@@ -11,7 +11,7 @@ namespace Foundry.WebApi.UnitTests.Shared.Persistence.FoundryDbContextTests;
 public sealed class Instantiation
 {
     [Fact]
-    public void GivenOptions_CanInstantiateDbContext()
+    public void WhenInstantiated_ModelIsEmpty()
     {
         // Arrange
         DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()

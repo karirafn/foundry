@@ -33,6 +33,7 @@ public sealed class GetHashCode
         int hashB = b.GetHashCode();
 
         // Assert
+        // Probabilistic: unequal objects may share hash codes, but shouldn't for these values
         hashA.ShouldNotBe(hashB);
     }
 }

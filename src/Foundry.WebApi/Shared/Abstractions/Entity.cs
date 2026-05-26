@@ -1,9 +1,14 @@
 namespace Foundry.WebApi.Shared.Abstractions;
 
-public abstract class Entity<TId>(TId id) : IEquatable<Entity<TId>>
+public abstract class Entity<TId> : IEquatable<Entity<TId>>
     where TId : struct, IStronglyTypedId<TId>
 {
-    public TId Id { get; private set; } = id;
+    protected Entity(TId id)
+    {
+        Id = id;
+    }
+
+    public TId Id { get; }
 
     public bool Equals(Entity<TId>? other) =>
         other is not null && GetType() == other.GetType() && Id.Equals(other.Id);
