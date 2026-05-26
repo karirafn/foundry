@@ -124,4 +124,17 @@ public sealed class Equals
         // Assert
         result.ShouldBeFalse();
     }
+
+    [Fact]
+    public void WhenOtherIsNull_EqualsReturnsFalse()
+    {
+        // Arrange
+        TestEntity entity = new(TestId.From(Guid.NewGuid()));
+
+        // Act
+        bool result = entity.Equals(null);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
 }

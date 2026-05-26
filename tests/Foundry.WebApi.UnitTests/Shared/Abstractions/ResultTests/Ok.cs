@@ -9,26 +9,13 @@ namespace Foundry.WebApi.UnitTests.Shared.Abstractions.ResultTests;
 public sealed class Ok
 {
     [Fact]
-    public void Ok_ReturnsSuccess_ContainingValue()
+    public void WhenCalled_ReturnsSuccessContainingValue()
     {
         // Arrange
         string value = "hello";
 
         // Act
-        Result<string> result = Result<string>.Ok(value);
-
-        // Assert
-        result.ShouldBeOfType<Result<string>.Success>();
-    }
-
-    [Fact]
-    public void Ok_SuccessContainsSuppliedValue()
-    {
-        // Arrange
-        string value = "hello";
-
-        // Act
-        Result<string>.Success success = (Result<string>.Success)Result<string>.Ok(value);
+        Result<string>.Success success = Result<string>.Ok(value).ShouldBeOfType<Result<string>.Success>();
 
         // Assert
         success.Value.ShouldBe(value);

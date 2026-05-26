@@ -9,7 +9,7 @@ namespace Foundry.WebApi.UnitTests.Shared.Abstractions.ResultVoidTests;
 public sealed class Ok
 {
     [Fact]
-    public void Ok_ReturnsSuccess()
+    public void WhenCalled_ReturnsSuccess()
     {
         // Arrange
 

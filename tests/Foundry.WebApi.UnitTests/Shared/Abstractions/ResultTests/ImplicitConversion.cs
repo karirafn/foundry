@@ -9,26 +9,13 @@ namespace Foundry.WebApi.UnitTests.Shared.Abstractions.ResultTests;
 public sealed class ImplicitConversion
 {
     [Fact]
-    public void ImplicitConversion_FromValue_ProducesSuccess()
+    public void WhenConvertedFromValue_ProducesSuccessContainingValue()
     {
         // Arrange
         string value = "hello";
 
         // Act
-        Result<string> result = value;
-
-        // Assert
-        result.ShouldBeOfType<Result<string>.Success>();
-    }
-
-    [Fact]
-    public void ImplicitConversion_FromValue_SuccessContainsValue()
-    {
-        // Arrange
-        string value = "hello";
-
-        // Act
-        Result<string>.Success success = (Result<string>.Success)(Result<string>)value;
+        Result<string>.Success success = ((Result<string>)value).ShouldBeOfType<Result<string>.Success>();
 
         // Assert
         success.Value.ShouldBe(value);

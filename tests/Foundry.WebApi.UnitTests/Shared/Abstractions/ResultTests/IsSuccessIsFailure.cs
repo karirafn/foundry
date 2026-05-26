@@ -9,7 +9,7 @@ namespace Foundry.WebApi.UnitTests.Shared.Abstractions.ResultTests;
 public sealed class IsSuccessIsFailure
 {
     [Fact]
-    public void IsSuccess_WhenSuccess_ReturnsTrue()
+    public void WhenSuccess_IsSuccessReturnsTrue()
     {
         // Arrange
         Result<string> result = Result<string>.Ok("hello");
@@ -19,7 +19,7 @@ public sealed class IsSuccessIsFailure
     }
 
     [Fact]
-    public void IsFailure_WhenSuccess_ReturnsFalse()
+    public void WhenSuccess_IsFailureReturnsFalse()
     {
         // Arrange
         Result<string> result = Result<string>.Ok("hello");
@@ -29,7 +29,7 @@ public sealed class IsSuccessIsFailure
     }
 
     [Fact]
-    public void IsFailure_WhenFailure_ReturnsTrue()
+    public void WhenFailure_IsFailureReturnsTrue()
     {
         // Arrange
         Error error = new("Test.Code", "Test message");
@@ -40,7 +40,7 @@ public sealed class IsSuccessIsFailure
     }
 
     [Fact]
-    public void IsSuccess_WhenFailure_ReturnsFalse()
+    public void WhenFailure_IsSuccessReturnsFalse()
     {
         // Arrange
         Error error = new("Test.Code", "Test message");

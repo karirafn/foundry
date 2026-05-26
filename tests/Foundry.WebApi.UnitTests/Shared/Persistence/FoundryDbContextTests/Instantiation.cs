@@ -22,6 +22,6 @@ public sealed class Instantiation
         using FoundryDbContext context = new(options);
 
         // Assert
-        context.ShouldNotBeNull();
+        context.Model.GetEntityTypes().ShouldBeEmpty();
     }
 }

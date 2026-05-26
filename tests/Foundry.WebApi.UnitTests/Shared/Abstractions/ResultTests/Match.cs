@@ -9,7 +9,7 @@ namespace Foundry.WebApi.UnitTests.Shared.Abstractions.ResultTests;
 public sealed class Match
 {
     [Fact]
-    public void Match_WhenSuccess_InvokesOnSuccess()
+    public void WhenSuccess_InvokesOnSuccess()
     {
         // Arrange
         Result<string> result = Result<string>.Ok("hello");
@@ -24,7 +24,7 @@ public sealed class Match
     }
 
     [Fact]
-    public void Match_WhenFailure_InvokesOnFailure()
+    public void WhenFailure_InvokesOnFailure()
     {
         // Arrange
         Error error = new("Test.Code", "Test message");

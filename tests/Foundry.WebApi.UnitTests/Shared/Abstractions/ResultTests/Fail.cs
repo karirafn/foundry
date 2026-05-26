@@ -9,26 +9,13 @@ namespace Foundry.WebApi.UnitTests.Shared.Abstractions.ResultTests;
 public sealed class Fail
 {
     [Fact]
-    public void Fail_ReturnsFailure()
+    public void WhenCalled_ReturnsFailureContainingError()
     {
         // Arrange
         Error error = new("Test.Code", "Test message");
 
         // Act
-        Result<string> result = Result<string>.Fail(error);
-
-        // Assert
-        result.ShouldBeOfType<Result<string>.Failure>();
-    }
-
-    [Fact]
-    public void Fail_FailureContainsSuppliedError()
-    {
-        // Arrange
-        Error error = new("Test.Code", "Test message");
-
-        // Act
-        Result<string>.Failure failure = (Result<string>.Failure)Result<string>.Fail(error);
+        Result<string>.Failure failure = Result<string>.Fail(error).ShouldBeOfType<Result<string>.Failure>();
 
         // Assert
         failure.Error.ShouldBe(error);
