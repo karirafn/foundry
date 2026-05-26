@@ -1,0 +1,3 @@
+# Base worker image — placeholder for Phase 4 implementation
+# Layers: Claude Code CLI, git, gh, glab
+# Language-specific variants extend this image

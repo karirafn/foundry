@@ -1,0 +1,25 @@
+###############################################################################
+# Set default behavior to automatically normalize line endings.
+###############################################################################
+* text=auto
+
+###############################################################################
+# Set the merge driver for project and solution files
+###############################################################################
+*.sln merge=binary
+*.csproj merge=union
+*.vbproj merge=union
+
+###############################################################################
+# Set file types
+###############################################################################
+*.cs text diff=csharp
+*.ts text
+*.scss text
+*.html text
+*.json text
+*.md text
+*.yml text
+*.yaml text
+*.xml text
+*.sh text eol=lf
