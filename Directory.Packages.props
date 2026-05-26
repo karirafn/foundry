@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Web -->
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
   </ItemGroup>
   <ItemGroup>
     <!-- Aspire ServiceDefaults -->
