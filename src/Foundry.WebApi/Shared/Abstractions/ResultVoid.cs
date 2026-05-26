@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Foundry.WebApi.Shared.Abstractions;
 
 public abstract class Result
@@ -20,12 +22,13 @@ public abstract class Result
         {
             Success => onSuccess(),
             Failure f => onFailure(f.Error),
-            _ => throw new InvalidOperationException("Unhandled Result subtype."),
+            _ => throw new UnreachableException(),
         };
 
     public static Result Ok() => new Success();
 
     public static Result Fail(Error error) => new Failure(error);
 
+    // Allows: return SomeErrors.NotFound; instead of Result.Fail(SomeErrors.NotFound)
     public static implicit operator Result(Error error) => Fail(error);
 }

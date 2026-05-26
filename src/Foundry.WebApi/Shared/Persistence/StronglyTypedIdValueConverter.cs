@@ -17,7 +17,9 @@ public sealed class StronglyTypedIdValueConverter<TId>()
         MethodInfo fromMethod = typeof(TId).GetMethod(
             nameof(IStronglyTypedId<TId>.From),
             BindingFlags.Public | BindingFlags.Static,
-            [typeof(Guid)])!;
+            [typeof(Guid)])
+            ?? throw new InvalidOperationException(
+                $"{typeof(TId).Name} does not have a public static From(Guid) method.");
         MethodCallExpression call = Expression.Call(null, fromMethod, parameter);
         return Expression.Lambda<Func<Guid, TId>>(call, parameter);
     }

@@ -1,6 +1,8 @@
+using System.Diagnostics;
+
 namespace Foundry.WebApi.Shared.Abstractions;
 
-public abstract class Result<T>
+public abstract class Result<T> where T : notnull
 {
     private Result() { }
 
@@ -23,7 +25,7 @@ public abstract class Result<T>
         {
             Success s => onSuccess(s.Value),
             Failure f => onFailure(f.Error),
-            _ => throw new InvalidOperationException("Unhandled Result subtype."),
+            _ => throw new UnreachableException(),
         };
 
     public static Result<T> Ok(T value) => new Success(value);
