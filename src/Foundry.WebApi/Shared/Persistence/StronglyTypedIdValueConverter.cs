@@ -1,0 +1,24 @@
+using System.Linq.Expressions;
+using System.Reflection;
+
+using Foundry.WebApi.Shared.Abstractions;
+
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+namespace Foundry.WebApi.Shared.Persistence;
+
+public sealed class StronglyTypedIdValueConverter<TId>()
+    : ValueConverter<TId, Guid>(id => id.Value, BuildFromProvider())
+    where TId : struct, IStronglyTypedId<TId>
+{
+    private static Expression<Func<Guid, TId>> BuildFromProvider()
+    {
+        ParameterExpression parameter = Expression.Parameter(typeof(Guid), "guid");
+        MethodInfo fromMethod = typeof(TId).GetMethod(
+            nameof(IStronglyTypedId<TId>.From),
+            BindingFlags.Public | BindingFlags.Static,
+            [typeof(Guid)])!;
+        MethodCallExpression call = Expression.Call(null, fromMethod, parameter);
+        return Expression.Lambda<Func<Guid, TId>>(call, parameter);
+    }
+}
