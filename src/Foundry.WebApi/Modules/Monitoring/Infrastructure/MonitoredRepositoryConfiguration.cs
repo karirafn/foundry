@@ -47,6 +47,9 @@ public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<
             .IsUnique()
             .HasDatabaseName("ix_monitored_repositories_slug");
 
+        builder.HasIndex(r => r.AccountId)
+            .HasDatabaseName("ix_monitored_repositories_account_id");
+
         builder.HasOne<Account>()
             .WithMany()
             .HasForeignKey(r => r.AccountId)

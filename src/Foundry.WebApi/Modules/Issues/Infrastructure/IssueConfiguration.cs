@@ -17,6 +17,17 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
     private const int TitleMaxLength = 500;
     private const int AuthorMaxLength = 200;
     private const int UrlMaxLength = 2000;
+    private const int DiscriminatorMaxLength = 20;
+
+    private static IssueAuthor ConvertToIssueAuthor(string value) =>
+        IssueAuthor.Create(value) is Result<IssueAuthor>.Success s
+            ? s.Value
+            : throw new InvalidOperationException($"Stored author value '{value}' failed validation.");
+
+    private static ProviderUrl ConvertToProviderUrl(string value) =>
+        ProviderUrl.Create(value) is Result<ProviderUrl>.Success s
+            ? s.Value
+            : throw new InvalidOperationException($"Stored URL value '{value}' failed validation.");
 
     public void Configure(EntityTypeBuilder<Issue> builder)
     {
@@ -50,7 +61,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
         builder.Property(i => i.Author)
             .HasConversion(
                 author => author.Value,
-                value => ((Result<IssueAuthor>.Success)IssueAuthor.Create(value)).Value)
+                value => ConvertToIssueAuthor(value))
             .HasMaxLength(AuthorMaxLength)
             .IsUnicode(false)
             .IsRequired()
@@ -59,7 +70,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
         builder.Property(i => i.Url)
             .HasConversion(
                 url => url.Value.ToString(),
-                value => ((Result<ProviderUrl>.Success)ProviderUrl.Create(value)).Value)
+                value => ConvertToProviderUrl(value))
             .HasMaxLength(UrlMaxLength)
             .IsUnicode(false)
             .IsRequired()
@@ -77,6 +88,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 
         builder.Property(i => i.Labels)
             .HasConversion(labelsConverter, labelsComparer)
+            .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
             .HasColumnName("labels");
 
@@ -85,7 +97,12 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 
         builder.HasDiscriminator<string>("state")
             .HasValue<DetectedIssue>("detected")
-            .HasValue<QueuedIssue>("queued");
+            .HasValue<QueuedIssue>("queued")
+            .IsComplete(true);
+
+        builder.Property<string>("state")
+            .HasMaxLength(DiscriminatorMaxLength)
+            .HasColumnName("state");
 
         builder.HasIndex(i => new { i.MonitoredRepositoryId, i.IssueNumber })
             .IsUnique()

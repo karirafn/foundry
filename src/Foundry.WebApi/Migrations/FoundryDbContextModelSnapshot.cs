@@ -47,6 +47,7 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<string>("Labels")
                         .IsRequired()
+                        .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
                         .HasColumnName("labels");
 
@@ -70,8 +71,9 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<string>("state")
                         .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("TEXT");
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("state");
 
                     b.HasKey("Id");
 
@@ -81,7 +83,7 @@ namespace Foundry.WebApi.Migrations
 
                     b.ToTable("issues", (string)null);
 
-                    b.HasDiscriminator<string>("state").HasValue("Issue");
+                    b.HasDiscriminator<string>("state").IsComplete(true).HasValue("Issue");
 
                     b.UseTphMappingStrategy();
                 });
@@ -115,14 +117,15 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<string>("type")
                         .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("TEXT");
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("type");
 
                     b.HasKey("Id");
 
                     b.ToTable("accounts", (string)null);
 
-                    b.HasDiscriminator<string>("type").HasValue("Account");
+                    b.HasDiscriminator<string>("type").IsComplete(true).HasValue("Account");
 
                     b.UseTphMappingStrategy();
                 });
@@ -158,7 +161,8 @@ namespace Foundry.WebApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountId");
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_monitored_repositories_account_id");
 
                     b.HasIndex("Slug")
                         .IsUnique()

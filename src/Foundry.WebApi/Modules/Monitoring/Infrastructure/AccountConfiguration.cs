@@ -11,6 +11,7 @@ public sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
     private const int NameMaxLength = 200;
     private const int SecretKeyNameMaxLength = 200;
     private const int BaseUrlMaxLength = 2000;
+    private const int DiscriminatorMaxLength = 20;
 
     public void Configure(EntityTypeBuilder<Account> builder)
     {
@@ -44,6 +45,11 @@ public sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
             .HasColumnName("base_url");
 
         builder.HasDiscriminator<string>("type")
-            .HasValue<GitHubAccount>("github");
+            .HasValue<GitHubAccount>("github")
+            .IsComplete(true);
+
+        builder.Property<string>("type")
+            .HasMaxLength(DiscriminatorMaxLength)
+            .HasColumnName("type");
     }
 }
