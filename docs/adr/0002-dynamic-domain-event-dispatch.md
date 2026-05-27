@@ -1,4 +1,4 @@
-# Dynamic Dispatch for Domain Events
+# Non-Generic Base Interface for Domain Event Dispatch
 
 ## Context
 
@@ -6,9 +6,10 @@ The domain event dispatcher needs to invoke typed `IDomainEventHandler<TEvent>` 
 
 ## Decision
 
-We use a `dynamic` cast — `((dynamic)handler).HandleAsync((dynamic)event, cancellationToken)` — rather than reflection via `MethodInfo.Invoke()` or source generators. The `dynamic` approach is readable, requires no boilerplate, and the runtime binder resolves the correct generic overload. Source generators were unnecessary complexity, and `MethodInfo.Invoke()` adds noise without benefit. Native AOT incompatibility with `dynamic` is not a concern because Foundry targets standard ASP.NET Core.
+`IDomainEventHandler<TEvent>` extends a non-generic `IDomainEventHandler` base interface. The base interface declares `HandleAsync(IDomainEvent, CancellationToken)`. The generic interface provides a default interface method implementation that casts the `IDomainEvent` to `TEvent` and delegates to the typed overload. The dispatcher resolves handlers as `IDomainEventHandler<TEvent>` via DI, casts each to `IDomainEventHandler`, and calls `HandleAsync` directly — no `dynamic`, no reflection on `MethodInfo`.
 
 ## Considered Options
 
-- **`MethodInfo.Invoke()`** — rejected because it requires boxing, error handling for `TargetInvocationException`, and is harder to read than the `dynamic` equivalent.
+- **`dynamic` dispatch** — rejected because `dynamic` requires cross-assembly visibility of handler types (`public` access), bypasses compile-time type checking, and is incompatible with Native AOT.
+- **`MethodInfo.Invoke()`** — rejected because it requires boxing, error handling for `TargetInvocationException`, and is harder to read than the base-interface approach.
 - **Source generators** — rejected because the infrastructure is not large enough to justify the build complexity.

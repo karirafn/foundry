@@ -2,11 +2,11 @@ using Foundry.WebApi.Shared.Abstractions;
 
 namespace Foundry.WebApi.UnitTests.Shared.Infrastructure.DomainEventDispatcherTests;
 
-public sealed record TestEvent(string Name) : IDomainEvent;
+internal sealed record TestEvent(string Name) : IDomainEvent;
 
-public sealed record SecondTestEvent(string Name) : IDomainEvent;
+internal sealed record SecondTestEvent(string Name) : IDomainEvent;
 
-public sealed class TestEventHandler : IDomainEventHandler<TestEvent>
+internal sealed class TestEventHandler : IDomainEventHandler<TestEvent>
 {
     public List<TestEvent> ReceivedEvents { get; } = [];
 
@@ -17,7 +17,7 @@ public sealed class TestEventHandler : IDomainEventHandler<TestEvent>
     }
 }
 
-public sealed class SecondTestEventHandler : IDomainEventHandler<SecondTestEvent>
+internal sealed class SecondTestEventHandler : IDomainEventHandler<SecondTestEvent>
 {
     public List<SecondTestEvent> ReceivedEvents { get; } = [];
 

@@ -14,12 +14,12 @@ internal sealed class DomainEventDispatcher(IServiceProvider services) : IDomain
             IEnumerable<object?> handlers = services.GetServices(handlerType);
             foreach (object? handler in handlers)
             {
-                if (handler is null)
+                if (handler is not IDomainEventHandler typedHandler)
                 {
                     continue;
                 }
 
-                await ((dynamic)handler).HandleAsync((dynamic)@event, cancellationToken);
+                await typedHandler.HandleAsync(@event, cancellationToken);
             }
         }
     }
