@@ -13,4 +13,8 @@
     <ProjectReference Include="..\Foundry.ServiceDefaults\Foundry.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Foundry.WebApi.UnitTests" />
+  </ItemGroup>
+
 </Project>
