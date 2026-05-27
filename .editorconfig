@@ -420,3 +420,12 @@ dotnet_diagnostic.CA1000.severity = none
 
 # CA1062: Validate parameter is non-null — suppressed for Match() delegates (caller-owned, not nullable)
 dotnet_diagnostic.CA1062.severity = none
+
+# CA1054: URI-like parameters should not be strings — suppressed for ProviderUrl.Create(string) which validates and wraps raw provider API strings
+dotnet_diagnostic.CA1054.severity = none
+
+# CA1055: URI-like return values should not be strings — suppressed for value object ToString() on ProviderUrl
+dotnet_diagnostic.CA1055.severity = none
+
+# CA1056: URI-like properties should not be strings — suppressed for value object properties on ProviderUrl
+dotnet_diagnostic.CA1056.severity = none

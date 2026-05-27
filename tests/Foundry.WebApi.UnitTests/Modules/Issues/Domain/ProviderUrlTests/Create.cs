@@ -1,0 +1,42 @@
+using Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.WebApi.Shared.Abstractions;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.WebApi.UnitTests.Modules.Issues.Domain.ProviderUrlTests;
+
+public sealed class Create
+{
+    [Fact]
+    public void WhenUriIsValidAndAbsolute_ReturnsSuccessWithValue()
+    {
+        // Arrange
+        string url = "https://github.com/owner/repo/issues/42";
+
+        // Act
+        Result<ProviderUrl>.Success result = ProviderUrl.Create(url)
+            .ShouldBeOfType<Result<ProviderUrl>.Success>();
+
+        // Assert
+        result.Value.Value.ShouldBe(new Uri(url));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null!)]
+    [InlineData("not-a-url")]
+    [InlineData("/relative/path")]
+    public void WhenUriIsInvalidOrRelative_ReturnsFailure(string? url)
+    {
+        // Arrange
+
+        // Act
+        Result<ProviderUrl> result = ProviderUrl.Create(url!);
+
+        // Assert
+        result.ShouldBeOfType<Result<ProviderUrl>.Failure>();
+    }
+}
