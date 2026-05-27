@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Foundry.WebApi.Migrations
 {
     [DbContext(typeof(FoundryDbContext))]
-    [Migration("20260527210524_AddMonitoringAndIssuesModules")]
+    [Migration("20260527211300_AddMonitoringAndIssuesModules")]
     partial class AddMonitoringAndIssuesModules
     {
         /// <inheritdoc />
