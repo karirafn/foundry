@@ -52,4 +52,9 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     {
         LastPolledAt = polledAt;
     }
+
+    public void RecordDomainEvent(IDomainEvent domainEvent)
+    {
+        AddDomainEvent(domainEvent);
+    }
 }
