@@ -35,4 +35,11 @@ public sealed class DetectedIssue : Issue
             detectedAt);
         return issue;
     }
+
+    public QueuedIssue Enqueue()
+    {
+        QueuedIssue queued = QueuedIssue.FromDetected(this);
+        AddDomainEvent(new IssueQueued(Id, MonitoredRepositoryId));
+        return queued;
+    }
 }

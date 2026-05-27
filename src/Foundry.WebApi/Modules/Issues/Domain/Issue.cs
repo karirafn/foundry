@@ -3,7 +3,7 @@ using Foundry.WebApi.Shared.Abstractions;
 
 namespace Foundry.WebApi.Modules.Issues.Domain;
 
-public abstract class Issue : AggregateRoot<IssueId>
+public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 {
     // Private parameterless constructor for EF Core materialization.
     private protected Issue() : base(IssueId.New())
@@ -29,6 +29,13 @@ public abstract class Issue : AggregateRoot<IssueId>
     public IReadOnlyList<string> Labels { get; private set; } = [];
 
     public DateTimeOffset DetectedAt { get; private set; }
+
+    public void UpdateDetails(string title, string body, IReadOnlyList<string> labels)
+    {
+        Title = title;
+        Body = body;
+        Labels = labels;
+    }
 
     protected void SetSharedProperties(
         MonitoredRepositoryId monitoredRepositoryId,
