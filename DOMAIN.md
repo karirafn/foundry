@@ -29,8 +29,8 @@ Multiple accounts can exist per provider. A Monitored Repository references a sp
 
 ## Monitor
 
-The background process that polls configured repositories for issues with trigger labels.
-Runs on a configurable interval per repo with a global default.
+The background process that polls configured repositories for issues labeled `foundry`.
+Runs on a fixed tick interval (30s default) and checks each repo's eligibility based on its configured poll interval and `LastPolledAt` timestamp.
 
 ## Issue
 
@@ -41,8 +41,9 @@ State transitions are methods on each variant that return the next variant type,
 ## Monitored Repository
 
 A repository configured for Foundry to poll.
-References an Account (for credentials) and specifies a trigger label and optional per-repo poll interval.
+References an Account (for credentials) and specifies an optional per-repo poll interval.
 Uniquely identified by its Repository Slug within the context of its Account.
+Tracks `LastPolledAt` for per-repo poll timing.
 
 ## Issue Dependency
 
@@ -50,11 +51,16 @@ A directed relationship between two issues where one blocks the other.
 Both GitHub and GitLab expose dependencies via structured APIs (not body text).
 Foundry persists these relationships during detection so the Workers module can respect execution order.
 
-## Lifecycle Label
+## Trigger Label
 
-A provider label applied to an issue to reflect its current state in the Foundry pipeline.
-Each state transition replaces the previous lifecycle label (e.g., remove `foundry-ready`, add `foundry-detected`).
-The trigger label (e.g., `foundry-ready`) is the initial lifecycle label that causes Foundry to detect the issue.
+The constant label `foundry` applied to a provider-side issue to flag it for Foundry processing.
+The label stays on the issue untouched — Foundry does not add, remove, or swap labels on the provider.
+All lifecycle state is tracked internally in the database.
+
+## Provider Issue
+
+A DTO representing an issue as returned by a provider's API.
+Carries raw data (number, title, body, author username, URL, labels) that the domain maps into value objects and aggregates during detection.
 
 ## Repository Slug
 
