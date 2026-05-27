@@ -13,7 +13,7 @@ dotnet build
 # Test
 dotnet test
 
-# Run locally (starts PostgreSQL, wires services)
+# Run locally (wires services)
 dotnet run --project src/Foundry.AppHost
 
 # Run single test
@@ -31,7 +31,7 @@ npx ng serve
 
 | Project | Role |
 |---------|------|
-| `AppHost` | Aspire orchestrator — PostgreSQL, service wiring |
+| `AppHost` | Aspire orchestrator — service wiring |
 | `ServiceDefaults` | OpenTelemetry, health checks, resilience defaults |
 | `WebApi` | ASP.NET Core Minimal API backend |
 | `Contracts` | Shared DTOs (sealed records) |
@@ -42,7 +42,7 @@ npx ng serve
 | Project | Role |
 |---------|------|
 | `WebApi.UnitTests` | Unit tests |
-| `WebApi.IntegrationTests` | Integration tests (Testcontainers + PostgreSQL) |
+| `WebApi.IntegrationTests` | Integration tests (Testcontainers + SQLite) |
 | `Testing` | Shared test infrastructure |
 
 ### Vertical Slices (WebApi)
@@ -53,7 +53,7 @@ WebApi/
 │   ├── Monitoring/         # Repo polling, issue detection
 │   ├── Workers/            # Container orchestration, lifecycle
 │   └── Issues/             # Issue state machine, lifecycle labels
-├── Shared/Abstractions/    # Result, Error, ValueObject, AggregateRoot
+├── Shared/Abstractions/    # Result, Error, AggregateRoot
 ├── Infrastructure/         # Cross-cutting (EF, Docker API client)
 └── Program.cs
 ```
@@ -68,7 +68,7 @@ WebApi/
 
 ### Database
 
-PostgreSQL via EF Core. Aspire manages the container in development.
+SQLite via EF Core. Data stored in `data/foundry.db` (configurable via connection string).
 
 ### Worker Containers
 

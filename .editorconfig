@@ -402,3 +402,21 @@ dotnet_diagnostic.SA1602.severity = none
 
 # SA1633 The file header is missing or not located at the top of the file.
 dotnet_diagnostic.SA1633.severity = none
+
+# CA1515: Consider making public types internal — suppressed for shared abstractions used across test projects
+dotnet_diagnostic.CA1515.severity = none
+
+# CA1716: Reserved keyword conflict — suppressed for architect-prescribed names (Error, Shared namespace)
+dotnet_diagnostic.CA1716.severity = none
+
+# CA1034: Nested visible types — suppressed for sealed Result<T> hierarchy (Success/Failure subtypes)
+dotnet_diagnostic.CA1034.severity = none
+
+# CA2225: Alternate for implicit operator — Ok() already serves this purpose
+dotnet_diagnostic.CA2225.severity = none
+
+# CA1000: Static members on generic types — architect-prescribed factory API on Result<T>
+dotnet_diagnostic.CA1000.severity = none
+
+# CA1062: Validate parameter is non-null — suppressed for Match() delegates (caller-owned, not nullable)
+dotnet_diagnostic.CA1062.severity = none

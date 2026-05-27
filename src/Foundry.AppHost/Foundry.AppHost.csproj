@@ -5,4 +5,8 @@
     <UserSecretsId>c1958729-d6c2-4d7f-bbdd-2dd1564d3ccb</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Foundry.WebApi\Foundry.WebApi.csproj" />
+  </ItemGroup>
+
 </Project>
