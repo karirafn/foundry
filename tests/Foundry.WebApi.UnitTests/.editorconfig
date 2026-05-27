@@ -3,5 +3,5 @@
 # CA1707: Remove the underscores from member name — suppressed for test projects (xUnit naming convention uses underscores)
 dotnet_diagnostic.CA1707.severity = none
 
-# CA1508: Dead code condition — suppressed to allow null-comparison tests that verify ValueObject.Equals(null) returns false
+# CA1508: Dead code condition — suppressed to allow null-comparison tests that verify entity Equals(null) returns false
 dotnet_diagnostic.CA1508.severity = none

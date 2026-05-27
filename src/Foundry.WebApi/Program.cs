@@ -1,12 +1,12 @@
 using Foundry.WebApi.Shared.Persistence;
+
 using Microsoft.EntityFrameworkCore;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
-builder.AddNpgsqlDbContext<FoundryDbContext>(
-    "foundry",
-    configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
+builder.Services.AddDbContext<FoundryDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db"));
 builder.Services.AddOpenApi();
 
 WebApplication app = builder.Build();

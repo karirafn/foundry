@@ -1,5 +1,6 @@
 using Foundry.WebApi.Shared.Persistence;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 using Shouldly;
@@ -14,8 +15,11 @@ public sealed class Instantiation
     public void WhenInstantiated_ModelIsEmpty()
     {
         // Arrange
+        using SqliteConnection connection = new("Data Source=:memory:");
+        connection.Open();
+
         DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseInMemoryDatabase("test")
+            .UseSqlite(connection)
             .Options;
 
         // Act
