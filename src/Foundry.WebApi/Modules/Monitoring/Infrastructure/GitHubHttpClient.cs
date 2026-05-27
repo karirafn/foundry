@@ -21,7 +21,7 @@ internal sealed class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
-        string url = $"repos/{slug.Owner}/{slug.Name}/issues?labels=foundry&state=open";
+        string url = $"repos/{Uri.EscapeDataString(slug.Owner)}/{Uri.EscapeDataString(slug.Name)}/issues?labels=foundry&state=open";
 
         using HttpRequestMessage request = new(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

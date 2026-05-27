@@ -1,8 +1,10 @@
+using System.Text.RegularExpressions;
+
 using Foundry.WebApi.Shared.Abstractions;
 
 namespace Foundry.WebApi.Modules.Monitoring.Domain;
 
-public sealed record RepositorySlug
+public sealed partial record RepositorySlug
 {
     public string Owner { get; }
 
@@ -36,10 +38,18 @@ public sealed record RepositorySlug
             return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
         }
 
+        if (!AllowedSegmentCharacters().IsMatch(owner) || !AllowedSegmentCharacters().IsMatch(name))
+        {
+            return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
+        }
+
         return new RepositorySlug(owner, name);
     }
 
     public override string ToString() => $"{Owner}/{Name}";
+
+    [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
+    private static partial Regex AllowedSegmentCharacters();
 }
 
 public static class RepositorySlugErrors

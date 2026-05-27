@@ -15,6 +15,11 @@ public sealed record ProviderUrl
             return Result<ProviderUrl>.Fail(ProviderUrlErrors.InvalidUrl);
         }
 
+        if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+        {
+            return Result<ProviderUrl>.Fail(ProviderUrlErrors.InvalidUrl);
+        }
+
         return new ProviderUrl(uri);
     }
 
