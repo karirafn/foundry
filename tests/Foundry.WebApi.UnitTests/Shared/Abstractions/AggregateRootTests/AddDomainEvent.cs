@@ -14,11 +14,8 @@ public sealed class AddDomainEvent
         // Arrange
         TestAggregateRoot sut = new(TestAggregateRootId.From(Guid.NewGuid()));
 
-        // Act
-        IReadOnlyList<IDomainEvent> events = sut.DomainEvents;
-
         // Assert
-        events.ShouldBeEmpty();
+        sut.DomainEvents.ShouldBeEmpty();
     }
 
     [Fact]

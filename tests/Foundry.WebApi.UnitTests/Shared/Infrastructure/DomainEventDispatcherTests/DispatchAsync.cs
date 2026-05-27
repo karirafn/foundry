@@ -1,5 +1,5 @@
 using Foundry.WebApi.Shared.Abstractions;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.WebApi.Shared.Infrastructure;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -7,7 +7,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.WebApi.UnitTests.Shared.Persistence.DomainEventDispatcherTests;
+namespace Foundry.WebApi.UnitTests.Shared.Infrastructure.DomainEventDispatcherTests;
 
 public sealed class DispatchAsync
 {
@@ -48,10 +48,8 @@ public sealed class DispatchAsync
         await sut.DispatchAsync([@event], CancellationToken.None);
 
         // Assert
-        handlerA.ReceivedEvents.ShouldSatisfyAllConditions(
-            () => handlerA.ReceivedEvents.ShouldContain(@event),
-            () => handlerB.ReceivedEvents.ShouldContain(@event)
-        );
+        handlerA.ReceivedEvents.ShouldContain(@event);
+        handlerB.ReceivedEvents.ShouldContain(@event);
     }
 
     [Fact]
@@ -75,7 +73,6 @@ public sealed class DispatchAsync
     public async Task WhenMultipleEventsDispatched_HandlersReceiveEventsInOrder()
     {
         // Arrange
-        List<string> dispatchOrder = [];
         TestEventHandler firstHandler = new();
         SecondTestEventHandler secondHandler = new();
 

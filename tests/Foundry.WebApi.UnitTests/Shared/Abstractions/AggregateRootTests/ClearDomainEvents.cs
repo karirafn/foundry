@@ -20,8 +20,6 @@ public sealed class ClearDomainEvents
         sut.ClearDomainEvents();
 
         // Assert
-        IReadOnlyList<IDomainEvent> events = sut.DomainEvents;
-        events.ShouldNotBeNull();
-        events.ShouldBeEmpty();
+        sut.DomainEvents.ShouldBeEmpty();
     }
 }

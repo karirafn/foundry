@@ -2,9 +2,9 @@ using Foundry.WebApi.Shared.Abstractions;
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Foundry.WebApi.Shared.Persistence;
+namespace Foundry.WebApi.Shared.Infrastructure;
 
-public sealed class DomainEventDispatcher(IServiceProvider services) : IDomainEventDispatcher
+internal sealed class DomainEventDispatcher(IServiceProvider services) : IDomainEventDispatcher
 {
     public async Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
     {
@@ -14,7 +14,12 @@ public sealed class DomainEventDispatcher(IServiceProvider services) : IDomainEv
             IEnumerable<object?> handlers = services.GetServices(handlerType);
             foreach (object? handler in handlers)
             {
-                await ((dynamic)handler!).HandleAsync((dynamic)@event, cancellationToken);
+                if (handler is null)
+                {
+                    continue;
+                }
+
+                await ((dynamic)handler).HandleAsync((dynamic)@event, cancellationToken);
             }
         }
     }

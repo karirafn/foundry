@@ -1,6 +1,6 @@
 using Foundry.WebApi.Shared.Abstractions;
 
-namespace Foundry.WebApi.UnitTests.Shared.Persistence.DomainEventDispatcherTests;
+namespace Foundry.WebApi.UnitTests.Shared.Infrastructure.DomainEventDispatcherTests;
 
 public sealed record TestEvent(string Name) : IDomainEvent;
 

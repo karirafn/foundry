@@ -1,6 +1,6 @@
 namespace Foundry.WebApi.Shared.Abstractions;
 
-public sealed class ValidatingCommandHandler<TCommand, TResult>(
+internal sealed class ValidatingCommandHandler<TCommand, TResult>(
     ICommandHandler<TCommand, TResult> inner,
     ICommandValidator<TCommand> validator)
     : ICommandHandler<TCommand, TResult>
