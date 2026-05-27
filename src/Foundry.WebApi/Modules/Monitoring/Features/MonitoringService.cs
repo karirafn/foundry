@@ -96,9 +96,9 @@ internal sealed class MonitoringService(
         if (tokenResult is not Result<string>.Success tokenSuccess)
         {
             logger.LogWarning(
-                "Could not retrieve token for account '{AccountName}' (key: {SecretKeyName}); skipping {Count} repo(s).",
+                "Could not retrieve token for account '{AccountName}' ({ErrorCode}); skipping {Count} repo(s).",
                 account.Name,
-                account.SecretKeyName,
+                tokenResult is Result<string>.Failure f ? f.Error.Code : "unknown",
                 accountGroup.Count());
             return;
         }

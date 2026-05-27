@@ -5,13 +5,15 @@ using Foundry.WebApi.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Foundry.WebApi.Modules.Monitoring.Features;
 
 internal sealed class MonitoringSeeder(
     IServiceScopeFactory scopeFactory,
-    IOptions<MonitoringOptions> optionsAccessor) : IHostedLifecycleService
+    IOptions<MonitoringOptions> optionsAccessor,
+    ILogger<MonitoringSeeder> logger) : IHostedLifecycleService
 {
     private readonly MonitoringOptions _options = optionsAccessor.Value;
 
@@ -58,6 +60,13 @@ internal sealed class MonitoringSeeder(
 
                 dbContext.Set<Account>().Add(account);
             }
+            else
+            {
+                logger.LogWarning(
+                    "Skipping account '{AccountName}': unknown type '{AccountType}'.",
+                    accountOption.Name,
+                    accountOption.Type);
+            }
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -84,6 +93,10 @@ internal sealed class MonitoringSeeder(
 
             if (!accountsByName.TryGetValue(repoOption.AccountName, out AccountId accountId))
             {
+                logger.LogWarning(
+                    "Skipping repository '{Slug}': account '{AccountName}' was not found.",
+                    repoOption.Slug,
+                    repoOption.AccountName);
                 continue;
             }
 
@@ -91,6 +104,11 @@ internal sealed class MonitoringSeeder(
 
             if (slugResult is not Result<RepositorySlug>.Success slugSuccess)
             {
+                string errorCode = slugResult is Result<RepositorySlug>.Failure f ? f.Error.Code : "unknown";
+                logger.LogWarning(
+                    "Skipping repository '{Slug}': invalid slug ({ErrorCode}).",
+                    repoOption.Slug,
+                    errorCode);
                 continue;
             }
 

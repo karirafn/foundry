@@ -6,6 +6,7 @@ using Foundry.WebApi.Shared.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 using Shouldly;
@@ -57,7 +58,7 @@ public sealed class StartingAsync : IAsyncDisposable
         ServiceProvider provider = services.BuildServiceProvider();
         IServiceScopeFactory scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
 
-        return new MonitoringSeeder(scopeFactory, Options.Create(options));
+        return new MonitoringSeeder(scopeFactory, Options.Create(options), NullLogger<MonitoringSeeder>.Instance);
     }
 
     [Fact]
