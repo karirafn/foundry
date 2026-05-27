@@ -16,7 +16,7 @@ public sealed class CreateProvider
     private static IIssueProviderFactory BuildSut()
     {
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
-        HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://api.github.com") };
+        HttpClient httpClient = new(handler);
         GitHubHttpClient gitHubHttpClient = new(httpClient);
         return new IssueProviderFactory(gitHubHttpClient);
     }

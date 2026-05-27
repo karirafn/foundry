@@ -14,6 +14,8 @@ namespace Foundry.WebApi.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpC
 
 public sealed class GetIssuesAsync
 {
+    private static readonly Uri ValidBaseUrl = new("https://api.github.com");
+
     private static RepositorySlug ValidSlug =>
         ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/repo")).Value;
 
@@ -38,11 +40,12 @@ public sealed class GetIssuesAsync
             """;
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://api.github.com") };
+        using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+            ValidBaseUrl,
             ValidSlug,
             "ghp_token123",
             CancellationToken.None);
@@ -68,11 +71,11 @@ public sealed class GetIssuesAsync
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
-        using HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://api.github.com") };
+        using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        await sut.GetIssuesAsync(ValidSlug, "ghp_mytoken", CancellationToken.None);
+        await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "ghp_mytoken", CancellationToken.None);
 
         // Assert
         HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
@@ -86,15 +89,59 @@ public sealed class GetIssuesAsync
     }
 
     [Fact]
+    public async Task WhenGitHubReturnsIssues_UsesAbsoluteUrlFromBaseUrl()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, "[]");
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+        Uri baseUrl = new("https://api.github.com");
+
+        // Act
+        await sut.GetIssuesAsync(baseUrl, ValidSlug, "token", CancellationToken.None);
+
+        // Assert
+        HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
+        request.RequestUri.ShouldNotBeNull();
+        request.RequestUri.IsAbsoluteUri.ShouldBeTrue();
+        request.RequestUri.Host.ShouldBe("api.github.com");
+        request.RequestUri.AbsolutePath.ShouldContain("repos/owner/repo/issues");
+    }
+
+    [Fact]
+    public async Task WhenBaseUrlHasNonHttpScheme_ReturnsFailure()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, "[]");
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+        Uri invalidBaseUrl = new("ftp://api.github.com");
+
+        // Act
+        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+            invalidBaseUrl,
+            ValidSlug,
+            "token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.InvalidBaseUrl");
+    }
+
+    [Fact]
     public async Task WhenGitHubReturnsNonSuccessStatus_ReturnsFailure()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
-        using HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://api.github.com") };
+        using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+            ValidBaseUrl,
             ValidSlug,
             "ghp_token",
             CancellationToken.None);
@@ -112,11 +159,12 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["X-RateLimit-Remaining"] = "0";
-        using HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://api.github.com") };
+        using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+            ValidBaseUrl,
             ValidSlug,
             "ghp_token",
             CancellationToken.None);
@@ -133,11 +181,12 @@ public sealed class GetIssuesAsync
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
-        using HttpClient httpClient = new(handler) { BaseAddress = new Uri("https://api.github.com") };
+        using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+            ValidBaseUrl,
             ValidSlug,
             "ghp_token",
             CancellationToken.None);

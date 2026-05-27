@@ -1,5 +1,5 @@
-using System.Net.Http.Headers;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -17,13 +17,20 @@ internal sealed class GitHubHttpClient(HttpClient httpClient)
     };
 
     public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        Uri baseUrl,
         RepositorySlug slug,
         string token,
         CancellationToken cancellationToken)
     {
-        string url = $"repos/{Uri.EscapeDataString(slug.Owner)}/{Uri.EscapeDataString(slug.Name)}/issues?labels=foundry&state=open";
+        if (baseUrl.Scheme is not ("https" or "http"))
+        {
+            return Result<IReadOnlyList<ProviderIssue>>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
 
-        using HttpRequestMessage request = new(HttpMethod.Get, url);
+        string relativePath = $"repos/{Uri.EscapeDataString(slug.Owner)}/{Uri.EscapeDataString(slug.Name)}/issues?labels=foundry&state=open";
+        Uri requestUri = new(baseUrl, relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
@@ -85,6 +92,10 @@ internal sealed class GitHubHttpClient(HttpClient httpClient)
 
 internal static class GitHubErrors
 {
+    public static readonly Error InvalidBaseUrl = new(
+        "GitHub.InvalidBaseUrl",
+        "The base URL must use the https or http scheme.");
+
     public static readonly Error RateLimitExhausted = new(
         "GitHub.RateLimitExhausted",
         "GitHub API rate limit exhausted. Wait before retrying.");
