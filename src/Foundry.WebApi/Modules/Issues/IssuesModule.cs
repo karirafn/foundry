@@ -2,6 +2,7 @@ using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Issues.Features;
 using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.WebApi.Shared.Abstractions;
+using Foundry.WebApi.Shared.Infrastructure;
 using Foundry.WebApi.Shared.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -60,6 +61,49 @@ internal sealed class IssuesModule(FoundryDbContext db) : IIssuesModule
         }
 
         return edges;
+    }
+
+    public async Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        // Claim the oldest queued issue (FIFO). The BackgroundService processes claims
+        // sequentially, so any queued issue is a valid next candidate — no ordering required.
+        QueuedIssue? queued = await db.Set<QueuedIssue>()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (queued is null)
+        {
+            return null;
+        }
+
+        var dispatchData = await db.Set<MonitoredRepository>()
+            .Where(r => r.Id == queued.MonitoredRepositoryId)
+            .Join(
+                db.Set<Account>(),
+                r => r.AccountId,
+                a => a.Id,
+                (r, a) => new { r.Slug, a.SecretKeyName, a.BaseUrl })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (dispatchData is null)
+        {
+            return null;
+        }
+
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+        await db.TransitionAsync(queued, inProgress, cancellationToken);
+
+        Uri cloneUrl = new(dispatchData.BaseUrl, $"{dispatchData.Slug}.git");
+
+        return new ClaimedIssueDispatch(
+            inProgress.Id,
+            inProgress.IssueNumber,
+            inProgress.Title,
+            inProgress.Body,
+            dispatchData.Slug.ToString(),
+            cloneUrl,
+            dispatchData.SecretKeyName);
     }
 }
 

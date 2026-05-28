@@ -1,5 +1,6 @@
 using Foundry.WebApi.Modules.Issues;
 using Foundry.WebApi.Modules.Monitoring;
+using Foundry.WebApi.Modules.Workers;
 using Foundry.WebApi.Shared.Abstractions;
 using Foundry.WebApi.Shared.Infrastructure;
 using Foundry.WebApi.Shared.Persistence;
@@ -14,6 +15,7 @@ builder.Services.AddDbContext<FoundryDbContext>(options =>
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule(builder.Configuration);
+builder.Services.AddWorkersModule(builder.Configuration);
 builder.Services.AddOpenApi();
 
 WebApplication app = builder.Build();
