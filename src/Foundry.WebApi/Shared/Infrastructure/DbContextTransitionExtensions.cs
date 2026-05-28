@@ -1,6 +1,7 @@
 using Foundry.WebApi.Shared.Abstractions;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Foundry.WebApi.Shared.Infrastructure;
 
@@ -14,7 +15,7 @@ public static class DbContextTransitionExtensions
         where TFrom : class, IStateMachine
         where TTo : class, IStateMachine
     {
-        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction =
+        await using IDbContextTransaction transaction =
             await db.Database.BeginTransactionAsync(cancellationToken);
 
         db.Remove(old);
