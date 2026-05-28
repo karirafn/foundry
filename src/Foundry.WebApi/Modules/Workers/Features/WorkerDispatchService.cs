@@ -70,14 +70,15 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        ClaimedIssueDispatch? claimed = await issuesModule.ClaimNextQueuedIssueAsync(cancellationToken);
+        Guid workerRunId = Guid.NewGuid();
+        ClaimedIssueDispatch? claimed = await issuesModule.ClaimNextQueuedIssueAsync(workerRunId, cancellationToken);
 
         if (claimed is null)
         {
             return;
         }
 
-        StartingRun startingRun = StartingRun.Begin(claimed.IssueId);
+        StartingRun startingRun = StartingRun.Begin(claimed.IssueId, WorkerRunId.From(workerRunId));
         dbContext.WorkerRuns.Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -161,7 +162,7 @@ internal sealed class WorkerDispatchService(
         CancellationToken cancellationToken)
     {
         string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
-        (string? branchName, string? prUrl) = IngestReports(dbContext, activeRun, reportsDir);
+        (string? branchName, string? prUrl) = await IngestReportsAsync(dbContext, activeRun, reportsDir, cancellationToken);
 
         WorkerStatus? status = await orchestrator.GetStatusAsync(activeRun.ContainerId, cancellationToken);
 
@@ -219,20 +220,23 @@ internal sealed class WorkerDispatchService(
         }
     }
 
-    private (string? BranchName, string? PrUrl) IngestReports(
+    private async Task<(string? BranchName, string? PrUrl)> IngestReportsAsync(
         FoundryDbContext dbContext,
         ActiveRun activeRun,
-        string reportsDir)
+        string reportsDir,
+        CancellationToken cancellationToken)
     {
         if (!Directory.Exists(reportsDir))
         {
             return (null, null);
         }
 
-        HashSet<int> ingestedSequenceNumbers = dbContext.WorkerReports
+        List<int> ingestedList = await dbContext.WorkerReports
             .Where(r => r.WorkerRunId == activeRun.Id)
             .Select(r => r.SequenceNumber)
-            .ToHashSet();
+            .ToListAsync(cancellationToken);
+
+        HashSet<int> ingestedSequenceNumbers = ingestedList.ToHashSet();
 
         string? branchName = null;
         string? prUrl = null;
@@ -250,9 +254,9 @@ internal sealed class WorkerDispatchService(
                 continue;
             }
 
-            WorkerReportPayload? payload = TryParseReport(filePath);
+            (WorkerReportPayload? payload, string? content) = TryParseReport(filePath);
 
-            if (payload is null)
+            if (payload is null || content is null)
             {
                 continue;
             }
@@ -261,7 +265,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 sequenceNumber.Value,
                 payload.Type,
-                File.ReadAllText(filePath));
+                content);
 
             dbContext.WorkerReports.Add(report);
 
@@ -279,7 +283,7 @@ internal sealed class WorkerDispatchService(
 
         if (dbContext.ChangeTracker.HasChanges())
         {
-            dbContext.SaveChanges();
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         return (branchName, prUrl);
@@ -300,12 +304,13 @@ internal sealed class WorkerDispatchService(
         return null;
     }
 
-    private WorkerReportPayload? TryParseReport(string filePath)
+    private (WorkerReportPayload? Payload, string? Content) TryParseReport(string filePath)
     {
         try
         {
-            string json = File.ReadAllText(filePath);
-            return JsonSerializer.Deserialize<WorkerReportPayload>(json, ReportJsonOptions);
+            string content = File.ReadAllText(filePath);
+            WorkerReportPayload? payload = JsonSerializer.Deserialize<WorkerReportPayload>(content, ReportJsonOptions);
+            return (payload, content);
         }
         catch (IOException ex)
         {
@@ -313,7 +318,7 @@ internal sealed class WorkerDispatchService(
                 ex,
                 "Could not read report file {FilePath}; will retry next tick.",
                 filePath);
-            return null;
+            return (null, null);
         }
         catch (JsonException ex)
         {
@@ -321,7 +326,7 @@ internal sealed class WorkerDispatchService(
                 ex,
                 "Could not parse report file {FilePath}; will retry next tick.",
                 filePath);
-            return null;
+            return (null, null);
         }
     }
 

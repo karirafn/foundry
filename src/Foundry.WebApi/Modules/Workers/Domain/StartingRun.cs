@@ -14,9 +14,9 @@ public sealed class StartingRun : WorkerRun
     {
     }
 
-    public static StartingRun Begin(IssueId issueId)
+    public static StartingRun Begin(IssueId issueId, WorkerRunId workerRunId)
     {
-        return new StartingRun(WorkerRunId.New(), issueId, DateTimeOffset.UtcNow);
+        return new StartingRun(workerRunId, issueId, DateTimeOffset.UtcNow);
     }
 
     public ActiveRun Activate(string containerId)

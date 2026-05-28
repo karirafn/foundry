@@ -40,7 +40,7 @@ public sealed class PersistStartingRun : IAsyncDisposable
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun run = StartingRun.Begin(issueId);
+        StartingRun run = StartingRun.Begin(issueId, WorkerRunId.New());
 
         _dbContext.Set<WorkerRun>().Add(run);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

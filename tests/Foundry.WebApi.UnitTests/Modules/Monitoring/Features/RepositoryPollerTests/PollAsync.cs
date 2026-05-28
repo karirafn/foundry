@@ -529,7 +529,7 @@ public sealed class PollAsync : IAsyncDisposable
             return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
         }
 
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(CancellationToken cancellationToken)
+        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
         {
             return Task.FromResult<ClaimedIssueDispatch?>(null);
         }

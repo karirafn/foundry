@@ -1,6 +1,5 @@
 using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Shared.Abstractions;
 
 using Shouldly;
@@ -37,9 +36,10 @@ public sealed class Claim
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        Guid workerRunId = Guid.NewGuid();
 
         // Act
-        InProgressIssue inProgress = queued.Claim();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
 
         // Assert
         inProgress.Id.ShouldBe(queued.Id);
@@ -53,7 +53,7 @@ public sealed class Claim
         QueuedIssue queued = CreateQueuedIssue(repositoryId);
 
         // Act
-        queued.Claim();
+        queued.Claim(Guid.NewGuid());
 
         // Assert
         IssueClaimed domainEvent = queued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueClaimed>();
@@ -70,7 +70,7 @@ public sealed class Claim
         QueuedIssue queued = CreateQueuedIssue(repositoryId);
 
         // Act
-        InProgressIssue inProgress = queued.Claim();
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
 
         // Assert
         inProgress.ShouldSatisfyAllConditions(
@@ -82,16 +82,17 @@ public sealed class Claim
     }
 
     [Fact]
-    public void WhenClaimed_WorkerRunIdIsAssigned()
+    public void WhenClaimed_WorkerRunIdMatchesProvidedGuid()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        Guid workerRunId = Guid.NewGuid();
 
         // Act
-        InProgressIssue inProgress = queued.Claim();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
 
         // Assert
-        inProgress.WorkerRunId.ShouldNotBe(default(WorkerRunId));
+        inProgress.WorkerRunId.ShouldBe(workerRunId);
     }
 }

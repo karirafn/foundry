@@ -64,7 +64,7 @@ public sealed class PersistInProgressIssue : IAsyncDisposable
         QueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
 
-        InProgressIssue inProgress = queued.Claim();
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 

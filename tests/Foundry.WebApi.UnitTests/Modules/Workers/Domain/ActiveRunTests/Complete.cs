@@ -11,7 +11,7 @@ public sealed class Complete
 {
     private static ActiveRun CreateActiveRun(IssueId? issueId = null)
     {
-        StartingRun starting = StartingRun.Begin(issueId ?? IssueId.New());
+        StartingRun starting = StartingRun.Begin(issueId ?? IssueId.New(), WorkerRunId.New());
         return starting.Activate("container-123");
     }
 

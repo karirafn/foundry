@@ -11,7 +11,7 @@ public sealed class UpdateProgress
 {
     private static ActiveRun CreateActiveRun()
     {
-        StartingRun starting = StartingRun.Begin(IssueId.New());
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
         return starting.Activate("container-123");
     }
 

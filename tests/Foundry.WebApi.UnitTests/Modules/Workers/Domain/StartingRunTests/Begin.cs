@@ -16,24 +16,24 @@ public sealed class Begin
         IssueId issueId = IssueId.New();
 
         // Act
-        StartingRun run = StartingRun.Begin(issueId);
+        StartingRun run = StartingRun.Begin(issueId, WorkerRunId.New());
 
         // Assert
         run.IssueId.ShouldBe(issueId);
     }
 
     [Fact]
-    public void WhenCalled_AssignsNewWorkerRunId()
+    public void WhenCalled_UsesProvidedWorkerRunId()
     {
         // Arrange
         IssueId issueId = IssueId.New();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        StartingRun a = StartingRun.Begin(issueId);
-        StartingRun b = StartingRun.Begin(issueId);
+        StartingRun run = StartingRun.Begin(issueId, workerRunId);
 
         // Assert
-        a.Id.ShouldNotBe(b.Id);
+        run.Id.ShouldBe(workerRunId);
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public sealed class Begin
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        StartingRun run = StartingRun.Begin(issueId);
+        StartingRun run = StartingRun.Begin(issueId, WorkerRunId.New());
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;

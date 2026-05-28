@@ -40,7 +40,7 @@ public sealed class PersistActiveRun : IAsyncDisposable
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         ActiveRun run = starting.Activate("container-abc123");
 
         _dbContext.Set<WorkerRun>().Add(run);
@@ -67,7 +67,7 @@ public sealed class PersistActiveRun : IAsyncDisposable
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         ActiveRun run = starting.Activate("container-xyz");
         run.UpdateProgress("Step 1 complete");
 

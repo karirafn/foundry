@@ -40,7 +40,7 @@ public sealed class PersistFailedRun : IAsyncDisposable
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         FailedRun run = starting.Fail(new FailureReason.NonZeroExit(42));
 
         _dbContext.Set<WorkerRun>().Add(run);
@@ -67,7 +67,7 @@ public sealed class PersistFailedRun : IAsyncDisposable
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         FailedRun run = starting.Fail(new FailureReason.TimedOut());
 
         _dbContext.Set<WorkerRun>().Add(run);
@@ -89,7 +89,7 @@ public sealed class PersistFailedRun : IAsyncDisposable
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         FailedRun run = starting.Fail(new FailureReason.ContainerError("Docker daemon unavailable"));
 
         _dbContext.Set<WorkerRun>().Add(run);

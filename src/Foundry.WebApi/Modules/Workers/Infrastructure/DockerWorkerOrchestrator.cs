@@ -47,15 +47,22 @@ internal sealed class DockerWorkerOrchestrator(DockerClient dockerClient) : IWor
 
     public async Task StopAsync(string containerId, CancellationToken cancellationToken)
     {
-        await dockerClient.Containers.StopContainerAsync(
-            containerId,
-            new ContainerStopParameters { WaitBeforeKillSeconds = 10 },
-            cancellationToken);
+        try
+        {
+            await dockerClient.Containers.StopContainerAsync(
+                containerId,
+                new ContainerStopParameters { WaitBeforeKillSeconds = 10 },
+                cancellationToken);
 
-        await dockerClient.Containers.RemoveContainerAsync(
-            containerId,
-            new ContainerRemoveParameters { Force = true },
-            cancellationToken);
+            await dockerClient.Containers.RemoveContainerAsync(
+                containerId,
+                new ContainerRemoveParameters { Force = true },
+                cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            // Container already gone — treat as successful stop.
+        }
     }
 
     public async Task<WorkerStatus?> GetStatusAsync(

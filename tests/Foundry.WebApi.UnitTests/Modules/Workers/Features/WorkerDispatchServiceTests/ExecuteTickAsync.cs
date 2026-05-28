@@ -193,7 +193,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         await using (FoundryDbContext db = CreateDbContext())
         {
             IssueId issueId = IssueId.New();
-            StartingRun starting = StartingRun.Begin(issueId);
+            StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
             ActiveRun activeRun = starting.Activate("container-existing");
             db.WorkerRuns.Add(activeRun);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -330,7 +330,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
 
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(CancellationToken cancellationToken)
+        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
             => Task.FromResult(claimedIssue);
     }
 

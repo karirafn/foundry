@@ -17,5 +17,5 @@ public interface IIssuesModule
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
-    Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(CancellationToken cancellationToken);
+    Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken);
 }

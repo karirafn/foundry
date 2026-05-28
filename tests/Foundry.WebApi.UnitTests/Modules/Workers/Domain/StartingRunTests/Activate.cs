@@ -13,7 +13,7 @@ public sealed class Activate
     public void WhenCalled_ReturnsActiveRunWithSameId()
     {
         // Arrange
-        StartingRun starting = StartingRun.Begin(IssueId.New());
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
 
         // Act
         ActiveRun active = starting.Activate("container-123");
@@ -27,7 +27,7 @@ public sealed class Activate
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
 
         // Act
         ActiveRun active = starting.Activate("container-123");
@@ -42,7 +42,7 @@ public sealed class Activate
     public void WhenCalled_SetsContainerId()
     {
         // Arrange
-        StartingRun starting = StartingRun.Begin(IssueId.New());
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
 
         // Act
         ActiveRun active = starting.Activate("container-abc");
@@ -55,7 +55,7 @@ public sealed class Activate
     public void WhenCalled_SetsStartedAtToUtcNow()
     {
         // Arrange
-        StartingRun starting = StartingRun.Begin(IssueId.New());
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
@@ -71,7 +71,7 @@ public sealed class Activate
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
 
         // Act
         starting.Activate("container-123");

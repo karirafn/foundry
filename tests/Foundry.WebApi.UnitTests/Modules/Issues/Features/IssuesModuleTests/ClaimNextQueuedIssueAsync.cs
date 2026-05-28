@@ -103,6 +103,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
 
         // Act
         ClaimedIssueDispatch? result = await _sut.ClaimNextQueuedIssueAsync(
+            Guid.NewGuid(),
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -124,6 +125,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
 
         // Act
         ClaimedIssueDispatch? result = await _sut.ClaimNextQueuedIssueAsync(
+            Guid.NewGuid(),
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -146,12 +148,32 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         QueuedIssue queued = await SeedQueuedIssueAsync(repository.Id);
 
         // Act
-        await _sut.ClaimNextQueuedIssueAsync(TestContext.Current.CancellationToken);
+        await _sut.ClaimNextQueuedIssueAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Assert
         Issue? issue = await _dbContext.Set<Issue>()
             .FindAsync([queued.Id], TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueExists_InProgressIssueStoresProvidedWorkerRunId()
+    {
+        // Arrange
+        (MonitoredRepository repository, _) = await SeedRepositoryAsync();
+        await SeedQueuedIssueAsync(repository.Id);
+        Guid workerRunId = Guid.NewGuid();
+
+        // Act
+        await _sut.ClaimNextQueuedIssueAsync(workerRunId, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert — the persisted InProgressIssue.WorkerRunId matches the provided guid
+        InProgressIssue? inProgress = await _dbContext.Set<Issue>()
+            .OfType<InProgressIssue>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        inProgress.ShouldNotBeNull();
+        inProgress.WorkerRunId.ShouldBe(workerRunId);
     }
 }

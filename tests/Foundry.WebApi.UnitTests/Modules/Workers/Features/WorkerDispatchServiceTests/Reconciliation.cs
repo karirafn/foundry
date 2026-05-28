@@ -48,7 +48,7 @@ public sealed class Reconciliation : IAsyncDisposable
     {
         using FoundryDbContext db = CreateDbContext();
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         ActiveRun activeRun = starting.Activate(containerId);
         db.WorkerRuns.Add(activeRun);
         db.SaveChanges();
@@ -232,7 +232,7 @@ public sealed class Reconciliation : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
 
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(CancellationToken cancellationToken)
+        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
             => Task.FromResult<ClaimedIssueDispatch?>(null);
     }
 

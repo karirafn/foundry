@@ -13,7 +13,7 @@ public sealed class Fail
     public void WhenCalled_ReturnsFailedRunWithSameId()
     {
         // Arrange
-        StartingRun starting = StartingRun.Begin(IssueId.New());
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
         FailureReason reason = new FailureReason.ContainerError("image not found");
 
         // Act
@@ -28,7 +28,7 @@ public sealed class Fail
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         FailureReason reason = new FailureReason.ContainerError("image not found");
 
         // Act
@@ -44,7 +44,7 @@ public sealed class Fail
     public void WhenCalled_SetsReason()
     {
         // Arrange
-        StartingRun starting = StartingRun.Begin(IssueId.New());
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
         FailureReason reason = new FailureReason.ContainerError("image not found");
 
         // Act
@@ -58,7 +58,7 @@ public sealed class Fail
     public void WhenCalled_SetsFailedAtToUtcNow()
     {
         // Arrange
-        StartingRun starting = StartingRun.Begin(IssueId.New());
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
         FailureReason reason = new FailureReason.ContainerError("image not found");
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
@@ -75,7 +75,7 @@ public sealed class Fail
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId);
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         FailureReason reason = new FailureReason.ContainerError("image not found");
 
         // Act

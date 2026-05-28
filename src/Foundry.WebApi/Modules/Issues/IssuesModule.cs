@@ -63,7 +63,9 @@ internal sealed class IssuesModule(FoundryDbContext db) : IIssuesModule
         return edges;
     }
 
-    public async Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(CancellationToken cancellationToken)
+    public async Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(
+        Guid workerRunId,
+        CancellationToken cancellationToken)
     {
         // Claim the oldest queued issue (FIFO). SQLite does not support ordering by
         // DateTimeOffset, so we load the first row without ordering — the BackgroundService
@@ -90,7 +92,7 @@ internal sealed class IssuesModule(FoundryDbContext db) : IIssuesModule
             return null;
         }
 
-        InProgressIssue inProgress = queued.Claim();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
         await db.TransitionAsync(queued, inProgress, cancellationToken);
 
         Uri cloneUrl = new(dispatchData.BaseUrl, $"{dispatchData.Slug}.git");
