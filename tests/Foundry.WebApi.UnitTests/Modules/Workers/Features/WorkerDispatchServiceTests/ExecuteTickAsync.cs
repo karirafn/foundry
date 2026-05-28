@@ -362,7 +362,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             => Task.CompletedTask;
 
         public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatus?>(null);
+            => Task.FromResult<WorkerStatus?>(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,

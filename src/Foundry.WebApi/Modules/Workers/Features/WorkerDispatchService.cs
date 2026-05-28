@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 using Foundry.WebApi.Modules.Issues;
 using Foundry.WebApi.Modules.Workers.Domain;
@@ -21,6 +22,11 @@ internal sealed class WorkerDispatchService(
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(10);
 
+    private static readonly JsonSerializerOptions ReportJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -41,6 +47,8 @@ internal sealed class WorkerDispatchService(
         IIssuesModule issuesModule = scope.ServiceProvider.GetRequiredService<IIssuesModule>();
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IProviderAuth providerAuth = scope.ServiceProvider.GetRequiredService<IProviderAuth>();
+
+        await MonitorActiveRunsAsync(dbContext, orchestrator, cancellationToken);
 
         int activeCount = await dbContext.WorkerRuns
             .OfType<ActiveRun>()
@@ -91,6 +99,192 @@ internal sealed class WorkerDispatchService(
                 startingRun.Id,
                 claimed.IssueNumber,
                 failure.Error.Message);
+        }
+    }
+
+    private async Task MonitorActiveRunsAsync(
+        FoundryDbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        CancellationToken cancellationToken)
+    {
+        List<ActiveRun> activeRuns = await dbContext.WorkerRuns
+            .OfType<ActiveRun>()
+            .ToListAsync(cancellationToken);
+
+        foreach (ActiveRun activeRun in activeRuns)
+        {
+            await MonitorRunAsync(dbContext, orchestrator, activeRun, cancellationToken);
+        }
+    }
+
+    private async Task MonitorRunAsync(
+        FoundryDbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
+        (string? branchName, string? prUrl) = IngestReports(dbContext, activeRun, reportsDir);
+
+        WorkerStatus? status = await orchestrator.GetStatusAsync(activeRun.ContainerId, cancellationToken);
+
+        if (status is null)
+        {
+            FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Container not found"));
+            await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} container {ContainerId} not found; marking failed.",
+                activeRun.Id,
+                activeRun.ContainerId);
+            return;
+        }
+
+        if (status.IsRunning)
+        {
+            DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(_options.TimeoutMinutes);
+            if (DateTimeOffset.UtcNow >= timeout)
+            {
+                await orchestrator.StopAsync(activeRun.ContainerId, cancellationToken);
+                FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut());
+                await dbContext.TransitionAsync(activeRun, timedOut, cancellationToken);
+
+                logger.LogWarning(
+                    "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
+                    activeRun.Id,
+                    _options.TimeoutMinutes);
+            }
+
+            return;
+        }
+
+        if (status.ExitCode == 0)
+        {
+            CompletedRun completed = activeRun.Complete(0, branchName, prUrl);
+            await dbContext.TransitionAsync(activeRun, completed, cancellationToken);
+
+            logger.LogInformation(
+                "Worker run {WorkerRunId} completed successfully (branch: {BranchName}, PR: {PrUrl}).",
+                activeRun.Id,
+                branchName ?? "(none)",
+                prUrl ?? "(none)");
+        }
+        else
+        {
+            int exitCode = status.ExitCode ?? -1;
+            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode));
+            await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} exited with code {ExitCode}.",
+                activeRun.Id,
+                exitCode);
+        }
+    }
+
+    private (string? BranchName, string? PrUrl) IngestReports(
+        FoundryDbContext dbContext,
+        ActiveRun activeRun,
+        string reportsDir)
+    {
+        if (!Directory.Exists(reportsDir))
+        {
+            return (null, null);
+        }
+
+        HashSet<int> ingestedSequenceNumbers = dbContext.WorkerReports
+            .Where(r => r.WorkerRunId == activeRun.Id)
+            .Select(r => r.SequenceNumber)
+            .ToHashSet();
+
+        string? branchName = null;
+        string? prUrl = null;
+
+        IEnumerable<string> reportFiles = Directory
+            .EnumerateFiles(reportsDir, "report-*.json")
+            .OrderBy(f => f);
+
+        foreach (string filePath in reportFiles)
+        {
+            int? sequenceNumber = ParseSequenceNumber(filePath);
+
+            if (sequenceNumber is null || ingestedSequenceNumbers.Contains(sequenceNumber.Value))
+            {
+                continue;
+            }
+
+            WorkerReportPayload? payload = TryParseReport(filePath);
+
+            if (payload is null)
+            {
+                continue;
+            }
+
+            WorkerReport report = WorkerReport.Create(
+                activeRun.Id,
+                sequenceNumber.Value,
+                payload.Type,
+                File.ReadAllText(filePath));
+
+            dbContext.WorkerReports.Add(report);
+
+            if (payload.Summary is not null)
+            {
+                activeRun.UpdateProgress(payload.Summary);
+            }
+
+            if (payload.Type == "final")
+            {
+                branchName = payload.BranchName;
+                prUrl = payload.PrUrl;
+            }
+        }
+
+        if (dbContext.ChangeTracker.HasChanges())
+        {
+            dbContext.SaveChanges();
+        }
+
+        return (branchName, prUrl);
+    }
+
+    private static int? ParseSequenceNumber(string filePath)
+    {
+        string fileName = Path.GetFileNameWithoutExtension(filePath);
+
+        // File name format: report-{sequenceNumber}
+        ReadOnlySpan<char> suffix = fileName.AsSpan("report-".Length);
+
+        if (int.TryParse(suffix, out int number))
+        {
+            return number;
+        }
+
+        return null;
+    }
+
+    private WorkerReportPayload? TryParseReport(string filePath)
+    {
+        try
+        {
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<WorkerReportPayload>(json, ReportJsonOptions);
+        }
+        catch (IOException ex)
+        {
+            logger.LogDebug(
+                ex,
+                "Could not read report file {FilePath}; will retry next tick.",
+                filePath);
+            return null;
+        }
+        catch (JsonException ex)
+        {
+            logger.LogDebug(
+                ex,
+                "Could not parse report file {FilePath}; will retry next tick.",
+                filePath);
+            return null;
         }
     }
 
