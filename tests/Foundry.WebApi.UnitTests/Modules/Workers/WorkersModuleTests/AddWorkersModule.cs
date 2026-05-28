@@ -1,0 +1,76 @@
+using Foundry.WebApi.Modules.Workers;
+using Foundry.WebApi.Modules.Workers.Features;
+using Foundry.WebApi.Modules.Workers.Infrastructure;
+
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.WebApi.UnitTests.Modules.Workers.WorkersModuleTests;
+
+public sealed class AddWorkersModule
+{
+    private static IConfiguration BuildConfiguration(Dictionary<string, string?> values)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(values)
+            .Build();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersWorkerOptions()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Workers:MaxConcurrent"] = "5",
+        });
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
+        options.Value.MaxConcurrent.ShouldBe(5);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersIWorkerOrchestrator()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IWorkerOrchestrator orchestrator = provider.GetRequiredService<IWorkerOrchestrator>();
+        orchestrator.ShouldBeOfType<DockerWorkerOrchestrator>();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersWorkerDispatchServiceAsHostedService()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddLogging();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
+        hostedServices.ShouldContain(s => s is WorkerDispatchService);
+    }
+}
