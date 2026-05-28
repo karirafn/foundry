@@ -92,12 +92,30 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasColumnType("TEXT")
             .HasColumnName("labels");
 
+        ValueConverter<IReadOnlyList<int>, string> blockedByConverter = new(
+            blockedBy => JsonSerializer.Serialize(blockedBy, (JsonSerializerOptions?)null),
+            json => (IReadOnlyList<int>)(JsonSerializer.Deserialize<List<int>>(json, (JsonSerializerOptions?)null)
+                ?? new List<int>()));
+
+        ValueComparer<IReadOnlyList<int>> blockedByComparer = new(
+            (a, b) => a != null && b != null && a.SequenceEqual(b),
+            blockedBy => blockedBy.Aggregate(0, (hash, n) => HashCode.Combine(hash, n.GetHashCode())),
+            blockedBy => (IReadOnlyList<int>)blockedBy.ToList());
+
+        builder.Property(i => i.BlockedBy)
+            .HasConversion(blockedByConverter, blockedByComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasDefaultValueSql("'[]'")
+            .HasColumnName("blocked_by");
+
         builder.Property(i => i.DetectedAt)
             .HasColumnName("detected_at");
 
         builder.HasDiscriminator<string>("state")
             .HasValue<DetectedIssue>("detected")
             .HasValue<QueuedIssue>("queued")
+            .HasValue<BlockedIssue>("blocked")
             .IsComplete(true);
 
         builder.Property<string>("state")
