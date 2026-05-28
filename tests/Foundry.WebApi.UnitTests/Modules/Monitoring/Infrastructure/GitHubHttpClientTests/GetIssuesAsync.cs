@@ -84,7 +84,7 @@ public sealed class GetIssuesAsync
         request.Headers.Authorization.Parameter.ShouldBe("ghp_mytoken");
         request.Headers.Accept.ShouldContain(h => h.MediaType == "application/vnd.github+json");
         request.Headers.Contains("X-GitHub-Api-Version").ShouldBeTrue();
-        request.Headers.GetValues("X-GitHub-Api-Version").ShouldContain("2022-11-28");
+        request.Headers.GetValues("X-GitHub-Api-Version").ShouldContain("2026-03-10");
         request.Headers.UserAgent.ShouldContain(h => h.Product != null && h.Product.Name == "Foundry");
     }
 

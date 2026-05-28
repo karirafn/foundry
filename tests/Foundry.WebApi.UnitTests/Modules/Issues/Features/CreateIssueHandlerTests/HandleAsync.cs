@@ -2,18 +2,16 @@ using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Issues.Features;
 using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.WebApi.Shared.Abstractions;
-using Foundry.WebApi.Shared.Infrastructure;
 using Foundry.WebApi.Shared.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.WebApi.UnitTests.Modules.Issues.Features.CreateAndEnqueueIssueHandlerTests;
+namespace Foundry.WebApi.UnitTests.Modules.Issues.Features.CreateIssueHandlerTests;
 
 public sealed class HandleAsync : IAsyncDisposable
 {
@@ -39,19 +37,8 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IDomainEventDispatcher BuildDispatcher(params IDomainEventHandler<IssueQueued>[] handlers)
-    {
-        ServiceCollection services = new();
-        foreach (IDomainEventHandler<IssueQueued> handler in handlers)
-        {
-            services.AddSingleton(handler);
-        }
-
-        return new DomainEventDispatcher(services.BuildServiceProvider());
-    }
-
     [Fact]
-    public async Task WhenIssueDetectedEventReceived_PersistsQueuedIssue()
+    public async Task WhenIssueDetectedEventReceived_PersistsDetectedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -65,26 +52,25 @@ public sealed class HandleAsync : IAsyncDisposable
             Labels: ["bug"],
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IDomainEventDispatcher dispatcher = BuildDispatcher();
-        IDomainEventHandler<IssueDetected> sut = new CreateAndEnqueueIssueHandler(_dbContext, dispatcher);
+        IDomainEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        QueuedIssue queued = _dbContext.Set<Issue>()
-            .OfType<QueuedIssue>()
+        DetectedIssue detected = _dbContext.Set<Issue>()
+            .OfType<DetectedIssue>()
             .ShouldHaveSingleItem();
-        queued.ShouldSatisfyAllConditions(
-            () => queued.MonitoredRepositoryId.ShouldBe(repositoryId),
-            () => queued.IssueNumber.ShouldBe(42),
-            () => queued.Title.ShouldBe("Fix the bug"),
-            () => queued.Body.ShouldBe("Bug body"),
-            () => queued.Labels.ShouldBe(["bug"]));
+        detected.ShouldSatisfyAllConditions(
+            () => detected.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => detected.IssueNumber.ShouldBe(42),
+            () => detected.Title.ShouldBe("Fix the bug"),
+            () => detected.Body.ShouldBe("Bug body"),
+            () => detected.Labels.ShouldBe(["bug"]));
     }
 
     [Fact]
-    public async Task WhenIssueDetectedEventReceived_DispatchesIssueQueuedEvent()
+    public async Task WhenIssueDetectedEventReceived_MapsAuthorAndUrl()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -98,25 +84,17 @@ public sealed class HandleAsync : IAsyncDisposable
             Labels: [],
             DetectedAt: DateTimeOffset.UtcNow);
 
-        List<IssueQueued> receivedEvents = [];
-        IssueQueuedCapturingHandler capturingHandler = new(receivedEvents);
-        IDomainEventDispatcher dispatcher = BuildDispatcher(capturingHandler);
-        IDomainEventHandler<IssueDetected> sut = new CreateAndEnqueueIssueHandler(_dbContext, dispatcher);
+        IDomainEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        IssueQueued queued = receivedEvents.ShouldHaveSingleItem();
-        queued.MonitoredRepositoryId.ShouldBe(repositoryId);
-    }
-
-    private sealed class IssueQueuedCapturingHandler(List<IssueQueued> received) : IDomainEventHandler<IssueQueued>
-    {
-        public Task HandleAsync(IssueQueued @event, CancellationToken cancellationToken)
-        {
-            received.Add(@event);
-            return Task.CompletedTask;
-        }
+        DetectedIssue detected = _dbContext.Set<Issue>()
+            .OfType<DetectedIssue>()
+            .ShouldHaveSingleItem();
+        detected.ShouldSatisfyAllConditions(
+            () => detected.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => detected.IssueNumber.ShouldBe(7));
     }
 }

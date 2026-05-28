@@ -8,6 +8,7 @@ using Foundry.WebApi.Shared.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using Shouldly;
 
@@ -30,6 +31,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddDbContext<FoundryDbContext>(opts =>
             opts.UseSqlite(_connection));
 
+        services.AddLogging();
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddIssuesModule();
 
@@ -65,7 +67,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         // Assert
         IDomainEventHandler<IssueDetected> handler =
             scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDetected>>();
-        handler.ShouldBeOfType<CreateAndEnqueueIssueHandler>();
+        handler.ShouldBeOfType<CreateIssueHandler>();
     }
 
     [Fact]
@@ -78,5 +80,17 @@ public sealed class AddIssuesModule : IAsyncDisposable
         IDomainEventHandler<IssueDetailsChanged> handler =
             scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDetailsChanged>>();
         handler.ShouldBeOfType<UpdateIssueDetailsHandler>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueDependenciesDetectedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueDependenciesDetected> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDependenciesDetected>>();
+        handler.ShouldBeOfType<ProcessIssueDependenciesHandler>();
     }
 }

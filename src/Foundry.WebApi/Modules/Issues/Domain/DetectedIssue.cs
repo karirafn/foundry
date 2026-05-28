@@ -38,8 +38,26 @@ public sealed class DetectedIssue : Issue
 
     public QueuedIssue Enqueue()
     {
+        if (BlockedBy.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Cannot enqueue an issue that has unresolved blockers.");
+        }
+
         QueuedIssue queued = QueuedIssue.FromDetected(this);
         AddDomainEvent(new IssueQueued(Id, MonitoredRepositoryId));
         return queued;
+    }
+
+    public BlockedIssue Block(IReadOnlyList<int> blockers)
+    {
+        if (blockers.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot block an issue without specifying at least one blocker.");
+        }
+
+        BlockedIssue blocked = BlockedIssue.FromDetected(this, blockers);
+        AddDomainEvent(new IssueBlocked(Id, MonitoredRepositoryId));
+        return blocked;
     }
 }

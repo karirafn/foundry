@@ -12,4 +12,8 @@ public interface IIssuesModule
         MonitoredRepositoryId repositoryId,
         IReadOnlySet<int> issueNumbers,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
 }

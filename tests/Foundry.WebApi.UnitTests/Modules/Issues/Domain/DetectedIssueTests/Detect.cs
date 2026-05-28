@@ -69,4 +69,18 @@ public sealed class Detect
         // Assert
         a.Id.ShouldNotBe(b.Id);
     }
+
+    [Fact]
+    public void WhenCalled_BlockedByIsEmpty()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+
+        // Act
+        DetectedIssue issue = DetectedIssue.Detect(
+            repositoryId, 1, "Title", "Body", ValidAuthor, ValidUrl, [], DateTimeOffset.UtcNow);
+
+        // Assert
+        issue.BlockedBy.ShouldBeEmpty();
+    }
 }

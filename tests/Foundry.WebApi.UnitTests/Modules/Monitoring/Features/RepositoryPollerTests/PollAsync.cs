@@ -116,7 +116,8 @@ public sealed class PollAsync : IAsyncDisposable
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<IssueDetected>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<IssueDetailsChanged>().ShouldBeEmpty();
     }
 
     [Fact]
@@ -182,7 +183,8 @@ public sealed class PollAsync : IAsyncDisposable
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<IssueDetected>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<IssueDetailsChanged>().ShouldBeEmpty();
     }
 
     [Fact]
@@ -269,6 +271,149 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenKnownIssueExists_RaisesIssueDependenciesDetectedEvent()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssuesModule issuesModule = new(
+            new HashSet<int> { 42 },
+            new Dictionary<int, IssueSnapshot>());
+        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IssueDependenciesDetected detected = _dispatcher.DispatchedEvents
+            .OfType<IssueDependenciesDetected>()
+            .ShouldHaveSingleItem();
+        detected.ShouldSatisfyAllConditions(
+            () => detected.MonitoredRepositoryId.ShouldBe(repository.Id),
+            () => detected.IssueNumber.ShouldBe(42),
+            () => detected.BlockedByIssueNumbers.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenProviderReturnsDependencies_EventCarriesBlockedByIssueNumbers()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        Dictionary<int, Result<IReadOnlyList<int>>> dependencyResults = new()
+        {
+            [42] = Result<IReadOnlyList<int>>.Ok([10, 20]),
+        };
+        StubIssuesModule issuesModule = new(
+            new HashSet<int> { 42 },
+            new Dictionary<int, IssueSnapshot>());
+        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        StubIssueProvider provider = new([], dependencyResults);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IssueDependenciesDetected detected = _dispatcher.DispatchedEvents
+            .OfType<IssueDependenciesDetected>()
+            .ShouldHaveSingleItem();
+        detected.BlockedByIssueNumbers.ShouldBe([10, 20]);
+    }
+
+    [Fact]
+    public async Task WhenProviderReturnsEmptyDependencies_EventRaisedWithEmptyBlockedByList()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        Dictionary<int, Result<IReadOnlyList<int>>> dependencyResults = new()
+        {
+            [7] = Result<IReadOnlyList<int>>.Ok([]),
+        };
+        StubIssuesModule issuesModule = new(
+            new HashSet<int> { 7 },
+            new Dictionary<int, IssueSnapshot>());
+        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        StubIssueProvider provider = new([], dependencyResults);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IssueDependenciesDetected detected = _dispatcher.DispatchedEvents
+            .OfType<IssueDependenciesDetected>()
+            .ShouldHaveSingleItem();
+        detected.BlockedByIssueNumbers.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenGetDependenciesFailsForOneIssue_SkipsThatIssueAndRaisesEventsForOthers()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        Error dependencyError = new("GitHub.RateLimited", "Rate limited");
+        Dictionary<int, Result<IReadOnlyList<int>>> dependencyResults = new()
+        {
+            [5] = Result<IReadOnlyList<int>>.Fail(dependencyError),
+            [6] = Result<IReadOnlyList<int>>.Ok([99]),
+        };
+        StubIssuesModule issuesModule = new(
+            new HashSet<int> { 5, 6 },
+            new Dictionary<int, IssueSnapshot>());
+        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        StubIssueProvider provider = new([], dependencyResults);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<IssueDependenciesDetected> detectedEvents = _dispatcher.DispatchedEvents
+            .OfType<IssueDependenciesDetected>()
+            .ToList();
+        detectedEvents.Count.ShouldBe(1);
+        detectedEvents.ShouldContain(e => e.IssueNumber == 6);
+        detectedEvents.ShouldNotContain(e => e.IssueNumber == 5);
+    }
+
+    [Fact]
+    public async Task WhenNewIssueDetectedInSameCycle_AlsoGetsDependencyCheck()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ProviderIssue newIssue = new(
+            Number: 15,
+            Title: "New issue",
+            Body: "Body",
+            Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/15",
+            Labels: []);
+
+        // Pass 1: issue 15 is new (not in initial known numbers).
+        // After dispatch, issue 15 is now persisted — second call returns {15, 16}.
+        StubIssuesModule issuesModule = new(
+            knownNumbers: new HashSet<int> { 16 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: new HashSet<int> { 15, 16 });
+
+        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        StubIssueProvider provider = new([newIssue]);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<IssueDependenciesDetected> dependencyEvents = _dispatcher.DispatchedEvents
+            .OfType<IssueDependenciesDetected>()
+            .ToList();
+        dependencyEvents.Count.ShouldBe(2);
+        dependencyEvents.ShouldContain(e => e.IssueNumber == 15);
+        dependencyEvents.ShouldContain(e => e.IssueNumber == 16);
+    }
+
+    [Fact]
     public async Task WhenProviderReturnsNoIssues_RaisesNoEventsAndUpdatesLastPolledAt()
     {
         // Arrange
@@ -284,7 +429,9 @@ public sealed class PollAsync : IAsyncDisposable
         repository.LastPolledAt.ShouldBe(Now);
     }
 
-    private sealed class StubIssueProvider(IReadOnlyList<ProviderIssue> issues) : IIssueProvider
+    private sealed class StubIssueProvider(
+        IReadOnlyList<ProviderIssue> issues,
+        IReadOnlyDictionary<int, Result<IReadOnlyList<int>>>? dependencyResults = null) : IIssueProvider
     {
         public StubIssueProvider() : this([])
         {
@@ -296,6 +443,19 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok(issues));
         }
+
+        public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+        {
+            if (dependencyResults is not null && dependencyResults.TryGetValue(issueNumber, out Result<IReadOnlyList<int>>? result))
+            {
+                return Task.FromResult(result);
+            }
+
+            return Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
+        }
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
@@ -306,12 +466,22 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Fail(error));
         }
+
+        public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<IReadOnlyList<int>>.Fail(error));
+        }
     }
 
     private sealed class StubIssuesModule : IIssuesModule
     {
         private readonly IReadOnlySet<int> _knownNumbers;
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
+        private readonly IReadOnlySet<int>? _knownNumbersSecondCall;
+        private int _getKnownNumbersCallCount;
 
         public StubIssuesModule()
             : this(new HashSet<int>(), new Dictionary<int, IssueSnapshot>())
@@ -319,16 +489,29 @@ public sealed class PollAsync : IAsyncDisposable
         }
 
         public StubIssuesModule(IReadOnlySet<int> knownNumbers, IReadOnlyDictionary<int, IssueSnapshot> snapshots)
+            : this(knownNumbers, snapshots, knownNumbersSecondCall: null)
+        {
+        }
+
+        public StubIssuesModule(
+            IReadOnlySet<int> knownNumbers,
+            IReadOnlyDictionary<int, IssueSnapshot> snapshots,
+            IReadOnlySet<int>? knownNumbersSecondCall)
         {
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
+            _knownNumbersSecondCall = knownNumbersSecondCall;
         }
 
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(_knownNumbers);
+            _getKnownNumbersCallCount++;
+            IReadOnlySet<int> numbers = _knownNumbersSecondCall is not null && _getKnownNumbersCallCount >= 2
+                ? _knownNumbersSecondCall
+                : _knownNumbers;
+            return Task.FromResult(numbers);
         }
 
         public Task<IReadOnlyDictionary<int, IssueSnapshot>> GetIssueSnapshotsAsync(
@@ -337,6 +520,13 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(_snapshots);
+        }
+
+        public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
         }
     }
 

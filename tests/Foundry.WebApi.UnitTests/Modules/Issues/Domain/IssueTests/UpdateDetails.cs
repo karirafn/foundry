@@ -65,4 +65,24 @@ public sealed class UpdateDetails
             () => issue.Body.ShouldBe(newBody),
             () => issue.Labels.ShouldBe(newLabels));
     }
+
+    [Fact]
+    public void WhenCalledOnBlockedIssue_UpdatesTitleBodyAndLabels()
+    {
+        // Arrange
+        DetectedIssue detected = CreateDetectedIssue();
+        BlockedIssue issue = detected.Block([42]);
+        string newTitle = "Updated Title";
+        string newBody = "Updated body";
+        IReadOnlyList<string> newLabels = ["foundry", "bug"];
+
+        // Act
+        issue.UpdateDetails(newTitle, newBody, newLabels);
+
+        // Assert
+        issue.ShouldSatisfyAllConditions(
+            () => issue.Title.ShouldBe(newTitle),
+            () => issue.Body.ShouldBe(newBody),
+            () => issue.Labels.ShouldBe(newLabels));
+    }
 }

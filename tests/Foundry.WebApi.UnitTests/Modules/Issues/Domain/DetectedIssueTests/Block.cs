@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Foundry.WebApi.UnitTests.Modules.Issues.Domain.DetectedIssueTests;
 
-public sealed class Enqueue
+public sealed class Block
 {
     private static IssueAuthor ValidAuthor =>
         ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
@@ -28,67 +28,62 @@ public sealed class Enqueue
             detectedAt: DateTimeOffset.UtcNow);
 
     [Fact]
-    public void WhenEnqueued_ReturnsQueuedIssueWithSameId()
+    public void WhenBlocked_ReturnsBlockedIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetectedIssue(repositoryId);
+        IReadOnlyList<int> blockers = [10];
 
         // Act
-        QueuedIssue queued = detected.Enqueue();
+        BlockedIssue blocked = detected.Block(blockers);
 
         // Assert
-        queued.Id.ShouldBe(detected.Id);
+        blocked.Id.ShouldBe(detected.Id);
     }
 
     [Fact]
-    public void WhenEnqueued_RaisesIssueQueuedDomainEvent()
+    public void WhenBlocked_RaisesIssueBlockedDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetectedIssue(repositoryId);
+        IReadOnlyList<int> blockers = [10];
 
         // Act
-        detected.Enqueue();
+        detected.Block(blockers);
 
         // Assert
-        IssueQueued domainEvent = detected.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueQueued>();
+        IssueBlocked domainEvent = detected.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueBlocked>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(detected.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public void WhenEnqueued_QueuedIssueHasSameSharedProperties()
+    public void WhenBlocked_BlockedByContainsSuppliedBlockers()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetectedIssue(repositoryId);
+        IReadOnlyList<int> blockers = [10, 20];
 
         // Act
-        QueuedIssue queued = detected.Enqueue();
+        BlockedIssue blocked = detected.Block(blockers);
 
         // Assert
-        queued.ShouldSatisfyAllConditions(
-            () => queued.MonitoredRepositoryId.ShouldBe(detected.MonitoredRepositoryId),
-            () => queued.IssueNumber.ShouldBe(detected.IssueNumber),
-            () => queued.Title.ShouldBe(detected.Title),
-            () => queued.Body.ShouldBe(detected.Body),
-            () => queued.Author.ShouldBe(detected.Author),
-            () => queued.Url.ShouldBe(detected.Url),
-            () => queued.Labels.ShouldBe(detected.Labels),
-            () => queued.DetectedAt.ShouldBe(detected.DetectedAt));
+        blocked.BlockedBy.ShouldBe(blockers);
     }
 
     [Fact]
-    public void WhenBlockedByIsNotEmpty_ThrowsInvalidOperationException()
+    public void WhenBlockersIsEmpty_ThrowsInvalidOperationException()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetectedIssue(repositoryId);
-        detected.SetBlockedBy([5, 10]);
+        IReadOnlyList<int> blockers = [];
 
-        // Act / Assert
-        Should.Throw<InvalidOperationException>(() => detected.Enqueue());
+        // Act & Assert
+        Should.Throw<InvalidOperationException>(() => detected.Block(blockers));
     }
 }
