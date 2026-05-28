@@ -269,6 +269,11 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         {
             return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
         }
+
+        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult<ClaimedIssueDispatch?>(null);
+        }
     }
 
     private sealed class NullDomainEventDispatcher : IDomainEventDispatcher

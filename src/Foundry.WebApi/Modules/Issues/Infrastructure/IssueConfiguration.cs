@@ -116,6 +116,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<DetectedIssue>("detected")
             .HasValue<QueuedIssue>("queued")
             .HasValue<BlockedIssue>("blocked")
+            .HasValue<InProgressIssue>("in_progress")
             .IsComplete(true);
 
         builder.Property<string>("state")

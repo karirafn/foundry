@@ -16,4 +16,6 @@ public interface IIssuesModule
     Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
+
+    Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(CancellationToken cancellationToken);
 }
