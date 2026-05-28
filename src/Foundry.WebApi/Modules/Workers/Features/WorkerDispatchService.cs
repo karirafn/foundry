@@ -28,6 +28,7 @@ internal sealed class WorkerDispatchService(
     };
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
+    // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -331,10 +332,20 @@ internal sealed class WorkerDispatchService(
         return null;
     }
 
+    private const long MaxReportFileSizeBytes = 1_048_576;
+
     private (WorkerReportPayload? Payload, string? Content) TryParseReport(string filePath)
     {
         try
         {
+            if (new FileInfo(filePath).Length > MaxReportFileSizeBytes)
+            {
+                logger.LogWarning(
+                    "Report file {FilePath} exceeds the 1 MB size limit; skipping.",
+                    filePath);
+                return (null, null);
+            }
+
             string content = File.ReadAllText(filePath);
             WorkerReportPayload? payload = JsonSerializer.Deserialize<WorkerReportPayload>(content, ReportJsonOptions);
             return (payload, content);
@@ -393,8 +404,8 @@ internal sealed class WorkerDispatchService(
 
         List<BindMount> bindMounts =
         [
-            new BindMount(_options.ConfigPath, "/home/user/.claude/"),
-            new BindMount(reportsHostPath, "/reports/"),
+            new BindMount(Path.GetFullPath(_options.ConfigPath), "/home/user/.claude/"),
+            new BindMount(Path.GetFullPath(reportsHostPath), "/reports/"),
         ];
 
         Dictionary<string, string> labels = new()

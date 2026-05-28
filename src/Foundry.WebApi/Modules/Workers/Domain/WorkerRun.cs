@@ -6,7 +6,7 @@ namespace Foundry.WebApi.Modules.Workers.Domain;
 public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<WorkerRun>
 {
     // Private parameterless constructor for EF Core materialization.
-    private protected WorkerRun() : base(WorkerRunId.New())
+    protected WorkerRun() : base(WorkerRunId.New())
     {
     }
 

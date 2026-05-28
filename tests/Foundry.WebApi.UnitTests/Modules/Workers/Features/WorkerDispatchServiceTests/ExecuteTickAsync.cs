@@ -6,11 +6,7 @@ using Foundry.WebApi.Modules.Workers.Features;
 using Foundry.WebApi.Shared.Abstractions;
 using Foundry.WebApi.Shared.Persistence;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -18,55 +14,14 @@ using Xunit;
 
 namespace Foundry.WebApi.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 
-public sealed class ExecuteTickAsync : IAsyncDisposable
+public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
 {
-    private readonly SqliteConnection _connection;
-
-    public ExecuteTickAsync()
-    {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
-    }
-
-    async ValueTask IAsyncDisposable.DisposeAsync()
-    {
-        await _connection.DisposeAsync();
-    }
-
-    private FoundryDbContext CreateDbContext()
-    {
-        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new FoundryDbContext(options);
-    }
-
     private WorkerDispatchService BuildService(
         StubIssuesModule issuesModule,
         StubWorkerOrchestrator orchestrator,
-        StubProviderAuth? providerAuth = null,
+        DispatchStubProviderAuth? providerAuth = null,
         int maxConcurrent = 3)
     {
-        SqliteConnection connection = _connection;
-
-        ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
-        services.AddScoped<IIssuesModule>(_ => issuesModule);
-        services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
-        services.AddScoped<IProviderAuth>(_ => providerAuth ?? new StubProviderAuth("test-api-key"));
-
-        ServiceProvider sp = services.BuildServiceProvider();
-
         WorkerOptions workerOptions = new()
         {
             Image = "test-image:latest",
@@ -76,10 +31,8 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             ApiKey = "test-api-key",
         };
 
-        return new WorkerDispatchService(
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(workerOptions),
-            NullLogger<WorkerDispatchService>.Instance);
+        // Delegates to base.BuildService — accesses inherited instance state.
+        return base.BuildService(orchestrator, workerOptions, issuesModule, providerAuth ?? new DispatchStubProviderAuth("test-api-key"));
     }
 
     [Fact]
@@ -114,7 +67,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
         StubIssuesModule issuesModule = new(claimedIssue: dispatch);
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "container-abc");
-        StubProviderAuth providerAuth = new("ghp_test_token");
+        DispatchStubProviderAuth providerAuth = new("ghp_test_token");
         WorkerDispatchService sut = BuildService(issuesModule, orchestrator, providerAuth);
 
         // Act
@@ -143,7 +96,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
         StubIssuesModule issuesModule = new(claimedIssue: dispatch);
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "container-xyz");
-        StubProviderAuth providerAuth = new("ghp_test_token");
+        DispatchStubProviderAuth providerAuth = new("ghp_test_token");
         WorkerDispatchService sut = BuildService(issuesModule, orchestrator, providerAuth);
 
         // Act
@@ -172,7 +125,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
         StubIssuesModule issuesModule = new(claimedIssue: dispatch);
         StubWorkerOrchestrator orchestrator = new(succeeds: false, errorMessage: "Docker daemon unreachable");
-        StubProviderAuth providerAuth = new("ghp_test_token");
+        DispatchStubProviderAuth providerAuth = new("ghp_test_token");
         WorkerDispatchService sut = BuildService(issuesModule, orchestrator, providerAuth);
 
         // Act
@@ -239,7 +192,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
         StubIssuesModule issuesModule = new(claimedIssue: dispatch);
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c1");
-        StubProviderAuth providerAuth = new("ghp_my_token");
+        DispatchStubProviderAuth providerAuth = new("ghp_my_token");
         WorkerDispatchService sut = BuildService(issuesModule, orchestrator, providerAuth);
 
         // Act
@@ -281,7 +234,8 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.BindMounts.ShouldContain(m => m.ContainerPath == "/home/user/.claude/");
         spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/");
-        spec.BindMounts.First(m => m.ContainerPath == "/home/user/.claude/").HostPath.ShouldBe("/tmp/config");
+        spec.BindMounts.First(m => m.ContainerPath == "/home/user/.claude/").HostPath
+            .ShouldBe(Path.GetFullPath("/tmp/config"));
     }
 
     [Fact]
@@ -328,7 +282,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
         StubIssuesModule issuesModule = new(claimedIssue: dispatch);
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "container-x");
-        StubProviderAuth providerAuth = new(string.Empty);
+        DispatchStubProviderAuth providerAuth = new(string.Empty);
         WorkerDispatchService sut = BuildService(issuesModule, orchestrator, providerAuth);
 
         // Act
@@ -403,15 +357,9 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         }
     }
 
-    private sealed class StubProviderAuth(string token) : IProviderAuth
+    private sealed class DispatchStubProviderAuth(string token) : IProviderAuth
     {
         public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(token));
-    }
-
-    private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
-    {
-        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 }

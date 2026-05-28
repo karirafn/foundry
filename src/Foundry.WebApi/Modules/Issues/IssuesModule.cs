@@ -67,9 +67,8 @@ internal sealed class IssuesModule(FoundryDbContext db) : IIssuesModule
         Guid workerRunId,
         CancellationToken cancellationToken)
     {
-        // Claim the oldest queued issue (FIFO). SQLite does not support ordering by
-        // DateTimeOffset, so we load the first row without ordering — the BackgroundService
-        // processes claims sequentially, so any queued issue is a valid next candidate.
+        // Claim the oldest queued issue (FIFO). The BackgroundService processes claims
+        // sequentially, so any queued issue is a valid next candidate — no ordering required.
         QueuedIssue? queued = await db.Set<QueuedIssue>()
             .FirstOrDefaultAsync(cancellationToken);
 

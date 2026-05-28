@@ -17,6 +17,7 @@ internal sealed class DockerWorkerOrchestrator(
 {
     private const long BytesPerMegabyte = 1024L * 1024L;
     private const long NanoCpusPerCpu = 1_000_000_000L;
+    private const int DockerErrorMessageMaxLength = 500;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
@@ -53,7 +54,10 @@ internal sealed class DockerWorkerOrchestrator(
         }
         catch (DockerApiException ex)
         {
-            return Result<string>.Fail(new Error("Docker.StartFailed", ex.Message));
+            string message = ex.Message.Length > DockerErrorMessageMaxLength
+                ? ex.Message[..DockerErrorMessageMaxLength]
+                : ex.Message;
+            return Result<string>.Fail(new Error("Docker.StartFailed", message));
         }
     }
 

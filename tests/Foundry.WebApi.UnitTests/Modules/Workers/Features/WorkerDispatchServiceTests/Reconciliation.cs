@@ -1,16 +1,9 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Modules.Workers.Features;
 using Foundry.WebApi.Shared.Abstractions;
 using Foundry.WebApi.Shared.Persistence;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -18,78 +11,8 @@ using Xunit;
 
 namespace Foundry.WebApi.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 
-public sealed class Reconciliation : IAsyncDisposable
+public sealed class Reconciliation : WorkerDispatchServiceTestBase
 {
-    private readonly SqliteConnection _connection;
-
-    public Reconciliation()
-    {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
-    }
-
-    async ValueTask IAsyncDisposable.DisposeAsync()
-    {
-        await _connection.DisposeAsync();
-    }
-
-    private FoundryDbContext CreateDbContext()
-    {
-        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new FoundryDbContext(options);
-    }
-
-    private ActiveRun SeedActiveRun(string containerId = "container-orphaned")
-    {
-        using FoundryDbContext db = CreateDbContext();
-        IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun activeRun = starting.Activate(containerId);
-        db.WorkerRuns.Add(activeRun);
-        db.SaveChanges();
-        return activeRun;
-    }
-
-    private WorkerDispatchService BuildService(ReconciliationStubWorkerOrchestrator orchestrator)
-    {
-        SqliteConnection connection = _connection;
-
-        ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
-        services.AddScoped<IIssuesModule>(_ => new EmptyIssuesModule());
-        services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
-        services.AddScoped<IProviderAuth>(_ => new StubProviderAuth("test-token"));
-
-        ServiceProvider sp = services.BuildServiceProvider();
-
-        WorkerOptions options = new()
-        {
-            Image = "test-image:latest",
-            MaxConcurrent = 3,
-            ConfigPath = "/tmp/config",
-            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-reconcile-{Guid.NewGuid()}"),
-            ApiKey = "test-api-key",
-            TimeoutMinutes = 120,
-        };
-
-        return new WorkerDispatchService(
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(options),
-            NullLogger<WorkerDispatchService>.Instance);
-    }
-
     [Fact]
     public async Task WhenFirstTickAndContainerNotFound_TransitionsOrphanedRunToFailedRun()
     {
@@ -212,39 +135,5 @@ public sealed class Reconciliation : IAsyncDisposable
             await Task.CompletedTask;
             yield break;
         }
-    }
-
-    private sealed class EmptyIssuesModule : IIssuesModule
-    {
-        public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
-
-        public Task<IReadOnlyDictionary<int, IssueSnapshot>> GetIssueSnapshotsAsync(
-            MonitoredRepositoryId repositoryId,
-            IReadOnlySet<int> issueNumbers,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<int, IssueSnapshot>>(new Dictionary<int, IssueSnapshot>());
-
-        public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
-
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
-            => Task.FromResult<ClaimedIssueDispatch?>(null);
-    }
-
-    private sealed class StubProviderAuth(string token) : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(token));
-    }
-
-    private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
-    {
-        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 }

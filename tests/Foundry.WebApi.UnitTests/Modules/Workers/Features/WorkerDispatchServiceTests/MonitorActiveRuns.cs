@@ -1,15 +1,9 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Modules.Workers.Features;
 using Foundry.WebApi.Shared.Abstractions;
 using Foundry.WebApi.Shared.Persistence;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 using Shouldly;
@@ -18,64 +12,12 @@ using Xunit;
 
 namespace Foundry.WebApi.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 
-public sealed class MonitorActiveRuns : IAsyncDisposable
+public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
 {
-    private readonly SqliteConnection _connection;
-
-    public MonitorActiveRuns()
-    {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
-    }
-
-    async ValueTask IAsyncDisposable.DisposeAsync()
-    {
-        await _connection.DisposeAsync();
-    }
-
-    private FoundryDbContext CreateDbContext()
-    {
-        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new FoundryDbContext(options);
-    }
-
-    private ActiveRun SeedActiveRun(string containerId = "container-123")
-    {
-        using FoundryDbContext db = CreateDbContext();
-        IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun activeRun = starting.Activate(containerId);
-        db.WorkerRuns.Add(activeRun);
-        db.SaveChanges();
-        return activeRun;
-    }
-
     private WorkerDispatchService BuildService(
         MonitoringStubWorkerOrchestrator orchestrator,
         WorkerOptions? workerOptions = null)
     {
-        SqliteConnection connection = _connection;
-
-        ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
-        services.AddScoped<IIssuesModule>(_ => new EmptyIssuesModule());
-        services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
-        services.AddScoped<IProviderAuth>(_ => new StubProviderAuth("test-token"));
-
-        ServiceProvider sp = services.BuildServiceProvider();
-
         WorkerOptions options = workerOptions ?? new WorkerOptions
         {
             Image = "test-image:latest",
@@ -86,10 +28,8 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
             TimeoutMinutes = 120,
         };
 
-        return new WorkerDispatchService(
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(options),
-            NullLogger<WorkerDispatchService>.Instance);
+        // Delegates to base.BuildService — accesses inherited instance state.
+        return base.BuildService(orchestrator, options);
     }
 
     [Fact]
@@ -121,7 +61,7 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
     public async Task WhenContainerExitsWithZero_TransitionsToCompletedRun()
     {
         // Arrange
-        ActiveRun activeRun = SeedActiveRun("exited-container");
+        SeedActiveRun("exited-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         MonitoringStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
         WorkerDispatchService sut = BuildService(orchestrator);
@@ -140,7 +80,7 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
     public async Task WhenContainerExitsWithNonZero_TransitionsToFailedRunWithNonZeroExit()
     {
         // Arrange
-        ActiveRun activeRun = SeedActiveRun("failed-container");
+        SeedActiveRun("failed-container");
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         MonitoringStubWorkerOrchestrator orchestrator = new(status: failedStatus);
         WorkerDispatchService sut = BuildService(orchestrator);
@@ -160,7 +100,7 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
     public async Task WhenContainerStillRunning_RunRemainsActive()
     {
         // Arrange
-        ActiveRun activeRun = SeedActiveRun("running-container");
+        SeedActiveRun("running-container");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         MonitoringStubWorkerOrchestrator orchestrator = new(status: runningStatus);
         WorkerDispatchService sut = BuildService(orchestrator);
@@ -197,39 +137,5 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
             await Task.CompletedTask;
             yield break;
         }
-    }
-
-    private sealed class EmptyIssuesModule : IIssuesModule
-    {
-        public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
-
-        public Task<IReadOnlyDictionary<int, IssueSnapshot>> GetIssueSnapshotsAsync(
-            MonitoredRepositoryId repositoryId,
-            IReadOnlySet<int> issueNumbers,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<int, IssueSnapshot>>(new Dictionary<int, IssueSnapshot>());
-
-        public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
-
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
-            => Task.FromResult<ClaimedIssueDispatch?>(null);
-    }
-
-    private sealed class StubProviderAuth(string token) : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(token));
-    }
-
-    private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
-    {
-        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 }

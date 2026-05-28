@@ -1,17 +1,11 @@
 using System.Text.Json;
 
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Modules.Workers.Features;
 using Foundry.WebApi.Shared.Abstractions;
 using Foundry.WebApi.Shared.Persistence;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 using Shouldly;
@@ -20,55 +14,29 @@ using Xunit;
 
 namespace Foundry.WebApi.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 
-public sealed class ReportIngestion : IAsyncDisposable
+public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    private readonly SqliteConnection _connection;
     private readonly string _reportsBasePath;
 
     public ReportIngestion()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
-
         _reportsBasePath = Path.Combine(Path.GetTempPath(), $"foundry-reports-{Guid.NewGuid()}");
         Directory.CreateDirectory(_reportsBasePath);
     }
 
-    async ValueTask IAsyncDisposable.DisposeAsync()
+    protected override async ValueTask DisposeAsyncCore()
     {
         if (Directory.Exists(_reportsBasePath))
         {
             Directory.Delete(_reportsBasePath, recursive: true);
         }
 
-        await _connection.DisposeAsync();
-    }
-
-    private FoundryDbContext CreateDbContext()
-    {
-        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new FoundryDbContext(options);
-    }
-
-    private ActiveRun SeedActiveRun()
-    {
-        using FoundryDbContext db = CreateDbContext();
-        IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun activeRun = starting.Activate("container-report-test");
-        db.WorkerRuns.Add(activeRun);
-        db.SaveChanges();
-        return activeRun;
+        await base.DisposeAsyncCore();
     }
 
     private string WriteReportFile(WorkerRunId workerRunId, int sequenceNumber, object payload)
@@ -82,47 +50,27 @@ public sealed class ReportIngestion : IAsyncDisposable
         return filePath;
     }
 
-    private WorkerDispatchService BuildService()
+    private WorkerDispatchService BuildReportService(IWorkerOrchestrator orchestrator)
     {
-        SqliteConnection connection = _connection;
-        string reportsPath = _reportsBasePath;
-
-        ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
-        services.AddScoped<IIssuesModule>(_ => new EmptyIssuesModule());
-        services.AddScoped<IWorkerOrchestrator>(_ => new RunningStubWorkerOrchestrator());
-        services.AddScoped<IProviderAuth>(_ => new StubProviderAuth("test-token"));
-
-        ServiceProvider sp = services.BuildServiceProvider();
-
         WorkerOptions options = new()
         {
             Image = "test-image:latest",
             MaxConcurrent = 3,
             ConfigPath = "/tmp/config",
-            ReportsPath = reportsPath,
+            ReportsPath = _reportsBasePath,
             ApiKey = "test-api-key",
             TimeoutMinutes = 99999,
         };
 
-        return new WorkerDispatchService(
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(options),
-            NullLogger<WorkerDispatchService>.Instance);
+        // Delegates to base.BuildService — accesses inherited instance state.
+        return base.BuildService(orchestrator, options);
     }
 
     [Fact]
     public async Task WhenReportFilesExist_IngestionCreatesWorkerReportEntities()
     {
         // Arrange
-        ActiveRun activeRun = SeedActiveRun();
+        ActiveRun activeRun = SeedActiveRun("container-report-test");
         WriteReportFile(activeRun.Id, 1, new
         {
             type = "progress",
@@ -133,7 +81,7 @@ public sealed class ReportIngestion : IAsyncDisposable
             branchName = "feat/add-login",
             metrics = new { testsRun = 5, testsPassed = 5 },
         });
-        WorkerDispatchService sut = BuildService();
+        WorkerDispatchService sut = BuildReportService(new RunningStubWorkerOrchestrator());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -152,7 +100,7 @@ public sealed class ReportIngestion : IAsyncDisposable
     public async Task WhenReportFilesExist_LatestProgressIsUpdatedFromSummary()
     {
         // Arrange
-        ActiveRun activeRun = SeedActiveRun();
+        ActiveRun activeRun = SeedActiveRun("container-report-test");
         WriteReportFile(activeRun.Id, 1, new
         {
             type = "progress",
@@ -163,7 +111,7 @@ public sealed class ReportIngestion : IAsyncDisposable
             branchName = (string?)null,
             metrics = new { testsRun = 0, testsPassed = 0 },
         });
-        WorkerDispatchService sut = BuildService();
+        WorkerDispatchService sut = BuildReportService(new RunningStubWorkerOrchestrator());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -179,7 +127,7 @@ public sealed class ReportIngestion : IAsyncDisposable
     public async Task WhenMultipleReportFiles_AllAreIngested()
     {
         // Arrange
-        ActiveRun activeRun = SeedActiveRun();
+        ActiveRun activeRun = SeedActiveRun("container-report-test");
         WriteReportFile(activeRun.Id, 1, new
         {
             type = "progress",
@@ -200,7 +148,7 @@ public sealed class ReportIngestion : IAsyncDisposable
             branchName = (string?)null,
             metrics = new { testsRun = 3, testsPassed = 3 },
         });
-        WorkerDispatchService sut = BuildService();
+        WorkerDispatchService sut = BuildReportService(new RunningStubWorkerOrchestrator());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -219,7 +167,7 @@ public sealed class ReportIngestion : IAsyncDisposable
     public async Task WhenReportAlreadyIngested_IsNotIngestedAgain()
     {
         // Arrange
-        ActiveRun activeRun = SeedActiveRun();
+        ActiveRun activeRun = SeedActiveRun("container-report-test");
         WriteReportFile(activeRun.Id, 1, new
         {
             type = "progress",
@@ -230,7 +178,7 @@ public sealed class ReportIngestion : IAsyncDisposable
             branchName = (string?)null,
             metrics = new { testsRun = 0, testsPassed = 0 },
         });
-        WorkerDispatchService sut = BuildService();
+        WorkerDispatchService sut = BuildReportService(new RunningStubWorkerOrchestrator());
 
         // Act — run two ticks
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -246,7 +194,7 @@ public sealed class ReportIngestion : IAsyncDisposable
     public async Task WhenFinalReportExists_BranchNameAndPrUrlUsedOnCompletion()
     {
         // Arrange — write a final report, then set container to exited
-        ActiveRun activeRun = SeedActiveRun();
+        ActiveRun activeRun = SeedActiveRun("container-report-test");
         WriteReportFile(activeRun.Id, 1, new
         {
             type = "final",
@@ -257,39 +205,7 @@ public sealed class ReportIngestion : IAsyncDisposable
             branchName = "feat/add-login",
             metrics = new { testsRun = 10, testsPassed = 10 },
         });
-
-        SqliteConnection connection = _connection;
-        string reportsPath = _reportsBasePath;
-
-        ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
-        services.AddScoped<IIssuesModule>(_ => new EmptyIssuesModule());
-        services.AddScoped<IWorkerOrchestrator>(_ => new ExitedStubWorkerOrchestrator(exitCode: 0));
-        services.AddScoped<IProviderAuth>(_ => new StubProviderAuth("test-token"));
-
-        ServiceProvider sp = services.BuildServiceProvider();
-
-        WorkerOptions options = new()
-        {
-            Image = "test-image:latest",
-            MaxConcurrent = 3,
-            ConfigPath = "/tmp/config",
-            ReportsPath = reportsPath,
-            ApiKey = "test-api-key",
-            TimeoutMinutes = 99999,
-        };
-
-        WorkerDispatchService sut = new(
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(options),
-            NullLogger<WorkerDispatchService>.Instance);
+        WorkerDispatchService sut = BuildReportService(new ExitedStubWorkerOrchestrator(exitCode: 0));
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -307,14 +223,14 @@ public sealed class ReportIngestion : IAsyncDisposable
     public async Task WhenReportJsonIsInvalid_ReportIsSkippedAndRetried()
     {
         // Arrange — write invalid JSON
-        ActiveRun activeRun = SeedActiveRun();
+        ActiveRun activeRun = SeedActiveRun("container-report-test");
         string runDir = Path.Combine(_reportsBasePath, activeRun.Id.Value.ToString());
         Directory.CreateDirectory(runDir);
         await File.WriteAllTextAsync(
             Path.Combine(runDir, "report-1.json"),
             "{ invalid json }}}",
             TestContext.Current.CancellationToken);
-        WorkerDispatchService sut = BuildService();
+        WorkerDispatchService sut = BuildReportService(new RunningStubWorkerOrchestrator());
 
         // Act — should not throw
         Exception? exception = await Record.ExceptionAsync(
@@ -331,8 +247,8 @@ public sealed class ReportIngestion : IAsyncDisposable
     public async Task WhenNoReportsDirectory_IngestionIsSkippedGracefully()
     {
         // Arrange — do NOT create any report directory for this run
-        ActiveRun activeRun = SeedActiveRun();
-        WorkerDispatchService sut = BuildService();
+        SeedActiveRun("container-report-test");
+        WorkerDispatchService sut = BuildReportService(new RunningStubWorkerOrchestrator());
 
         // Act
         Exception? exception = await Record.ExceptionAsync(
@@ -346,7 +262,7 @@ public sealed class ReportIngestion : IAsyncDisposable
     public async Task WhenReportFileHasMalformedName_FileIsSkippedWithoutError()
     {
         // Arrange — write a file that matches the glob but has a malformed sequence number
-        ActiveRun activeRun = SeedActiveRun();
+        ActiveRun activeRun = SeedActiveRun("container-report-test");
         string runDir = Path.Combine(_reportsBasePath, activeRun.Id.Value.ToString());
         Directory.CreateDirectory(runDir);
 
@@ -356,7 +272,7 @@ public sealed class ReportIngestion : IAsyncDisposable
             """{"type":"progress","status":"running","summary":"test"}""",
             TestContext.Current.CancellationToken);
 
-        WorkerDispatchService sut = BuildService();
+        WorkerDispatchService sut = BuildReportService(new RunningStubWorkerOrchestrator());
 
         // Act — should not throw, malformed file skipped
         Exception? exception = await Record.ExceptionAsync(
@@ -408,39 +324,5 @@ public sealed class ReportIngestion : IAsyncDisposable
             await Task.CompletedTask;
             yield break;
         }
-    }
-
-    private sealed class EmptyIssuesModule : IIssuesModule
-    {
-        public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
-
-        public Task<IReadOnlyDictionary<int, IssueSnapshot>> GetIssueSnapshotsAsync(
-            MonitoredRepositoryId repositoryId,
-            IReadOnlySet<int> issueNumbers,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<int, IssueSnapshot>>(new Dictionary<int, IssueSnapshot>());
-
-        public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
-
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
-            => Task.FromResult<ClaimedIssueDispatch?>(null);
-    }
-
-    private sealed class StubProviderAuth(string token) : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(token));
-    }
-
-    private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
-    {
-        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 }
