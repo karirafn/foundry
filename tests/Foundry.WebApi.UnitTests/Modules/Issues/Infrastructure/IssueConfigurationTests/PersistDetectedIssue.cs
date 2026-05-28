@@ -77,4 +77,34 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
             () => detected.Url.Value.ShouldBe(new Uri("https://github.com/owner/repo/issues/1")),
             () => detected.Labels.ShouldBe(["foundry", "bug"]));
     }
+
+    [Fact]
+    public async Task WhenDetectedIssuePersistedWithEmptyBlockedBy_ReloadsAsEmptyList()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue issue = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 99,
+            title: "No blockers",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([issue.Id], TestContext.Current.CancellationToken);
+
+        // Assert — BlockedBy must come back as empty list, not null
+        DetectedIssue detected = result.ShouldBeOfType<DetectedIssue>();
+        detected.BlockedBy.ShouldNotBeNull();
+        detected.BlockedBy.ShouldBeEmpty();
+    }
 }

@@ -60,6 +60,8 @@ public sealed class RepositoryPoller(
         IReadOnlySet<int> issueNumbers,
         CancellationToken cancellationToken)
     {
+        // HTTP calls are sequential: GitHub has no batch dependencies endpoint,
+        // and issue counts per repository are expected to be small (design decision D6).
         foreach (int issueNumber in issueNumbers)
         {
             Result<IReadOnlyList<int>> dependencyResult = await provider.GetDependenciesAsync(

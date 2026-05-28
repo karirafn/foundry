@@ -7,6 +7,7 @@ using Foundry.WebApi.Shared.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -39,7 +40,11 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
         _dispatcher = new CapturingDomainEventDispatcher();
-        _sut = new ProcessIssueDependenciesHandler(_dbContext, new IssuesModule(_dbContext), _dispatcher);
+        _sut = new ProcessIssueDependenciesHandler(
+            _dbContext,
+            new IssuesModule(_dbContext),
+            _dispatcher,
+            NullLogger<ProcessIssueDependenciesHandler>.Instance);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -433,8 +438,10 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 2,
                 TestContext.Current.CancellationToken);
 
+        Issue reloaded = issue.ShouldNotBeNull();
+        reloaded.ShouldBeOfType<DetectedIssue>();
         // BlockedBy should still be updated though
-        issue.ShouldNotBeNull().BlockedBy.ShouldBe([1]);
+        reloaded.BlockedBy.ShouldBe([1]);
     }
 
     private sealed class CapturingDomainEventDispatcher : IDomainEventDispatcher

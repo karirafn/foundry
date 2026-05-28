@@ -32,9 +32,14 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     public IReadOnlyList<int> BlockedBy { get; private set; } = [];
 
+    // GitHub limits dependencies to 50 per direction; cap silently to match.
+    private const int MaxBlockers = 50;
+
     internal void SetBlockedBy(IReadOnlyList<int> blockers)
     {
-        BlockedBy = blockers;
+        BlockedBy = blockers.Count <= MaxBlockers
+            ? blockers
+            : blockers.Take(MaxBlockers).ToList();
     }
 
     public void UpdateDetails(string title, string body, IReadOnlyList<string> labels)

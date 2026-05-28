@@ -8,6 +8,7 @@ using Foundry.WebApi.Shared.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using Shouldly;
 
@@ -30,6 +31,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddDbContext<FoundryDbContext>(opts =>
             opts.UseSqlite(_connection));
 
+        services.AddLogging();
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddIssuesModule();
 

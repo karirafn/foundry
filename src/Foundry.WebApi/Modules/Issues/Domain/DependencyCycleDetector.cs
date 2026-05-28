@@ -4,35 +4,63 @@ public static class DependencyCycleDetector
 {
     private enum VisitState { Unvisited, InStack, Done }
 
+    // Frame pushed onto the explicit stack.
+    // NeighbourIndex tracks which neighbour to process next, so the loop
+    // can resume after a child is pushed without recursion.
+    private readonly record struct DfsFrame(int Node, int NeighbourIndex);
+
     public static IReadOnlyList<IReadOnlyList<int>> DetectCycles(IReadOnlyList<DependencyEdge> edges)
     {
         Dictionary<int, List<int>> adjacency = BuildAdjacency(edges);
         Dictionary<int, VisitState> state = [];
         List<IReadOnlyList<int>> cycles = [];
 
-        foreach (int node in adjacency.Keys)
+        foreach (int root in adjacency.Keys)
         {
-            if (state.GetValueOrDefault(node) == VisitState.Unvisited)
+            if (state.GetValueOrDefault(root) != VisitState.Unvisited)
             {
-                Dfs(node, adjacency, state, [], cycles);
+                continue;
             }
+
+            DfsIterative(root, adjacency, state, cycles);
         }
 
         return cycles;
     }
 
-    private static void Dfs(
-        int node,
+    private static void DfsIterative(
+        int root,
         Dictionary<int, List<int>> adjacency,
         Dictionary<int, VisitState> state,
-        List<int> path,
         List<IReadOnlyList<int>> cycles)
     {
-        state[node] = VisitState.InStack;
-        path.Add(node);
+        // path mirrors the recursive call stack — nodes currently InStack.
+        List<int> path = [];
+        Stack<DfsFrame> stack = new();
 
-        foreach (int neighbour in adjacency.GetValueOrDefault(node, []))
+        stack.Push(new DfsFrame(root, 0));
+        state[root] = VisitState.InStack;
+        path.Add(root);
+
+        while (stack.Count > 0)
         {
+            DfsFrame frame = stack.Peek();
+            List<int> neighbours = adjacency.GetValueOrDefault(frame.Node, []);
+
+            if (frame.NeighbourIndex >= neighbours.Count)
+            {
+                // All neighbours processed — backtrack.
+                stack.Pop();
+                path.RemoveAt(path.Count - 1);
+                state[frame.Node] = VisitState.Done;
+                continue;
+            }
+
+            // Advance the neighbour index on the top frame.
+            stack.Pop();
+            stack.Push(frame with { NeighbourIndex = frame.NeighbourIndex + 1 });
+
+            int neighbour = neighbours[frame.NeighbourIndex];
             VisitState neighbourState = state.GetValueOrDefault(neighbour);
 
             if (neighbourState == VisitState.InStack)
@@ -42,12 +70,11 @@ public static class DependencyCycleDetector
             }
             else if (neighbourState == VisitState.Unvisited)
             {
-                Dfs(neighbour, adjacency, state, path, cycles);
+                state[neighbour] = VisitState.InStack;
+                path.Add(neighbour);
+                stack.Push(new DfsFrame(neighbour, 0));
             }
         }
-
-        path.RemoveAt(path.Count - 1);
-        state[node] = VisitState.Done;
     }
 
     private static Dictionary<int, List<int>> BuildAdjacency(IReadOnlyList<DependencyEdge> edges)
@@ -64,10 +91,7 @@ public static class DependencyCycleDetector
 
             neighbours.Add(edge.BlockedByIssueNumber);
 
-            if (!adjacency.ContainsKey(edge.BlockedByIssueNumber))
-            {
-                adjacency[edge.BlockedByIssueNumber] = [];
-            }
+            adjacency.TryAdd(edge.BlockedByIssueNumber, []);
         }
 
         return adjacency;
