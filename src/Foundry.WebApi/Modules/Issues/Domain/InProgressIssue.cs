@@ -1,3 +1,5 @@
+using Foundry.WebApi.Modules.Workers.Domain;
+
 namespace Foundry.WebApi.Modules.Issues.Domain;
 
 public sealed class InProgressIssue : Issue
@@ -11,9 +13,9 @@ public sealed class InProgressIssue : Issue
     {
     }
 
-    public Guid WorkerRunId { get; private set; }
+    public WorkerRunId WorkerRunId { get; private set; }
 
-    internal static InProgressIssue FromQueued(QueuedIssue queued, Guid workerRunId)
+    internal static InProgressIssue FromQueued(QueuedIssue queued, WorkerRunId workerRunId)
     {
         InProgressIssue inProgress = new(queued.Id);
         inProgress.SetSharedProperties(

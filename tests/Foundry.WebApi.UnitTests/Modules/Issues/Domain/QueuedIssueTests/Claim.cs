@@ -1,5 +1,6 @@
 using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Shared.Abstractions;
 
 using Shouldly;
@@ -91,6 +92,6 @@ public sealed class Claim
         InProgressIssue inProgress = queued.Claim();
 
         // Assert
-        inProgress.WorkerRunId.ShouldNotBe(Guid.Empty);
+        inProgress.WorkerRunId.ShouldNotBe(default(WorkerRunId));
     }
 }

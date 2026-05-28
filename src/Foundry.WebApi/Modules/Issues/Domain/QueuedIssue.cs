@@ -1,3 +1,5 @@
+using Foundry.WebApi.Modules.Workers.Domain;
+
 namespace Foundry.WebApi.Modules.Issues.Domain;
 
 public sealed class QueuedIssue : Issue
@@ -55,7 +57,7 @@ public sealed class QueuedIssue : Issue
 
     public InProgressIssue Claim()
     {
-        InProgressIssue inProgress = InProgressIssue.FromQueued(this, Guid.NewGuid());
+        InProgressIssue inProgress = InProgressIssue.FromQueued(this, WorkerRunId.New());
         AddDomainEvent(new IssueClaimed(Id, MonitoredRepositoryId));
         return inProgress;
     }
