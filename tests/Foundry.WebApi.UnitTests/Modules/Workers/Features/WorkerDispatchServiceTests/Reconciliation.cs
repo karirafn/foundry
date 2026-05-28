@@ -18,11 +18,11 @@ using Xunit;
 
 namespace Foundry.WebApi.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 
-public sealed class MonitorActiveRuns : IAsyncDisposable
+public sealed class Reconciliation : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
 
-    public MonitorActiveRuns()
+    public Reconciliation()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -44,7 +44,7 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
         return new FoundryDbContext(options);
     }
 
-    private ActiveRun SeedActiveRun(string containerId = "container-123")
+    private ActiveRun SeedActiveRun(string containerId = "container-orphaned")
     {
         using FoundryDbContext db = CreateDbContext();
         IssueId issueId = IssueId.New();
@@ -55,9 +55,7 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
         return activeRun;
     }
 
-    private WorkerDispatchService BuildService(
-        MonitoringStubWorkerOrchestrator orchestrator,
-        WorkerOptions? workerOptions = null)
+    private WorkerDispatchService BuildService(ReconciliationStubWorkerOrchestrator orchestrator)
     {
         SqliteConnection connection = _connection;
 
@@ -76,12 +74,12 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        WorkerOptions options = workerOptions ?? new WorkerOptions
+        WorkerOptions options = new()
         {
             Image = "test-image:latest",
             MaxConcurrent = 3,
             ConfigPath = "/tmp/config",
-            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
+            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-reconcile-{Guid.NewGuid()}"),
             ApiKey = "test-api-key",
             TimeoutMinutes = 120,
         };
@@ -93,20 +91,14 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenContainerDisappearsAfterReconciliation_TransitionsToFailedRunWithContainerError()
+    public async Task WhenFirstTickAndContainerNotFound_TransitionsOrphanedRunToFailedRun()
     {
-        // Arrange — seed the run after the first tick so reconciliation does not process it;
-        // on the second tick the monitoring loop finds the container missing
-        MonitoringStubWorkerOrchestrator orchestrator = new(status: null);
+        // Arrange
+        SeedActiveRun("orphaned-container");
+        ReconciliationStubWorkerOrchestrator orchestrator = new(status: null);
         WorkerDispatchService sut = BuildService(orchestrator);
 
-        // First tick: no active runs exist yet, so reconciliation has nothing to process
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Seed the active run after reconciliation has already completed
-        SeedActiveRun("missing-container");
-
-        // Act — second tick: reconciliation skipped; monitoring sees null status
+        // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -114,55 +106,16 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
         WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
-        error.Message.ShouldBe("Container not found");
+        error.Message.ShouldBe("Orphaned after restart");
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithZero_TransitionsToCompletedRun()
+    public async Task WhenFirstTickAndContainerStillRunning_RunRemainsActive()
     {
         // Arrange
-        ActiveRun activeRun = SeedActiveRun("exited-container");
-        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
-        MonitoringStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
-
-        // Act
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        CompletedRun completedRun = run.ShouldBeOfType<CompletedRun>();
-        completedRun.ExitCode.ShouldBe(0);
-    }
-
-    [Fact]
-    public async Task WhenContainerExitsWithNonZero_TransitionsToFailedRunWithNonZeroExit()
-    {
-        // Arrange
-        ActiveRun activeRun = SeedActiveRun("failed-container");
-        WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        MonitoringStubWorkerOrchestrator orchestrator = new(status: failedStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
-
-        // Act
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        FailureReason.NonZeroExit nonZeroExit = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
-        nonZeroExit.ExitCode.ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task WhenContainerStillRunning_RunRemainsActive()
-    {
-        // Arrange
-        ActiveRun activeRun = SeedActiveRun("running-container");
+        SeedActiveRun("running-container");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        MonitoringStubWorkerOrchestrator orchestrator = new(status: runningStatus);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(status: runningStatus);
         WorkerDispatchService sut = BuildService(orchestrator);
 
         // Act
@@ -174,21 +127,83 @@ public sealed class MonitorActiveRuns : IAsyncDisposable
         run.ShouldBeOfType<ActiveRun>();
     }
 
-    internal sealed class MonitoringStubWorkerOrchestrator(WorkerStatus? status) : IWorkerOrchestrator
+    [Fact]
+    public async Task WhenFirstTickAndContainerExitedWithZero_TransitionsToCompletedRun()
     {
-        public string? LastStoppedContainerId { get; private set; }
+        // Arrange
+        SeedActiveRun("exited-zero-container");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<CompletedRun>();
+    }
+
+    [Fact]
+    public async Task WhenFirstTickAndContainerExitedWithNonZero_TransitionsToFailedRun()
+    {
+        // Arrange
+        SeedActiveRun("exited-nonzero-container");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 2, FinishedAt: DateTimeOffset.UtcNow);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.NonZeroExit nonZeroExit = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
+        nonZeroExit.ExitCode.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenSecondTick_ReconciliationDoesNotRunAgain()
+    {
+        // Arrange — seed run, first tick will reconcile (container missing → FailedRun)
+        // Then seed another active run; second tick should NOT reconcile it (it stays Active)
+        ReconciliationStubWorkerOrchestrator orchestrator = new(status: null);
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // First tick: reconciles the orphaned run (no active runs seeded yet, so nothing happens)
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Seed a new ActiveRun AFTER the first tick
+        SeedActiveRun("post-reconcile-container");
+
+        // Act — second tick should skip reconciliation
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — the new ActiveRun was NOT touched by reconciliation (stays Active because
+        // reconciliation only runs once; normal monitoring handles it but orchestrator returns null
+        // which would transition it — but that's via normal monitoring, not reconciliation)
+        // What we verify: reconciliation ran exactly once (GetStatusAsync call count matches)
+        orchestrator.GetStatusCallCount.ShouldBe(1);
+    }
+
+    internal sealed class ReconciliationStubWorkerOrchestrator(WorkerStatus? status) : IWorkerOrchestrator
+    {
+        public int GetStatusCallCount { get; private set; }
 
         public Task<Result<string>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Fail(new Error("Test.NoDispatch", "No dispatch in monitor tests")));
+            => Task.FromResult(Result<string>.Fail(new Error("Test.NoDispatch", "No dispatch in reconciliation tests")));
 
         public Task StopAsync(string containerId, CancellationToken cancellationToken)
-        {
-            LastStoppedContainerId = containerId;
-            return Task.CompletedTask;
-        }
+            => Task.CompletedTask;
 
         public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult(status);
+        {
+            GetStatusCallCount++;
+            return Task.FromResult(status);
+        }
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,

@@ -28,6 +28,7 @@ internal sealed class WorkerDispatchService(
     };
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
+    private bool _reconciled;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -47,6 +48,12 @@ internal sealed class WorkerDispatchService(
         IIssuesModule issuesModule = scope.ServiceProvider.GetRequiredService<IIssuesModule>();
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IProviderAuth providerAuth = scope.ServiceProvider.GetRequiredService<IProviderAuth>();
+
+        if (!_reconciled)
+        {
+            await ReconcileOrphanedRunsAsync(dbContext, orchestrator, cancellationToken);
+            _reconciled = true;
+        }
 
         await MonitorActiveRunsAsync(dbContext, orchestrator, cancellationToken);
 
@@ -99,6 +106,36 @@ internal sealed class WorkerDispatchService(
                 startingRun.Id,
                 claimed.IssueNumber,
                 failure.Error.Message);
+        }
+    }
+
+    private async Task ReconcileOrphanedRunsAsync(
+        FoundryDbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        CancellationToken cancellationToken)
+    {
+        List<ActiveRun> activeRuns = await dbContext.WorkerRuns
+            .OfType<ActiveRun>()
+            .ToListAsync(cancellationToken);
+
+        foreach (ActiveRun activeRun in activeRuns)
+        {
+            WorkerStatus? status = await orchestrator.GetStatusAsync(activeRun.ContainerId, cancellationToken);
+
+            if (status is null)
+            {
+                FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
+                await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+
+                logger.LogWarning(
+                    "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; marking failed.",
+                    activeRun.Id,
+                    activeRun.ContainerId);
+            }
+            else if (!status.IsRunning)
+            {
+                await MonitorRunAsync(dbContext, orchestrator, activeRun, cancellationToken);
+            }
         }
     }
 
