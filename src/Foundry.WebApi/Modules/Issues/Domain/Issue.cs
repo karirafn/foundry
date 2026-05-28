@@ -30,6 +30,13 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     public DateTimeOffset DetectedAt { get; private set; }
 
+    public IReadOnlyList<int> BlockedBy { get; private set; } = [];
+
+    internal void SetBlockedBy(IReadOnlyList<int> blockers)
+    {
+        BlockedBy = blockers;
+    }
+
     public void UpdateDetails(string title, string body, IReadOnlyList<string> labels)
     {
         Title = title;
