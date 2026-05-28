@@ -12,7 +12,7 @@ namespace Foundry.WebApi.UnitTests.Shared.Persistence.FoundryDbContextTests;
 public sealed class Instantiation
 {
     [Fact]
-    public void WhenInstantiated_ModelIsEmpty()
+    public void WhenInstantiated_ModelContainsRegisteredEntities()
     {
         // Arrange
         using SqliteConnection connection = new("Data Source=:memory:");
@@ -26,6 +26,6 @@ public sealed class Instantiation
         using FoundryDbContext context = new(options);
 
         // Assert
-        context.Model.GetEntityTypes().ShouldBeEmpty();
+        context.Model.GetEntityTypes().ShouldNotBeEmpty();
     }
 }

@@ -14,3 +14,9 @@ dotnet_diagnostic.CA1711.severity = none
 
 # CA1002: Do not expose generic lists — suppressed for test spy types that expose received events for assertion
 dotnet_diagnostic.CA1002.severity = none
+
+# CA1054: URI-like parameters should not be strings — suppressed to allow tests that exercise invalid-string paths
+dotnet_diagnostic.CA1054.severity = none
+
+# CA2000: Dispose objects before losing scope — suppressed for DelegatingHandler test doubles whose lifetime is managed by the owning HttpClient
+dotnet_diagnostic.CA2000.severity = none
