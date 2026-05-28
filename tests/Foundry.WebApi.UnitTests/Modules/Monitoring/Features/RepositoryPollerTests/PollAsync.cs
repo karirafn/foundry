@@ -296,6 +296,14 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok(issues));
         }
+
+        public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
+        }
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
@@ -305,6 +313,14 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Fail(error));
+        }
+
+        public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<IReadOnlyList<int>>.Fail(error));
         }
     }
 

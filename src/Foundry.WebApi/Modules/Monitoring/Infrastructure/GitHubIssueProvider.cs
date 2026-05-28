@@ -12,4 +12,12 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
     {
         return httpClient.GetIssuesAsync(baseUrl, slug, token, cancellationToken);
     }
+
+    public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetDependenciesAsync(baseUrl, slug, issueNumber, token, cancellationToken);
+    }
 }

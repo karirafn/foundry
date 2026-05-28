@@ -234,6 +234,14 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
                     Result<IReadOnlyList<ProviderIssue>>.Ok(
                         (IReadOnlyList<ProviderIssue>)Array.Empty<ProviderIssue>()));
             }
+
+            public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+                RepositorySlug slug,
+                int issueNumber,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
+            }
         }
     }
 
