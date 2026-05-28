@@ -51,6 +51,11 @@ public sealed class DetectedIssue : Issue
 
     public BlockedIssue Block(IReadOnlyList<int> blockers)
     {
+        if (blockers.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot block an issue without specifying at least one blocker.");
+        }
+
         BlockedIssue blocked = BlockedIssue.FromDetected(this, blockers);
         AddDomainEvent(new IssueBlocked(Id, MonitoredRepositoryId));
         return blocked;

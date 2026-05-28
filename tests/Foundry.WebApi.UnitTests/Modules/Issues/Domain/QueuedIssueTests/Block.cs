@@ -77,4 +77,16 @@ public sealed class Block
         // Assert
         blocked.BlockedBy.ShouldBe(blockers);
     }
+
+    [Fact]
+    public void WhenBlockersIsEmpty_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        IReadOnlyList<int> blockers = [];
+
+        // Act & Assert
+        Should.Throw<InvalidOperationException>(() => queued.Block(blockers));
+    }
 }
