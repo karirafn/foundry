@@ -312,6 +312,36 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         spec.Labels["foundry.worker-run-id"].ShouldNotBeNullOrWhiteSpace();
     }
 
+    [Fact]
+    public async Task WhenGitPatIsEmpty_CreatesFailedRunWithEmptyPatError()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        ClaimedIssueDispatch dispatch = new(
+            issueId,
+            10,
+            "PAT Test Issue",
+            "body",
+            "owner/repo",
+            new Uri("https://github.com/owner/repo.git"),
+            "MY_SECRET");
+
+        StubIssuesModule issuesModule = new(claimedIssue: dispatch);
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "container-x");
+        StubProviderAuth providerAuth = new(string.Empty);
+        WorkerDispatchService sut = BuildService(issuesModule, orchestrator, providerAuth);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        error.Message.ShouldContain("MY_SECRET");
+    }
+
     private sealed class StubIssuesModule(ClaimedIssueDispatch? claimedIssue) : IIssuesModule
     {
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(

@@ -3,6 +3,7 @@ using System;
 using Foundry.WebApi.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Foundry.WebApi.Migrations
 {
     [DbContext(typeof(FoundryDbContext))]
-    partial class FoundryDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260528163829_AddWorkerConstraintsAndIndexes")]
+    partial class AddWorkerConstraintsAndIndexes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");

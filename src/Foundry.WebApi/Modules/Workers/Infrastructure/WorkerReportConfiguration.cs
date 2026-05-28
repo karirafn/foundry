@@ -42,7 +42,12 @@ public sealed class WorkerReportConfiguration : IEntityTypeConfiguration<WorkerR
         builder.Property(r => r.IngestedAt)
             .HasColumnName("ingested_at");
 
-        builder.HasIndex(r => r.WorkerRunId)
-            .HasDatabaseName("ix_worker_reports_worker_run_id");
+        builder.HasOne<WorkerRun>()
+            .WithMany()
+            .HasForeignKey(r => r.WorkerRunId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(r => new { r.WorkerRunId, r.SequenceNumber })
+            .HasDatabaseName("ix_worker_reports_worker_run_id_sequence_number");
     }
 }

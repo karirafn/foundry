@@ -29,6 +29,7 @@ public sealed class AddWorkersModule
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
             ["Workers:MaxConcurrent"] = "5",
+            ["Workers:ApiKey"] = "sk-ant-test",
         });
         ServiceCollection services = new();
 
@@ -45,7 +46,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersIWorkerOrchestrator()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Workers:ApiKey"] = "sk-ant-test",
+        });
         ServiceCollection services = new();
 
         // Act
@@ -58,10 +62,37 @@ public sealed class AddWorkersModule
     }
 
     [Fact]
+    public void WhenCalled_RegistersWorkerOptionsValidator()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Workers:ApiKey"] = "sk-ant-test",
+        });
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert — accessing Value with empty ApiKey triggers validation failure
+        IConfiguration emptyConfig = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection servicesWithEmptyKey = new();
+        servicesWithEmptyKey.AddWorkersModule(emptyConfig);
+        ServiceProvider providerWithEmptyKey = servicesWithEmptyKey.BuildServiceProvider();
+
+        IOptions<WorkerOptions> options = providerWithEmptyKey.GetRequiredService<IOptions<WorkerOptions>>();
+        Should.Throw<OptionsValidationException>(() => _ = options.Value);
+    }
+
+    [Fact]
     public void WhenCalled_RegistersWorkerDispatchServiceAsHostedService()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Workers:ApiKey"] = "sk-ant-test",
+        });
         ServiceCollection services = new();
         services.AddLogging();
 

@@ -342,6 +342,33 @@ public sealed class ReportIngestion : IAsyncDisposable
         exception.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task WhenReportFileHasMalformedName_FileIsSkippedWithoutError()
+    {
+        // Arrange — write a file that matches the glob but has a malformed sequence number
+        ActiveRun activeRun = SeedActiveRun();
+        string runDir = Path.Combine(_reportsBasePath, activeRun.Id.Value.ToString());
+        Directory.CreateDirectory(runDir);
+
+        // "report-" with no trailing number
+        await File.WriteAllTextAsync(
+            Path.Combine(runDir, "report-.json"),
+            """{"type":"progress","status":"running","summary":"test"}""",
+            TestContext.Current.CancellationToken);
+
+        WorkerDispatchService sut = BuildService();
+
+        // Act — should not throw, malformed file skipped
+        Exception? exception = await Record.ExceptionAsync(
+            () => sut.ExecuteTickAsync(TestContext.Current.CancellationToken));
+
+        // Assert
+        exception.ShouldBeNull();
+        await using FoundryDbContext assertDb = CreateDbContext();
+        List<WorkerReport> reports = await assertDb.WorkerReports.ToListAsync(TestContext.Current.CancellationToken);
+        reports.ShouldBeEmpty();
+    }
+
     private sealed class RunningStubWorkerOrchestrator : IWorkerOrchestrator
     {
         public Task<Result<string>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)

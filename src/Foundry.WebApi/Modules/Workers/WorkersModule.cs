@@ -5,6 +5,7 @@ using Foundry.WebApi.Modules.Workers.Infrastructure;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.WebApi.Modules.Workers;
 
@@ -15,8 +16,13 @@ public static class WorkersModule
         IConfiguration configuration)
     {
         services.Configure<WorkerOptions>(configuration.GetSection("Workers"));
+        services.AddSingleton<IValidateOptions<WorkerOptions>, WorkerOptionsValidator>();
 
-        services.AddSingleton<DockerClient>(_ => new DockerClientConfiguration().CreateClient());
+        services.AddSingleton<DockerClient>(_ =>
+        {
+            using DockerClientConfiguration config = new();
+            return config.CreateClient();
+        });
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
 
         services.AddHostedService<WorkerDispatchService>();

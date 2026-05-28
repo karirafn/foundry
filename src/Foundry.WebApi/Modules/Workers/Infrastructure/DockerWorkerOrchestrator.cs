@@ -7,10 +7,19 @@ using Docker.DotNet.Models;
 using Foundry.WebApi.Modules.Workers.Features;
 using Foundry.WebApi.Shared.Abstractions;
 
+using Microsoft.Extensions.Options;
+
 namespace Foundry.WebApi.Modules.Workers.Infrastructure;
 
-internal sealed class DockerWorkerOrchestrator(DockerClient dockerClient) : IWorkerOrchestrator
+internal sealed class DockerWorkerOrchestrator(
+    DockerClient dockerClient,
+    IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
 {
+    private const long BytesPerMegabyte = 1024L * 1024L;
+    private const long NanoCpusPerCpu = 1_000_000_000L;
+
+    private readonly WorkerOptions _options = optionsAccessor.Value;
+
     public async Task<Result<string>> StartAsync(
         WorkerContainerSpec spec,
         CancellationToken cancellationToken)
@@ -25,6 +34,9 @@ internal sealed class DockerWorkerOrchestrator(DockerClient dockerClient) : IWor
                 HostConfig = new HostConfig
                 {
                     Binds = [.. spec.BindMounts.Select(b => $"{b.HostPath}:{b.ContainerPath}")],
+                    Memory = _options.MemoryLimitMb * BytesPerMegabyte,
+                    NanoCPUs = (long)(_options.CpuLimit * NanoCpusPerCpu),
+                    PidsLimit = _options.PidsLimit,
                 },
             };
 
@@ -84,7 +96,7 @@ internal sealed class DockerWorkerOrchestrator(DockerClient dockerClient) : IWor
 
             return new WorkerStatus(
                 response.State.Running,
-                response.State.Running ? null : (int)response.State.ExitCode,
+                response.State.Running ? null : (int)Math.Clamp(response.State.ExitCode, int.MinValue, int.MaxValue),
                 finishedAt);
         }
         catch (DockerContainerNotFoundException)

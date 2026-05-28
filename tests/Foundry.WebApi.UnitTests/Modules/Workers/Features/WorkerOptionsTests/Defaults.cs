@@ -22,6 +22,9 @@ public sealed class Defaults
             () => options.ConfigPath.ShouldBe("./workers/config"),
             () => options.BranchNamingInstruction.ShouldBe("Use conventional branch naming"),
             () => options.ReportsPath.ShouldBe("./data/reports"),
-            () => options.SystemPromptTemplate.ShouldNotBeNullOrWhiteSpace());
+            () => options.SystemPromptTemplate.ShouldNotBeNullOrWhiteSpace(),
+            () => options.MemoryLimitMb.ShouldBe(8192),
+            () => options.CpuLimit.ShouldBe(2.0),
+            () => options.PidsLimit.ShouldBe(512));
     }
 }

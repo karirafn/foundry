@@ -25,4 +25,13 @@ public sealed class WorkerOptions
         """;
 
     public string ReportsPath { get; set; } = "./data/reports";
+
+    /// <summary>Memory limit for worker containers in megabytes.</summary>
+    public int MemoryLimitMb { get; set; } = 8192;
+
+    /// <summary>CPU limit for worker containers (number of CPUs, fractional values allowed).</summary>
+    public double CpuLimit { get; set; } = 2.0;
+
+    /// <summary>Maximum number of processes (PIDs) per worker container.</summary>
+    public int PidsLimit { get; set; } = 512;
 }

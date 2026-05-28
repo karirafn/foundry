@@ -1,3 +1,4 @@
+using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Shared.Persistence;
 
@@ -37,8 +38,12 @@ public sealed class PersistWorkerReport : IAsyncDisposable
     [Fact]
     public async Task WhenWorkerReportPersisted_CanBeReloadedWithAllProperties()
     {
-        // Arrange
+        // Arrange — seed a WorkerRun to satisfy the FK constraint
         WorkerRunId workerRunId = WorkerRunId.New();
+        StartingRun startingRun = StartingRun.Begin(IssueId.New(), workerRunId);
+        _dbContext.WorkerRuns.Add(startingRun);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
         WorkerReport report = WorkerReport.Create(
             workerRunId,
             sequenceNumber: 3,

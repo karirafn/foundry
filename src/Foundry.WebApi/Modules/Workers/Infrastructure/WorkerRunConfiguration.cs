@@ -41,6 +41,9 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
         builder.Property<string>("state")
             .HasMaxLength(DiscriminatorMaxLength)
             .HasColumnName("state");
+
+        builder.HasIndex(r => r.IssueId)
+            .HasDatabaseName("ix_worker_runs_issue_id");
     }
 }
 

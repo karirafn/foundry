@@ -49,17 +49,19 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IProviderAuth providerAuth = scope.ServiceProvider.GetRequiredService<IProviderAuth>();
 
+        List<ActiveRun> activeRuns = await dbContext.WorkerRuns
+            .OfType<ActiveRun>()
+            .ToListAsync(cancellationToken);
+
         if (!_reconciled)
         {
-            await ReconcileOrphanedRunsAsync(dbContext, orchestrator, cancellationToken);
+            await ReconcileOrphanedRunsAsync(dbContext, orchestrator, activeRuns, cancellationToken);
             _reconciled = true;
         }
 
-        await MonitorActiveRunsAsync(dbContext, orchestrator, cancellationToken);
+        await MonitorActiveRunsAsync(dbContext, orchestrator, activeRuns, cancellationToken);
 
-        int activeCount = await dbContext.WorkerRuns
-            .OfType<ActiveRun>()
-            .CountAsync(cancellationToken);
+        int activeCount = activeRuns.Count;
 
         if (activeCount >= _options.MaxConcurrent)
         {
@@ -82,8 +84,22 @@ internal sealed class WorkerDispatchService(
         dbContext.WorkerRuns.Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        WorkerContainerSpec spec = await BuildSpecAsync(startingRun, claimed, providerAuth, cancellationToken);
+        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, providerAuth, cancellationToken);
 
+        if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
+        {
+            FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(specFailure.Error.Message));
+            await dbContext.TransitionAsync(startingRun, failedRun, cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: {Error}",
+                startingRun.Id,
+                claimed.IssueNumber,
+                specFailure.Error.Message);
+            return;
+        }
+
+        WorkerContainerSpec spec = ((Result<WorkerContainerSpec>.Success)specResult).Value;
         Result<string> startResult = await orchestrator.StartAsync(spec, cancellationToken);
 
         if (startResult is Result<string>.Success success)
@@ -91,7 +107,7 @@ internal sealed class WorkerDispatchService(
             ActiveRun activeRun = startingRun.Activate(success.Value);
             await dbContext.TransitionAsync(startingRun, activeRun, cancellationToken);
 
-            logger.LogInformation(
+            logger.LogDebug(
                 "Worker run {WorkerRunId} started for issue #{IssueNumber} (container: {ContainerId}).",
                 startingRun.Id,
                 claimed.IssueNumber,
@@ -113,11 +129,10 @@ internal sealed class WorkerDispatchService(
     private async Task ReconcileOrphanedRunsAsync(
         FoundryDbContext dbContext,
         IWorkerOrchestrator orchestrator,
+        List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
-        List<ActiveRun> activeRuns = await dbContext.WorkerRuns
-            .OfType<ActiveRun>()
-            .ToListAsync(cancellationToken);
+        List<ActiveRun> runsToRemove = [];
 
         foreach (ActiveRun activeRun in activeRuns)
         {
@@ -127,6 +142,7 @@ internal sealed class WorkerDispatchService(
             {
                 FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
                 await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+                runsToRemove.Add(activeRun);
 
                 logger.LogWarning(
                     "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; marking failed.",
@@ -136,19 +152,22 @@ internal sealed class WorkerDispatchService(
             else if (!status.IsRunning)
             {
                 await MonitorRunAsync(dbContext, orchestrator, activeRun, cancellationToken);
+                runsToRemove.Add(activeRun);
             }
+        }
+
+        foreach (ActiveRun run in runsToRemove)
+        {
+            activeRuns.Remove(run);
         }
     }
 
     private async Task MonitorActiveRunsAsync(
         FoundryDbContext dbContext,
         IWorkerOrchestrator orchestrator,
+        List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
-        List<ActiveRun> activeRuns = await dbContext.WorkerRuns
-            .OfType<ActiveRun>()
-            .ToListAsync(cancellationToken);
-
         foreach (ActiveRun activeRun in activeRuns)
         {
             await MonitorRunAsync(dbContext, orchestrator, activeRun, cancellationToken);
@@ -289,12 +308,20 @@ internal sealed class WorkerDispatchService(
         return (branchName, prUrl);
     }
 
+    private const string ReportFilePrefix = "report-";
+
     private static int? ParseSequenceNumber(string filePath)
     {
         string fileName = Path.GetFileNameWithoutExtension(filePath);
 
+        if (fileName.Length <= ReportFilePrefix.Length
+            || !fileName.StartsWith(ReportFilePrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
         // File name format: report-{sequenceNumber}
-        ReadOnlySpan<char> suffix = fileName.AsSpan("report-".Length);
+        ReadOnlySpan<char> suffix = fileName.AsSpan(ReportFilePrefix.Length);
 
         if (int.TryParse(suffix, out int number))
         {
@@ -330,13 +357,20 @@ internal sealed class WorkerDispatchService(
         }
     }
 
-    private async Task<WorkerContainerSpec> BuildSpecAsync(
+    private async Task<Result<WorkerContainerSpec>> BuildSpecAsync(
         StartingRun startingRun,
         ClaimedIssueDispatch claimed,
         IProviderAuth providerAuth,
         CancellationToken cancellationToken)
     {
-        string gitPat = await ResolveGitPatAsync(providerAuth, claimed.AccountSecretKeyName, cancellationToken);
+        Result<string> patResult = await ResolveGitPatAsync(providerAuth, claimed.AccountSecretKeyName, cancellationToken);
+
+        if (patResult is not Result<string>.Success patSuccess)
+        {
+            return Result<WorkerContainerSpec>.Fail(((Result<string>.Failure)patResult).Error);
+        }
+
+        string gitPat = patSuccess.Value;
 
         string systemPrompt = SystemPromptBuilder.Build(
             claimed.IssueNumber,
@@ -368,14 +402,14 @@ internal sealed class WorkerDispatchService(
             ["foundry.worker-run-id"] = startingRun.Id.Value.ToString(),
         };
 
-        return new WorkerContainerSpec(
+        return Result<WorkerContainerSpec>.Ok(new WorkerContainerSpec(
             _options.Image,
             envVars,
             bindMounts,
-            labels);
+            labels));
     }
 
-    private async Task<string> ResolveGitPatAsync(
+    private async Task<Result<string>> ResolveGitPatAsync(
         IProviderAuth providerAuth,
         string secretKeyName,
         CancellationToken cancellationToken)
@@ -384,13 +418,19 @@ internal sealed class WorkerDispatchService(
 
         if (result is Result<string>.Success success)
         {
-            return success.Value;
+            if (string.IsNullOrEmpty(success.Value))
+            {
+                return Result<string>.Fail(
+                    new Error("Worker.EmptyGitPat", $"Git PAT not configured for account: {secretKeyName}"));
+            }
+
+            return result;
         }
 
         logger.LogWarning(
-            "Could not resolve Git PAT for secret key '{SecretKeyName}'; using empty string.",
+            "Could not resolve Git PAT for secret key '{SecretKeyName}'.",
             secretKeyName);
 
-        return string.Empty;
+        return result;
     }
 }
