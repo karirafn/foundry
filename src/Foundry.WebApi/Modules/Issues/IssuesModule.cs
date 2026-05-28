@@ -40,6 +40,27 @@ internal sealed class IssuesModule(FoundryDbContext db) : IIssuesModule
 
         return snapshots;
     }
+
+    public async Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        List<Issue> allIssues = await db.Set<Issue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .ToListAsync(cancellationToken);
+
+        List<DependencyEdge> edges = [];
+        foreach (Issue issue in allIssues.Where(i => i.BlockedBy.Count > 0))
+        {
+            foreach (int blockerNumber in issue.BlockedBy)
+            {
+                edges.Add(new DependencyEdge(issue.IssueNumber, blockerNumber));
+            }
+        }
+
+        return edges;
+    }
 }
 
 public static class IssuesModuleServiceCollectionExtensions
@@ -49,6 +70,7 @@ public static class IssuesModuleServiceCollectionExtensions
         services.AddScoped<IIssuesModule, IssuesModule>();
         services.AddDomainEventHandler<IssueDetected, CreateIssueHandler>();
         services.AddDomainEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();
+        services.AddDomainEventHandler<IssueDependenciesDetected, ProcessIssueDependenciesHandler>();
         return services;
     }
 }

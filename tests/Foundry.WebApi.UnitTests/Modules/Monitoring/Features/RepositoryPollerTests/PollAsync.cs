@@ -521,6 +521,13 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(_snapshots);
         }
+
+        public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
+        }
     }
 
     private sealed class CapturingDomainEventDispatcher : IDomainEventDispatcher

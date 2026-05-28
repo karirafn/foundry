@@ -79,4 +79,16 @@ public sealed class AddIssuesModule : IAsyncDisposable
             scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDetailsChanged>>();
         handler.ShouldBeOfType<UpdateIssueDetailsHandler>();
     }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueDependenciesDetectedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueDependenciesDetected> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDependenciesDetected>>();
+        handler.ShouldBeOfType<ProcessIssueDependenciesHandler>();
+    }
 }

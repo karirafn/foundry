@@ -262,6 +262,13 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             return Task.FromResult<IReadOnlyDictionary<int, IssueSnapshot>>(
                 new Dictionary<int, IssueSnapshot>());
         }
+
+        public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
+        }
     }
 
     private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
