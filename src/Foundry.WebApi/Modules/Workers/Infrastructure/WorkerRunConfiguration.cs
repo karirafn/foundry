@@ -79,6 +79,14 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
     private const int BranchNameMaxLength = 500;
     private const int PullRequestUrlMaxLength = 2000;
 
+    private static readonly ValueConverter<BranchName, string> BranchNameConverter = new(
+        bn => bn.Value,
+        value => BranchName.From(value));
+
+    private static readonly ValueConverter<PullRequestUrl, string> PullRequestUrlConverter = new(
+        url => url.Value,
+        value => PullRequestUrl.From(value));
+
     public void Configure(EntityTypeBuilder<CompletedRun> builder)
     {
         builder.Property(r => r.ExitCode)
@@ -88,11 +96,13 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             .HasColumnName("completed_at");
 
         builder.Property(r => r.BranchName)
+            .HasConversion(BranchNameConverter)
             .HasMaxLength(BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
 
         builder.Property(r => r.PullRequestUrl)
+            .HasConversion(PullRequestUrlConverter)
             .HasMaxLength(PullRequestUrlMaxLength)
             .IsUnicode(false)
             .HasColumnName("pull_request_url");

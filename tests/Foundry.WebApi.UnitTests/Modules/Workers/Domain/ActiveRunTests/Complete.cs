@@ -79,10 +79,10 @@ public sealed class Complete
         ActiveRun active = CreateActiveRun();
 
         // Act
-        CompletedRun completed = active.Complete(0, "feat/issue-5", null);
+        CompletedRun completed = active.Complete(0, BranchName.From("feat/issue-5"), null);
 
         // Assert
-        completed.BranchName.ShouldBe("feat/issue-5");
+        completed.BranchName.ShouldBe(BranchName.From("feat/issue-5"));
     }
 
     [Fact]
@@ -92,10 +92,10 @@ public sealed class Complete
         ActiveRun active = CreateActiveRun();
 
         // Act
-        CompletedRun completed = active.Complete(0, null, "https://github.com/owner/repo/pull/10");
+        CompletedRun completed = active.Complete(0, null, PullRequestUrl.From("https://github.com/owner/repo/pull/10"));
 
         // Assert
-        completed.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10");
+        completed.PullRequestUrl.ShouldBe(PullRequestUrl.From("https://github.com/owner/repo/pull/10"));
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class Complete
         ActiveRun active = CreateActiveRun(issueId);
 
         // Act
-        active.Complete(0, "feat/issue-5", "https://github.com/owner/repo/pull/10");
+        active.Complete(0, BranchName.From("feat/issue-5"), PullRequestUrl.From("https://github.com/owner/repo/pull/10"));
 
         // Assert
         WorkerRunCompleted domainEvent = active.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunCompleted>();

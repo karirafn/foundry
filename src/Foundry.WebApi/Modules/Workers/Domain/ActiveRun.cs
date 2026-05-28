@@ -42,10 +42,10 @@ public sealed class ActiveRun : WorkerRun
         LatestProgress = progress;
     }
 
-    public CompletedRun Complete(int exitCode, string? branchName, string? pullRequestUrl)
+    public CompletedRun Complete(int exitCode, BranchName? branchName, PullRequestUrl? pullRequestUrl)
     {
         CompletedRun completed = CompletedRun.FromActive(this, exitCode, branchName, pullRequestUrl);
-        AddDomainEvent(new WorkerRunCompleted(Id, IssueId, branchName, pullRequestUrl));
+        AddDomainEvent(new WorkerRunCompleted(Id, IssueId, branchName?.Value, pullRequestUrl?.Value));
         return completed;
     }
 

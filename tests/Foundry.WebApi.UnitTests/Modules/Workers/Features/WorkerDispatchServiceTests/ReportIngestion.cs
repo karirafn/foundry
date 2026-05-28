@@ -215,8 +215,8 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         CompletedRun completedRun = run.ShouldBeOfType<CompletedRun>();
         completedRun.ShouldSatisfyAllConditions(
-            () => completedRun.BranchName.ShouldBe("feat/add-login"),
-            () => completedRun.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/99"));
+            () => completedRun.BranchName.ShouldBe(BranchName.From("feat/add-login")),
+            () => completedRun.PullRequestUrl.ShouldBe(PullRequestUrl.From("https://github.com/owner/repo/pull/99")));
     }
 
     [Fact]

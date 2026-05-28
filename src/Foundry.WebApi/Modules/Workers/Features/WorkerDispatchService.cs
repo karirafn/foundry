@@ -183,7 +183,7 @@ internal sealed class WorkerDispatchService(
         WorkerStatus? knownStatus = null)
     {
         string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
-        (string? branchName, string? prUrl) = await IngestReportsAsync(dbContext, activeRun, reportsDir, cancellationToken);
+        (BranchName? branchName, PullRequestUrl? prUrl) = await IngestReportsAsync(dbContext, activeRun, reportsDir, cancellationToken);
 
         WorkerStatus? status = knownStatus ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
 
@@ -225,8 +225,8 @@ internal sealed class WorkerDispatchService(
             logger.LogInformation(
                 "Worker run {WorkerRunId} completed successfully (branch: {BranchName}, PR: {PrUrl}).",
                 activeRun.Id,
-                branchName ?? "(none)",
-                prUrl ?? "(none)");
+                branchName?.Value ?? "(none)",
+                prUrl?.Value ?? "(none)");
         }
         else
         {
@@ -241,7 +241,7 @@ internal sealed class WorkerDispatchService(
         }
     }
 
-    private async Task<(string? BranchName, string? PrUrl)> IngestReportsAsync(
+    private async Task<(BranchName? BranchName, PullRequestUrl? PrUrl)> IngestReportsAsync(
         FoundryDbContext dbContext,
         ActiveRun activeRun,
         string reportsDir,
@@ -259,8 +259,8 @@ internal sealed class WorkerDispatchService(
 
         HashSet<int> ingestedSequenceNumbers = ingestedList.ToHashSet();
 
-        string? branchName = null;
-        string? prUrl = null;
+        BranchName? branchName = null;
+        PullRequestUrl? prUrl = null;
 
         IEnumerable<string> reportFiles = Directory
             .EnumerateFiles(reportsDir, "report-*.json")
@@ -297,8 +297,12 @@ internal sealed class WorkerDispatchService(
 
             if (payload.Type == "final")
             {
-                branchName = payload.BranchName;
-                prUrl = payload.PrUrl;
+                branchName = payload.BranchName is not null
+                    ? BranchName.From(payload.BranchName)
+                    : null;
+                prUrl = payload.PrUrl is not null
+                    ? PullRequestUrl.From(payload.PrUrl)
+                    : null;
             }
         }
 

@@ -42,7 +42,10 @@ public sealed class PersistCompletedRun : IAsyncDisposable
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         ActiveRun active = starting.Activate(ContainerId.From("container-completed"));
-        CompletedRun run = active.Complete(exitCode: 0, branchName: "feat/my-feature", pullRequestUrl: "https://github.com/owner/repo/pull/1");
+        CompletedRun run = active.Complete(
+            exitCode: 0,
+            branchName: BranchName.From("feat/my-feature"),
+            pullRequestUrl: PullRequestUrl.From("https://github.com/owner/repo/pull/1"));
 
         _dbContext.Set<WorkerRun>().Add(run);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -60,8 +63,8 @@ public sealed class PersistCompletedRun : IAsyncDisposable
             () => reloaded.IssueId.ShouldBe(issueId),
             () => reloaded.ExitCode.ShouldBe(0),
             () => reloaded.CompletedAt.ShouldBe(run.CompletedAt),
-            () => reloaded.BranchName.ShouldBe("feat/my-feature"),
-            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/1"));
+            () => reloaded.BranchName.ShouldBe(BranchName.From("feat/my-feature")),
+            () => reloaded.PullRequestUrl.ShouldBe(PullRequestUrl.From("https://github.com/owner/repo/pull/1")));
     }
 
     [Fact]

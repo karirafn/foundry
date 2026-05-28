@@ -15,8 +15,8 @@ public sealed class CompletedRun : WorkerRun
         DateTimeOffset createdAt,
         int exitCode,
         DateTimeOffset completedAt,
-        string? branchName,
-        string? pullRequestUrl)
+        BranchName? branchName,
+        PullRequestUrl? pullRequestUrl)
         : base(id, issueId, createdAt)
     {
         ExitCode = exitCode;
@@ -29,11 +29,11 @@ public sealed class CompletedRun : WorkerRun
 
     public DateTimeOffset CompletedAt { get; private set; }
 
-    public string? BranchName { get; private set; }
+    public BranchName? BranchName { get; private set; }
 
-    public string? PullRequestUrl { get; private set; }
+    public PullRequestUrl? PullRequestUrl { get; private set; }
 
-    internal static CompletedRun FromActive(ActiveRun active, int exitCode, string? branchName, string? pullRequestUrl)
+    internal static CompletedRun FromActive(ActiveRun active, int exitCode, BranchName? branchName, PullRequestUrl? pullRequestUrl)
     {
         return new CompletedRun(
             active.Id,
