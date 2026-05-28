@@ -13,7 +13,8 @@ Monitors repositories across multiple providers for issues with a trigger label,
 
 A Claude Code Docker container dispatched to implement a single issue.
 Ephemeral — created on demand, destroyed after completion.
-Workers push to `foundry/<issue-id>/*` branches and call back to Foundry with results.
+Has no identity independent of its WorkerRun — the container is the execution mechanism, not a separate domain concept.
+Workers clone the repo, implement the issue, push a branch, and write reports to a shared volume.
 
 ## Provider
 
@@ -76,8 +77,21 @@ Carries raw data (number, title, body, author username, URL, labels) that the do
 The `owner/name` pair that uniquely identifies a repository within a provider.
 Value object — always appears as a pair, never just owner or just name.
 
-## Run
+## WorkerRun
 
-A single execution of a worker against an issue.
+A single execution of a worker against an issue — the primary aggregate for the Workers module.
+Modeled as a polymorphic aggregate with state variants: `StartingRun` (container creation requested), `ActiveRun` (container running), `CompletedRun` (exited successfully), `FailedRun` (exited with error, timed out, or failed to start).
 An issue can have multiple runs (e.g. after retry from Failed or Review state).
-Each run captures logs, exit status, and PR/MR URL.
+Each run captures reports, exit status, branch name, and PR/MR URL.
+
+## WorkerReport
+
+A progress or final report written by a worker during execution.
+Owned by a WorkerRun as a collection — persisted to the database after ingestion from the shared reports volume.
+Periodic reports capture intermediate progress (e.g., "implementing step 3/6"); the final report captures the outcome (branch name, PR URL, summary, error details).
+JSON format: `{ type, status, summary, error, prUrl, branchName, metrics }`.
+
+## FailureReason
+
+A value object on FailedRun that classifies how the run failed.
+Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.).
