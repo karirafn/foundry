@@ -4,6 +4,8 @@ public sealed class WorkerOptions
 {
     public string Image { get; set; } = "ghcr.io/anthropics/claude-code:latest";
 
+    public string ApiKey { get; set; } = string.Empty;
+
     public int MaxConcurrent { get; set; } = 3;
 
     public int TimeoutMinutes { get; set; } = 120;
