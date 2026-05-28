@@ -1,0 +1,85 @@
+using Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.WebApi.Modules.Workers.Domain;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.WebApi.UnitTests.Modules.Workers.Domain.StartingRunTests;
+
+public sealed class Activate
+{
+    [Fact]
+    public void WhenCalled_ReturnsActiveRunWithSameId()
+    {
+        // Arrange
+        StartingRun starting = StartingRun.Begin(IssueId.New());
+
+        // Act
+        ActiveRun active = starting.Activate("container-123");
+
+        // Assert
+        active.Id.ShouldBe(starting.Id);
+    }
+
+    [Fact]
+    public void WhenCalled_CopiesSharedProperties()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        StartingRun starting = StartingRun.Begin(issueId);
+
+        // Act
+        ActiveRun active = starting.Activate("container-123");
+
+        // Assert
+        active.ShouldSatisfyAllConditions(
+            () => active.IssueId.ShouldBe(issueId),
+            () => active.CreatedAt.ShouldBe(starting.CreatedAt));
+    }
+
+    [Fact]
+    public void WhenCalled_SetsContainerId()
+    {
+        // Arrange
+        StartingRun starting = StartingRun.Begin(IssueId.New());
+
+        // Act
+        ActiveRun active = starting.Activate("container-abc");
+
+        // Assert
+        active.ContainerId.ShouldBe("container-abc");
+    }
+
+    [Fact]
+    public void WhenCalled_SetsStartedAtToUtcNow()
+    {
+        // Arrange
+        StartingRun starting = StartingRun.Begin(IssueId.New());
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        // Act
+        ActiveRun active = starting.Activate("container-123");
+
+        // Assert
+        DateTimeOffset after = DateTimeOffset.UtcNow;
+        active.StartedAt.ShouldBeInRange(before, after);
+    }
+
+    [Fact]
+    public void WhenCalled_RaisesWorkerRunStartedOnStartingRun()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        StartingRun starting = StartingRun.Begin(issueId);
+
+        // Act
+        starting.Activate("container-123");
+
+        // Assert
+        WorkerRunStarted domainEvent = starting.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunStarted>();
+        domainEvent.ShouldSatisfyAllConditions(
+            () => domainEvent.WorkerRunId.ShouldBe(starting.Id),
+            () => domainEvent.IssueId.ShouldBe(issueId));
+    }
+}
