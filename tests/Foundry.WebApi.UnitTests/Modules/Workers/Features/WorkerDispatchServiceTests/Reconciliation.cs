@@ -132,8 +132,8 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
     {
         public int GetStatusCallCount { get; private set; }
 
-        public Task<Result<string>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Fail(new Error("Test.NoDispatch", "No dispatch in reconciliation tests")));
+        public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in reconciliation tests")));
 
         public Task StopAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;

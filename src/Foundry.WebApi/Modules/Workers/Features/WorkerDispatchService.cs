@@ -101,9 +101,9 @@ internal sealed class WorkerDispatchService(
         }
 
         WorkerContainerSpec spec = ((Result<WorkerContainerSpec>.Success)specResult).Value;
-        Result<string> startResult = await orchestrator.StartAsync(spec, cancellationToken);
+        Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
 
-        if (startResult is Result<string>.Success success)
+        if (startResult is Result<ContainerId>.Success success)
         {
             ActiveRun activeRun = startingRun.Activate(success.Value);
             await dbContext.TransitionAsync(startingRun, activeRun, cancellationToken);
@@ -112,9 +112,9 @@ internal sealed class WorkerDispatchService(
                 "Worker run {WorkerRunId} started for issue #{IssueNumber} (container: {ContainerId}).",
                 startingRun.Id,
                 claimed.IssueNumber,
-                success.Value);
+                success.Value.Value);
         }
-        else if (startResult is Result<string>.Failure failure)
+        else if (startResult is Result<ContainerId>.Failure failure)
         {
             FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(failure.Error.Message));
             await dbContext.TransitionAsync(startingRun, failedRun, cancellationToken);
@@ -137,7 +137,7 @@ internal sealed class WorkerDispatchService(
 
         foreach (ActiveRun activeRun in activeRuns)
         {
-            WorkerStatus? status = await orchestrator.GetStatusAsync(activeRun.ContainerId, cancellationToken);
+            WorkerStatus? status = await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
 
             if (status is null)
             {
@@ -148,7 +148,7 @@ internal sealed class WorkerDispatchService(
                 logger.LogWarning(
                     "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; marking failed.",
                     activeRun.Id,
-                    activeRun.ContainerId);
+                    activeRun.ContainerId.Value);
             }
             else if (!status.IsRunning)
             {
@@ -185,7 +185,7 @@ internal sealed class WorkerDispatchService(
         string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
         (string? branchName, string? prUrl) = await IngestReportsAsync(dbContext, activeRun, reportsDir, cancellationToken);
 
-        WorkerStatus? status = knownStatus ?? await orchestrator.GetStatusAsync(activeRun.ContainerId, cancellationToken);
+        WorkerStatus? status = knownStatus ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
 
         if (status is null)
         {
@@ -195,7 +195,7 @@ internal sealed class WorkerDispatchService(
             logger.LogWarning(
                 "Worker run {WorkerRunId} container {ContainerId} not found; marking failed.",
                 activeRun.Id,
-                activeRun.ContainerId);
+                activeRun.ContainerId.Value);
             return;
         }
 
@@ -204,7 +204,7 @@ internal sealed class WorkerDispatchService(
             DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(_options.TimeoutMinutes);
             if (DateTimeOffset.UtcNow >= timeout)
             {
-                await orchestrator.StopAsync(activeRun.ContainerId, cancellationToken);
+                await orchestrator.StopAsync(activeRun.ContainerId.Value, cancellationToken);
                 FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut());
                 await dbContext.TransitionAsync(activeRun, timedOut, cancellationToken);
 

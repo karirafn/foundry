@@ -1,10 +1,11 @@
+using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Shared.Abstractions;
 
 namespace Foundry.WebApi.Modules.Workers.Features;
 
 public interface IWorkerOrchestrator
 {
-    Task<Result<string>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken);
+    Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken);
 
     Task StopAsync(string containerId, CancellationToken cancellationToken);
 

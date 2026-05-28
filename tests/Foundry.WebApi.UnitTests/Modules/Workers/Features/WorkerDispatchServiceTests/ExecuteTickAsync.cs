@@ -106,7 +106,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.ContainerId.ShouldBe("container-xyz");
+        activeRun.ContainerId.ShouldBe(ContainerId.From("container-xyz"));
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         {
             IssueId issueId = IssueId.New();
             StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-            ActiveRun activeRun = starting.Activate("container-existing");
+            ActiveRun activeRun = starting.Activate(ContainerId.From("container-existing"));
             db.WorkerRuns.Add(activeRun);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -333,12 +333,12 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
             _errorMessage = errorMessage;
         }
 
-        public Task<Result<string>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
+        public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
         {
             LastSpec = spec;
-            Result<string> result = _succeeds
-                ? Result<string>.Ok(_containerId ?? "default-container")
-                : Result<string>.Fail(new Error("Orchestrator.StartFailed", _errorMessage ?? "Start failed"));
+            Result<ContainerId> result = _succeeds
+                ? Result<ContainerId>.Ok(ContainerId.From(_containerId ?? "default-container"))
+                : Result<ContainerId>.Fail(new Error("Orchestrator.StartFailed", _errorMessage ?? "Start failed"));
             return Task.FromResult(result);
         }
 

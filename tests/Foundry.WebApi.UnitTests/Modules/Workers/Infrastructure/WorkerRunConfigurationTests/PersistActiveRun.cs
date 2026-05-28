@@ -41,7 +41,7 @@ public sealed class PersistActiveRun : IAsyncDisposable
         // Arrange
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun run = starting.Activate("container-abc123");
+        ActiveRun run = starting.Activate(ContainerId.From("container-abc123"));
 
         _dbContext.Set<WorkerRun>().Add(run);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -57,7 +57,7 @@ public sealed class PersistActiveRun : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.Id.ShouldBe(run.Id),
             () => reloaded.IssueId.ShouldBe(issueId),
-            () => reloaded.ContainerId.ShouldBe("container-abc123"),
+            () => reloaded.ContainerId.ShouldBe(ContainerId.From("container-abc123")),
             () => reloaded.StartedAt.ShouldBe(run.StartedAt),
             () => reloaded.LatestProgress.ShouldBeNull());
     }
@@ -68,7 +68,7 @@ public sealed class PersistActiveRun : IAsyncDisposable
         // Arrange
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun run = starting.Activate("container-xyz");
+        ActiveRun run = starting.Activate(ContainerId.From("container-xyz"));
         run.UpdateProgress("Step 1 complete");
 
         _dbContext.Set<WorkerRun>().Add(run);

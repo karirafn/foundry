@@ -118,8 +118,8 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
     {
         public string? LastStoppedContainerId { get; private set; }
 
-        public Task<Result<string>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Fail(new Error("Test.NoDispatch", "No dispatch in monitor tests")));
+        public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in monitor tests")));
 
         public Task StopAsync(string containerId, CancellationToken cancellationToken)
         {

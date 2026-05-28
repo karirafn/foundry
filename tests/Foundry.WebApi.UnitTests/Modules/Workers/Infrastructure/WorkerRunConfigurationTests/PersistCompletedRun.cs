@@ -41,7 +41,7 @@ public sealed class PersistCompletedRun : IAsyncDisposable
         // Arrange
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun active = starting.Activate("container-completed");
+        ActiveRun active = starting.Activate(ContainerId.From("container-completed"));
         CompletedRun run = active.Complete(exitCode: 0, branchName: "feat/my-feature", pullRequestUrl: "https://github.com/owner/repo/pull/1");
 
         _dbContext.Set<WorkerRun>().Add(run);
@@ -70,7 +70,7 @@ public sealed class PersistCompletedRun : IAsyncDisposable
         // Arrange
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun active = starting.Activate("container-no-branch");
+        ActiveRun active = starting.Activate(ContainerId.From("container-no-branch"));
         CompletedRun run = active.Complete(exitCode: 1, branchName: null, pullRequestUrl: null);
 
         _dbContext.Set<WorkerRun>().Add(run);

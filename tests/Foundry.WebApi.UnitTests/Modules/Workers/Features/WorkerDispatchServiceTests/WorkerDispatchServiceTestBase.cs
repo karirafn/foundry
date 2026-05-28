@@ -49,7 +49,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         using FoundryDbContext db = CreateDbContext();
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun activeRun = starting.Activate(containerId);
+        ActiveRun activeRun = starting.Activate(ContainerId.From(containerId));
         db.WorkerRuns.Add(activeRun);
         db.SaveChanges();
         return activeRun;

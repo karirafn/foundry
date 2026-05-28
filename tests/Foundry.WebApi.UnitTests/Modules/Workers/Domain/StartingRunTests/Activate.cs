@@ -16,7 +16,7 @@ public sealed class Activate
         StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
 
         // Act
-        ActiveRun active = starting.Activate("container-123");
+        ActiveRun active = starting.Activate(ContainerId.From("container-123"));
 
         // Assert
         active.Id.ShouldBe(starting.Id);
@@ -30,7 +30,7 @@ public sealed class Activate
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
 
         // Act
-        ActiveRun active = starting.Activate("container-123");
+        ActiveRun active = starting.Activate(ContainerId.From("container-123"));
 
         // Assert
         active.ShouldSatisfyAllConditions(
@@ -45,10 +45,10 @@ public sealed class Activate
         StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
 
         // Act
-        ActiveRun active = starting.Activate("container-abc");
+        ActiveRun active = starting.Activate(ContainerId.From("container-abc"));
 
         // Assert
-        active.ContainerId.ShouldBe("container-abc");
+        active.ContainerId.ShouldBe(ContainerId.From("container-abc"));
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class Activate
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        ActiveRun active = starting.Activate("container-123");
+        ActiveRun active = starting.Activate(ContainerId.From("container-123"));
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;
@@ -74,7 +74,7 @@ public sealed class Activate
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
 
         // Act
-        starting.Activate("container-123");
+        starting.Activate(ContainerId.From("container-123"));
 
         // Assert
         WorkerRunStarted domainEvent = starting.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunStarted>();

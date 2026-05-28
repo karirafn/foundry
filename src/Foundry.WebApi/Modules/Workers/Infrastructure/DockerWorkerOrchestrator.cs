@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Modules.Workers.Features;
 using Foundry.WebApi.Shared.Abstractions;
 
@@ -21,7 +22,7 @@ internal sealed class DockerWorkerOrchestrator(
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
-    public async Task<Result<string>> StartAsync(
+    public async Task<Result<ContainerId>> StartAsync(
         WorkerContainerSpec spec,
         CancellationToken cancellationToken)
     {
@@ -50,14 +51,14 @@ internal sealed class DockerWorkerOrchestrator(
                 new ContainerStartParameters(),
                 cancellationToken);
 
-            return Result<string>.Ok(response.ID);
+            return Result<ContainerId>.Ok(ContainerId.From(response.ID));
         }
         catch (DockerApiException ex)
         {
             string message = ex.Message.Length > DockerErrorMessageMaxLength
                 ? ex.Message[..DockerErrorMessageMaxLength]
                 : ex.Message;
-            return Result<string>.Fail(new Error("Docker.StartFailed", message));
+            return Result<ContainerId>.Fail(new Error("Docker.StartFailed", message));
         }
     }
 

@@ -13,7 +13,7 @@ public sealed class ActiveRun : WorkerRun
         WorkerRunId id,
         IssueId issueId,
         DateTimeOffset createdAt,
-        string containerId,
+        ContainerId containerId,
         DateTimeOffset startedAt)
         : base(id, issueId, createdAt)
     {
@@ -21,13 +21,13 @@ public sealed class ActiveRun : WorkerRun
         StartedAt = startedAt;
     }
 
-    public string ContainerId { get; private set; } = string.Empty;
+    public ContainerId ContainerId { get; private set; }
 
     public DateTimeOffset StartedAt { get; private set; }
 
     public string? LatestProgress { get; private set; }
 
-    internal static ActiveRun FromStarting(StartingRun starting, string containerId)
+    internal static ActiveRun FromStarting(StartingRun starting, ContainerId containerId)
     {
         return new ActiveRun(
             starting.Id,

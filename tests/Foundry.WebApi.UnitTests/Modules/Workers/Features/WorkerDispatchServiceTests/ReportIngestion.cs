@@ -287,8 +287,8 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
     private sealed class RunningStubWorkerOrchestrator : IWorkerOrchestrator
     {
-        public Task<Result<string>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Fail(new Error("Test.NoDispatch", "No dispatch in report tests")));
+        public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in report tests")));
 
         public Task StopAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
@@ -307,8 +307,8 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
     private sealed class ExitedStubWorkerOrchestrator(int exitCode) : IWorkerOrchestrator
     {
-        public Task<Result<string>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Fail(new Error("Test.NoDispatch", "No dispatch in report tests")));
+        public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in report tests")));
 
         public Task StopAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;

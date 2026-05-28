@@ -51,9 +51,14 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 {
     private const int ContainerIdMaxLength = 200;
 
+    private static readonly ValueConverter<ContainerId, string> ContainerIdConverter = new(
+        id => id.Value,
+        value => ContainerId.From(value));
+
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
         builder.Property(r => r.ContainerId)
+            .HasConversion(ContainerIdConverter)
             .HasMaxLength(ContainerIdMaxLength)
             .IsUnicode(false)
             .IsRequired()
