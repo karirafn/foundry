@@ -25,6 +25,8 @@ public sealed class ActiveRun : WorkerRun
 
     public DateTimeOffset StartedAt { get; private set; }
 
+    public string? LatestProgress { get; private set; }
+
     internal static ActiveRun FromStarting(StartingRun starting, string containerId)
     {
         return new ActiveRun(
@@ -33,6 +35,11 @@ public sealed class ActiveRun : WorkerRun
             starting.CreatedAt,
             containerId,
             DateTimeOffset.UtcNow);
+    }
+
+    public void UpdateProgress(string progress)
+    {
+        LatestProgress = progress;
     }
 
     public CompletedRun Complete(int exitCode, string? branchName, string? pullRequestUrl)
