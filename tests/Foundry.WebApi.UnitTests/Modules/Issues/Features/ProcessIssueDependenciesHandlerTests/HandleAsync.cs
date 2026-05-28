@@ -363,6 +363,54 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBlockedIssueStillHasBlockers_PersistsUpdatedBlockedBy()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedBlockedIssue(repositoryId, issueNumber: 10, blockedBy: [20]);
+
+        IssueDependenciesDetected @event = new(
+            MonitoredRepositoryId: repositoryId,
+            IssueNumber: 10,
+            BlockedByIssueNumbers: [21]);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 10,
+                TestContext.Current.CancellationToken);
+        issue.ShouldNotBeNull().BlockedBy.ShouldBe([21]);
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueHasNoBlockers_PersistsEmptyBlockedBy()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repositoryId, issueNumber: 11);
+
+        IssueDependenciesDetected @event = new(
+            MonitoredRepositoryId: repositoryId,
+            IssueNumber: 11,
+            BlockedByIssueNumbers: []);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 11,
+                TestContext.Current.CancellationToken);
+        issue.ShouldNotBeNull().BlockedBy.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenQueuedIssueHasNoBlockers_NoTransition()
     {
         // Arrange

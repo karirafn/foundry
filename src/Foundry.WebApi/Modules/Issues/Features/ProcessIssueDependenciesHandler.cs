@@ -95,8 +95,15 @@ internal sealed class ProcessIssueDependenciesHandler(
                 break;
             }
 
-            // QueuedIssue with no new blockers: already queued, nothing to do.
-            // BlockedIssue with still-existing blockers: remains blocked, BlockedBy updated above.
+            // BlockedIssue with still-existing blockers: remains blocked, persist the updated BlockedBy.
+            case BlockedIssue when issue.BlockedBy.Count > 0:
+                await db.SaveChangesAsync(cancellationToken);
+                break;
+
+            // QueuedIssue with no new blockers: already queued, persist (SetBlockedBy([]) is a no-op but save is explicit).
+            case QueuedIssue when issue.BlockedBy.Count == 0:
+                await db.SaveChangesAsync(cancellationToken);
+                break;
         }
     }
 
