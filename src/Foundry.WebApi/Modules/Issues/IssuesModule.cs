@@ -47,7 +47,7 @@ public static class IssuesModuleServiceCollectionExtensions
     public static IServiceCollection AddIssuesModule(this IServiceCollection services)
     {
         services.AddScoped<IIssuesModule, IssuesModule>();
-        services.AddDomainEventHandler<IssueDetected, CreateAndEnqueueIssueHandler>();
+        services.AddDomainEventHandler<IssueDetected, CreateIssueHandler>();
         services.AddDomainEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();
         return services;
     }

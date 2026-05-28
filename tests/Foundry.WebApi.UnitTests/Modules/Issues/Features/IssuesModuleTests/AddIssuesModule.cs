@@ -65,7 +65,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         // Assert
         IDomainEventHandler<IssueDetected> handler =
             scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDetected>>();
-        handler.ShouldBeOfType<CreateAndEnqueueIssueHandler>();
+        handler.ShouldBeOfType<CreateIssueHandler>();
     }
 
     [Fact]

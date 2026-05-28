@@ -5,10 +5,7 @@ using Foundry.WebApi.Shared.Persistence;
 
 namespace Foundry.WebApi.Modules.Issues.Features;
 
-internal sealed class CreateAndEnqueueIssueHandler(
-    FoundryDbContext db,
-    IDomainEventDispatcher events)
-    : IDomainEventHandler<IssueDetected>
+internal sealed class CreateIssueHandler(FoundryDbContext db) : IDomainEventHandler<IssueDetected>
 {
     public async Task HandleAsync(IssueDetected @event, CancellationToken cancellationToken)
     {
@@ -34,10 +31,7 @@ internal sealed class CreateAndEnqueueIssueHandler(
             @event.Labels,
             @event.DetectedAt);
 
-        QueuedIssue queued = detected.Enqueue();
-        db.Set<Issue>().Add(queued);
+        db.Set<Issue>().Add(detected);
         await db.SaveChangesAsync(cancellationToken);
-        await events.DispatchAsync(detected.DomainEvents, cancellationToken);
-        detected.ClearDomainEvents();
     }
 }
