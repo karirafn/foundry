@@ -35,7 +35,7 @@ Runs on a fixed tick interval (30s default) and checks each repo's eligibility b
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `QueuedIssue`, `InProgressIssue`, `ReviewIssue`, `CompletedIssue`, `FailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `InProgressIssue`, `ReviewIssue`, `CompletedIssue`, `FailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ## Monitored Repository
@@ -47,9 +47,18 @@ Tracks `LastPolledAt` for per-repo poll timing.
 
 ## Issue Dependency
 
-A directed relationship between two issues where one blocks the other.
-Both GitHub and GitLab expose dependencies via structured APIs (not body text).
-Foundry persists these relationships during detection so the Workers module can respect execution order.
+A directed "blocked by" relationship between two issues within the same repository.
+Stored as a collection of blocking issue numbers on the Issue aggregate — the blocking issue may or may not be tracked by Foundry.
+Both GitHub (REST API v2026-03-10) and GitLab (Issue Links API, Premium+) expose dependencies via structured APIs.
+Foundry fetches dependencies during the detection poll cycle and reconciles them on each subsequent poll.
+Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
+
+## Blocked Issue
+
+A lifecycle state for an issue that has unresolved dependencies.
+A `DetectedIssue` with blockers transitions to `BlockedIssue` instead of `QueuedIssue`.
+A `QueuedIssue` that gains blockers is demoted to `BlockedIssue`.
+When all blockers are resolved, a `BlockedIssue` transitions to `QueuedIssue`.
 
 ## Trigger Label
 
