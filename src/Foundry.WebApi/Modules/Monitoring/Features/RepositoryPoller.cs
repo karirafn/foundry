@@ -39,7 +39,44 @@ public sealed class RepositoryPoller(
         await eventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
         repository.ClearDomainEvents();
 
+        // Pass 3: detect dependencies for all known non-terminal issues.
+        // Re-query known numbers so newly detected issues from pass 1 are included.
+        IReadOnlySet<int> knownNumbersForDependencies = await issuesModule.GetKnownIssueNumbersAsync(
+            repository.Id,
+            cancellationToken);
+
+        await DetectDependenciesAsync(repository, provider, knownNumbersForDependencies, cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await eventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
+        repository.ClearDomainEvents();
+
         return Result.Ok();
+    }
+
+    private static async Task DetectDependenciesAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        IReadOnlySet<int> issueNumbers,
+        CancellationToken cancellationToken)
+    {
+        foreach (int issueNumber in issueNumbers)
+        {
+            Result<IReadOnlyList<int>> dependencyResult = await provider.GetDependenciesAsync(
+                repository.Slug,
+                issueNumber,
+                cancellationToken);
+
+            if (dependencyResult is not Result<IReadOnlyList<int>>.Success dependencySuccess)
+            {
+                continue;
+            }
+
+            repository.RecordDomainEvent(new IssueDependenciesDetected(
+                repository.Id,
+                issueNumber,
+                dependencySuccess.Value));
+        }
     }
 
     private static void DetectNewIssues(
