@@ -89,6 +89,22 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenFirstTickAndContainerExited_GetStatusCalledOnce()
+    {
+        // Arrange
+        SeedActiveRun("exited-on-reconcile-container");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — status fetched once during reconciliation; MonitorRunAsync must reuse it
+        orchestrator.GetStatusCallCount.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task WhenSecondTick_ReconciliationDoesNotRunAgain()
     {
         // Arrange — seed run, first tick will reconcile (container missing → FailedRun)

@@ -152,7 +152,7 @@ internal sealed class WorkerDispatchService(
             }
             else if (!status.IsRunning)
             {
-                await MonitorRunAsync(dbContext, orchestrator, activeRun, cancellationToken);
+                await MonitorRunAsync(dbContext, orchestrator, activeRun, cancellationToken, knownStatus: status);
                 runsToRemove.Add(activeRun);
             }
         }
@@ -179,12 +179,13 @@ internal sealed class WorkerDispatchService(
         FoundryDbContext dbContext,
         IWorkerOrchestrator orchestrator,
         ActiveRun activeRun,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WorkerStatus? knownStatus = null)
     {
         string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
         (string? branchName, string? prUrl) = await IngestReportsAsync(dbContext, activeRun, reportsDir, cancellationToken);
 
-        WorkerStatus? status = await orchestrator.GetStatusAsync(activeRun.ContainerId, cancellationToken);
+        WorkerStatus? status = knownStatus ?? await orchestrator.GetStatusAsync(activeRun.ContainerId, cancellationToken);
 
         if (status is null)
         {
