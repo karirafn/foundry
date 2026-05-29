@@ -50,6 +50,7 @@ namespace Foundry.WebApi.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_issues", x => x.id);
+                    table.CheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
                 });
 
             migrationBuilder.CreateTable(
@@ -73,6 +74,12 @@ namespace Foundry.WebApi.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_worker_runs", x => x.id);
+                    table.CheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+                    table.CheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+                    table.CheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+                    table.CheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+                    table.CheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+                    table.CheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
                 });
 
             migrationBuilder.CreateTable(

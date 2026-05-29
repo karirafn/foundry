@@ -32,7 +32,12 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 
     public void Configure(EntityTypeBuilder<Issue> builder)
     {
-        builder.ToTable("issues");
+        builder.ToTable("issues", t =>
+        {
+            t.HasCheckConstraint(
+                "ck_issues_in_progress_worker_run_id",
+                "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+        });
 
         builder.HasKey(i => i.Id);
 

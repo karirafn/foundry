@@ -89,7 +89,10 @@ namespace Foundry.WebApi.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_issues_monitored_repository_id_issue_number");
 
-                    b.ToTable("issues", (string)null);
+                    b.ToTable("issues", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+                        });
 
                     b.HasDiscriminator<string>("state").IsComplete(true).HasValue("Issue");
 
@@ -244,7 +247,20 @@ namespace Foundry.WebApi.Migrations
                     b.HasIndex("IssueId")
                         .HasDatabaseName("ix_worker_runs_issue_id");
 
-                    b.ToTable("worker_runs", (string)null);
+                    b.ToTable("worker_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
+                        });
 
                     b.HasDiscriminator<string>("state").IsComplete(true).HasValue("WorkerRun");
 
@@ -255,12 +271,22 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Issue");
 
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+                        });
+
                     b.HasDiscriminator().HasValue("blocked");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.DetectedIssue", b =>
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Issue");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+                        });
 
                     b.HasDiscriminator().HasValue("detected");
                 });
@@ -273,12 +299,22 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("worker_run_id");
 
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+                        });
+
                     b.HasDiscriminator().HasValue("in_progress");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.QueuedIssue", b =>
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Issue");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+                        });
 
                     b.HasDiscriminator().HasValue("queued");
                 });
@@ -311,6 +347,21 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("started_at");
 
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
+                        });
+
                     b.HasDiscriminator().HasValue("active");
                 });
 
@@ -338,6 +389,21 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
 
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
+                        });
+
                     b.HasDiscriminator().HasValue("completed");
                 });
 
@@ -355,12 +421,42 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("reason");
 
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
+                        });
+
                     b.HasDiscriminator().HasValue("failed");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Workers.Domain.StartingRun", b =>
                 {
                     b.HasBaseType("Foundry.Modules.Workers.Domain.WorkerRun");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
+                        });
 
                     b.HasDiscriminator().HasValue("starting");
                 });
