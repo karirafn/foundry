@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Foundry.Shared\Foundry.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Foundry.WebApi" />
+    <InternalsVisibleTo Include="Foundry.WebApi.UnitTests" />
+  </ItemGroup>
+
+</Project>
+

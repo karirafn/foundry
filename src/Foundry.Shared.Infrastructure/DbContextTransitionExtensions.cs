@@ -3,7 +3,7 @@ using Foundry.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Foundry.WebApi.Shared.Infrastructure;
+namespace Foundry.Shared.Infrastructure;
 
 public static class DbContextTransitionExtensions
 {

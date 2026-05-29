@@ -4,7 +4,7 @@ using System.Text.Json;
 using Foundry.WebApi.Modules.Issues;
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.Shared;
-using Foundry.WebApi.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Shared.Persistence;
 
 using Microsoft.EntityFrameworkCore;

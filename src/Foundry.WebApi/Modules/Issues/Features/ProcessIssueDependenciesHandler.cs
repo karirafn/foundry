@@ -1,7 +1,7 @@
 using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.Shared;
-using Foundry.WebApi.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Shared.Persistence;
 
 using Microsoft.EntityFrameworkCore;

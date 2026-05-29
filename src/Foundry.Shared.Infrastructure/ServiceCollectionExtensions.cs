@@ -2,7 +2,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared.Infrastructure;
 
 internal static class ServiceCollectionExtensions
 {

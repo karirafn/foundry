@@ -2,7 +2,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Foundry.WebApi.Shared.Infrastructure;
+namespace Foundry.Shared.Infrastructure;
 
 internal sealed class DomainEventDispatcher(IServiceProvider services) : IDomainEventDispatcher
 {

@@ -5,7 +5,7 @@ using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Foundry.WebApi.Shared.Persistence;
+namespace Foundry.Shared.Infrastructure;
 
 public sealed class StronglyTypedIdValueConverter<TId>()
     : ValueConverter<TId, Guid>(id => id.Value, BuildFromProvider())

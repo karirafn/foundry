@@ -1,5 +1,5 @@
 using Foundry.Shared;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.UnitTests.Shared.Abstractions.EntityTests;
 
 using Shouldly;
