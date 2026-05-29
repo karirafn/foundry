@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features;
 
-public sealed class RepositoryPoller(
+internal sealed class RepositoryPoller(
     IIssueQueries issueQueries,
     DbContext dbContext,
     IDomainEventDispatcher domainEventDispatcher,

@@ -3,7 +3,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Features;
 
-public interface IWorkerOrchestrator
+internal interface IWorkerOrchestrator
 {
     Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken);
 

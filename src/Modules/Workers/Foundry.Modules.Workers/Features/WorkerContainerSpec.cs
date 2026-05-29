@@ -1,6 +1,6 @@
 namespace Foundry.Modules.Workers.Features;
 
-public sealed record WorkerContainerSpec(
+internal sealed record WorkerContainerSpec(
     string Image,
     IReadOnlyDictionary<string, string> EnvironmentVariables,
     IReadOnlyList<BindMount> BindMounts,

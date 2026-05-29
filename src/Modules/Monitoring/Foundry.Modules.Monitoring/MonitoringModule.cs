@@ -11,6 +11,12 @@ namespace Foundry.Modules.Monitoring;
 
 public static class MonitoringModule
 {
+    public static IServiceCollection AddProviderAuth(this IServiceCollection services)
+    {
+        services.AddScoped<IProviderAuth, ConfigurationProviderAuth>();
+        return services;
+    }
+
     public static IServiceCollection AddMonitoringModule(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -20,7 +26,6 @@ public static class MonitoringModule
         services.AddHttpClient<GitHubHttpClient>();
 
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
-        services.AddScoped<IProviderAuth, ConfigurationProviderAuth>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
         services.AddScoped<RepositoryPoller>();
 

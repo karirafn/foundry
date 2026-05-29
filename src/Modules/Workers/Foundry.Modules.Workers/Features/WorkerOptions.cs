@@ -1,6 +1,6 @@
 namespace Foundry.Modules.Workers.Features;
 
-public sealed class WorkerOptions
+internal sealed class WorkerOptions
 {
     public string Image { get; set; } = "ghcr.io/anthropics/claude-code:latest";
 

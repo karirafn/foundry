@@ -1,3 +1,3 @@
 namespace Foundry.Modules.Workers.Features;
 
-public sealed record BindMount(string HostPath, string ContainerPath);
+internal sealed record BindMount(string HostPath, string ContainerPath);

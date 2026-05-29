@@ -1,6 +1,6 @@
 namespace Foundry.Modules.Workers.Features;
 
-public sealed record WorkerStatus(
+internal sealed record WorkerStatus(
     bool IsRunning,
     int? ExitCode,
     DateTimeOffset? FinishedAt);
