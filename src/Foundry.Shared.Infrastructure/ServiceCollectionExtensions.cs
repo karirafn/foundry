@@ -50,4 +50,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDomainEventHandler<TEvent>, THandler>();
         return services;
     }
+
+    public static IServiceCollection AddIntegrationEventHandler<TEvent, THandler>(
+        this IServiceCollection services)
+        where TEvent : IIntegrationEvent
+        where THandler : class, IIntegrationEventHandler<TEvent>
+    {
+        services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
+        return services;
+    }
 }

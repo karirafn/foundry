@@ -13,6 +13,7 @@ builder.AddServiceDefaults();
 builder.Services.AddDbContext<FoundryDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db"));
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+builder.Services.AddScoped<IIntegrationEventDispatcher, IntegrationEventDispatcher>();
 builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule(builder.Configuration);
 builder.Services.AddWorkersModule(builder.Configuration);
