@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Foundry.Shared.Infrastructure;
 
-internal static class ServiceCollectionExtensions
+public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddCommandHandler<TCommand, TResult, THandler, TValidator>(
         this IServiceCollection services)

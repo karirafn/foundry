@@ -16,8 +16,4 @@
     <ProjectReference Include="..\Foundry.Shared\Foundry.Shared.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="Foundry.WebApi.UnitTests" />
-  </ItemGroup>
-
 </Project>
