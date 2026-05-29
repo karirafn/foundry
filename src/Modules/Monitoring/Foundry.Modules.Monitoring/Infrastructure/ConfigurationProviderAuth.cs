@@ -19,7 +19,7 @@ internal sealed class ConfigurationProviderAuth(IConfiguration configuration) : 
     }
 }
 
-public static class ProviderAuthErrors
+internal static class ProviderAuthErrors
 {
     public static Error SecretNotFound(string secretKeyName) =>
         new("ProviderAuth.SecretNotFound", "A required provider secret was not configured.");

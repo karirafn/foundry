@@ -17,6 +17,10 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
         {
             failures.Add("Workers:Image must be non-empty.");
         }
+        else if (options.Image.EndsWith(":latest", StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add("Workers:Image must not use the ':latest' tag. Pin to a specific version tag or digest for reproducible builds.");
+        }
 
         if (string.IsNullOrWhiteSpace(options.ConfigPath))
         {

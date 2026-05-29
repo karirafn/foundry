@@ -17,8 +17,6 @@ internal static class SystemPromptBuilder
 
         return options.SystemPromptTemplate
             .Replace("{issueNumber}", issueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
-            .Replace("{title}", title, StringComparison.Ordinal)
-            .Replace("{body}", body, StringComparison.Ordinal)
             .Replace("{issueContent}", issueContent, StringComparison.Ordinal)
             .Replace("{branchNamingInstruction}", options.BranchNamingInstruction, StringComparison.Ordinal);
     }

@@ -2,7 +2,7 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerOptions
 {
-    public string Image { get; set; } = "ghcr.io/anthropics/claude-code:latest";
+    public string Image { get; set; } = "ghcr.io/anthropics/claude-code";
 
     public string ApiKey { get; set; } = string.Empty;
 
