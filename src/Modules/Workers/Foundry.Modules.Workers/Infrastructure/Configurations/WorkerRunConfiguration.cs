@@ -16,7 +16,32 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 
     public void Configure(EntityTypeBuilder<WorkerRun> builder)
     {
-        builder.ToTable("worker_runs");
+        builder.ToTable("worker_runs", t =>
+        {
+            t.HasCheckConstraint(
+                "ck_worker_runs_active_container_id",
+                "state <> 'active' OR container_id IS NOT NULL");
+
+            t.HasCheckConstraint(
+                "ck_worker_runs_active_started_at",
+                "state <> 'active' OR started_at IS NOT NULL");
+
+            t.HasCheckConstraint(
+                "ck_worker_runs_completed_exit_code",
+                "state <> 'completed' OR exit_code IS NOT NULL");
+
+            t.HasCheckConstraint(
+                "ck_worker_runs_completed_completed_at",
+                "state <> 'completed' OR completed_at IS NOT NULL");
+
+            t.HasCheckConstraint(
+                "ck_worker_runs_failed_reason",
+                "state <> 'failed' OR reason IS NOT NULL");
+
+            t.HasCheckConstraint(
+                "ck_worker_runs_failed_failed_at",
+                "state <> 'failed' OR failed_at IS NOT NULL");
+        });
 
         builder.HasKey(r => r.Id);
 
