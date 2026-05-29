@@ -11,6 +11,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -39,7 +40,11 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
 
         _dispatcher = new CapturingIntegrationEventDispatcher();
         RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext);
-        _sut = new WorkerCapacityAvailableHandler(_dbContext, repositoryDispatchQueries, _dispatcher);
+        _sut = new WorkerCapacityAvailableHandler(
+            _dbContext,
+            repositoryDispatchQueries,
+            _dispatcher,
+            NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

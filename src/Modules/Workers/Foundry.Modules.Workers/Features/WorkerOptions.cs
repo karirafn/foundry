@@ -16,10 +16,9 @@ public sealed class WorkerOptions
 
     public string SystemPromptTemplate { get; set; } =
         """
-        You are implementing GitHub issue #{issueNumber}: {title}.
+        You are implementing GitHub issue #{issueNumber}.
 
-        Issue body:
-        {body}
+        {issueContent}
 
         Branch naming: {branchNamingInstruction}.
         """;

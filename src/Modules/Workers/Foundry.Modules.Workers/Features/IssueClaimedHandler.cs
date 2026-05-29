@@ -43,7 +43,12 @@ internal sealed class IssueClaimedHandler(
             return;
         }
 
-        WorkerContainerSpec spec = ((Result<WorkerContainerSpec>.Success)specResult).Value;
+        if (specResult is not Result<WorkerContainerSpec>.Success specSuccess)
+        {
+            return;
+        }
+
+        WorkerContainerSpec spec = specSuccess.Value;
         Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
 
         if (startResult is Result<ContainerId>.Success success)
@@ -79,7 +84,12 @@ internal sealed class IssueClaimedHandler(
 
         if (patResult is not Result<string>.Success patSuccess)
         {
-            return Result<WorkerContainerSpec>.Fail(((Result<string>.Failure)patResult).Error);
+            if (patResult is Result<string>.Failure patFailure)
+            {
+                return Result<WorkerContainerSpec>.Fail(patFailure.Error);
+            }
+
+            return Result<WorkerContainerSpec>.Fail(new Error("Worker.UnknownPatError", "PAT resolution failed."));
         }
 
         string gitPat = patSuccess.Value;

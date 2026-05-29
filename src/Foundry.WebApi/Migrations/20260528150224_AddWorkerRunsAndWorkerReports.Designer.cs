@@ -20,7 +20,7 @@ namespace Foundry.WebApi.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Issues.Domain.Issue", b =>
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.Issue", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT")
@@ -99,7 +99,7 @@ namespace Foundry.WebApi.Migrations
                     b.UseTphMappingStrategy();
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Monitoring.Domain.Account", b =>
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.Account", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT")
@@ -141,7 +141,7 @@ namespace Foundry.WebApi.Migrations
                     b.UseTphMappingStrategy();
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Monitoring.Domain.MonitoredRepository", b =>
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT")
@@ -182,7 +182,7 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("monitored_repositories", (string)null);
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Workers.Domain.WorkerReport", b =>
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.WorkerReport", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT")
@@ -222,7 +222,7 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("worker_reports", (string)null);
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Workers.Domain.WorkerRun", b =>
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.WorkerRun", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT")
@@ -251,23 +251,23 @@ namespace Foundry.WebApi.Migrations
                     b.UseTphMappingStrategy();
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Issues.Domain.BlockedIssue", b =>
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.BlockedIssue", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Issues.Domain.Issue");
+                    b.HasBaseType("Foundry.Modules.Issues.Domain.Issue");
 
                     b.HasDiscriminator().HasValue("blocked");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Issues.Domain.DetectedIssue", b =>
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.DetectedIssue", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Issues.Domain.Issue");
+                    b.HasBaseType("Foundry.Modules.Issues.Domain.Issue");
 
                     b.HasDiscriminator().HasValue("detected");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Issues.Domain.InProgressIssue", b =>
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.InProgressIssue", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Issues.Domain.Issue");
+                    b.HasBaseType("Foundry.Modules.Issues.Domain.Issue");
 
                     b.Property<Guid>("WorkerRunId")
                         .HasColumnType("TEXT")
@@ -276,23 +276,23 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator().HasValue("in_progress");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Issues.Domain.QueuedIssue", b =>
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.QueuedIssue", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Issues.Domain.Issue");
+                    b.HasBaseType("Foundry.Modules.Issues.Domain.Issue");
 
                     b.HasDiscriminator().HasValue("queued");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Monitoring.Domain.GitHubAccount", b =>
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.GitHubAccount", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Monitoring.Domain.Account");
+                    b.HasBaseType("Foundry.Modules.Monitoring.Domain.Entities.Account");
 
                     b.HasDiscriminator().HasValue("github");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Workers.Domain.ActiveRun", b =>
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.ActiveRun", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Workers.Domain.WorkerRun");
+                    b.HasBaseType("Foundry.Modules.Workers.Domain.WorkerRun");
 
                     b.Property<string>("ContainerId")
                         .IsRequired()
@@ -314,9 +314,9 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator().HasValue("active");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Workers.Domain.CompletedRun", b =>
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.CompletedRun", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Workers.Domain.WorkerRun");
+                    b.HasBaseType("Foundry.Modules.Workers.Domain.WorkerRun");
 
                     b.Property<string>("BranchName")
                         .HasMaxLength(500)
@@ -341,9 +341,9 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator().HasValue("completed");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Workers.Domain.FailedRun", b =>
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.FailedRun", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Workers.Domain.WorkerRun");
+                    b.HasBaseType("Foundry.Modules.Workers.Domain.WorkerRun");
 
                     b.Property<DateTimeOffset>("FailedAt")
                         .HasColumnType("TEXT")
@@ -358,16 +358,16 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator().HasValue("failed");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Workers.Domain.StartingRun", b =>
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.StartingRun", b =>
                 {
-                    b.HasBaseType("Foundry.WebApi.Modules.Workers.Domain.WorkerRun");
+                    b.HasBaseType("Foundry.Modules.Workers.Domain.WorkerRun");
 
                     b.HasDiscriminator().HasValue("starting");
                 });
 
-            modelBuilder.Entity("Foundry.WebApi.Modules.Monitoring.Domain.MonitoredRepository", b =>
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", b =>
                 {
-                    b.HasOne("Foundry.WebApi.Modules.Monitoring.Domain.Account", null)
+                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.Account", null)
                         .WithMany()
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Cascade)

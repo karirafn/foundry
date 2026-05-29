@@ -6,13 +6,15 @@ using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features;
 
 internal sealed class WorkerCapacityAvailableHandler(
     DbContext db,
     IRepositoryDispatchQueries repositoryDispatchQueries,
-    IIntegrationEventDispatcher integrationEventDispatcher) : IIntegrationEventHandler<WorkerCapacityAvailable>
+    IIntegrationEventDispatcher integrationEventDispatcher,
+    ILogger<WorkerCapacityAvailableHandler> logger) : IIntegrationEventHandler<WorkerCapacityAvailable>
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
     {
@@ -31,6 +33,10 @@ internal sealed class WorkerCapacityAvailableHandler(
 
         if (dispatchInfo is null)
         {
+            logger.LogWarning(
+                "Could not find dispatch info for repository {RepositoryId}; issue #{IssueNumber} not claimed.",
+                queued.MonitoredRepositoryId,
+                queued.IssueNumber);
             return;
         }
 

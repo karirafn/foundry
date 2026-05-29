@@ -29,7 +29,12 @@ public sealed class RepositoryPoller(
 
         if (providerResult is not Result<IReadOnlyList<ProviderIssue>>.Success providerSuccess)
         {
-            return ((Result<IReadOnlyList<ProviderIssue>>.Failure)providerResult).Error;
+            if (providerResult is Result<IReadOnlyList<ProviderIssue>>.Failure f)
+            {
+                return f.Error;
+            }
+
+            return new Error("Monitoring.UnexpectedResult", "GetIssues returned an unexpected result type.");
         }
 
         IReadOnlyList<ProviderIssue> fetchedIssues = providerSuccess.Value;
