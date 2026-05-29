@@ -8,4 +8,9 @@ internal sealed class TestAggregateRoot(TestAggregateRootId id) : AggregateRoot<
     {
         AddDomainEvent(domainEvent);
     }
+
+    public void RaiseIntegrationEvent(IIntegrationEvent integrationEvent)
+    {
+        AddIntegrationEvent(integrationEvent);
+    }
 }
