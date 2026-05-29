@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Foundry.Shared\Foundry.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

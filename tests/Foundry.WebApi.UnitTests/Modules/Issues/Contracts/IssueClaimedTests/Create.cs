@@ -1,0 +1,33 @@
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Shared;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.WebApi.UnitTests.Modules.Issues.Contracts.IssueClaimedTests;
+
+public sealed class Create
+{
+    [Fact]
+    public void WhenCreated_ImplementsIIntegrationEvent()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        ClaimedIssueDispatch dispatch = new(
+            issueId,
+            IssueNumber: 42,
+            Title: "Fix the bug",
+            Body: "Bug details",
+            RepositorySlug: "org/repo",
+            CloneUrl: new Uri("https://github.com/org/repo.git"),
+            AccountSecretKeyName: "github-pat");
+
+        // Act
+        IssueClaimed @event = new(dispatch);
+
+        // Assert
+        @event.ShouldBeAssignableTo<IIntegrationEvent>();
+        @event.Dispatch.IssueId.ShouldBe(issueId);
+    }
+}

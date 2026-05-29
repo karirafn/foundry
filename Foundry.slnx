@@ -5,6 +5,16 @@
     <Project Path="src/Foundry.ServiceDefaults/Foundry.ServiceDefaults.csproj" />
     <Project Path="src/Foundry.WebApi/Foundry.WebApi.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Issues/">
+    <Project Path="src/Modules/Issues/Foundry.Modules.Issues.Contracts/Foundry.Modules.Issues.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Monitoring/">
+    <Project Path="src/Modules/Monitoring/Foundry.Modules.Monitoring.Contracts/Foundry.Modules.Monitoring.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Workers/">
+    <Project Path="src/Modules/Workers/Foundry.Modules.Workers.Contracts/Foundry.Modules.Workers.Contracts.csproj" />
+  </Folder>
   <Folder Name="/src/Shared/">
     <Project Path="src/Foundry.Shared/Foundry.Shared.csproj" />
     <Project Path="src/Foundry.Shared.Infrastructure/Foundry.Shared.Infrastructure.csproj" />
