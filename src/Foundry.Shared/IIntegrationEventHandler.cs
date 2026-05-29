@@ -14,7 +14,10 @@ public interface IIntegrationEventHandler<TEvent> : IIntegrationEventHandler
 
     Task IIntegrationEventHandler.HandleAsync(IIntegrationEvent @event, CancellationToken cancellationToken)
     {
-        return HandleAsync((TEvent)@event, cancellationToken);
+        return @event is TEvent typedEvent
+            ? HandleAsync(typedEvent, cancellationToken)
+            : Task.FromException(new InvalidOperationException(
+                $"Expected {typeof(TEvent).Name} but received {@event.GetType().Name}."));
     }
 }
 #pragma warning restore CA1711
