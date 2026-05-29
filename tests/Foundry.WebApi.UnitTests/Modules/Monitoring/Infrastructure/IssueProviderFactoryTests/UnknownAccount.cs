@@ -1,4 +1,5 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 
 namespace Foundry.WebApi.UnitTests.Modules.Monitoring.Infrastructure.IssueProviderFactoryTests;
 

@@ -1,7 +1,7 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 
-namespace Foundry.WebApi.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features;
 
 public interface IIssueProvider
 {

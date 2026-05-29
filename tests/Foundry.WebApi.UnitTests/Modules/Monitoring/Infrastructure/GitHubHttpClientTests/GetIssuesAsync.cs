@@ -1,8 +1,8 @@
 using System.Net;
 
-using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Modules.Monitoring.Features;
-using Foundry.WebApi.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 using Foundry.WebApi.UnitTests.Modules.Monitoring.Infrastructure;
 

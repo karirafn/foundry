@@ -1,6 +1,6 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
-using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,7 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Foundry.WebApi.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features;
 
 internal sealed class MonitoringSeeder(
     IServiceScopeFactory scopeFactory,
@@ -20,7 +20,7 @@ internal sealed class MonitoringSeeder(
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         await SeedAccountsAsync(dbContext, cancellationToken);
         await SeedRepositoriesAsync(dbContext, cancellationToken);
@@ -36,7 +36,7 @@ internal sealed class MonitoringSeeder(
 
     public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    private async Task SeedAccountsAsync(FoundryDbContext dbContext, CancellationToken cancellationToken)
+    private async Task SeedAccountsAsync(DbContext dbContext, CancellationToken cancellationToken)
     {
         HashSet<string> existingNames = (await dbContext.Set<Account>()
             .AsNoTracking()
@@ -72,7 +72,7 @@ internal sealed class MonitoringSeeder(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task SeedRepositoriesAsync(FoundryDbContext dbContext, CancellationToken cancellationToken)
+    private async Task SeedRepositoriesAsync(DbContext dbContext, CancellationToken cancellationToken)
     {
         HashSet<string> existingSlugs = (await dbContext.Set<MonitoredRepository>()
             .AsNoTracking()

@@ -1,12 +1,12 @@
+using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
-using Foundry.WebApi.Modules.Monitoring.Features;
-using Foundry.WebApi.Modules.Monitoring.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Foundry.WebApi.Modules.Monitoring;
+namespace Foundry.Modules.Monitoring;
 
 public static class MonitoringModule
 {

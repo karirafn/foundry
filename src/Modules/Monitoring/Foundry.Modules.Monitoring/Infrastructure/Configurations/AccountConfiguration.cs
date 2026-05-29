@@ -1,10 +1,11 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Foundry.WebApi.Modules.Monitoring.Infrastructure;
+namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 public sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
 {

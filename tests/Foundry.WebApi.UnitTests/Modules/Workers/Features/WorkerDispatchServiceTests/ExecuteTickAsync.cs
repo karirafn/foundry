@@ -1,6 +1,6 @@
 using Foundry.WebApi.Modules.Issues;
 using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Modules.Workers.Features;
 using Foundry.Shared;

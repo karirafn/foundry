@@ -1,5 +1,6 @@
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.WebApi.Modules.Workers.Domain;
 
 using Microsoft.EntityFrameworkCore;
@@ -19,5 +20,6 @@ public sealed class FoundryDbContext(DbContextOptions<FoundryDbContext> options)
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FoundryDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AccountConfiguration).Assembly);
     }
 }

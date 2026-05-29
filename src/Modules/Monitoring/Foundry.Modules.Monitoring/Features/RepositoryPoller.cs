@@ -1,14 +1,17 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
-using Foundry.WebApi.Persistence;
 
-namespace Foundry.WebApi.Modules.Monitoring.Features;
+using Microsoft.EntityFrameworkCore;
+
+namespace Foundry.Modules.Monitoring.Features;
 
 public sealed class RepositoryPoller(
-    IIssuesModule issuesModule,
-    FoundryDbContext dbContext,
-    IDomainEventDispatcher eventDispatcher)
+    IIssueQueries issueQueries,
+    DbContext dbContext,
+    IDomainEventDispatcher domainEventDispatcher,
+    IIntegrationEventDispatcher integrationEventDispatcher)
 {
     public async Task<Result> PollAsync(
         MonitoredRepository repository,
@@ -16,7 +19,7 @@ public sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        IReadOnlySet<int> knownNumbers = await issuesModule.GetKnownIssueNumbersAsync(
+        IReadOnlySet<int> knownNumbers = await issueQueries.GetKnownIssueNumbersAsync(
             repository.Id,
             cancellationToken);
 
@@ -36,20 +39,24 @@ public sealed class RepositoryPoller(
 
         repository.MarkPolled(now);
         await dbContext.SaveChangesAsync(cancellationToken);
-        await eventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
+        await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearDomainEvents();
+        repository.ClearIntegrationEvents();
 
         // Pass 3: detect dependencies for all known non-terminal issues.
         // Re-query known numbers so newly detected issues from pass 1 are included.
-        IReadOnlySet<int> knownNumbersForDependencies = await issuesModule.GetKnownIssueNumbersAsync(
+        IReadOnlySet<int> knownNumbersForDependencies = await issueQueries.GetKnownIssueNumbersAsync(
             repository.Id,
             cancellationToken);
 
         await DetectDependenciesAsync(repository, provider, knownNumbersForDependencies, cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        await eventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
+        await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearDomainEvents();
+        repository.ClearIntegrationEvents();
 
         return Result.Ok();
     }
@@ -74,7 +81,7 @@ public sealed class RepositoryPoller(
                 continue;
             }
 
-            repository.RecordDomainEvent(new IssueDependenciesDetected(
+            repository.RecordIntegrationEvent(new IssueDependenciesDetected(
                 repository.Id,
                 issueNumber,
                 dependencySuccess.Value));
@@ -91,7 +98,7 @@ public sealed class RepositoryPoller(
         {
             if (!knownNumbers.Contains(issue.Number))
             {
-                repository.RecordDomainEvent(new IssueDetected(
+                repository.RecordIntegrationEvent(new IssueDetected(
                     repository.Id,
                     issue.Number,
                     issue.Title,
@@ -119,7 +126,7 @@ public sealed class RepositoryPoller(
             return;
         }
 
-        IReadOnlyDictionary<int, IssueSnapshot> snapshots = await issuesModule.GetIssueSnapshotsAsync(
+        IReadOnlyDictionary<int, IssueSnapshot> snapshots = await issueQueries.GetIssueSnapshotsAsync(
             repository.Id,
             knownFetchedNumbers,
             cancellationToken);
@@ -133,7 +140,7 @@ public sealed class RepositoryPoller(
 
             if (HasDetailsChanged(snapshot, issue))
             {
-                repository.RecordDomainEvent(new IssueDetailsChanged(
+                repository.RecordIntegrationEvent(new IssueDetailsChanged(
                     repository.Id,
                     issue.Number,
                     issue.Title,

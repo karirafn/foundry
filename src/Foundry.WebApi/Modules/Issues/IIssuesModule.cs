@@ -1,4 +1,4 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
 
 namespace Foundry.WebApi.Modules.Issues;
 

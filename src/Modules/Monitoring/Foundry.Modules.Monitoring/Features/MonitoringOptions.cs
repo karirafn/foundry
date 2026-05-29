@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 
-namespace Foundry.WebApi.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features;
 
 public sealed class MonitoringOptions
 {

@@ -1,6 +1,6 @@
 using Foundry.WebApi.Modules.Issues;
 using Foundry.WebApi.Modules.Issues.Features;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Persistence;
@@ -65,8 +65,8 @@ public sealed class AddIssuesModule : IAsyncDisposable
         using IServiceScope scope = _serviceProvider.CreateScope();
 
         // Assert
-        IDomainEventHandler<IssueDetected> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDetected>>();
+        IIntegrationEventHandler<IssueDetected> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<IssueDetected>>();
         handler.ShouldBeOfType<CreateIssueHandler>();
     }
 
@@ -77,8 +77,8 @@ public sealed class AddIssuesModule : IAsyncDisposable
         using IServiceScope scope = _serviceProvider.CreateScope();
 
         // Assert
-        IDomainEventHandler<IssueDetailsChanged> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDetailsChanged>>();
+        IIntegrationEventHandler<IssueDetailsChanged> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<IssueDetailsChanged>>();
         handler.ShouldBeOfType<UpdateIssueDetailsHandler>();
     }
 
@@ -89,8 +89,8 @@ public sealed class AddIssuesModule : IAsyncDisposable
         using IServiceScope scope = _serviceProvider.CreateScope();
 
         // Assert
-        IDomainEventHandler<IssueDependenciesDetected> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDependenciesDetected>>();
+        IIntegrationEventHandler<IssueDependenciesDetected> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<IssueDependenciesDetected>>();
         handler.ShouldBeOfType<ProcessIssueDependenciesHandler>();
     }
 }

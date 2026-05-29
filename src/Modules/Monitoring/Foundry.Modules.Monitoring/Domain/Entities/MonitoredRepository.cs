@@ -1,6 +1,7 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
-namespace Foundry.WebApi.Modules.Monitoring.Domain;
+namespace Foundry.Modules.Monitoring.Domain.Entities;
 
 public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 {
@@ -53,8 +54,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         LastPolledAt = polledAt;
     }
 
-    public void RecordDomainEvent(IDomainEvent domainEvent)
+    public void RecordIntegrationEvent(IIntegrationEvent integrationEvent)
     {
-        AddDomainEvent(domainEvent);
+        AddIntegrationEvent(integrationEvent);
     }
 }

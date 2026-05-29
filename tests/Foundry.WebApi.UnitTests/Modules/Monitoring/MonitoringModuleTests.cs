@@ -1,5 +1,5 @@
-using Foundry.WebApi.Modules.Monitoring;
-using Foundry.WebApi.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring;
+using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Configuration;

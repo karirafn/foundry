@@ -1,5 +1,5 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Persistence;
@@ -13,7 +13,7 @@ internal sealed class ProcessIssueDependenciesHandler(
     FoundryDbContext db,
     IIssuesModule issuesModule,
     IDomainEventDispatcher dispatcher,
-    ILogger<ProcessIssueDependenciesHandler> logger) : IDomainEventHandler<IssueDependenciesDetected>
+    ILogger<ProcessIssueDependenciesHandler> logger) : IIntegrationEventHandler<IssueDependenciesDetected>
 {
     public async Task HandleAsync(IssueDependenciesDetected @event, CancellationToken cancellationToken)
     {

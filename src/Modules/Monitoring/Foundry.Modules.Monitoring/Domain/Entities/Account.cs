@@ -1,6 +1,7 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
-namespace Foundry.WebApi.Modules.Monitoring.Domain;
+namespace Foundry.Modules.Monitoring.Domain.Entities;
 
 public abstract class Account : AggregateRoot<AccountId>
 {

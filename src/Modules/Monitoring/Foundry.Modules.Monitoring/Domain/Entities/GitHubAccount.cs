@@ -1,4 +1,6 @@
-namespace Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
+
+namespace Foundry.Modules.Monitoring.Domain.Entities;
 
 public sealed class GitHubAccount : Account
 {

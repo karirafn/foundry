@@ -11,6 +11,7 @@
   </Folder>
   <Folder Name="/src/Modules/Monitoring/">
     <Project Path="src/Modules/Monitoring/Foundry.Modules.Monitoring.Contracts/Foundry.Modules.Monitoring.Contracts.csproj" />
+    <Project Path="src/Modules/Monitoring/Foundry.Modules.Monitoring/Foundry.Modules.Monitoring.csproj" />
   </Folder>
   <Folder Name="/src/Modules/Workers/">
     <Project Path="src/Modules/Workers/Foundry.Modules.Workers.Contracts/Foundry.Modules.Workers.Contracts.csproj" />

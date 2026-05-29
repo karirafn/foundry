@@ -1,4 +1,4 @@
-namespace Foundry.WebApi.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features;
 
 public sealed record ProviderIssue(
     int Number,

@@ -1,4 +1,4 @@
-using Foundry.WebApi.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features;
 
 using Microsoft.Extensions.Configuration;
 

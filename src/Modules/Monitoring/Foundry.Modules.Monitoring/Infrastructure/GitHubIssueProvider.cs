@@ -1,8 +1,8 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 
-namespace Foundry.WebApi.Modules.Monitoring.Infrastructure;
+namespace Foundry.Modules.Monitoring.Infrastructure;
 
 internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string token, Uri baseUrl) : IIssueProvider
 {

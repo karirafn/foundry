@@ -1,6 +1,7 @@
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Issues.Features;
-using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Persistence;
@@ -112,9 +113,9 @@ public static class IssuesModuleServiceCollectionExtensions
     public static IServiceCollection AddIssuesModule(this IServiceCollection services)
     {
         services.AddScoped<IIssuesModule, IssuesModule>();
-        services.AddDomainEventHandler<IssueDetected, CreateIssueHandler>();
-        services.AddDomainEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();
-        services.AddDomainEventHandler<IssueDependenciesDetected, ProcessIssueDependenciesHandler>();
+        services.AddIntegrationEventHandler<IssueDetected, CreateIssueHandler>();
+        services.AddIntegrationEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();
+        services.AddIntegrationEventHandler<IssueDependenciesDetected, ProcessIssueDependenciesHandler>();
         return services;
     }
 }

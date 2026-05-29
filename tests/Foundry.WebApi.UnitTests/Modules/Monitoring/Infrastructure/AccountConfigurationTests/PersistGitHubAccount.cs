@@ -1,4 +1,4 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;

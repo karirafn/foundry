@@ -1,6 +1,6 @@
 using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Issues.Features;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -52,7 +52,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Labels: ["bug"],
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IDomainEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -84,7 +84,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Labels: [],
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IDomainEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);

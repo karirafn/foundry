@@ -1,6 +1,6 @@
 using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Issues.Features;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -17,7 +17,7 @@ public sealed class HandleAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
-    private readonly IDomainEventHandler<IssueDetailsChanged> _sut;
+    private readonly IIntegrationEventHandler<IssueDetailsChanged> _sut;
 
     public HandleAsync()
     {

@@ -1,6 +1,7 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Modules.Monitoring.Features;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -17,7 +18,7 @@ public sealed class PollAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
-    private readonly CapturingDomainEventDispatcher _dispatcher;
+    private readonly CapturingIntegrationEventDispatcher _dispatcher;
     private readonly RepositoryPoller _sut;
 
     private static readonly DateTimeOffset Now = new(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
@@ -36,8 +37,8 @@ public sealed class PollAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _dispatcher = new CapturingDomainEventDispatcher();
-        _sut = new RepositoryPoller(new StubIssuesModule(), _dbContext, _dispatcher);
+        _dispatcher = new CapturingIntegrationEventDispatcher();
+        _sut = new RepositoryPoller(new StubIssueQueries(), _dbContext, new NullDomainEventDispatcher(), _dispatcher);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -104,11 +105,11 @@ public sealed class PollAsync : IAsyncDisposable
             Labels: ["bug"]);
 
         IssueSnapshot snapshot = new("Existing", "Body", ["bug"]);
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             new HashSet<int> { 5 },
             new Dictionary<int, IssueSnapshot> { [5] = snapshot });
 
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([existingIssue]);
 
         // Act
@@ -134,11 +135,11 @@ public sealed class PollAsync : IAsyncDisposable
             Labels: ["bug"]);
 
         IssueSnapshot oldSnapshot = new("Old Title", "Same body", ["bug"]);
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             new HashSet<int> { 7 },
             new Dictionary<int, IssueSnapshot> { [7] = oldSnapshot });
 
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([updatedIssue]);
 
         // Act
@@ -171,11 +172,11 @@ public sealed class PollAsync : IAsyncDisposable
             Labels: ["feature", "bug"]);
 
         IssueSnapshot snapshot = new("Same", "Same", ["bug", "feature"]);
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             new HashSet<int> { 3 },
             new Dictionary<int, IssueSnapshot> { [3] = snapshot });
 
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([issue]);
 
         // Act
@@ -201,11 +202,11 @@ public sealed class PollAsync : IAsyncDisposable
             Labels: ["bug", "priority"]);
 
         IssueSnapshot snapshot = new("Same", "Same", ["bug"]);
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             new HashSet<int> { 9 },
             new Dictionary<int, IssueSnapshot> { [9] = snapshot });
 
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([issue]);
 
         // Act
@@ -275,10 +276,10 @@ public sealed class PollAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             new HashSet<int> { 42 },
             new Dictionary<int, IssueSnapshot>());
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([]);
 
         // Act
@@ -304,10 +305,10 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<IReadOnlyList<int>>.Ok([10, 20]),
         };
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             new HashSet<int> { 42 },
             new Dictionary<int, IssueSnapshot>());
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([], dependencyResults);
 
         // Act
@@ -330,10 +331,10 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [7] = Result<IReadOnlyList<int>>.Ok([]),
         };
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             new HashSet<int> { 7 },
             new Dictionary<int, IssueSnapshot>());
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([], dependencyResults);
 
         // Act
@@ -358,10 +359,10 @@ public sealed class PollAsync : IAsyncDisposable
             [5] = Result<IReadOnlyList<int>>.Fail(dependencyError),
             [6] = Result<IReadOnlyList<int>>.Ok([99]),
         };
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             new HashSet<int> { 5, 6 },
             new Dictionary<int, IssueSnapshot>());
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([], dependencyResults);
 
         // Act
@@ -392,12 +393,12 @@ public sealed class PollAsync : IAsyncDisposable
 
         // Pass 1: issue 15 is new (not in initial known numbers).
         // After dispatch, issue 15 is now persisted — second call returns {15, 16}.
-        StubIssuesModule issuesModule = new(
+        StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 16 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
             knownNumbersSecondCall: new HashSet<int> { 15, 16 });
 
-        RepositoryPoller sut = new(issuesModule, _dbContext, _dispatcher);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
         StubIssueProvider provider = new([newIssue]);
 
         // Act
@@ -476,24 +477,24 @@ public sealed class PollAsync : IAsyncDisposable
         }
     }
 
-    private sealed class StubIssuesModule : IIssuesModule
+    private sealed class StubIssueQueries : IIssueQueries
     {
         private readonly IReadOnlySet<int> _knownNumbers;
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
         private readonly IReadOnlySet<int>? _knownNumbersSecondCall;
         private int _getKnownNumbersCallCount;
 
-        public StubIssuesModule()
+        public StubIssueQueries()
             : this(new HashSet<int>(), new Dictionary<int, IssueSnapshot>())
         {
         }
 
-        public StubIssuesModule(IReadOnlySet<int> knownNumbers, IReadOnlyDictionary<int, IssueSnapshot> snapshots)
+        public StubIssueQueries(IReadOnlySet<int> knownNumbers, IReadOnlyDictionary<int, IssueSnapshot> snapshots)
             : this(knownNumbers, snapshots, knownNumbersSecondCall: null)
         {
         }
 
-        public StubIssuesModule(
+        public StubIssueQueries(
             IReadOnlySet<int> knownNumbers,
             IReadOnlyDictionary<int, IssueSnapshot> snapshots,
             IReadOnlySet<int>? knownNumbersSecondCall)
@@ -528,22 +529,25 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
         }
+    }
 
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
+    private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        private readonly List<IIntegrationEvent> _events = [];
+
+        public IReadOnlyList<IIntegrationEvent> DispatchedEvents => _events;
+
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
         {
-            return Task.FromResult<ClaimedIssueDispatch?>(null);
+            _events.AddRange(events);
+            return Task.CompletedTask;
         }
     }
 
-    private sealed class CapturingDomainEventDispatcher : IDomainEventDispatcher
+    private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
     {
-        private readonly List<IDomainEvent> _events = [];
-
-        public IReadOnlyList<IDomainEvent> DispatchedEvents => _events;
-
         public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
         {
-            _events.AddRange(events);
             return Task.CompletedTask;
         }
     }

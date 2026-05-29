@@ -1,7 +1,7 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features;
 
-namespace Foundry.WebApi.Modules.Monitoring.Infrastructure;
+namespace Foundry.Modules.Monitoring.Infrastructure;
 
 internal sealed class IssueProviderFactory(GitHubHttpClient gitHubHttpClient) : IIssueProviderFactory
 {

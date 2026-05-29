@@ -1,7 +1,7 @@
 using System.Text.Json;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 

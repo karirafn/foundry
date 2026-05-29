@@ -1,6 +1,6 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
-using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,7 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Foundry.WebApi.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features;
 
 internal sealed class MonitoringService(
     IServiceScopeFactory scopeFactory,
@@ -34,7 +34,7 @@ internal sealed class MonitoringService(
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
-        FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         IProviderAuth providerAuth = scope.ServiceProvider.GetRequiredService<IProviderAuth>();
         IIssueProviderFactory providerFactory = scope.ServiceProvider.GetRequiredService<IIssueProviderFactory>();
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
@@ -57,7 +57,7 @@ internal sealed class MonitoringService(
     }
 
     private static async Task<ILookup<AccountId, MonitoredRepository>> LoadActiveReposAsync(
-        FoundryDbContext dbContext,
+        DbContext dbContext,
         CancellationToken cancellationToken)
     {
         List<MonitoredRepository> repos = await dbContext.Set<MonitoredRepository>()
@@ -69,7 +69,7 @@ internal sealed class MonitoringService(
 
     private async Task ProcessAccountGroupAsync(
         IGrouping<AccountId, MonitoredRepository> accountGroup,
-        FoundryDbContext dbContext,
+        DbContext dbContext,
         IProviderAuth providerAuth,
         IIssueProviderFactory providerFactory,
         RepositoryPoller poller,

@@ -1,5 +1,5 @@
+using Foundry.Modules.Monitoring;
 using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Monitoring;
 using Foundry.WebApi.Modules.Workers;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -12,6 +12,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.Services.AddDbContext<FoundryDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db"));
+builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 builder.Services.AddScoped<IIntegrationEventDispatcher, IntegrationEventDispatcher>();
 builder.Services.AddIssuesModule();
