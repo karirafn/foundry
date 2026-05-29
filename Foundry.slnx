@@ -23,7 +23,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Foundry.Testing/Foundry.Testing.csproj" />
-    <Project Path="tests/Foundry.WebApi.IntegrationTests/Foundry.WebApi.IntegrationTests.csproj" />
-    <Project Path="tests/Foundry.WebApi.UnitTests/Foundry.WebApi.UnitTests.csproj" />
+    <Project Path="tests/Foundry.IntegrationTests/Foundry.IntegrationTests.csproj" />
+    <Project Path="tests/Foundry.UnitTests/Foundry.UnitTests.csproj" />
   </Folder>
 </Solution>
