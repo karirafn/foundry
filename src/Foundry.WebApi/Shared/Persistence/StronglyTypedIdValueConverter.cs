@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 

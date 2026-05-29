@@ -1,4 +1,4 @@
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared;
 
 // IDomainEventHandler is the standard DDD term — renaming it would break ubiquitous language
 #pragma warning disable CA1711

@@ -2,7 +2,7 @@ using System.Text.Json;
 
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Modules.Workers.Features;
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 using Foundry.WebApi.Shared.Persistence;
 
 using Microsoft.EntityFrameworkCore;

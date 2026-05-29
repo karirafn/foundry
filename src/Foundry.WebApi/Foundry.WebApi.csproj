@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Foundry.ServiceDefaults\Foundry.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Foundry.Shared\Foundry.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

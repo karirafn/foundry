@@ -1,3 +1,5 @@
+using Foundry.Shared;
+
 namespace Foundry.WebApi.Shared.Abstractions;
 
 internal sealed class ValidatingCommandHandler<TCommand, TResult>(

@@ -1,6 +1,6 @@
 using Foundry.WebApi.Modules.Issues;
 using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 using Foundry.WebApi.Shared.Persistence;
 
 namespace Foundry.WebApi.Modules.Monitoring.Features;

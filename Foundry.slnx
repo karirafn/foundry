@@ -3,6 +3,7 @@
     <Project Path="src/Foundry.AppHost/Foundry.AppHost.csproj" />
     <Project Path="src/Foundry.Contracts/Foundry.Contracts.csproj" />
     <Project Path="src/Foundry.ServiceDefaults/Foundry.ServiceDefaults.csproj" />
+    <Project Path="src/Foundry.Shared/Foundry.Shared.csproj" />
     <Project Path="src/Foundry.WebApi/Foundry.WebApi.csproj" />
   </Folder>
   <Folder Name="/tests/">

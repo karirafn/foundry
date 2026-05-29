@@ -1,4 +1,4 @@
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared;
 
 // Marker interface — queries carry data via their concrete record types
 #pragma warning disable CA1040

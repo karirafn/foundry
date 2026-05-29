@@ -1,3 +1,3 @@
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared;
 
 public sealed record Error(string Code, string Message);

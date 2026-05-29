@@ -1,4 +1,4 @@
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared;
 
 public abstract class AggregateRoot<TId> : Entity<TId>
     where TId : struct, IStronglyTypedId<TId>

@@ -1,6 +1,6 @@
 namespace Foundry.WebApi.UnitTests.Shared.Abstractions.EntityTests;
 
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 internal readonly record struct TestId(Guid Value) : IStronglyTypedId<TestId>
 {

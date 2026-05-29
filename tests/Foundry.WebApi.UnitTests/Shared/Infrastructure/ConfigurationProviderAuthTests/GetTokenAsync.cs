@@ -1,4 +1,4 @@
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 using Foundry.WebApi.Shared.Infrastructure;
 
 using Microsoft.Extensions.Configuration;

@@ -1,3 +1,4 @@
+using Foundry.Shared;
 using Foundry.WebApi.Shared.Abstractions;
 
 using Microsoft.Extensions.DependencyInjection;

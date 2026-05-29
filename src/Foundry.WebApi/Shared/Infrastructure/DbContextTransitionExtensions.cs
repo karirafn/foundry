@@ -1,4 +1,4 @@
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;

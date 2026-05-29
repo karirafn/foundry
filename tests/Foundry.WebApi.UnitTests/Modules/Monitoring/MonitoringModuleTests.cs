@@ -1,6 +1,6 @@
 using Foundry.WebApi.Modules.Monitoring;
 using Foundry.WebApi.Modules.Monitoring.Features;
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

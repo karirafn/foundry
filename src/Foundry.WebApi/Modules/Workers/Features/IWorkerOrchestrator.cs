@@ -1,5 +1,5 @@
 using Foundry.WebApi.Modules.Workers.Domain;
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 namespace Foundry.WebApi.Modules.Workers.Features;
 

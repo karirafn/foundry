@@ -1,4 +1,4 @@
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 namespace Foundry.WebApi.Modules.Issues.Domain;
 

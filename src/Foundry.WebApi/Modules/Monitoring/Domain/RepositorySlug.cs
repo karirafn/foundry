@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 namespace Foundry.WebApi.Modules.Monitoring.Domain;
 

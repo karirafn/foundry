@@ -4,7 +4,7 @@ using System.Text.Json;
 
 using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.WebApi.Modules.Monitoring.Features;
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 namespace Foundry.WebApi.Modules.Monitoring.Infrastructure;
 

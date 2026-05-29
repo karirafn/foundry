@@ -6,7 +6,7 @@ using Docker.DotNet.Models;
 
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Modules.Workers.Features;
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 using Microsoft.Extensions.Options;
 
