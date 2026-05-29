@@ -96,7 +96,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Assert
-        List<WorkerRun> runs = await _dbContext.WorkerRuns.ToListAsync(TestContext.Current.CancellationToken);
+        List<WorkerRun> runs = await _dbContext.Set<WorkerRun>().ToListAsync(TestContext.Current.CancellationToken);
         runs.Count.ShouldBe(1);
         runs[0].ShouldBeOfType<ActiveRun>();
     }
@@ -114,7 +114,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Assert
-        WorkerRun? run = await _dbContext.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
         activeRun.ContainerId.ShouldBe(ContainerId.From("container-xyz"));
     }
@@ -132,7 +132,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Assert
-        WorkerRun? run = await _dbContext.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.ContainerError containerError = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
         containerError.Message.ShouldBe("Docker daemon unreachable");
@@ -228,7 +228,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Assert
-        WorkerRun? run = await _dbContext.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
         error.Message.ShouldContain("MY_SECRET");

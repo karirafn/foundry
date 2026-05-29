@@ -75,7 +75,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
             IssueId issueId = IssueId.New();
             StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
             ActiveRun activeRun = starting.Activate(ContainerId.From("container-existing"));
-            db.WorkerRuns.Add(activeRun);
+            db.Set<WorkerRun>().Add(activeRun);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -114,7 +114,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
             IssueId issueId = IssueId.New();
             StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
             ActiveRun activeRun = starting.Activate(ContainerId.From("container-existing"));
-            db.WorkerRuns.Add(activeRun);
+            db.Set<WorkerRun>().Add(activeRun);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 

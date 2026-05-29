@@ -23,6 +23,7 @@ builder.Services.AddOpenApi();
 WebApplication app = builder.Build();
 
 app.MapDefaultEndpoints();
+app.MapIssuesEndpoints();
 app.MapMonitoringEndpoints();
 
 if (app.Environment.IsDevelopment())

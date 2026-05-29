@@ -88,7 +88,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
         // Assert — a WorkerReport was persisted
         await using FoundryDbContext assertDb = CreateDbContext();
-        List<WorkerReport> reports = await assertDb.WorkerReports.ToListAsync(TestContext.Current.CancellationToken);
+        List<WorkerReport> reports = await assertDb.Set<WorkerReport>().ToListAsync(TestContext.Current.CancellationToken);
         reports.Count.ShouldBe(1);
         reports[0].ShouldSatisfyAllConditions(
             () => reports[0].WorkerRunId.ShouldBe(activeRun.Id),
@@ -118,7 +118,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
         // Assert — LatestProgress on the ActiveRun is updated
         await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun updatedRun = run.ShouldBeOfType<ActiveRun>();
         updatedRun.LatestProgress.ShouldBe("Implementing the feature");
     }
@@ -155,7 +155,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
         // Assert — both reports were persisted
         await using FoundryDbContext assertDb = CreateDbContext();
-        List<WorkerReport> reports = await assertDb.WorkerReports
+        List<WorkerReport> reports = await assertDb.Set<WorkerReport>()
             .OrderBy(r => r.SequenceNumber)
             .ToListAsync(TestContext.Current.CancellationToken);
         reports.Count.ShouldBe(2);
@@ -186,7 +186,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
         // Assert — only one WorkerReport was created (idempotent ingestion)
         await using FoundryDbContext assertDb = CreateDbContext();
-        List<WorkerReport> reports = await assertDb.WorkerReports.ToListAsync(TestContext.Current.CancellationToken);
+        List<WorkerReport> reports = await assertDb.Set<WorkerReport>().ToListAsync(TestContext.Current.CancellationToken);
         reports.Count.ShouldBe(1);
     }
 
@@ -212,7 +212,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
         // Assert — CompletedRun contains branch and PR info from final report
         await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         CompletedRun completedRun = run.ShouldBeOfType<CompletedRun>();
         completedRun.ShouldSatisfyAllConditions(
             () => completedRun.BranchName.ShouldBe(BranchName.From("feat/add-login")),
@@ -239,7 +239,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         // Assert — no exception, no report ingested
         exception.ShouldBeNull();
         await using FoundryDbContext assertDb = CreateDbContext();
-        List<WorkerReport> reports = await assertDb.WorkerReports.ToListAsync(TestContext.Current.CancellationToken);
+        List<WorkerReport> reports = await assertDb.Set<WorkerReport>().ToListAsync(TestContext.Current.CancellationToken);
         reports.ShouldBeEmpty();
     }
 
@@ -281,7 +281,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         // Assert
         exception.ShouldBeNull();
         await using FoundryDbContext assertDb = CreateDbContext();
-        List<WorkerReport> reports = await assertDb.WorkerReports.ToListAsync(TestContext.Current.CancellationToken);
+        List<WorkerReport> reports = await assertDb.Set<WorkerReport>().ToListAsync(TestContext.Current.CancellationToken);
         reports.ShouldBeEmpty();
     }
 

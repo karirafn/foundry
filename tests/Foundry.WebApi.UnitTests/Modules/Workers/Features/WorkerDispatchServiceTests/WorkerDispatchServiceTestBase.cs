@@ -48,7 +48,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         ActiveRun activeRun = starting.Activate(ContainerId.From(containerId));
-        db.WorkerRuns.Add(activeRun);
+        db.Set<WorkerRun>().Add(activeRun);
         db.SaveChanges();
         return activeRun;
     }

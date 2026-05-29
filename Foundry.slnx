@@ -1,7 +1,6 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Foundry.AppHost/Foundry.AppHost.csproj" />
-    <Project Path="src/Foundry.Contracts/Foundry.Contracts.csproj" />
     <Project Path="src/Foundry.ServiceDefaults/Foundry.ServiceDefaults.csproj" />
     <Project Path="src/Foundry.WebApi/Foundry.WebApi.csproj" />
   </Folder>

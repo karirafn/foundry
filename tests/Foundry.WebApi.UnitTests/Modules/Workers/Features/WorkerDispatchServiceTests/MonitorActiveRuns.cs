@@ -51,7 +51,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
         error.Message.ShouldBe("Container not found");
@@ -71,7 +71,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         CompletedRun completedRun = run.ShouldBeOfType<CompletedRun>();
         completedRun.ExitCode.ShouldBe(0);
     }
@@ -90,7 +90,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.NonZeroExit nonZeroExit = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
         nonZeroExit.ExitCode.ShouldBe(1);
@@ -110,7 +110,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         run.ShouldBeOfType<ActiveRun>();
     }
 
