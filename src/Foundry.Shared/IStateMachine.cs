@@ -1,4 +1,4 @@
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared;
 
 // Marker interfaces for TPH state variant aggregates.
 // The non-generic IStateMachine is used as the TransitionAsync constraint — all state machine

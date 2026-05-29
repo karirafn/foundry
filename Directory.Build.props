@@ -9,4 +9,9 @@
     <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectDirectory.Contains('src'))">
+    <InternalsVisibleTo Include="Foundry.WebApi.UnitTests" />
+    <InternalsVisibleTo Include="Foundry.WebApi.IntegrationTests" />
+  </ItemGroup>
 </Project>

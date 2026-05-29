@@ -1,4 +1,4 @@
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared;
 
 public interface IStronglyTypedId<TSelf> : IEquatable<TSelf>
     where TSelf : struct, IStronglyTypedId<TSelf>

@@ -1,4 +1,4 @@
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared;
 
 public interface ICommandHandler<TCommand, TResult>
     where TCommand : ICommand<TResult>

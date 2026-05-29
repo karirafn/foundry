@@ -2,8 +2,8 @@ using Foundry.WebApi.Modules.Issues;
 using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.WebApi.Modules.Issues.Features;
 using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Shared.Abstractions;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.Shared;
+using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

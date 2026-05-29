@@ -1,5 +1,5 @@
 using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Shared.Abstractions;
+using Foundry.Shared;
 
 using Shouldly;
 

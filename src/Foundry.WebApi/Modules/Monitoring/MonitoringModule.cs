@@ -1,7 +1,6 @@
+using Foundry.Shared;
 using Foundry.WebApi.Modules.Monitoring.Features;
 using Foundry.WebApi.Modules.Monitoring.Infrastructure;
-using Foundry.WebApi.Shared.Abstractions;
-using Foundry.WebApi.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;

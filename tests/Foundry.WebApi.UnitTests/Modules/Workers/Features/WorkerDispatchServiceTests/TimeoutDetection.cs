@@ -1,7 +1,7 @@
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.WebApi.Modules.Workers.Features;
-using Foundry.WebApi.Shared.Abstractions;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.Shared;
+using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

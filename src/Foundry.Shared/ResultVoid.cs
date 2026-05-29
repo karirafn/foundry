@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Foundry.WebApi.Shared.Abstractions;
+namespace Foundry.Shared;
 
 public abstract class Result
 {

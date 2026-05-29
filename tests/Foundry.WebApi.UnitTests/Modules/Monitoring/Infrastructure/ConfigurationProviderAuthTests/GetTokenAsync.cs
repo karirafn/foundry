@@ -1,5 +1,5 @@
-using Foundry.WebApi.Shared.Abstractions;
-using Foundry.WebApi.Shared.Infrastructure;
+using Foundry.Shared;
+using Foundry.WebApi.Modules.Monitoring.Infrastructure;
 
 using Microsoft.Extensions.Configuration;
 
@@ -7,7 +7,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.WebApi.UnitTests.Shared.Infrastructure.ConfigurationProviderAuthTests;
+namespace Foundry.WebApi.UnitTests.Modules.Monitoring.Infrastructure.ConfigurationProviderAuthTests;
 
 public sealed class GetTokenAsync
 {

@@ -5,6 +5,10 @@
     <Project Path="src/Foundry.ServiceDefaults/Foundry.ServiceDefaults.csproj" />
     <Project Path="src/Foundry.WebApi/Foundry.WebApi.csproj" />
   </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Foundry.Shared/Foundry.Shared.csproj" />
+    <Project Path="src/Foundry.Shared.Infrastructure/Foundry.Shared.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Foundry.Testing/Foundry.Testing.csproj" />
     <Project Path="tests/Foundry.WebApi.IntegrationTests/Foundry.WebApi.IntegrationTests.csproj" />

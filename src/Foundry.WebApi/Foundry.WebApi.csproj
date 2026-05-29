@@ -12,10 +12,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Foundry.ServiceDefaults\Foundry.ServiceDefaults.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <InternalsVisibleTo Include="Foundry.WebApi.UnitTests" />
+    <ProjectReference Include="..\Foundry.Shared.Infrastructure\Foundry.Shared.Infrastructure.csproj" />
+    <ProjectReference Include="..\Foundry.Shared\Foundry.Shared.csproj" />
   </ItemGroup>
 
 </Project>

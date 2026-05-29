@@ -1,6 +1,6 @@
 using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Shared.Abstractions;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
