@@ -1,4 +1,4 @@
-using Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain;
 using Foundry.Shared;
 
 using Shouldly;

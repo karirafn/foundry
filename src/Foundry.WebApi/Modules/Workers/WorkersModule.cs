@@ -1,5 +1,7 @@
 using Docker.DotNet;
 
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Modules.Workers.Features;
 using Foundry.WebApi.Modules.Workers.Infrastructure;
 
@@ -24,6 +26,8 @@ public static class WorkersModule
             return config.CreateClient();
         });
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
+
+        services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
 
         services.AddHostedService<WorkerDispatchService>();
 

@@ -1,4 +1,5 @@
-using Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;

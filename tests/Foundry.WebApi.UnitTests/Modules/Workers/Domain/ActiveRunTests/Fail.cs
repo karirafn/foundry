@@ -1,4 +1,4 @@
-using Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Contracts;
 using Foundry.WebApi.Modules.Workers.Domain;
 
 using Shouldly;

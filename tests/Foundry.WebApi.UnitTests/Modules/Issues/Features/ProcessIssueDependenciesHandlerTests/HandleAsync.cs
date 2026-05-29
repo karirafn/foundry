@@ -1,6 +1,7 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Issues.Features;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
+using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
@@ -42,7 +43,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dispatcher = new CapturingDomainEventDispatcher();
         _sut = new ProcessIssueDependenciesHandler(
             _dbContext,
-            new IssuesModule(_dbContext),
+            new IssueQueries(_dbContext),
             _dispatcher,
             NullLogger<ProcessIssueDependenciesHandler>.Instance);
     }

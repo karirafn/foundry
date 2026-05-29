@@ -1,11 +1,13 @@
+using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.Shared;
-using Foundry.WebApi.Persistence;
 
-namespace Foundry.WebApi.Modules.Issues.Features;
+using Microsoft.EntityFrameworkCore;
 
-internal sealed class CreateIssueHandler(FoundryDbContext db) : IIntegrationEventHandler<IssueDetected>
+namespace Foundry.Modules.Issues.Features;
+
+internal sealed class CreateIssueHandler(
+    DbContext db) : IIntegrationEventHandler<IssueDetected>
 {
     public async Task HandleAsync(IssueDetected @event, CancellationToken cancellationToken)
     {

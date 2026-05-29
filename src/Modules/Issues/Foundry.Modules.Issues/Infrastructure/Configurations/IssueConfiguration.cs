@@ -1,7 +1,8 @@
 using System.Text.Json;
 
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -10,7 +11,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Foundry.WebApi.Modules.Issues.Infrastructure;
+namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
 public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 {

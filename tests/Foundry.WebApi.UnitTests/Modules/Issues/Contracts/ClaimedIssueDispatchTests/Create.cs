@@ -17,6 +17,7 @@ public sealed class Create
         // Act
         ClaimedIssueDispatch dispatch = new(
             issueId,
+            WorkerRunId: Guid.NewGuid(),
             IssueNumber: 42,
             Title: "Fix the bug",
             Body: "Bug details",

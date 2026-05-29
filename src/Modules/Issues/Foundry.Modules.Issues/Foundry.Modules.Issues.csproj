@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Foundry.Modules.Issues.Contracts\Foundry.Modules.Issues.Contracts.csproj" />
+    <ProjectReference Include="..\..\Monitoring\Foundry.Modules.Monitoring\Foundry.Modules.Monitoring.csproj" />
+    <ProjectReference Include="..\..\Workers\Foundry.Modules.Workers.Contracts\Foundry.Modules.Workers.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\Foundry.Shared.Infrastructure\Foundry.Shared.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

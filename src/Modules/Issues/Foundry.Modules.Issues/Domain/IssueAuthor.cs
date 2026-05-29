@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.WebApi.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain;
 
 public sealed record IssueAuthor
 {

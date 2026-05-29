@@ -1,7 +1,6 @@
-using System.Globalization;
 using System.Text.Json;
 
-using Foundry.WebApi.Modules.Issues;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.WebApi.Modules.Workers.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -46,9 +45,9 @@ internal sealed class WorkerDispatchService(
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
         FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-        IIssuesModule issuesModule = scope.ServiceProvider.GetRequiredService<IIssuesModule>();
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
-        IProviderAuth providerAuth = scope.ServiceProvider.GetRequiredService<IProviderAuth>();
+        IIntegrationEventDispatcher integrationEventDispatcher =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
         List<ActiveRun> activeRuns = await dbContext.WorkerRuns
             .OfType<ActiveRun>()
@@ -74,57 +73,9 @@ internal sealed class WorkerDispatchService(
         }
 
         Guid workerRunId = Guid.NewGuid();
-        ClaimedIssueDispatch? claimed = await issuesModule.ClaimNextQueuedIssueAsync(workerRunId, cancellationToken);
-
-        if (claimed is null)
-        {
-            return;
-        }
-
-        StartingRun startingRun = StartingRun.Begin(claimed.IssueId, WorkerRunId.From(workerRunId));
-        dbContext.WorkerRuns.Add(startingRun);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, providerAuth, cancellationToken);
-
-        if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
-        {
-            FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(specFailure.Error.Message));
-            await dbContext.TransitionAsync(startingRun, failedRun, cancellationToken);
-
-            logger.LogWarning(
-                "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: {Error}",
-                startingRun.Id,
-                claimed.IssueNumber,
-                specFailure.Error.Message);
-            return;
-        }
-
-        WorkerContainerSpec spec = ((Result<WorkerContainerSpec>.Success)specResult).Value;
-        Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
-
-        if (startResult is Result<ContainerId>.Success success)
-        {
-            ActiveRun activeRun = startingRun.Activate(success.Value);
-            await dbContext.TransitionAsync(startingRun, activeRun, cancellationToken);
-
-            logger.LogDebug(
-                "Worker run {WorkerRunId} started for issue #{IssueNumber} (container: {ContainerId}).",
-                startingRun.Id,
-                claimed.IssueNumber,
-                success.Value.Value);
-        }
-        else if (startResult is Result<ContainerId>.Failure failure)
-        {
-            FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(failure.Error.Message));
-            await dbContext.TransitionAsync(startingRun, failedRun, cancellationToken);
-
-            logger.LogWarning(
-                "Worker run {WorkerRunId} failed to start for issue #{IssueNumber}: {Error}",
-                startingRun.Id,
-                claimed.IssueNumber,
-                failure.Error.Message);
-        }
+        await integrationEventDispatcher.DispatchAsync(
+            [new WorkerCapacityAvailable(workerRunId)],
+            cancellationToken);
     }
 
     private async Task ReconcileOrphanedRunsAsync(
@@ -371,82 +322,5 @@ internal sealed class WorkerDispatchService(
                 filePath);
             return (null, null);
         }
-    }
-
-    private async Task<Result<WorkerContainerSpec>> BuildSpecAsync(
-        StartingRun startingRun,
-        ClaimedIssueDispatch claimed,
-        IProviderAuth providerAuth,
-        CancellationToken cancellationToken)
-    {
-        Result<string> patResult = await ResolveGitPatAsync(providerAuth, claimed.AccountSecretKeyName, cancellationToken);
-
-        if (patResult is not Result<string>.Success patSuccess)
-        {
-            return Result<WorkerContainerSpec>.Fail(((Result<string>.Failure)patResult).Error);
-        }
-
-        string gitPat = patSuccess.Value;
-
-        string systemPrompt = SystemPromptBuilder.Build(
-            claimed.IssueNumber,
-            claimed.Title,
-            claimed.Body,
-            _options);
-
-        string reportsHostPath = Path.Combine(_options.ReportsPath, startingRun.Id.Value.ToString());
-
-        Directory.CreateDirectory(reportsHostPath);
-
-        Dictionary<string, string> envVars = new()
-        {
-            ["ANTHROPIC_API_KEY"] = _options.ApiKey,
-            ["GIT_PAT"] = gitPat,
-            ["CLONE_URL"] = claimed.CloneUrl.ToString(),
-            ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
-            ["SYSTEM_PROMPT"] = systemPrompt,
-        };
-
-        List<BindMount> bindMounts =
-        [
-            new BindMount(Path.GetFullPath(_options.ConfigPath), "/home/user/.claude/"),
-            new BindMount(Path.GetFullPath(reportsHostPath), "/reports/"),
-        ];
-
-        Dictionary<string, string> labels = new()
-        {
-            ["foundry.worker-run-id"] = startingRun.Id.Value.ToString(),
-        };
-
-        return Result<WorkerContainerSpec>.Ok(new WorkerContainerSpec(
-            _options.Image,
-            envVars,
-            bindMounts,
-            labels));
-    }
-
-    private async Task<Result<string>> ResolveGitPatAsync(
-        IProviderAuth providerAuth,
-        string secretKeyName,
-        CancellationToken cancellationToken)
-    {
-        Result<string> result = await providerAuth.GetTokenAsync(secretKeyName, cancellationToken);
-
-        if (result is Result<string>.Success success)
-        {
-            if (string.IsNullOrEmpty(success.Value))
-            {
-                return Result<string>.Fail(
-                    new Error("Worker.EmptyGitPat", $"Git PAT not configured for account: {secretKeyName}"));
-            }
-
-            return result;
-        }
-
-        logger.LogWarning(
-            "Could not resolve Git PAT for secret key '{SecretKeyName}'.",
-            secretKeyName);
-
-        return result;
     }
 }

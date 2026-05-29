@@ -1,17 +1,18 @@
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.WebApi.Modules.Issues.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
-using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.WebApi.Modules.Issues.Features;
+namespace Foundry.Modules.Issues.Features;
 
 internal sealed class ProcessIssueDependenciesHandler(
-    FoundryDbContext db,
-    IIssuesModule issuesModule,
+    DbContext db,
+    IIssueQueries issueQueries,
     IDomainEventDispatcher dispatcher,
     ILogger<ProcessIssueDependenciesHandler> logger) : IIntegrationEventHandler<IssueDependenciesDetected>
 {
@@ -33,7 +34,7 @@ internal sealed class ProcessIssueDependenciesHandler(
         // Query the committed graph before mutating BlockedBy so that cycle
         // detection sees a consistent snapshot. The current issue's new edges
         // are added manually below using the event payload.
-        IReadOnlyList<DependencyEdge> committedGraph = await issuesModule.GetDependencyGraphAsync(
+        IReadOnlyList<DependencyEdge> committedGraph = await issueQueries.GetDependencyGraphAsync(
             @event.MonitoredRepositoryId,
             cancellationToken);
 

@@ -1,7 +1,8 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
-namespace Foundry.WebApi.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain;
 
 public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 {

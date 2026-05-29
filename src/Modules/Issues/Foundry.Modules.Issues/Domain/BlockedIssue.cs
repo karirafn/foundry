@@ -1,4 +1,6 @@
-namespace Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Contracts;
+
+namespace Foundry.Modules.Issues.Domain;
 
 public sealed class BlockedIssue : Issue
 {
@@ -46,7 +48,7 @@ public sealed class BlockedIssue : Issue
     public QueuedIssue Unblock()
     {
         QueuedIssue queued = QueuedIssue.FromBlocked(this);
-        AddDomainEvent(new IssueQueued(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }
 }

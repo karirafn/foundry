@@ -1,6 +1,7 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 
-namespace Foundry.WebApi.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain;
 
 public sealed class DetectedIssue : Issue
 {
@@ -45,7 +46,7 @@ public sealed class DetectedIssue : Issue
         }
 
         QueuedIssue queued = QueuedIssue.FromDetected(this);
-        AddDomainEvent(new IssueQueued(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }
 
@@ -57,7 +58,7 @@ public sealed class DetectedIssue : Issue
         }
 
         BlockedIssue blocked = BlockedIssue.FromDetected(this, blockers);
-        AddDomainEvent(new IssueBlocked(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueBlocked(Id, MonitoredRepositoryId));
         return blocked;
     }
 }

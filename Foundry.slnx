@@ -7,6 +7,7 @@
   </Folder>
   <Folder Name="/src/Modules/" />
   <Folder Name="/src/Modules/Issues/">
+    <Project Path="src/Modules/Issues/Foundry.Modules.Issues/Foundry.Modules.Issues.csproj" />
     <Project Path="src/Modules/Issues/Foundry.Modules.Issues.Contracts/Foundry.Modules.Issues.Contracts.csproj" />
   </Folder>
   <Folder Name="/src/Modules/Monitoring/">

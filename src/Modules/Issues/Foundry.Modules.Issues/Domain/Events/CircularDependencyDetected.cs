@@ -1,7 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
-namespace Foundry.WebApi.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain.Events;
 
 public sealed record CircularDependencyDetected(
     MonitoredRepositoryId MonitoredRepositoryId,

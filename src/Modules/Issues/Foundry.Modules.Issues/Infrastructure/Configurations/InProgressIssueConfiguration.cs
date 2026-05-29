@@ -1,9 +1,9 @@
-using Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Foundry.WebApi.Modules.Issues.Infrastructure;
+namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
 public sealed class InProgressIssueConfiguration : IEntityTypeConfiguration<InProgressIssue>
 {

@@ -1,7 +1,9 @@
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Persistence;
@@ -19,7 +21,8 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
-    private readonly IIssuesModule _sut;
+    private readonly CapturingIntegrationEventDispatcher _dispatcher;
+    private readonly WorkerCapacityAvailableHandler _sut;
 
     public ClaimNextQueuedIssueAsync()
     {
@@ -32,7 +35,9 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new IssuesModule(_dbContext);
+
+        _dispatcher = new CapturingIntegrationEventDispatcher();
+        _sut = new WorkerCapacityAvailableHandler(_dbContext, _dispatcher);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -98,21 +103,20 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNoQueuedIssuesExist_ReturnsNull()
+    public async Task WhenNoQueuedIssuesExist_DoesNotDispatchIssueClaimed()
     {
         // Arrange (empty database)
+        WorkerCapacityAvailable @event = new(Guid.NewGuid());
 
         // Act
-        ClaimedIssueDispatch? result = await _sut.ClaimNextQueuedIssueAsync(
-            Guid.NewGuid(),
-            TestContext.Current.CancellationToken);
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeNull();
+        _dispatcher.Captured.ShouldNotContain(e => e is IssueClaimed);
     }
 
     [Fact]
-    public async Task WhenQueuedIssueExists_ReturnsDispatchWithCorrectProperties()
+    public async Task WhenQueuedIssueExists_DispatchesIssueClaimedWithCorrectProperties()
     {
         // Arrange
         (MonitoredRepository repository, GitHubAccount account) =
@@ -124,15 +128,20 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             title: "Fix the bug",
             body: "Detailed description");
 
+        Guid workerRunId = Guid.NewGuid();
+        WorkerCapacityAvailable @event = new(workerRunId);
+
         // Act
-        ClaimedIssueDispatch? result = await _sut.ClaimNextQueuedIssueAsync(
-            Guid.NewGuid(),
-            TestContext.Current.CancellationToken);
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
 
         // Assert
-        ClaimedIssueDispatch dispatch = result.ShouldNotBeNull();
+        IssueClaimed claimed = _dispatcher.Captured
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        ClaimedIssueDispatch dispatch = claimed.Dispatch;
         dispatch.ShouldSatisfyAllConditions(
             () => dispatch.IssueId.ShouldBe(queued.Id),
+            () => dispatch.WorkerRunId.ShouldBe(workerRunId),
             () => dispatch.IssueNumber.ShouldBe(7),
             () => dispatch.Title.ShouldBe("Fix the bug"),
             () => dispatch.Body.ShouldBe("Detailed description"),
@@ -148,8 +157,10 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         (MonitoredRepository repository, _) = await SeedRepositoryAsync();
         QueuedIssue queued = await SeedQueuedIssueAsync(repository.Id);
 
+        WorkerCapacityAvailable @event = new(Guid.NewGuid());
+
         // Act
-        await _sut.ClaimNextQueuedIssueAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Assert
@@ -166,8 +177,10 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         await SeedQueuedIssueAsync(repository.Id);
         Guid workerRunId = Guid.NewGuid();
 
+        WorkerCapacityAvailable @event = new(workerRunId);
+
         // Act
-        await _sut.ClaimNextQueuedIssueAsync(workerRunId, TestContext.Current.CancellationToken);
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Assert — the persisted InProgressIssue.WorkerRunId matches the provided guid
@@ -176,5 +189,18 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         inProgress.ShouldNotBeNull();
         inProgress.WorkerRunId.ShouldBe(workerRunId);
+    }
+
+    private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        private readonly List<IIntegrationEvent> _captured = [];
+
+        public IReadOnlyList<IIntegrationEvent> Captured => _captured;
+
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+        {
+            _captured.AddRange(events);
+            return Task.CompletedTask;
+        }
     }
 }

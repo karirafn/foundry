@@ -1,4 +1,6 @@
-namespace Foundry.WebApi.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Contracts;
+
+namespace Foundry.Modules.Issues.Domain;
 
 public sealed class InProgressIssue : Issue
 {
