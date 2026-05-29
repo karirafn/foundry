@@ -3,7 +3,7 @@ using Foundry.WebApi.Modules.Monitoring;
 using Foundry.WebApi.Modules.Workers;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 

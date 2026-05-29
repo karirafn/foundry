@@ -1,7 +1,7 @@
 using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.WebApi.Modules.Monitoring.Features;
 using Foundry.Shared;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

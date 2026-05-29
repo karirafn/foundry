@@ -3,7 +3,7 @@ using Foundry.WebApi.Modules.Issues.Features;
 using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

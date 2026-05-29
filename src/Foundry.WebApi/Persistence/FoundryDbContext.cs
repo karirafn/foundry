@@ -4,7 +4,7 @@ using Foundry.WebApi.Modules.Workers.Domain;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.WebApi.Shared.Persistence;
+namespace Foundry.WebApi.Persistence;
 
 public sealed class FoundryDbContext(DbContextOptions<FoundryDbContext> options) : DbContext(options)
 {

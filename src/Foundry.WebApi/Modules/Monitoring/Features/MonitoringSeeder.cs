@@ -1,6 +1,6 @@
 using Foundry.WebApi.Modules.Monitoring.Domain;
 using Foundry.Shared;
-using Foundry.WebApi.Shared.Persistence;
+using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
