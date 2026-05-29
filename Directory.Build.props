@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup Condition="$(MSBuildProjectDirectory.Contains('src'))">
-    <InternalsVisibleTo Include="Foundry.WebApi.UnitTests" />
-    <InternalsVisibleTo Include="Foundry.WebApi.IntegrationTests" />
+    <InternalsVisibleTo Include="Foundry.UnitTests" />
+    <InternalsVisibleTo Include="Foundry.IntegrationTests" />
   </ItemGroup>
 </Project>
