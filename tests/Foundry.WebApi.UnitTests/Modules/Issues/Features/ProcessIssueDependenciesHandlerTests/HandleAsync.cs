@@ -1,7 +1,8 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Issues.Features;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
+using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -20,7 +21,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
-    private readonly IDomainEventHandler<IssueDependenciesDetected> _sut;
+    private readonly IIntegrationEventHandler<IssueDependenciesDetected> _sut;
 
     private static IssueAuthor ValidAuthor =>
         ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
@@ -42,7 +43,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dispatcher = new CapturingDomainEventDispatcher();
         _sut = new ProcessIssueDependenciesHandler(
             _dbContext,
-            new IssuesModule(_dbContext),
+            new IssueQueries(_dbContext),
             _dispatcher,
             NullLogger<ProcessIssueDependenciesHandler>.Instance);
     }

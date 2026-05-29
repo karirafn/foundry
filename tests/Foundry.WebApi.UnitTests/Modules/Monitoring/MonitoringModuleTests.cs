@@ -1,5 +1,5 @@
-using Foundry.WebApi.Modules.Monitoring;
-using Foundry.WebApi.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring;
+using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Configuration;
@@ -60,9 +60,9 @@ public sealed class MonitoringModuleTests
     }
 
     [Fact]
-    public void AddMonitoringModule_RegistersIProviderAuth()
+    public void AddMonitoringModule_DoesNotRegisterIProviderAuth()
     {
-        // Arrange
+        // Arrange — IProviderAuth is registered in Program.cs (composition root), not by the module.
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddHttpClient();
@@ -72,10 +72,10 @@ public sealed class MonitoringModuleTests
         services.AddMonitoringModule(configuration);
         ServiceProvider provider = services.BuildServiceProvider();
 
-        // Assert — can resolve IProviderAuth
+        // Assert — IProviderAuth is not resolvable from the module alone
         using IServiceScope scope = provider.CreateScope();
-        IProviderAuth auth = scope.ServiceProvider.GetRequiredService<IProviderAuth>();
-        auth.ShouldNotBeNull();
+        IProviderAuth? auth = scope.ServiceProvider.GetService<IProviderAuth>();
+        auth.ShouldBeNull();
     }
 
     [Fact]

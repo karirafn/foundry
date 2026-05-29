@@ -1,5 +1,5 @@
-using Foundry.WebApi.Modules.Workers.Domain;
-using Foundry.WebApi.Modules.Workers.Features;
+using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -45,7 +45,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
 
         // Assert — run transitioned to FailedRun with TimedOut reason
         await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         failedRun.Reason.ShouldBeOfType<FailureReason.TimedOut>();
     }
@@ -78,7 +78,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
 
         // Assert — run remains active
         await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.WorkerRuns.SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         run.ShouldBeOfType<ActiveRun>();
     }
 

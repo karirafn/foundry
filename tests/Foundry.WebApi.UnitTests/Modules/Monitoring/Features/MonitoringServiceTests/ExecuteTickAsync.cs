@@ -1,6 +1,7 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Modules.Monitoring.Features;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -83,9 +84,11 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
                 .Options;
             return new FoundryDbContext(options);
         });
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
-        services.AddScoped<IIssuesModule, StubIssuesModule>();
+        services.AddScoped<IIssueQueries, StubIssueQueries>();
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
+        services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IProviderAuth>(_ => providerAuth);
         services.AddScoped<IIssueProviderFactory>(_ => providerFactory);
         services.AddScoped<RepositoryPoller>();
@@ -245,7 +248,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         }
     }
 
-    private sealed class StubIssuesModule : IIssuesModule
+    private sealed class StubIssueQueries : IIssueQueries
     {
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
@@ -269,16 +272,19 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         {
             return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
         }
-
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
-        {
-            return Task.FromResult<ClaimedIssueDispatch?>(null);
-        }
     }
 
     private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
     {
         public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
         }

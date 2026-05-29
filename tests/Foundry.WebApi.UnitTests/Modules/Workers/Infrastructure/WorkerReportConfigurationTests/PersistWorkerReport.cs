@@ -1,5 +1,5 @@
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Workers.Domain;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Workers.Domain;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -41,7 +41,7 @@ public sealed class PersistWorkerReport : IAsyncDisposable
         // Arrange — seed a WorkerRun to satisfy the FK constraint
         WorkerRunId workerRunId = WorkerRunId.New();
         StartingRun startingRun = StartingRun.Begin(IssueId.New(), workerRunId);
-        _dbContext.WorkerRuns.Add(startingRun);
+        _dbContext.Set<WorkerRun>().Add(startingRun);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         WorkerReport report = WorkerReport.Create(

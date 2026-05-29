@@ -1,8 +1,6 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Modules.Workers.Domain;
-using Foundry.WebApi.Modules.Workers.Features;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -50,7 +48,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         ActiveRun activeRun = starting.Activate(ContainerId.From(containerId));
-        db.WorkerRuns.Add(activeRun);
+        db.Set<WorkerRun>().Add(activeRun);
         db.SaveChanges();
         return activeRun;
     }
@@ -58,7 +56,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     internal WorkerDispatchService BuildService(
         IWorkerOrchestrator orchestrator,
         WorkerOptions? workerOptions = null,
-        IIssuesModule? issuesModule = null,
+        IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IProviderAuth? providerAuth = null)
     {
         SqliteConnection connection = _connection;
@@ -71,8 +69,10 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
                 .Options;
             return new FoundryDbContext(options);
         });
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
-        services.AddScoped<IIssuesModule>(_ => issuesModule ?? new EmptyIssuesModule());
+        services.AddScoped<IIntegrationEventDispatcher>(
+            _ => integrationEventDispatcher ?? new NullIntegrationEventDispatcher());
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
         services.AddScoped<IProviderAuth>(_ => providerAuth ?? new StubProviderAuth("test-token"));
 
@@ -94,28 +94,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             NullLogger<WorkerDispatchService>.Instance);
     }
 
-    protected sealed class EmptyIssuesModule : IIssuesModule
-    {
-        public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
-
-        public Task<IReadOnlyDictionary<int, IssueSnapshot>> GetIssueSnapshotsAsync(
-            MonitoredRepositoryId repositoryId,
-            IReadOnlySet<int> issueNumbers,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<int, IssueSnapshot>>(new Dictionary<int, IssueSnapshot>());
-
-        public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
-
-        public Task<ClaimedIssueDispatch?> ClaimNextQueuedIssueAsync(Guid workerRunId, CancellationToken cancellationToken)
-            => Task.FromResult<ClaimedIssueDispatch?>(null);
-    }
-
     protected sealed class StubProviderAuth(string token) : IProviderAuth
     {
         public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
@@ -126,5 +104,24 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     {
         public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    protected sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    protected sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        private readonly List<IIntegrationEvent> _captured = [];
+
+        public IReadOnlyList<IIntegrationEvent> Captured => _captured;
+
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+        {
+            _captured.AddRange(events);
+            return Task.CompletedTask;
+        }
     }
 }

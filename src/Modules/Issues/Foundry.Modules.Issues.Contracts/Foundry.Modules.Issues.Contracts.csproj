@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Foundry.Shared\Foundry.Shared.csproj" />
+    <ProjectReference Include="..\..\Monitoring\Foundry.Modules.Monitoring.Contracts\Foundry.Modules.Monitoring.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

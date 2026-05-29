@@ -1,6 +1,7 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -17,7 +18,7 @@ public sealed class GetKnownIssueNumbersAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
-    private readonly IIssuesModule _sut;
+    private readonly IIssueQueries _sut;
 
     public GetKnownIssueNumbersAsync()
     {
@@ -30,7 +31,7 @@ public sealed class GetKnownIssueNumbersAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new IssuesModule(_dbContext);
+        _sut = new IssueQueries(_dbContext);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

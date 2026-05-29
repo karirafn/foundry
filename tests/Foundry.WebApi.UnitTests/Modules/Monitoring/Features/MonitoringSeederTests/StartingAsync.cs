@@ -1,5 +1,6 @@
-using Foundry.WebApi.Modules.Monitoring.Domain;
-using Foundry.WebApi.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -54,6 +55,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 .Options;
             return new FoundryDbContext(dbOptions);
         });
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
         ServiceProvider provider = services.BuildServiceProvider();
         IServiceScopeFactory scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();

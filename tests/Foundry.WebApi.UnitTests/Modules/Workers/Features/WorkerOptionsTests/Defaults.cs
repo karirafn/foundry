@@ -1,4 +1,4 @@
-using Foundry.WebApi.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features;
 
 using Shouldly;
 
@@ -16,7 +16,7 @@ public sealed class Defaults
 
         // Assert
         options.ShouldSatisfyAllConditions(
-            () => options.Image.ShouldBe("ghcr.io/anthropics/claude-code:latest"),
+            () => options.Image.ShouldBe("ghcr.io/anthropics/claude-code"),
             () => options.MaxConcurrent.ShouldBe(3),
             () => options.TimeoutMinutes.ShouldBe(120),
             () => options.ConfigPath.ShouldBe("./workers/config"),

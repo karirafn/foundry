@@ -1,5 +1,5 @@
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
 using Shouldly;
@@ -46,20 +46,17 @@ public sealed class Claim
     }
 
     [Fact]
-    public void WhenClaimed_RaisesIssueClaimedDomainEvent()
+    public void WhenClaimed_DoesNotRaiseDomainEvents()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         QueuedIssue queued = CreateQueuedIssue(repositoryId);
 
-        // Act
+        // Act — claim is acknowledged via integration event choreography, not domain events
         queued.Claim(Guid.NewGuid());
 
         // Assert
-        IssueClaimed domainEvent = queued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueClaimed>();
-        domainEvent.ShouldSatisfyAllConditions(
-            () => domainEvent.IssueId.ShouldBe(queued.Id),
-            () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
+        queued.DomainEvents.ShouldBeEmpty();
     }
 
     [Fact]

@@ -1,0 +1,10 @@
+using Foundry.Shared;
+
+namespace Foundry.Modules.Monitoring.Contracts;
+
+public readonly record struct MonitoredRepositoryId(Guid Value) : IStronglyTypedId<MonitoredRepositoryId>
+{
+    public static MonitoredRepositoryId New() => new(Guid.NewGuid());
+
+    public static MonitoredRepositoryId From(Guid value) => new(value);
+}

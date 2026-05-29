@@ -1,5 +1,6 @@
-using Foundry.WebApi.Modules.Issues.Domain;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
 using Shouldly;

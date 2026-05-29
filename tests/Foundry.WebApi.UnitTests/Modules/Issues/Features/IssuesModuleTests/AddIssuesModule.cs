@@ -1,6 +1,8 @@
-using Foundry.WebApi.Modules.Issues;
-using Foundry.WebApi.Modules.Issues.Features;
-using Foundry.WebApi.Modules.Monitoring.Domain;
+using Foundry.Modules.Issues;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Persistence;
@@ -30,9 +32,12 @@ public sealed class AddIssuesModule : IAsyncDisposable
 
         services.AddDbContext<FoundryDbContext>(opts =>
             opts.UseSqlite(_connection));
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
         services.AddLogging();
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
+        services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
         services.AddIssuesModule();
 
         _serviceProvider = services.BuildServiceProvider();
@@ -48,14 +53,14 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
-    public void WhenServicesRegistered_IIssuesModuleResolvable()
+    public void WhenServicesRegistered_IIssueQueriesResolvable()
     {
         // Arrange & Act
         using IServiceScope scope = _serviceProvider.CreateScope();
 
         // Assert
-        IIssuesModule module = scope.ServiceProvider.GetRequiredService<IIssuesModule>();
-        module.ShouldBeOfType<IssuesModule>();
+        IIssueQueries queries = scope.ServiceProvider.GetRequiredService<IIssueQueries>();
+        queries.ShouldBeOfType<IssueQueries>();
     }
 
     [Fact]
@@ -65,8 +70,8 @@ public sealed class AddIssuesModule : IAsyncDisposable
         using IServiceScope scope = _serviceProvider.CreateScope();
 
         // Assert
-        IDomainEventHandler<IssueDetected> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDetected>>();
+        IIntegrationEventHandler<IssueDetected> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<IssueDetected>>();
         handler.ShouldBeOfType<CreateIssueHandler>();
     }
 
@@ -77,8 +82,8 @@ public sealed class AddIssuesModule : IAsyncDisposable
         using IServiceScope scope = _serviceProvider.CreateScope();
 
         // Assert
-        IDomainEventHandler<IssueDetailsChanged> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDetailsChanged>>();
+        IIntegrationEventHandler<IssueDetailsChanged> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<IssueDetailsChanged>>();
         handler.ShouldBeOfType<UpdateIssueDetailsHandler>();
     }
 
@@ -89,8 +94,34 @@ public sealed class AddIssuesModule : IAsyncDisposable
         using IServiceScope scope = _serviceProvider.CreateScope();
 
         // Assert
-        IDomainEventHandler<IssueDependenciesDetected> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDependenciesDetected>>();
+        IIntegrationEventHandler<IssueDependenciesDetected> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<IssueDependenciesDetected>>();
         handler.ShouldBeOfType<ProcessIssueDependenciesHandler>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_WorkerCapacityAvailableHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<WorkerCapacityAvailable> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<WorkerCapacityAvailable>>();
+        handler.ShouldBeOfType<WorkerCapacityAvailableHandler>();
+    }
+
+    private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    private sealed class NullRepositoryDispatchQueries : IRepositoryDispatchQueries
+    {
+        public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<RepositoryDispatchInfo?>(null);
     }
 }
