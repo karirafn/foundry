@@ -1,8 +1,8 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.WebApi.Modules.Workers.Domain;
-using Foundry.WebApi.Modules.Workers.Features;
+using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 

@@ -1,7 +1,7 @@
 using System.Text.Json;
 
-using Foundry.WebApi.Modules.Workers.Domain;
-using Foundry.WebApi.Modules.Workers.Features;
+using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 

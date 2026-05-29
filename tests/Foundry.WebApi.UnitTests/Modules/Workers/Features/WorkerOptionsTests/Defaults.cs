@@ -1,4 +1,4 @@
-using Foundry.WebApi.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features;
 
 using Shouldly;
 

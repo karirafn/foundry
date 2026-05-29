@@ -2,7 +2,8 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Issues.Infrastructure.Configurations;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
-using Foundry.WebApi.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Infrastructure.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -20,8 +21,8 @@ public sealed class FoundryDbContext(DbContextOptions<FoundryDbContext> options)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(FoundryDbContext).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AccountConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IssueConfiguration).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(WorkerRunConfiguration).Assembly);
     }
 }

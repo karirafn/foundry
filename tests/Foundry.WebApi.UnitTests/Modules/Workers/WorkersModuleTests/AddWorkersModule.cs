@@ -1,6 +1,6 @@
-using Foundry.WebApi.Modules.Workers;
-using Foundry.WebApi.Modules.Workers.Features;
-using Foundry.WebApi.Modules.Workers.Infrastructure;
+using Foundry.Modules.Workers;
+using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Infrastructure;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

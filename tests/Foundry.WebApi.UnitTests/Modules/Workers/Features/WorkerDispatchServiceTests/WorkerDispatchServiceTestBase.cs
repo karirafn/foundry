@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.WebApi.Modules.Workers.Domain;
-using Foundry.WebApi.Modules.Workers.Features;
+using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -70,6 +69,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
                 .Options;
             return new FoundryDbContext(options);
         });
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher>(
             _ => integrationEventDispatcher ?? new NullIntegrationEventDispatcher());

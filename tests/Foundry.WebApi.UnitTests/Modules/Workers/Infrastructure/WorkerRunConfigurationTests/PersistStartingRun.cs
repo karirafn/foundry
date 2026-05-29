@@ -1,5 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
-using Foundry.WebApi.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;

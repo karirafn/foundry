@@ -1,6 +1,6 @@
 using Foundry.Modules.Issues;
 using Foundry.Modules.Monitoring;
-using Foundry.WebApi.Modules.Workers;
+using Foundry.Modules.Workers;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Persistence;

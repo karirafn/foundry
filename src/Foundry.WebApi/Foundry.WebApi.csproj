@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
-    <PackageReference Include="Docker.DotNet" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
@@ -16,6 +15,7 @@
     <ProjectReference Include="..\Foundry.Shared\Foundry.Shared.csproj" />
     <ProjectReference Include="..\Modules\Issues\Foundry.Modules.Issues\Foundry.Modules.Issues.csproj" />
     <ProjectReference Include="..\Modules\Monitoring\Foundry.Modules.Monitoring\Foundry.Modules.Monitoring.csproj" />
+    <ProjectReference Include="..\Modules\Workers\Foundry.Modules.Workers\Foundry.Modules.Workers.csproj" />
   </ItemGroup>
 
 </Project>
