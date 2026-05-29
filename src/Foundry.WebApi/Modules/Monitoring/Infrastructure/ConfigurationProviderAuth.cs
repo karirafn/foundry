@@ -2,7 +2,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.Configuration;
 
-namespace Foundry.WebApi.Shared.Infrastructure;
+namespace Foundry.WebApi.Modules.Monitoring.Infrastructure;
 
 internal sealed class ConfigurationProviderAuth(IConfiguration configuration) : IProviderAuth
 {
