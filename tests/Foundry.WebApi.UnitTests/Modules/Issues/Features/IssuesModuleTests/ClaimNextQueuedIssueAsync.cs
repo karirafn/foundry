@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -37,7 +38,8 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
 
         _dispatcher = new CapturingIntegrationEventDispatcher();
-        _sut = new WorkerCapacityAvailableHandler(_dbContext, _dispatcher);
+        RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext);
+        _sut = new WorkerCapacityAvailableHandler(_dbContext, repositoryDispatchQueries, _dispatcher);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

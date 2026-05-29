@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -12,6 +11,7 @@ namespace Foundry.Modules.Issues.Features;
 
 internal sealed class WorkerCapacityAvailableHandler(
     DbContext db,
+    IRepositoryDispatchQueries repositoryDispatchQueries,
     IIntegrationEventDispatcher integrationEventDispatcher) : IIntegrationEventHandler<WorkerCapacityAvailable>
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
@@ -25,16 +25,11 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        var dispatchData = await db.Set<MonitoredRepository>()
-            .Where(r => r.Id == queued.MonitoredRepositoryId)
-            .Join(
-                db.Set<Account>(),
-                r => r.AccountId,
-                a => a.Id,
-                (r, a) => new { r.Slug, a.SecretKeyName, a.BaseUrl })
-            .FirstOrDefaultAsync(cancellationToken);
+        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
+            queued.MonitoredRepositoryId,
+            cancellationToken);
 
-        if (dispatchData is null)
+        if (dispatchInfo is null)
         {
             return;
         }
@@ -42,17 +37,15 @@ internal sealed class WorkerCapacityAvailableHandler(
         InProgressIssue inProgress = queued.Claim(@event.WorkerRunId);
         await db.TransitionAsync(queued, inProgress, cancellationToken);
 
-        Uri cloneUrl = new(dispatchData.BaseUrl, $"{dispatchData.Slug}.git");
-
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,
             @event.WorkerRunId,
             inProgress.IssueNumber,
             inProgress.Title,
             inProgress.Body,
-            dispatchData.Slug.ToString(),
-            cloneUrl,
-            dispatchData.SecretKeyName);
+            dispatchInfo.RepositorySlug,
+            dispatchInfo.CloneUrl,
+            dispatchInfo.AccountSecretKeyName);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

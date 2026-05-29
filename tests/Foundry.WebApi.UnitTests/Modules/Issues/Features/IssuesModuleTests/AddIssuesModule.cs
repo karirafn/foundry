@@ -37,6 +37,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddLogging();
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
+        services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
         services.AddIssuesModule();
 
         _serviceProvider = services.BuildServiceProvider();
@@ -114,5 +115,13 @@ public sealed class AddIssuesModule : IAsyncDisposable
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    private sealed class NullRepositoryDispatchQueries : IRepositoryDispatchQueries
+    {
+        public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<RepositoryDispatchInfo?>(null);
     }
 }
