@@ -36,7 +36,7 @@ Runs on a fixed tick interval (30s default) and checks each repo's eligibility b
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `InProgressIssue`, `ReviewIssue`, `CompletedIssue`, `FailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `InProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ## Monitored Repository
@@ -60,6 +60,31 @@ A lifecycle state for an issue that has unresolved dependencies.
 A `DetectedIssue` with blockers transitions to `BlockedIssue` instead of `QueuedIssue`.
 A `QueuedIssue` that gains blockers is demoted to `BlockedIssue`.
 When all blockers are resolved, a `BlockedIssue` transitions to `QueuedIssue`.
+
+## Review Issue
+
+A lifecycle state for an issue whose worker completed successfully and produced a PR.
+Carries `WorkerRunId`, `BranchName`, and `PullRequestUrl` — all non-nullable.
+Awaits human review of the PR. The monitoring service polls the provider for PR/issue status.
+Transitions: `ReviewIssue.Retry()` → `QueuedIssue`; monitoring-driven → `CompletedIssue` (issue closed) or `FailedIssue` (PR closed without merge).
+
+## Unchanged Issue
+
+A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
+Requires manual resolution: the user can complete the issue (agreeing no changes are needed) or retry (disagreeing with the worker's assessment).
+Transitions: `UnchangedIssue.Complete()` → `CompletedIssue`, `UnchangedIssue.Retry()` → `QueuedIssue`.
+
+## Completed Issue
+
+Terminal lifecycle state — the issue is resolved.
+Carries nullable `BranchName` and `PullRequestUrl` (present when completed via review, absent when completed from `UnchangedIssue`) and `CompletedAt`.
+
+## Failed Issue
+
+A lifecycle state for an issue whose worker run failed or whose PR was closed without merge.
+Carries `WorkerRunId`, `FailureReason` (string description), and `FailedAt`.
+Can come from `InProgressIssue` (worker failed) or `ReviewIssue` (PR rejected — concern 2).
+Transitions: `FailedIssue.Retry()` → `QueuedIssue`.
 
 ## Trigger Label
 
