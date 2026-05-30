@@ -29,12 +29,12 @@ internal sealed class WorkerRunCompletedHandler(
             return;
         }
 
-        if (@event.BranchName is not null)
+        if (@event.BranchName is not null && @event.PullRequestUrl is not null)
         {
             ReviewIssue review = inProgress.MarkInReview(
                 @event.WorkerRunId,
                 @event.BranchName,
-                @event.PullRequestUrl ?? string.Empty);
+                @event.PullRequestUrl);
             await db.TransitionAsync(inProgress, review, cancellationToken);
         }
         else

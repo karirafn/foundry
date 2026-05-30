@@ -125,6 +125,32 @@ public sealed class HandleAsync : IAsyncDisposable
         unchanged.WorkerRunId.ShouldBe(inProgress.WorkerRunId);
     }
 
+    [Fact]
+    public async Task WhenInProgressIssueWithBranchNameButNoPrUrl_TransitionsToUnchangedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: null);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        UnchangedIssue unchanged = issue.ShouldBeOfType<UnchangedIssue>();
+        unchanged.WorkerRunId.ShouldBe(inProgress.WorkerRunId);
+    }
+
     private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId)
     {
         DetectedIssue detected = DetectedIssue.Detect(
