@@ -103,11 +103,13 @@ internal sealed class WorkerDispatchService(
                 await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
                 runsToRemove.Add(activeRun);
 
-                await integrationEventDispatcher.DispatchAsync(
+                await TryDispatchAsync(
+                    integrationEventDispatcher,
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Orphaned after restart")],
+                    activeRun.Id.Value,
                     cancellationToken);
 
                 logger.LogWarning(
@@ -165,11 +167,13 @@ internal sealed class WorkerDispatchService(
             FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Container not found"));
             await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
 
-            await integrationEventDispatcher.DispatchAsync(
+            await TryDispatchAsync(
+                integrationEventDispatcher,
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     "Container not found")],
+                activeRun.Id.Value,
                 cancellationToken);
 
             logger.LogWarning(
@@ -188,11 +192,13 @@ internal sealed class WorkerDispatchService(
                 FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut());
                 await dbContext.TransitionAsync(activeRun, timedOut, cancellationToken);
 
-                await integrationEventDispatcher.DispatchAsync(
+                await TryDispatchAsync(
+                    integrationEventDispatcher,
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Timed out")],
+                    activeRun.Id.Value,
                     cancellationToken);
 
                 logger.LogWarning(
@@ -209,12 +215,14 @@ internal sealed class WorkerDispatchService(
             CompletedRun completed = activeRun.Complete(0, branchName, prUrl);
             await dbContext.TransitionAsync(activeRun, completed, cancellationToken);
 
-            await integrationEventDispatcher.DispatchAsync(
+            await TryDispatchAsync(
+                integrationEventDispatcher,
                 [new WorkerRunCompletedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     branchName?.Value,
                     prUrl?.Value)],
+                activeRun.Id.Value,
                 cancellationToken);
 
             logger.LogInformation(
@@ -230,17 +238,37 @@ internal sealed class WorkerDispatchService(
             FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode));
             await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
 
-            await integrationEventDispatcher.DispatchAsync(
+            await TryDispatchAsync(
+                integrationEventDispatcher,
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     exitReason)],
+                activeRun.Id.Value,
                 cancellationToken);
 
             logger.LogWarning(
                 "Worker run {WorkerRunId} exited with code {ExitCode}.",
                 activeRun.Id,
                 exitCode);
+        }
+    }
+
+    private async Task TryDispatchAsync(
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IEnumerable<IIntegrationEvent> events,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await integrationEventDispatcher.DispatchAsync(events, cancellationToken);
+        }
+#pragma warning disable CA1031 // Any failure in the handler (e.g. DB error during issue transition) must not crash the BackgroundService tick; the stuck state is visible via the warning log.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(ex, "Failed to dispatch integration event for WorkerRun {WorkerRunId}", workerRunId);
         }
     }
 
