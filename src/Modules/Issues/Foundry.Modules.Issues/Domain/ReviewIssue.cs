@@ -54,4 +54,11 @@ public sealed class ReviewIssue : Issue
         AddDomainEvent(new Events.IssueCompleted(Id, MonitoredRepositoryId));
         return completed;
     }
+
+    public FailedIssue Fail(string failureReason, DateTimeOffset failedAt)
+    {
+        FailedIssue failed = FailedIssue.FromReview(this, failureReason, failedAt);
+        AddDomainEvent(new Events.IssueFailed(Id, MonitoredRepositoryId));
+        return failed;
+    }
 }
