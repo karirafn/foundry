@@ -5,6 +5,9 @@ using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
+using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
+using WorkerRunFailedEvent = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -53,11 +56,16 @@ internal sealed class WorkerDispatchService(
 
         if (!_reconciled)
         {
-            await ReconcileOrphanedRunsAsync(dbContext, orchestrator, activeRuns, cancellationToken);
+            await ReconcileOrphanedRunsAsync(
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                activeRuns,
+                cancellationToken);
             _reconciled = true;
         }
 
-        await MonitorActiveRunsAsync(dbContext, orchestrator, activeRuns, cancellationToken);
+        await MonitorActiveRunsAsync(dbContext, orchestrator, integrationEventDispatcher, activeRuns, cancellationToken);
 
         int activeCount = activeRuns.Count;
 
@@ -79,6 +87,7 @@ internal sealed class WorkerDispatchService(
     private async Task ReconcileOrphanedRunsAsync(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -94,6 +103,13 @@ internal sealed class WorkerDispatchService(
                 await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
                 runsToRemove.Add(activeRun);
 
+                await integrationEventDispatcher.DispatchAsync(
+                    [new WorkerRunFailedEvent(
+                        activeRun.Id.Value,
+                        activeRun.IssueId.Value,
+                        "Orphaned after restart")],
+                    cancellationToken);
+
                 logger.LogWarning(
                     "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; marking failed.",
                     activeRun.Id,
@@ -101,7 +117,13 @@ internal sealed class WorkerDispatchService(
             }
             else if (!status.IsRunning)
             {
-                await MonitorRunAsync(dbContext, orchestrator, activeRun, cancellationToken, knownStatus: status);
+                await MonitorRunAsync(
+                    dbContext,
+                    orchestrator,
+                    integrationEventDispatcher,
+                    activeRun,
+                    cancellationToken,
+                    knownStatus: status);
                 runsToRemove.Add(activeRun);
             }
         }
@@ -115,18 +137,20 @@ internal sealed class WorkerDispatchService(
     private async Task MonitorActiveRunsAsync(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
         foreach (ActiveRun activeRun in activeRuns)
         {
-            await MonitorRunAsync(dbContext, orchestrator, activeRun, cancellationToken);
+            await MonitorRunAsync(dbContext, orchestrator, integrationEventDispatcher, activeRun, cancellationToken);
         }
     }
 
     private async Task MonitorRunAsync(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
@@ -140,6 +164,13 @@ internal sealed class WorkerDispatchService(
         {
             FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Container not found"));
             await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+
+            await integrationEventDispatcher.DispatchAsync(
+                [new WorkerRunFailedEvent(
+                    activeRun.Id.Value,
+                    activeRun.IssueId.Value,
+                    "Container not found")],
+                cancellationToken);
 
             logger.LogWarning(
                 "Worker run {WorkerRunId} container {ContainerId} not found; marking failed.",
@@ -157,6 +188,13 @@ internal sealed class WorkerDispatchService(
                 FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut());
                 await dbContext.TransitionAsync(activeRun, timedOut, cancellationToken);
 
+                await integrationEventDispatcher.DispatchAsync(
+                    [new WorkerRunFailedEvent(
+                        activeRun.Id.Value,
+                        activeRun.IssueId.Value,
+                        "Timed out")],
+                    cancellationToken);
+
                 logger.LogWarning(
                     "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
                     activeRun.Id,
@@ -171,6 +209,14 @@ internal sealed class WorkerDispatchService(
             CompletedRun completed = activeRun.Complete(0, branchName, prUrl);
             await dbContext.TransitionAsync(activeRun, completed, cancellationToken);
 
+            await integrationEventDispatcher.DispatchAsync(
+                [new WorkerRunCompletedEvent(
+                    activeRun.Id.Value,
+                    activeRun.IssueId.Value,
+                    branchName?.Value,
+                    prUrl?.Value)],
+                cancellationToken);
+
             logger.LogInformation(
                 "Worker run {WorkerRunId} completed successfully (branch: {BranchName}, PR: {PrUrl}).",
                 activeRun.Id,
@@ -180,8 +226,16 @@ internal sealed class WorkerDispatchService(
         else
         {
             int exitCode = status.ExitCode ?? -1;
+            string exitReason = $"Non-zero exit code: {exitCode}";
             FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode));
             await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+
+            await integrationEventDispatcher.DispatchAsync(
+                [new WorkerRunFailedEvent(
+                    activeRun.Id.Value,
+                    activeRun.IssueId.Value,
+                    exitReason)],
+                cancellationToken);
 
             logger.LogWarning(
                 "Worker run {WorkerRunId} exited with code {ExitCode}.",

@@ -111,6 +111,30 @@ public sealed class AddIssuesModule : IAsyncDisposable
         handler.ShouldBeOfType<WorkerCapacityAvailableHandler>();
     }
 
+    [Fact]
+    public void WhenServicesRegistered_WorkerRunCompletedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<WorkerRunCompleted> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<WorkerRunCompleted>>();
+        handler.ShouldBeOfType<WorkerRunCompletedHandler>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_WorkerRunFailedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<WorkerRunFailed> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<WorkerRunFailed>>();
+        handler.ShouldBeOfType<WorkerRunFailedHandler>();
+    }
+
     private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
