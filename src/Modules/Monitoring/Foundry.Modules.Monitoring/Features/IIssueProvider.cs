@@ -13,4 +13,14 @@ public interface IIssueProvider
         RepositorySlug slug,
         int issueNumber,
         CancellationToken cancellationToken);
+
+    Task<Result<bool>> IsIssueClosedAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken);
+
+    Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken);
 }

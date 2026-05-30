@@ -16,4 +16,8 @@ public interface IIssueQueries
     Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
 }

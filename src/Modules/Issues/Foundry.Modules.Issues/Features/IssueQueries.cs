@@ -38,6 +38,17 @@ internal sealed class IssueQueries(DbContext db) : IIssueQueries
         return snapshots;
     }
 
+    public async Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Set<ReviewIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new ReviewIssueInfo(i.IssueNumber, i.PullRequestUrl))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)

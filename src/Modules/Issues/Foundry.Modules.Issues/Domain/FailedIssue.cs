@@ -41,6 +41,27 @@ public sealed class FailedIssue : Issue
         return failed;
     }
 
+    internal static FailedIssue FromReview(
+        ReviewIssue source,
+        string failureReason,
+        DateTimeOffset failedAt)
+    {
+        FailedIssue failed = new(source.Id);
+        failed.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Body,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        failed.WorkerRunId = source.WorkerRunId;
+        failed.FailureReason = failureReason;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
     public QueuedIssue Retry()
     {
         QueuedIssue queued = QueuedIssue.FromRetry(this);

@@ -20,4 +20,20 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
     {
         return httpClient.GetDependenciesAsync(baseUrl, slug, issueNumber, token, cancellationToken);
     }
+
+    public Task<Result<bool>> IsIssueClosedAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.IsIssueClosedAsync(baseUrl, slug, issueNumber, token, cancellationToken);
+    }
+
+    public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetPullRequestStatusAsync(baseUrl, slug, pullRequestUrl, token, cancellationToken);
+    }
 }

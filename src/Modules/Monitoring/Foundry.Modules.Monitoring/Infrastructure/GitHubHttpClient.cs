@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
@@ -8,7 +9,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
 
-internal sealed class GitHubHttpClient(HttpClient httpClient)
+internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 {
     private const string ApiVersion = "2026-03-10";
 
@@ -104,6 +105,101 @@ internal sealed class GitHubHttpClient(HttpClient httpClient)
         return Result<IReadOnlyList<int>>.Ok(issueNumbers);
     }
 
+    public async Task<Result<bool>> IsIssueClosedAsync(
+        Uri baseUrl,
+        RepositorySlug slug,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (baseUrl.Scheme is not ("https" or "http"))
+        {
+            return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string relativePath = $"repos/{owner}/{repo}/issues/{issueNumber}";
+        Uri requestUri = new(baseUrl, relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubIssueStateDto? dto = JsonSerializer.Deserialize<GitHubIssueStateDto>(body, JsonOptions);
+
+        bool isClosed = string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
+        return Result<bool>.Ok(isClosed);
+    }
+
+    public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+        Uri baseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (baseUrl.Scheme is not ("https" or "http"))
+        {
+            return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
+        {
+            return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidPullRequestUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}";
+        Uri requestUri = new(baseUrl, relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<PullRequestStatus>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubPullRequestDto? dto = JsonSerializer.Deserialize<GitHubPullRequestDto>(body, JsonOptions);
+
+        bool isClosed = string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
+        bool isMerged = dto?.MergedAt is not null;
+        return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
+    }
+
+    [GeneratedRegex(@"/pull/(\d+)(?:[/?#]|$)")]
+    private static partial Regex PrNumberRegex();
+
+    private static bool TryParsePrNumber(string pullRequestUrl, out int prNumber)
+    {
+        Match match = PrNumberRegex().Match(pullRequestUrl);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out prNumber))
+        {
+            return true;
+        }
+
+        prNumber = 0;
+        return false;
+    }
+
     private static Error ErrorFromNonSuccess(HttpResponseMessage response)
     {
         if (response.StatusCode == HttpStatusCode.Forbidden)
@@ -137,6 +233,10 @@ internal sealed class GitHubHttpClient(HttpClient httpClient)
         GitHubRepositoryDto Repository);
 
     private sealed record GitHubRepositoryDto(string FullName);
+
+    private sealed record GitHubIssueStateDto(string State);
+
+    private sealed record GitHubPullRequestDto(string State, string? MergedAt);
 }
 
 internal static class GitHubErrors
@@ -148,6 +248,10 @@ internal static class GitHubErrors
     public static readonly Error RateLimitExhausted = new(
         "GitHub.RateLimitExhausted",
         "GitHub API rate limit exhausted. Wait before retrying.");
+
+    public static readonly Error InvalidPullRequestUrl = new(
+        "GitHub.InvalidPullRequestUrl",
+        "The pull request URL does not contain a valid PR number.");
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitHub.UnexpectedStatusCode", $"GitHub API returned unexpected status code {statusCode}.");
