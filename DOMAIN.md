@@ -68,6 +68,12 @@ Carries `WorkerRunId`, `BranchName`, and `PullRequestUrl` — all non-nullable.
 Awaits human review of the PR. The monitoring service polls the provider for PR/issue status.
 Transitions: `ReviewIssue.Retry()` → `QueuedIssue`; monitoring-driven → `CompletedIssue` (issue closed) or `FailedIssue` (PR closed without merge).
 
+## Unchanged Issue
+
+A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
+Requires manual resolution: the user can complete the issue (agreeing no changes are needed) or retry (disagreeing with the worker's assessment).
+Transitions: `UnchangedIssue.Complete()` → `CompletedIssue`, `UnchangedIssue.Retry()` → `QueuedIssue`.
+
 ## Completed Issue
 
 Terminal lifecycle state — the issue is resolved.
@@ -109,12 +115,6 @@ A progress or final report written by a worker during execution.
 Owned by a WorkerRun as a collection — persisted to the database after ingestion from the shared reports volume.
 Periodic reports capture intermediate progress (e.g., "implementing step 3/6"); the final report captures the outcome (branch name, PR URL, summary, error details).
 JSON format: `{ type, status, summary, error, prUrl, branchName, metrics }`.
-
-## Unchanged Issue
-
-A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
-Requires manual resolution: the user can complete the issue (agreeing no changes are needed) or retry (disagreeing with the worker's assessment).
-Transitions: `UnchangedIssue.Complete()` → `CompletedIssue`, `UnchangedIssue.Retry()` → `QueuedIssue`.
 
 ## FailureReason
 
