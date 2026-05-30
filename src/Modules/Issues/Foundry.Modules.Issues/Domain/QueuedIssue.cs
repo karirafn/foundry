@@ -43,6 +43,21 @@ public sealed class QueuedIssue : Issue
         return queued;
     }
 
+    internal static QueuedIssue FromRetry(Issue source)
+    {
+        QueuedIssue queued = new(source.Id);
+        queued.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Body,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        return queued;
+    }
+
     public BlockedIssue Block(IReadOnlyList<int> blockers)
     {
         if (blockers.Count == 0)
