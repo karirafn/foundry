@@ -30,4 +30,25 @@ public sealed class InProgressIssue : Issue
         inProgress.WorkerRunId = workerRunId;
         return inProgress;
     }
+
+    public ReviewIssue MarkInReview(Guid workerRunId, string branchName, string pullRequestUrl)
+    {
+        ReviewIssue review = ReviewIssue.FromInProgress(this, workerRunId, branchName, pullRequestUrl);
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        return review;
+    }
+
+    public UnchangedIssue MarkUnchanged(Guid workerRunId)
+    {
+        UnchangedIssue unchanged = UnchangedIssue.FromInProgress(this, workerRunId);
+        AddDomainEvent(new Events.IssueUnchanged(Id, MonitoredRepositoryId));
+        return unchanged;
+    }
+
+    public FailedIssue MarkFailed(Guid workerRunId, string failureReason, DateTimeOffset failedAt)
+    {
+        FailedIssue failed = FailedIssue.FromInProgress(this, workerRunId, failureReason, failedAt);
+        AddDomainEvent(new Events.IssueFailed(Id, MonitoredRepositoryId));
+        return failed;
+    }
 }

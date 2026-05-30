@@ -20,3 +20,6 @@ dotnet_diagnostic.CA1054.severity = none
 
 # CA2000: Dispose objects before losing scope — suppressed for DelegatingHandler test doubles whose lifetime is managed by the owning HttpClient
 dotnet_diagnostic.CA2000.severity = none
+
+# CA1724: Type name conflicts with namespace name — suppressed for test classes named after domain operations (e.g. Retry) that conflict with Polly namespaces
+dotnet_diagnostic.CA1724.severity = none

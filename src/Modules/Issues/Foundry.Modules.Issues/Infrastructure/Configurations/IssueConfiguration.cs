@@ -37,6 +37,18 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             t.HasCheckConstraint(
                 "ck_issues_in_progress_worker_run_id",
                 "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_issues_review_fields",
+                "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_unchanged_worker_run_id",
+                "state <> 'unchanged' OR worker_run_id IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_issues_failed_fields",
+                "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_completed_completed_at",
+                "state <> 'completed' OR completed_at IS NOT NULL");
         });
 
         builder.HasKey(i => i.Id);
@@ -123,6 +135,10 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<QueuedIssue>("queued")
             .HasValue<BlockedIssue>("blocked")
             .HasValue<InProgressIssue>("in_progress")
+            .HasValue<ReviewIssue>("review")
+            .HasValue<UnchangedIssue>("unchanged")
+            .HasValue<FailedIssue>("failed")
+            .HasValue<CompletedIssue>("completed")
             .IsComplete(true);
 
         builder.Property<string>("state")
