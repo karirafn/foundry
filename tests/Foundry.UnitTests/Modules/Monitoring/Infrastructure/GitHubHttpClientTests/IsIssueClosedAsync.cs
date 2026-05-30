@@ -110,6 +110,29 @@ public sealed class IsIssueClosedAsync
     }
 
     [Fact]
+    public async Task WhenBaseUrlHasInvalidScheme_ReturnsInvalidBaseUrlError()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, "{}");
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+        Uri invalidBaseUrl = new("ftp://api.github.com");
+
+        // Act
+        Result<bool> result = await sut.IsIssueClosedAsync(
+            invalidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.InvalidBaseUrl");
+    }
+
+    [Fact]
     public async Task WhenCalled_UsesCorrectEndpointUrl()
     {
         // Arrange

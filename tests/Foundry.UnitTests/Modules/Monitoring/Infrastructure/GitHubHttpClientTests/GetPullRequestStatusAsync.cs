@@ -161,4 +161,27 @@ public sealed class GetPullRequestStatusAsync
         Result<PullRequestStatus>.Failure failure = result.ShouldBeOfType<Result<PullRequestStatus>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.RateLimitExhausted");
     }
+
+    [Fact]
+    public async Task WhenBaseUrlHasInvalidScheme_ReturnsInvalidBaseUrlError()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, "{}");
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+        Uri invalidBaseUrl = new("ftp://api.github.com");
+
+        // Act
+        Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
+            invalidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: "https://github.com/owner/repo/pull/123",
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<PullRequestStatus>.Failure failure = result.ShouldBeOfType<Result<PullRequestStatus>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.InvalidBaseUrl");
+    }
 }
