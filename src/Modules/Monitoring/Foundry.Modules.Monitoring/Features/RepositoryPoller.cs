@@ -63,6 +63,12 @@ internal sealed class RepositoryPoller(
         repository.ClearDomainEvents();
         repository.ClearIntegrationEvents();
 
+        // Pass 4: check provider-side status of all review issues.
+        await DetectReviewStatusChangesAsync(repository, provider, cancellationToken);
+
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
+        repository.ClearIntegrationEvents();
+
         return Result.Ok();
     }
 
@@ -151,6 +157,50 @@ internal sealed class RepositoryPoller(
                     issue.Title,
                     issue.Body,
                     issue.Labels));
+            }
+        }
+    }
+
+    private async Task DetectReviewStatusChangesAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<ReviewIssueInfo> reviewIssues = await issueQueries.GetReviewIssuesAsync(
+            repository.Id,
+            cancellationToken);
+
+        foreach (ReviewIssueInfo reviewIssue in reviewIssues)
+        {
+            Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
+                repository.Slug,
+                reviewIssue.IssueNumber,
+                cancellationToken);
+
+            if (isClosedResult is not Result<bool>.Success isClosedSuccess)
+            {
+                continue;
+            }
+
+            if (isClosedSuccess.Value)
+            {
+                repository.RecordIntegrationEvent(new ProviderIssueClosed(repository.Id, reviewIssue.IssueNumber));
+                continue;
+            }
+
+            Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
+                repository.Slug,
+                reviewIssue.PullRequestUrl,
+                cancellationToken);
+
+            if (prStatusResult is not Result<PullRequestStatus>.Success prStatusSuccess)
+            {
+                continue;
+            }
+
+            if (prStatusSuccess.Value.IsClosed && !prStatusSuccess.Value.IsMerged)
+            {
+                repository.RecordIntegrationEvent(new ProviderPullRequestClosed(repository.Id, reviewIssue.IssueNumber));
             }
         }
     }

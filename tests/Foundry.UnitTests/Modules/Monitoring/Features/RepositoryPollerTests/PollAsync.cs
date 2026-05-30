@@ -415,6 +415,227 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenReviewIssueIsClosedOnProvider_RaisesProviderIssueClosed()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: "https://github.com/owner/repo/pull/99");
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(true),
+        };
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        ProviderIssueClosed closed = _dispatcher.DispatchedEvents
+            .OfType<ProviderIssueClosed>()
+            .ShouldHaveSingleItem();
+        closed.ShouldSatisfyAllConditions(
+            () => closed.RepositoryId.ShouldBe(repository.Id),
+            () => closed.IssueNumber.ShouldBe(42));
+    }
+
+    [Fact]
+    public async Task WhenReviewIssuePullRequestIsClosedWithoutMerge_RaisesProviderPullRequestClosed()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false)),
+        };
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        ProviderPullRequestClosed closed = _dispatcher.DispatchedEvents
+            .OfType<ProviderPullRequestClosed>()
+            .ShouldHaveSingleItem();
+        closed.ShouldSatisfyAllConditions(
+            () => closed.RepositoryId.ShouldBe(repository.Id),
+            () => closed.IssueNumber.ShouldBe(42));
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueIsOpenAndPullRequestIsOpen_RaisesNoReviewStatusEvents()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
+        };
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenIsIssueClosedFailsForOneReviewIssue_SkipsThatIssueAndContinues()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/200";
+        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: "https://github.com/owner/repo/pull/100");
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [failingIssue, successIssue]);
+
+        Error providerError = new("GitHub.RateLimited", "Rate limited");
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [10] = Result<bool>.Fail(providerError),
+            [20] = Result<bool>.Ok(true),
+        };
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderIssueClosed> closedEvents = _dispatcher.DispatchedEvents
+            .OfType<ProviderIssueClosed>()
+            .ToList();
+        closedEvents.Count.ShouldBe(1);
+        closedEvents.ShouldContain(e => e.IssueNumber == 20);
+        closedEvents.ShouldNotContain(e => e.IssueNumber == 10);
+    }
+
+    [Fact]
+    public async Task WhenReviewIssuePullRequestIsClosedAndMerged_RaisesNoEvents()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true)),
+        };
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenGetPullRequestStatusFailsForReviewIssue_SkipsThatIssue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Error providerError = new("GitHub.Unavailable", "Service unavailable");
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Fail(providerError),
+        };
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenGetReviewIssuesReturnsEmpty_RaisesNoReviewStatusEvents()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        // StubIssueQueries defaults to empty review issues; IsIssueClosedAsync never called.
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>().ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenProviderReturnsNoIssues_RaisesNoEventsAndUpdatesLastPolledAt()
     {
         // Arrange
@@ -432,7 +653,9 @@ public sealed class PollAsync : IAsyncDisposable
 
     private sealed class StubIssueProvider(
         IReadOnlyList<ProviderIssue> issues,
-        IReadOnlyDictionary<int, Result<IReadOnlyList<int>>>? dependencyResults = null) : IIssueProvider
+        IReadOnlyDictionary<int, Result<IReadOnlyList<int>>>? dependencyResults = null,
+        IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
+        IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null) : IIssueProvider
     {
         public StubIssueProvider() : this([])
         {
@@ -463,6 +686,11 @@ public sealed class PollAsync : IAsyncDisposable
             int issueNumber,
             CancellationToken cancellationToken)
         {
+            if (isClosedResults is not null && isClosedResults.TryGetValue(issueNumber, out Result<bool>? result))
+            {
+                return Task.FromResult(result);
+            }
+
             return Task.FromResult(Result<bool>.Ok(false));
         }
 
@@ -471,6 +699,12 @@ public sealed class PollAsync : IAsyncDisposable
             string pullRequestUrl,
             CancellationToken cancellationToken)
         {
+            if (pullRequestStatusResults is not null
+                && pullRequestStatusResults.TryGetValue(pullRequestUrl, out Result<PullRequestStatus>? result))
+            {
+                return Task.FromResult(result);
+            }
+
             return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
         }
     }
@@ -514,6 +748,7 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly IReadOnlySet<int> _knownNumbers;
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
         private readonly IReadOnlySet<int>? _knownNumbersSecondCall;
+        private readonly IReadOnlyList<ReviewIssueInfo> _reviewIssues;
         private int _getKnownNumbersCallCount;
 
         public StubIssueQueries()
@@ -529,11 +764,13 @@ public sealed class PollAsync : IAsyncDisposable
         public StubIssueQueries(
             IReadOnlySet<int> knownNumbers,
             IReadOnlyDictionary<int, IssueSnapshot> snapshots,
-            IReadOnlySet<int>? knownNumbersSecondCall)
+            IReadOnlySet<int>? knownNumbersSecondCall,
+            IReadOnlyList<ReviewIssueInfo>? reviewIssues = null)
         {
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
             _knownNumbersSecondCall = knownNumbersSecondCall;
+            _reviewIssues = reviewIssues ?? [];
         }
 
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
@@ -566,7 +803,7 @@ public sealed class PollAsync : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlyList<ReviewIssueInfo>>([]);
+            return Task.FromResult(_reviewIssues);
         }
     }
 
