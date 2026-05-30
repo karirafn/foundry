@@ -6,6 +6,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 using Shouldly;
 
@@ -42,6 +43,19 @@ public sealed class PersistFailedIssue : IAsyncDisposable
 
     private static ProviderUrl ValidUrl =>
         ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
+
+    [Fact]
+    public void FailureReason_HasMaxLength500AndIsNotUnicode()
+    {
+        // Arrange
+        IEntityType entityType = _dbContext.Model.FindEntityType(typeof(FailedIssue))!;
+        IProperty property = entityType.FindProperty(nameof(FailedIssue.FailureReason))!;
+
+        // Act / Assert
+        property.ShouldSatisfyAllConditions(
+            () => property.GetMaxLength().ShouldBe(500),
+            () => property.IsUnicode().ShouldBe(false));
+    }
 
     [Fact]
     public async Task WhenFailedIssueTransitioned_CanBeReloadedAsFailedIssueWithAllFields()

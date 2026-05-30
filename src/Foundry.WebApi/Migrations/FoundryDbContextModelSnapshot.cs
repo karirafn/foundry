@@ -363,6 +363,8 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<string>("FailureReason")
                         .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("failure_reason");
 

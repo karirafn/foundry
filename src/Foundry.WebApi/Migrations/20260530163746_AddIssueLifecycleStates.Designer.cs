@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Foundry.WebApi.Migrations
 {
     [DbContext(typeof(FoundryDbContext))]
-    [Migration("20260530131325_AddIssueLifecycleStates")]
+    [Migration("20260530163746_AddIssueLifecycleStates")]
     partial class AddIssueLifecycleStates
     {
         /// <inheritdoc />
@@ -366,6 +366,8 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<string>("FailureReason")
                         .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("failure_reason");
 
