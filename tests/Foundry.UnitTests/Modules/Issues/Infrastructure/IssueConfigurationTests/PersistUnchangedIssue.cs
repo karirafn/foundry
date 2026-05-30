@@ -80,6 +80,9 @@ public sealed class PersistUnchangedIssue : IAsyncDisposable
 
         // Assert
         UnchangedIssue reloaded = result.ShouldBeOfType<UnchangedIssue>();
-        reloaded.WorkerRunId.ShouldBe(unchangedWorkerRunId);
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.WorkerRunId.ShouldBe(unchangedWorkerRunId),
+            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
+            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
     }
 }

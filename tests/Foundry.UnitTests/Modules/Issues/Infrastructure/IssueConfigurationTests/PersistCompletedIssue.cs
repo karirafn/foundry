@@ -92,7 +92,9 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.CompletedAt.ShouldBe(completedAt),
             () => reloaded.BranchName.ShouldBeNull(),
-            () => reloaded.PullRequestUrl.ShouldBeNull());
+            () => reloaded.PullRequestUrl.ShouldBeNull(),
+            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
+            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
     }
 
     [Fact]
@@ -122,6 +124,8 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.CompletedAt.ShouldBe(completedAt),
             () => reloaded.BranchName.ShouldBe("feat/issue-46"),
-            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/2"));
+            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/2"),
+            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
+            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
     }
 }

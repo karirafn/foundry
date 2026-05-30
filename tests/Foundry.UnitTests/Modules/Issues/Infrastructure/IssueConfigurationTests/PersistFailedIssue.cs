@@ -98,6 +98,8 @@ public sealed class PersistFailedIssue : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.WorkerRunId.ShouldBe(failedWorkerRunId),
             () => reloaded.FailureReason.ShouldBe("Container exited with code 1"),
-            () => reloaded.FailedAt.ShouldBe(failedAt));
+            () => reloaded.FailedAt.ShouldBe(failedAt),
+            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
+            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
     }
 }

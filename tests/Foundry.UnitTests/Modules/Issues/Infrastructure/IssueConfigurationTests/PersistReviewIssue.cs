@@ -83,6 +83,8 @@ public sealed class PersistReviewIssue : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.WorkerRunId.ShouldBe(reviewWorkerRunId),
             () => reloaded.BranchName.ShouldBe("feat/issue-42"),
-            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/1"));
+            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/1"),
+            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
+            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
     }
 }
