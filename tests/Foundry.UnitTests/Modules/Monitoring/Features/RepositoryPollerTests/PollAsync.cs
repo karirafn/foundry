@@ -457,6 +457,22 @@ public sealed class PollAsync : IAsyncDisposable
 
             return Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
         }
+
+        public Task<Result<bool>> IsIssueClosedAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Ok(false));
+        }
+
+        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+        }
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
@@ -474,6 +490,22 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<IReadOnlyList<int>>.Fail(error));
+        }
+
+        public Task<Result<bool>> IsIssueClosedAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Fail(error));
+        }
+
+        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<PullRequestStatus>.Fail(error));
         }
     }
 

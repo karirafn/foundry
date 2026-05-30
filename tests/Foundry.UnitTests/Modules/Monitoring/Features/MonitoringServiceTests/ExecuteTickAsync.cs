@@ -245,6 +245,23 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             {
                 return Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
             }
+
+            public Task<Result<bool>> IsIssueClosedAsync(
+                RepositorySlug slug,
+                int issueNumber,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(Result<bool>.Ok(false));
+            }
+
+            public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+                RepositorySlug slug,
+                string pullRequestUrl,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(
+                    Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+            }
         }
     }
 
