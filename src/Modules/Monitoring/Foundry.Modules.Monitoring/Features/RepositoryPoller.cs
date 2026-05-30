@@ -170,6 +170,8 @@ internal sealed class RepositoryPoller(
             repository.Id,
             cancellationToken);
 
+        // HTTP calls are sequential: GitHub has no batch issue/PR status endpoint,
+        // and review issues per repository are expected to be small (design decision D6).
         foreach (ReviewIssueInfo reviewIssue in reviewIssues)
         {
             Result<bool> isClosedResult = await provider.IsIssueClosedAsync(

@@ -149,6 +149,11 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
+        if (baseUrl.Scheme is not ("https" or "http"))
+        {
+            return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
         if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
         {
             return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidPullRequestUrl);
@@ -176,7 +181,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         GitHubPullRequestDto? dto = JsonSerializer.Deserialize<GitHubPullRequestDto>(body, JsonOptions);
 
         bool isClosed = string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
-        bool isMerged = dto?.Merged == true || dto?.MergedAt is not null;
+        bool isMerged = dto?.MergedAt is not null;
         return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
     }
 
@@ -231,7 +236,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
     private sealed record GitHubIssueStateDto(string State);
 
-    private sealed record GitHubPullRequestDto(string State, bool Merged, string? MergedAt);
+    private sealed record GitHubPullRequestDto(string State, string? MergedAt);
 }
 
 internal static class GitHubErrors
