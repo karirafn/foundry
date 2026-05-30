@@ -135,6 +135,30 @@ public sealed class AddIssuesModule : IAsyncDisposable
         handler.ShouldBeOfType<WorkerRunFailedHandler>();
     }
 
+    [Fact]
+    public void WhenServicesRegistered_ProviderIssueClosedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<ProviderIssueClosed> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<ProviderIssueClosed>>();
+        handler.ShouldBeOfType<ProviderIssueClosedHandler>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_ProviderPullRequestClosedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<ProviderPullRequestClosed> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<ProviderPullRequestClosed>>();
+        handler.ShouldBeOfType<ProviderPullRequestClosedHandler>();
+    }
+
     private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)

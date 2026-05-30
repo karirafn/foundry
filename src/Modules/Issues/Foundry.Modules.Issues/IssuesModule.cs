@@ -22,6 +22,8 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<WorkerCapacityAvailable, WorkerCapacityAvailableHandler>();
         services.AddIntegrationEventHandler<WorkerRunCompleted, WorkerRunCompletedHandler>();
         services.AddIntegrationEventHandler<WorkerRunFailed, WorkerRunFailedHandler>();
+        services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
+        services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
 
         return services;
     }
