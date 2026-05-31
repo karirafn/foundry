@@ -34,7 +34,7 @@ public sealed class Complete
     }
 
     [Fact]
-    public void WhenCompleted_ReturnsCompletedIssueWithSameId()
+    public void WhenCompleted_ReturnsDismissedIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -42,14 +42,14 @@ public sealed class Complete
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
 
         // Act
-        CompletedIssue completed = unchanged.Complete(completedAt);
+        DismissedIssue dismissed = unchanged.Complete(completedAt);
 
         // Assert
-        completed.Id.ShouldBe(unchanged.Id);
+        dismissed.Id.ShouldBe(unchanged.Id);
     }
 
     [Fact]
-    public void WhenCompleted_RaisesIssueCompletedDomainEvent()
+    public void WhenCompleted_RaisesIssueDismissedDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -60,14 +60,14 @@ public sealed class Complete
         unchanged.Complete(completedAt);
 
         // Assert
-        IssueCompleted domainEvent = unchanged.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueCompleted>();
+        IssueDismissed domainEvent = unchanged.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueDismissed>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(unchanged.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public void WhenCompleted_CompletedIssueHasNullBranchAndPullRequest()
+    public void WhenCompleted_DismissedIssueHasCompletedAt()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -75,13 +75,11 @@ public sealed class Complete
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
 
         // Act
-        CompletedIssue completed = unchanged.Complete(completedAt);
+        DismissedIssue dismissed = unchanged.Complete(completedAt);
 
         // Assert
-        completed.ShouldSatisfyAllConditions(
-            () => completed.BranchName.ShouldBeNull(),
-            () => completed.PullRequestUrl.ShouldBeNull(),
-            () => completed.CompletedAt.ShouldBe(completedAt),
-            () => completed.MonitoredRepositoryId.ShouldBe(repositoryId));
+        dismissed.ShouldSatisfyAllConditions(
+            () => dismissed.CompletedAt.ShouldBe(completedAt),
+            () => dismissed.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }

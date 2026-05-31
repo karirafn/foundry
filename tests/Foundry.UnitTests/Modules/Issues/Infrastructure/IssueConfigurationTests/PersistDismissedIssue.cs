@@ -13,12 +13,12 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Issues.Infrastructure.IssueConfigurationTests;
 
-public sealed class PersistCompletedIssue : IAsyncDisposable
+public sealed class PersistDismissedIssue : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
-    public PersistCompletedIssue()
+    public PersistDismissedIssue()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -43,13 +43,16 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
     private static ProviderUrl ValidUrl =>
         ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
 
-    private async Task<InProgressIssue> BuildInProgressIssue(int issueNumber)
+    [Fact]
+    public async Task WhenDismissedFromUnchanged_CanBeReloadedAsDismissedIssueWithCompletedAt()
     {
+        // Arrange
+        DateTimeOffset completedAt = new DateTimeOffset(2026, 5, 30, 14, 0, 0, TimeSpan.Zero);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
+            issueNumber: 47,
+            title: "Dismissed issue",
             body: "Body",
             author: ValidAuthor,
             url: ValidUrl,
@@ -65,38 +68,24 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
 
-        return inProgress;
-    }
+        UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
+        await _dbContext.TransitionAsync(inProgress, unchanged, TestContext.Current.CancellationToken);
 
-    [Fact]
-    public async Task WhenCompletedFromReview_CanBeReloadedAsCompletedIssueWithPrFields()
-    {
-        // Arrange
-        DateTimeOffset completedAt = new DateTimeOffset(2026, 5, 30, 15, 0, 0, TimeSpan.Zero);
-        InProgressIssue inProgress = await BuildInProgressIssue(issueNumber: 46);
-
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-46",
-            "https://github.com/owner/repo/pull/2");
-        await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
-
-        CompletedIssue completed = review.Complete(completedAt);
-        await _dbContext.TransitionAsync(review, completed, TestContext.Current.CancellationToken);
+        DismissedIssue dismissed = unchanged.Complete(completedAt);
+        await _dbContext.TransitionAsync(unchanged, dismissed, TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
         Issue? result = await _dbContext
             .Set<Issue>()
-            .FindAsync([completed.Id], TestContext.Current.CancellationToken);
+            .FindAsync([dismissed.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        CompletedIssue reloaded = result.ShouldBeOfType<CompletedIssue>();
+        DismissedIssue reloaded = result.ShouldBeOfType<DismissedIssue>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.CompletedAt.ShouldBe(completedAt),
-            () => reloaded.BranchName.ShouldBe("feat/issue-46"),
-            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/2"),
             () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
-            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
+            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value),
+            () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }

@@ -15,11 +15,13 @@ public sealed class CompletedIssueConfiguration : IEntityTypeConfiguration<Compl
         builder.Property(i => i.BranchName)
             .HasMaxLength(BranchNameMaxLength)
             .IsUnicode(false)
+            .IsRequired()
             .HasColumnName("branch_name");
 
         builder.Property(i => i.PullRequestUrl)
             .HasMaxLength(PullRequestUrlMaxLength)
             .IsUnicode(false)
+            .IsRequired()
             .HasColumnName("pull_request_url");
 
         builder.Property(i => i.CompletedAt)

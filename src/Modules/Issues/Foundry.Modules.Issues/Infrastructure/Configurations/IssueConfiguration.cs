@@ -139,6 +139,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<UnchangedIssue>("unchanged")
             .HasValue<FailedIssue>("failed")
             .HasValue<CompletedIssue>("completed")
+            .HasValue<DismissedIssue>("dismissed")
             .IsComplete(true);
 
         builder.Property<string>("state")
