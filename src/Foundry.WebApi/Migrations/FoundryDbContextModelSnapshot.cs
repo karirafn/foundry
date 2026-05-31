@@ -45,8 +45,9 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("body");
 
-                    b.Property<long>("DetectedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<string>("DetectedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
                         .HasColumnName("detected_at");
 
                     b.Property<int>("IssueNumber")

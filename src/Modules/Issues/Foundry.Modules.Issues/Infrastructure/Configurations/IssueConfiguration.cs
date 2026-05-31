@@ -129,9 +129,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 
         builder.Property(i => i.DetectedAt)
             .HasConversion(
-                dto => dto.UtcTicks,
-                ticks => new DateTimeOffset(ticks, TimeSpan.Zero))
-            .HasColumnType("INTEGER")
+                dto => dto.UtcDateTime.ToString("O"),
+                s => DateTimeOffset.Parse(s, null, System.Globalization.DateTimeStyles.RoundtripKind))
+            .HasColumnType("TEXT")
             .HasColumnName("detected_at");
 
         builder.HasDiscriminator<string>("state")

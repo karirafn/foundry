@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Foundry.WebApi.Migrations
 {
     [DbContext(typeof(FoundryDbContext))]
-    [Migration("20260531195029_AddDetectedAtIntegerConversion")]
-    partial class AddDetectedAtIntegerConversion
+    [Migration("20260531211925_AddRevisionLifecycleColumns")]
+    partial class AddRevisionLifecycleColumns
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -48,8 +48,9 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("body");
 
-                    b.Property<long>("DetectedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<string>("DetectedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
                         .HasColumnName("detected_at");
 
                     b.Property<int>("IssueNumber")

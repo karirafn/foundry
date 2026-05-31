@@ -6,19 +6,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Foundry.WebApi.Migrations
 {
     /// <inheritdoc />
-    public partial class AddDetectedAtIntegerConversion : Migration
+    public partial class AddRevisionLifecycleColumns : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AlterColumn<long>(
-                name: "detected_at",
-                table: "issues",
-                type: "INTEGER",
-                nullable: false,
-                oldClrType: typeof(DateTimeOffset),
-                oldType: "TEXT");
-
             migrationBuilder.AddColumn<DateTimeOffset>(
                 name: "feedback_cutoff_at",
                 table: "issues",
@@ -43,14 +35,6 @@ namespace Foundry.WebApi.Migrations
             migrationBuilder.DropColumn(
                 name: "review_comments",
                 table: "issues");
-
-            migrationBuilder.AlterColumn<DateTimeOffset>(
-                name: "detected_at",
-                table: "issues",
-                type: "TEXT",
-                nullable: false,
-                oldClrType: typeof(long),
-                oldType: "INTEGER");
         }
     }
 }
