@@ -215,7 +215,10 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
         if (reviewsResult is not Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Success reviewsSuccess)
         {
-            return Result<ReviewFeedback>.Fail(((Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Failure)reviewsResult).Error);
+            Error error = reviewsResult is Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Failure failure
+                ? failure.Error
+                : throw new InvalidOperationException("Unexpected Result variant.");
+            return Result<ReviewFeedback>.Fail(error);
         }
 
         IReadOnlyList<GitHubPullRequestReviewDto> changesRequestedReviews = reviewsSuccess.Value

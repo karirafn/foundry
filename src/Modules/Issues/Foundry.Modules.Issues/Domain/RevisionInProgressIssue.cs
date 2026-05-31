@@ -41,7 +41,7 @@ public sealed class RevisionInProgressIssue : Issue
         return revisionInProgress;
     }
 
-    public ReviewIssue MarkInReview(Guid workerRunId, DateTimeOffset feedbackCutoffAt)
+    public ReviewIssue MarkInReview(DateTimeOffset feedbackCutoffAt)
     {
         ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));

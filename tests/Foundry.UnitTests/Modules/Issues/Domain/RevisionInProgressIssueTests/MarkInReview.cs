@@ -45,11 +45,10 @@ public sealed class MarkInReview
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress = CreateRevisionInProgressIssue(repositoryId);
-        Guid workerRunId = Guid.NewGuid();
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow;
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview(workerRunId, feedbackCutoffAt);
+        ReviewIssue review = revisionInProgress.MarkInReview(feedbackCutoffAt);
 
         // Assert
         review.Id.ShouldBe(revisionInProgress.Id);
@@ -61,11 +60,10 @@ public sealed class MarkInReview
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress = CreateRevisionInProgressIssue(repositoryId);
-        Guid workerRunId = Guid.NewGuid();
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow;
 
         // Act
-        revisionInProgress.MarkInReview(workerRunId, feedbackCutoffAt);
+        revisionInProgress.MarkInReview(feedbackCutoffAt);
 
         // Assert
         IssueInReview domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>();
@@ -80,11 +78,10 @@ public sealed class MarkInReview
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress = CreateRevisionInProgressIssue(repositoryId);
-        Guid workerRunId = Guid.NewGuid();
         DateTimeOffset feedbackCutoffAt = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview(workerRunId, feedbackCutoffAt);
+        ReviewIssue review = revisionInProgress.MarkInReview(feedbackCutoffAt);
 
         // Assert
         review.ShouldSatisfyAllConditions(
