@@ -13,6 +13,9 @@ namespace Foundry.Modules.Monitoring.Infrastructure;
 internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 {
     private const string ApiVersion = "2026-03-10";
+    private const int MaxComments = 50;
+    private const int MaxCommentBodyLength = 4000;
+    private const string TruncatedSuffix = "[truncated]";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -223,9 +226,19 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         List<ReviewComment> comments = [];
         foreach (GitHubPullRequestReviewDto review in changesRequestedReviews)
         {
+            if (comments.Count >= MaxComments)
+            {
+                break;
+            }
+
             if (!string.IsNullOrWhiteSpace(review.Body))
             {
-                comments.Add(new ReviewComment(review.Body));
+                comments.Add(new ReviewComment(TruncateBody(review.Body)));
+            }
+
+            if (comments.Count >= MaxComments)
+            {
+                break;
             }
 
             Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>> fileCommentsResult =
@@ -239,8 +252,14 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
             foreach (GitHubPullRequestReviewCommentDto fileComment in fileCommentsSuccess.Value)
             {
+                if (comments.Count >= MaxComments)
+                {
+                    break;
+                }
+
                 int? line = fileComment.Line ?? fileComment.OriginalLine;
-                comments.Add(new ReviewComment(fileComment.Body, fileComment.Path, line));
+                string? sanitizedPath = SanitizeFilePath(fileComment.Path);
+                comments.Add(new ReviewComment(TruncateBody(fileComment.Body), sanitizedPath, line));
             }
         }
 
@@ -323,6 +342,36 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
         prNumber = 0;
         return false;
+    }
+
+    private static string TruncateBody(string body)
+    {
+        if (body.Length <= MaxCommentBodyLength)
+        {
+            return body;
+        }
+
+        return string.Concat(body.AsSpan(0, MaxCommentBodyLength), TruncatedSuffix);
+    }
+
+    private static string? SanitizeFilePath(string? path)
+    {
+        if (path is null)
+        {
+            return null;
+        }
+
+        if (path.Contains("..", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (path.StartsWith('/') || path.Contains(':', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return path;
     }
 
     private static Error ErrorFromNonSuccess(HttpResponseMessage response)
