@@ -128,6 +128,10 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasColumnName("blocked_by");
 
         builder.Property(i => i.DetectedAt)
+            .HasConversion(
+                dto => dto.UtcTicks,
+                ticks => new DateTimeOffset(ticks, TimeSpan.Zero))
+            .HasColumnType("INTEGER")
             .HasColumnName("detected_at");
 
         builder.HasDiscriminator<string>("state")

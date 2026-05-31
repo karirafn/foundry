@@ -109,6 +109,40 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         return queued;
     }
 
+    private async Task<RevisionQueuedIssue> SeedRevisionQueuedIssueAsync(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber = 10,
+        string branchName = "feat/issue-10-fix",
+        string pullRequestUrl = "https://github.com/owner/repo/pull/10",
+        IReadOnlyList<ReviewComment>? reviewComments = null)
+    {
+        IReadOnlyList<ReviewComment> comments = reviewComments ?? [];
+
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber,
+            "Revision issue",
+            "Revision body",
+            ValidAuthor,
+            ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ReviewIssue review = inProgress.MarkInReview(
+            inProgress.WorkerRunId,
+            branchName,
+            pullRequestUrl,
+            DateTimeOffset.UtcNow);
+        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+
+        _dbContext.Set<Issue>().Add(revisionQueued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        return revisionQueued;
+    }
+
     [Fact]
     public async Task WhenNoQueuedIssuesExist_DoesNotDispatchIssueClaimed()
     {
@@ -174,6 +208,110 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         Issue? issue = await _dbContext.Set<Issue>()
             .FindAsync([queued.Id], TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenBothRevisionQueuedAndQueuedIssueExist_ClaimsRevisionQueuedFirst()
+    {
+        // Arrange
+        (MonitoredRepository repository, _) = await SeedRepositoryAsync();
+
+        RevisionQueuedIssue revisionQueued =
+            await SeedRevisionQueuedIssueAsync(repository.Id, issueNumber: 10);
+        await SeedQueuedIssueAsync(repository.Id, issueNumber: 1);
+
+        WorkerCapacityAvailable @event = new(Guid.NewGuid());
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert — only the RevisionQueuedIssue is transitioned; QueuedIssue stays queued
+        Issue? claimed = await _dbContext.Set<Issue>()
+            .FindAsync([revisionQueued.Id], TestContext.Current.CancellationToken);
+        claimed.ShouldBeOfType<RevisionInProgressIssue>();
+
+        Issue? stillQueued = await _dbContext.Set<Issue>()
+            .OfType<QueuedIssue>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        stillQueued.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task WhenRevisionQueuedIssueExists_DispatchIncludesRevisionContext()
+    {
+        // Arrange
+        (MonitoredRepository repository, _) = await SeedRepositoryAsync("myorg/myrepo", "MY_GITHUB_TOKEN");
+
+        IReadOnlyList<ReviewComment> comments =
+        [
+            new ReviewComment("Fix the null check", "src/Service.cs", Line: 42),
+        ];
+
+        RevisionQueuedIssue revisionQueued = await SeedRevisionQueuedIssueAsync(
+            repository.Id,
+            issueNumber: 10,
+            branchName: "feat/issue-10-fix",
+            pullRequestUrl: "https://github.com/owner/repo/pull/10",
+            reviewComments: comments);
+
+        Guid workerRunId = Guid.NewGuid();
+        WorkerCapacityAvailable @event = new(workerRunId);
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = _dispatcher.Captured
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        ClaimedIssueDispatch dispatch = claimed.Dispatch;
+        RevisionContext revision = dispatch.Revision.ShouldNotBeNull();
+        revision.ShouldSatisfyAllConditions(
+            () => revision.BranchName.ShouldBe("feat/issue-10-fix"),
+            () => revision.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"),
+            () => revision.Comments.Count.ShouldBe(1),
+            () => revision.Comments[0].Body.ShouldBe("Fix the null check"),
+            () => dispatch.IssueId.ShouldBe(revisionQueued.Id),
+            () => dispatch.WorkerRunId.ShouldBe(workerRunId));
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueExists_DispatchHasNullRevisionContext()
+    {
+        // Arrange
+        (MonitoredRepository repository, _) = await SeedRepositoryAsync();
+        await SeedQueuedIssueAsync(repository.Id);
+
+        WorkerCapacityAvailable @event = new(Guid.NewGuid());
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = _dispatcher.Captured
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.Revision.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenRevisionQueuedIssueExists_IssueTransitionsToRevisionInProgress()
+    {
+        // Arrange
+        (MonitoredRepository repository, _) = await SeedRepositoryAsync();
+        RevisionQueuedIssue revisionQueued = await SeedRevisionQueuedIssueAsync(repository.Id);
+
+        WorkerCapacityAvailable @event = new(Guid.NewGuid());
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FindAsync([revisionQueued.Id], TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<RevisionInProgressIssue>();
     }
 
     [Fact]
