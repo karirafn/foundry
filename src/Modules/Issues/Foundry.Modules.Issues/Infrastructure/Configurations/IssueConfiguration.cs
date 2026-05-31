@@ -141,6 +141,8 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<CompletedIssue>("completed")
             .HasValue<DismissedIssue>("dismissed")
             .HasValue<RevisionQueuedIssue>("revision_queued")
+            .HasValue<RevisionInProgressIssue>("revision_in_progress")
+            .HasValue<RevisionFailedIssue>("revision_failed")
             .IsComplete(true);
 
         builder.Property<string>("state")

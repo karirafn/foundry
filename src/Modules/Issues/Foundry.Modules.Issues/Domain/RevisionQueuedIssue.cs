@@ -40,9 +40,26 @@ public sealed class RevisionQueuedIssue : Issue
         return revisionQueued;
     }
 
-    public InProgressIssue Claim(Guid workerRunId)
+    internal static RevisionQueuedIssue FromRevisionFailed(RevisionFailedIssue source)
     {
-        throw new NotImplementedException(
-            "Claim() will be implemented in step 4 when RevisionInProgressIssue exists.");
+        RevisionQueuedIssue revisionQueued = new(source.Id);
+        revisionQueued.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Body,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        revisionQueued.BranchName = source.BranchName;
+        revisionQueued.PullRequestUrl = source.PullRequestUrl;
+        revisionQueued.ReviewComments = source.ReviewComments;
+        return revisionQueued;
+    }
+
+    public RevisionInProgressIssue Claim(Guid workerRunId)
+    {
+        return RevisionInProgressIssue.FromRevisionQueued(this, workerRunId);
     }
 }

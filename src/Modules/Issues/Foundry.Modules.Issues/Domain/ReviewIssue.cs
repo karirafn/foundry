@@ -46,6 +46,27 @@ public sealed class ReviewIssue : Issue
         return review;
     }
 
+    internal static ReviewIssue FromRevisionInProgress(
+        RevisionInProgressIssue source,
+        DateTimeOffset feedbackCutoffAt)
+    {
+        ReviewIssue review = new(source.Id);
+        review.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Body,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        review.WorkerRunId = source.WorkerRunId;
+        review.BranchName = source.BranchName;
+        review.PullRequestUrl = source.PullRequestUrl;
+        review.FeedbackCutoffAt = feedbackCutoffAt;
+        return review;
+    }
+
     public RevisionQueuedIssue Revise(IReadOnlyList<ReviewComment> comments)
     {
         RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromReview(this, comments);
