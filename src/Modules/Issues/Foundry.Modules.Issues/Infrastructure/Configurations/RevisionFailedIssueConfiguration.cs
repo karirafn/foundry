@@ -7,8 +7,6 @@ namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
 public sealed class RevisionFailedIssueConfiguration : IEntityTypeConfiguration<RevisionFailedIssue>
 {
-    private const int BranchNameMaxLength = 500;
-    private const int PullRequestUrlMaxLength = 2000;
     private const int FailureReasonMaxLength = 500;
 
     public void Configure(EntityTypeBuilder<RevisionFailedIssue> builder)
@@ -17,12 +15,12 @@ public sealed class RevisionFailedIssueConfiguration : IEntityTypeConfiguration<
             .HasColumnName("worker_run_id");
 
         builder.Property(i => i.BranchName)
-            .HasMaxLength(BranchNameMaxLength)
+            .HasMaxLength(IssueColumnLimits.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
 
         builder.Property(i => i.PullRequestUrl)
-            .HasMaxLength(PullRequestUrlMaxLength)
+            .HasMaxLength(IssueColumnLimits.PullRequestUrlMaxLength)
             .IsUnicode(false)
             .HasColumnName("pull_request_url");
 
@@ -37,6 +35,7 @@ public sealed class RevisionFailedIssueConfiguration : IEntityTypeConfiguration<
         builder.Property(i => i.ReviewComments)
             .HasConversion(ReviewCommentsJsonConversion.Converter, ReviewCommentsJsonConversion.Comparer)
             .HasMaxLength(int.MaxValue)
+            .IsUnicode(true)
             .HasColumnType("TEXT")
             .HasColumnName("review_comments");
     }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
@@ -39,7 +40,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
                 "state <> 'in_progress' OR worker_run_id IS NOT NULL");
             t.HasCheckConstraint(
                 "ck_issues_review_fields",
-                "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL)");
+                "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
             t.HasCheckConstraint(
                 "ck_issues_unchanged_worker_run_id",
                 "state <> 'unchanged' OR worker_run_id IS NOT NULL");
@@ -142,7 +143,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
         builder.Property(i => i.DetectedAt)
             .HasConversion(
                 dto => dto.UtcDateTime.ToString("O"),
-                s => DateTimeOffset.Parse(s, null, System.Globalization.DateTimeStyles.RoundtripKind))
+                s => DateTimeOffset.Parse(s, null, DateTimeStyles.RoundtripKind))
             .HasColumnType("TEXT")
             .HasColumnName("detected_at");
 
