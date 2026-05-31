@@ -114,6 +114,25 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenReviewIssueExists_ReturnsFeedbackCutoffAt()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        const string pullRequestUrl = "https://github.com/owner/repo/pull/42";
+
+        ReviewIssue review = await CreateAndPersistReviewIssueAsync(repositoryId, issueNumber: 10, pullRequestUrl);
+
+        // Act
+        IReadOnlyList<ReviewIssueInfo> result = await _sut.GetReviewIssuesAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        ReviewIssueInfo info = result.ShouldHaveSingleItem();
+        info.FeedbackCutoffAt.ShouldBe(review.FeedbackCutoffAt);
+    }
+
+    [Fact]
     public async Task WhenReviewIssuesExistForDifferentRepository_ReturnsOnlyMatchingRepository()
     {
         // Arrange

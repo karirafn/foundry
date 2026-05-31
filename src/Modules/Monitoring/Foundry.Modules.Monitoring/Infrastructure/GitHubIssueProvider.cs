@@ -36,4 +36,13 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
     {
         return httpClient.GetPullRequestStatusAsync(baseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
+
+    public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        DateTimeOffset since,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetPullRequestReviewFeedbackAsync(baseUrl, slug, pullRequestUrl, since, token, cancellationToken);
+    }
 }

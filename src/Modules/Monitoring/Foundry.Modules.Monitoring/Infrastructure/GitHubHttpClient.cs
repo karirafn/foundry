@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
@@ -185,6 +186,130 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
     }
 
+    public async Task<Result<ReviewFeedback>> GetPullRequestReviewFeedbackAsync(
+        Uri baseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        DateTimeOffset since,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (baseUrl.Scheme is not ("https" or "http"))
+        {
+            return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
+        {
+            return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidPullRequestUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+
+        Result<IReadOnlyList<GitHubPullRequestReviewDto>> reviewsResult = await FetchPullRequestReviewsAsync(
+            baseUrl, owner, repo, prNumber, token, cancellationToken);
+
+        if (reviewsResult is not Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Success reviewsSuccess)
+        {
+            return Result<ReviewFeedback>.Fail(((Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Failure)reviewsResult).Error);
+        }
+
+        IReadOnlyList<GitHubPullRequestReviewDto> changesRequestedReviews = reviewsSuccess.Value
+            .Where(r => string.Equals(r.State, "CHANGES_REQUESTED", StringComparison.OrdinalIgnoreCase))
+            .Where(r => r.SubmittedAt > since)
+            .ToList();
+
+        List<ReviewComment> comments = [];
+        foreach (GitHubPullRequestReviewDto review in changesRequestedReviews)
+        {
+            if (!string.IsNullOrWhiteSpace(review.Body))
+            {
+                comments.Add(new ReviewComment(review.Body));
+            }
+
+            Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>> fileCommentsResult =
+                await FetchPullRequestReviewCommentsAsync(
+                    baseUrl, owner, repo, prNumber, review.Id, token, cancellationToken);
+
+            if (fileCommentsResult is not Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Success fileCommentsSuccess)
+            {
+                continue;
+            }
+
+            foreach (GitHubPullRequestReviewCommentDto fileComment in fileCommentsSuccess.Value)
+            {
+                int? line = fileComment.Line ?? fileComment.OriginalLine;
+                comments.Add(new ReviewComment(fileComment.Body, fileComment.Path, line));
+            }
+        }
+
+        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments));
+    }
+
+    private async Task<Result<IReadOnlyList<GitHubPullRequestReviewDto>>> FetchPullRequestReviewsAsync(
+        Uri baseUrl,
+        string owner,
+        string repo,
+        int prNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}/reviews";
+        Uri requestUri = new(baseUrl, relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitHubPullRequestReviewDto>? dtos =
+            JsonSerializer.Deserialize<List<GitHubPullRequestReviewDto>>(body, JsonOptions);
+
+        return Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Ok(dtos ?? []);
+    }
+
+    private async Task<Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>> FetchPullRequestReviewCommentsAsync(
+        Uri baseUrl,
+        string owner,
+        string repo,
+        int prNumber,
+        long reviewId,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}/reviews/{reviewId}/comments";
+        Uri requestUri = new(baseUrl, relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitHubPullRequestReviewCommentDto>? dtos =
+            JsonSerializer.Deserialize<List<GitHubPullRequestReviewCommentDto>>(body, JsonOptions);
+
+        return Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Ok(dtos ?? []);
+    }
+
     [GeneratedRegex(@"/pull/(\d+)(?:[/?#]|$)")]
     private static partial Regex PrNumberRegex();
 
@@ -237,6 +362,18 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private sealed record GitHubIssueStateDto(string State);
 
     private sealed record GitHubPullRequestDto(string State, string? MergedAt);
+
+    private sealed record GitHubPullRequestReviewDto(
+        long Id,
+        string State,
+        string Body,
+        DateTimeOffset SubmittedAt);
+
+    private sealed record GitHubPullRequestReviewCommentDto(
+        string Body,
+        string Path,
+        int? Line,
+        int? OriginalLine);
 }
 
 internal static class GitHubErrors
