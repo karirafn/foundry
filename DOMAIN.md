@@ -36,7 +36,7 @@ Runs on a fixed tick interval (30s default) and checks each repo's eligibility b
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `InProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ## Monitored Repository
@@ -64,27 +64,77 @@ When all blockers are resolved, a `BlockedIssue` transitions to `QueuedIssue`.
 ## Review Issue
 
 A lifecycle state for an issue whose worker completed successfully and produced a PR.
-Carries `WorkerRunId`, `BranchName`, and `PullRequestUrl` — all non-nullable.
-Awaits human review of the PR. The monitoring service polls the provider for PR/issue status.
-Transitions: `ReviewIssue.Retry()` → `QueuedIssue`; monitoring-driven → `CompletedIssue` (issue closed) or `FailedIssue` (PR closed without merge).
+Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable.
+Awaits human review of the PR. The monitoring service polls the provider for PR/issue status and review feedback.
+`FeedbackCutoffAt` filters stale feedback — only review comments submitted after this timestamp are considered actionable. Set to the worker run's completion time on first entry; updated on re-entry after a revision cycle.
+Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `FailedIssue` (PR closed without merge); `Retry()` → `QueuedIssue` (manual fresh start).
 
 ## Unchanged Issue
 
 A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
-Requires manual resolution: the user can complete the issue (agreeing no changes are needed) or retry (disagreeing with the worker's assessment).
-Transitions: `UnchangedIssue.Complete()` → `CompletedIssue`, `UnchangedIssue.Retry()` → `QueuedIssue`.
+Requires manual resolution: the user can dismiss the issue (agreeing no changes are needed) or retry (disagreeing with the worker's assessment).
+Transitions: `UnchangedIssue.Complete()` → `DismissedIssue`, `UnchangedIssue.Retry()` → `QueuedIssue`.
+
+## Revision Queued Issue
+
+A lifecycle state for an issue queued for revision after receiving review feedback.
+Carries `BranchName`, `PullRequestUrl`, and `ReviewComments` (`IReadOnlyList<ReviewComment>`) — all non-nullable.
+Created from `ReviewIssue.Revise()` when the monitoring service detects a "changes requested" review.
+Claimed with priority over regular `QueuedIssue` to minimize open issue count.
+Transitions: `Claim()` → `RevisionInProgressIssue`.
+
+## Revision In-Progress Issue
+
+A lifecycle state for an issue whose worker is executing a revision cycle.
+Carries `WorkerRunId`, `BranchName`, and `PullRequestUrl` — all non-nullable.
+Created from `RevisionQueuedIssue.Claim()`.
+Transitions: `MarkInReview()` → `ReviewIssue` (worker pushed changes); `MarkUnchanged()` → `ReviewIssue` (worker made no changes but PR still exists); `MarkFailed()` → `RevisionFailedIssue`.
 
 ## Completed Issue
 
-Terminal lifecycle state — the issue is resolved.
-Carries nullable `BranchName` and `PullRequestUrl` (present when completed via review, absent when completed from `UnchangedIssue`) and `CompletedAt`.
+Terminal lifecycle state — the issue is resolved via a merged PR.
+Carries `BranchName`, `PullRequestUrl`, and `CompletedAt` — all non-nullable.
+Created from `ReviewIssue.Complete()` when the provider-side issue is closed.
+
+## Dismissed Issue
+
+Terminal lifecycle state — the issue is resolved without code changes.
+Carries `CompletedAt`.
+Created from `UnchangedIssue.Complete()` when the user agrees no changes are needed.
 
 ## Failed Issue
 
-A lifecycle state for an issue whose worker run failed or whose PR was closed without merge.
+A lifecycle state for an issue whose fresh worker run failed or whose PR was closed without merge.
 Carries `WorkerRunId`, `FailureReason` (string description), and `FailedAt`.
-Can come from `InProgressIssue` (worker failed) or `ReviewIssue` (PR rejected — concern 2).
+Can come from `InProgressIssue` (worker failed) or `ReviewIssue` (PR closed without merge).
 Transitions: `FailedIssue.Retry()` → `QueuedIssue`.
+
+## Revision Failed Issue
+
+A lifecycle state for an issue whose revision worker run failed.
+Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `FailureReason`, and `FailedAt` — all non-nullable.
+Created from `RevisionInProgressIssue.MarkFailed()`.
+Preserves branch context so retry re-enters the revision path.
+Transitions: `Retry()` → `RevisionQueuedIssue`.
+
+## Review Comment
+
+A value object representing a single piece of reviewer feedback on a PR.
+Carries `Body` (text), optional `FilePath`, and optional `Line` number.
+Lives in Issues contracts — produced by the monitoring provider, consumed by the worker dispatch.
+
+## Review Feedback
+
+A provider-agnostic result from `IIssueProvider.GetReviewFeedbackAsync()`.
+Carries an `IReadOnlyList<ReviewComment>`.
+Each provider implementation decides what constitutes actionable feedback — GitHub uses `CHANGES_REQUESTED` reviews; GitLab (future) will use unresolved threads or unapproved state.
+
+## Revision Context
+
+The dispatch payload extension for revision-aware worker execution.
+Carries `BranchName`, `PullRequestUrl`, and `IReadOnlyList<ReviewComment>`.
+Present on `ClaimedIssueDispatch` when the claimed issue was a `RevisionQueuedIssue`; absent for fresh attempts.
+The worker uses this to check out the existing branch and address the specific review comments.
 
 ## Trigger Label
 
