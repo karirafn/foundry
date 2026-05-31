@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 
 namespace Foundry.Modules.Issues.Domain;
 
@@ -19,11 +20,14 @@ public sealed class ReviewIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
+    public DateTimeOffset FeedbackCutoffAt { get; private set; }
+
     internal static ReviewIssue FromInProgress(
         InProgressIssue source,
         Guid workerRunId,
         string branchName,
-        string pullRequestUrl)
+        string pullRequestUrl,
+        DateTimeOffset feedbackCutoffAt)
     {
         ReviewIssue review = new(source.Id);
         review.SetSharedProperties(
@@ -38,7 +42,15 @@ public sealed class ReviewIssue : Issue
         review.WorkerRunId = workerRunId;
         review.BranchName = branchName;
         review.PullRequestUrl = pullRequestUrl;
+        review.FeedbackCutoffAt = feedbackCutoffAt;
         return review;
+    }
+
+    public RevisionQueuedIssue Revise(IReadOnlyList<ReviewComment> comments)
+    {
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromReview(this, comments);
+        AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
+        return revisionQueued;
     }
 
     public QueuedIssue Retry()

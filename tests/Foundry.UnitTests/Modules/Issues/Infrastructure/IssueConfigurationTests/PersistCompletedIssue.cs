@@ -78,7 +78,8 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
             "feat/issue-46",
-            "https://github.com/owner/repo/pull/2");
+            "https://github.com/owner/repo/pull/2",
+            DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
 
         CompletedIssue completed = review.Complete(completedAt);

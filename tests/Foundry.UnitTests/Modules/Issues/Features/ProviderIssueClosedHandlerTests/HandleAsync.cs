@@ -65,7 +65,8 @@ public sealed class HandleAsync : IAsyncDisposable
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
             "feat/issue-1-fix",
-            "https://github.com/owner/repo/pull/10");
+            "https://github.com/owner/repo/pull/10",
+            DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(review);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

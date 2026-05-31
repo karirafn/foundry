@@ -24,5 +24,8 @@ public sealed class ReviewIssueConfiguration : IEntityTypeConfiguration<ReviewIs
             .HasMaxLength(PullRequestUrlMaxLength)
             .IsUnicode(false)
             .HasColumnName("pull_request_url");
+
+        builder.Property(i => i.FeedbackCutoffAt)
+            .HasColumnName("feedback_cutoff_at");
     }
 }

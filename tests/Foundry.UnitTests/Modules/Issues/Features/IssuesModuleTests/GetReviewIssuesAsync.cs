@@ -71,7 +71,7 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
 
-        ReviewIssue review = inProgress.MarkInReview(Guid.NewGuid(), $"feat/issue-{issueNumber}", pullRequestUrl);
+        ReviewIssue review = inProgress.MarkInReview(Guid.NewGuid(), $"feat/issue-{issueNumber}", pullRequestUrl, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
 
         return review;

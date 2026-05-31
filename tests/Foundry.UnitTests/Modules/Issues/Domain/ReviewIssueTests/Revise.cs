@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Issues.Domain.ReviewIssueTests;
 
-public sealed class Complete
+public sealed class Revise
 {
     private static IssueAuthor ValidAuthor =>
         ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
@@ -30,58 +30,68 @@ public sealed class Complete
             detectedAt: DateTimeOffset.UtcNow);
         QueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        return inProgress.MarkInReview(Guid.NewGuid(), "foundry/1/add-feature", "https://github.com/owner/repo/pull/5", DateTimeOffset.UtcNow);
+        return inProgress.MarkInReview(
+            Guid.NewGuid(),
+            "foundry/1/add-feature",
+            "https://github.com/owner/repo/pull/5",
+            DateTimeOffset.UtcNow);
     }
 
     [Fact]
-    public void WhenCompleted_ReturnsCompletedIssueWithSameId()
+    public void WhenRevised_ReturnsRevisionQueuedIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ReviewIssue review = CreateReviewIssue(repositoryId);
-        DateTimeOffset completedAt = DateTimeOffset.UtcNow;
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix the formatting.")];
 
         // Act
-        CompletedIssue completed = review.Complete(completedAt);
+        RevisionQueuedIssue revisionQueued = review.Revise(comments);
 
         // Assert
-        completed.Id.ShouldBe(review.Id);
+        revisionQueued.Id.ShouldBe(review.Id);
     }
 
     [Fact]
-    public void WhenCompleted_RaisesIssueCompletedDomainEvent()
+    public void WhenRevised_RaisesIssueRevisionQueuedDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ReviewIssue review = CreateReviewIssue(repositoryId);
-        DateTimeOffset completedAt = DateTimeOffset.UtcNow;
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix the formatting.")];
 
         // Act
-        review.Complete(completedAt);
+        review.Revise(comments);
 
         // Assert
-        IssueCompleted domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueCompleted>();
+        IssueRevisionQueued domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionQueued>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(review.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public void WhenCompleted_CompletedIssueHasBranchAndPullRequestFromReview()
+    public void WhenRevised_RevisionQueuedIssueHasBranchNameAndPullRequestUrlAndReviewComments()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ReviewIssue review = CreateReviewIssue(repositoryId);
-        DateTimeOffset completedAt = DateTimeOffset.UtcNow;
+        IReadOnlyList<ReviewComment> comments =
+        [
+            new ReviewComment("Please fix the formatting."),
+            new ReviewComment("Rename this variable.", "src/Foo.cs", 42),
+        ];
 
         // Act
-        CompletedIssue completed = review.Complete(completedAt);
+        RevisionQueuedIssue revisionQueued = review.Revise(comments);
 
         // Assert
-        completed.ShouldSatisfyAllConditions(
-            () => completed.BranchName.ShouldBe(review.BranchName),
-            () => completed.PullRequestUrl.ShouldBe(review.PullRequestUrl),
-            () => completed.CompletedAt.ShouldBe(completedAt),
-            () => completed.MonitoredRepositoryId.ShouldBe(repositoryId));
+        revisionQueued.ShouldSatisfyAllConditions(
+            () => revisionQueued.BranchName.ShouldBe(review.BranchName),
+            () => revisionQueued.PullRequestUrl.ShouldBe(review.PullRequestUrl),
+            () => revisionQueued.ReviewComments.Count.ShouldBe(2),
+            () => revisionQueued.ReviewComments[0].Body.ShouldBe("Please fix the formatting."),
+            () => revisionQueued.ReviewComments[1].Body.ShouldBe("Rename this variable."),
+            () => revisionQueued.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }
