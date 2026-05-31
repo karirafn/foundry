@@ -18,7 +18,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
     private const int TitleMaxLength = 500;
     private const int AuthorMaxLength = 200;
     private const int UrlMaxLength = 2000;
-    private const int DiscriminatorMaxLength = 20;
+    private const int DiscriminatorMaxLength = 30;
 
     private static IssueAuthor ConvertToIssueAuthor(string value) =>
         IssueAuthor.Create(value) is Result<IssueAuthor>.Success s
@@ -49,6 +49,18 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             t.HasCheckConstraint(
                 "ck_issues_completed_completed_at",
                 "state <> 'completed' OR completed_at IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_issues_dismissed_completed_at",
+                "state <> 'dismissed' OR completed_at IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_issues_revision_queued_fields",
+                "state <> 'revision_queued' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_revision_in_progress_fields",
+                "state <> 'revision_in_progress' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_revision_failed_fields",
+                "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
         });
 
         builder.HasKey(i => i.Id);
