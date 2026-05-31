@@ -169,6 +169,91 @@ public sealed class HandleAsync : IAsyncDisposable
         return queued;
     }
 
+    private RevisionInProgressIssue SeedRevisionInProgressIssue(MonitoredRepositoryId repositoryId)
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 3,
+            title: "Issue 3",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ReviewIssue review = inProgress.MarkInReview(
+            Guid.NewGuid(),
+            "feat/issue-3",
+            "https://github.com/owner/repo/pull/3",
+            DateTimeOffset.UtcNow);
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
+        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(Guid.NewGuid());
+        _dbContext.Set<Issue>().Add(revisionInProgress);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return revisionInProgress;
+    }
+
+    [Fact]
+    public async Task WhenRevisionInProgressWithPrUrl_TransitionsToReviewIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress = SeedRevisionInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: revisionInProgress.WorkerRunId,
+            IssueId: revisionInProgress.Id.Value,
+            BranchName: revisionInProgress.BranchName,
+            PullRequestUrl: revisionInProgress.PullRequestUrl);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ReviewIssue review = issue.ShouldBeOfType<ReviewIssue>();
+        review.ShouldSatisfyAllConditions(
+            () => review.BranchName.ShouldBe(revisionInProgress.BranchName),
+            () => review.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
+            () => review.FeedbackCutoffAt.ShouldBeGreaterThan(DateTimeOffset.MinValue));
+    }
+
+    [Fact]
+    public async Task WhenRevisionInProgressWithoutPrUrl_TransitionsToReviewIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress = SeedRevisionInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: revisionInProgress.WorkerRunId,
+            IssueId: revisionInProgress.Id.Value,
+            BranchName: null,
+            PullRequestUrl: null);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ReviewIssue review = issue.ShouldBeOfType<ReviewIssue>();
+        review.ShouldSatisfyAllConditions(
+            () => review.BranchName.ShouldBe(revisionInProgress.BranchName),
+            () => review.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
+            () => review.FeedbackCutoffAt.ShouldBeGreaterThan(DateTimeOffset.MinValue));
+    }
+
     [Fact]
     public async Task WhenIssueNotInProgress_SilentlyIgnores()
     {
