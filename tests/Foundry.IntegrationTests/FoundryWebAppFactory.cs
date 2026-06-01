@@ -13,11 +13,13 @@ namespace Foundry.IntegrationTests;
 public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
+    private readonly Action<IServiceCollection>? _serviceOverrides;
 
-    public FoundryWebAppFactory()
+    public FoundryWebAppFactory(Action<IServiceCollection>? serviceOverrides = null)
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
+        _serviceOverrides = serviceOverrides;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -29,6 +31,8 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
                 options.UseSqlite(_connection));
 
             services.RemoveAll<IHostedService>();
+
+            _serviceOverrides?.Invoke(services);
 
             using ServiceProvider sp = services.BuildServiceProvider();
             using IServiceScope scope = sp.CreateScope();

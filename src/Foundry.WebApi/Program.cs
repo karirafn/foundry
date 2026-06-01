@@ -2,6 +2,7 @@ using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
 using Foundry.Modules.Workers;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Hubs;
@@ -27,6 +28,7 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
+builder.Services.AddSingleton<IWorkerLogBroadcaster, SignalRWorkerLogBroadcaster>();
 
 builder.Services.AddCors(options =>
 {
@@ -55,5 +57,6 @@ app.MapIssuesEndpoints();
 app.MapMonitoringEndpoints();
 app.MapWorkersEndpoints();
 app.MapHub<IssueHub>("/hubs/issues");
+app.MapHub<WorkerLogHub>("/hubs/worker-log");
 
 app.Run();

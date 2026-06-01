@@ -16,7 +16,9 @@ internal static class IngestReport
         string ReportType,
         string Content) : ICommand<WorkerReportSummary>;
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, WorkerReportSummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        IWorkerLogBroadcaster broadcaster) : ICommandHandler<Command, WorkerReportSummary>
     {
         public async Task<Result<WorkerReportSummary>> HandleAsync(
             Command command,
@@ -49,13 +51,17 @@ internal static class IngestReport
             dbContext.Set<WorkerReport>().Add(report);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return new WorkerReportSummary(
+            WorkerReportSummary summary = new(
                 report.Id.Value,
                 report.WorkerRunId.Value,
                 report.SequenceNumber,
                 report.ReportType,
                 report.Content,
                 report.IngestedAt);
+
+            await broadcaster.PushAsync(run.IssueId.Value, summary, cancellationToken);
+
+            return summary;
         }
     }
 
