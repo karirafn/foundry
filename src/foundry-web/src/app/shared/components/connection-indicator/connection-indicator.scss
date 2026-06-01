@@ -25,6 +25,11 @@
     &.dot--reconnecting {
       background-color: #d29922;
       animation: pulse 1.5s ease-in-out infinite;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+        background-color: #d29922;
+      }
     }
 
     &.dot--disconnected {
