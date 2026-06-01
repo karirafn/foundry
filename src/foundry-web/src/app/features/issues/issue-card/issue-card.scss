@@ -6,6 +6,10 @@
   cursor: pointer;
   transition: background 150ms ease, border-color 150ms ease;
   outline: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
 
   &:hover,
   &:focus-visible {

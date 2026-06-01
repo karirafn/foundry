@@ -42,10 +42,9 @@ function timeAgo(dateString: string): string {
   standalone: true,
   imports: [StateBadgeComponent, SafeHrefPipe],
   template: `
-    <div
+    <button
+      type="button"
       class="issue-card"
-      role="button"
-      tabindex="0"
       [attr.aria-expanded]="expanded().toString()"
       [attr.aria-controls]="'detail-' + issue().id"
       [attr.aria-label]="'Issue #' + issue().issueNumber + ': ' + issue().title"
@@ -96,7 +95,7 @@ function timeAgo(dateString: string): string {
           </a>
         }
       </div>
-    </div>
+    </button>
   `,
   styleUrl: './issue-card.scss',
 })
