@@ -1,12 +1,14 @@
-<div class="worker-log-panel__header">
-  <span class="worker-log-panel__title">Worker Logs</span>
-  @if (isLive()) {
-    <span class="worker-log-panel__live-indicator" aria-label="Live log streaming active">
-      <span class="worker-log-panel__live-dot" aria-hidden="true"></span>
-      <span class="worker-log-panel__live-label">LIVE</span>
-    </span>
-  }
-</div>
+@if (!hideHeader()) {
+  <div class="worker-log-panel__header">
+    <span class="worker-log-panel__title">Worker Logs</span>
+    @if (isLive()) {
+      <span class="worker-log-panel__live-indicator" aria-label="Live log streaming active">
+        <span class="worker-log-panel__live-dot" aria-hidden="true"></span>
+        <span class="worker-log-panel__live-label">LIVE</span>
+      </span>
+    }
+  </div>
+}
 
 <div
   #scrollContainer

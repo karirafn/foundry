@@ -27,6 +27,7 @@ export class WorkerLogPanelComponent {
   readonly loading: InputSignal<boolean> = input.required<boolean>();
   readonly error: InputSignal<string | null> = input.required<string | null>();
   readonly isLive: InputSignal<boolean> = input.required<boolean>();
+  readonly hideHeader: InputSignal<boolean> = input<boolean>(false);
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   @ViewChild('scrollContainer') private readonly _scrollContainer?: ElementRef<HTMLElement>;

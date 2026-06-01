@@ -43,6 +43,7 @@ function setup(overrides: {
   loading?: boolean;
   error?: string | null;
   isLive?: boolean;
+  hideHeader?: boolean;
 } = {}) {
   const retryEmitted: boolean[] = [];
 
@@ -55,6 +56,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('loading', overrides.loading ?? false);
   fixture.componentRef.setInput('error', overrides.error ?? null);
   fixture.componentRef.setInput('isLive', overrides.isLive ?? false);
+  fixture.componentRef.setInput('hideHeader', overrides.hideHeader ?? false);
   fixture.componentInstance.retry.subscribe(() => retryEmitted.push(true));
 
   return { fixture, retryEmitted };
@@ -445,5 +447,32 @@ describe('WorkerLogPanelComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const metrics = el.querySelector('.worker-log-panel__final-metrics');
     expect(metrics).toBeFalsy();
+  });
+
+  // Cycle 11: hideHeader input
+  it('should show panel header by default', () => {
+    // Arrange
+    const { fixture } = setup();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const header = el.querySelector('.worker-log-panel__header');
+    expect(header).toBeTruthy();
+  });
+
+  it('should hide panel header when hideHeader input is true', () => {
+    // Arrange
+    const { fixture } = setup({ hideHeader: true });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const header = el.querySelector('.worker-log-panel__header');
+    expect(header).toBeFalsy();
   });
 });
