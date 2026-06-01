@@ -318,9 +318,9 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             return Task.FromResult<IssueSummary?>(null);
         }
 
-        public Task<IssueDetail?> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
+        public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
         {
-            return Task.FromResult<IssueDetail?>(null);
+            return Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
         }
     }
 

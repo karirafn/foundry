@@ -1,8 +1,8 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 
 namespace Foundry.Modules.Issues.Features;
@@ -18,16 +18,13 @@ internal static class GetIssueById
                     IIssueQueries queries,
                     CancellationToken cancellationToken) =>
                 {
-                    IssueDetail? detail = await queries.GetIssueDetailAsync(
+                    Result<IssueDetail> result = await queries.GetIssueDetailAsync(
                         IssueId.From(id),
                         cancellationToken);
 
-                    if (detail is null)
-                    {
-                        return (Results<Ok<IssueDetail>, NotFound>)TypedResults.NotFound();
-                    }
-
-                    return (Results<Ok<IssueDetail>, NotFound>)TypedResults.Ok(detail);
+                    return result.Match(
+                        detail => TypedResults.Ok(detail) as IResult,
+                        _ => TypedResults.NotFound());
                 })
                 .WithName("GetIssueById")
                 .WithSummary("Gets issue detail by ID")

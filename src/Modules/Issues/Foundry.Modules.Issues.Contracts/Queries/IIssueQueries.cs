@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Contracts;
 
@@ -27,5 +28,5 @@ public interface IIssueQueries
 
     Task<IssueSummary?> GetIssueSummaryAsync(IssueId issueId, CancellationToken cancellationToken);
 
-    Task<IssueDetail?> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken);
+    Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken);
 }

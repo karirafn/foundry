@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -140,7 +141,7 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             Url: projection.Url.Value.ToString());
     }
 
-    public async Task<IssueDetail?> GetIssueDetailAsync(
+    public async Task<Result<IssueDetail>> GetIssueDetailAsync(
         IssueId issueId,
         CancellationToken cancellationToken)
     {
@@ -150,7 +151,7 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
 
         if (issue is null)
         {
-            return null;
+            return Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId));
         }
 
         HashSet<MonitoredRepositoryId> repoIds = [issue.MonitoredRepositoryId];

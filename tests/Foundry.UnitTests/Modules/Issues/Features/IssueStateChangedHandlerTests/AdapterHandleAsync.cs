@@ -119,7 +119,7 @@ public sealed class AdapterHandleAsync
             return Task.FromResult(summary);
         }
 
-        public Task<IssueDetail?> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
-            => Task.FromResult<IssueDetail?>(null);
+        public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
+            => Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
     }
 }

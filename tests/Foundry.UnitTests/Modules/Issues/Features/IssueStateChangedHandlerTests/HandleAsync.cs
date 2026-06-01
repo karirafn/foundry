@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -135,7 +136,7 @@ public sealed class HandleAsync
             return Task.FromResult(summary);
         }
 
-        public Task<IssueDetail?> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
-            => Task.FromResult<IssueDetail?>(null);
+        public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
+            => Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
     }
 }

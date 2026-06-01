@@ -78,18 +78,20 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIssueDoesNotExist_ReturnsNull()
+    public async Task WhenIssueDoesNotExist_ReturnsNotFoundError()
     {
         // Arrange
         IssueId nonExistentId = IssueId.New();
 
         // Act
-        IssueDetail? result = await _sut.GetIssueDetailAsync(
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
             nonExistentId,
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeNull();
+        result.IsFailure.ShouldBeTrue();
+        Result<IssueDetail>.Failure failure = result.ShouldBeOfType<Result<IssueDetail>.Failure>();
+        failure.Error.Code.ShouldBe("Issue.NotFound");
     }
 
     [Fact]
@@ -112,12 +114,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        IssueDetail? result = await _sut.GetIssueDetailAsync(
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
             issue.Id,
             TestContext.Current.CancellationToken);
 
         // Assert
-        IssueDetail detail = result.ShouldNotBeNull();
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.ShouldSatisfyAllConditions(
             () => detail.Id.ShouldBe(issue.Id.Value),
             () => detail.IssueNumber.ShouldBe(7),
@@ -142,12 +144,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        IssueDetail? result = await _sut.GetIssueDetailAsync(
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
             blocked.Id,
             TestContext.Current.CancellationToken);
 
         // Assert
-        IssueDetail detail = result.ShouldNotBeNull();
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.State.ShouldBe("blocked");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.BlockedBy.ShouldBe([2, 3]);
@@ -175,12 +177,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        IssueDetail? result = await _sut.GetIssueDetailAsync(
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
             review.Id,
             TestContext.Current.CancellationToken);
 
         // Assert
-        IssueDetail detail = result.ShouldNotBeNull();
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.State.ShouldBe("review");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
@@ -209,12 +211,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        IssueDetail? result = await _sut.GetIssueDetailAsync(
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
             failed.Id,
             TestContext.Current.CancellationToken);
 
         // Assert
-        IssueDetail detail = result.ShouldNotBeNull();
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.State.ShouldBe("failed");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
@@ -249,12 +251,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        IssueDetail? result = await _sut.GetIssueDetailAsync(
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
             completed.Id,
             TestContext.Current.CancellationToken);
 
         // Assert
-        IssueDetail detail = result.ShouldNotBeNull();
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.State.ShouldBe("completed");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
