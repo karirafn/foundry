@@ -276,6 +276,42 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME");
     }
 
+    [Fact]
+    public async Task WhenOrchestratorSucceeds_ContainerSpecHasWorkerPromptEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c6");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(issueNumber: 42);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldContainKey("WORKER_PROMPT");
+        spec.EnvironmentVariables["WORKER_PROMPT"].ShouldContain("42");
+    }
+
+    [Fact]
+    public async Task WhenOrchestratorSucceeds_ContainerSpecCommandIsEntrypoint()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c7");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.Command.ShouldHaveSingleItem();
+        spec.Command[0].ShouldBe("/entrypoint.sh");
+    }
+
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator
     {
         private readonly bool _succeeds;

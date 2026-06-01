@@ -23,6 +23,8 @@ public sealed class Defaults
             () => options.BranchNamingInstruction.ShouldBe("Use conventional branch naming"),
             () => options.ReportsPath.ShouldBe("./data/reports"),
             () => options.SystemPromptTemplate.ShouldNotBeNullOrWhiteSpace(),
+            () => options.WorkerPromptTemplate.ShouldNotBeNullOrWhiteSpace(),
+            () => options.WorkerPromptTemplate.ShouldContain("{issueNumber}"),
             () => options.MemoryLimitMb.ShouldBe(8192),
             () => options.CpuLimit.ShouldBe(2.0),
             () => options.PidsLimit.ShouldBe(512));
