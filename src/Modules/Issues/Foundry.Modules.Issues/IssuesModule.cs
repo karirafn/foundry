@@ -31,6 +31,7 @@ public static class IssuesModule
 
     public static IEndpointRouteBuilder MapIssuesEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapIssueEndpoints();
         return app;
     }
 }
