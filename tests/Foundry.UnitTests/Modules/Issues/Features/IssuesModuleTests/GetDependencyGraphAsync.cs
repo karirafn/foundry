@@ -2,8 +2,8 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -151,12 +151,4 @@ public sealed class GetDependencyGraphAsync : IAsyncDisposable
         result.ShouldContain(new DependencyEdge(1, 99));
     }
 
-    private sealed class NullRepositorySlugQueries : IRepositorySlugQueries
-    {
-        public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
-            IReadOnlySet<MonitoredRepositoryId> repositoryIds,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(
-                new Dictionary<MonitoredRepositoryId, string>());
-    }
 }

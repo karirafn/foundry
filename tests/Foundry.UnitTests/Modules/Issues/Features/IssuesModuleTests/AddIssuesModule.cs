@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -291,12 +292,4 @@ public sealed class AddIssuesModule : IAsyncDisposable
             => Task.FromResult<RepositoryDispatchInfo?>(null);
     }
 
-    private sealed class NullRepositorySlugQueries : IRepositorySlugQueries
-    {
-        public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
-            IReadOnlySet<MonitoredRepositoryId> repositoryIds,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(
-                new Dictionary<MonitoredRepositoryId, string>());
-    }
 }
