@@ -42,17 +42,17 @@ builder.Services.AddCors(options =>
 
 WebApplication app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors(AngularDevServerPolicy);
+    app.MapOpenApi();
+}
+
+app.UseHttpsRedirection();
+
 app.MapDefaultEndpoints();
 app.MapIssuesEndpoints();
 app.MapMonitoringEndpoints();
 app.MapHub<IssueHub>("/hubs/issues");
-
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
-app.UseCors(AngularDevServerPolicy);
-app.UseHttpsRedirection();
 
 app.Run();
