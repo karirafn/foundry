@@ -121,8 +121,9 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             return null;
         }
 
+        HashSet<MonitoredRepositoryId> repoIds = [projection.MonitoredRepositoryId];
         IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
-            new HashSet<MonitoredRepositoryId> { projection.MonitoredRepositoryId },
+            repoIds,
             cancellationToken);
 
         string repositorySlug = slugs.TryGetValue(projection.MonitoredRepositoryId, out string? slug)
@@ -152,8 +153,9 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             return null;
         }
 
+        HashSet<MonitoredRepositoryId> repoIds = [issue.MonitoredRepositoryId];
         IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
-            new HashSet<MonitoredRepositoryId> { issue.MonitoredRepositoryId },
+            repoIds,
             cancellationToken);
 
         string repositorySlug = slugs.TryGetValue(issue.MonitoredRepositoryId, out string? slug)
