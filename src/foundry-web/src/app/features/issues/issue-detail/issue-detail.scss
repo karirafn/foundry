@@ -65,7 +65,7 @@
 
   &__label-pill {
     background: var(--fd-border-default);
-    color: var(--fd-text-secondary);
+    color: var(--fd-text-primary);
     border-radius: var(--fd-radius-sm);
     padding: 2px 8px;
     font-size: 0.75rem;
@@ -89,7 +89,7 @@
 
   &__field-key {
     text-transform: uppercase;
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.75rem;
     letter-spacing: 0.05em;
   }
