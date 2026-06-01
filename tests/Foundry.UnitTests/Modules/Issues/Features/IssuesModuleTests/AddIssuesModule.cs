@@ -1,10 +1,13 @@
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -38,6 +41,8 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
+        services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
+        services.AddScoped<IIssueBroadcaster, NullIssueBroadcaster>();
         services.AddIssuesModule();
 
         _serviceProvider = services.BuildServiceProvider();
@@ -159,6 +164,120 @@ public sealed class AddIssuesModule : IAsyncDisposable
         handler.ShouldBeOfType<ProviderPullRequestClosedHandler>();
     }
 
+    [Fact]
+    public void WhenServicesRegistered_IssueQueuedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueQueued> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueQueued>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueQueued>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueBlockedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueBlocked> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueBlocked>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueBlocked>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueCompletedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueCompleted> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueCompleted>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueCompleted>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueFailedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueFailed> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueFailed>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueFailed>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueInReviewHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueInReview> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueInReview>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueInReview>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueUnchangedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueUnchanged> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueUnchanged>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueUnchanged>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueDismissedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueDismissed> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDismissed>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueDismissed>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueRevisionQueuedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueRevisionQueued> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueRevisionQueued>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueRevisionQueued>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueRevisionFailedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueRevisionFailed> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueRevisionFailed>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueRevisionFailed>>();
+    }
+
+    private sealed class NullIssueBroadcaster : IIssueBroadcaster
+    {
+        public Task BroadcastAsync(IssueSummary summary, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
     private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
@@ -172,4 +291,5 @@ public sealed class AddIssuesModule : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<RepositoryDispatchInfo?>(null);
     }
+
 }

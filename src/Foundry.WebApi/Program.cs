@@ -1,11 +1,15 @@
 using Foundry.Modules.Issues;
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
 using Foundry.Modules.Workers;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.WebApi.Hubs;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+
+const string AngularDevServerPolicy = "AngularDevServer";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -21,17 +25,34 @@ builder.Services.AddMonitoringModule(builder.Configuration);
 builder.Services.AddWorkersModule(builder.Configuration);
 builder.Services.AddOpenApi();
 
-WebApplication app = builder.Build();
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
 
-app.MapDefaultEndpoints();
-app.MapIssuesEndpoints();
-app.MapMonitoringEndpoints();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(AngularDevServerPolicy, policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:4200")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
+WebApplication app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
+    app.UseCors(AngularDevServerPolicy);
     app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();
+
+app.MapDefaultEndpoints();
+app.MapIssuesEndpoints();
+app.MapMonitoringEndpoints();
+app.MapHub<IssueHub>("/hubs/issues");
 
 app.Run();

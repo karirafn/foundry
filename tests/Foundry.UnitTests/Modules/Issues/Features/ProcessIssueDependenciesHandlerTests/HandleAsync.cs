@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -43,7 +44,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dispatcher = new CapturingDomainEventDispatcher();
         _sut = new ProcessIssueDependenciesHandler(
             _dbContext,
-            new IssueQueries(_dbContext),
+            new IssueQueries(_dbContext, new NullRepositorySlugQueries()),
             _dispatcher,
             NullLogger<ProcessIssueDependenciesHandler>.Instance);
     }
@@ -505,4 +506,5 @@ public sealed class HandleAsync : IAsyncDisposable
             return Task.CompletedTask;
         }
     }
+
 }

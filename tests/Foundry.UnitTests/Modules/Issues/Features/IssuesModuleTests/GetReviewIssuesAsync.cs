@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -32,7 +33,7 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new IssueQueries(_dbContext);
+        _sut = new IssueQueries(_dbContext, new NullRepositorySlugQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -179,4 +180,5 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         // Assert
         result.ShouldBeEmpty();
     }
+
 }

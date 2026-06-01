@@ -1,0 +1,28 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 var(--fd-spacing-xl);
+  border-bottom: 1px solid var(--fd-border-default);
+  background: var(--fd-bg-card);
+  flex-shrink: 0;
+}
+
+.app-header__logo {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fd-text-primary);
+  letter-spacing: 0.02em;
+}
+
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+}

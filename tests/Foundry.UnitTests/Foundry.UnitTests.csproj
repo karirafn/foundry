@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Foundry.Testing\Foundry.Testing.csproj" />
     <ProjectReference Include="..\..\src\Foundry.WebApi\Foundry.WebApi.csproj" />
     <ProjectReference Include="..\..\src\Modules\Monitoring\Foundry.Modules.Monitoring.Contracts\Foundry.Modules.Monitoring.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Issues\Foundry.Modules.Issues.Contracts\Foundry.Modules.Issues.Contracts.csproj" />

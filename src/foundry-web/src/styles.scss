@@ -1,1 +1,78 @@
-/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap');
+
+:root {
+  /* Background */
+  --fd-bg-page: #0f1117;
+  --fd-bg-card: #161b22;
+  --fd-bg-card-hover: #1c2129;
+
+  /* Text */
+  --fd-text-primary: #e6edf3;
+  --fd-text-secondary: #8b949e;
+  --fd-text-tertiary: #6e7681;
+  --fd-text-link: #58a6ff;
+
+  /* Borders */
+  --fd-border-default: #30363d;
+  --fd-border-muted: #21262d;
+
+  /* State badge colors (WCAG AA compliant, white text) */
+  --fd-state-detected: #656d76;
+  --fd-state-queued: #1a6dd4;
+  --fd-state-blocked: #9a5520;
+  --fd-state-in-progress: #8957e5;
+  --fd-state-review: #8957e5;
+  --fd-state-unchanged: #656d76;
+  --fd-state-failed: #da3633;
+  --fd-state-completed: #238636;
+  --fd-state-dismissed: #57606a;
+
+  /* Spacing */
+  --fd-spacing-xs: 0.25rem;
+  --fd-spacing-sm: 0.5rem;
+  --fd-spacing-md: 0.75rem;
+  --fd-spacing-lg: 1rem;
+  --fd-spacing-xl: 1.5rem;
+  --fd-spacing-2xl: 2rem;
+
+  /* Border radii */
+  --fd-radius-sm: 6px;
+  --fd-radius-md: 8px;
+  --fd-radius-lg: 12px;
+
+  /* Typography */
+  --fd-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
+  --fd-font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--fd-bg-page);
+  color: var(--fd-text-primary);
+  font-family: var(--fd-font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

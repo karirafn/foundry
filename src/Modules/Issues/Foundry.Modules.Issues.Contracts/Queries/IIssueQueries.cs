@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Contracts;
 
@@ -20,4 +21,12 @@ public interface IIssueQueries
     Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
+        MonitoredRepositoryId? repositoryId,
+        CancellationToken cancellationToken);
+
+    Task<IssueSummary?> GetIssueSummaryAsync(IssueId issueId, CancellationToken cancellationToken);
+
+    Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken);
 }

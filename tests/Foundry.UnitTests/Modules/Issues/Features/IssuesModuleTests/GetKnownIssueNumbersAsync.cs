@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -31,7 +32,7 @@ public sealed class GetKnownIssueNumbersAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new IssueQueries(_dbContext);
+        _sut = new IssueQueries(_dbContext, new NullRepositorySlugQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -137,4 +138,5 @@ public sealed class GetKnownIssueNumbersAsync : IAsyncDisposable
         // Assert
         result.ShouldBe([10], ignoreOrder: true);
     }
+
 }

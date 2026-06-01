@@ -1010,6 +1010,23 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(_reviewIssues);
         }
+
+        public Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
+            MonitoredRepositoryId? repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<IssueSummary>>([]);
+        }
+
+        public Task<IssueSummary?> GetIssueSummaryAsync(IssueId issueId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IssueSummary?>(null);
+        }
+
+        public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
+        }
     }
 
     private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher

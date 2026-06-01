@@ -6,4 +6,4 @@ namespace Foundry.Modules.Issues.Domain.Events;
 
 public sealed record IssueDismissed(
     IssueId IssueId,
-    MonitoredRepositoryId MonitoredRepositoryId) : IDomainEvent;
+    MonitoredRepositoryId MonitoredRepositoryId) : IDomainEvent, IIssueStateChanged;
