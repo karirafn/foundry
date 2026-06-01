@@ -1,0 +1,116 @@
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.issue-detail {
+  &__skeleton {
+    padding: var(--fd-spacing-lg);
+    background: var(--fd-bg-card);
+    border-top: 1px solid var(--fd-border-muted);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-md);
+  }
+
+  &__shimmer-bar {
+    height: 1rem;
+    border-radius: var(--fd-radius-sm);
+    background: linear-gradient(
+      90deg,
+      var(--fd-border-muted) 25%,
+      var(--fd-border-default) 50%,
+      var(--fd-border-muted) 75%
+    );
+    background-size: 800px 100%;
+    animation: shimmer 1.5s infinite linear;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+      background: var(--fd-border-muted);
+    }
+  }
+
+  &__content {
+    background: var(--fd-bg-card);
+    border-top: 1px solid var(--fd-border-muted);
+    padding: var(--fd-spacing-lg);
+  }
+
+  &__section {
+    margin-bottom: var(--fd-spacing-lg);
+  }
+
+  &__body {
+    white-space: pre-wrap;
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    max-height: 12rem;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__label-pill {
+    background: var(--fd-border-default);
+    color: var(--fd-text-secondary);
+    border-radius: var(--fd-radius-sm);
+    padding: 2px 8px;
+    font-size: 0.75rem;
+  }
+
+  &__fields {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--fd-spacing-md) var(--fd-spacing-lg);
+
+    @media (max-width: 767px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__field-key {
+    text-transform: uppercase;
+    color: var(--fd-text-tertiary);
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+
+  &__field-value {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  &__pr-link {
+    color: var(--fd-text-link);
+    text-decoration: none;
+    font-size: 0.8125rem;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__branch {
+    font-family: var(--fd-font-mono);
+    font-size: 0.8125rem;
+  }
+}
