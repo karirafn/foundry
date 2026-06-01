@@ -29,19 +29,17 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
                 options.UseSqlite(_connection));
 
             services.RemoveAll<IHostedService>();
+
+            using ServiceProvider sp = services.BuildServiceProvider();
+            using IServiceScope scope = sp.CreateScope();
+            FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+            dbContext.Database.EnsureCreated();
         });
 
         builder.UseEnvironment("Testing");
     }
 
-    public async Task EnsureDatabaseCreatedAsync()
-    {
-        using IServiceScope scope = Services.CreateScope();
-        FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-        await dbContext.Database.EnsureCreatedAsync();
-    }
-
-    async ValueTask IAsyncDisposable.DisposeAsync()
+async ValueTask IAsyncDisposable.DisposeAsync()
     {
         await _connection.DisposeAsync();
         await base.DisposeAsync();

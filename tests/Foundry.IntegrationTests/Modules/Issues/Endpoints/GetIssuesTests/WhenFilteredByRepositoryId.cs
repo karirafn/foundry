@@ -34,7 +34,6 @@ public sealed class WhenFilteredByRepositoryId : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _factory.EnsureDatabaseCreatedAsync();
         _client = _factory.CreateClient();
     }
 
