@@ -26,7 +26,7 @@ public sealed class IssueHubMapping : IAsyncDisposable
     [Fact]
     public async Task ReturnsSuccessOnNegotiate()
     {
-        // Arrange & Act
+        // Act
         HttpResponseMessage response = await _client.PostAsync(
             new Uri("/hubs/issues/negotiate?negotiateVersion=1", UriKind.Relative),
             content: null,

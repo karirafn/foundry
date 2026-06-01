@@ -16,10 +16,10 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Issues.Endpoints.GetIssuesTests;
 
-public sealed class WhenIssuesExist : IAsyncLifetime
+public sealed class WhenIssuesExist : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
-    private HttpClient _client = null!;
+    private readonly HttpClient _client;
 
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
 
@@ -32,14 +32,10 @@ public sealed class WhenIssuesExist : IAsyncLifetime
     public WhenIssuesExist()
     {
         _factory = new FoundryWebAppFactory();
-    }
-
-    public async ValueTask InitializeAsync()
-    {
         _client = _factory.CreateClient();
     }
 
-    public async ValueTask DisposeAsync()
+    async ValueTask IAsyncDisposable.DisposeAsync()
     {
         _client.Dispose();
         await _factory.DisposeAsync();

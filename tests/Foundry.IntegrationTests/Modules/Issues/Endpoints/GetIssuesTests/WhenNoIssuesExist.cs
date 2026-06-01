@@ -9,22 +9,18 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Issues.Endpoints.GetIssuesTests;
 
-public sealed class WhenNoIssuesExist : IAsyncLifetime
+public sealed class WhenNoIssuesExist : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
-    private HttpClient _client = null!;
+    private readonly HttpClient _client;
 
     public WhenNoIssuesExist()
     {
         _factory = new FoundryWebAppFactory();
-    }
-
-    public async ValueTask InitializeAsync()
-    {
         _client = _factory.CreateClient();
     }
 
-    public async ValueTask DisposeAsync()
+    async ValueTask IAsyncDisposable.DisposeAsync()
     {
         _client.Dispose();
         await _factory.DisposeAsync();
