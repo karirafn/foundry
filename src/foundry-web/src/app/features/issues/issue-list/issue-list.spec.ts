@@ -188,6 +188,45 @@ describe('IssueListComponent', () => {
     httpMock.expectOne('/api/issues').flush([mockSummary]);
     fixture.detectChanges();
 
+    // Assert — wrapper is always present in the DOM so aria-controls is always valid
+    const el = fixture.nativeElement as HTMLElement;
+    const wrapper = el.querySelector('.issue-list__detail-wrapper') as HTMLElement;
+    expect(wrapper?.getAttribute('id')).toBe('detail-abc123');
+  });
+
+  it('should keep the detail wrapper in the DOM when the card is collapsed', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    fixture.detectChanges();
+
+    // Assert — wrapper is present before any expansion
+    const el = fixture.nativeElement as HTMLElement;
+    const wrapper = el.querySelector('.issue-list__detail-wrapper');
+    expect(wrapper).toBeTruthy();
+  });
+
+  it('should hide the detail wrapper with [hidden] when card is collapsed', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    fixture.detectChanges();
+
+    // Assert — wrapper is hidden when not expanded
+    const el = fixture.nativeElement as HTMLElement;
+    const wrapper = el.querySelector('.issue-list__detail-wrapper') as HTMLElement;
+    expect(wrapper.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('should not hide the detail wrapper when card is expanded', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    fixture.detectChanges();
+
     // Act - expand the card
     const el = fixture.nativeElement as HTMLElement;
     const card = el.querySelector('.issue-card') as HTMLElement;
@@ -213,7 +252,79 @@ describe('IssueListComponent', () => {
 
     // Assert
     const wrapper = el.querySelector('.issue-list__detail-wrapper') as HTMLElement;
-    expect(wrapper?.getAttribute('id')).toBe('detail-abc123');
+    expect(wrapper.hasAttribute('hidden')).toBe(false);
+  });
+
+  // Cycle 4c: load error is shown with retry
+  it('should show error message when loadIssues fails', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+
+    // Act — simulate a server error
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const errorEl = el.querySelector('.issue-list__error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.textContent).toContain('Failed to load issues');
+  });
+
+  it('should show a retry button when loadIssues fails', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+
+    // Act
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const retryBtn = el.querySelector('.issue-list__error-retry');
+    expect(retryBtn).toBeTruthy();
+  });
+
+  it('should retry loading issues when retry button is clicked', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const retryBtn = el.querySelector('.issue-list__error-retry') as HTMLElement;
+    retryBtn.click();
+    fixture.detectChanges();
+
+    // Assert — a second HTTP request was made
+    const req = httpMock.expectOne('/api/issues');
+    req.flush([]);
+  });
+
+  it('should not show error block when loadIssues succeeds', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const errorEl = el.querySelector('.issue-list__error');
+    expect(errorEl).toBeFalsy();
   });
 
   // Cycle 5: renders fd-connection-indicator

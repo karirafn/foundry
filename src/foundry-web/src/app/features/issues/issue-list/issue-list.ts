@@ -22,6 +22,17 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         <fd-connection-indicator [status]="signalR.connectionStatus()" />
       </header>
 
+      @if (issueService.loadError()) {
+        <div class="issue-list__error" role="alert">
+          <span class="issue-list__error-message">Failed to load issues</span>
+          <button
+            class="issue-list__error-retry"
+            type="button"
+            (click)="issueService.loadIssues()"
+          >Retry</button>
+        </div>
+      }
+
       @if (!issueService.initialLoading() && issueService.isEmpty() && !issueService.loadError()) {
         <fd-empty-state />
       }
@@ -35,14 +46,19 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
               (toggle)="issueService.toggleExpand(issue.id)"
             />
 
-            @if (issueService.expandedIssueId() === issue.id) {
-              <div class="issue-list__detail-wrapper" [id]="'detail-' + issue.id">
+            <div
+              class="issue-list__detail-wrapper"
+              [id]="'detail-' + issue.id"
+              [hidden]="issueService.expandedIssueId() !== issue.id"
+            >
+              @if (issueService.expandedIssueId() === issue.id) {
                 <fd-issue-detail
                   [detail]="issueService.issueDetail()"
                   [loading]="issueService.detailLoading()"
+                  [error]="issueService.detailError()"
                 />
-              </div>
-            }
+              }
+            </div>
           </div>
         }
       </div>

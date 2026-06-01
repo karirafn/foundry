@@ -25,13 +25,14 @@ const mockDetail: IssueDetail = {
   },
 };
 
-function createComponent(detail: IssueDetail | null, loading = false) {
+function createComponent(detail: IssueDetail | null, loading = false, error: string | null = null) {
   TestBed.configureTestingModule({
     imports: [IssueDetailComponent],
   });
   const fixture = TestBed.createComponent(IssueDetailComponent);
   fixture.componentRef.setInput('detail', detail);
   fixture.componentRef.setInput('loading', loading);
+  fixture.componentRef.setInput('error', error);
   fixture.detectChanges();
   return fixture;
 }
@@ -213,5 +214,47 @@ describe('IssueDetailComponent', () => {
     // Assert
     const region = el.querySelector('[role="region"]') as HTMLElement;
     expect(region?.getAttribute('aria-label')).toBe('Issue details for #42');
+  });
+
+  // Cycle 8: error state
+  it('should show error message when error input is truthy', () => {
+    // Arrange / Act
+    const fixture = createComponent(null, false, 'Http failure');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const errorEl = el.querySelector('.issue-detail__error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.textContent).toContain('Failed to load details');
+  });
+
+  it('should not show detail content when error is present', () => {
+    // Arrange / Act
+    const fixture = createComponent(null, false, 'Http failure');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const content = el.querySelector('.issue-detail__content');
+    expect(content).toBeFalsy();
+  });
+
+  it('should not show skeleton when error is present', () => {
+    // Arrange / Act
+    const fixture = createComponent(null, true, 'Http failure');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const skeleton = el.querySelector('.issue-detail__skeleton');
+    expect(skeleton).toBeFalsy();
+  });
+
+  it('should not show error block when error is null', () => {
+    // Arrange / Act
+    const fixture = createComponent(mockDetail, false, null);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const errorEl = el.querySelector('.issue-detail__error');
+    expect(errorEl).toBeFalsy();
   });
 });

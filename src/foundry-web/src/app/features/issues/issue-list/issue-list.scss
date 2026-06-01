@@ -53,4 +53,34 @@
   &__detail-wrapper {
     overflow: hidden;
   }
+
+  &__error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--fd-spacing-md);
+    padding: var(--fd-spacing-2xl);
+    text-align: center;
+  }
+
+  &__error-message {
+    color: var(--fd-state-failed);
+    font-size: 1rem;
+  }
+
+  &__error-retry {
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      border-color: var(--fd-text-secondary);
+    }
+  }
 }

@@ -8,7 +8,11 @@ import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
   standalone: true,
   imports: [DatePipe, SafeHrefPipe],
   template: `
-    @if (loading()) {
+    @if (error()) {
+      <div class="issue-detail__error" role="alert">
+        <span class="issue-detail__error-message">Failed to load details</span>
+      </div>
+    } @else if (loading()) {
       <div class="issue-detail__skeleton" aria-busy="true" aria-label="Loading issue details">
         <div class="issue-detail__shimmer-bar" style="width: 100%"></div>
         <div class="issue-detail__shimmer-bar" style="width: 60%"></div>
@@ -16,7 +20,7 @@ import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
       </div>
     }
 
-    @if (detail(); as d) {
+    @if (!error() && detail(); as d) {
       <div
         class="issue-detail__content"
         role="region"
@@ -114,4 +118,5 @@ import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 export class IssueDetailComponent {
   readonly detail: InputSignal<IssueDetail | null> = input.required<IssueDetail | null>();
   readonly loading: InputSignal<boolean> = input.required<boolean>();
+  readonly error: InputSignal<string | null> = input.required<string | null>();
 }
