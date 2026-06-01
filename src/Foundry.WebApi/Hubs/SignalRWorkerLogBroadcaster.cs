@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 
 using Microsoft.AspNetCore.SignalR;

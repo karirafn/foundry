@@ -21,6 +21,13 @@ Workers clone the repo, implement the issue, push a branch, and write reports to
 A git hosting platform (GitHub, GitLab).
 Each provider has its own API client, label format (flat on GitHub, scoped on GitLab), and CLI tooling (`gh`, `glab`).
 
+## Branch Protection
+
+A provider-agnostic set of preconditions Foundry requires on a repository's default branch before processing issues.
+Three invariants: rejects direct pushes (all changes via merge/pull request), rejects force pushes (history cannot be rewritten), rejects deletion.
+Each provider adapter maps these invariants to provider-specific API checks (GitHub branch protection rules, GitLab protected branches).
+Validated at issue detection time and re-validated at claim time.
+
 ## Account
 
 Credentials for accessing a specific provider's API.
@@ -36,7 +43,7 @@ Runs on a fixed tick interval (30s default) and checks each repo's eligibility b
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `IneligibleIssue`, `BlockedIssue`, `QueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ## Monitored Repository
@@ -53,6 +60,22 @@ Stored as a collection of blocking issue numbers on the Issue aggregate — the 
 Both GitHub (REST API v2026-03-10) and GitLab (Issue Links API, Premium+) expose dependencies via structured APIs.
 Foundry fetches dependencies during the detection poll cycle and reconciles them on each subsequent poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
+
+## Ineligible Issue
+
+A lifecycle state for an issue whose repository does not meet Foundry's processing preconditions.
+Carries a collection of `EligibilityViolation` values describing which preconditions failed.
+Created from `DetectedIssue` when branch protection validation fails or the provider API is unreachable.
+Also created from `QueuedIssue` when re-validation at claim time fails.
+Auto re-evaluated on each monitor poll cycle; when all violations are resolved, transitions directly to `BlockedIssue` or `QueuedIssue` (blocker check runs inline).
+Manual retry also supported.
+Transitions: re-evaluation passes → `BlockedIssue` (has blockers) or `QueuedIssue` (no blockers).
+
+## Eligibility Violation
+
+A value object describing a specific precondition failure on a repository.
+Carries `Rule` (a well-known string constant identifying the check, e.g. `"branch-protection:no-direct-push"`, `"branch-protection:unreachable"`) and `Description` (human-readable explanation for dashboard display).
+Stored as a collection on `IneligibleIssue`.
 
 ## Blocked Issue
 

@@ -4,6 +4,7 @@ using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
@@ -60,11 +61,11 @@ internal static class GetReports
                         query,
                         cancellationToken);
 
-                    return result.Match(
-                        reports => TypedResults.Ok(reports) as IResult,
+                    return result.Match<Results<Ok<IReadOnlyList<WorkerReportSummary>>, NotFound, BadRequest<string>>>(
+                        reports => TypedResults.Ok(reports),
                         error => error.Code switch
                         {
-                            WorkerRunErrors.NotFoundCode => TypedResults.NotFound() as IResult,
+                            WorkerRunErrors.NotFoundCode => TypedResults.NotFound(),
                             _ => TypedResults.BadRequest(error.Message),
                         });
                 })

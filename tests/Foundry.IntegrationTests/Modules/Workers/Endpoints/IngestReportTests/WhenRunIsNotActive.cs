@@ -48,7 +48,7 @@ public sealed class WhenRunIsNotActive : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsBadRequest()
+    public async Task WhenRunIsNotActive_ReturnsBadRequest()
     {
         // Arrange
         WorkerRunId runId = await SeedStartingRunAsync();

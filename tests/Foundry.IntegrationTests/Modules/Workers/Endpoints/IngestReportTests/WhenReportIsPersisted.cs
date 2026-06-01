@@ -50,7 +50,7 @@ public sealed class WhenReportIsPersisted : IAsyncDisposable
     }
 
     [Fact]
-    public async Task SavesReportToDatabase()
+    public async Task WhenReportIsPersisted_SavesReportToDatabase()
     {
         // Arrange
         WorkerRunId runId = await SeedActiveRunAsync();

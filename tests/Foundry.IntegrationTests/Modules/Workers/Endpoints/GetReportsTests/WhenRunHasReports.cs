@@ -56,7 +56,7 @@ public sealed class WhenRunHasReports : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsReportsOrderedBySequenceNumber()
+    public async Task WhenRunHasReports_ReturnsReportsOrderedBySequenceNumber()
     {
         // Arrange
         WorkerRunId runId = await SeedRunWithReportsAsync();

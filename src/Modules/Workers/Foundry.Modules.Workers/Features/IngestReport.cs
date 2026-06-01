@@ -4,6 +4,7 @@ using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,10 +12,14 @@ namespace Foundry.Modules.Workers.Features;
 
 internal static class IngestReport
 {
+    private const int MaxContentLength = 65536;
+
     internal sealed record Command(
         WorkerRunId WorkerRunId,
         string ReportType,
         string Content) : ICommand<WorkerReportSummary>;
+
+    internal sealed record Request(string Type, string Content);
 
     internal sealed class Handler(
         DbContext dbContext,
@@ -24,6 +29,11 @@ internal static class IngestReport
             Command command,
             CancellationToken cancellationToken)
         {
+            if (command.Content.Length > MaxContentLength)
+            {
+                return Result<WorkerReportSummary>.Fail(WorkerRunErrors.ContentTooLarge(MaxContentLength));
+            }
+
             WorkerRun? run = await dbContext.Set<WorkerRun>()
                 .FirstOrDefaultAsync(r => r.Id == command.WorkerRunId, cancellationToken);
 
@@ -37,6 +47,9 @@ internal static class IngestReport
                 return Result<WorkerReportSummary>.Fail(WorkerRunErrors.NotActive(command.WorkerRunId));
             }
 
+            // Sequence number is computed from MAX(sequence_number) — workers are expected to post
+            // sequentially. Concurrent POSTs for the same run could compute the same sequence number,
+            // which may cause a collision on the (worker_run_id, sequence_number) index.
             int maxSequence = await dbContext.Set<WorkerReport>()
                 .Where(r => r.WorkerRunId == command.WorkerRunId)
                 .Select(r => (int?)r.SequenceNumber)
@@ -67,8 +80,6 @@ internal static class IngestReport
 
     internal static class Endpoint
     {
-        internal sealed record Request(string Type, string Content);
-
         public static void Map(RouteGroupBuilder group)
         {
             group.MapPost("/{runId:guid}/reports", static async (
@@ -84,12 +95,11 @@ internal static class IngestReport
 
                     Result<WorkerReportSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match(
-                        summary => TypedResults.Created($"/api/workers/{runId}/reports/{summary.Id}", summary) as IResult,
+                    return result.Match<Results<Created<WorkerReportSummary>, NotFound, BadRequest<string>>>(
+                        summary => TypedResults.Created($"/api/workers/{runId}/reports/{summary.Id}", summary),
                         error => error.Code switch
                         {
-                            WorkerRunErrors.NotFoundCode => TypedResults.NotFound() as IResult,
-                            WorkerRunErrors.NotActiveCode => TypedResults.BadRequest(error.Message),
+                            WorkerRunErrors.NotFoundCode => TypedResults.NotFound(),
                             _ => TypedResults.BadRequest(error.Message),
                         });
                 })

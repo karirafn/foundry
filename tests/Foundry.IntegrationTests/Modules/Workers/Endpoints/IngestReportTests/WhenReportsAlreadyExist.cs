@@ -57,7 +57,7 @@ public sealed class WhenReportsAlreadyExist : IAsyncDisposable
     }
 
     [Fact]
-    public async Task AssignsNextSequenceNumber()
+    public async Task WhenReportsAlreadyExist_AssignsNextSequenceNumber()
     {
         // Arrange
         WorkerRunId runId = await SeedActiveRunWithReportsAsync(existingReportCount: 3);

@@ -25,7 +25,7 @@ public sealed class WhenRunDoesNotExist : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsNotFound()
+    public async Task WhenRunDoesNotExist_ReturnsNotFound()
     {
         // Arrange
         Guid nonExistentRunId = Guid.NewGuid();

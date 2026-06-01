@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.WebApi.Persistence;
 
@@ -15,12 +14,12 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Workers.Endpoints.IngestReportTests;
 
-public sealed class WhenRunIsActive : IAsyncDisposable
+public sealed class WhenContentExceedsLimit : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenRunIsActive()
+    public WhenContentExceedsLimit()
     {
         _factory = new FoundryWebAppFactory();
         _client = _factory.CreateClient();
@@ -34,14 +33,14 @@ public sealed class WhenRunIsActive : IAsyncDisposable
 
     private async Task<WorkerRunId> SeedActiveRunAsync()
     {
-        // No HTTP endpoint exists to create active runs — seeded directly via DbContext.
+        // No HTTP endpoint to create active runs — seed directly via DbContext.
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         IssueId issueId = IssueId.New();
         WorkerRunId runId = WorkerRunId.New();
         StartingRun starting = StartingRun.Begin(issueId, runId);
-        ActiveRun active = starting.Activate(ContainerId.From("container-abc"));
+        ActiveRun active = starting.Activate(ContainerId.From("container-limit"));
 
         dbContext.Set<WorkerRun>().Add(active);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -50,11 +49,12 @@ public sealed class WhenRunIsActive : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRunIsActive_ReturnsCreatedWithSummary()
+    public async Task WhenContentExceedsLimit_ReturnsBadRequest()
     {
         // Arrange
         WorkerRunId runId = await SeedActiveRunAsync();
-        object request = new { Type = "progress", Content = "Building the thing..." };
+        string oversizedContent = new('x', 65537);
+        object request = new { Type = "progress", Content = oversizedContent };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(
@@ -63,15 +63,6 @@ public sealed class WhenRunIsActive : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        WorkerReportSummary? summary = await response.Content.ReadFromJsonAsync<WorkerReportSummary>(
-            TestContext.Current.CancellationToken);
-        summary.ShouldNotBeNull();
-        summary.ShouldSatisfyAllConditions(
-            () => summary.WorkerRunId.ShouldBe(runId.Value),
-            () => summary.SequenceNumber.ShouldBe(1),
-            () => summary.ReportType.ShouldBe("progress"),
-            () => summary.Content.ShouldBe("Building the thing..."),
-            () => summary.IngestedAt.ShouldBeGreaterThan(DateTimeOffset.UtcNow.AddMinutes(-1)));
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 }

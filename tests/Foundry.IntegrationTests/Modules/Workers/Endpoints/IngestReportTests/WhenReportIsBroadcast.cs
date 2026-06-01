@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.WebApi.Persistence;
@@ -56,7 +57,7 @@ public sealed class WhenReportIsBroadcast : IAsyncDisposable
     }
 
     [Fact]
-    public async Task PushesReportToIssueGroup()
+    public async Task WhenReportIsBroadcast_PushesReportToIssueGroup()
     {
         // Arrange
         (WorkerRunId runId, IssueId issueId) = await SeedActiveRunAsync();

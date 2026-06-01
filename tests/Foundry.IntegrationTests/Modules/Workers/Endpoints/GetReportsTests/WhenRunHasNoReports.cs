@@ -50,7 +50,7 @@ public sealed class WhenRunHasNoReports : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithEmptyList()
+    public async Task WhenRunHasNoReports_ReturnsOkWithEmptyList()
     {
         // Arrange
         WorkerRunId runId = await SeedActiveRunAsync();

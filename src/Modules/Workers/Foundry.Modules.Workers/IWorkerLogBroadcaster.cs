@@ -1,4 +1,6 @@
-namespace Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts;
+
+namespace Foundry.Modules.Workers;
 
 public interface IWorkerLogBroadcaster
 {

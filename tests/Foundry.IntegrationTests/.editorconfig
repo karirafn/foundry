@@ -1,0 +1,4 @@
+[*.cs]
+
+# CA1707: Remove the underscores from member name — suppressed for test projects (xUnit naming convention uses underscores)
+dotnet_diagnostic.CA1707.severity = none

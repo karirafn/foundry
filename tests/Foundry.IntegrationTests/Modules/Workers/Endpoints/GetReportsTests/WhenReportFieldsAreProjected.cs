@@ -54,7 +54,7 @@ public sealed class WhenReportFieldsAreProjected : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsCorrectFieldsForEachReport()
+    public async Task WhenReportFieldsAreProjected_ReturnsCorrectFieldsForEachReport()
     {
         // Arrange
         (WorkerRunId runId, WorkerReport report) = await SeedRunWithOneReportAsync();
