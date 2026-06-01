@@ -30,7 +30,8 @@ internal static class GetIssues
                 })
                 .WithName("GetIssues")
                 .WithSummary("Gets issue summaries, optionally filtered by repository")
-                .Produces<IReadOnlyList<IssueSummary>>();
+                .Produces<IReadOnlyList<IssueSummary>>()
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }
 }
