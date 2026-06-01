@@ -23,4 +23,10 @@ public interface IIssueProvider
         RepositorySlug slug,
         string pullRequestUrl,
         CancellationToken cancellationToken);
+
+    Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        DateTimeOffset since,
+        CancellationToken cancellationToken);
 }

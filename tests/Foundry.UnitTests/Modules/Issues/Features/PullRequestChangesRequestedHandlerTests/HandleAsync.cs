@@ -1,0 +1,169 @@
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
+using Foundry.WebApi.Persistence;
+
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.UnitTests.Modules.Issues.Features.PullRequestChangesRequestedHandlerTests;
+
+public sealed class HandleAsync : IAsyncDisposable
+{
+    private readonly SqliteConnection _connection;
+    private readonly FoundryDbContext _dbContext;
+    private readonly IIntegrationEventHandler<PullRequestChangesRequested> _sut;
+
+    private static IssueAuthor ValidAuthor =>
+        ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+
+    private static ProviderUrl ValidUrl =>
+        ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
+
+    public HandleAsync()
+    {
+        _connection = new SqliteConnection("Data Source=:memory:");
+        _connection.Open();
+
+        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+
+        _dbContext = new FoundryDbContext(options);
+        _dbContext.Database.EnsureCreated();
+        _sut = new PullRequestChangesRequestedHandler(
+            _dbContext,
+            NullLogger<PullRequestChangesRequestedHandler>.Instance);
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        await _dbContext.DisposeAsync();
+        await _connection.DisposeAsync();
+    }
+
+    private ReviewIssue SeedReviewIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: issueNumber,
+            title: "Issue title",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ReviewIssue review = inProgress.MarkInReview(
+            inProgress.WorkerRunId,
+            "feat/issue-1-fix",
+            "https://github.com/owner/repo/pull/10",
+            DateTimeOffset.UtcNow);
+        _dbContext.Set<Issue>().Add(review);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return review;
+    }
+
+    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 2)
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: issueNumber,
+            title: "Issue title",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        _dbContext.Set<Issue>().Add(queued);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return queued;
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueExists_TransitionsToRevisionQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        ReviewIssue review = SeedReviewIssue(repositoryId, issueNumber: 1);
+
+        IReadOnlyList<ReviewComment> comments =
+        [
+            new ReviewComment("Please fix the null check", "src/Service.cs", Line: 42),
+        ];
+
+        PullRequestChangesRequested @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Comments: comments);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
+        revisionQueued.ShouldSatisfyAllConditions(
+            () => revisionQueued.BranchName.ShouldBe("feat/issue-1-fix"),
+            () => revisionQueued.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"),
+            () => revisionQueued.ReviewComments.Count.ShouldBe(1),
+            () => revisionQueued.ReviewComments[0].Body.ShouldBe("Please fix the null check"));
+    }
+
+    [Fact]
+    public async Task WhenIssueNotInReviewState_SilentlyIgnores()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        QueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 2);
+
+        PullRequestChangesRequested @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 2,
+            Comments: [new ReviewComment("Comment", "file.cs", Line: 1)]);
+
+        // Act
+        Task act = _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — does not throw; issue remains in original state
+        await Should.NotThrowAsync(act);
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenIssueNotFound_SilentlyIgnores()
+    {
+        // Arrange
+        MonitoredRepositoryId unknownRepositoryId = MonitoredRepositoryId.New();
+
+        PullRequestChangesRequested @event = new(
+            RepositoryId: unknownRepositoryId,
+            IssueNumber: 999,
+            Comments: [new ReviewComment("Comment", "file.cs", Line: 1)]);
+
+        // Act
+        Task act = _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — does not throw
+        await Should.NotThrowAsync(act);
+    }
+}

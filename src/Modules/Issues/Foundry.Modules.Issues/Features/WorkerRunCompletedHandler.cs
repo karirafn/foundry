@@ -20,27 +20,45 @@ internal sealed class WorkerRunCompletedHandler(
         Issue? issue = await db.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
 
-        if (issue is not InProgressIssue inProgress)
+        if (issue is InProgressIssue inProgress)
         {
-            logger.LogWarning(
-                "WorkerRunCompleted received for issue {IssueId} but it is not InProgress (state: {State}); ignoring.",
-                @event.IssueId,
-                issue?.GetType().Name ?? "not found");
+            if (@event.BranchName is not null && @event.PullRequestUrl is not null)
+            {
+                ReviewIssue review = inProgress.MarkInReview(
+                    @event.WorkerRunId,
+                    @event.BranchName,
+                    @event.PullRequestUrl,
+                    DateTimeOffset.UtcNow);
+                await db.TransitionAsync(inProgress, review, cancellationToken);
+            }
+            else
+            {
+                UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
+                await db.TransitionAsync(inProgress, unchanged, cancellationToken);
+            }
+
             return;
         }
 
-        if (@event.BranchName is not null && @event.PullRequestUrl is not null)
+        if (issue is RevisionInProgressIssue revisionInProgress)
         {
-            ReviewIssue review = inProgress.MarkInReview(
-                @event.WorkerRunId,
-                @event.BranchName,
-                @event.PullRequestUrl);
-            await db.TransitionAsync(inProgress, review, cancellationToken);
+            if (@event.BranchName is not null && @event.PullRequestUrl is not null)
+            {
+                ReviewIssue review = revisionInProgress.MarkInReview(DateTimeOffset.UtcNow);
+                await db.TransitionAsync(revisionInProgress, review, cancellationToken);
+            }
+            else
+            {
+                ReviewIssue review = revisionInProgress.MarkUnchanged(DateTimeOffset.UtcNow);
+                await db.TransitionAsync(revisionInProgress, review, cancellationToken);
+            }
+
+            return;
         }
-        else
-        {
-            UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
-            await db.TransitionAsync(inProgress, unchanged, cancellationToken);
-        }
+
+        logger.LogWarning(
+            "WorkerRunCompleted received for issue {IssueId} but it is not InProgress (state: {State}); ignoring.",
+            @event.IssueId,
+            issue?.GetType().Name ?? "not found");
     }
 }

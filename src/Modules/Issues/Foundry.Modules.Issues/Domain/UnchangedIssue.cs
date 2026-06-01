@@ -38,10 +38,10 @@ public sealed class UnchangedIssue : Issue
         return queued;
     }
 
-    public CompletedIssue Complete(DateTimeOffset completedAt)
+    public DismissedIssue Complete(DateTimeOffset completedAt)
     {
-        CompletedIssue completed = CompletedIssue.FromUnchanged(this, completedAt);
-        AddDomainEvent(new Events.IssueCompleted(Id, MonitoredRepositoryId));
-        return completed;
+        DismissedIssue dismissed = DismissedIssue.FromUnchanged(this, completedAt);
+        AddDomainEvent(new Events.IssueDismissed(Id, MonitoredRepositoryId));
+        return dismissed;
     }
 }

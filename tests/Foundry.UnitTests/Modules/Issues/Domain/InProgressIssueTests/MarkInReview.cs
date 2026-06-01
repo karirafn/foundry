@@ -41,7 +41,11 @@ public sealed class MarkInReview
         Guid workerRunId = Guid.NewGuid();
 
         // Act
-        ReviewIssue review = inProgress.MarkInReview(workerRunId, "foundry/1/add-feature", "https://github.com/owner/repo/pull/5");
+        ReviewIssue review = inProgress.MarkInReview(
+            workerRunId,
+            "foundry/1/add-feature",
+            "https://github.com/owner/repo/pull/5",
+            DateTimeOffset.UtcNow);
 
         // Assert
         review.Id.ShouldBe(inProgress.Id);
@@ -56,7 +60,11 @@ public sealed class MarkInReview
         Guid workerRunId = Guid.NewGuid();
 
         // Act
-        inProgress.MarkInReview(workerRunId, "foundry/1/add-feature", "https://github.com/owner/repo/pull/5");
+        inProgress.MarkInReview(
+            workerRunId,
+            "foundry/1/add-feature",
+            "https://github.com/owner/repo/pull/5",
+            DateTimeOffset.UtcNow);
 
         // Assert
         IssueInReview domainEvent = inProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>();
@@ -76,7 +84,7 @@ public sealed class MarkInReview
         string pullRequestUrl = "https://github.com/owner/repo/pull/5";
 
         // Act
-        ReviewIssue review = inProgress.MarkInReview(workerRunId, branchName, pullRequestUrl);
+        ReviewIssue review = inProgress.MarkInReview(workerRunId, branchName, pullRequestUrl, DateTimeOffset.UtcNow);
 
         // Assert
         review.ShouldSatisfyAllConditions(

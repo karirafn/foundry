@@ -20,19 +20,29 @@ internal sealed class WorkerRunFailedHandler(
         Issue? issue = await db.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
 
-        if (issue is not InProgressIssue inProgress)
+        if (issue is InProgressIssue inProgress)
         {
-            logger.LogWarning(
-                "WorkerRunFailed received for issue {IssueId} but it is not InProgress (state: {State}); ignoring.",
-                @event.IssueId,
-                issue?.GetType().Name ?? "not found");
+            FailedIssue failed = inProgress.MarkFailed(
+                @event.WorkerRunId,
+                @event.ReasonDescription,
+                DateTimeOffset.UtcNow);
+            await db.TransitionAsync(inProgress, failed, cancellationToken);
             return;
         }
 
-        FailedIssue failed = inProgress.MarkFailed(
-            @event.WorkerRunId,
-            @event.ReasonDescription,
-            DateTimeOffset.UtcNow);
-        await db.TransitionAsync(inProgress, failed, cancellationToken);
+        if (issue is RevisionInProgressIssue revisionInProgress)
+        {
+            RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
+                @event.WorkerRunId,
+                @event.ReasonDescription,
+                DateTimeOffset.UtcNow);
+            await db.TransitionAsync(revisionInProgress, revisionFailed, cancellationToken);
+            return;
+        }
+
+        logger.LogWarning(
+            "WorkerRunFailed received for issue {IssueId} but it is not InProgress (state: {State}); ignoring.",
+            @event.IssueId,
+            issue?.GetType().Name ?? "not found");
     }
 }

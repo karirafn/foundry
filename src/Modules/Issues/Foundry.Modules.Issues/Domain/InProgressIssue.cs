@@ -31,9 +31,18 @@ public sealed class InProgressIssue : Issue
         return inProgress;
     }
 
-    public ReviewIssue MarkInReview(Guid workerRunId, string branchName, string pullRequestUrl)
+    public ReviewIssue MarkInReview(
+        Guid workerRunId,
+        string branchName,
+        string pullRequestUrl,
+        DateTimeOffset feedbackCutoffAt)
     {
-        ReviewIssue review = ReviewIssue.FromInProgress(this, workerRunId, branchName, pullRequestUrl);
+        ReviewIssue review = ReviewIssue.FromInProgress(
+            this,
+            workerRunId,
+            branchName,
+            pullRequestUrl,
+            feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }

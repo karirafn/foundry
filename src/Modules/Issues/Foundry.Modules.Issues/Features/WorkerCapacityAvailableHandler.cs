@@ -18,8 +18,19 @@ internal sealed class WorkerCapacityAvailableHandler(
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
     {
-        // Claim the oldest queued issue (FIFO).
+        // Revision queue takes priority — claim the oldest revision first, then fall back to fresh queue.
+        RevisionQueuedIssue? revisionQueued = await db.Set<RevisionQueuedIssue>()
+            .OrderBy(i => i.DetectedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (revisionQueued is not null)
+        {
+            await ClaimRevisionQueuedAsync(revisionQueued, @event.WorkerRunId, cancellationToken);
+            return;
+        }
+
         QueuedIssue? queued = await db.Set<QueuedIssue>()
+            .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (queued is null)
@@ -27,6 +38,56 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
+        await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
+    }
+
+    private async Task ClaimRevisionQueuedAsync(
+        RevisionQueuedIssue revisionQueued,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
+            revisionQueued.MonitoredRepositoryId,
+            cancellationToken);
+
+        if (dispatchInfo is null)
+        {
+            logger.LogWarning(
+                "Could not find dispatch info for repository {RepositoryId}; revision issue #{IssueNumber} not claimed.",
+                revisionQueued.MonitoredRepositoryId,
+                revisionQueued.IssueNumber);
+            return;
+        }
+
+        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
+        await db.TransitionAsync(revisionQueued, revisionInProgress, cancellationToken);
+
+        RevisionContext revision = new(
+            revisionQueued.BranchName,
+            revisionQueued.PullRequestUrl,
+            revisionQueued.ReviewComments);
+
+        ClaimedIssueDispatch dispatch = new(
+            revisionInProgress.Id,
+            workerRunId,
+            revisionInProgress.IssueNumber,
+            revisionInProgress.Title,
+            revisionInProgress.Body,
+            dispatchInfo.RepositorySlug,
+            dispatchInfo.CloneUrl,
+            dispatchInfo.AccountSecretKeyName,
+            revision);
+
+        await integrationEventDispatcher.DispatchAsync(
+            [new IssueClaimed(dispatch)],
+            cancellationToken);
+    }
+
+    private async Task ClaimQueuedAsync(
+        QueuedIssue queued,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
         RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
             queued.MonitoredRepositoryId,
             cancellationToken);
@@ -40,12 +101,12 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        InProgressIssue inProgress = queued.Claim(@event.WorkerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId);
         await db.TransitionAsync(queued, inProgress, cancellationToken);
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,
-            @event.WorkerRunId,
+            workerRunId,
             inProgress.IssueNumber,
             inProgress.Title,
             inProgress.Body,

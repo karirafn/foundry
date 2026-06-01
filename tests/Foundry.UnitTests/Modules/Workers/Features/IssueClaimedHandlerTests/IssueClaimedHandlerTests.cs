@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
@@ -69,7 +70,8 @@ public sealed class HandleAsync : IAsyncDisposable
         string title = "Test Issue",
         string body = "Test body",
         string repositorySlug = "owner/repo",
-        string secretKeyName = "GITHUB_PAT")
+        string secretKeyName = "GITHUB_PAT",
+        RevisionContext? revision = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -79,7 +81,8 @@ public sealed class HandleAsync : IAsyncDisposable
             body,
             repositorySlug,
             new Uri($"https://github.com/{repositorySlug}.git"),
-            secretKeyName);
+            secretKeyName,
+            revision);
         return new IssueClaimed(dispatch);
     }
 
@@ -232,6 +235,45 @@ public sealed class HandleAsync : IAsyncDisposable
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
         error.Message.ShouldContain("MY_SECRET");
+    }
+
+    [Fact]
+    public async Task WhenRevisionContextPresent_ContainerSpecHasBranchNameEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c4");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        RevisionContext revision = new(
+            "feat/42-fix",
+            "https://github.com/owner/repo/pull/10",
+            [new ReviewComment("Please add tests.")]);
+        IssueClaimed @event = BuildEvent(revision: revision);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldContainKey("BRANCH_NAME");
+        spec.EnvironmentVariables["BRANCH_NAME"].ShouldBe("feat/42-fix");
+    }
+
+    [Fact]
+    public async Task WhenNoRevisionContext_NoBranchNameEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c5");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(revision: null);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME");
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

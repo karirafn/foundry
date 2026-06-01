@@ -203,6 +203,31 @@ internal sealed class RepositoryPoller(
             if (prStatusSuccess.Value.IsClosed && !prStatusSuccess.Value.IsMerged)
             {
                 repository.RecordIntegrationEvent(new ProviderPullRequestClosed(repository.Id, reviewIssue.IssueNumber));
+                continue;
+            }
+
+            if (prStatusSuccess.Value.IsClosed)
+            {
+                continue;
+            }
+
+            Result<ReviewFeedback> feedbackResult = await provider.GetReviewFeedbackAsync(
+                repository.Slug,
+                reviewIssue.PullRequestUrl,
+                reviewIssue.FeedbackCutoffAt,
+                cancellationToken);
+
+            if (feedbackResult is not Result<ReviewFeedback>.Success feedbackSuccess)
+            {
+                continue;
+            }
+
+            if (feedbackSuccess.Value.Comments.Count > 0)
+            {
+                repository.RecordIntegrationEvent(new PullRequestChangesRequested(
+                    repository.Id,
+                    reviewIssue.IssueNumber,
+                    feedbackSuccess.Value.Comments));
             }
         }
     }

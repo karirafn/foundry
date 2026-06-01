@@ -419,7 +419,10 @@ public sealed class PollAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: "https://github.com/owner/repo/pull/99");
+        ReviewIssueInfo reviewIssue = new(
+            IssueNumber: 42,
+            PullRequestUrl: "https://github.com/owner/repo/pull/99",
+            FeedbackCutoffAt: Now);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -452,7 +455,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -489,7 +492,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -522,8 +525,11 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/200";
-        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: "https://github.com/owner/repo/pull/100");
-        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl);
+        ReviewIssueInfo failingIssue = new(
+            IssueNumber: 10,
+            PullRequestUrl: "https://github.com/owner/repo/pull/100",
+            FeedbackCutoffAt: Now);
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl, FeedbackCutoffAt: Now);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -558,7 +564,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -591,7 +597,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -651,11 +657,186 @@ public sealed class PollAsync : IAsyncDisposable
         repository.LastPolledAt.ShouldBe(Now);
     }
 
+    [Fact]
+    public async Task WhenReviewIssuePrIsOpenAndProviderReturnsFeedback_RaisesPullRequestChangesRequested()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        DateTimeOffset cutoff = Now.AddHours(-1);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
+        };
+        ReviewComment comment = new("Please fix the indentation", "src/Foo.cs", 42);
+        Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
+        {
+            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment])),
+        };
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: isClosedResults,
+            pullRequestStatusResults: prStatusResults,
+            reviewFeedbackResults: feedbackResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        PullRequestChangesRequested changesRequested = _dispatcher.DispatchedEvents
+            .OfType<PullRequestChangesRequested>()
+            .ShouldHaveSingleItem();
+        changesRequested.ShouldSatisfyAllConditions(
+            () => changesRequested.RepositoryId.ShouldBe(repository.Id),
+            () => changesRequested.IssueNumber.ShouldBe(42),
+            () => changesRequested.Comments.Count.ShouldBe(1),
+            () => changesRequested.Comments[0].ShouldBe(comment));
+    }
+
+    [Fact]
+    public async Task WhenReviewIssuePrIsOpenAndProviderReturnsEmptyFeedback_RaisesNoPullRequestChangesRequested()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
+        };
+        Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
+        {
+            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([])),
+        };
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: isClosedResults,
+            pullRequestStatusResults: prStatusResults,
+            reviewFeedbackResults: feedbackResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<PullRequestChangesRequested>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenGetReviewFeedbackFailsForReviewIssue_SkipsThatIssueAndContinues()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl1 = "https://github.com/owner/repo/pull/10";
+        string prUrl2 = "https://github.com/owner/repo/pull/20";
+        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: prUrl1, FeedbackCutoffAt: Now);
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl2, FeedbackCutoffAt: Now);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [failingIssue, successIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [10] = Result<bool>.Ok(false),
+            [20] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl1] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
+            [prUrl2] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
+        };
+        Error feedbackError = new("GitHub.RateLimited", "Rate limited");
+        ReviewComment comment = new("Please address this");
+        Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
+        {
+            [prUrl1] = Result<ReviewFeedback>.Fail(feedbackError),
+            [prUrl2] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment])),
+        };
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: isClosedResults,
+            pullRequestStatusResults: prStatusResults,
+            reviewFeedbackResults: feedbackResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<PullRequestChangesRequested> events = _dispatcher.DispatchedEvents
+            .OfType<PullRequestChangesRequested>()
+            .ToList();
+        events.Count.ShouldBe(1);
+        events.ShouldContain(e => e.IssueNumber == 20);
+        events.ShouldNotContain(e => e.IssueNumber == 10);
+    }
+
+    [Fact]
+    public async Task WhenReviewIssuePrIsClosedAndMerged_DoesNotCallGetReviewFeedback()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true)),
+        };
+        // No feedback configured — if called, stub returns empty feedback (not a problem for this test's assertion)
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<PullRequestChangesRequested>().ShouldBeEmpty();
+    }
+
     private sealed class StubIssueProvider(
         IReadOnlyList<ProviderIssue> issues,
         IReadOnlyDictionary<int, Result<IReadOnlyList<int>>>? dependencyResults = null,
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
-        IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null) : IIssueProvider
+        IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null,
+        IReadOnlyDictionary<string, Result<ReviewFeedback>>? reviewFeedbackResults = null) : IIssueProvider
     {
         public StubIssueProvider() : this([])
         {
@@ -707,6 +888,21 @@ public sealed class PollAsync : IAsyncDisposable
 
             return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
         }
+
+        public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            DateTimeOffset since,
+            CancellationToken cancellationToken)
+        {
+            if (reviewFeedbackResults is not null
+                && reviewFeedbackResults.TryGetValue(pullRequestUrl, out Result<ReviewFeedback>? result))
+            {
+                return Task.FromResult(result);
+            }
+
+            return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+        }
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
@@ -740,6 +936,15 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<PullRequestStatus>.Fail(error));
+        }
+
+        public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            DateTimeOffset since,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<ReviewFeedback>.Fail(error));
         }
     }
 

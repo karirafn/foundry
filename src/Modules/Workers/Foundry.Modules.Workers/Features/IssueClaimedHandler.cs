@@ -98,7 +98,8 @@ internal sealed class IssueClaimedHandler(
             claimed.IssueNumber,
             claimed.Title,
             claimed.Body,
-            _options);
+            _options,
+            claimed.Revision);
 
         string reportsHostPath = Path.Combine(_options.ReportsPath, startingRun.Id.Value.ToString());
 
@@ -112,6 +113,11 @@ internal sealed class IssueClaimedHandler(
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
             ["SYSTEM_PROMPT"] = systemPrompt,
         };
+
+        if (claimed.Revision is not null)
+        {
+            envVars["BRANCH_NAME"] = claimed.Revision.BranchName;
+        }
 
         List<BindMount> bindMounts =
         [

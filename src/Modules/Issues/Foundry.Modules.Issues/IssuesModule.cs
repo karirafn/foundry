@@ -24,6 +24,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<WorkerRunFailed, WorkerRunFailedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
+        services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
 
         return services;
     }

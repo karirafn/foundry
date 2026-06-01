@@ -69,35 +69,6 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenCompletedFromUnchanged_CanBeReloadedAsCompletedIssueWithNullPrFields()
-    {
-        // Arrange
-        DateTimeOffset completedAt = new DateTimeOffset(2026, 5, 30, 14, 0, 0, TimeSpan.Zero);
-        InProgressIssue inProgress = await BuildInProgressIssue(issueNumber: 45);
-
-        UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
-        await _dbContext.TransitionAsync(inProgress, unchanged, TestContext.Current.CancellationToken);
-
-        CompletedIssue completed = unchanged.Complete(completedAt);
-        await _dbContext.TransitionAsync(unchanged, completed, TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Act
-        Issue? result = await _dbContext
-            .Set<Issue>()
-            .FindAsync([completed.Id], TestContext.Current.CancellationToken);
-
-        // Assert
-        CompletedIssue reloaded = result.ShouldBeOfType<CompletedIssue>();
-        reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.CompletedAt.ShouldBe(completedAt),
-            () => reloaded.BranchName.ShouldBeNull(),
-            () => reloaded.PullRequestUrl.ShouldBeNull(),
-            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
-            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
-    }
-
-    [Fact]
     public async Task WhenCompletedFromReview_CanBeReloadedAsCompletedIssueWithPrFields()
     {
         // Arrange
@@ -107,7 +78,8 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
             "feat/issue-46",
-            "https://github.com/owner/repo/pull/2");
+            "https://github.com/owner/repo/pull/2",
+            DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
 
         CompletedIssue completed = review.Complete(completedAt);

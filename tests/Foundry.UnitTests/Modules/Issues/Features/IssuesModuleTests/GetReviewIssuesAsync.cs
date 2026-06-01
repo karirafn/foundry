@@ -71,7 +71,7 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
 
-        ReviewIssue review = inProgress.MarkInReview(Guid.NewGuid(), $"feat/issue-{issueNumber}", pullRequestUrl);
+        ReviewIssue review = inProgress.MarkInReview(Guid.NewGuid(), $"feat/issue-{issueNumber}", pullRequestUrl, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
 
         return review;
@@ -111,6 +111,25 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         info.ShouldSatisfyAllConditions(
             () => info.IssueNumber.ShouldBe(10),
             () => info.PullRequestUrl.ShouldBe(pullRequestUrl));
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueExists_ReturnsFeedbackCutoffAt()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        const string pullRequestUrl = "https://github.com/owner/repo/pull/42";
+
+        ReviewIssue review = await CreateAndPersistReviewIssueAsync(repositoryId, issueNumber: 10, pullRequestUrl);
+
+        // Act
+        IReadOnlyList<ReviewIssueInfo> result = await _sut.GetReviewIssuesAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        ReviewIssueInfo info = result.ShouldHaveSingleItem();
+        info.FeedbackCutoffAt.ShouldBe(review.FeedbackCutoffAt);
     }
 
     [Fact]

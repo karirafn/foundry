@@ -45,7 +45,7 @@ internal sealed class IssueQueries(DbContext db) : IIssueQueries
         return await db.Set<ReviewIssue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
-            .Select(i => new ReviewIssueInfo(i.IssueNumber, i.PullRequestUrl))
+            .Select(i => new ReviewIssueInfo(i.IssueNumber, i.PullRequestUrl, i.FeedbackCutoffAt))
             .ToListAsync(cancellationToken);
     }
 

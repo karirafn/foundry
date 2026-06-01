@@ -69,7 +69,8 @@ public sealed class PersistReviewIssue : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
 
         Guid reviewWorkerRunId = Guid.NewGuid();
-        ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-42", "https://github.com/owner/repo/pull/1");
+        DateTimeOffset feedbackCutoffAt = new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero);
+        ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-42", "https://github.com/owner/repo/pull/1", feedbackCutoffAt);
         await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 

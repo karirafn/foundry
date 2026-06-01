@@ -262,6 +262,15 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
                 return Task.FromResult(
                     Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
             }
+
+            public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+                RepositorySlug slug,
+                string pullRequestUrl,
+                DateTimeOffset since,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+            }
         }
     }
 
