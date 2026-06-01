@@ -114,6 +114,7 @@ export class IssueCardComponent {
 
   onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
       this.toggle.emit();
     }
   }

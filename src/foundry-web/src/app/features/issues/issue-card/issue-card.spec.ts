@@ -223,4 +223,36 @@ describe('IssueCardComponent', () => {
     // Assert
     expect(emitted).toBe(true);
   });
+
+  it('should call preventDefault when Space key is pressed to prevent page scroll', () => {
+    // Arrange
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    let defaultPrevented = false;
+    event.preventDefault = () => { defaultPrevented = true; };
+
+    // Act
+    card.dispatchEvent(event);
+
+    // Assert
+    expect(defaultPrevented).toBe(true);
+  });
+
+  it('should call preventDefault when Enter key is pressed', () => {
+    // Arrange
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    let defaultPrevented = false;
+    event.preventDefault = () => { defaultPrevented = true; };
+
+    // Act
+    card.dispatchEvent(event);
+
+    // Assert
+    expect(defaultPrevented).toBe(true);
+  });
 });
