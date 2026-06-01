@@ -82,8 +82,9 @@ public sealed class WhenIssueExists : IAsyncLifetime
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IssueDetail detail = (await response.Content.ReadFromJsonAsync<IssueDetail>(
-            TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
+            TestContext.Current.CancellationToken);
+        detail.ShouldNotBeNull();
         detail.ShouldSatisfyAllConditions(
             () => detail.Id.ShouldBe(issue.Id.Value),
             () => detail.IssueNumber.ShouldBe(7),

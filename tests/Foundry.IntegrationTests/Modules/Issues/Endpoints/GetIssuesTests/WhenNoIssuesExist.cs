@@ -34,15 +34,16 @@ public sealed class WhenNoIssuesExist : IAsyncLifetime
     [Fact]
     public async Task ReturnsOkWithEmptyList()
     {
-        // Arrange & Act
+        // Act
         HttpResponseMessage response = await _client.GetAsync(
             new Uri("/api/issues", UriKind.Relative),
             TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary> summaries = (await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
-            TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+            TestContext.Current.CancellationToken);
+        summaries.ShouldNotBeNull();
         summaries.ShouldBeEmpty();
     }
 }

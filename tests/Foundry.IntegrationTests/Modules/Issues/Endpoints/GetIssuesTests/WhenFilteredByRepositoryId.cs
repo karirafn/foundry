@@ -82,8 +82,9 @@ public sealed class WhenFilteredByRepositoryId : IAsyncLifetime
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary> summaries = (await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
-            TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+            TestContext.Current.CancellationToken);
+        summaries.ShouldNotBeNull();
         IssueSummary summary = summaries.ShouldHaveSingleItem();
         summary.IssueNumber.ShouldBe(1);
     }

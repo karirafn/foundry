@@ -80,8 +80,9 @@ public sealed class WhenIssuesExist : IAsyncLifetime
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary> summaries = (await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
-            TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+            TestContext.Current.CancellationToken);
+        summaries.ShouldNotBeNull();
         IssueSummary summary = summaries.ShouldHaveSingleItem();
         summary.ShouldSatisfyAllConditions(
             () => summary.IssueNumber.ShouldBe(1),
