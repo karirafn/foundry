@@ -34,12 +34,6 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         builder.UseEnvironment("Testing");
     }
 
-    public HttpClient CreateAuthorizedClient()
-    {
-        HttpClient client = CreateClient();
-        return client;
-    }
-
     public async Task EnsureDatabaseCreatedAsync()
     {
         using IServiceScope scope = Services.CreateScope();
