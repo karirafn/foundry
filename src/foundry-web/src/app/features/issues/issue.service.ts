@@ -1,0 +1,77 @@
+import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { SignalRService } from '../../core/services/signalr.service';
+import { IssueDetail, IssueSummary } from './issue.model';
+
+@Injectable({ providedIn: 'root' })
+export class IssueService {
+  private readonly _http = inject(HttpClient);
+  private readonly _signalR = inject(SignalRService);
+
+  readonly issues: WritableSignal<IssueSummary[]> = signal([]);
+  readonly expandedIssueId: WritableSignal<string | null> = signal(null);
+  readonly issueDetail: WritableSignal<IssueDetail | null> = signal(null);
+  readonly detailLoading: WritableSignal<boolean> = signal(false);
+
+  readonly sortedIssues: Signal<IssueSummary[]> = computed(() =>
+    [...this.issues()].sort(
+      (a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime()
+    )
+  );
+
+  readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
+
+  constructor() {
+    this._signalR.on<IssueSummary>('IssueUpdated', (updated) => this._upsertIssue(updated));
+    this._signalR.onReconnected(() => this.loadIssues());
+  }
+
+  loadIssues(repositoryId?: string): void {
+    let params = new HttpParams();
+    if (repositoryId !== undefined) {
+      params = params.set('repositoryId', repositoryId);
+    }
+
+    this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
+      next: (issues) => this.issues.set(issues),
+    });
+  }
+
+  loadDetail(id: string): void {
+    this.detailLoading.set(true);
+    this._http.get<IssueDetail>(`/api/issues/${id}`).subscribe({
+      next: (detail) => {
+        this.issueDetail.set(detail);
+        this.detailLoading.set(false);
+      },
+    });
+  }
+
+  toggleExpand(id: string): void {
+    if (this.expandedIssueId() === id) {
+      this.expandedIssueId.set(null);
+      this.issueDetail.set(null);
+      return;
+    }
+
+    this.expandedIssueId.set(id);
+    this.loadDetail(id);
+  }
+
+  private _upsertIssue(updated: IssueSummary): void {
+    const current = this.issues();
+    const index = current.findIndex((i) => i.id === updated.id);
+
+    if (index >= 0) {
+      const next = [...current];
+      next[index] = updated;
+      this.issues.set(next);
+    } else {
+      this.issues.set([...current, updated]);
+    }
+
+    if (this.expandedIssueId() === updated.id) {
+      this.loadDetail(updated.id);
+    }
+  }
+}
