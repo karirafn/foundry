@@ -312,6 +312,11 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         {
             return Task.FromResult<IReadOnlyList<IssueSummary>>([]);
         }
+
+        public Task<IssueDetail?> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IssueDetail?>(null);
+        }
     }
 
     private sealed class NullDomainEventDispatcher : IDomainEventDispatcher

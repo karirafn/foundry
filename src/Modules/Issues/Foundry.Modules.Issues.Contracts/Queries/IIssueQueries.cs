@@ -24,4 +24,6 @@ public interface IIssueQueries
     Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken);
+
+    Task<IssueDetail?> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken);
 }

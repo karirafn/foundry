@@ -99,6 +99,169 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             .ToList();
     }
 
+    public async Task<IssueDetail?> GetIssueDetailAsync(
+        IssueId issueId,
+        CancellationToken cancellationToken)
+    {
+        Issue? issue = await db.Set<Issue>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
+
+        if (issue is null)
+        {
+            return null;
+        }
+
+        IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
+            new HashSet<MonitoredRepositoryId> { issue.MonitoredRepositoryId },
+            cancellationToken);
+
+        string repositorySlug = slugs.TryGetValue(issue.MonitoredRepositoryId, out string? slug)
+            ? slug
+            : string.Empty;
+
+        string state = GetStateDiscriminator(issue);
+
+        IssueStateDetails? stateDetails = BuildStateDetails(issue);
+
+        return new IssueDetail(
+            Id: issue.Id.Value,
+            IssueNumber: issue.IssueNumber,
+            Title: issue.Title,
+            State: state,
+            RepositorySlug: repositorySlug,
+            DetectedAt: issue.DetectedAt,
+            Url: issue.Url.Value.ToString(),
+            Body: issue.Body,
+            Author: issue.Author.Value,
+            Labels: issue.Labels,
+            StateDetails: stateDetails);
+    }
+
+    private static string GetStateDiscriminator(Issue issue) =>
+        issue switch
+        {
+            DetectedIssue => "detected",
+            QueuedIssue => "queued",
+            BlockedIssue => "blocked",
+            InProgressIssue => "in_progress",
+            ReviewIssue => "review",
+            UnchangedIssue => "unchanged",
+            FailedIssue => "failed",
+            CompletedIssue => "completed",
+            DismissedIssue => "dismissed",
+            RevisionQueuedIssue => "revision_queued",
+            RevisionInProgressIssue => "revision_in_progress",
+            RevisionFailedIssue => "revision_failed",
+            _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
+        };
+
+    private static IssueStateDetails? BuildStateDetails(Issue issue) =>
+        issue switch
+        {
+            BlockedIssue blocked => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: null,
+                PullRequestUrl: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: blocked.BlockedBy),
+
+            InProgressIssue inProgress => new IssueStateDetails(
+                WorkerRunId: inProgress.WorkerRunId,
+                BranchName: null,
+                PullRequestUrl: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null),
+
+            ReviewIssue review => new IssueStateDetails(
+                WorkerRunId: review.WorkerRunId,
+                BranchName: review.BranchName,
+                PullRequestUrl: review.PullRequestUrl,
+                FeedbackCutoffAt: review.FeedbackCutoffAt,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null),
+
+            UnchangedIssue unchanged => new IssueStateDetails(
+                WorkerRunId: unchanged.WorkerRunId,
+                BranchName: null,
+                PullRequestUrl: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null),
+
+            FailedIssue failed => new IssueStateDetails(
+                WorkerRunId: failed.WorkerRunId,
+                BranchName: null,
+                PullRequestUrl: null,
+                FeedbackCutoffAt: null,
+                FailureReason: failed.FailureReason,
+                FailedAt: failed.FailedAt,
+                CompletedAt: null,
+                BlockedBy: null),
+
+            CompletedIssue completed => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: completed.BranchName,
+                PullRequestUrl: completed.PullRequestUrl,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: completed.CompletedAt,
+                BlockedBy: null),
+
+            DismissedIssue dismissed => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: null,
+                PullRequestUrl: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: dismissed.CompletedAt,
+                BlockedBy: null),
+
+            RevisionQueuedIssue revisionQueued => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: revisionQueued.BranchName,
+                PullRequestUrl: revisionQueued.PullRequestUrl,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null),
+
+            RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
+                WorkerRunId: revisionInProgress.WorkerRunId,
+                BranchName: revisionInProgress.BranchName,
+                PullRequestUrl: revisionInProgress.PullRequestUrl,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null),
+
+            RevisionFailedIssue revisionFailed => new IssueStateDetails(
+                WorkerRunId: revisionFailed.WorkerRunId,
+                BranchName: revisionFailed.BranchName,
+                PullRequestUrl: revisionFailed.PullRequestUrl,
+                FeedbackCutoffAt: null,
+                FailureReason: revisionFailed.FailureReason,
+                FailedAt: revisionFailed.FailedAt,
+                CompletedAt: null,
+                BlockedBy: null),
+
+            _ => null
+        };
+
     private sealed record IssueProjection(
         IssueId Id,
         int IssueNumber,
