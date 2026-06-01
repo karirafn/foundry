@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
@@ -27,6 +28,7 @@ public static class MonitoringModule
 
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
+        services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();
         services.AddScoped<RepositoryPoller>();
 
         services.AddHostedService<MonitoringSeeder>();
