@@ -35,6 +35,13 @@
   --fd-spacing-xl: 1.5rem;
   --fd-spacing-2xl: 2rem;
 
+  /* State live indicator */
+  --fd-state-live: #3fb950;
+  --fd-text-on-state: #ffffff;
+
+  /* Error backgrounds */
+  --fd-bg-error-subtle: rgba(218, 54, 51, 0.08);
+
   /* Border radii */
   --fd-radius-sm: 6px;
   --fd-radius-md: 8px;
