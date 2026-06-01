@@ -33,7 +33,7 @@ describe('IssueCardComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should render a card container with role="button"', () => {
+  it('should render a native button as the card container', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
@@ -41,7 +41,7 @@ describe('IssueCardComponent', () => {
     // Assert
     const card = el.querySelector('.issue-card') as HTMLElement;
     expect(card).toBeTruthy();
-    expect(card.getAttribute('role')).toBe('button');
+    expect(card.tagName).toBe('BUTTON');
   });
 
   // Cycle 2: meta row renders issue number and repo slug
@@ -196,14 +196,15 @@ describe('IssueCardComponent', () => {
     expect(card?.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('should have tabindex="0" for keyboard accessibility', () => {
+  it('should be focusable as a native button', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
-    expect(card?.getAttribute('tabindex')).toBe('0');
+    const card = el.querySelector('.issue-card') as HTMLButtonElement;
+    expect(card?.tagName).toBe('BUTTON');
+    expect(card?.type).toBe('button');
   });
 
   // Cycle 6b: aria-controls and aria-label

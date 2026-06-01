@@ -22,7 +22,7 @@ describe('ConnectionIndicatorComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should have role="status" and aria-live="polite"', () => {
+  it('should have role="status" without redundant aria-live', () => {
     // Arrange / Act
     const fixture = createComponent('connected');
     const el = fixture.nativeElement as HTMLElement;
@@ -30,7 +30,7 @@ describe('ConnectionIndicatorComponent', () => {
 
     // Assert
     expect(host?.getAttribute('role')).toBe('status');
-    expect(host?.getAttribute('aria-live')).toBe('polite');
+    expect(host?.getAttribute('aria-live')).toBeNull();
   });
 
   // Cycle 2: label text for each connection status
