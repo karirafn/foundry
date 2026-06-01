@@ -105,6 +105,9 @@ internal sealed class IssueClaimedHandler(
 
         Directory.CreateDirectory(reportsHostPath);
 
+        string workerPrompt = _options.WorkerPromptTemplate
+            .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+
         Dictionary<string, string> envVars = new()
         {
             ["ANTHROPIC_API_KEY"] = _options.ApiKey,
@@ -112,6 +115,7 @@ internal sealed class IssueClaimedHandler(
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
             ["SYSTEM_PROMPT"] = systemPrompt,
+            ["WORKER_PROMPT"] = workerPrompt,
         };
 
         if (claimed.Revision is not null)
@@ -121,7 +125,7 @@ internal sealed class IssueClaimedHandler(
 
         List<BindMount> bindMounts =
         [
-            new BindMount(Path.GetFullPath(_options.ConfigPath), "/home/user/.claude/"),
+            new BindMount(Path.GetFullPath(_options.ConfigPath), "/home/claude/.claude/"),
             new BindMount(Path.GetFullPath(reportsHostPath), "/reports/"),
         ];
 
@@ -134,7 +138,8 @@ internal sealed class IssueClaimedHandler(
             _options.Image,
             envVars,
             bindMounts,
-            labels));
+            labels,
+            ["/entrypoint.sh"]));
     }
 
     private async Task<Result<string>> ResolveGitPatAsync(

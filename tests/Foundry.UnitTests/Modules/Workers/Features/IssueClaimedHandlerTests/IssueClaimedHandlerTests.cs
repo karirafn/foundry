@@ -192,10 +192,10 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldContain(m => m.ContainerPath == "/home/user/.claude/");
+        spec.BindMounts.ShouldContain(m => m.ContainerPath == "/home/claude/.claude/");
         spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/");
         spec.BindMounts
-            .First(m => m.ContainerPath == "/home/user/.claude/")
+            .First(m => m.ContainerPath == "/home/claude/.claude/")
             .HostPath
             .ShouldBe(Path.GetFullPath("/tmp/config"));
     }
@@ -274,6 +274,43 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME");
+    }
+
+    [Fact]
+    public async Task WhenOrchestratorSucceeds_ContainerSpecHasWorkerPromptEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c6");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(issueNumber: 42);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldContainKey("WORKER_PROMPT");
+        spec.EnvironmentVariables["WORKER_PROMPT"].ShouldContain("42");
+        spec.EnvironmentVariables["WORKER_PROMPT"].ShouldNotContain("{issueNumber}");
+    }
+
+    [Fact]
+    public async Task WhenOrchestratorSucceeds_ContainerSpecCommandIsEntrypoint()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c7");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.Command.ShouldHaveSingleItem();
+        spec.Command[0].ShouldBe("/entrypoint.sh");
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

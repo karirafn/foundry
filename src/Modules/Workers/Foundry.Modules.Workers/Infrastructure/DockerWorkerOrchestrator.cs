@@ -31,6 +31,7 @@ internal sealed class DockerWorkerOrchestrator(
             CreateContainerParameters createParams = new()
             {
                 Image = spec.Image,
+                Cmd = [.. spec.Command],
                 Env = [.. spec.EnvironmentVariables.Select(kv => $"{kv.Key}={kv.Value}")],
                 Labels = new Dictionary<string, string>(spec.Labels),
                 HostConfig = new HostConfig
