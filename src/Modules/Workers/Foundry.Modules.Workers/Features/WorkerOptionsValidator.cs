@@ -40,7 +40,11 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
             failures.Add("Workers:ReportsPath must not contain path traversal segments (..).");
         }
 
-        if (!options.WorkerPromptTemplate.Contains("{issueNumber}", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(options.WorkerPromptTemplate))
+        {
+            failures.Add("Workers:WorkerPromptTemplate must be non-empty.");
+        }
+        else if (!options.WorkerPromptTemplate.Contains("{issueNumber}", StringComparison.Ordinal))
         {
             failures.Add("Workers:WorkerPromptTemplate must contain the {issueNumber} token.");
         }

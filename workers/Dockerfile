@@ -12,7 +12,7 @@ RUN useradd --create-home --shell /bin/bash claude && \
     chown claude:claude /workspace
 
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod 555 /entrypoint.sh
 
 WORKDIR /workspace
 
