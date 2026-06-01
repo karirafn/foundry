@@ -12,6 +12,7 @@ internal static class WorkerEndpoints
             .WithTags("Workers");
 
         IngestReport.Endpoint.Map(group);
+        GetReports.Endpoint.Map(group);
 
         return routes;
     }

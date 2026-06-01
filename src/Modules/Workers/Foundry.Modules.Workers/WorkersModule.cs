@@ -34,6 +34,7 @@ public static class WorkersModule
         services.AddHostedService<WorkerDispatchService>();
 
         services.AddCommandHandler<IngestReport.Command, WorkerReportSummary, IngestReport.Handler>();
+        services.AddQueryHandler<GetReports.Query, IReadOnlyList<WorkerReportSummary>, GetReports.Handler>();
 
         return services;
     }
