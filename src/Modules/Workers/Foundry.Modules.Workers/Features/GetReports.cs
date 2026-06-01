@@ -72,7 +72,8 @@ internal static class GetReports
                 .WithName("GetWorkerReports")
                 .WithSummary("Gets historical reports for a worker run ordered by sequence number")
                 .Produces<IReadOnlyList<WorkerReportSummary>>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

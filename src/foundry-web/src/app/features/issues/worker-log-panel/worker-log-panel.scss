@@ -110,7 +110,7 @@
     height: 100%;
     min-height: 4rem;
     font-size: 0.8125rem;
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-style: italic;
   }
 
@@ -172,7 +172,6 @@
 
     &--error {
       border-inline-start: 3px solid var(--fd-state-failed);
-      background: var(--fd-bg-error-subtle);
       padding-inline-start: calc(var(--fd-spacing-lg) - 3px);
 
       & .worker-log-panel__timestamp {
@@ -192,7 +191,7 @@
 
   &__timestamp {
     font-size: 0.75rem;
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     white-space: nowrap;
     min-width: 5.5rem;
     flex-shrink: 0;

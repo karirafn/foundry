@@ -213,6 +213,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
           (keydown.escape)="closeLogPanel()"
           (click)="onOverlayBackdropClick($event)"
         >
+          <span #focusTrapStart class="issue-detail__focus-sentinel" tabindex="0" aria-hidden="true" (focus)="focusOverlayClose()"></span>
           <div class="issue-detail__overlay-inner" (click)="$event.stopPropagation()">
             <div class="issue-detail__overlay-header">
               <span class="issue-detail__overlay-title">Worker Logs</span>
@@ -251,6 +252,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
               />
             </div>
           </div>
+          <span #focusTrapEnd class="issue-detail__focus-sentinel" tabindex="0" aria-hidden="true" (focus)="focusOverlayClose()"></span>
         </div>
       }
     }
@@ -317,5 +319,9 @@ export class IssueDetailComponent implements OnDestroy {
     if (event.target === event.currentTarget) {
       this.closeLogPanel();
     }
+  }
+
+  focusOverlayClose(): void {
+    this._overlayCloseBtn?.nativeElement.focus();
   }
 }
