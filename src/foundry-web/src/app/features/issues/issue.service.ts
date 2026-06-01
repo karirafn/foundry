@@ -30,6 +30,8 @@ export class IssueService {
   }
 
   loadIssues(repositoryId?: string): void {
+    this.loadError.set(null);
+
     let params = new HttpParams();
     if (repositoryId !== undefined) {
       params = params.set('repositoryId', repositoryId);
@@ -49,6 +51,7 @@ export class IssueService {
   }
 
   loadDetail(id: string): void {
+    this.detailError.set(null);
     this.detailLoading.set(true);
     this._http.get<IssueDetail>(`/api/issues/${id}`).subscribe({
       next: (detail) => {
