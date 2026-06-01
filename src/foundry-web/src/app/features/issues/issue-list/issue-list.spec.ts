@@ -146,6 +146,40 @@ describe('IssueListComponent', () => {
     expect(emptyState).toBeFalsy();
   });
 
+  it('should not render fd-empty-state during initial load before the first response', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act — detect changes but do NOT flush the HTTP response
+    fixture.detectChanges();
+
+    // Assert — empty state must not appear while still loading
+    const el = fixture.nativeElement as HTMLElement;
+    const emptyState = el.querySelector('fd-empty-state');
+    expect(emptyState).toBeFalsy();
+
+    // Cleanup
+    httpMock.expectOne('/api/issues').flush([]);
+  });
+
+  it('should not render fd-empty-state when loadIssues results in an HTTP error', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+
+    // Act — simulate a server error
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — error state, not empty state
+    const el = fixture.nativeElement as HTMLElement;
+    const emptyState = el.querySelector('fd-empty-state');
+    expect(emptyState).toBeFalsy();
+  });
+
   // Cycle 4b: detail wrapper has stable id for aria-controls
   it('should give the detail wrapper an id matching the issue id', () => {
     // Arrange

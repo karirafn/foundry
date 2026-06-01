@@ -22,7 +22,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         <fd-connection-indicator [status]="signalR.connectionStatus()" />
       </header>
 
-      @if (issueService.isEmpty()) {
+      @if (!issueService.initialLoading() && issueService.isEmpty() && !issueService.loadError()) {
         <fd-empty-state />
       }
 
