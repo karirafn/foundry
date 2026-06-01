@@ -15,9 +15,10 @@ dotnet user-secrets init --project src/Foundry.WebApi
 dotnet user-secrets set "Workers:ApiKey" "" --project src/Foundry.WebApi
 dotnet user-secrets set "Monitoring:Secrets:github-default" "" --project src/Foundry.WebApi
 dotnet user-secrets set "Workers:ConfigPath" "" --project src/Foundry.WebApi
+dotnet user-secrets set "Monitoring:Repositories:0:Slug" "" --project src/Foundry.WebApi
 ```
 
-Fill in actual values for your Anthropic API key, GitHub PAT, and path to your `.claude` directory.
+Fill in actual values for your Anthropic API key, GitHub PAT, path to your `.claude` directory, and target repository slug (e.g., `owner/repo`).
 
 ## Running
 
