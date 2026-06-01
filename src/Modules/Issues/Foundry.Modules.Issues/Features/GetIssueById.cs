@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 
 namespace Foundry.Modules.Issues.Features;
@@ -23,10 +24,10 @@ internal static class GetIssueById
 
                     if (detail is null)
                     {
-                        return Results.NotFound();
+                        return (Results<Ok<IssueDetail>, NotFound>)TypedResults.NotFound();
                     }
 
-                    return TypedResults.Ok(detail);
+                    return (Results<Ok<IssueDetail>, NotFound>)TypedResults.Ok(detail);
                 })
                 .WithName("GetIssueById")
                 .WithSummary("Gets issue detail by ID")
