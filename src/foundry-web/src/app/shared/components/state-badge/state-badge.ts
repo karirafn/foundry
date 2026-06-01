@@ -52,6 +52,7 @@ const STATE_CSS_CLASSES: Record<IssueState, string> = {
   template: `
     <span
       class="badge"
+      role="img"
       [class]="badgeClass()"
       [attr.aria-label]="ariaLabel()"
     >{{ label() }}</span>

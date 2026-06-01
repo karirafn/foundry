@@ -14,7 +14,6 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
     <div
       class="connection-indicator"
       role="status"
-      aria-live="polite"
       [attr.aria-label]="ariaLabel()"
       [attr.title]="ariaLabel()"
     >
