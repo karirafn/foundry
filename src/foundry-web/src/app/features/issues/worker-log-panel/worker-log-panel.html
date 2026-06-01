@@ -1,0 +1,111 @@
+<div class="worker-log-panel__header">
+  <span class="worker-log-panel__title">Worker Logs</span>
+  @if (isLive()) {
+    <span class="worker-log-panel__live-indicator" aria-label="Live log streaming active">
+      <span class="worker-log-panel__live-dot" aria-hidden="true"></span>
+      <span class="worker-log-panel__live-label">LIVE</span>
+    </span>
+  }
+</div>
+
+<div
+  #scrollContainer
+  class="worker-log-panel__body"
+  role="log"
+  aria-label="Worker log output"
+  [attr.aria-live]="isLive() ? 'polite' : null"
+  [attr.aria-busy]="loading() ? 'true' : null"
+  (scroll)="onScroll($event)"
+>
+  @if (loading()) {
+    <div class="worker-log-panel__shimmer" aria-hidden="true">
+      <div class="worker-log-panel__shimmer-bar" style="width: 80%"></div>
+      <div class="worker-log-panel__shimmer-bar" style="width: 60%"></div>
+      <div class="worker-log-panel__shimmer-bar" style="width: 70%"></div>
+    </div>
+  } @else if (error()) {
+    <div class="worker-log-panel__error-state" role="alert">
+      <span class="worker-log-panel__error-message">{{ error() }}</span>
+      <button
+        class="worker-log-panel__retry"
+        type="button"
+        (click)="onRetry()"
+      >Retry</button>
+    </div>
+  } @else if (showEmpty()) {
+    <div class="worker-log-panel__empty">No reports yet</div>
+  } @else {
+    @for (report of reports(); track report.id) {
+      @if (report.reportType === 'final') {
+        @let finalContent = parseFinalContent(report.content);
+        @if (finalContent) {
+          <div class="worker-log-panel__entry worker-log-panel__entry--final">
+            <div class="worker-log-panel__final-card">
+              <div class="worker-log-panel__final-header">
+                <span class="worker-log-panel__final-status worker-log-panel__final-status--{{ finalContent.status }}">
+                  {{ finalContent.status }}
+                </span>
+              </div>
+              <p class="worker-log-panel__final-summary">{{ finalContent.summary }}</p>
+              @if (finalContent.branchName) {
+                <span class="worker-log-panel__final-branch">{{ finalContent.branchName }}</span>
+              }
+              @if (finalContent.prUrl | safeHref; as safePrUrl) {
+                <a
+                  class="worker-log-panel__pr-link"
+                  [href]="safePrUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open pull request (opens in new tab)"
+                >View PR</a>
+              }
+              @if (finalContent.metrics) {
+                <span class="worker-log-panel__final-metrics">
+                  {{ finalContent.metrics.testsPassed }}/{{ finalContent.metrics.testsRun }} passed
+                </span>
+              }
+            </div>
+          </div>
+        }
+      } @else if (report.reportType === 'error') {
+        <div
+          class="worker-log-panel__entry worker-log-panel__entry--error"
+          role="alert"
+        >
+          <span class="worker-log-panel__timestamp">{{ formatTimestamp(report.ingestedAt) }}</span>
+          <span class="worker-log-panel__content">{{ report.content }}</span>
+        </div>
+      } @else {
+        <div class="worker-log-panel__entry worker-log-panel__entry--progress">
+          <span class="worker-log-panel__timestamp">{{ formatTimestamp(report.ingestedAt) }}</span>
+          <span class="worker-log-panel__content">{{ report.content }}</span>
+        </div>
+      }
+    }
+  }
+</div>
+
+@if (isLive() && _userScrolledUp()) {
+  <button
+    class="worker-log-panel__scroll-pill"
+    type="button"
+    aria-label="Scroll to latest logs"
+    (click)="onScrollToBottom()"
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+    New logs
+  </button>
+}
