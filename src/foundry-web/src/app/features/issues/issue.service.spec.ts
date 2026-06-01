@@ -251,6 +251,110 @@ describe('IssueService', () => {
     http.verify();
   });
 
+  // Cycle 12a: initialLoading starts true, becomes false after first loadIssues response
+  it('should have initialLoading true before first loadIssues response', () => {
+    // Arrange / Act
+    service.loadIssues();
+
+    // Assert — before the response, still loading
+    expect(service.initialLoading()).toBe(true);
+    httpMock.expectOne('/api/issues').flush([]);
+  });
+
+  it('should set initialLoading to false after loadIssues succeeds', () => {
+    // Arrange / Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([]);
+
+    // Assert
+    expect(service.initialLoading()).toBe(false);
+  });
+
+  it('should set initialLoading to false after loadIssues fails', () => {
+    // Arrange / Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.initialLoading()).toBe(false);
+  });
+
+  it('should preserve existing issues when loadIssues fails', () => {
+    // Arrange — load initial issues
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    expect(service.issues().length).toBe(1);
+
+    // Act — reload with error
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — original issues remain
+    expect(service.issues().length).toBe(1);
+  });
+
+  it('should set loadError when loadIssues fails', () => {
+    // Arrange / Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.loadError()).not.toBeNull();
+  });
+
+  it('should clear loadError on successful loadIssues', () => {
+    // Arrange — cause an error first
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(service.loadError()).not.toBeNull();
+
+    // Act — successful reload
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([mockSummary]);
+
+    // Assert
+    expect(service.loadError()).toBeNull();
+  });
+
+  it('should set detailLoading to false when loadDetail fails', () => {
+    // Arrange
+    service.loadDetail('abc123');
+    expect(service.detailLoading()).toBe(true);
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123').flush('Not Found', {
+      status: 404,
+      statusText: 'Not Found',
+    });
+
+    // Assert
+    expect(service.detailLoading()).toBe(false);
+  });
+
+  it('should set detailError when loadDetail fails', () => {
+    // Arrange / Act
+    service.loadDetail('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush('Not Found', {
+      status: 404,
+      statusText: 'Not Found',
+    });
+
+    // Assert
+    expect(service.detailError()).not.toBeNull();
+  });
+
   // Cycle 12: Reconnect backfill calls loadIssues
   it('should call loadIssues on reconnect to backfill missed events', () => {
     // Arrange

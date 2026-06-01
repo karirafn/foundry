@@ -1,5 +1,5 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { SignalRService } from '../../core/services/signalr.service';
 import { IssueDetail, IssueSummary } from './issue.model';
 
@@ -12,6 +12,9 @@ export class IssueService {
   readonly expandedIssueId: WritableSignal<string | null> = signal(null);
   readonly issueDetail: WritableSignal<IssueDetail | null> = signal(null);
   readonly detailLoading: WritableSignal<boolean> = signal(false);
+  readonly loadError: WritableSignal<string | null> = signal(null);
+  readonly detailError: WritableSignal<string | null> = signal(null);
+  readonly initialLoading: WritableSignal<boolean> = signal(true);
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() =>
     [...this.issues()].sort(
@@ -33,7 +36,15 @@ export class IssueService {
     }
 
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
-      next: (issues) => this.issues.set(issues),
+      next: (issues) => {
+        this.issues.set(issues);
+        this.loadError.set(null);
+        this.initialLoading.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.loadError.set(err.message);
+        this.initialLoading.set(false);
+      },
     });
   }
 
@@ -43,6 +54,11 @@ export class IssueService {
       next: (detail) => {
         this.issueDetail.set(detail);
         this.detailLoading.set(false);
+        this.detailError.set(null);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.detailLoading.set(false);
+        this.detailError.set(err.message);
       },
     });
   }
