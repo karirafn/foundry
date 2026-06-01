@@ -14,6 +14,7 @@
     <ProjectReference Include="..\..\src\Foundry.WebApi\Foundry.WebApi.csproj" />
     <ProjectReference Include="..\..\src\Modules\Issues\Foundry.Modules.Issues.Contracts\Foundry.Modules.Issues.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Monitoring\Foundry.Modules.Monitoring.Contracts\Foundry.Modules.Monitoring.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Workers\Foundry.Modules.Workers.Contracts\Foundry.Modules.Workers.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

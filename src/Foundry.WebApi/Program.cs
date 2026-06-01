@@ -53,6 +53,7 @@ app.UseHttpsRedirection();
 app.MapDefaultEndpoints();
 app.MapIssuesEndpoints();
 app.MapMonitoringEndpoints();
+app.MapWorkersEndpoints();
 app.MapHub<IssueHub>("/hubs/issues");
 
 app.Run();
