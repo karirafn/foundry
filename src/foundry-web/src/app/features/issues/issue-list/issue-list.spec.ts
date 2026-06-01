@@ -146,6 +146,42 @@ describe('IssueListComponent', () => {
     expect(emptyState).toBeFalsy();
   });
 
+  // Cycle 4b: detail wrapper has stable id for aria-controls
+  it('should give the detail wrapper an id matching the issue id', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    fixture.detectChanges();
+
+    // Act - expand the card
+    const el = fixture.nativeElement as HTMLElement;
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    card.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues/abc123').flush({
+      ...mockSummary,
+      body: null,
+      author: 'dev',
+      labels: [],
+      stateDetails: {
+        workerRunId: null,
+        branchName: null,
+        pullRequestUrl: null,
+        feedbackCutoffAt: null,
+        failureReason: null,
+        failedAt: null,
+        completedAt: null,
+        blockedBy: null,
+      },
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const wrapper = el.querySelector('.issue-list__detail-wrapper') as HTMLElement;
+    expect(wrapper?.getAttribute('id')).toBe('detail-abc123');
+  });
+
   // Cycle 5: renders fd-connection-indicator
   it('should render fd-connection-indicator in the header', () => {
     // Arrange

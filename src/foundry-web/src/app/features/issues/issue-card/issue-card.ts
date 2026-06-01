@@ -46,6 +46,8 @@ function timeAgo(dateString: string): string {
       role="button"
       tabindex="0"
       [attr.aria-expanded]="expanded().toString()"
+      [attr.aria-controls]="'detail-' + issue().id"
+      [attr.aria-label]="'Issue #' + issue().issueNumber + ': ' + issue().title"
       (click)="onCardClick()"
       (keydown)="onKeydown($event)"
     >

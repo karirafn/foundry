@@ -193,6 +193,27 @@ describe('IssueCardComponent', () => {
     expect(card?.getAttribute('tabindex')).toBe('0');
   });
 
+  // Cycle 6b: aria-controls and aria-label
+  it('should set aria-controls pointing to the detail element id', () => {
+    // Arrange / Act
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.getAttribute('aria-controls')).toBe('detail-abc123');
+  });
+
+  it('should set aria-label with issue number and title', () => {
+    // Arrange / Act
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard');
+  });
+
   // Cycle 7: keyboard interaction
   it('should emit toggle when Enter key is pressed', () => {
     // Arrange

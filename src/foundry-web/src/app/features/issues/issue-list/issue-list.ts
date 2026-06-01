@@ -36,7 +36,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
             />
 
             @if (issueService.expandedIssueId() === issue.id) {
-              <div class="issue-list__detail-wrapper">
+              <div class="issue-list__detail-wrapper" [id]="'detail-' + issue.id">
                 <fd-issue-detail
                   [detail]="issueService.issueDetail()"
                   [loading]="issueService.detailLoading()"
