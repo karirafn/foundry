@@ -1,11 +1,12 @@
 import { Component, InputSignal, input } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { IssueDetail } from '../issue.model';
+import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 
 @Component({
   selector: 'fd-issue-detail',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, SafeHrefPipe],
   template: `
     @if (loading()) {
       <div class="issue-detail__skeleton" aria-busy="true" aria-label="Loading issue details">
@@ -45,12 +46,12 @@ import { IssueDetail } from '../issue.model';
             </div>
           }
 
-          @if (d.stateDetails.pullRequestUrl) {
+          @if (d.stateDetails.pullRequestUrl | safeHref; as safePrUrl) {
             <div class="issue-detail__field">
               <span class="issue-detail__field-key">Pull Request</span>
               <a
                 class="issue-detail__pr-link issue-detail__field-value"
-                [href]="d.stateDetails.pullRequestUrl"
+                [href]="safePrUrl"
                 target="_blank"
                 rel="noopener noreferrer"
                 [attr.aria-label]="'Open pull request for issue #' + d.issueNumber"

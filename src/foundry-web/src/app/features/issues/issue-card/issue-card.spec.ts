@@ -146,6 +146,19 @@ describe('IssueCardComponent', () => {
     expect(emitted).toBe(true);
   });
 
+  it('should not render the external link when issue url is not https', () => {
+    // Arrange
+    const nonHttpsIssue: IssueSummary = { ...mockIssue, url: 'http://github.com/owner/repo/issues/42' };
+
+    // Act
+    const fixture = createComponent(nonHttpsIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-card__link');
+    expect(link).toBeFalsy();
+  });
+
   it('should not emit toggle when the external link is clicked', () => {
     // Arrange
     const fixture = createComponent();

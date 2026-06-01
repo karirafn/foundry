@@ -145,6 +145,22 @@ describe('IssueDetailComponent', () => {
     expect(link?.getAttribute('aria-label')).toBe('Open pull request for issue #42');
   });
 
+  it('should not render a PR link when pullRequestUrl is not https', () => {
+    // Arrange
+    const detailHttpPr: IssueDetail = {
+      ...mockDetail,
+      stateDetails: { ...mockDetail.stateDetails, pullRequestUrl: 'http://github.com/owner/repo/pull/99' },
+    };
+
+    // Act
+    const fixture = createComponent(detailHttpPr);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__pr-link');
+    expect(link).toBeFalsy();
+  });
+
   it('should not render a PR link when pullRequestUrl is null', () => {
     // Arrange
     const detailNoPr: IssueDetail = {
