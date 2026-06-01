@@ -135,6 +135,16 @@ describe('IssueDetailComponent', () => {
     expect(link?.getAttribute('target')).toBe('_blank');
   });
 
+  it('should set aria-label on PR link to include issue number', () => {
+    // Arrange / Act
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
+    expect(link?.getAttribute('aria-label')).toBe('Open pull request for issue #42');
+  });
+
   it('should not render a PR link when pullRequestUrl is null', () => {
     // Arrange
     const detailNoPr: IssueDetail = {

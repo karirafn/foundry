@@ -53,7 +53,7 @@ import { IssueDetail } from '../issue.model';
                 [href]="d.stateDetails.pullRequestUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Open pull request"
+                [attr.aria-label]="'Open pull request for issue #' + d.issueNumber"
               >View PR</a>
             </div>
           }
