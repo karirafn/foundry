@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -43,7 +44,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dispatcher = new CapturingDomainEventDispatcher();
         _sut = new ProcessIssueDependenciesHandler(
             _dbContext,
-            new IssueQueries(_dbContext),
+            new IssueQueries(_dbContext, new NullRepositorySlugQueries()),
             _dispatcher,
             NullLogger<ProcessIssueDependenciesHandler>.Instance);
     }
@@ -504,5 +505,14 @@ public sealed class HandleAsync : IAsyncDisposable
             _events.AddRange(events);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class NullRepositorySlugQueries : IRepositorySlugQueries
+    {
+        public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
+            IReadOnlySet<MonitoredRepositoryId> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(
+                new Dictionary<MonitoredRepositoryId, string>());
     }
 }

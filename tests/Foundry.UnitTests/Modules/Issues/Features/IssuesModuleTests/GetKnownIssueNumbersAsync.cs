@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -31,7 +32,7 @@ public sealed class GetKnownIssueNumbersAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new IssueQueries(_dbContext);
+        _sut = new IssueQueries(_dbContext, new NullRepositorySlugQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -136,5 +137,14 @@ public sealed class GetKnownIssueNumbersAsync : IAsyncDisposable
 
         // Assert
         result.ShouldBe([10], ignoreOrder: true);
+    }
+
+    private sealed class NullRepositorySlugQueries : IRepositorySlugQueries
+    {
+        public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
+            IReadOnlySet<MonitoredRepositoryId> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(
+                new Dictionary<MonitoredRepositoryId, string>());
     }
 }

@@ -2,6 +2,7 @@ using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -38,6 +39,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
+        services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
         services.AddIssuesModule();
 
         _serviceProvider = services.BuildServiceProvider();
@@ -171,5 +173,14 @@ public sealed class AddIssuesModule : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
             => Task.FromResult<RepositoryDispatchInfo?>(null);
+    }
+
+    private sealed class NullRepositorySlugQueries : IRepositorySlugQueries
+    {
+        public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
+            IReadOnlySet<MonitoredRepositoryId> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(
+                new Dictionary<MonitoredRepositoryId, string>());
     }
 }
