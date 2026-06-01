@@ -163,6 +163,8 @@
   &__view-logs-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    min-height: 44px;
     gap: var(--fd-spacing-xs);
     background: transparent;
     border: 1px solid var(--fd-border-default);
@@ -240,6 +242,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
     background: transparent;
     border: none;
     color: var(--fd-text-secondary);

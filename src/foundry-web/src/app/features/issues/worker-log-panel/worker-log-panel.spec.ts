@@ -238,7 +238,7 @@ describe('WorkerLogPanelComponent', () => {
     expect(errorEntry).toBeTruthy();
   });
 
-  it('should give error report entry role="alert"', () => {
+  it('should not have role="alert" on individual error entries to avoid screen-reader spam during live streaming', () => {
     // Arrange
     const { fixture } = setup({ reports: [mockErrorReport] });
 
@@ -247,8 +247,9 @@ describe('WorkerLogPanelComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const alertEntry = el.querySelector('.worker-log-panel__entry--error[role="alert"]');
-    expect(alertEntry).toBeTruthy();
+    const entry = el.querySelector('.worker-log-panel__entry--error') as HTMLElement;
+    expect(entry).toBeTruthy();
+    expect(entry?.getAttribute('role')).toBeNull();
   });
 
   // Cycle 7: final report rendering

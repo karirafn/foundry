@@ -1,4 +1,4 @@
-import { Injectable, InjectionToken, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { IssueState } from './issue.model';
@@ -46,11 +46,11 @@ export class WorkerLogService {
   private readonly _activeWorkerRunId: WritableSignal<string | null> = signal(null);
   private readonly _activeIssueId: WritableSignal<string | null> = signal(null);
 
-  readonly reports: Signal<WorkerReportSummary[]> = computed(() => this._reports());
-  readonly loading: Signal<boolean> = computed(() => this._loading());
-  readonly error: Signal<string | null> = computed(() => this._error());
-  readonly isLive: Signal<boolean> = computed(() => this._isLive());
-  readonly activeWorkerRunId: Signal<string | null> = computed(() => this._activeWorkerRunId());
+  readonly reports: Signal<WorkerReportSummary[]> = this._reports.asReadonly();
+  readonly loading: Signal<boolean> = this._loading.asReadonly();
+  readonly error: Signal<string | null> = this._error.asReadonly();
+  readonly isLive: Signal<boolean> = this._isLive.asReadonly();
+  readonly activeWorkerRunId: Signal<string | null> = this._activeWorkerRunId.asReadonly();
 
   private _hub: WorkerLogHub | null = null;
 
@@ -85,10 +85,23 @@ export class WorkerLogService {
         this._loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
-        this._error.set(err.message);
+        this._error.set(WorkerLogService._mapHttpError(err));
         this._loading.set(false);
       },
     });
+  }
+
+  private static _mapHttpError(err: HttpErrorResponse): string {
+    if (!err.status) {
+      return 'Could not connect to the server';
+    }
+    if (err.status === 404) {
+      return 'Worker run not found';
+    }
+    if (err.status >= 500) {
+      return 'Failed to load logs — try again';
+    }
+    return 'An unexpected error occurred';
   }
 
   private _connectHub(issueId: string): void {
@@ -103,7 +116,7 @@ export class WorkerLogService {
     this._hub
       .start()
       .then(() => this._hub?.invoke('JoinIssueLog', issueId))
-      .catch(() => {});
+      .catch(() => { this._isLive.set(false); });
   }
 
   private _disconnectHub(): void {

@@ -2,7 +2,7 @@
   <div class="worker-log-panel__header">
     <span class="worker-log-panel__title">Worker Logs</span>
     @if (isLive()) {
-      <span class="worker-log-panel__live-indicator" aria-label="Live log streaming active">
+      <span class="worker-log-panel__live-indicator" role="status" aria-label="Live log streaming active">
         <span class="worker-log-panel__live-dot" aria-hidden="true"></span>
         <span class="worker-log-panel__live-label">LIVE</span>
       </span>
@@ -44,7 +44,7 @@
           <div class="worker-log-panel__entry worker-log-panel__entry--final">
             <div class="worker-log-panel__final-card">
               <div class="worker-log-panel__final-header">
-                <span class="worker-log-panel__final-status worker-log-panel__final-status--{{ finalContent.status }}">
+                <span class="worker-log-panel__final-status worker-log-panel__final-status--{{ safeStatus(finalContent.status) }}">
                   {{ finalContent.status }}
                 </span>
               </div>
@@ -72,7 +72,6 @@
       } @else if (report.reportType === 'error') {
         <div
           class="worker-log-panel__entry worker-log-panel__entry--error"
-          role="alert"
         >
           <span class="worker-log-panel__timestamp">{{ formatTimestamp(report.ingestedAt) }}</span>
           <span class="worker-log-panel__content">{{ report.content }}</span>
@@ -85,29 +84,29 @@
       }
     }
   }
-</div>
 
-@if (isLive() && _userScrolledUp()) {
-  <button
-    class="worker-log-panel__scroll-pill"
-    type="button"
-    aria-label="Scroll to latest logs"
-    (click)="onScrollToBottom()"
-  >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
+  @if (isLive() && _userScrolledUp()) {
+    <button
+      class="worker-log-panel__scroll-pill"
+      type="button"
+      aria-label="Scroll to latest logs"
+      (click)="onScrollToBottom()"
     >
-      <polyline points="6 9 12 15 18 9"></polyline>
-    </svg>
-    New logs
-  </button>
-}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+      New logs
+    </button>
+  }
+</div>

@@ -340,13 +340,27 @@ describe('IssueDetailComponent', () => {
     expect(btn?.getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('should set aria-controls pointing to the log panel id', () => {
+  it('should not set aria-controls when log panel is closed', () => {
     // Arrange / Act
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
+    expect(btn?.getAttribute('aria-controls')).toBeNull();
+  });
+
+  it('should set aria-controls pointing to the log panel id when panel is open on desktop', () => {
+    // Arrange
+    const fixture = createComponent(mockDetailWithWorkerRun);
+    const el = fixture.nativeElement as HTMLElement;
+    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
+
+    // Act
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert
     expect(btn?.getAttribute('aria-controls')).toBe('issue-detail-log-panel');
   });
 

@@ -48,20 +48,27 @@ export class WorkerLogPanelComponent {
     });
   }
 
+  private static readonly _KNOWN_STATUSES = new Set(['success', 'failed', 'failure', 'partial']);
+
   formatTimestamp(isoString: string): string {
     const date = new Date(isoString);
-    const hh = date.getHours().toString().padStart(2, '0');
-    const mm = date.getMinutes().toString().padStart(2, '0');
-    const ss = date.getSeconds().toString().padStart(2, '0');
+    const hh = date.getUTCHours().toString().padStart(2, '0');
+    const mm = date.getUTCMinutes().toString().padStart(2, '0');
+    const ss = date.getUTCSeconds().toString().padStart(2, '0');
     return `[${hh}:${mm}:${ss}]`;
   }
 
   parseFinalContent(content: string): FinalReportContent | null {
     try {
-      return JSON.parse(content) as FinalReportContent;
+      const parsed = JSON.parse(content) as FinalReportContent;
+      return parsed;
     } catch {
       return null;
     }
+  }
+
+  safeStatus(status: string): string {
+    return WorkerLogPanelComponent._KNOWN_STATUSES.has(status) ? status : 'unknown';
   }
 
   onRetry(): void {

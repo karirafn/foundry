@@ -199,8 +199,8 @@ describe('WorkerLogService', () => {
     expect(svc.isLive()).toBe(false);
   });
 
-  // Cycle 13: open() sets error on HTTP failure
-  it('should set error when fetching reports fails', () => {
+  // Cycle 13: open() sets user-facing error on HTTP failure
+  it('should set user-facing error message for 500 when fetching reports fails', () => {
     // Arrange
     const { svc, http } = setup();
 
@@ -212,8 +212,53 @@ describe('WorkerLogService', () => {
     });
 
     // Assert
-    expect(svc.error()).not.toBeNull();
+    expect(svc.error()).toBe('Failed to load logs — try again');
     expect(svc.loading()).toBe(false);
+  });
+
+  it('should set "Worker run not found" error for 404', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.open('run-1', 'issue-1', 'completed');
+    http.expectOne('/api/workers/run-1/reports').flush('Not Found', {
+      status: 404,
+      statusText: 'Not Found',
+    });
+
+    // Assert
+    expect(svc.error()).toBe('Worker run not found');
+  });
+
+  // Cycle 13b: hub start failure sets isLive to false
+  it('should set isLive to false when hub start fails', async () => {
+    // Arrange
+    const captured: CapturedHubCallbacks = { onReportReceived: null, invocations: [] };
+    const failingHub: WorkerLogHub = {
+      ...buildMockHub(captured),
+      start: () => Promise.reject(new Error('Connection refused')),
+    };
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        WorkerLogService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: WORKER_LOG_HUB_FACTORY, useValue: () => failingHub },
+      ],
+    });
+    const svc = TestBed.inject(WorkerLogService);
+    const http = TestBed.inject(HttpTestingController);
+
+    // Act
+    svc.open('run-1', 'issue-1', 'in_progress');
+    http.expectOne('/api/workers/run-1/reports').flush([]);
+    // Flush all pending microtasks (rejected promise + catch handler)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    // Assert
+    expect(svc.isLive()).toBe(false);
   });
 
   // Cycle 14: close() resets all state

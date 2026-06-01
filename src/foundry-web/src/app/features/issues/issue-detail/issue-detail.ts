@@ -164,7 +164,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
               class="issue-detail__view-logs-btn"
               type="button"
               [attr.aria-expanded]="_logPanelOpen()"
-              [attr.aria-controls]="logPanelId"
+              [attr.aria-controls]="_logPanelOpen() && !_isMobile() ? logPanelId : null"
               (click)="toggleLogPanel(d)"
             >
               <svg
@@ -217,6 +217,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
             <div class="issue-detail__overlay-header">
               <span class="issue-detail__overlay-title">Worker Logs</span>
               <button
+                #overlayCloseBtn
                 class="issue-detail__overlay-close"
                 type="button"
                 aria-label="Close worker logs"
@@ -274,6 +275,7 @@ export class IssueDetailComponent implements OnDestroy {
   readonly logPanelId = LOG_PANEL_ID;
 
   @ViewChild('viewLogsBtn') private readonly _viewLogsBtn?: ElementRef<HTMLButtonElement>;
+  @ViewChild('overlayCloseBtn') private readonly _overlayCloseBtn?: ElementRef<HTMLButtonElement>;
 
   constructor() {
     const handler = (e: MediaQueryListEvent) => this._isMobile.set(e.matches);
@@ -292,6 +294,9 @@ export class IssueDetailComponent implements OnDestroy {
       this._logPanelOpen.set(true);
       if (d.stateDetails.workerRunId) {
         this._logService.open(d.stateDetails.workerRunId, d.id, d.state);
+      }
+      if (this._isMobile()) {
+        queueMicrotask(() => this._overlayCloseBtn?.nativeElement.focus());
       }
     }
   }
