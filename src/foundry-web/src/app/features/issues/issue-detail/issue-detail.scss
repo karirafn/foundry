@@ -132,4 +132,24 @@
     color: var(--fd-state-failed);
     font-size: 0.875rem;
   }
+
+  &__error-retry {
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      border-color: var(--fd-text-secondary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
 }

@@ -56,6 +56,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
                   [detail]="issueService.issueDetail()"
                   [loading]="issueService.detailLoading()"
                   [error]="issueService.detailError()"
+                  (retry)="issueService.loadDetail(issueService.expandedIssueId()!)"
                 />
               }
             </div>

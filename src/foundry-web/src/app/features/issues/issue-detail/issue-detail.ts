@@ -1,4 +1,4 @@
-import { Component, InputSignal, input } from '@angular/core';
+import { Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { IssueDetail } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
@@ -11,6 +11,11 @@ import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
     @if (error()) {
       <div class="issue-detail__error" role="alert">
         <span class="issue-detail__error-message">Failed to load details</span>
+        <button
+          class="issue-detail__error-retry"
+          type="button"
+          (click)="retry.emit()"
+        >Retry</button>
       </div>
     } @else if (loading()) {
       <div class="issue-detail__skeleton" aria-busy="true" aria-label="Loading issue details">
@@ -119,4 +124,5 @@ export class IssueDetailComponent {
   readonly detail: InputSignal<IssueDetail | null> = input.required<IssueDetail | null>();
   readonly loading: InputSignal<boolean> = input.required<boolean>();
   readonly error: InputSignal<string | null> = input.required<string | null>();
+  readonly retry: OutputEmitterRef<void> = output<void>();
 }
