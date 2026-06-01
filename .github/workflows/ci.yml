@@ -1,47 +1,91 @@
-name: build
+name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+      - ".editorconfig"
+      - ".gitignore"
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  api:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Detect changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: changes
+        with:
+          filters: |
+            api:
+              - 'src/**/*.cs'
+              - 'src/**/*.csproj'
+              - 'tests/**'
+              - 'Directory.Build.props'
+              - 'Directory.Packages.props'
+              - '*.sln'
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7  # v5.2.0
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: 10.0.x
 
       - name: Restore
+        if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
         run: dotnet restore
 
       - name: Build
+        if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
         run: dotnet build --no-restore
 
       - name: Test
+        if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
         run: dotnet test --no-build
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Detect changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: changes
         with:
-          node-version: '22'
-          cache: 'npm'
+          filters: |
+            web:
+              - 'src/foundry-web/**'
+
+      - name: Setup Node
+        if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
           cache-dependency-path: src/foundry-web/package-lock.json
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
+        if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
         run: npm ci
         working-directory: src/foundry-web
 
-      - name: Build frontend
+      - name: Build
+        if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
         run: npx ng build
         working-directory: src/foundry-web
 
-      - name: Test frontend
+      - name: Test
+        if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
         run: npx ng test --watch=false
         working-directory: src/foundry-web
