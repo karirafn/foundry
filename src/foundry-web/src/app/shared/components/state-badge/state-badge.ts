@@ -53,7 +53,6 @@ const STATE_CSS_CLASSES: Record<IssueState, string> = {
     <span
       class="badge"
       [class]="badgeClass()"
-      role="status"
       [attr.aria-label]="ariaLabel()"
     >{{ label() }}</span>
   `,

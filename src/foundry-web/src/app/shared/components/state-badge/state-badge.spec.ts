@@ -22,7 +22,7 @@ describe('StateBadgeComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should render a span with role="status"', () => {
+  it('should render a span without role="status" as it is a static label not a live region', () => {
     // Arrange / Act
     const fixture = createComponent('detected');
     const el = fixture.nativeElement as HTMLElement;
@@ -30,7 +30,7 @@ describe('StateBadgeComponent', () => {
     // Assert
     const span = el.querySelector('span');
     expect(span).toBeTruthy();
-    expect(span?.getAttribute('role')).toBe('status');
+    expect(span?.getAttribute('role')).toBeNull();
   });
 
   // Cycle 2: label text for each state
