@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -26,7 +27,25 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
 
+        services.AddScoped<IssueStateChangedHandler>();
+        AddIssueStateChangedHandler<IssueQueued>(services);
+        AddIssueStateChangedHandler<IssueBlocked>(services);
+        AddIssueStateChangedHandler<IssueCompleted>(services);
+        AddIssueStateChangedHandler<IssueFailed>(services);
+        AddIssueStateChangedHandler<IssueInReview>(services);
+        AddIssueStateChangedHandler<IssueUnchanged>(services);
+        AddIssueStateChangedHandler<IssueDismissed>(services);
+        AddIssueStateChangedHandler<IssueRevisionQueued>(services);
+        AddIssueStateChangedHandler<IssueRevisionFailed>(services);
+
         return services;
+    }
+
+    private static void AddIssueStateChangedHandler<TEvent>(IServiceCollection services)
+        where TEvent : IDomainEvent, IIssueStateChanged
+    {
+        services.AddScoped<IDomainEventHandler<TEvent>>(sp =>
+            new IssueStateChangedAdapter<TEvent>(sp.GetRequiredService<IssueStateChangedHandler>()));
     }
 
     public static IEndpointRouteBuilder MapIssuesEndpoints(this IEndpointRouteBuilder app)

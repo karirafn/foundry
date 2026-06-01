@@ -25,5 +25,7 @@ public interface IIssueQueries
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken);
 
+    Task<IssueSummary?> GetIssueSummaryAsync(IssueId issueId, CancellationToken cancellationToken);
+
     Task<IssueDetail?> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken);
 }

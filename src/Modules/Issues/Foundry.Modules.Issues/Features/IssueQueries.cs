@@ -99,6 +99,46 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             .ToList();
     }
 
+    public async Task<IssueSummary?> GetIssueSummaryAsync(
+        IssueId issueId,
+        CancellationToken cancellationToken)
+    {
+        IssueProjection? projection = await db.Set<Issue>()
+            .AsNoTracking()
+            .Where(i => i.Id == issueId)
+            .Select(i => new IssueProjection(
+                i.Id,
+                i.IssueNumber,
+                i.Title,
+                EF.Property<string>(i, "state"),
+                i.MonitoredRepositoryId,
+                i.DetectedAt,
+                i.Url))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (projection is null)
+        {
+            return null;
+        }
+
+        IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
+            new HashSet<MonitoredRepositoryId> { projection.MonitoredRepositoryId },
+            cancellationToken);
+
+        string repositorySlug = slugs.TryGetValue(projection.MonitoredRepositoryId, out string? slug)
+            ? slug
+            : string.Empty;
+
+        return new IssueSummary(
+            Id: projection.Id.Value,
+            IssueNumber: projection.IssueNumber,
+            Title: projection.Title,
+            State: projection.State,
+            RepositorySlug: repositorySlug,
+            DetectedAt: projection.DetectedAt,
+            Url: projection.Url.Value.ToString());
+    }
+
     public async Task<IssueDetail?> GetIssueDetailAsync(
         IssueId issueId,
         CancellationToken cancellationToken)

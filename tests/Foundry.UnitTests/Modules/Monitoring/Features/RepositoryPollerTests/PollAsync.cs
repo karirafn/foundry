@@ -1018,6 +1018,11 @@ public sealed class PollAsync : IAsyncDisposable
             return Task.FromResult<IReadOnlyList<IssueSummary>>([]);
         }
 
+        public Task<IssueSummary?> GetIssueSummaryAsync(IssueId issueId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IssueSummary?>(null);
+        }
+
         public Task<IssueDetail?> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
         {
             return Task.FromResult<IssueDetail?>(null);

@@ -6,4 +6,4 @@ namespace Foundry.Modules.Issues.Domain.Events;
 
 public sealed record IssueRevisionFailed(
     IssueId IssueId,
-    MonitoredRepositoryId MonitoredRepositoryId) : IDomainEvent;
+    MonitoredRepositoryId MonitoredRepositoryId) : IDomainEvent, IIssueStateChanged;
