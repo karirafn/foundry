@@ -1,7 +1,8 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Required environment variables
+: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}"
 : "${CLONE_URL:?CLONE_URL is required}"
 : "${GIT_PAT:?GIT_PAT is required}"
 : "${WORKER_PROMPT:?WORKER_PROMPT is required}"

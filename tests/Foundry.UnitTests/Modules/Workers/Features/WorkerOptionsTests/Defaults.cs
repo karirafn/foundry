@@ -11,7 +11,8 @@ public sealed class Defaults
     [Fact]
     public void WhenDefaultOptionsCreated_HasExpectedDefaults()
     {
-        // Arrange / Act
+        // Arrange
+        // Act
         WorkerOptions options = new();
 
         // Assert

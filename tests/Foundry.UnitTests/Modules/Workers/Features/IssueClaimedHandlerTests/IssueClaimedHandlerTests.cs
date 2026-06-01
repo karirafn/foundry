@@ -192,10 +192,10 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldContain(m => m.ContainerPath == "/home/user/.claude/");
+        spec.BindMounts.ShouldContain(m => m.ContainerPath == "/home/claude/.claude/");
         spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/");
         spec.BindMounts
-            .First(m => m.ContainerPath == "/home/user/.claude/")
+            .First(m => m.ContainerPath == "/home/claude/.claude/")
             .HostPath
             .ShouldBe(Path.GetFullPath("/tmp/config"));
     }
@@ -292,6 +292,7 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables.ShouldContainKey("WORKER_PROMPT");
         spec.EnvironmentVariables["WORKER_PROMPT"].ShouldContain("42");
+        spec.EnvironmentVariables["WORKER_PROMPT"].ShouldNotContain("{issueNumber}");
     }
 
     [Fact]

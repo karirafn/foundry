@@ -1,3 +1,4 @@
+// Aspire sets services__webapi__http__0 via service discovery; fall back for standalone ng serve
 const target = process.env["services__webapi__http__0"] || "http://localhost:5000";
 
 module.exports = {

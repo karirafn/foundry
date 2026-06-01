@@ -48,10 +48,7 @@ if (app.Environment.IsDevelopment())
     using AsyncServiceScope scope = app.Services.CreateAsyncScope();
     FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
     dbContext.Database.Migrate();
-}
 
-if (app.Environment.IsDevelopment())
-{
     app.UseCors(AngularDevServerPolicy);
     app.MapOpenApi();
 }

@@ -125,7 +125,7 @@ internal sealed class IssueClaimedHandler(
 
         List<BindMount> bindMounts =
         [
-            new BindMount(Path.GetFullPath(_options.ConfigPath), "/home/user/.claude/"),
+            new BindMount(Path.GetFullPath(_options.ConfigPath), "/home/claude/.claude/"),
             new BindMount(Path.GetFullPath(reportsHostPath), "/reports/"),
         ];
 
@@ -139,7 +139,7 @@ internal sealed class IssueClaimedHandler(
             envVars,
             bindMounts,
             labels,
-            Command: ["/entrypoint.sh"]));
+            ["/entrypoint.sh"]));
     }
 
     private async Task<Result<string>> ResolveGitPatAsync(
