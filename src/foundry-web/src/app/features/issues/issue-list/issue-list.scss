@@ -82,5 +82,10 @@
       background: var(--fd-bg-card-hover);
       border-color: var(--fd-text-secondary);
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
   }
 }
