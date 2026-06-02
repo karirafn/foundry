@@ -117,14 +117,8 @@ internal sealed class IssueClaimedHandler(
             ["WORKER_PROMPT"] = workerPrompt,
         };
 
-        if (!string.IsNullOrWhiteSpace(_options.OAuthToken))
-        {
-            envVars["CLAUDE_CODE_OAUTH_TOKEN"] = _options.OAuthToken;
-        }
-        else
-        {
-            envVars["ANTHROPIC_API_KEY"] = _options.ApiKey;
-        }
+        KeyValuePair<string, string> authVar = _options.GetAuthEnvironmentVariable();
+        envVars[authVar.Key] = authVar.Value;
 
         if (claimed.Revision is not null)
         {

@@ -38,4 +38,14 @@ internal sealed class WorkerOptions
 
     /// <summary>Maximum number of processes (PIDs) per worker container.</summary>
     public int PidsLimit { get; set; } = 512;
+
+    public KeyValuePair<string, string> GetAuthEnvironmentVariable()
+    {
+        if (!string.IsNullOrWhiteSpace(OAuthToken))
+        {
+            return new KeyValuePair<string, string>("CLAUDE_CODE_OAUTH_TOKEN", OAuthToken);
+        }
+
+        return new KeyValuePair<string, string>("ANTHROPIC_API_KEY", ApiKey);
+    }
 }
