@@ -175,7 +175,8 @@ public sealed class HandleAsync : IAsyncDisposable
             () => spec.EnvironmentVariables["ANTHROPIC_API_KEY"].ShouldBe("test-api-key"),
             () => spec.EnvironmentVariables["GIT_PAT"].ShouldBe("ghp_my_token"),
             () => spec.EnvironmentVariables["CLONE_URL"].ShouldBe("https://github.com/org/repo.git"),
-            () => spec.EnvironmentVariables["ISSUE_NUMBER"].ShouldBe("7"));
+            () => spec.EnvironmentVariables["ISSUE_NUMBER"].ShouldBe("7"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("CLAUDE_CODE_OAUTH_TOKEN"));
     }
 
     [Fact]
@@ -311,6 +312,36 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.Command.ShouldHaveSingleItem();
         spec.Command[0].ShouldBe("/entrypoint.sh");
+    }
+
+    [Fact]
+    public async Task WhenOAuthTokenConfigured_ContainerSpecHasOAuthTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            workerOptions: new WorkerOptions
+            {
+                Image = "test-image:latest",
+                MaxConcurrent = 3,
+                ConfigPath = "/tmp/config",
+                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
+                OAuthToken = "test-oauth-token",
+                ApiKey = "",
+                TimeoutMinutes = 120,
+            });
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.EnvironmentVariables["CLAUDE_CODE_OAUTH_TOKEN"].ShouldBe("test-oauth-token"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("ANTHROPIC_API_KEY"));
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

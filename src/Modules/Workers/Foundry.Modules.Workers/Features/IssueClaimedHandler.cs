@@ -110,13 +110,15 @@ internal sealed class IssueClaimedHandler(
 
         Dictionary<string, string> envVars = new()
         {
-            ["ANTHROPIC_API_KEY"] = _options.ApiKey,
             ["GIT_PAT"] = gitPat,
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
         };
+
+        KeyValuePair<string, string> authVar = _options.GetAuthEnvironmentVariable();
+        envVars[authVar.Key] = authVar.Value;
 
         if (claimed.Revision is not null)
         {

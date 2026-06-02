@@ -12,13 +12,17 @@ A containerized service that monitors repositories across multiple providers (Gi
 
 ```bash
 dotnet user-secrets init --project src/Foundry.WebApi
-dotnet user-secrets set "Workers:ApiKey" "" --project src/Foundry.WebApi
 dotnet user-secrets set "Monitoring:Secrets:github-default" "" --project src/Foundry.WebApi
 dotnet user-secrets set "Workers:ConfigPath" "" --project src/Foundry.WebApi
 dotnet user-secrets set "Monitoring:Repositories:0:Slug" "" --project src/Foundry.WebApi
 ```
 
-Fill in actual values for your Anthropic API key, GitHub PAT, path to your `.claude` directory, and target repository slug (e.g., `owner/repo`).
+Set exactly one worker credential — the application rejects both or neither at startup.
+
+- **Pay-per-use API:** `dotnet user-secrets set "Workers:ApiKey" "<your-anthropic-api-key>" --project src/Foundry.WebApi`
+- **Max plan (OAuth):** `dotnet user-secrets set "Workers:OAuthToken" "<token-from-claude-setup-token>" --project src/Foundry.WebApi`
+
+Fill in actual values for your GitHub PAT, path to your `.claude` directory, and target repository slug (e.g., `owner/repo`).
 
 ## Running
 

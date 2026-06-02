@@ -13,10 +13,10 @@ public sealed class Validate
     private readonly WorkerOptionsValidator _sut = new();
 
     [Fact]
-    public void WhenApiKeyIsEmpty_ReturnsFailure()
+    public void WhenNeitherCredentialSet_ReturnsFailure()
     {
         // Arrange
-        WorkerOptions options = new() { ApiKey = string.Empty };
+        WorkerOptions options = new() { ApiKey = string.Empty, OAuthToken = string.Empty };
 
         // Act
         ValidateOptionsResult result = _sut.Validate(null, options);
@@ -26,10 +26,10 @@ public sealed class Validate
     }
 
     [Fact]
-    public void WhenApiKeyIsWhitespace_ReturnsFailure()
+    public void WhenBothCredentialsAreWhitespaceOnly_ReturnsFailure()
     {
         // Arrange
-        WorkerOptions options = new() { ApiKey = "   " };
+        WorkerOptions options = new() { ApiKey = "   ", OAuthToken = "   " };
 
         // Act
         ValidateOptionsResult result = _sut.Validate(null, options);
@@ -39,10 +39,10 @@ public sealed class Validate
     }
 
     [Fact]
-    public void WhenApiKeyIsNonEmpty_ReturnsSuccess()
+    public void WhenOnlyApiKeySet_ReturnsSuccess()
     {
         // Arrange
-        WorkerOptions options = new() { ApiKey = "sk-ant-api-key" };
+        WorkerOptions options = new() { ApiKey = "sk-ant-api-key", OAuthToken = string.Empty };
 
         // Act
         ValidateOptionsResult result = _sut.Validate(null, options);
@@ -52,17 +52,70 @@ public sealed class Validate
     }
 
     [Fact]
-    public void WhenApiKeyIsEmpty_FailureMessageMentionsApiKey()
+    public void WhenNeitherCredentialSet_FailureMessageMentionsBothOptions()
     {
         // Arrange
-        WorkerOptions options = new() { ApiKey = string.Empty };
+        WorkerOptions options = new() { ApiKey = string.Empty, OAuthToken = string.Empty };
 
         // Act
         ValidateOptionsResult result = _sut.Validate(null, options);
 
         // Assert
-        string failureMessage = result.Failures.ShouldHaveSingleItem();
-        failureMessage.ShouldContain("ApiKey");
+        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
+        failures.ShouldContain(f => f.Contains("ApiKey") && f.Contains("OAuthToken"));
+    }
+
+    [Fact]
+    public void WhenBothCredentialsSet_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new() { ApiKey = "sk-ant-api-key", OAuthToken = "valid-oauth-token" };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenBothCredentialsSet_FailureMessageMentionsNotBoth()
+    {
+        // Arrange
+        WorkerOptions options = new() { ApiKey = "sk-ant-api-key", OAuthToken = "valid-oauth-token" };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
+        failures.ShouldContain(f => f.Contains("not both"));
+    }
+
+    [Fact]
+    public void WhenOnlyOAuthTokenSet_WithEmptyApiKey_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new() { ApiKey = string.Empty, OAuthToken = "valid-oauth-token" };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenOnlyOAuthTokenSet_WithWhitespaceApiKey_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new() { ApiKey = "   ", OAuthToken = "valid-oauth-token" };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
     }
 
     [Fact]

@@ -8,9 +8,16 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
     {
         List<string> failures = [];
 
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        bool hasApiKey = !string.IsNullOrWhiteSpace(options.ApiKey);
+        bool hasOAuthToken = !string.IsNullOrWhiteSpace(options.OAuthToken);
+
+        if (hasApiKey && hasOAuthToken)
         {
-            failures.Add("Workers:ApiKey must be non-empty. Set the Anthropic API key before starting.");
+            failures.Add("Set exactly one of Workers:ApiKey or Workers:OAuthToken, not both.");
+        }
+        else if (!hasApiKey && !hasOAuthToken)
+        {
+            failures.Add("Set exactly one of Workers:ApiKey (pay-per-use) or Workers:OAuthToken (Max plan via claude setup-token).");
         }
 
         if (string.IsNullOrWhiteSpace(options.Image))
