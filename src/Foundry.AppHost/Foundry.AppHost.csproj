@@ -13,4 +13,8 @@
     <ProjectReference Include="..\Foundry.WebApi\Foundry.WebApi.csproj" />
   </ItemGroup>
 
+  <Target Name="BuildWorkerImage" BeforeTargets="Run">
+    <Exec Command="docker build -t foundry-worker:local -f $(MSBuildProjectDirectory)\..\..\workers\Dockerfile $(MSBuildProjectDirectory)\..\..\workers" />
+  </Target>
+
 </Project>

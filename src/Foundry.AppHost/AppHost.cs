@@ -7,11 +7,6 @@ IResourceBuilder<ProjectResource> webapi = builder
     .AddProject<Projects.Foundry_WebApi>("webapi")
     .WithEnvironment("ConnectionStrings__foundry", connectionString);
 
-// Image build only; runtime containers are dispatched by DockerWorkerOrchestrator
-builder.AddDockerfile("foundry-worker", "../../workers")
-    .WithImage("foundry-worker")
-    .WithImageTag("local");
-
 builder.AddJavaScriptApp("foundry-web", "../foundry-web", "start")
     .WithHttpEndpoint(port: 4200, env: "PORT")
     .WithReference(webapi)
