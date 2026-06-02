@@ -16,6 +16,13 @@ Ephemeral — created on demand, destroyed after completion.
 Has no identity independent of its WorkerRun — the container is the execution mechanism, not a separate domain concept.
 Workers clone the repo, implement the issue, push a branch, and write reports to a shared volume.
 
+## Worker Authentication
+
+How a worker container authenticates with the Anthropic API (Claude Code).
+Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use) and OAuth token (`CLAUDE_CODE_OAUTH_TOKEN`, Max/Pro/Team/Enterprise plan, generated via `claude setup-token`).
+Exactly one method is configured per Foundry instance — enforced at startup by `WorkerOptionsValidator`.
+Distinct from provider authentication (Account / PAT), which authenticates git operations against GitHub or GitLab.
+
 ## Provider
 
 A git hosting platform (GitHub, GitLab).
