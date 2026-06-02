@@ -75,7 +75,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "GITHUB_TOKEN",
                 },
             ],
@@ -93,7 +93,7 @@ public sealed class StartingAsync : IAsyncDisposable
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe("my-org"),
             () => account.SecretKeyName.ShouldBe("GITHUB_TOKEN"),
-            () => account.BaseUrl.ShouldBe(new Uri("https://api.github.com")));
+            () => account.BaseUrl.ShouldBe(new Uri("https://github.com")));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "GITHUB_TOKEN",
                 },
             ],
@@ -150,7 +150,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "GITHUB_TOKEN",
                 },
             ],
@@ -196,7 +196,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "NEW_TOKEN",
                 },
             ],
@@ -239,7 +239,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "TOKEN",
                 },
             ],
@@ -275,7 +275,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "TOKEN",
                 },
             ],
