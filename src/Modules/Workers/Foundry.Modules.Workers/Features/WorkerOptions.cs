@@ -6,6 +6,8 @@ internal sealed class WorkerOptions
 
     public string ApiKey { get; set; } = string.Empty;
 
+    public string OAuthToken { get; set; } = string.Empty;
+
     public int MaxConcurrent { get; set; } = 3;
 
     public int TimeoutMinutes { get; set; } = 120;
