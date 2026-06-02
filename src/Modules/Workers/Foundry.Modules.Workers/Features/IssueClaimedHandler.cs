@@ -110,13 +110,21 @@ internal sealed class IssueClaimedHandler(
 
         Dictionary<string, string> envVars = new()
         {
-            ["ANTHROPIC_API_KEY"] = _options.ApiKey,
             ["GIT_PAT"] = gitPat,
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
         };
+
+        if (!string.IsNullOrWhiteSpace(_options.OAuthToken))
+        {
+            envVars["CLAUDE_CODE_OAUTH_TOKEN"] = _options.OAuthToken;
+        }
+        else
+        {
+            envVars["ANTHROPIC_API_KEY"] = _options.ApiKey;
+        }
 
         if (claimed.Revision is not null)
         {
