@@ -2,7 +2,10 @@
 set -euo pipefail
 
 # Required environment variables
-: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}"
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+    echo "Either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN is required" >&2
+    exit 1
+fi
 : "${CLONE_URL:?CLONE_URL is required}"
 : "${GIT_PAT:?GIT_PAT is required}"
 : "${WORKER_PROMPT:?WORKER_PROMPT is required}"
