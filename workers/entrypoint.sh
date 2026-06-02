@@ -24,7 +24,7 @@ git -C /workspace remote set-url origin "$CLONE_URL"
 cd /workspace
 
 if [[ -n "${BRANCH_NAME:-}" ]]; then
-    git checkout -- "$BRANCH_NAME"
+    git checkout "$BRANCH_NAME"
 fi
 
 claude -p "$WORKER_PROMPT" \
