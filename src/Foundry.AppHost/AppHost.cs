@@ -8,7 +8,7 @@ IResourceBuilder<ProjectResource> webapi = builder
     .WithEnvironment("ConnectionStrings__foundry", connectionString);
 
 builder.AddJavaScriptApp("foundry-web", "../foundry-web", "start")
-    .WithHttpEndpoint(port: 4200, env: "PORT")
+    .WithHttpEndpoint(port: 4200, env: "PORT", isProxied: false)
     .WithReference(webapi)
     .WaitFor(webapi);
 
