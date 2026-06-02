@@ -46,6 +46,12 @@ internal sealed class WorkerOptions
             return new KeyValuePair<string, string>("CLAUDE_CODE_OAUTH_TOKEN", OAuthToken);
         }
 
-        return new KeyValuePair<string, string>("ANTHROPIC_API_KEY", ApiKey);
+        if (!string.IsNullOrWhiteSpace(ApiKey))
+        {
+            return new KeyValuePair<string, string>("ANTHROPIC_API_KEY", ApiKey);
+        }
+
+        throw new InvalidOperationException(
+            "No authentication credential configured. Set Workers:ApiKey or Workers:OAuthToken.");
     }
 }

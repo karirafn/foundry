@@ -26,7 +26,7 @@ public sealed class Validate
     }
 
     [Fact]
-    public void WhenNeitherCredentialSet_WithWhitespace_ReturnsFailure()
+    public void WhenBothCredentialsAreWhitespaceOnly_ReturnsFailure()
     {
         // Arrange
         WorkerOptions options = new() { ApiKey = "   ", OAuthToken = "   " };
