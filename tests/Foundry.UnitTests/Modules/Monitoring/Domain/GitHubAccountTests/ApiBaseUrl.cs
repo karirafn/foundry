@@ -33,4 +33,17 @@ public sealed class ApiBaseUrl
         // Assert
         apiBaseUrl.ShouldBe(new Uri("https://github.example.com/api/v3/"));
     }
+
+    [Fact]
+    public void WhenBaseUrlIsGitHubEnterpriseWithTrailingPath_PreservesSubPath()
+    {
+        // Arrange
+        GitHubAccount account = GitHubAccount.Create("ghe-account", "GHE_TOKEN", new Uri("https://corp.example.com/github"));
+
+        // Act
+        Uri apiBaseUrl = account.ApiBaseUrl;
+
+        // Assert
+        apiBaseUrl.ShouldBe(new Uri("https://corp.example.com/github/api/v3/"));
+    }
 }

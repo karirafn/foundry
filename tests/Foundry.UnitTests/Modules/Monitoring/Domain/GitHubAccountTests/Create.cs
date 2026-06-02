@@ -39,4 +39,17 @@ public sealed class Create
         // Assert
         a.Id.ShouldNotBe(b.Id);
     }
+
+    [Fact]
+    public void WhenBaseUrlSchemeIsNotHttps_ThrowsArgumentException()
+    {
+        // Arrange
+        Uri baseUrl = new("http://github.example.com");
+
+        // Act
+        Action act = () => GitHubAccount.Create("my-account", "MY_TOKEN", baseUrl);
+
+        // Assert
+        Should.Throw<ArgumentException>(act);
+    }
 }
