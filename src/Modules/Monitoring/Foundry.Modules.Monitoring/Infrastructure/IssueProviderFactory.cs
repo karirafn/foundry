@@ -9,7 +9,7 @@ internal sealed class IssueProviderFactory(GitHubHttpClient gitHubHttpClient) : 
     {
         return account switch
         {
-            GitHubAccount gitHub => new GitHubIssueProvider(gitHubHttpClient, token, gitHub.BaseUrl),
+            GitHubAccount gitHub => new GitHubIssueProvider(gitHubHttpClient, token, gitHub.ApiBaseUrl),
             _ => throw new NotSupportedException(
                 $"No issue provider is registered for account type '{account.GetType().Name}'."),
         };

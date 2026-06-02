@@ -23,18 +23,18 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     };
 
     public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
-        Uri baseUrl,
+        Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
         CancellationToken cancellationToken)
     {
-        if (baseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not ("https" or "http"))
         {
             return Result<IReadOnlyList<ProviderIssue>>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
         string relativePath = $"repos/{Uri.EscapeDataString(slug.Owner)}/{Uri.EscapeDataString(slug.Name)}/issues?labels=foundry&state=open";
-        Uri requestUri = new(baseUrl, relativePath);
+        Uri requestUri = new(apiBaseUrl, relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -68,13 +68,13 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     }
 
     public async Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
-        Uri baseUrl,
+        Uri apiBaseUrl,
         RepositorySlug slug,
         int issueNumber,
         string token,
         CancellationToken cancellationToken)
     {
-        if (baseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not ("https" or "http"))
         {
             return Result<IReadOnlyList<int>>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -82,7 +82,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}/issues/{issueNumber}/dependencies/blocked_by";
-        Uri requestUri = new(baseUrl, relativePath);
+        Uri requestUri = new(apiBaseUrl, relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -110,13 +110,13 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     }
 
     public async Task<Result<bool>> IsIssueClosedAsync(
-        Uri baseUrl,
+        Uri apiBaseUrl,
         RepositorySlug slug,
         int issueNumber,
         string token,
         CancellationToken cancellationToken)
     {
-        if (baseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not ("https" or "http"))
         {
             return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -124,7 +124,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}/issues/{issueNumber}";
-        Uri requestUri = new(baseUrl, relativePath);
+        Uri requestUri = new(apiBaseUrl, relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -147,13 +147,13 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     }
 
     public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        Uri baseUrl,
+        Uri apiBaseUrl,
         RepositorySlug slug,
         string pullRequestUrl,
         string token,
         CancellationToken cancellationToken)
     {
-        if (baseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not ("https" or "http"))
         {
             return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -166,7 +166,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}";
-        Uri requestUri = new(baseUrl, relativePath);
+        Uri requestUri = new(apiBaseUrl, relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -190,14 +190,14 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     }
 
     public async Task<Result<ReviewFeedback>> GetPullRequestReviewFeedbackAsync(
-        Uri baseUrl,
+        Uri apiBaseUrl,
         RepositorySlug slug,
         string pullRequestUrl,
         DateTimeOffset since,
         string token,
         CancellationToken cancellationToken)
     {
-        if (baseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not ("https" or "http"))
         {
             return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -211,7 +211,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string repo = Uri.EscapeDataString(slug.Name);
 
         Result<IReadOnlyList<GitHubPullRequestReviewDto>> reviewsResult = await FetchPullRequestReviewsAsync(
-            baseUrl, owner, repo, prNumber, token, cancellationToken);
+            apiBaseUrl, owner, repo, prNumber, token, cancellationToken);
 
         if (reviewsResult is not Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Success reviewsSuccess)
         {
@@ -246,7 +246,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
             Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>> fileCommentsResult =
                 await FetchPullRequestReviewCommentsAsync(
-                    baseUrl, owner, repo, prNumber, review.Id, token, cancellationToken);
+                    apiBaseUrl, owner, repo, prNumber, review.Id, token, cancellationToken);
 
             if (fileCommentsResult is not Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Success fileCommentsSuccess)
             {
@@ -270,7 +270,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     }
 
     private async Task<Result<IReadOnlyList<GitHubPullRequestReviewDto>>> FetchPullRequestReviewsAsync(
-        Uri baseUrl,
+        Uri apiBaseUrl,
         string owner,
         string repo,
         int prNumber,
@@ -278,7 +278,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         CancellationToken cancellationToken)
     {
         string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}/reviews";
-        Uri requestUri = new(baseUrl, relativePath);
+        Uri requestUri = new(apiBaseUrl, relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -301,7 +301,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     }
 
     private async Task<Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>> FetchPullRequestReviewCommentsAsync(
-        Uri baseUrl,
+        Uri apiBaseUrl,
         string owner,
         string repo,
         int prNumber,
@@ -310,7 +310,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         CancellationToken cancellationToken)
     {
         string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}/reviews/{reviewId}/comments";
-        Uri requestUri = new(baseUrl, relativePath);
+        Uri requestUri = new(apiBaseUrl, relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

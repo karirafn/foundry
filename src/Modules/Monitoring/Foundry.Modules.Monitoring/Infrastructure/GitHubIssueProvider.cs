@@ -4,13 +4,13 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
 
-internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string token, Uri baseUrl) : IIssueProvider
+internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
 {
     public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetIssuesAsync(baseUrl, slug, token, cancellationToken);
+        return httpClient.GetIssuesAsync(apiBaseUrl, slug, token, cancellationToken);
     }
 
     public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
@@ -18,7 +18,7 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         int issueNumber,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetDependenciesAsync(baseUrl, slug, issueNumber, token, cancellationToken);
+        return httpClient.GetDependenciesAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
     }
 
     public Task<Result<bool>> IsIssueClosedAsync(
@@ -26,7 +26,7 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         int issueNumber,
         CancellationToken cancellationToken)
     {
-        return httpClient.IsIssueClosedAsync(baseUrl, slug, issueNumber, token, cancellationToken);
+        return httpClient.IsIssueClosedAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
     }
 
     public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
@@ -34,7 +34,7 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         string pullRequestUrl,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetPullRequestStatusAsync(baseUrl, slug, pullRequestUrl, token, cancellationToken);
+        return httpClient.GetPullRequestStatusAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
 
     public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
@@ -43,6 +43,6 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         DateTimeOffset since,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetPullRequestReviewFeedbackAsync(baseUrl, slug, pullRequestUrl, since, token, cancellationToken);
+        return httpClient.GetPullRequestReviewFeedbackAsync(apiBaseUrl, slug, pullRequestUrl, since, token, cancellationToken);
     }
 }
