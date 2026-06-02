@@ -6,7 +6,7 @@ A containerized service that monitors repositories across multiple providers (Gi
 
 - Docker Desktop (running)
 - .NET 10 SDK
-- Node.js 22+
+- Node.js 22 LTS (use [fnm](https://github.com/Schniz/fnm) — `.node-version` pins the version)
 
 ## One-time setup
 
@@ -32,7 +32,7 @@ dotnet run --project src/Foundry.AppHost
 
 This command:
 
-- Builds the worker Docker image via Aspire's `AddDockerfile` (cached after first run)
+- Builds the worker Docker image via MSBuild target (cached after first run)
 - Starts the WebApi with auto-migration applied on startup
 - Starts the Angular dashboard
 
