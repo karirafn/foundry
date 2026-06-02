@@ -49,7 +49,7 @@ public sealed class PollAsync : IAsyncDisposable
 
     private MonitoredRepository SeedRepository()
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://api.github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
         _dbContext.Set<Account>().Add(account);
         _dbContext.SaveChanges();
 

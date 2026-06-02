@@ -14,7 +14,7 @@ public sealed class Create
         // Arrange
         string name = "my-github-account";
         string secretKeyName = "GITHUB_TOKEN";
-        Uri baseUrl = new("https://api.github.com");
+        Uri baseUrl = new("https://github.com");
 
         // Act
         GitHubAccount account = GitHubAccount.Create(name, secretKeyName, baseUrl);
@@ -30,7 +30,7 @@ public sealed class Create
     public void WhenCreated_AssignsNewId()
     {
         // Arrange
-        Uri baseUrl = new("https://api.github.com");
+        Uri baseUrl = new("https://github.com");
 
         // Act
         GitHubAccount a = GitHubAccount.Create("account-a", "KEY_A", baseUrl);

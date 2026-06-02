@@ -13,6 +13,12 @@ public sealed class GitHubAccount : Account
     {
     }
 
+    private static readonly Uri GitHubApiBaseUrl = new("https://api.github.com");
+
+    public override Uri ApiBaseUrl => BaseUrl.Host == "github.com"
+        ? GitHubApiBaseUrl
+        : new Uri(BaseUrl, "/api/v3/");
+
     public static GitHubAccount Create(string name, string secretKeyName, Uri baseUrl)
     {
         return new GitHubAccount(AccountId.New())

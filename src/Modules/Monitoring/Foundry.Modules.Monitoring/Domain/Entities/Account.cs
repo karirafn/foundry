@@ -14,4 +14,6 @@ public abstract class Account : AggregateRoot<AccountId>
     public string SecretKeyName { get; private protected set; } = string.Empty;
 
     public Uri BaseUrl { get; private protected set; } = null!;
+
+    public abstract Uri ApiBaseUrl { get; }
 }
