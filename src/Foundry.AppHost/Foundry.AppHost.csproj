@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <Target Name="BuildWorkerImage" BeforeTargets="Run">
-    <Exec Command="docker build -t foundry-worker:local -f $(MSBuildProjectDirectory)\..\..\workers\Dockerfile $(MSBuildProjectDirectory)\..\..\workers" />
+    <Exec Command="docker build -t foundry-worker:local -f &quot;$(MSBuildProjectDirectory)/../../workers/Dockerfile&quot; &quot;$(MSBuildProjectDirectory)/../../workers&quot;" />
   </Target>
 
 </Project>
