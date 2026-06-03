@@ -105,7 +105,7 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
                     $"{configKey} container path '{containerPath}' targets a sensitive system directory and is not allowed.");
             }
 
-            if (!Path.IsPathFullyQualified(hostPath) && !hostPath.StartsWith('/'))
+            if (!IsAbsolutePath(hostPath))
             {
                 failures.Add(
                     $"{configKey} host path '{hostPath}' must be absolute.");
@@ -131,6 +131,12 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
             SensitiveContainerPrefixes,
             prefix => prefix == normalized
                 || (prefix != "/" && normalized.StartsWith(prefix + "/", StringComparison.Ordinal)));
+    }
+
+    private static bool IsAbsolutePath(string path)
+    {
+        return path.StartsWith('/')
+            || (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/'));
     }
 
     private static bool ContainsPathTraversal(string path)
