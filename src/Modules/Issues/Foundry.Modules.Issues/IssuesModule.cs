@@ -16,6 +16,7 @@ public static class IssuesModule
     public static IServiceCollection AddIssuesModule(this IServiceCollection services)
     {
         services.AddScoped<IIssueQueries, IssueQueries>();
+        services.AddScoped<RetryEligibility.Handler>();
 
         services.AddIntegrationEventHandler<IssueDetected, CreateIssueHandler>();
         services.AddIntegrationEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();

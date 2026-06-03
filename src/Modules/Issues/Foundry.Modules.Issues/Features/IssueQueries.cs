@@ -216,6 +216,19 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
     private static IssueStateDetails? BuildStateDetails(Issue issue) =>
         issue switch
         {
+            IneligibleIssue ineligible => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: null,
+                PullRequestUrl: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                Violations: ineligible.Violations
+                    .Select(v => new EligibilityViolationDto(v.Rule, v.Description))
+                    .ToList()),
+
             BlockedIssue blocked => new IssueStateDetails(
                 WorkerRunId: null,
                 BranchName: null,

@@ -13,6 +13,7 @@ internal static class IssueEndpoints
 
         GetIssues.Endpoint.Map(group);
         GetIssueById.Endpoint.Map(group);
+        RetryEligibility.Endpoint.Map(group);
 
         return routes;
     }
