@@ -12,6 +12,10 @@ fi
 : "${SYSTEM_PROMPT:?SYSTEM_PROMPT is required}"
 : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
 
+if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
+    echo "$CLAUDE_SETTINGS_JSON" > /home/claude/.claude/settings.json
+fi
+
 # Transform https://github.com/owner/repo -> https://<PAT>@github.com/owner/repo.git
 AUTHENTICATED_URL="${CLONE_URL/#https:\/\//https:\/\/${GIT_PAT}@}"
 if [[ "$AUTHENTICATED_URL" != *.git ]]; then

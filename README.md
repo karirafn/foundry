@@ -35,9 +35,10 @@ Common mounts for Claude Code workers:
 | `~/.claude/rules` | `/root/.claude/rules` | `Mounts` |
 | `~/.claude/commands` | `/root/.claude/commands` | `Mounts` |
 | `~/.claude/hooks` | `/root/.claude/hooks` | `Mounts` |
-| `~/.claude/settings.json` | `/root/.claude/settings.json` | `Mounts` |
 | `~/.claude/plugins` | `/root/.claude/plugins` | `Mounts` |
 | `~/.claude/observations` | `/root/.claude/observations` | `WritableMounts` |
+
+Do not mount `settings.json` directly — it is generated at dispatch time from `Workers:Settings` (see below).
 
 Example — mount skills and rules read-only, observations read-write:
 
@@ -48,6 +49,56 @@ dotnet user-secrets set "Workers:WritableMounts:/root/.claude/observations" "/ho
 ```
 
 On Windows, use the full Windows path (e.g. `C:\Users\you\.claude\skills`). Docker Desktop must have path sharing enabled — see Windows notes below.
+
+### Worker settings
+
+Foundry generates a `settings.json` for each worker container at dispatch time and injects it via the `CLAUDE_SETTINGS_JSON` environment variable.
+The entrypoint writes it to `/home/claude/.claude/settings.json` before Claude Code starts.
+
+**Base deny list** — always enforced, not configurable:
+
+- `Bash(git push --force:*)`
+- `Bash(git push * main)`
+- `Bash(git push * master)`
+- `Bash(npm publish:*)`
+- `Bash(npx -y:*)`
+
+**Model** — omit to let Claude Code use its own default; set to pin a specific model:
+
+```bash
+dotnet user-secrets set "Workers:Settings:Model" "claude-sonnet-4-5" --project src/Foundry.WebApi
+```
+
+**Additional deny rules** — appended after the base deny list:
+
+```bash
+dotnet user-secrets set "Workers:Settings:AdditionalDenyRules:0" "Bash(rm -rf:*)" --project src/Foundry.WebApi
+```
+
+**Hooks** — edit `secrets.json` directly for the complex hook structure (array values are not supported by the `dotnet user-secrets set` command):
+
+```bash
+dotnet user-secrets edit --project src/Foundry.WebApi
+```
+
+```json
+{
+  "Workers": {
+    "Settings": {
+      "Hooks": {
+        "PreToolUse": [
+          {
+            "Matcher": "Bash",
+            "Hooks": [
+              { "Type": "command", "Command": "/hooks/my-hook.sh" }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ## Running
 
