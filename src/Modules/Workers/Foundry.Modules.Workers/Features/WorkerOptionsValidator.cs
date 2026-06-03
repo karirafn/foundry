@@ -1,3 +1,5 @@
+using Foundry.Modules.Workers.Features.ImageBuild;
+
 using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Features;
@@ -75,6 +77,7 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
         }
 
         ValidateSettings(options.Settings, failures);
+        ValidateImageBuild(options.ImageBuild, failures);
 
         return failures.Count > 0
             ? ValidateOptionsResult.Fail(failures)
@@ -139,6 +142,23 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
     {
         return path.StartsWith('/')
             || (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/'));
+    }
+
+    private static void ValidateImageBuild(ImageBuildOptions imageBuild, List<string> failures)
+    {
+        if (!imageBuild.Enabled)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(imageBuild.ContextPath))
+        {
+            failures.Add("Workers:ImageBuild:ContextPath must be non-empty when ImageBuild is enabled.");
+        }
+        else if (ContainsPathTraversal(imageBuild.ContextPath))
+        {
+            failures.Add("Workers:ImageBuild:ContextPath must not contain path traversal segments (..).");
+        }
     }
 
     private static bool ContainsPathTraversal(string path)

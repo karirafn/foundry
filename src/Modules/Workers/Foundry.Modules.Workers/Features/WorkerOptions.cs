@@ -1,3 +1,5 @@
+using Foundry.Modules.Workers.Features.ImageBuild;
+
 namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerOptions
@@ -17,6 +19,8 @@ internal sealed class WorkerOptions
     public IReadOnlyDictionary<string, string> WritableMounts { get; set; } = new Dictionary<string, string>();
 
     public WorkerSettingsOptions Settings { get; set; } = new();
+
+    public ImageBuildOptions ImageBuild { get; set; } = new();
 
     public string BranchNamingInstruction { get; set; } = "Use conventional branch naming";
 
