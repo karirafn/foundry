@@ -22,6 +22,11 @@ internal sealed class DockerWorkerOrchestrator(
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
+    internal static string FormatBind(BindMount mount) =>
+        mount.ReadOnly
+            ? $"{mount.HostPath}:{mount.ContainerPath}:ro"
+            : $"{mount.HostPath}:{mount.ContainerPath}";
+
     public async Task<Result<ContainerId>> StartAsync(
         WorkerContainerSpec spec,
         CancellationToken cancellationToken)
@@ -36,7 +41,7 @@ internal sealed class DockerWorkerOrchestrator(
                 Labels = new Dictionary<string, string>(spec.Labels),
                 HostConfig = new HostConfig
                 {
-                    Binds = [.. spec.BindMounts.Select(b => $"{b.HostPath}:{b.ContainerPath}")],
+                    Binds = [.. spec.BindMounts.Select(FormatBind)],
                     Memory = _options.MemoryLimitMb * BytesPerMegabyte,
                     NanoCPUs = (long)(_options.CpuLimit * NanoCpusPerCpu),
                     PidsLimit = _options.PidsLimit,
