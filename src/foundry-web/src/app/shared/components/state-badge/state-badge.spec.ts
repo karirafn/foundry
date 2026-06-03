@@ -179,4 +179,32 @@ describe('StateBadgeComponent', () => {
     // Assert
     expect(el.querySelector('span')?.classList.contains('badge--revision-queued')).toBe(true);
   });
+
+  // Cycle 5: ineligible state
+  it('should display "INELIGIBLE" for ineligible state', () => {
+    // Arrange / Act
+    const fixture = createComponent('ineligible');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('INELIGIBLE');
+  });
+
+  it('should set aria-label "State: ineligible" for ineligible state', () => {
+    // Arrange / Act
+    const fixture = createComponent('ineligible');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: ineligible');
+  });
+
+  it('should apply badge--ineligible CSS class for ineligible state', () => {
+    // Arrange / Act
+    const fixture = createComponent('ineligible');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.classList.contains('badge--ineligible')).toBe(true);
+  });
 });

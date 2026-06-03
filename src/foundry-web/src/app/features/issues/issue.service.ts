@@ -77,6 +77,12 @@ export class IssueService {
     this.loadDetail(id);
   }
 
+  retryEligibility(id: string): void {
+    this._http.post<void>(`/api/issues/${id}/retry-eligibility`, {}).subscribe({
+      next: () => this.loadDetail(id),
+    });
+  }
+
   private _upsertIssue(updated: IssueSummary): void {
     const current = this.issues();
     const index = current.findIndex((i) => i.id === updated.id);

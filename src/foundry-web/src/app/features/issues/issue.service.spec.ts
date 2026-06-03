@@ -355,6 +355,29 @@ describe('IssueService', () => {
     expect(service.detailError()).not.toBeNull();
   });
 
+  // Cycle 13: retryEligibility posts to retry-eligibility endpoint and reloads detail
+  it('should POST to retry-eligibility endpoint when retryEligibility is called', () => {
+    // Arrange / Act
+    service.retryEligibility('abc123');
+
+    // Assert
+    const req = httpMock.expectOne('/api/issues/abc123/retry-eligibility');
+    expect(req.request.method).toBe('POST');
+    req.flush(null);
+    httpMock.expectOne('/api/issues/abc123').flush({});
+  });
+
+  it('should reload issue detail after retryEligibility succeeds', () => {
+    // Arrange
+    service.retryEligibility('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush(null);
+
+    // Act / Assert — loadDetail is called and fetches updated detail
+    const req = httpMock.expectOne('/api/issues/abc123');
+    expect(req.request.method).toBe('GET');
+    req.flush({ ...mockSummary });
+  });
+
   // Cycle 12: Reconnect backfill calls loadIssues
   it('should call loadIssues on reconnect to backfill missed events', () => {
     // Arrange

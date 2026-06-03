@@ -56,4 +56,8 @@
   &--revision-failed {
     background-color: var(--fd-state-failed);
   }
+
+  &--ineligible {
+    background-color: var(--fd-state-ineligible);
+  }
 }

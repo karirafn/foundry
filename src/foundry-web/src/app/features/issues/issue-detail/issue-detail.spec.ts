@@ -1,7 +1,16 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { IssueDetailComponent, MEDIA_QUERY_FACTORY } from './issue-detail';
 import { IssueDetail } from '../issue.model';
 import { WorkerLogService, WORKER_LOG_HUB_FACTORY } from '../worker-log.service';
+import { IssueService } from '../issue.service';
+import { SignalRService } from '../../../core/services/signalr.service';
+
+const mockSignalRService = {
+  on: () => {},
+  onReconnected: () => {},
+};
 
 const mockDetail: IssueDetail = {
   id: 'abc123',
@@ -52,8 +61,12 @@ function createComponent(
     imports: [IssueDetailComponent],
     providers: [
       WorkerLogService,
+      IssueService,
+      provideHttpClient(),
+      provideHttpClientTesting(),
       { provide: WORKER_LOG_HUB_FACTORY, useValue: mockHubFactory },
       { provide: MEDIA_QUERY_FACTORY, useValue: mqFactory },
+      { provide: SignalRService, useValue: mockSignalRService },
     ],
   });
   const fixture = TestBed.createComponent(IssueDetailComponent);
@@ -489,5 +502,112 @@ describe('IssueDetailComponent', () => {
     const icon = btn?.querySelector('svg');
     expect(icon).toBeTruthy();
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  // Cycle 16: ineligible state — violations list
+  it('should render eligibility violations when state is ineligible and violations are present', () => {
+    // Arrange
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: {
+        ...mockDetail.stateDetails,
+        violations: [
+          { rule: 'no-open-pr', description: 'Issue already has an open pull request' },
+          { rule: 'label-removed', description: 'Trigger label was removed' },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(ineligibleDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const items = el.querySelectorAll('.issue-detail__violation');
+    expect(items.length).toBe(2);
+    const texts = Array.from(items).map((i) => i.textContent?.trim());
+    expect(texts).toContain('Issue already has an open pull request');
+    expect(texts).toContain('Trigger label was removed');
+  });
+
+  it('should not render violations section when state is not ineligible', () => {
+    // Arrange / Act
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const violations = el.querySelector('.issue-detail__violations');
+    expect(violations).toBeFalsy();
+  });
+
+  it('should not render violations section when violations list is empty', () => {
+    // Arrange
+    const ineligibleNoViolations: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockDetail.stateDetails, violations: [] },
+    };
+
+    // Act
+    const fixture = createComponent(ineligibleNoViolations);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const violations = el.querySelector('.issue-detail__violations');
+    expect(violations).toBeFalsy();
+  });
+
+  // Cycle 17: ineligible state — retry button
+  it('should render a retry button when state is ineligible', () => {
+    // Arrange
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockDetail.stateDetails, violations: null },
+    };
+
+    // Act
+    const fixture = createComponent(ineligibleDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    expect(btn?.textContent?.trim()).toBe('Retry');
+  });
+
+  it('should not render retry eligibility button when state is not ineligible', () => {
+    // Arrange / Act
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-eligibility-btn');
+    expect(btn).toBeFalsy();
+  });
+
+  it('should call retryEligibility on the service when retry button is clicked', () => {
+    // Arrange
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockDetail.stateDetails, violations: null },
+    };
+    const fixture = createComponent(ineligibleDetail);
+    const el = fixture.nativeElement as HTMLElement;
+    const http = TestBed.inject(HttpTestingController);
+
+    // Act
+    const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
+    btn.click();
+    const req = http.expectOne(`/api/issues/${ineligibleDetail.id}/retry-eligibility`);
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    req.flush(null);
+    // Service calls loadDetail after success; flush that request too
+    http.expectOne(`/api/issues/${ineligibleDetail.id}`).flush(ineligibleDetail);
+    http.verify();
   });
 });

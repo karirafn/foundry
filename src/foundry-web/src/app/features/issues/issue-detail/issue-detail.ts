@@ -18,6 +18,7 @@ import { IssueDetail } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { WorkerLogPanelComponent } from '../worker-log-panel/worker-log-panel';
 import { WorkerLogService } from '../worker-log.service';
+import { IssueService } from '../issue.service';
 
 const LOG_PANEL_ID = 'issue-detail-log-panel';
 const MOBILE_QUERY = '(max-width: 767px)';
@@ -130,6 +131,17 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
             </div>
           }
 
+          @if (d.state === 'ineligible' && d.stateDetails.violations?.length) {
+            <div class="issue-detail__field">
+              <span class="issue-detail__field-key">Eligibility Violations</span>
+              <ul class="issue-detail__violations">
+                @for (violation of d.stateDetails.violations!; track violation.rule) {
+                  <li class="issue-detail__violation">{{ violation.description }}</li>
+                }
+              </ul>
+            </div>
+          }
+
           @if (d.stateDetails.completedAt) {
             <div class="issue-detail__field">
               <span class="issue-detail__field-key">Completed</span>
@@ -156,6 +168,16 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
             <span class="issue-detail__field-value">{{ d.author }}</span>
           </div>
         </div>
+
+        @if (d.state === 'ineligible') {
+          <div class="issue-detail__actions">
+            <button
+              class="issue-detail__retry-eligibility-btn"
+              type="button"
+              (click)="retryEligibility(d)"
+            >Retry</button>
+          </div>
+        }
 
         @if (d.stateDetails.workerRunId) {
           <div class="issue-detail__log-section">
@@ -266,6 +288,7 @@ export class IssueDetailComponent implements OnDestroy {
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   protected readonly _logService = inject(WorkerLogService);
+  private readonly _issueService = inject(IssueService);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _mqFactory = inject(MEDIA_QUERY_FACTORY);
 
@@ -323,5 +346,9 @@ export class IssueDetailComponent implements OnDestroy {
 
   focusOverlayClose(): void {
     this._overlayCloseBtn?.nativeElement.focus();
+  }
+
+  retryEligibility(d: IssueDetail): void {
+    this._issueService.retryEligibility(d.id);
   }
 }

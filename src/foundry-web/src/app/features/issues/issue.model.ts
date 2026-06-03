@@ -10,7 +10,8 @@ export type IssueState =
   | 'dismissed'
   | 'revision_queued'
   | 'revision_in_progress'
-  | 'revision_failed';
+  | 'revision_failed'
+  | 'ineligible';
 
 export interface IssueSummary {
   id: string;
@@ -22,6 +23,11 @@ export interface IssueSummary {
   url: string;
 }
 
+export interface EligibilityViolation {
+  rule: string;
+  description: string;
+}
+
 export interface IssueStateDetails {
   workerRunId: string | null;
   branchName: string | null;
@@ -31,6 +37,7 @@ export interface IssueStateDetails {
   failedAt: string | null;
   completedAt: string | null;
   blockedBy: string | null;
+  violations?: EligibilityViolation[] | null;
 }
 
 export interface IssueDetail extends IssueSummary {
