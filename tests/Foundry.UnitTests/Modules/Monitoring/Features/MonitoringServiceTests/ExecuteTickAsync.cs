@@ -271,6 +271,14 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             {
                 return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
             }
+
+            public Task<Result<BranchProtection>> GetBranchProtectionAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(
+                    Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
+            }
         }
     }
 

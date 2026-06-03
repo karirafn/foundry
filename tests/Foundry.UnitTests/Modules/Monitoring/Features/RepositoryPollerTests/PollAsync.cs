@@ -903,6 +903,14 @@ public sealed class PollAsync : IAsyncDisposable
 
             return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
         }
+
+        public Task<Result<BranchProtection>> GetBranchProtectionAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
+                Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
+        }
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
@@ -945,6 +953,13 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<ReviewFeedback>.Fail(error));
+        }
+
+        public Task<Result<BranchProtection>> GetBranchProtectionAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<BranchProtection>.Fail(error));
         }
     }
 

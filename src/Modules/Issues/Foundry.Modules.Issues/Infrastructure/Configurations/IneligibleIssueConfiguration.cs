@@ -34,7 +34,7 @@ public sealed class IneligibleIssueConfiguration : IEntityTypeConfiguration<Inel
             .HasColumnName("eligibility_violations");
     }
 
-    private static IReadOnlyList<EligibilityViolation> DeserializeViolations(string json)
+    private static List<EligibilityViolation> DeserializeViolations(string json)
     {
         JsonArray? array = JsonSerializer.Deserialize<JsonArray>(json, (JsonSerializerOptions?)null);
 

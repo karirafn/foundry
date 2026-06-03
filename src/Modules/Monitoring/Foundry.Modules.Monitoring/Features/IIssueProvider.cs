@@ -29,4 +29,8 @@ public interface IIssueProvider
         string pullRequestUrl,
         DateTimeOffset since,
         CancellationToken cancellationToken);
+
+    Task<Result<BranchProtection>> GetBranchProtectionAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken);
 }

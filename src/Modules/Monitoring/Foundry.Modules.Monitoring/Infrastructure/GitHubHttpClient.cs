@@ -22,6 +22,87 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
+    public async Task<Result<string>> GetDefaultBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        {
+            return Result<string>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string relativePath = $"repos/{owner}/{repo}";
+        Uri requestUri = new(apiBaseUrl, relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<string>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubRepositoryInfoDto? dto = JsonSerializer.Deserialize<GitHubRepositoryInfoDto>(body, JsonOptions);
+
+        return Result<string>.Ok(dto?.DefaultBranch ?? string.Empty);
+    }
+
+    public async Task<Result<BranchRules>> GetBranchRulesAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branch,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        {
+            return Result<BranchRules>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string encodedBranch = Uri.EscapeDataString(branch);
+        string relativePath = $"repos/{owner}/{repo}/rules/branches/{encodedBranch}";
+        Uri requestUri = new(apiBaseUrl, relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return Result<BranchRules>.Ok(new BranchRules(false, false, false));
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<BranchRules>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitHubBranchRuleDto>? dtos = JsonSerializer.Deserialize<List<GitHubBranchRuleDto>>(body, JsonOptions);
+
+        bool rejectForcePushes = (dtos ?? []).Any(r => r.Type == "non_fast_forward");
+        bool rejectDeletion = (dtos ?? []).Any(r => r.Type == "deletion");
+        bool rejectDirectPushes = (dtos ?? []).Any(r => r.Type == "pull_request");
+
+        return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
+    }
+
     public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -392,6 +473,10 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return GitHubErrors.UnexpectedStatusCode(statusCode);
     }
 
+    private sealed record GitHubRepositoryInfoDto(string DefaultBranch);
+
+    private sealed record GitHubBranchRuleDto(string Type);
+
     private sealed record GitHubIssueDto(
         int Number,
         string Title,
@@ -427,6 +512,8 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         int? Line,
         int? OriginalLine);
 }
+
+internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
 
 internal static class GitHubErrors
 {
