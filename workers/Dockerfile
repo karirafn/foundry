@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim
 
 # Install git explicitly — not present in slim variant
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Disable telemetry and auto-update
 ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
@@ -17,7 +17,7 @@ RUN mkdir -p /home/node/.claude && chown node:node /home/node/.claude
 ARG INSTALL_DOTNET=false
 RUN if [ "$INSTALL_DOTNET" = "true" ]; then \
         apt-get update && \
-        apt-get install -y --no-install-recommends curl ca-certificates && \
+        apt-get install -y --no-install-recommends curl && \
         curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
             | gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg && \
         echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/microsoft-debian-bookworm-prod bookworm main" \
