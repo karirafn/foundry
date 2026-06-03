@@ -24,7 +24,6 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         {
             Image = "test-image:latest",
             MaxConcurrent = maxConcurrent,
-            ConfigPath = "/tmp/config",
             ReportsPath = "/tmp/reports",
             ApiKey = "test-api-key",
         };

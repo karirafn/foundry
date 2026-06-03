@@ -127,7 +127,6 @@ internal sealed class IssueClaimedHandler(
 
         List<BindMount> bindMounts =
         [
-            new BindMount(Path.GetFullPath(_options.ConfigPath), "/home/claude/.claude/"),
             new BindMount(Path.GetFullPath(reportsHostPath), "/reports/"),
         ];
 

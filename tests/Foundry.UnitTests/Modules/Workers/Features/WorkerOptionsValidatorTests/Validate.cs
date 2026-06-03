@@ -119,36 +119,10 @@ public sealed class Validate
     }
 
     [Fact]
-    public void WhenConfigPathIsEmpty_ReturnsFailure()
-    {
-        // Arrange
-        WorkerOptions options = new() { ApiKey = "sk-ant-key", ConfigPath = string.Empty };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Failed.ShouldBeTrue();
-    }
-
-    [Fact]
     public void WhenReportsPathIsEmpty_ReturnsFailure()
     {
         // Arrange
         WorkerOptions options = new() { ApiKey = "sk-ant-key", ReportsPath = string.Empty };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Failed.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenConfigPathContainsTraversal_ReturnsFailure()
-    {
-        // Arrange
-        WorkerOptions options = new() { ApiKey = "sk-ant-key", ConfigPath = "../etc/workers/config" };
 
         // Act
         ValidateOptionsResult result = _sut.Validate(null, options);
@@ -168,20 +142,6 @@ public sealed class Validate
 
         // Assert
         result.Failed.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenConfigPathContainsTraversal_FailureMessageMentionsConfigPath()
-    {
-        // Arrange
-        WorkerOptions options = new() { ApiKey = "sk-ant-key", ConfigPath = "../unsafe" };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
-        failures.ShouldContain(f => f.Contains("ConfigPath"));
     }
 
     [Fact]
@@ -260,7 +220,6 @@ public sealed class Validate
         {
             ApiKey = "sk-ant-key",
             Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ConfigPath = "./workers/config",
             ReportsPath = "./data/reports",
             WorkerPromptTemplate = string.Empty,
         };
@@ -280,7 +239,6 @@ public sealed class Validate
         {
             ApiKey = "sk-ant-key",
             Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ConfigPath = "./workers/config",
             ReportsPath = "./data/reports",
             WorkerPromptTemplate = "Implement the issue.",
         };
@@ -300,7 +258,6 @@ public sealed class Validate
         {
             ApiKey = "sk-ant-key",
             Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ConfigPath = "./workers/config",
             ReportsPath = "./data/reports",
             WorkerPromptTemplate = "Implement the issue.",
         };
@@ -321,7 +278,6 @@ public sealed class Validate
         {
             ApiKey = "sk-ant-key",
             Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ConfigPath = "./workers/config",
             ReportsPath = "./data/reports",
         };
 
@@ -330,5 +286,86 @@ public sealed class Validate
 
         // Assert
         result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsAndWritableMountsAreEmpty_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = [],
+            WritableMounts = [],
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsAndWritableMountsHaveDistinctContainerPaths_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/config/"] = "/host/config" },
+            WritableMounts = new Dictionary<string, string> { ["/data/"] = "/host/data" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsAndWritableMountsShareContainerPath_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/shared/"] = "/host/a" },
+            WritableMounts = new Dictionary<string, string> { ["/shared/"] = "/host/b" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsAndWritableMountsShareContainerPath_FailureMessageMentionsOverlap()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/shared/"] = "/host/a" },
+            WritableMounts = new Dictionary<string, string> { ["/shared/"] = "/host/b" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
+        failures.ShouldContain(f => f.Contains("/shared/"));
     }
 }

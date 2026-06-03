@@ -56,7 +56,6 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         {
             Image = "test-image:latest",
             MaxConcurrent = 3,
-            ConfigPath = "/tmp/config",
             ReportsPath = _reportsBasePath,
             ApiKey = "test-api-key",
             TimeoutMinutes = 99999,

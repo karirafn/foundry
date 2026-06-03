@@ -49,7 +49,6 @@ public sealed class HandleAsync : IAsyncDisposable
         {
             Image = "test-image:latest",
             MaxConcurrent = 3,
-            ConfigPath = "/tmp/config",
             ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
             ApiKey = "test-api-key",
             TimeoutMinutes = 120,
@@ -153,7 +152,6 @@ public sealed class HandleAsync : IAsyncDisposable
             {
                 Image = "test-image:latest",
                 MaxConcurrent = 3,
-                ConfigPath = "/tmp/config",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 ApiKey = "test-api-key",
                 TimeoutMinutes = 120,
@@ -193,12 +191,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldContain(m => m.ContainerPath == "/home/claude/.claude/");
         spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/");
-        spec.BindMounts
-            .First(m => m.ContainerPath == "/home/claude/.claude/")
-            .HostPath
-            .ShouldBe(Path.GetFullPath("/tmp/config"));
     }
 
     [Fact]
@@ -325,7 +318,6 @@ public sealed class HandleAsync : IAsyncDisposable
             {
                 Image = "test-image:latest",
                 MaxConcurrent = 3,
-                ConfigPath = "/tmp/config",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 OAuthToken = "test-oauth-token",
                 ApiKey = "",

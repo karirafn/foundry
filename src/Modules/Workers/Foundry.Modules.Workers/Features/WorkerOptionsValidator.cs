@@ -29,15 +29,6 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
             failures.Add("Workers:Image must not use the ':latest' tag. Pin to a specific version tag or digest for reproducible builds.");
         }
 
-        if (string.IsNullOrWhiteSpace(options.ConfigPath))
-        {
-            failures.Add("Workers:ConfigPath must be non-empty.");
-        }
-        else if (ContainsPathTraversal(options.ConfigPath))
-        {
-            failures.Add("Workers:ConfigPath must not contain path traversal segments (..).");
-        }
-
         if (string.IsNullOrWhiteSpace(options.ReportsPath))
         {
             failures.Add("Workers:ReportsPath must be non-empty.");
@@ -45,6 +36,15 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
         else if (ContainsPathTraversal(options.ReportsPath))
         {
             failures.Add("Workers:ReportsPath must not contain path traversal segments (..).");
+        }
+
+        IEnumerable<string> overlappingContainerPaths = options.Mounts.Keys
+            .Intersect(options.WritableMounts.Keys, StringComparer.Ordinal);
+
+        foreach (string containerPath in overlappingContainerPaths)
+        {
+            failures.Add(
+                $"Container path '{containerPath}' appears in both Workers:Mounts and Workers:WritableMounts. Each container path must appear in at most one mount dictionary.");
         }
 
         if (string.IsNullOrWhiteSpace(options.WorkerPromptTemplate))
