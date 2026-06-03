@@ -1175,4 +1175,224 @@ public sealed class Validate
         // Assert
         result.Succeeded.ShouldBeTrue();
     }
+
+    [Theory]
+    [InlineData("/absolute/path")]
+    [InlineData("/etc/myapp")]
+    [InlineData("C:\\Users\\test\\workers")]
+    public void WhenImageBuildEnabledAndContextPathIsAbsolute_ReturnsFailure(string absolutePath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions { Enabled = true, ContextPath = absolutePath },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("/absolute/path")]
+    [InlineData("/etc/myapp")]
+    public void WhenImageBuildEnabledAndContextPathIsAbsolute_FailureMessageMentionsRelative(string absolutePath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions { Enabled = true, ContextPath = absolutePath },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
+        failures.ShouldContain(f => f.Contains("relative"));
+    }
+
+    [Fact]
+    public void WhenImageBuildEnabledAndContextPathIsRelative_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions { Enabled = true, ContextPath = "workers" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenImageBuildEnabledWithValidBuildArgs_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions
+            {
+                Enabled = true,
+                ContextPath = "workers",
+                BuildArgs = new Dictionary<string, string>
+                {
+                    ["INSTALL_DOTNET"] = "true",
+                    ["VERSION_NUMBER"] = "1.0.0",
+                },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("lowercase_key")]
+    [InlineData("123_STARTS_WITH_NUMBER")]
+    [InlineData("KEY-WITH-DASH")]
+    [InlineData("KEY WITH SPACE")]
+    public void WhenImageBuildBuildArgsKeyIsInvalid_ReturnsFailure(string invalidKey)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions
+            {
+                Enabled = true,
+                ContextPath = "workers",
+                BuildArgs = new Dictionary<string, string> { [invalidKey] = "value" },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("INSTALL_DOTNET")]
+    [InlineData("VERSION")]
+    [InlineData("MY_BUILD_ARG_123")]
+    [InlineData("_LEADING_UNDERSCORE")]
+    public void WhenImageBuildBuildArgsKeyMatchesDockerConvention_ReturnsSuccess(string validKey)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions
+            {
+                Enabled = true,
+                ContextPath = "workers",
+                BuildArgs = new Dictionary<string, string> { [validKey] = "value" },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenImageBuildBuildArgsValueContainsNewline_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions
+            {
+                Enabled = true,
+                ContextPath = "workers",
+                BuildArgs = new Dictionary<string, string> { ["MY_ARG"] = "value\ninjected" },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenImageBuildBuildArgsValueContainsNullByte_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions
+            {
+                Enabled = true,
+                ContextPath = "workers",
+                BuildArgs = new Dictionary<string, string> { ["MY_ARG"] = "value\0injected" },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenImageBuildBuildArgsValueContainsNewline_FailureMessageMentionsBuildArgs()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions
+            {
+                Enabled = true,
+                ContextPath = "workers",
+                BuildArgs = new Dictionary<string, string> { ["MY_ARG"] = "value\ninjected" },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
+        failures.ShouldContain(f => f.Contains("BuildArgs"));
+    }
 }

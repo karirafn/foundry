@@ -13,14 +13,15 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.138
 # Pre-create ~/.claude owned by the built-in node user (UID 1000)
 RUN mkdir -p /home/node/.claude && chown node:node /home/node/.claude
 
-# Conditional .NET SDK install
+# Conditional .NET SDK install — uses apt GPG signing key for authenticity verification
 ARG INSTALL_DOTNET=false
 RUN if [ "$INSTALL_DOTNET" = "true" ]; then \
         apt-get update && \
-        apt-get install -y --no-install-recommends wget ca-certificates && \
-        wget -q https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
-        dpkg -i packages-microsoft-prod.deb && \
-        rm packages-microsoft-prod.deb && \
+        apt-get install -y --no-install-recommends curl ca-certificates && \
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+            | gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg && \
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/microsoft-debian-bookworm-prod bookworm main" \
+            > /etc/apt/sources.list.d/microsoft.list && \
         apt-get update && \
         apt-get install -y --no-install-recommends dotnet-sdk-10.0 && \
         rm -rf /var/lib/apt/lists/*; \

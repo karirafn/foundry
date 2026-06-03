@@ -2,6 +2,7 @@ using Docker.DotNet;
 
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
 
 using Microsoft.Extensions.Configuration;
@@ -135,7 +136,7 @@ public sealed class AddWorkersModule
 
         // Assert
         IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
-        hostedServices.ShouldContain(s => s.GetType().Name == "WorkerImageBuildService");
+        hostedServices.ShouldContain(s => s is WorkerImageBuildService);
     }
 
     [Fact]

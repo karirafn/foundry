@@ -29,6 +29,8 @@ internal sealed class WorkerImageBuildService(
 
         string contextPath = ResolveContextPath(_options.ImageBuild.ContextPath);
 
+        logger.LogDebug("Resolved Docker build context path: {ContextPath}", contextPath);
+
         if (!Directory.Exists(contextPath))
         {
             throw new InvalidOperationException(
@@ -41,7 +43,7 @@ internal sealed class WorkerImageBuildService(
             _options.Image,
             contextPath);
 
-        MemoryStream tarStream = new();
+        await using MemoryStream tarStream = new();
         await TarFile.CreateFromDirectoryAsync(
             contextPath,
             tarStream,

@@ -51,10 +51,11 @@ public sealed class StartingAsync
                 ContextPath = nonExistentPath,
             });
 
-        // Act / Assert
+        // Act
         InvalidOperationException ex = await Should.ThrowAsync<InvalidOperationException>(
             () => ((IHostedLifecycleService)sut).StartingAsync(CancellationToken.None));
 
+        // Assert
         ex.Message.ShouldContain("context");
     }
 
@@ -167,7 +168,7 @@ public sealed class StartingAsync
     private sealed class StubHostEnvironment(string contentRootPath) : IHostEnvironment
     {
         public string ApplicationName { get; set; } = "Foundry.WebApi";
-        public IFileProvider ContentRootFileProvider { get; set; } = null!;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
         public string ContentRootPath { get; set; } = contentRootPath;
         public string EnvironmentName { get; set; } = "Development";
     }

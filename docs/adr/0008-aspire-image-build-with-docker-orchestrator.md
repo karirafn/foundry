@@ -1,5 +1,9 @@
 # Aspire Image Build with Docker Orchestrator Runtime Dispatch
 
+## Status
+
+Superseded by [ADR 0009](0009-worker-image-build-hosted-service.md)
+
 ## Context
 
 Foundry dispatches ephemeral Docker containers running Claude Code to implement issues. The worker image needs to be built from a Dockerfile, and containers need to be created on-demand per issue. Aspire's `AddDockerfile` builds and starts a container, but workers are not long-running services — they are created per-issue by `DockerWorkerOrchestrator`.
