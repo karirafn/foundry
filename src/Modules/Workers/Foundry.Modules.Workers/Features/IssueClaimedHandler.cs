@@ -110,6 +110,7 @@ internal sealed class IssueClaimedHandler(
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
+            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),
         };
 
         KeyValuePair<string, string> authVar = _options.GetAuthEnvironmentVariable();
