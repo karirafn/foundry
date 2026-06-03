@@ -9,7 +9,9 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.138
 # Create a non-root user and workspace directory with correct ownership
 RUN useradd --create-home --shell /bin/bash claude && \
     mkdir -p /workspace && \
-    chown claude:claude /workspace
+    chown claude:claude /workspace && \
+    mkdir -p /home/claude/.claude && \
+    chown claude:claude /home/claude/.claude
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 555 /entrypoint.sh

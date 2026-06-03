@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
@@ -495,6 +497,53 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.Command.ShouldHaveSingleItem();
         spec.Command[0].ShouldBe("/entrypoint.sh");
+    }
+
+    [Fact]
+    public async Task WhenOrchestratorSucceeds_ContainerSpecHasClaudeSettingsJsonEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldContainKey("CLAUDE_SETTINGS_JSON");
+    }
+
+    [Fact]
+    public async Task WhenOrchestratorSucceeds_ClaudeSettingsJsonEnvVarContainsBaseDenyList()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings-deny");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+
+        string json = spec.EnvironmentVariables["CLAUDE_SETTINGS_JSON"];
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement deny = doc.RootElement
+            .GetProperty("permissions")
+            .GetProperty("deny");
+
+        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+
+        rules.ShouldContain("Bash(git push --force:*)");
+        rules.ShouldContain("Bash(git push * main)");
+        rules.ShouldContain("Bash(git push * master)");
+        rules.ShouldContain("Bash(npm publish:*)");
+        rules.ShouldContain("Bash(npx -y:*)");
     }
 
     [Fact]

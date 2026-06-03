@@ -29,6 +29,9 @@ public sealed class Defaults
             () => options.WorkerPromptTemplate.ShouldContain("{issueNumber}"),
             () => options.MemoryLimitMb.ShouldBe(8192),
             () => options.CpuLimit.ShouldBe(2.0),
-            () => options.PidsLimit.ShouldBe(512));
+            () => options.PidsLimit.ShouldBe(512),
+            () => options.Settings.ShouldNotBeNull(),
+            () => options.Settings.AdditionalDenyRules.ShouldBeEmpty(),
+            () => options.Settings.Model.ShouldBeNull());
     }
 }
