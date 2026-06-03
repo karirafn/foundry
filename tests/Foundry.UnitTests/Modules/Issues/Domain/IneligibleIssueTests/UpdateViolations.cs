@@ -50,14 +50,17 @@ public sealed class UpdateViolations
     }
 
     [Fact]
-    public void WhenViolationsIsEmpty_ThrowsArgumentException()
+    public void WhenViolationsIsEmpty_ReturnsFailResult()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         IneligibleIssue ineligible = CreateIneligibleIssue(repositoryId);
         IReadOnlyList<EligibilityViolation> newViolations = [];
 
-        // Act & Assert
-        Should.Throw<ArgumentException>(() => ineligible.UpdateViolations(newViolations));
+        // Act
+        Result result = ineligible.UpdateViolations(newViolations);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
     }
 }

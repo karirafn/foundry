@@ -66,8 +66,11 @@ internal static class RetryEligibility
             }
             else
             {
-                ineligible.UpdateViolations(violations);
-                await db.SaveChangesAsync(cancellationToken);
+                Result updateResult = ineligible.UpdateViolations(violations);
+                if (updateResult.IsSuccess)
+                {
+                    await db.SaveChangesAsync(cancellationToken);
+                }
             }
 
             return await queries.GetIssueDetailAsync(issueId, cancellationToken);
@@ -89,7 +92,7 @@ internal static class RetryEligibility
 
                     return result.Match(
                         detail => TypedResults.Ok(detail) as IResult,
-                        error => error.Code == "Issue.NotFound"
+                        error => error.Code == IssueErrors.NotFoundCode
                             ? TypedResults.NotFound()
                             : TypedResults.Conflict());
                 })

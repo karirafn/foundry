@@ -18,7 +18,7 @@ public sealed class Unreachable
         EligibilityViolation violation = EligibilityViolation.Unreachable(message);
 
         // Assert
-        violation.Rule.ShouldBe("repository:unreachable");
+        violation.Rule.ShouldBe("branch-protection:unreachable");
     }
 
     [Fact]

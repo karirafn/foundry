@@ -46,6 +46,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             repositoryDispatchQueries,
             _dispatcher,
             new PassingBranchProtectionValidator(),
+            new NullDomainEventDispatcher(),
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
@@ -359,5 +360,11 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             => Task.FromResult(
                 Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
                     Array.Empty<EligibilityViolationInfo>()));
+    }
+
+    private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

@@ -276,7 +276,7 @@ internal sealed class RepositoryPoller(
             string message = protectionResult is Result<BranchProtection>.Failure failure
                 ? failure.Error.Message
                 : "Branch protection could not be retrieved.";
-            return [new EligibilityViolationInfo("branch-protection:unreachable", message)];
+            return [new EligibilityViolationInfo(EligibilityViolationInfo.UnreachableRule, message)];
         }
 
         BranchProtection protection = success.Value;
@@ -285,21 +285,21 @@ internal sealed class RepositoryPoller(
         if (!protection.RejectDirectPushes)
         {
             violations.Add(new EligibilityViolationInfo(
-                "branch-protection:allow-direct-pushes",
+                EligibilityViolationInfo.AllowDirectPushesRule,
                 "The repository allows direct pushes to the protected branch, which could allow bypassing the worker's pull request workflow."));
         }
 
         if (!protection.RejectForcePushes)
         {
             violations.Add(new EligibilityViolationInfo(
-                "branch-protection:allow-force-pushes",
+                EligibilityViolationInfo.AllowForcePushesRule,
                 "The repository allows force pushes to the protected branch, which could allow overwriting the worker's commits."));
         }
 
         if (!protection.RejectDeletion)
         {
             violations.Add(new EligibilityViolationInfo(
-                "branch-protection:allow-deletion",
+                EligibilityViolationInfo.AllowDeletionRule,
                 "The repository allows deletion of the protected branch, which could result in loss of the worker's work."));
         }
 

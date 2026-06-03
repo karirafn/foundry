@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -20,6 +21,7 @@ public sealed class HandleAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly CapturingDomainEventDispatcher _domainEventDispatcher;
 
     private static IssueAuthor ValidAuthor =>
         ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
@@ -38,6 +40,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
+        _domainEventDispatcher = new CapturingDomainEventDispatcher();
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -59,6 +62,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 "GITHUB_PAT")),
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             branchProtectionValidator ?? new StubBranchProtectionValidator(violations: []),
+            _domainEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
@@ -137,6 +141,33 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBranchProtectionReturnsViolations_DispatchesIssueIneligibleEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repositoryId);
+
+        IReadOnlyList<EligibilityViolationInfo> violations =
+        [
+            new EligibilityViolationInfo(
+                "branch-protection:allow-direct-pushes",
+                "Direct pushes allowed.")
+        ];
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            branchProtectionValidator: new StubBranchProtectionValidator(violations: violations));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _domainEventDispatcher.DispatchedEvents
+            .OfType<IssueIneligible>()
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task WhenBranchProtectionReturnsViolations_PersistsViolations()
     {
         // Arrange
@@ -194,6 +225,27 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBranchProtectionIsUnreachable_DispatchesIssueIneligibleEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            branchProtectionValidator: new FailingBranchProtectionValidator());
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _domainEventDispatcher.DispatchedEvents
+            .OfType<IssueIneligible>()
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task WhenBranchProtectionIsUnreachable_PersistsUnreachableViolation()
     {
         // Arrange
@@ -214,7 +266,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .OfType<IneligibleIssue>()
             .ShouldHaveSingleItem();
         ineligible.Violations.ShouldHaveSingleItem()
-            .Rule.ShouldBe("repository:unreachable");
+            .Rule.ShouldBe("branch-protection:unreachable");
     }
 
     private sealed class StubBranchProtectionValidator(
@@ -248,5 +300,18 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    private sealed class CapturingDomainEventDispatcher : IDomainEventDispatcher
+    {
+        private readonly List<IDomainEvent> _events = [];
+
+        public IReadOnlyList<IDomainEvent> DispatchedEvents => _events;
+
+        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
+        {
+            _events.AddRange(events);
+            return Task.CompletedTask;
+        }
     }
 }

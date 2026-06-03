@@ -1,7 +1,14 @@
+using Foundry.Modules.Monitoring.Contracts;
+
 namespace Foundry.Modules.Issues.Domain;
 
 public sealed record EligibilityViolation
 {
+    public static string AllowDirectPushesRule => EligibilityViolationInfo.AllowDirectPushesRule;
+    public static string AllowForcePushesRule => EligibilityViolationInfo.AllowForcePushesRule;
+    public static string AllowDeletionRule => EligibilityViolationInfo.AllowDeletionRule;
+    public static string UnreachableRule => EligibilityViolationInfo.UnreachableRule;
+
     public string Rule { get; }
     public string Description { get; }
 
@@ -16,21 +23,21 @@ public sealed record EligibilityViolation
 
     public static EligibilityViolation AllowDirectPushes() =>
         new(
-            "branch-protection:allow-direct-pushes",
+            AllowDirectPushesRule,
             "The repository allows direct pushes to the protected branch, which could allow bypassing the worker's pull request workflow.");
 
     public static EligibilityViolation AllowForcePushes() =>
         new(
-            "branch-protection:allow-force-pushes",
+            AllowForcePushesRule,
             "The repository allows force pushes to the protected branch, which could allow overwriting the worker's commits.");
 
     public static EligibilityViolation AllowDeletion() =>
         new(
-            "branch-protection:allow-deletion",
+            AllowDeletionRule,
             "The repository allows deletion of the protected branch, which could result in loss of the worker's work.");
 
     public static EligibilityViolation Unreachable(string message) =>
         new(
-            "repository:unreachable",
+            UnreachableRule,
             message);
 }

@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain;
 
@@ -29,16 +30,15 @@ public sealed class IneligibleIssue : Issue
         return queued;
     }
 
-    public void UpdateViolations(IReadOnlyList<EligibilityViolation> violations)
+    public Result UpdateViolations(IReadOnlyList<EligibilityViolation> violations)
     {
         if (violations.Count == 0)
         {
-            throw new ArgumentException(
-                "An ineligible issue must have at least one eligibility violation.",
-                nameof(violations));
+            return Result.Fail(IneligibleIssueErrors.ViolationsRequired());
         }
 
         Violations = violations;
+        return Result.Ok();
     }
 
     internal static IneligibleIssue FromDetected(DetectedIssue detected, IReadOnlyList<EligibilityViolation> violations)
@@ -73,4 +73,11 @@ public sealed class IneligibleIssue : Issue
         ineligible.Violations = violations;
         return ineligible;
     }
+}
+
+internal static class IneligibleIssueErrors
+{
+    public static Error ViolationsRequired() =>
+        new("IneligibleIssue.ViolationsRequired",
+            "An ineligible issue must have at least one eligibility violation.");
 }

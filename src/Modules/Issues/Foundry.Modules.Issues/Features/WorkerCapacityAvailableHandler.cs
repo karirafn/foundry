@@ -16,6 +16,7 @@ internal sealed class WorkerCapacityAvailableHandler(
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IIntegrationEventDispatcher integrationEventDispatcher,
     IBranchProtectionValidator branchProtectionValidator,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<WorkerCapacityAvailableHandler> logger) : IIntegrationEventHandler<WorkerCapacityAvailable>
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
@@ -74,6 +75,7 @@ internal sealed class WorkerCapacityAvailableHandler(
 
         IneligibleIssue ineligible = queued.MarkIneligible(violations);
         await db.TransitionAsync(queued, ineligible, cancellationToken);
+        await domainEventDispatcher.DispatchAsync(queued.DomainEvents, cancellationToken);
 
         logger.LogWarning(
             "Issue #{IssueNumber} in repository {RepositoryId} failed branch protection check; marked ineligible.",
