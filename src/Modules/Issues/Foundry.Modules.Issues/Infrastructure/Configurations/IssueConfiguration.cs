@@ -62,6 +62,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             t.HasCheckConstraint(
                 "ck_issues_revision_failed_fields",
                 "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_ineligible_violations",
+                "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
         });
 
         builder.HasKey(i => i.Id);

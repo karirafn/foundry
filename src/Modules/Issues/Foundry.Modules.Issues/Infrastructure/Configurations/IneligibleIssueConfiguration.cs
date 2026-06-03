@@ -31,8 +31,7 @@ public sealed class IneligibleIssueConfiguration : IEntityTypeConfiguration<Inel
             .HasConversion(violationsConverter, violationsComparer)
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
-            .HasDefaultValueSql("'[]'")
-            .HasColumnName("violations");
+            .HasColumnName("eligibility_violations");
     }
 
     private static IReadOnlyList<EligibilityViolation> DeserializeViolations(string json)
