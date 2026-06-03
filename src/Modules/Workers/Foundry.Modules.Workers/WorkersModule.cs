@@ -3,6 +3,7 @@ using Docker.DotNet;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
 
@@ -27,11 +28,13 @@ public static class WorkersModule
             using DockerClientConfiguration config = new();
             return config.CreateClient();
         });
+        services.AddSingleton<IImageOperations>(sp => sp.GetRequiredService<DockerClient>().Images);
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
 
         services.AddHostedService<WorkerDispatchService>();
+        services.AddHostedService<WorkerImageBuildService>();
 
         services.AddCommandHandler<IngestReport.Command, WorkerReportSummary, IngestReport.Handler>();
         services.AddQueryHandler<GetReports.Query, IReadOnlyList<WorkerReportSummary>, GetReports.Handler>();

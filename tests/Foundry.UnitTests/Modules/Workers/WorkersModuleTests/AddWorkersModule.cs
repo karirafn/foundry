@@ -1,9 +1,13 @@
+using Docker.DotNet;
+
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -20,6 +24,14 @@ public sealed class AddWorkersModule
         return new ConfigurationBuilder()
             .AddInMemoryCollection(values)
             .Build();
+    }
+
+    private sealed class StubHostEnvironment : IHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "TestApp";
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        public string ContentRootPath { get; set; } = Path.GetTempPath();
+        public string EnvironmentName { get; set; } = "Test";
     }
 
     [Fact]
@@ -95,6 +107,7 @@ public sealed class AddWorkersModule
         });
         ServiceCollection services = new();
         services.AddLogging();
+        services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
 
         // Act
         services.AddWorkersModule(configuration);
@@ -103,5 +116,45 @@ public sealed class AddWorkersModule
         // Assert
         IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
         hostedServices.ShouldContain(s => s is WorkerDispatchService);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersWorkerImageBuildServiceAsHostedService()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Workers:ApiKey"] = "sk-ant-test",
+        });
+        ServiceCollection services = new();
+        services.AddLogging();
+        services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
+        hostedServices.ShouldContain(s => s is WorkerImageBuildService);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersIImageOperations()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["Workers:ApiKey"] = "sk-ant-test",
+        });
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IImageOperations imageOperations = provider.GetRequiredService<IImageOperations>();
+        imageOperations.ShouldNotBeNull();
     }
 }

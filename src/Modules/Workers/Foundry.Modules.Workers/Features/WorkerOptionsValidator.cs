@@ -1,9 +1,16 @@
+using System.Text.RegularExpressions;
+
+using Foundry.Modules.Workers.Features.ImageBuild;
+
 using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Features;
 
-internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
+internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
 {
+    [GeneratedRegex(@"^[A-Z_][A-Z0-9_]*$")]
+    private static partial Regex BuildArgKeyPattern();
+
     private static readonly string[] SensitiveContainerPrefixes =
     [
         "/",
@@ -75,6 +82,7 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
         }
 
         ValidateSettings(options.Settings, failures);
+        ValidateImageBuild(options.ImageBuild, failures);
 
         return failures.Count > 0
             ? ValidateOptionsResult.Fail(failures)
@@ -139,6 +147,47 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
     {
         return path.StartsWith('/')
             || (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/'));
+    }
+
+    private static void ValidateImageBuild(ImageBuildOptions imageBuild, List<string> failures)
+    {
+        if (!imageBuild.Enabled)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(imageBuild.ContextPath))
+        {
+            failures.Add("Workers:ImageBuild:ContextPath must be non-empty when ImageBuild is enabled.");
+        }
+        else if (IsAbsolutePath(imageBuild.ContextPath))
+        {
+            failures.Add(
+                "Workers:ImageBuild:ContextPath must be a relative path. " +
+                "It is resolved against the solution root at startup.");
+        }
+        else if (ContainsPathTraversal(imageBuild.ContextPath))
+        {
+            failures.Add("Workers:ImageBuild:ContextPath must not contain path traversal segments (..).");
+        }
+
+        foreach (KeyValuePair<string, string> buildArg in imageBuild.BuildArgs)
+        {
+            if (!BuildArgKeyPattern().IsMatch(buildArg.Key))
+            {
+                failures.Add(
+                    $"Workers:ImageBuild:BuildArgs key '{buildArg.Key}' is invalid. " +
+                    "Keys must match ^[A-Z_][A-Z0-9_]*$ (Docker build arg convention).");
+            }
+
+            if (buildArg.Value.Contains('\n', StringComparison.Ordinal)
+                || buildArg.Value.Contains('\r', StringComparison.Ordinal)
+                || buildArg.Value.Contains('\0', StringComparison.Ordinal))
+            {
+                failures.Add(
+                    $"Workers:ImageBuild:BuildArgs value for key '{buildArg.Key}' must not contain newlines, carriage returns, or null bytes.");
+            }
+        }
     }
 
     private static bool ContainsPathTraversal(string path)
