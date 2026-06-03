@@ -526,6 +526,151 @@ public sealed class Validate
         result.Failed.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData("/proc/self/environ")]
+    [InlineData("/proc/self")]
+    [InlineData("/etc/passwd")]
+    [InlineData("/sys/class/net")]
+    [InlineData("/etc/shadow")]
+    [InlineData("/dev/mem")]
+    public void WhenMountsContainerPathIsSubpathOfSensitivePrefix_ReturnsFailure(string subPath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { [subPath] = "/host/config" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("/proc/self/environ")]
+    [InlineData("/proc/self")]
+    [InlineData("/etc/passwd")]
+    [InlineData("/sys/class/net")]
+    public void WhenWritableMountsContainerPathIsSubpathOfSensitivePrefix_ReturnsFailure(string subPath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string> { [subPath] = "/host/data" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("/etc")]
+    [InlineData("/proc")]
+    [InlineData("/sys")]
+    [InlineData("/dev")]
+    [InlineData("/run")]
+    [InlineData("/var/run")]
+    [InlineData("/etc/ssh")]
+    [InlineData("/proc/self")]
+    [InlineData("/sys/class/net")]
+    public void WhenMountsHostPathIsSensitivePrefix_ReturnsFailure(string sensitivePath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/config"] = sensitivePath },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("/etc")]
+    [InlineData("/proc")]
+    [InlineData("/sys")]
+    [InlineData("/dev")]
+    [InlineData("/run")]
+    [InlineData("/var/run")]
+    public void WhenWritableMountsHostPathIsSensitivePrefix_ReturnsFailure(string sensitivePath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string> { ["/workspace"] = sensitivePath },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsHostPathIsDockerSocket_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/var/run/docker.sock"] = "/var/run/docker.sock" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenWritableMountsHostPathIsDockerSocket_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string> { ["/var/run/docker.sock"] = "/var/run/docker.sock" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
     [Fact]
     public void WhenMountsContainerPathIsNotSensitive_ReturnsSuccess()
     {
@@ -544,6 +689,29 @@ public sealed class Validate
 
         // Assert
         result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsHostPathIsWindowsAbsolutePath_PassesAbsoluteCheck()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/config"] = @"C:\Users\test\.claude\skills" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        // Should not fail for the "must be absolute" reason — the only possible failure
+        // is if the path were considered relative. Windows-style paths are accepted.
+        IEnumerable<string> failures = result.Failures ?? [];
+        failures.ShouldNotContain(f => f.Contains("must be absolute"));
     }
 
     [Fact]

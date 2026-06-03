@@ -198,6 +198,12 @@ internal sealed class IssueClaimedHandler(
         string resolvedPath = new FileInfo(fullPath).ResolveLinkTarget(returnFinalTarget: true)?.FullName
             ?? fullPath;
 
+        if (HostPathSecurity.IsSensitiveHostPath(resolvedPath))
+        {
+            return Result<string>.Fail(
+                new Error("Worker.SensitiveMountPath", $"Mount host path resolves to a sensitive system directory: {resolvedPath}"));
+        }
+
         return Result<string>.Ok(resolvedPath);
     }
 

@@ -104,15 +104,20 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
                     $"{configKey} container path '{containerPath}' targets a sensitive system directory and is not allowed.");
             }
 
-            if (!hostPath.StartsWith('/'))
+            if (!Path.IsPathFullyQualified(hostPath) && !hostPath.StartsWith('/'))
             {
                 failures.Add(
-                    $"{configKey} host path '{hostPath}' must be absolute (start with '/').");
+                    $"{configKey} host path '{hostPath}' must be absolute.");
             }
             else if (ContainsPathTraversal(hostPath))
             {
                 failures.Add(
                     $"{configKey} host path '{hostPath}' must not contain path traversal segments (..).");
+            }
+            else if (HostPathSecurity.IsSensitiveHostPath(hostPath))
+            {
+                failures.Add(
+                    $"{configKey} host path '{hostPath}' targets a sensitive system directory and is not allowed.");
             }
         }
     }
@@ -121,7 +126,10 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
     {
         string trimmed = containerPath.TrimEnd('/');
         string normalized = trimmed.Length == 0 ? "/" : trimmed;
-        return Array.Exists(SensitiveContainerPrefixes, prefix => prefix == normalized);
+        return Array.Exists(
+            SensitiveContainerPrefixes,
+            prefix => prefix == normalized
+                || (prefix != "/" && normalized.StartsWith(prefix + "/", StringComparison.Ordinal)));
     }
 
     private static bool ContainsPathTraversal(string path)
