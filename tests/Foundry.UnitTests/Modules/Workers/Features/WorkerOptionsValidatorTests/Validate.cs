@@ -1395,4 +1395,28 @@ public sealed class Validate
         IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
         failures.ShouldContain(f => f.Contains("BuildArgs"));
     }
+
+    [Fact]
+    public void WhenImageBuildBuildArgsValueContainsCarriageReturn_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            ImageBuild = new ImageBuildOptions
+            {
+                Enabled = true,
+                ContextPath = "workers",
+                BuildArgs = new Dictionary<string, string> { ["MY_ARG"] = "value\rinjected" },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
 }

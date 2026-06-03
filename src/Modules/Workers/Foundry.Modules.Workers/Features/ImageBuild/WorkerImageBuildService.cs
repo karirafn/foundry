@@ -89,11 +89,6 @@ internal sealed class WorkerImageBuildService(
 
     private string ResolveContextPath(string configuredContextPath)
     {
-        if (Path.IsPathRooted(configuredContextPath))
-        {
-            return configuredContextPath;
-        }
-
         // ContentRootPath is src/Foundry.WebApi/ — solution root is two directories up.
         string solutionRoot = Path.GetFullPath(
             Path.Combine(hostEnvironment.ContentRootPath, "..", ".."));

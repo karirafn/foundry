@@ -181,10 +181,11 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
             }
 
             if (buildArg.Value.Contains('\n', StringComparison.Ordinal)
+                || buildArg.Value.Contains('\r', StringComparison.Ordinal)
                 || buildArg.Value.Contains('\0', StringComparison.Ordinal))
             {
                 failures.Add(
-                    $"Workers:ImageBuild:BuildArgs value for key '{buildArg.Key}' must not contain newlines or null bytes.");
+                    $"Workers:ImageBuild:BuildArgs value for key '{buildArg.Key}' must not contain newlines, carriage returns, or null bytes.");
             }
         }
     }

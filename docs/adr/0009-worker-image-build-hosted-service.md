@@ -1,9 +1,9 @@
-# Worker Image Build as Hosted Lifecycle Service
-
-## Status
-
+---
 status: accepted
 supersedes: 0008-aspire-image-build-with-docker-orchestrator.md
+---
+
+# Worker Image Build as Hosted Lifecycle Service
 
 ## Context
 
