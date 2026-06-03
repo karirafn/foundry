@@ -330,6 +330,13 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         {
             return Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
         }
+
+        public Task<IReadOnlyList<int>> GetDetectedAndIneligibleIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<int>>([]);
+        }
     }
 
     private sealed class NullDomainEventDispatcher : IDomainEventDispatcher

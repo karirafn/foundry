@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
@@ -831,12 +832,214 @@ public sealed class PollAsync : IAsyncDisposable
         _dispatcher.DispatchedEvents.OfType<PullRequestChangesRequested>().ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task WhenNoDetectedOrIneligibleIssuesExist_RaisesNoEligibilityCheckedEvents()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<IssueEligibilityChecked>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenDetectedIssueExistsAndBranchProtectionPasses_RaisesEligibilityCheckedWithNoViolations()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            detectedAndIneligibleNumbers: [10]);
+
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        StubIssueProvider provider = new(
+            [],
+            branchProtectionResult: Result<BranchProtection>.Ok(protection));
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IssueEligibilityChecked evt = _dispatcher.DispatchedEvents
+            .OfType<IssueEligibilityChecked>()
+            .ShouldHaveSingleItem();
+        evt.ShouldSatisfyAllConditions(
+            () => evt.MonitoredRepositoryId.ShouldBe(repository.Id),
+            () => evt.IssueNumber.ShouldBe(10),
+            () => evt.Violations.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenDetectedIssueExistsAndDirectPushesAllowed_RaisesEligibilityCheckedWithViolation()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            detectedAndIneligibleNumbers: [5]);
+
+        BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
+        StubIssueProvider provider = new(
+            [],
+            branchProtectionResult: Result<BranchProtection>.Ok(protection));
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IssueEligibilityChecked evt = _dispatcher.DispatchedEvents
+            .OfType<IssueEligibilityChecked>()
+            .ShouldHaveSingleItem();
+        EligibilityViolationInfo violation = evt.Violations.ShouldHaveSingleItem();
+        violation.Rule.ShouldBe("branch-protection:allow-direct-pushes");
+    }
+
+    [Fact]
+    public async Task WhenDetectedIssueExistsAndForcePushesAllowed_RaisesEligibilityCheckedWithViolation()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            detectedAndIneligibleNumbers: [5]);
+
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: false, RejectDeletion: true);
+        StubIssueProvider provider = new(
+            [],
+            branchProtectionResult: Result<BranchProtection>.Ok(protection));
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IssueEligibilityChecked evt = _dispatcher.DispatchedEvents
+            .OfType<IssueEligibilityChecked>()
+            .ShouldHaveSingleItem();
+        EligibilityViolationInfo violation = evt.Violations.ShouldHaveSingleItem();
+        violation.Rule.ShouldBe("branch-protection:allow-force-pushes");
+    }
+
+    [Fact]
+    public async Task WhenDetectedIssueExistsAndDeletionAllowed_RaisesEligibilityCheckedWithViolation()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            detectedAndIneligibleNumbers: [5]);
+
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: false);
+        StubIssueProvider provider = new(
+            [],
+            branchProtectionResult: Result<BranchProtection>.Ok(protection));
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IssueEligibilityChecked evt = _dispatcher.DispatchedEvents
+            .OfType<IssueEligibilityChecked>()
+            .ShouldHaveSingleItem();
+        EligibilityViolationInfo violation = evt.Violations.ShouldHaveSingleItem();
+        violation.Rule.ShouldBe("branch-protection:allow-deletion");
+    }
+
+    [Fact]
+    public async Task WhenMultipleDetectedIssuesExist_GetBranchProtectionCalledOnceAndEventRaisedPerIssue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            detectedAndIneligibleNumbers: [3, 7, 12]);
+
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        StubIssueProvider provider = new(
+            [],
+            branchProtectionResult: Result<BranchProtection>.Ok(protection));
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<IssueEligibilityChecked> events = _dispatcher.DispatchedEvents
+            .OfType<IssueEligibilityChecked>()
+            .ToList();
+        events.Count.ShouldBe(3);
+        events.ShouldContain(e => e.IssueNumber == 3);
+        events.ShouldContain(e => e.IssueNumber == 7);
+        events.ShouldContain(e => e.IssueNumber == 12);
+    }
+
+    [Fact]
+    public async Task WhenGetBranchProtectionFails_RaisesEligibilityCheckedWithUnreachableViolation()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            detectedAndIneligibleNumbers: [8]);
+
+        Error providerError = new("GitHub.Unavailable", "Service is unavailable");
+        StubIssueProvider provider = new(
+            [],
+            branchProtectionResult: Result<BranchProtection>.Fail(providerError));
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IssueEligibilityChecked evt = _dispatcher.DispatchedEvents
+            .OfType<IssueEligibilityChecked>()
+            .ShouldHaveSingleItem();
+        EligibilityViolationInfo violation = evt.Violations.ShouldHaveSingleItem();
+        violation.ShouldSatisfyAllConditions(
+            () => violation.Rule.ShouldBe("branch-protection:unreachable"),
+            () => violation.Description.ShouldBe("Service is unavailable"));
+    }
+
     private sealed class StubIssueProvider(
         IReadOnlyList<ProviderIssue> issues,
         IReadOnlyDictionary<int, Result<IReadOnlyList<int>>>? dependencyResults = null,
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
         IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null,
-        IReadOnlyDictionary<string, Result<ReviewFeedback>>? reviewFeedbackResults = null) : IIssueProvider
+        IReadOnlyDictionary<string, Result<ReviewFeedback>>? reviewFeedbackResults = null,
+        Result<BranchProtection>? branchProtectionResult = null) : IIssueProvider
     {
         public StubIssueProvider() : this([])
         {
@@ -909,7 +1112,8 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(
-                Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
+                branchProtectionResult
+                ?? Result<BranchProtection>.Ok(new BranchProtection("main", true, true, true)));
         }
     }
 
@@ -969,6 +1173,7 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
         private readonly IReadOnlySet<int>? _knownNumbersSecondCall;
         private readonly IReadOnlyList<ReviewIssueInfo> _reviewIssues;
+        private readonly IReadOnlyList<int> _detectedAndIneligibleNumbers;
         private int _getKnownNumbersCallCount;
 
         public StubIssueQueries()
@@ -985,12 +1190,14 @@ public sealed class PollAsync : IAsyncDisposable
             IReadOnlySet<int> knownNumbers,
             IReadOnlyDictionary<int, IssueSnapshot> snapshots,
             IReadOnlySet<int>? knownNumbersSecondCall,
-            IReadOnlyList<ReviewIssueInfo>? reviewIssues = null)
+            IReadOnlyList<ReviewIssueInfo>? reviewIssues = null,
+            IReadOnlyList<int>? detectedAndIneligibleNumbers = null)
         {
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
             _knownNumbersSecondCall = knownNumbersSecondCall;
             _reviewIssues = reviewIssues ?? [];
+            _detectedAndIneligibleNumbers = detectedAndIneligibleNumbers ?? [];
         }
 
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
@@ -1024,6 +1231,13 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(_reviewIssues);
+        }
+
+        public Task<IReadOnlyList<int>> GetDetectedAndIneligibleIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_detectedAndIneligibleNumbers);
         }
 
         public Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(

@@ -40,6 +40,19 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
         return snapshots;
     }
 
+    public async Task<IReadOnlyList<int>> GetDetectedAndIneligibleIssueNumbersAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Set<Issue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Where(i => EF.Property<string>(i, "state") == "detected"
+                || EF.Property<string>(i, "state") == "ineligible")
+            .Select(i => i.IssueNumber)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)

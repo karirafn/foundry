@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 
@@ -65,6 +66,12 @@ internal sealed class RepositoryPoller(
 
         // Pass 4: check provider-side status of all review issues.
         await DetectReviewStatusChangesAsync(repository, provider, cancellationToken);
+
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
+        repository.ClearIntegrationEvents();
+
+        // Pass 5: check eligibility for all detected and ineligible issues.
+        await CheckEligibilityAsync(repository, provider, cancellationToken);
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();
@@ -230,6 +237,73 @@ internal sealed class RepositoryPoller(
                     feedbackSuccess.Value.Comments));
             }
         }
+    }
+
+    private async Task CheckEligibilityAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<int> issueNumbers = await issueQueries.GetDetectedAndIneligibleIssueNumbersAsync(
+            repository.Id,
+            cancellationToken);
+
+        if (issueNumbers.Count == 0)
+        {
+            return;
+        }
+
+        Result<BranchProtection> protectionResult = await provider.GetBranchProtectionAsync(
+            repository.Slug,
+            cancellationToken);
+
+        IReadOnlyList<EligibilityViolationInfo> violations = BuildViolations(protectionResult);
+
+        foreach (int issueNumber in issueNumbers)
+        {
+            repository.RecordIntegrationEvent(new IssueEligibilityChecked(
+                repository.Id,
+                issueNumber,
+                violations));
+        }
+    }
+
+    private static List<EligibilityViolationInfo> BuildViolations(
+        Result<BranchProtection> protectionResult)
+    {
+        if (protectionResult is not Result<BranchProtection>.Success success)
+        {
+            string message = protectionResult is Result<BranchProtection>.Failure failure
+                ? failure.Error.Message
+                : "Branch protection could not be retrieved.";
+            return [new EligibilityViolationInfo("branch-protection:unreachable", message)];
+        }
+
+        BranchProtection protection = success.Value;
+        List<EligibilityViolationInfo> violations = [];
+
+        if (!protection.RejectDirectPushes)
+        {
+            violations.Add(new EligibilityViolationInfo(
+                "branch-protection:allow-direct-pushes",
+                "The repository allows direct pushes to the protected branch, which could allow bypassing the worker's pull request workflow."));
+        }
+
+        if (!protection.RejectForcePushes)
+        {
+            violations.Add(new EligibilityViolationInfo(
+                "branch-protection:allow-force-pushes",
+                "The repository allows force pushes to the protected branch, which could allow overwriting the worker's commits."));
+        }
+
+        if (!protection.RejectDeletion)
+        {
+            violations.Add(new EligibilityViolationInfo(
+                "branch-protection:allow-deletion",
+                "The repository allows deletion of the protected branch, which could result in loss of the worker's work."));
+        }
+
+        return violations;
     }
 
     private static bool HasDetailsChanged(IssueSnapshot snapshot, ProviderIssue issue)
