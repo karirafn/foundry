@@ -151,6 +151,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<DetectedIssue>("detected")
             .HasValue<QueuedIssue>("queued")
             .HasValue<BlockedIssue>("blocked")
+            .HasValue<IneligibleIssue>("ineligible")
             .HasValue<InProgressIssue>("in_progress")
             .HasValue<ReviewIssue>("review")
             .HasValue<UnchangedIssue>("unchanged")

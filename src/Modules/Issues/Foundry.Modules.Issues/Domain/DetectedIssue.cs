@@ -61,4 +61,11 @@ public sealed class DetectedIssue : Issue
         AddDomainEvent(new Events.IssueBlocked(Id, MonitoredRepositoryId));
         return blocked;
     }
+
+    public IneligibleIssue MarkIneligible(IReadOnlyList<EligibilityViolation> violations)
+    {
+        IneligibleIssue ineligible = IneligibleIssue.FromDetected(this, violations);
+        AddDomainEvent(new Events.IssueIneligible(Id, MonitoredRepositoryId));
+        return ineligible;
+    }
 }

@@ -187,6 +187,7 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             DetectedIssue => "detected",
             QueuedIssue => "queued",
             BlockedIssue => "blocked",
+            IneligibleIssue => "ineligible",
             InProgressIssue => "in_progress",
             ReviewIssue => "review",
             UnchangedIssue => "unchanged",

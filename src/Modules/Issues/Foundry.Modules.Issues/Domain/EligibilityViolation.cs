@@ -11,6 +11,9 @@ public sealed record EligibilityViolation
         Description = description;
     }
 
+    internal static EligibilityViolation From(string rule, string description) =>
+        new(rule, description);
+
     public static EligibilityViolation AllowDirectPushes() =>
         new(
             "branch-protection:allow-direct-pushes",
