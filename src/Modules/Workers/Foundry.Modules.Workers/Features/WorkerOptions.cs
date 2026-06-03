@@ -16,7 +16,7 @@ internal sealed class WorkerOptions
 
     public IReadOnlyDictionary<string, string> WritableMounts { get; set; } = new Dictionary<string, string>();
 
-    public WorkerSettingsOptions Settings { get; set; } = new WorkerSettingsOptions();
+    public WorkerSettingsOptions Settings { get; set; } = new();
 
     public string BranchNamingInstruction { get; set; } = "Use conventional branch naming";
 

@@ -22,17 +22,14 @@ internal static class WorkerSettingsBuilder
 
     public static string Build(WorkerSettingsOptions? settings)
     {
-        IEnumerable<string> denyRules = BaseDenyList;
-
-        if (settings?.AdditionalDenyRules.Count > 0)
-        {
-            denyRules = [..BaseDenyList, ..settings.AdditionalDenyRules];
-        }
+        string[] denyRules = settings?.AdditionalDenyRules.Count > 0
+            ? [..BaseDenyList, ..settings.AdditionalDenyRules]
+            : BaseDenyList;
 
         SettingsDocument document = new()
         {
             Model = settings?.Model,
-            Permissions = new PermissionsSection { Deny = [..denyRules] },
+            Permissions = new() { Deny = denyRules },
             Hooks = settings?.Hooks.Count > 0 ? settings.Hooks : null,
         };
 

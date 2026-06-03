@@ -13,7 +13,8 @@ fi
 : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
 
 if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
-    echo "$CLAUDE_SETTINGS_JSON" > /home/claude/.claude/settings.json
+    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > /home/claude/.claude/settings.json
+    chmod 444 /home/claude/.claude/settings.json
 fi
 
 # Transform https://github.com/owner/repo -> https://<PAT>@github.com/owner/repo.git

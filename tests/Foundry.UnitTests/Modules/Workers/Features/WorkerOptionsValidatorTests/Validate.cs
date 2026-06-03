@@ -813,4 +813,270 @@ public sealed class Validate
         // Assert
         result.Failed.ShouldBeTrue();
     }
+
+    [Fact]
+    public void WhenAdditionalDenyRulesContainsEmptyString_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions { AdditionalDenyRules = [string.Empty] },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenAdditionalDenyRulesContainsWhitespaceOnlyString_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions { AdditionalDenyRules = ["   "] },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenAdditionalDenyRulesContainsEmptyString_FailureMessageMentionsAdditionalDenyRules()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions { AdditionalDenyRules = [string.Empty] },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
+        failures.ShouldContain(f => f.Contains("AdditionalDenyRules"));
+    }
+
+    [Fact]
+    public void WhenAdditionalDenyRulesContainsValidEntries_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions { AdditionalDenyRules = ["Bash(rm -rf:*)"] },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenHookEntryTypeIsNotCommand_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions
+            {
+                Hooks = new Dictionary<string, List<HookGroup>>
+                {
+                    ["PreToolUse"] =
+                    [
+                        new HookGroup
+                        {
+                            Hooks = [new HookEntry { Type = "script", Command = "echo hi" }],
+                        },
+                    ],
+                },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenHookEntryTypeIsNotCommand_FailureMessageMentionsCommand()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions
+            {
+                Hooks = new Dictionary<string, List<HookGroup>>
+                {
+                    ["PreToolUse"] =
+                    [
+                        new HookGroup
+                        {
+                            Hooks = [new HookEntry { Type = "script", Command = "echo hi" }],
+                        },
+                    ],
+                },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
+        failures.ShouldContain(f => f.Contains("\"command\""));
+    }
+
+    [Fact]
+    public void WhenHookEntryCommandIsEmpty_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions
+            {
+                Hooks = new Dictionary<string, List<HookGroup>>
+                {
+                    ["PreToolUse"] =
+                    [
+                        new HookGroup
+                        {
+                            Hooks = [new HookEntry { Type = "command", Command = string.Empty }],
+                        },
+                    ],
+                },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenHookEntryCommandIsWhitespaceOnly_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions
+            {
+                Hooks = new Dictionary<string, List<HookGroup>>
+                {
+                    ["PostToolUse"] =
+                    [
+                        new HookGroup
+                        {
+                            Hooks = [new HookEntry { Type = "command", Command = "   " }],
+                        },
+                    ],
+                },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenHookEntryCommandIsEmpty_FailureMessageMentionsCommand()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions
+            {
+                Hooks = new Dictionary<string, List<HookGroup>>
+                {
+                    ["PreToolUse"] =
+                    [
+                        new HookGroup
+                        {
+                            Hooks = [new HookEntry { Type = "command", Command = string.Empty }],
+                        },
+                    ],
+                },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
+        failures.ShouldContain(f => f.Contains("Command"));
+    }
+
+    [Fact]
+    public void WhenHooksAreValid_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Settings = new WorkerSettingsOptions
+            {
+                Hooks = new Dictionary<string, List<HookGroup>>
+                {
+                    ["PreToolUse"] =
+                    [
+                        new HookGroup
+                        {
+                            Matcher = "Bash",
+                            Hooks = [new HookEntry { Type = "command", Command = "echo pre-tool" }],
+                        },
+                    ],
+                },
+            },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
 }
