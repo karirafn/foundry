@@ -12,6 +12,7 @@ internal sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
         "/sys",
         "/dev",
         "/run",
+        "/var/run",
     ];
 
     public ValidateOptionsResult Validate(string? name, WorkerOptions options)
