@@ -84,12 +84,7 @@ internal sealed class IssueClaimedHandler(
 
         if (patResult is not Result<string>.Success patSuccess)
         {
-            if (patResult is Result<string>.Failure patFailure)
-            {
-                return Result<WorkerContainerSpec>.Fail(patFailure.Error);
-            }
-
-            return Result<WorkerContainerSpec>.Fail(new Error("Worker.UnknownPatError", "PAT resolution failed."));
+            return Result<WorkerContainerSpec>.Fail(((Result<string>.Failure)patResult).Error);
         }
 
         string gitPat = patSuccess.Value;
@@ -125,11 +120,14 @@ internal sealed class IssueClaimedHandler(
             envVars["BRANCH_NAME"] = claimed.Revision.BranchName;
         }
 
-        List<BindMount> bindMounts =
-        [
-            new BindMount(Path.GetFullPath(_options.ConfigPath), "/home/claude/.claude/"),
-            new BindMount(Path.GetFullPath(reportsHostPath), "/reports/"),
-        ];
+        Result<List<BindMount>> mountsResult = BuildBindMounts(reportsHostPath);
+
+        if (mountsResult is not Result<List<BindMount>>.Success mountsSuccess)
+        {
+            return Result<WorkerContainerSpec>.Fail(((Result<List<BindMount>>.Failure)mountsResult).Error);
+        }
+
+        List<BindMount> bindMounts = mountsSuccess.Value;
 
         Dictionary<string, string> labels = new()
         {
@@ -142,6 +140,71 @@ internal sealed class IssueClaimedHandler(
             bindMounts,
             labels,
             ["/entrypoint.sh"]));
+    }
+
+    private Result<List<BindMount>> BuildBindMounts(string reportsHostPath)
+    {
+        List<BindMount> mounts = [new BindMount(Path.GetFullPath(reportsHostPath), "/reports/")];
+
+        Result<List<BindMount>> readOnlyResult = ResolveBindMounts(_options.Mounts, readOnly: true);
+        if (readOnlyResult is not Result<List<BindMount>>.Success readOnlySuccess)
+        {
+            return readOnlyResult;
+        }
+
+        mounts.AddRange(readOnlySuccess.Value);
+
+        Result<List<BindMount>> writableResult = ResolveBindMounts(_options.WritableMounts, readOnly: false);
+        if (writableResult is not Result<List<BindMount>>.Success writableSuccess)
+        {
+            return writableResult;
+        }
+
+        mounts.AddRange(writableSuccess.Value);
+
+        return Result<List<BindMount>>.Ok(mounts);
+    }
+
+    private static Result<List<BindMount>> ResolveBindMounts(
+        IReadOnlyDictionary<string, string> mounts,
+        bool readOnly)
+    {
+        List<BindMount> resolved = [];
+
+        foreach (KeyValuePair<string, string> mount in mounts)
+        {
+            Result<string> resolvedPath = ResolveAndValidateHostPath(mount.Value);
+            if (resolvedPath is not Result<string>.Success resolvedSuccess)
+            {
+                return Result<List<BindMount>>.Fail(((Result<string>.Failure)resolvedPath).Error);
+            }
+
+            resolved.Add(new BindMount(resolvedSuccess.Value, mount.Key, ReadOnly: readOnly));
+        }
+
+        return Result<List<BindMount>>.Ok(resolved);
+    }
+
+    private static Result<string> ResolveAndValidateHostPath(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+
+        if (!Path.Exists(fullPath))
+        {
+            return Result<string>.Fail(
+                new Error("Worker.MountPathNotFound", $"Mount host path does not exist: {fullPath}"));
+        }
+
+        string resolvedPath = new FileInfo(fullPath).ResolveLinkTarget(returnFinalTarget: true)?.FullName
+            ?? fullPath;
+
+        if (HostPathSecurity.IsSensitiveHostPath(resolvedPath))
+        {
+            return Result<string>.Fail(
+                new Error("Worker.SensitiveMountPath", $"Mount host path resolves to a sensitive system directory: {resolvedPath}"));
+        }
+
+        return Result<string>.Ok(resolvedPath);
     }
 
     private async Task<Result<string>> ResolveGitPatAsync(

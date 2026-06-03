@@ -22,7 +22,6 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         {
             Image = "test-image:latest",
             MaxConcurrent = 3,
-            ConfigPath = "/tmp/config",
             ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
             ApiKey = "test-api-key",
             TimeoutMinutes = timeoutMinutes,

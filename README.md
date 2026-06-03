@@ -12,9 +12,8 @@ A containerized service that monitors repositories across multiple providers (Gi
 
 ```bash
 dotnet user-secrets init --project src/Foundry.WebApi
-dotnet user-secrets set "Monitoring:Secrets:github-default" "" --project src/Foundry.WebApi
-dotnet user-secrets set "Workers:ConfigPath" "" --project src/Foundry.WebApi
-dotnet user-secrets set "Monitoring:Repositories:0:Slug" "" --project src/Foundry.WebApi
+dotnet user-secrets set "Monitoring:Secrets:github-default" "<your-github-pat>" --project src/Foundry.WebApi
+dotnet user-secrets set "Monitoring:Repositories:0:Slug" "owner/repo" --project src/Foundry.WebApi
 ```
 
 Set exactly one worker credential — the application rejects both or neither at startup.
@@ -22,7 +21,33 @@ Set exactly one worker credential — the application rejects both or neither at
 - **Pay-per-use API:** `dotnet user-secrets set "Workers:ApiKey" "<your-anthropic-api-key>" --project src/Foundry.WebApi`
 - **Max plan (OAuth):** `dotnet user-secrets set "Workers:OAuthToken" "<token-from-claude-setup-token>" --project src/Foundry.WebApi`
 
-Fill in actual values for your GitHub PAT, path to your `.claude` directory, and target repository slug (e.g., `owner/repo`).
+### Worker bind mounts
+
+Workers run in sandboxed Docker containers. Use `Mounts` (read-only) and `WritableMounts` (read-write) to share host paths into every worker container.
+
+Dictionary keys are container paths; values are host paths. Symlinks are resolved at dispatch time.
+
+Common mounts for Claude Code workers:
+
+| Host path | Container path | Dictionary |
+|---|---|---|
+| `~/.claude/skills` | `/root/.claude/skills` | `Mounts` |
+| `~/.claude/rules` | `/root/.claude/rules` | `Mounts` |
+| `~/.claude/commands` | `/root/.claude/commands` | `Mounts` |
+| `~/.claude/hooks` | `/root/.claude/hooks` | `Mounts` |
+| `~/.claude/settings.json` | `/root/.claude/settings.json` | `Mounts` |
+| `~/.claude/plugins` | `/root/.claude/plugins` | `Mounts` |
+| `~/.claude/observations` | `/root/.claude/observations` | `WritableMounts` |
+
+Example — mount skills and rules read-only, observations read-write:
+
+```bash
+dotnet user-secrets set "Workers:Mounts:/root/.claude/skills" "/home/user/.claude/skills" --project src/Foundry.WebApi
+dotnet user-secrets set "Workers:Mounts:/root/.claude/rules" "/home/user/.claude/rules" --project src/Foundry.WebApi
+dotnet user-secrets set "Workers:WritableMounts:/root/.claude/observations" "/home/user/.claude/observations" --project src/Foundry.WebApi
+```
+
+On Windows, use the full Windows path (e.g. `C:\Users\you\.claude\skills`). Docker Desktop must have path sharing enabled — see Windows notes below.
 
 ## Running
 

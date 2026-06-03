@@ -49,7 +49,6 @@ public sealed class HandleAsync : IAsyncDisposable
         {
             Image = "test-image:latest",
             MaxConcurrent = 3,
-            ConfigPath = "/tmp/config",
             ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
             ApiKey = "test-api-key",
             TimeoutMinutes = 120,
@@ -153,7 +152,6 @@ public sealed class HandleAsync : IAsyncDisposable
             {
                 Image = "test-image:latest",
                 MaxConcurrent = 3,
-                ConfigPath = "/tmp/config",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 ApiKey = "test-api-key",
                 TimeoutMinutes = 120,
@@ -193,12 +191,197 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldContain(m => m.ContainerPath == "/home/claude/.claude/");
         spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/");
-        spec.BindMounts
-            .First(m => m.ContainerPath == "/home/claude/.claude/")
-            .HostPath
-            .ShouldBe(Path.GetFullPath("/tmp/config"));
+    }
+
+    [Fact]
+    public async Task WhenMountsConfigured_BindMountsContainsReadOnlyMountsFromDictionary()
+    {
+        // Arrange
+        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-mount-test-{Guid.NewGuid()}");
+        Directory.CreateDirectory(hostDir);
+
+        try
+        {
+            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-ro-mounts");
+            IssueClaimedHandler sut = BuildHandler(
+                orchestrator: orchestrator,
+                workerOptions: new WorkerOptions
+                {
+                    Image = "test-image:latest",
+                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
+                    ApiKey = "test-api-key",
+                    Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
+                    WritableMounts = new Dictionary<string, string>(),
+                });
+            IssueClaimed @event = BuildEvent();
+
+            // Act
+            await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+            // Assert
+            WorkerContainerSpec? spec = orchestrator.LastSpec;
+            spec.ShouldNotBeNull();
+            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/container/config" && m.ReadOnly);
+        }
+        finally
+        {
+            Directory.Delete(hostDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenMountsConfigured_ReportsMountIsAlwaysPresentAndReadWrite()
+    {
+        // Arrange
+        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-reports-test-{Guid.NewGuid()}");
+        Directory.CreateDirectory(hostDir);
+
+        try
+        {
+            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-reports-rw");
+            IssueClaimedHandler sut = BuildHandler(
+                orchestrator: orchestrator,
+                workerOptions: new WorkerOptions
+                {
+                    Image = "test-image:latest",
+                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
+                    ApiKey = "test-api-key",
+                    Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
+                    WritableMounts = new Dictionary<string, string>(),
+                });
+            IssueClaimed @event = BuildEvent();
+
+            // Act
+            await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+            // Assert
+            WorkerContainerSpec? spec = orchestrator.LastSpec;
+            spec.ShouldNotBeNull();
+            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/" && !m.ReadOnly);
+        }
+        finally
+        {
+            Directory.Delete(hostDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenMountHostPathDoesNotExist_CreatesFailedRunWithMissingPathError()
+    {
+        // Arrange
+        string nonExistentPath = Path.Combine(Path.GetTempPath(), $"foundry-nonexistent-{Guid.NewGuid()}");
+        IssueClaimedHandler sut = BuildHandler(
+            workerOptions: new WorkerOptions
+            {
+                Image = "test-image:latest",
+                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
+                ApiKey = "test-api-key",
+                Mounts = new Dictionary<string, string> { ["/container/config"] = nonExistentPath },
+                WritableMounts = new Dictionary<string, string>(),
+            });
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        error.Message.ShouldContain(nonExistentPath);
+    }
+
+    [Fact]
+    public async Task WhenWritableMountHostPathDoesNotExist_CreatesFailedRunWithMissingPathError()
+    {
+        // Arrange
+        string nonExistentPath = Path.Combine(Path.GetTempPath(), $"foundry-nonexistent-{Guid.NewGuid()}");
+        IssueClaimedHandler sut = BuildHandler(
+            workerOptions: new WorkerOptions
+            {
+                Image = "test-image:latest",
+                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
+                ApiKey = "test-api-key",
+                Mounts = new Dictionary<string, string>(),
+                WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = nonExistentPath },
+            });
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        error.Message.ShouldContain(nonExistentPath);
+    }
+
+    [Fact]
+    public async Task WhenWritableMountsConfigured_BindMountsContainsReadWriteMountsFromDictionary()
+    {
+        // Arrange
+        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-writable-test-{Guid.NewGuid()}");
+        Directory.CreateDirectory(hostDir);
+
+        try
+        {
+            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-rw-mounts");
+            IssueClaimedHandler sut = BuildHandler(
+                orchestrator: orchestrator,
+                workerOptions: new WorkerOptions
+                {
+                    Image = "test-image:latest",
+                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
+                    ApiKey = "test-api-key",
+                    Mounts = new Dictionary<string, string>(),
+                    WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = hostDir },
+                });
+            IssueClaimed @event = BuildEvent();
+
+            // Act
+            await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+            // Assert
+            WorkerContainerSpec? spec = orchestrator.LastSpec;
+            spec.ShouldNotBeNull();
+            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/container/workspace" && !m.ReadOnly);
+        }
+        finally
+        {
+            Directory.Delete(hostDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenNoMountsConfigured_BindMountsContainsOnlyReportsMount()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-empty");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            workerOptions: new WorkerOptions
+            {
+                Image = "test-image:latest",
+                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
+                ApiKey = "test-api-key",
+                Mounts = new Dictionary<string, string>(),
+                WritableMounts = new Dictionary<string, string>(),
+            });
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.BindMounts.Count.ShouldBe(1);
+        spec.BindMounts[0].ContainerPath.ShouldBe("/reports/");
+        spec.BindMounts[0].ReadOnly.ShouldBeFalse();
     }
 
     [Fact]
@@ -325,7 +508,6 @@ public sealed class HandleAsync : IAsyncDisposable
             {
                 Image = "test-image:latest",
                 MaxConcurrent = 3,
-                ConfigPath = "/tmp/config",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 OAuthToken = "test-oauth-token",
                 ApiKey = "",

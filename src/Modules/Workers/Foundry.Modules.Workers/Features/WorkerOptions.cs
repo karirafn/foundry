@@ -12,7 +12,9 @@ internal sealed class WorkerOptions
 
     public int TimeoutMinutes { get; set; } = 120;
 
-    public string ConfigPath { get; set; } = "./workers/config";
+    public IReadOnlyDictionary<string, string> Mounts { get; set; } = new Dictionary<string, string>();
+
+    public IReadOnlyDictionary<string, string> WritableMounts { get; set; } = new Dictionary<string, string>();
 
     public string BranchNamingInstruction { get; set; } = "Use conventional branch naming";
 
