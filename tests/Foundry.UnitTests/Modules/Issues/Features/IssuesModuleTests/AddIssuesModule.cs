@@ -42,6 +42,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
+        services.AddScoped<IBranchProtectionValidator, NullBranchProtectionValidator>();
         services.AddScoped<IIssueBroadcaster, NullIssueBroadcaster>();
         services.AddIssuesModule();
 
@@ -304,4 +305,13 @@ public sealed class AddIssuesModule : IAsyncDisposable
             => Task.FromResult<RepositoryDispatchInfo?>(null);
     }
 
+    private sealed class NullBranchProtectionValidator : IBranchProtectionValidator
+    {
+        public Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
+                    Array.Empty<EligibilityViolationInfo>()));
+    }
 }
