@@ -84,12 +84,7 @@ internal sealed class IssueClaimedHandler(
 
         if (patResult is not Result<string>.Success patSuccess)
         {
-            if (patResult is Result<string>.Failure patFailure)
-            {
-                return Result<WorkerContainerSpec>.Fail(patFailure.Error);
-            }
-
-            return Result<WorkerContainerSpec>.Fail(new Error("Worker.UnknownPatError", "PAT resolution failed."));
+            return Result<WorkerContainerSpec>.Fail(((Result<string>.Failure)patResult).Error);
         }
 
         string gitPat = patSuccess.Value;
@@ -129,12 +124,7 @@ internal sealed class IssueClaimedHandler(
 
         if (mountsResult is not Result<List<BindMount>>.Success mountsSuccess)
         {
-            if (mountsResult is Result<List<BindMount>>.Failure mountFailure)
-            {
-                return Result<WorkerContainerSpec>.Fail(mountFailure.Error);
-            }
-
-            return Result<WorkerContainerSpec>.Fail(new Error("Worker.UnknownMountError", "Mount resolution failed."));
+            return Result<WorkerContainerSpec>.Fail(((Result<List<BindMount>>.Failure)mountsResult).Error);
         }
 
         List<BindMount> bindMounts = mountsSuccess.Value;
@@ -156,29 +146,43 @@ internal sealed class IssueClaimedHandler(
     {
         List<BindMount> mounts = [new BindMount(Path.GetFullPath(reportsHostPath), "/reports/")];
 
-        foreach (KeyValuePair<string, string> mount in _options.Mounts)
+        Result<List<BindMount>> readOnlyResult = ResolveBindMounts(_options.Mounts, readOnly: true);
+        if (readOnlyResult is not Result<List<BindMount>>.Success readOnlySuccess)
         {
-            Result<string> resolved = ResolveAndValidateHostPath(mount.Value);
-            if (resolved is Result<string>.Failure failure)
-            {
-                return Result<List<BindMount>>.Fail(failure.Error);
-            }
-
-            mounts.Add(new BindMount(((Result<string>.Success)resolved).Value, mount.Key, ReadOnly: true));
+            return readOnlyResult;
         }
 
-        foreach (KeyValuePair<string, string> mount in _options.WritableMounts)
-        {
-            Result<string> resolved = ResolveAndValidateHostPath(mount.Value);
-            if (resolved is Result<string>.Failure failure)
-            {
-                return Result<List<BindMount>>.Fail(failure.Error);
-            }
+        mounts.AddRange(readOnlySuccess.Value);
 
-            mounts.Add(new BindMount(((Result<string>.Success)resolved).Value, mount.Key, ReadOnly: false));
+        Result<List<BindMount>> writableResult = ResolveBindMounts(_options.WritableMounts, readOnly: false);
+        if (writableResult is not Result<List<BindMount>>.Success writableSuccess)
+        {
+            return writableResult;
         }
+
+        mounts.AddRange(writableSuccess.Value);
 
         return Result<List<BindMount>>.Ok(mounts);
+    }
+
+    private static Result<List<BindMount>> ResolveBindMounts(
+        IReadOnlyDictionary<string, string> mounts,
+        bool readOnly)
+    {
+        List<BindMount> resolved = [];
+
+        foreach (KeyValuePair<string, string> mount in mounts)
+        {
+            Result<string> resolvedPath = ResolveAndValidateHostPath(mount.Value);
+            if (resolvedPath is not Result<string>.Success resolvedSuccess)
+            {
+                return Result<List<BindMount>>.Fail(((Result<string>.Failure)resolvedPath).Error);
+            }
+
+            resolved.Add(new BindMount(resolvedSuccess.Value, mount.Key, ReadOnly: readOnly));
+        }
+
+        return Result<List<BindMount>>.Ok(resolved);
     }
 
     private static Result<string> ResolveAndValidateHostPath(string path)

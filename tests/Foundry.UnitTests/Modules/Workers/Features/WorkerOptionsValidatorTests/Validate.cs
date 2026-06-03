@@ -297,8 +297,8 @@ public sealed class Validate
             ApiKey = "sk-ant-key",
             Image = "ghcr.io/anthropics/claude-code:v1.0",
             ReportsPath = "./data/reports",
-            Mounts = [],
-            WritableMounts = [],
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string>(),
         };
 
         // Act
@@ -367,5 +367,282 @@ public sealed class Validate
         // Assert
         IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
         failures.ShouldContain(f => f.Contains("/shared/"));
+    }
+
+    [Fact]
+    public void WhenMountsContainerPathIsRelative_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["relative/path"] = "/host/config" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenWritableMountsContainerPathIsRelative_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string> { ["no/leading/slash"] = "/host/data" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsContainerPathContainsTraversalSegment_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/safe/../escape"] = "/host/config" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenWritableMountsContainerPathContainsTraversalSegment_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string> { ["/safe/../escape"] = "/host/data" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/etc")]
+    [InlineData("/proc")]
+    [InlineData("/sys")]
+    [InlineData("/dev")]
+    [InlineData("/run")]
+    public void WhenMountsContainerPathIsSensitivePrefix_ReturnsFailure(string sensitivePath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { [sensitivePath] = "/host/config" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/etc")]
+    [InlineData("/proc")]
+    [InlineData("/sys")]
+    [InlineData("/dev")]
+    [InlineData("/run")]
+    public void WhenWritableMountsContainerPathIsSensitivePrefix_ReturnsFailure(string sensitivePath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string> { [sensitivePath] = "/host/data" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("/etc/")]
+    [InlineData("/proc/")]
+    [InlineData("/sys/")]
+    [InlineData("/dev/")]
+    [InlineData("/run/")]
+    public void WhenMountsContainerPathIsSensitivePrefixWithTrailingSlash_ReturnsFailure(string sensitivePath)
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { [sensitivePath] = "/host/config" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsContainerPathIsNotSensitive_ReturnsSuccess()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/config"] = "/host/config" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsHostPathContainsTraversalSegment_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/config"] = "/host/../../escape" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenWritableMountsHostPathContainsTraversalSegment_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string> { ["/workspace"] = "/host/../../escape" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsHostPathIsRelative_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/config"] = "relative/path" },
+            WritableMounts = new Dictionary<string, string>(),
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenWritableMountsHostPathIsRelative_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string>(),
+            WritableMounts = new Dictionary<string, string> { ["/workspace"] = "relative/path" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenMountsContainerPathWithTrailingSlashMatchesWritableMounts_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            Mounts = new Dictionary<string, string> { ["/config/"] = "/host/a" },
+            WritableMounts = new Dictionary<string, string> { ["/config"] = "/host/b" },
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
     }
 }

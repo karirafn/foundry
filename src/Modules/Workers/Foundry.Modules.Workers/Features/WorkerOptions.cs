@@ -12,9 +12,9 @@ internal sealed class WorkerOptions
 
     public int TimeoutMinutes { get; set; } = 120;
 
-    public Dictionary<string, string> Mounts { get; set; } = [];
+    public IReadOnlyDictionary<string, string> Mounts { get; set; } = new Dictionary<string, string>();
 
-    public Dictionary<string, string> WritableMounts { get; set; } = [];
+    public IReadOnlyDictionary<string, string> WritableMounts { get; set; } = new Dictionary<string, string>();
 
     public string BranchNamingInstruction { get; set; } = "Use conventional branch naming";
 

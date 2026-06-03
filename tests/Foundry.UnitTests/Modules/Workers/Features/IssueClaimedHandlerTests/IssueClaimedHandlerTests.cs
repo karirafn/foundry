@@ -212,7 +212,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     ApiKey = "test-api-key",
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
-                    WritableMounts = [],
+                    WritableMounts = new Dictionary<string, string>(),
                 });
             IssueClaimed @event = BuildEvent();
 
@@ -248,7 +248,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     ApiKey = "test-api-key",
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
-                    WritableMounts = [],
+                    WritableMounts = new Dictionary<string, string>(),
                 });
             IssueClaimed @event = BuildEvent();
 
@@ -278,7 +278,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 ApiKey = "test-api-key",
                 Mounts = new Dictionary<string, string> { ["/container/config"] = nonExistentPath },
-                WritableMounts = [],
+                WritableMounts = new Dictionary<string, string>(),
             });
         IssueClaimed @event = BuildEvent();
 
@@ -304,7 +304,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 Image = "test-image:latest",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 ApiKey = "test-api-key",
-                Mounts = [],
+                Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = nonExistentPath },
             });
         IssueClaimed @event = BuildEvent();
@@ -337,7 +337,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     Image = "test-image:latest",
                     ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     ApiKey = "test-api-key",
-                    Mounts = [],
+                    Mounts = new Dictionary<string, string>(),
                     WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = hostDir },
                 });
             IssueClaimed @event = BuildEvent();
@@ -368,8 +368,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 Image = "test-image:latest",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 ApiKey = "test-api-key",
-                Mounts = [],
-                WritableMounts = [],
+                Mounts = new Dictionary<string, string>(),
+                WritableMounts = new Dictionary<string, string>(),
             });
         IssueClaimed @event = BuildEvent();
 
