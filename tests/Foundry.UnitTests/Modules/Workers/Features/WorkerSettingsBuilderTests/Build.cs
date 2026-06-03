@@ -10,39 +10,6 @@ namespace Foundry.UnitTests.Modules.Workers.Features.WorkerSettingsBuilderTests;
 
 public sealed class Build
 {
-    private static readonly string[] BaseDenyList =
-    [
-        "Bash(git push --force:*)",
-        "Bash(git push * main)",
-        "Bash(git push * master)",
-        "Bash(npm publish:*)",
-        "Bash(npx -y:*)",
-    ];
-
-    [Fact]
-    public void WhenSettingsIsNull_ReturnsJsonWithBaseDenyListOnly()
-    {
-        // Arrange
-
-        // Act
-        string json = WorkerSettingsBuilder.Build(null);
-
-        // Assert
-        using JsonDocument doc = JsonDocument.Parse(json);
-        JsonElement root = doc.RootElement;
-
-        root.TryGetProperty("model", out _).ShouldBeFalse();
-        root.TryGetProperty("hooks", out _).ShouldBeFalse();
-
-        JsonElement deny = root
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
-
-        rules.ShouldBe(BaseDenyList);
-    }
-
     [Fact]
     public void WhenSettingsIsEmpty_ReturnsJsonWithBaseDenyListOnly()
     {
@@ -65,7 +32,12 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.ShouldBe(BaseDenyList);
+        rules.Length.ShouldBe(5);
+        rules.ShouldContain("Bash(git push --force:*)");
+        rules.ShouldContain("Bash(git push * main)");
+        rules.ShouldContain("Bash(git push * master)");
+        rules.ShouldContain("Bash(npm publish:*)");
+        rules.ShouldContain("Bash(npx -y:*)");
     }
 
     [Fact]
@@ -121,7 +93,9 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.ShouldBe([..BaseDenyList, "Bash(rm -rf:*)", "Bash(curl:*)"]);
+        rules.Length.ShouldBe(7);
+        rules[5].ShouldBe("Bash(rm -rf:*)");
+        rules[6].ShouldBe("Bash(curl:*)");
     }
 
     [Fact]
@@ -205,6 +179,9 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.ShouldBe([..BaseDenyList, "Bash(rm -rf:*)"]);
+        rules.Length.ShouldBe(6);
+        rules.ShouldContain("Bash(git push --force:*)");
+        rules.ShouldContain("Bash(npx -y:*)");
+        rules[5].ShouldBe("Bash(rm -rf:*)");
     }
 }

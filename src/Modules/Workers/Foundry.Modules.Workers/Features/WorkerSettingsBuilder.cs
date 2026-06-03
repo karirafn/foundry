@@ -20,17 +20,17 @@ internal static class WorkerSettingsBuilder
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static string Build(WorkerSettingsOptions? settings)
+    public static string Build(WorkerSettingsOptions settings)
     {
-        string[] denyRules = settings?.AdditionalDenyRules.Count > 0
+        string[] denyRules = settings.AdditionalDenyRules.Count > 0
             ? [..BaseDenyList, ..settings.AdditionalDenyRules]
             : BaseDenyList;
 
         SettingsDocument document = new()
         {
-            Model = settings?.Model,
+            Model = settings.Model,
             Permissions = new() { Deny = denyRules },
-            Hooks = settings?.Hooks.Count > 0 ? settings.Hooks : null,
+            Hooks = settings.Hooks.Count > 0 ? settings.Hooks : null,
         };
 
         return JsonSerializer.Serialize(document, SerializerOptions);
