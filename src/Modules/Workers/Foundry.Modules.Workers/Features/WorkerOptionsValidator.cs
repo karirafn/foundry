@@ -160,7 +160,7 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
         {
             failures.Add("Workers:ImageBuild:ContextPath must be non-empty when ImageBuild is enabled.");
         }
-        else if (Path.IsPathRooted(imageBuild.ContextPath))
+        else if (IsAbsolutePath(imageBuild.ContextPath))
         {
             failures.Add(
                 "Workers:ImageBuild:ContextPath must be a relative path. " +
