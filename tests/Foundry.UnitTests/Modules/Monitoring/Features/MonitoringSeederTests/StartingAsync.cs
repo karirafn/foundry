@@ -75,7 +75,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "GITHUB_TOKEN",
                 },
             ],
@@ -93,7 +93,7 @@ public sealed class StartingAsync : IAsyncDisposable
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe("my-org"),
             () => account.SecretKeyName.ShouldBe("GITHUB_TOKEN"),
-            () => account.BaseUrl.ShouldBe(new Uri("https://api.github.com")));
+            () => account.BaseUrl.ShouldBe(new Uri("https://github.com")));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "GITHUB_TOKEN",
                 },
             ],
@@ -150,7 +150,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "GITHUB_TOKEN",
                 },
             ],
@@ -183,7 +183,7 @@ public sealed class StartingAsync : IAsyncDisposable
         // Arrange
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
-            GitHubAccount existing = GitHubAccount.Create("my-org", "OLD_TOKEN", new Uri("https://api.github.com"));
+            GitHubAccount existing = GitHubAccount.Create("my-org", "OLD_TOKEN", new Uri("https://github.com"));
             seedDb.Set<Account>().Add(existing);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -196,7 +196,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "NEW_TOKEN",
                 },
             ],
@@ -219,7 +219,7 @@ public sealed class StartingAsync : IAsyncDisposable
         AccountId accountId;
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
-            GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://api.github.com"));
+            GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
             seedDb.Set<Account>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
             accountId = account.Id;
@@ -239,7 +239,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "TOKEN",
                 },
             ],
@@ -275,7 +275,7 @@ public sealed class StartingAsync : IAsyncDisposable
                 {
                     Name = "my-org",
                     Type = "GitHub",
-                    BaseUrl = "https://api.github.com",
+                    BaseUrl = "https://github.com",
                     SecretKeyName = "TOKEN",
                 },
             ],

@@ -38,7 +38,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     public async Task WhenGitHubAccountPersisted_CanBeReloadedAsGitHubAccount()
     {
         // Arrange
-        Uri baseUrl = new("https://api.github.com");
+        Uri baseUrl = new("https://github.com");
         GitHubAccount account = GitHubAccount.Create("my-org", "MY_GITHUB_TOKEN", baseUrl);
 
         _dbContext.Set<Account>().Add(account);

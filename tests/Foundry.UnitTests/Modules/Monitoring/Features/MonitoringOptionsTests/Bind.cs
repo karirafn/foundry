@@ -58,7 +58,7 @@ public sealed class Bind
         {
             ["Monitoring:Accounts:0:Name"] = "my-org",
             ["Monitoring:Accounts:0:Type"] = "GitHub",
-            ["Monitoring:Accounts:0:BaseUrl"] = "https://api.github.com",
+            ["Monitoring:Accounts:0:BaseUrl"] = "https://github.com",
             ["Monitoring:Accounts:0:SecretKeyName"] = "GITHUB_TOKEN",
         };
 
@@ -71,7 +71,7 @@ public sealed class Bind
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe("my-org"),
             () => account.Type.ShouldBe("GitHub"),
-            () => account.BaseUrl.ShouldBe("https://api.github.com"),
+            () => account.BaseUrl.ShouldBe("https://github.com"),
             () => account.SecretKeyName.ShouldBe("GITHUB_TOKEN"));
     }
 

@@ -81,7 +81,7 @@ public sealed class GetSlugsAsync : IAsyncDisposable
     public async Task WhenIdsMatchRepositories_ReturnsSlugStringsKeyedById()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://api.github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
         _dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), account.Id, null);

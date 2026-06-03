@@ -8,4 +8,6 @@ internal sealed class UnknownAccount : Account
     public UnknownAccount() : base(AccountId.New())
     {
     }
+
+    public override Uri ApiBaseUrl => throw new NotSupportedException();
 }

@@ -26,7 +26,7 @@ public sealed class CreateProvider
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", new Uri("https://api.github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", new Uri("https://github.com"));
 
         // Act
         IIssueProvider provider = sut.CreateProvider(account, "ghp_token123");

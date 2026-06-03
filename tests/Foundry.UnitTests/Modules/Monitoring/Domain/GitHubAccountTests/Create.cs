@@ -14,7 +14,7 @@ public sealed class Create
         // Arrange
         string name = "my-github-account";
         string secretKeyName = "GITHUB_TOKEN";
-        Uri baseUrl = new("https://api.github.com");
+        Uri baseUrl = new("https://github.com");
 
         // Act
         GitHubAccount account = GitHubAccount.Create(name, secretKeyName, baseUrl);
@@ -30,7 +30,7 @@ public sealed class Create
     public void WhenCreated_AssignsNewId()
     {
         // Arrange
-        Uri baseUrl = new("https://api.github.com");
+        Uri baseUrl = new("https://github.com");
 
         // Act
         GitHubAccount a = GitHubAccount.Create("account-a", "KEY_A", baseUrl);
@@ -38,5 +38,18 @@ public sealed class Create
 
         // Assert
         a.Id.ShouldNotBe(b.Id);
+    }
+
+    [Fact]
+    public void WhenBaseUrlSchemeIsNotHttps_ThrowsArgumentException()
+    {
+        // Arrange
+        Uri baseUrl = new("http://github.example.com");
+
+        // Act
+        Action act = () => GitHubAccount.Create("my-account", "MY_TOKEN", baseUrl);
+
+        // Assert
+        Should.Throw<ArgumentException>(act);
     }
 }

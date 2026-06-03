@@ -99,7 +99,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         await using FoundryDbContext db = CreateDbContext();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "GITHUB_TOKEN", new Uri("https://api.github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "GITHUB_TOKEN", new Uri("https://github.com"));
         db.Set<Account>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
