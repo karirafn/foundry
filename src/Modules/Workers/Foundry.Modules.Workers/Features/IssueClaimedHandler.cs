@@ -125,10 +125,19 @@ internal sealed class IssueClaimedHandler(
             envVars["BRANCH_NAME"] = claimed.Revision.BranchName;
         }
 
-        List<BindMount> bindMounts =
-        [
-            new BindMount(Path.GetFullPath(reportsHostPath), "/reports/"),
-        ];
+        Result<List<BindMount>> mountsResult = BuildBindMounts(reportsHostPath);
+
+        if (mountsResult is not Result<List<BindMount>>.Success mountsSuccess)
+        {
+            if (mountsResult is Result<List<BindMount>>.Failure mountFailure)
+            {
+                return Result<WorkerContainerSpec>.Fail(mountFailure.Error);
+            }
+
+            return Result<WorkerContainerSpec>.Fail(new Error("Worker.UnknownMountError", "Mount resolution failed."));
+        }
+
+        List<BindMount> bindMounts = mountsSuccess.Value;
 
         Dictionary<string, string> labels = new()
         {
@@ -141,6 +150,51 @@ internal sealed class IssueClaimedHandler(
             bindMounts,
             labels,
             ["/entrypoint.sh"]));
+    }
+
+    private Result<List<BindMount>> BuildBindMounts(string reportsHostPath)
+    {
+        List<BindMount> mounts = [new BindMount(Path.GetFullPath(reportsHostPath), "/reports/")];
+
+        foreach (KeyValuePair<string, string> mount in _options.Mounts)
+        {
+            Result<string> resolved = ResolveAndValidateHostPath(mount.Value);
+            if (resolved is Result<string>.Failure failure)
+            {
+                return Result<List<BindMount>>.Fail(failure.Error);
+            }
+
+            mounts.Add(new BindMount(((Result<string>.Success)resolved).Value, mount.Key, ReadOnly: true));
+        }
+
+        foreach (KeyValuePair<string, string> mount in _options.WritableMounts)
+        {
+            Result<string> resolved = ResolveAndValidateHostPath(mount.Value);
+            if (resolved is Result<string>.Failure failure)
+            {
+                return Result<List<BindMount>>.Fail(failure.Error);
+            }
+
+            mounts.Add(new BindMount(((Result<string>.Success)resolved).Value, mount.Key, ReadOnly: false));
+        }
+
+        return Result<List<BindMount>>.Ok(mounts);
+    }
+
+    private static Result<string> ResolveAndValidateHostPath(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+
+        if (!Path.Exists(fullPath))
+        {
+            return Result<string>.Fail(
+                new Error("Worker.MountPathNotFound", $"Mount host path does not exist: {fullPath}"));
+        }
+
+        string resolvedPath = new FileInfo(fullPath).ResolveLinkTarget(returnFinalTarget: true)?.FullName
+            ?? fullPath;
+
+        return Result<string>.Ok(resolvedPath);
     }
 
     private async Task<Result<string>> ResolveGitPatAsync(
