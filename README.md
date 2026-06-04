@@ -21,6 +21,18 @@ Set exactly one worker credential — the application rejects both or neither at
 - **Pay-per-use API:** `dotnet user-secrets set "Workers:ApiKey" "<your-anthropic-api-key>" --project src/Foundry.WebApi`
 - **Max plan (OAuth):** `dotnet user-secrets set "Workers:OAuthToken" "<token-from-claude-setup-token>" --project src/Foundry.WebApi`
 
+### GitHub fine-grained token permissions
+
+Fine-grained personal access tokens are preferred over classic PATs — they offer a smaller scope and more precise permission control.
+
+Generate a fine-grained token at **Settings > Developer settings > Personal access tokens > Fine-grained tokens** and grant the following repository permissions:
+
+| Permission | Access |
+|---|---|
+| Contents | Read and write |
+| Metadata | Read |
+| Pull requests | Read and write (optional — required only if workers need to create or update PRs) |
+
 ### Worker bind mounts
 
 Workers run in sandboxed Docker containers. Use `Mounts` (read-only) and `WritableMounts` (read-write) to share host paths into every worker container.
@@ -62,6 +74,9 @@ The entrypoint writes it to `/home/node/.claude/settings.json` before Claude Cod
 - `Bash(git push * master)`
 - `Bash(npm publish:*)`
 - `Bash(npx -y:*)`
+- `Bash(git branch -D:*)`
+- `Bash(git branch -d:*)`
+- `Bash(git push --delete:*)`
 
 **Model** — omit to let Claude Code use its own default; set to pin a specific model:
 
@@ -74,6 +89,32 @@ dotnet user-secrets set "Workers:Settings:Model" "claude-sonnet-4-5" --project s
 ```bash
 dotnet user-secrets set "Workers:Settings:AdditionalDenyRules:0" "Bash(rm -rf:*)" --project src/Foundry.WebApi
 ```
+
+**CI/CD deny defaults** — a configurable default deny list that blocks edits to CI/CD files.
+Unlike the base deny list, operators can clear it by binding an empty array:
+
+- `Edit(.github/workflows/**:*)`
+- `Edit(.gitlab-ci.yml:*)`
+- `Edit(Dockerfile:*)`
+- `Edit(docker-compose*.yml:*)`
+
+To clear the CI/CD deny defaults, edit `secrets.json` directly:
+
+```bash
+dotnet user-secrets edit --project src/Foundry.WebApi
+```
+
+```json
+{
+  "Workers": {
+    "Settings": {
+      "CiCdDenyRules": []
+    }
+  }
+}
+```
+
+Note: the system prompt still instructs workers not to touch CI/CD files even when this list is cleared (soft guidance).
 
 **Hooks** — edit `secrets.json` directly for the complex hook structure (array values are not supported by the `dotnet user-secrets set` command):
 
