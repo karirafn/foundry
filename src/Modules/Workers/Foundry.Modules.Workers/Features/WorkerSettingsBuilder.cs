@@ -15,6 +15,8 @@ internal static class WorkerSettingsBuilder
         "Bash(git branch -D:*)",
         "Bash(git branch -d:*)",
         "Bash(git push --delete:*)",
+        "Bash(git push * HEAD:*)",
+        "Bash(git push * :*)",
     ];
 
     private static readonly JsonSerializerOptions SerializerOptions = new()

@@ -11,7 +11,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.WorkerSettingsBuilderTests;
 public sealed class Build
 {
     [Fact]
-    public void WhenSettingsIsEmpty_ReturnsJsonWithBaseDenyListOnly()
+    public void WhenSettingsIsEmpty_ReturnsJsonWithBaseAndDefaultCiCdRules()
     {
         // Arrange
         WorkerSettingsOptions settings = new();
@@ -32,7 +32,7 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.Length.ShouldBe(12);
+        rules.Length.ShouldBe(17);
         rules.ShouldContain("Bash(git push --force:*)");
         rules.ShouldContain("Bash(git push * main)");
         rules.ShouldContain("Bash(git push * master)");
@@ -41,10 +41,15 @@ public sealed class Build
         rules.ShouldContain("Bash(git branch -D:*)");
         rules.ShouldContain("Bash(git branch -d:*)");
         rules.ShouldContain("Bash(git push --delete:*)");
+        rules.ShouldContain("Bash(git push * HEAD:*)");
+        rules.ShouldContain("Bash(git push * :*)");
         rules.ShouldContain("Edit(.github/workflows/**:*)");
         rules.ShouldContain("Edit(.gitlab-ci.yml:*)");
         rules.ShouldContain("Edit(Dockerfile:*)");
         rules.ShouldContain("Edit(docker-compose*.yml:*)");
+        rules.ShouldContain("Edit(docker-compose.yaml:*)");
+        rules.ShouldContain("Edit(compose.yml:*)");
+        rules.ShouldContain("Edit(compose.yaml:*)");
     }
 
     [Fact]
@@ -80,7 +85,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenAdditionalDenyRulesProvided_AppendsThemAfterBaseRules()
+    public void WhenAdditionalDenyRulesProvided_AppendsThemAfterBaseAndCiCdRules()
     {
         // Arrange
         WorkerSettingsOptions settings = new()
@@ -100,9 +105,9 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.Length.ShouldBe(14);
-        rules[12].ShouldBe("Bash(rm -rf:*)");
-        rules[13].ShouldBe("Bash(curl:*)");
+        rules.Length.ShouldBe(19);
+        rules[17].ShouldBe("Bash(rm -rf:*)");
+        rules[18].ShouldBe("Bash(curl:*)");
     }
 
     [Fact]
@@ -195,7 +200,10 @@ public sealed class Build
             () => rules.ShouldContain("Edit(.github/workflows/**:*)"),
             () => rules.ShouldContain("Edit(.gitlab-ci.yml:*)"),
             () => rules.ShouldContain("Edit(Dockerfile:*)"),
-            () => rules.ShouldContain("Edit(docker-compose*.yml:*)"));
+            () => rules.ShouldContain("Edit(docker-compose*.yml:*)"),
+            () => rules.ShouldContain("Edit(docker-compose.yaml:*)"),
+            () => rules.ShouldContain("Edit(compose.yml:*)"),
+            () => rules.ShouldContain("Edit(compose.yaml:*)"));
     }
 
     [Fact]
@@ -219,7 +227,7 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.Length.ShouldBe(8);
+        rules.Length.ShouldBe(10);
         rules.ShouldSatisfyAllConditions(
             () => rules.ShouldNotContain("Edit(.github/workflows/**:*)"),
             () => rules.ShouldNotContain("Edit(.gitlab-ci.yml:*)"),
@@ -256,7 +264,9 @@ public sealed class Build
             () => rules.ShouldContain("Bash(npx -y:*)"),
             () => rules.ShouldContain("Bash(git branch -D:*)"),
             () => rules.ShouldContain("Bash(git branch -d:*)"),
-            () => rules.ShouldContain("Bash(git push --delete:*)"));
+            () => rules.ShouldContain("Bash(git push --delete:*)"),
+            () => rules.ShouldContain("Bash(git push * HEAD:*)"),
+            () => rules.ShouldContain("Bash(git push * :*)"));
     }
 
     [Fact]
@@ -281,18 +291,18 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        // 8 base + 1 CI/CD + 1 additional = 10
-        rules.Length.ShouldBe(10);
+        // 10 base + 1 CI/CD + 1 additional = 12
+        rules.Length.ShouldBe(12);
 
-        // Base rules come first (indices 0-7)
+        // Base rules come first (indices 0-9)
         rules[0].ShouldBe("Bash(git push --force:*)");
-        rules[7].ShouldBe("Bash(git push --delete:*)");
+        rules[9].ShouldBe("Bash(git push * :*)");
 
-        // CI/CD rule follows base (index 8)
-        rules[8].ShouldBe("Edit(.github/workflows/**:*)");
+        // CI/CD rule follows base (index 10)
+        rules[10].ShouldBe("Edit(.github/workflows/**:*)");
 
-        // Additional rule comes last (index 9)
-        rules[9].ShouldBe("Bash(rm -rf:*)");
+        // Additional rule comes last (index 11)
+        rules[11].ShouldBe("Bash(rm -rf:*)");
     }
 
     [Fact]
@@ -332,9 +342,9 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.Length.ShouldBe(13);
+        rules.Length.ShouldBe(18);
         rules.ShouldContain("Bash(git push --force:*)");
         rules.ShouldContain("Bash(npx -y:*)");
-        rules[12].ShouldBe("Bash(rm -rf:*)");
+        rules[17].ShouldBe("Bash(rm -rf:*)");
     }
 }

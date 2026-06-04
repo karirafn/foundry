@@ -8,6 +8,9 @@ internal sealed class WorkerSettingsOptions
         "Edit(.gitlab-ci.yml:*)",
         "Edit(Dockerfile:*)",
         "Edit(docker-compose*.yml:*)",
+        "Edit(docker-compose.yaml:*)",
+        "Edit(compose.yml:*)",
+        "Edit(compose.yaml:*)",
     ];
 
     public string? Model { get; set; }
