@@ -67,32 +67,28 @@ internal sealed class ProcessIssueDependenciesHandler(
             case DetectedIssue detected when issue.BlockedBy.Count == 0:
             {
                 QueuedIssue queued = detected.Enqueue();
-                await db.TransitionAsync(detected, queued, cancellationToken);
-                await dispatcher.DispatchAsync(detected.DomainEvents, cancellationToken);
+                await db.TransitionAsync(detected, queued, dispatcher, cancellationToken);
                 break;
             }
 
             case DetectedIssue detected:
             {
                 BlockedIssue blocked = detected.Block(issue.BlockedBy);
-                await db.TransitionAsync(detected, blocked, cancellationToken);
-                await dispatcher.DispatchAsync(detected.DomainEvents, cancellationToken);
+                await db.TransitionAsync(detected, blocked, dispatcher, cancellationToken);
                 break;
             }
 
             case QueuedIssue queued when issue.BlockedBy.Count > 0:
             {
                 BlockedIssue blocked = queued.Block(issue.BlockedBy);
-                await db.TransitionAsync(queued, blocked, cancellationToken);
-                await dispatcher.DispatchAsync(queued.DomainEvents, cancellationToken);
+                await db.TransitionAsync(queued, blocked, dispatcher, cancellationToken);
                 break;
             }
 
             case BlockedIssue blocked when issue.BlockedBy.Count == 0:
             {
                 QueuedIssue queued = blocked.Unblock();
-                await db.TransitionAsync(blocked, queued, cancellationToken);
-                await dispatcher.DispatchAsync(blocked.DomainEvents, cancellationToken);
+                await db.TransitionAsync(blocked, queued, dispatcher, cancellationToken);
                 break;
             }
 

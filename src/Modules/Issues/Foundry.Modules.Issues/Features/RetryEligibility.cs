@@ -55,14 +55,12 @@ internal static class RetryEligibility
                 switch (next)
                 {
                     case QueuedIssue queued:
-                        await db.TransitionAsync(ineligible, queued, cancellationToken);
+                        await db.TransitionAsync(ineligible, queued, dispatcher, cancellationToken);
                         break;
                     case BlockedIssue blocked:
-                        await db.TransitionAsync(ineligible, blocked, cancellationToken);
+                        await db.TransitionAsync(ineligible, blocked, dispatcher, cancellationToken);
                         break;
                 }
-
-                await dispatcher.DispatchAsync(ineligible.DomainEvents, cancellationToken);
             }
             else
             {
