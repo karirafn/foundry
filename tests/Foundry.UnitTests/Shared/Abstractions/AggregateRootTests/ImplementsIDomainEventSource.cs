@@ -14,11 +14,8 @@ public sealed class ImplementsIDomainEventSource
         // Arrange
         TestAggregateRoot sut = new(TestAggregateRootId.From(Guid.NewGuid()));
 
-        // Act
-        IDomainEventSource source = sut;
-
         // Assert
-        source.ShouldNotBeNull();
+        sut.ShouldBeAssignableTo<IDomainEventSource>();
     }
 
     [Fact]
