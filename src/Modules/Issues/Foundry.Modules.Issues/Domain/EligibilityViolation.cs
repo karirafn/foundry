@@ -36,8 +36,8 @@ public sealed record EligibilityViolation
             AllowDeletionRule,
             "The repository allows deletion of the protected branch, which could result in loss of the worker's work.");
 
-    public static EligibilityViolation Unreachable(string message) =>
+    public static EligibilityViolation Unreachable() =>
         new(
             UnreachableRule,
-            message);
+            "Branch protection could not be verified. The provider API was unreachable or returned an error.");
 }

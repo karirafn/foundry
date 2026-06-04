@@ -28,7 +28,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not "https")
         {
             return Result<string>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -64,7 +64,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not "https")
         {
             return Result<BranchRules>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -109,7 +109,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not "https")
         {
             return Result<IReadOnlyList<ProviderIssue>>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -155,7 +155,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not "https")
         {
             return Result<IReadOnlyList<int>>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -197,7 +197,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not "https")
         {
             return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -234,7 +234,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not "https")
         {
             return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -278,7 +278,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not ("https" or "http"))
+        if (apiBaseUrl.Scheme is not "https")
         {
             return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidBaseUrl);
         }
@@ -296,9 +296,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
         if (reviewsResult is not Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Success reviewsSuccess)
         {
-            Error error = reviewsResult is Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Failure failure
-                ? failure.Error
-                : throw new InvalidOperationException("Unexpected Result variant.");
+            Error error = ((Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Failure)reviewsResult).Error;
             return Result<ReviewFeedback>.Fail(error);
         }
 
@@ -519,7 +517,7 @@ internal static class GitHubErrors
 {
     public static readonly Error InvalidBaseUrl = new(
         "GitHub.InvalidBaseUrl",
-        "The base URL must use the https or http scheme.");
+        "The base URL must use the https scheme.");
 
     public static readonly Error RateLimitExhausted = new(
         "GitHub.RateLimitExhausted",

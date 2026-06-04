@@ -10,6 +10,9 @@ namespace Foundry.Modules.Issues.Features;
 
 internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQueries) : IIssueQueries
 {
+    private const string DetectedState = "detected";
+    private const string IneligibleState = "ineligible";
+
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
@@ -47,8 +50,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
         return await db.Set<Issue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
-            .Where(i => EF.Property<string>(i, "state") == "detected"
-                || EF.Property<string>(i, "state") == "ineligible")
+            .Where(i => EF.Property<string>(i, "state") == DetectedState
+                || EF.Property<string>(i, "state") == IneligibleState)
             .Select(i => i.IssueNumber)
             .ToListAsync(cancellationToken);
     }
@@ -237,7 +240,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: blocked.BlockedBy),
+                BlockedBy: blocked.BlockedBy,
+                Violations: null),
 
             InProgressIssue inProgress => new IssueStateDetails(
                 WorkerRunId: inProgress.WorkerRunId,
@@ -247,7 +251,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             ReviewIssue review => new IssueStateDetails(
                 WorkerRunId: review.WorkerRunId,
@@ -257,7 +262,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId,
@@ -267,7 +273,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             FailedIssue failed => new IssueStateDetails(
                 WorkerRunId: failed.WorkerRunId,
@@ -277,7 +284,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: failed.FailureReason,
                 FailedAt: failed.FailedAt,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             CompletedIssue completed => new IssueStateDetails(
                 WorkerRunId: null,
@@ -287,7 +295,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: completed.CompletedAt,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             DismissedIssue dismissed => new IssueStateDetails(
                 WorkerRunId: null,
@@ -297,7 +306,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: dismissed.CompletedAt,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             RevisionQueuedIssue revisionQueued => new IssueStateDetails(
                 WorkerRunId: null,
@@ -307,7 +317,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
                 WorkerRunId: revisionInProgress.WorkerRunId,
@@ -317,7 +328,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             RevisionFailedIssue revisionFailed => new IssueStateDetails(
                 WorkerRunId: revisionFailed.WorkerRunId,
@@ -327,7 +339,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailureReason: revisionFailed.FailureReason,
                 FailedAt: revisionFailed.FailedAt,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                Violations: null),
 
             _ => null
         };

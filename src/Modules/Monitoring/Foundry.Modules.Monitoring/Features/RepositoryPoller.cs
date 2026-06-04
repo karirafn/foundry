@@ -273,10 +273,9 @@ internal sealed class RepositoryPoller(
     {
         if (protectionResult is not Result<BranchProtection>.Success success)
         {
-            string message = protectionResult is Result<BranchProtection>.Failure failure
-                ? failure.Error.Message
-                : "Branch protection could not be retrieved.";
-            return [new EligibilityViolationInfo(EligibilityViolationInfo.UnreachableRule, message)];
+            return [new EligibilityViolationInfo(
+                EligibilityViolationInfo.UnreachableRule,
+                EligibilityViolationInfo.UnreachableDescription)];
         }
 
         BranchProtection protection = success.Value;

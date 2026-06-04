@@ -1030,7 +1030,8 @@ public sealed class PollAsync : IAsyncDisposable
         EligibilityViolationInfo violation = evt.Violations.ShouldHaveSingleItem();
         violation.ShouldSatisfyAllConditions(
             () => violation.Rule.ShouldBe("branch-protection:unreachable"),
-            () => violation.Description.ShouldBe("Service is unavailable"));
+            () => violation.Description.ShouldBe(
+                "Branch protection could not be verified. The provider API was unreachable or returned an error."));
     }
 
     private sealed class StubIssueProvider(

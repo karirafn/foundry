@@ -58,9 +58,7 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
 
         if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
         {
-            Error error = defaultBranchResult is Result<string>.Failure failure
-                ? failure.Error
-                : throw new InvalidOperationException("Unexpected Result variant.");
+            Error error = ((Result<string>.Failure)defaultBranchResult).Error;
             return Result<BranchProtection>.Fail(error);
         }
 
@@ -75,9 +73,7 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
 
         if (rulesResult is not Result<BranchRules>.Success rulesSuccess)
         {
-            Error error = rulesResult is Result<BranchRules>.Failure failure
-                ? failure.Error
-                : throw new InvalidOperationException("Unexpected Result variant.");
+            Error error = ((Result<BranchRules>.Failure)rulesResult).Error;
             return Result<BranchProtection>.Fail(error);
         }
 

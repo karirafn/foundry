@@ -10,33 +10,37 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
-public sealed class IneligibleIssueConfiguration : IEntityTypeConfiguration<IneligibleIssue>
+internal sealed class IneligibleIssueConfiguration : IEntityTypeConfiguration<IneligibleIssue>
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = null };
+
     public void Configure(EntityTypeBuilder<IneligibleIssue> builder)
     {
         ValueConverter<IReadOnlyList<EligibilityViolation>, string> violationsConverter = new(
             violations => JsonSerializer.Serialize(
                 violations.Select(v => new { v.Rule, v.Description }),
-                (JsonSerializerOptions?)null),
+                JsonOptions),
             json => DeserializeViolations(json));
 
         ValueComparer<IReadOnlyList<EligibilityViolation>> violationsComparer = new(
             (a, b) => a != null && b != null && a.SequenceEqual(b),
             violations => violations.Aggregate(
                 0,
-                (hash, v) => HashCode.Combine(hash, v.Rule.GetHashCode(StringComparison.Ordinal))),
+                (hash, v) => HashCode.Combine(
+                    hash,
+                    v.Rule.GetHashCode(StringComparison.Ordinal),
+                    v.Description.GetHashCode(StringComparison.Ordinal))),
             violations => (IReadOnlyList<EligibilityViolation>)violations.ToList());
 
         builder.Property(i => i.Violations)
             .HasConversion(violationsConverter, violationsComparer)
-            .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
             .HasColumnName("eligibility_violations");
     }
 
     private static List<EligibilityViolation> DeserializeViolations(string json)
     {
-        JsonArray? array = JsonSerializer.Deserialize<JsonArray>(json, (JsonSerializerOptions?)null);
+        JsonArray? array = JsonSerializer.Deserialize<JsonArray>(json, JsonOptions);
 
         if (array is null)
         {

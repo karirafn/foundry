@@ -11,26 +11,21 @@ public sealed class Unreachable
     [Fact]
     public void WhenCalled_ReturnsViolationWithExpectedRule()
     {
-        // Arrange
-        string message = "Connection timed out.";
-
-        // Act
-        EligibilityViolation violation = EligibilityViolation.Unreachable(message);
+        // Arrange / Act
+        EligibilityViolation violation = EligibilityViolation.Unreachable();
 
         // Assert
         violation.Rule.ShouldBe("branch-protection:unreachable");
     }
 
     [Fact]
-    public void WhenCalled_ReturnsViolationWithSuppliedMessage()
+    public void WhenCalled_ReturnsViolationWithFixedDescription()
     {
-        // Arrange
-        string message = "Connection timed out.";
-
-        // Act
-        EligibilityViolation violation = EligibilityViolation.Unreachable(message);
+        // Arrange / Act
+        EligibilityViolation violation = EligibilityViolation.Unreachable();
 
         // Assert
-        violation.Description.ShouldBe(message);
+        violation.Description.ShouldBe(
+            "Branch protection could not be verified. The provider API was unreachable or returned an error.");
     }
 }

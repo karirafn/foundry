@@ -22,4 +22,4 @@ public sealed record IssueStateDetails(
     DateTimeOffset? FailedAt,
     DateTimeOffset? CompletedAt,
     IReadOnlyList<int>? BlockedBy,
-    IReadOnlyList<EligibilityViolationDto>? Violations = null);
+    IReadOnlyList<EligibilityViolationDto>? Violations);

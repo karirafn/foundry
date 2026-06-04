@@ -64,7 +64,7 @@ internal sealed class WorkerCapacityAvailableHandler(
                     .Select(v => EligibilityViolation.From(v.Rule, v.Description))
                     .ToList(),
             Result<IReadOnlyList<EligibilityViolationInfo>>.Failure =>
-                [EligibilityViolation.Unreachable("Branch protection check failed")],
+                [EligibilityViolation.Unreachable()],
             _ => [],
         };
 

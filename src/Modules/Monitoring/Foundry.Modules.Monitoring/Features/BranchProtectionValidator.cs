@@ -42,9 +42,7 @@ internal sealed class BranchProtectionValidator(
 
         if (tokenResult is not Result<string>.Success tokenSuccess)
         {
-            Error error = tokenResult is Result<string>.Failure failure
-                ? failure.Error
-                : throw new InvalidOperationException("Unexpected Result variant.");
+            Error error = ((Result<string>.Failure)tokenResult).Error;
             return Result<IReadOnlyList<EligibilityViolationInfo>>.Fail(error);
         }
 
@@ -59,9 +57,7 @@ internal sealed class BranchProtectionValidator(
             return Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
                 [new EligibilityViolationInfo(
                     EligibilityViolationInfo.UnreachableRule,
-                    protectionResult is Result<BranchProtection>.Failure f
-                        ? f.Error.Message
-                        : "Branch protection could not be retrieved.")]);
+                    EligibilityViolationInfo.UnreachableDescription)]);
         }
 
         BranchProtection protection = protectionSuccess.Value;
