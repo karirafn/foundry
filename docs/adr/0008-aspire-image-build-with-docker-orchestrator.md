@@ -1,3 +1,8 @@
+---
+status: superseded
+superseded-by: 0009-worker-image-build-hosted-service.md
+---
+
 # Aspire Image Build with Docker Orchestrator Runtime Dispatch
 
 ## Context

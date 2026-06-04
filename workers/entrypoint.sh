@@ -13,8 +13,12 @@ fi
 : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
 
 if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
-    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > /home/claude/.claude/settings.json
-    chmod 444 /home/claude/.claude/settings.json
+    if [[ ! -w ~/.claude ]]; then
+        echo "ERROR: ~/.claude is not writable by $(whoami). Rebuild the worker image: docker build -t foundry-worker:local workers/" >&2
+        exit 1
+    fi
+    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > ~/.claude/settings.json
+    chmod 444 ~/.claude/settings.json
 fi
 
 # Transform https://github.com/owner/repo -> https://<PAT>@github.com/owner/repo.git
@@ -29,7 +33,7 @@ git -C /workspace remote set-url origin "$CLONE_URL"
 cd /workspace
 
 if [[ -n "${BRANCH_NAME:-}" ]]; then
-    git switch "$BRANCH_NAME"
+    git switch -- "$BRANCH_NAME"
 fi
 
 claude -p "$WORKER_PROMPT" \

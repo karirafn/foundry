@@ -31,21 +31,21 @@ Common mounts for Claude Code workers:
 
 | Host path | Container path | Dictionary |
 |---|---|---|
-| `~/.claude/skills` | `/root/.claude/skills` | `Mounts` |
-| `~/.claude/rules` | `/root/.claude/rules` | `Mounts` |
-| `~/.claude/commands` | `/root/.claude/commands` | `Mounts` |
-| `~/.claude/hooks` | `/root/.claude/hooks` | `Mounts` |
-| `~/.claude/plugins` | `/root/.claude/plugins` | `Mounts` |
-| `~/.claude/observations` | `/root/.claude/observations` | `WritableMounts` |
+| `~/.claude/skills` | `/home/node/.claude/skills` | `Mounts` |
+| `~/.claude/rules` | `/home/node/.claude/rules` | `Mounts` |
+| `~/.claude/commands` | `/home/node/.claude/commands` | `Mounts` |
+| `~/.claude/hooks` | `/home/node/.claude/hooks` | `Mounts` |
+| `~/.claude/plugins` | `/home/node/.claude/plugins` | `Mounts` |
+| `~/.claude/observations` | `/home/node/.claude/observations` | `WritableMounts` |
 
 Do not mount `settings.json` directly — it is generated at dispatch time from `Workers:Settings` (see below).
 
 Example — mount skills and rules read-only, observations read-write:
 
 ```bash
-dotnet user-secrets set "Workers:Mounts:/root/.claude/skills" "/home/user/.claude/skills" --project src/Foundry.WebApi
-dotnet user-secrets set "Workers:Mounts:/root/.claude/rules" "/home/user/.claude/rules" --project src/Foundry.WebApi
-dotnet user-secrets set "Workers:WritableMounts:/root/.claude/observations" "/home/user/.claude/observations" --project src/Foundry.WebApi
+dotnet user-secrets set "Workers:Mounts:/home/node/.claude/skills" "/home/user/.claude/skills" --project src/Foundry.WebApi
+dotnet user-secrets set "Workers:Mounts:/home/node/.claude/rules" "/home/user/.claude/rules" --project src/Foundry.WebApi
+dotnet user-secrets set "Workers:WritableMounts:/home/node/.claude/observations" "/home/user/.claude/observations" --project src/Foundry.WebApi
 ```
 
 On Windows, use the full Windows path (e.g. `C:\Users\you\.claude\skills`). Docker Desktop must have path sharing enabled — see Windows notes below.
@@ -53,7 +53,7 @@ On Windows, use the full Windows path (e.g. `C:\Users\you\.claude\skills`). Dock
 ### Worker settings
 
 Foundry generates a `settings.json` for each worker container at dispatch time and injects it via the `CLAUDE_SETTINGS_JSON` environment variable.
-The entrypoint writes it to `/home/claude/.claude/settings.json` before Claude Code starts.
+The entrypoint writes it to `/home/node/.claude/settings.json` before Claude Code starts.
 
 **Base deny list** — always enforced, not configurable:
 
@@ -108,7 +108,7 @@ dotnet run --project src/Foundry.AppHost
 
 This command:
 
-- Builds the worker Docker image via MSBuild target (cached after first run)
+- Starts the WebApi, which builds the worker Docker image at startup (controlled by `Workers:ImageBuild:Enabled`)
 - Starts the WebApi with auto-migration applied on startup
 - Starts the Angular dashboard
 
