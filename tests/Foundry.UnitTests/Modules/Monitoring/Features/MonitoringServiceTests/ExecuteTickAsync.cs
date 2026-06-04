@@ -271,6 +271,14 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             {
                 return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
             }
+
+            public Task<Result<BranchProtection>> GetBranchProtectionAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(
+                    Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
+            }
         }
     }
 
@@ -321,6 +329,13 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
+        }
+
+        public Task<IReadOnlyList<int>> GetDetectedAndIneligibleIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<int>>([]);
         }
     }
 

@@ -105,6 +105,16 @@ public sealed class ImplementsIIssueStateChanged
     }
 
     [Fact]
+    public void IssueIneligible_ImplementsIIssueStateChanged()
+    {
+        // Arrange
+        IssueIneligible @event = new(AnyIssueId, AnyRepositoryId);
+
+        // Act & Assert
+        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+    }
+
+    [Fact]
     public void CircularDependencyDetected_DoesNotImplementIIssueStateChanged()
     {
         // Arrange

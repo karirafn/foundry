@@ -100,6 +100,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -298,6 +300,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -347,6 +351,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -374,6 +380,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -407,6 +415,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -454,6 +464,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -466,6 +478,41 @@ namespace Foundry.WebApi.Migrations
                         });
 
                     b.HasDiscriminator().HasValue("failed");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.IneligibleIssue", b =>
+                {
+                    b.HasBaseType("Foundry.Modules.Issues.Domain.Issue");
+
+                    b.Property<string>("Violations")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("eligibility_violations");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_dismissed_completed_at", "state <> 'dismissed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_in_progress_fields", "state <> 'revision_in_progress' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_queued_fields", "state <> 'revision_queued' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_unchanged_worker_run_id", "state <> 'unchanged' OR worker_run_id IS NOT NULL");
+                        });
+
+                    b.HasDiscriminator().HasValue("ineligible");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.InProgressIssue", b =>
@@ -486,6 +533,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -514,6 +563,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -567,6 +618,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -638,6 +691,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -695,6 +750,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -747,6 +804,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -779,6 +838,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_ineligible_violations", "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 

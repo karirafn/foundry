@@ -18,6 +18,7 @@ import { IssueDetail } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { WorkerLogPanelComponent } from '../worker-log-panel/worker-log-panel';
 import { WorkerLogService } from '../worker-log.service';
+import { IssueService } from '../issue.service';
 
 const LOG_PANEL_ID = 'issue-detail-log-panel';
 const MOBILE_QUERY = '(max-width: 767px)';
@@ -130,6 +131,21 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
             </div>
           }
 
+          @if (d.state === 'ineligible') {
+            <div class="issue-detail__field">
+              <span class="issue-detail__field-key" id="eligibility-violations-label">Eligibility Violations</span>
+              @if (d.stateDetails.violations?.length) {
+                <ul class="issue-detail__violations" aria-labelledby="eligibility-violations-label">
+                  @for (violation of d.stateDetails.violations!; track violation.rule) {
+                    <li class="issue-detail__violation">{{ violation.description }}</li>
+                  }
+                </ul>
+              } @else {
+                <span class="issue-detail__field-value">Eligibility details are unavailable</span>
+              }
+            </div>
+          }
+
           @if (d.stateDetails.completedAt) {
             <div class="issue-detail__field">
               <span class="issue-detail__field-key">Completed</span>
@@ -156,6 +172,18 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
             <span class="issue-detail__field-value">{{ d.author }}</span>
           </div>
         </div>
+
+        @if (d.state === 'ineligible') {
+          <div class="issue-detail__actions">
+            <button
+              class="issue-detail__retry-eligibility-btn"
+              type="button"
+              [disabled]="_issueService.retryingEligibility()"
+              [attr.aria-label]="'Retry eligibility check for issue #' + d.issueNumber"
+              (click)="retryEligibility(d.id)"
+            >{{ _issueService.retryingEligibility() ? 'Retrying...' : 'Retry Eligibility Check' }}</button>
+          </div>
+        }
 
         @if (d.stateDetails.workerRunId) {
           <div class="issue-detail__log-section">
@@ -266,6 +294,7 @@ export class IssueDetailComponent implements OnDestroy {
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   protected readonly _logService = inject(WorkerLogService);
+  protected readonly _issueService = inject(IssueService);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _mqFactory = inject(MEDIA_QUERY_FACTORY);
 
@@ -323,5 +352,9 @@ export class IssueDetailComponent implements OnDestroy {
 
   focusOverlayClose(): void {
     this._overlayCloseBtn?.nativeElement.focus();
+  }
+
+  retryEligibility(id: string): void {
+    this._issueService.retryEligibility(id);
   }
 }

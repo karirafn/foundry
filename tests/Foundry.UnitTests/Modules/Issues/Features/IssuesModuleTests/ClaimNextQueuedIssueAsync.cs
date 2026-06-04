@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Workers.Contracts;
@@ -44,6 +45,8 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             _dbContext,
             repositoryDispatchQueries,
             _dispatcher,
+            new PassingBranchProtectionValidator(),
+            new NullDomainEventDispatcher(),
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
@@ -347,5 +350,21 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             _captured.AddRange(events);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class PassingBranchProtectionValidator : IBranchProtectionValidator
+    {
+        public Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
+                    Array.Empty<EligibilityViolationInfo>()));
+    }
+
+    private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

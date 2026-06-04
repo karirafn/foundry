@@ -29,6 +29,7 @@ public static class MonitoringModule
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();
+        services.AddScoped<IBranchProtectionValidator, BranchProtectionValidator>();
         services.AddScoped<RepositoryPoller>();
 
         services.AddHostedService<MonitoringSeeder>();

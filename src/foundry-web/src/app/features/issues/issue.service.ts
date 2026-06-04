@@ -15,6 +15,7 @@ export class IssueService {
   readonly loadError: WritableSignal<string | null> = signal(null);
   readonly detailError: WritableSignal<string | null> = signal(null);
   readonly initialLoading: WritableSignal<boolean> = signal(true);
+  readonly retryingEligibility: WritableSignal<boolean> = signal(false);
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() =>
     [...this.issues()].sort(
@@ -75,6 +76,20 @@ export class IssueService {
 
     this.expandedIssueId.set(id);
     this.loadDetail(id);
+  }
+
+  retryEligibility(id: string): void {
+    this.retryingEligibility.set(true);
+    this._http.post<void>(`/api/issues/${id}/retry-eligibility`, {}).subscribe({
+      next: () => {
+        this.retryingEligibility.set(false);
+        this.loadDetail(id);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.retryingEligibility.set(false);
+        this.detailError.set(err.message);
+      },
+    });
   }
 
   private _upsertIssue(updated: IssueSummary): void {

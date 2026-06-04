@@ -45,6 +45,22 @@ public sealed class BlockedIssue : Issue
         return blocked;
     }
 
+    internal static BlockedIssue FromIneligible(IneligibleIssue ineligible)
+    {
+        BlockedIssue blocked = new(ineligible.Id);
+        blocked.SetSharedProperties(
+            ineligible.MonitoredRepositoryId,
+            ineligible.IssueNumber,
+            ineligible.Title,
+            ineligible.Body,
+            ineligible.Author,
+            ineligible.Url,
+            ineligible.Labels,
+            ineligible.DetectedAt);
+        blocked.SetBlockedBy(ineligible.BlockedBy);
+        return blocked;
+    }
+
     public QueuedIssue Unblock()
     {
         QueuedIssue queued = QueuedIssue.FromBlocked(this);

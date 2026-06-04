@@ -45,4 +45,43 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
     {
         return httpClient.GetPullRequestReviewFeedbackAsync(apiBaseUrl, slug, pullRequestUrl, since, token, cancellationToken);
     }
+
+    public async Task<Result<BranchProtection>> GetBranchProtectionAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        Result<string> defaultBranchResult = await httpClient.GetDefaultBranchAsync(
+            apiBaseUrl,
+            slug,
+            token,
+            cancellationToken);
+
+        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
+        {
+            Error error = ((Result<string>.Failure)defaultBranchResult).Error;
+            return Result<BranchProtection>.Fail(error);
+        }
+
+        string defaultBranch = defaultBranchSuccess.Value;
+
+        Result<BranchRules> rulesResult = await httpClient.GetBranchRulesAsync(
+            apiBaseUrl,
+            slug,
+            defaultBranch,
+            token,
+            cancellationToken);
+
+        if (rulesResult is not Result<BranchRules>.Success rulesSuccess)
+        {
+            Error error = ((Result<BranchRules>.Failure)rulesResult).Error;
+            return Result<BranchProtection>.Fail(error);
+        }
+
+        BranchRules rules = rulesSuccess.Value;
+        return Result<BranchProtection>.Ok(new BranchProtection(
+            defaultBranch,
+            rules.RejectDirectPushes,
+            rules.RejectForcePushes,
+            rules.RejectDeletion));
+    }
 }

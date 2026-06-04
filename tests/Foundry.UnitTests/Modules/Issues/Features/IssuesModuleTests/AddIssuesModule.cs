@@ -42,6 +42,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
+        services.AddScoped<IBranchProtectionValidator, NullBranchProtectionValidator>();
         services.AddScoped<IIssueBroadcaster, NullIssueBroadcaster>();
         services.AddIssuesModule();
 
@@ -189,6 +190,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_IssueIneligibleHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueIneligible> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueIneligible>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueIneligible>>();
+    }
+
+    [Fact]
     public void WhenServicesRegistered_IssueCompletedHandlerResolvable()
     {
         // Arrange & Act
@@ -292,4 +305,13 @@ public sealed class AddIssuesModule : IAsyncDisposable
             => Task.FromResult<RepositoryDispatchInfo?>(null);
     }
 
+    private sealed class NullBranchProtectionValidator : IBranchProtectionValidator
+    {
+        public Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
+                    Array.Empty<EligibilityViolationInfo>()));
+    }
 }

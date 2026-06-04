@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -14,6 +15,8 @@ internal sealed class WorkerCapacityAvailableHandler(
     DbContext db,
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IIntegrationEventDispatcher integrationEventDispatcher,
+    IBranchProtectionValidator branchProtectionValidator,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<WorkerCapacityAvailableHandler> logger) : IIntegrationEventHandler<WorkerCapacityAvailable>
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
@@ -38,7 +41,48 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
+        bool eligible = await ValidateAndMarkIneligibleIfNotAsync(queued, cancellationToken);
+        if (!eligible)
+        {
+            return;
+        }
+
         await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
+    }
+
+    private async Task<bool> ValidateAndMarkIneligibleIfNotAsync(
+        QueuedIssue queued,
+        CancellationToken cancellationToken)
+    {
+        Result<IReadOnlyList<EligibilityViolationInfo>> validationResult =
+            await branchProtectionValidator.ValidateAsync(queued.MonitoredRepositoryId, cancellationToken);
+
+        List<EligibilityViolation> violations = validationResult switch
+        {
+            Result<IReadOnlyList<EligibilityViolationInfo>>.Success success when success.Value.Count > 0 =>
+                success.Value
+                    .Select(v => EligibilityViolation.From(v.Rule, v.Description))
+                    .ToList(),
+            Result<IReadOnlyList<EligibilityViolationInfo>>.Failure =>
+                [EligibilityViolation.Unreachable()],
+            _ => [],
+        };
+
+        if (violations.Count == 0)
+        {
+            return true;
+        }
+
+        IneligibleIssue ineligible = queued.MarkIneligible(violations);
+        await db.TransitionAsync(queued, ineligible, cancellationToken);
+        await domainEventDispatcher.DispatchAsync(queued.DomainEvents, cancellationToken);
+
+        logger.LogWarning(
+            "Issue #{IssueNumber} in repository {RepositoryId} failed branch protection check; marked ineligible.",
+            queued.IssueNumber,
+            queued.MonitoredRepositoryId);
+
+        return false;
     }
 
     private async Task ClaimRevisionQueuedAsync(
