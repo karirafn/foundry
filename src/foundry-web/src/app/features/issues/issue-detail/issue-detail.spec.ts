@@ -700,4 +700,41 @@ describe('IssueDetailComponent', () => {
     const list = el.querySelector('.issue-detail__violations') as HTMLUListElement;
     expect(list?.getAttribute('aria-labelledby')).toBe('eligibility-violations-label');
   });
+
+  // Transition behavior: stale ineligible detail does not show content while loading
+  it('should not render content block when loading is true even if stale detail is present', () => {
+    // Arrange — simulate stale ineligible detail still in memory during transition
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockDetail.stateDetails, violations: null },
+    };
+
+    // Act — loading=true with stale detail (transition state)
+    const fixture = createComponent(ineligibleDetail, true);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — content is not rendered, only the skeleton is shown
+    const content = el.querySelector('.issue-detail__content');
+    expect(content).toBeFalsy();
+    const skeleton = el.querySelector('.issue-detail__skeleton');
+    expect(skeleton).toBeTruthy();
+  });
+
+  it('should not render retry eligibility button when loading is true even if stale ineligible detail is present', () => {
+    // Arrange — simulate stale ineligible detail during loading transition
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockDetail.stateDetails, violations: null },
+    };
+
+    // Act
+    const fixture = createComponent(ineligibleDetail, true);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — retry button is absent while skeleton is shown
+    const retryBtn = el.querySelector('.issue-detail__retry-eligibility-btn');
+    expect(retryBtn).toBeFalsy();
+  });
 });

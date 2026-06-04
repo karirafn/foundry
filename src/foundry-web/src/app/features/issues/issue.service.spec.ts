@@ -195,6 +195,46 @@ describe('IssueService', () => {
     httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
   });
 
+  // Cycle 8b: toggleExpand — switching clears stale detail immediately
+  it('should clear issueDetail and set detailLoading to true immediately when switching to a different issue', () => {
+    // Arrange — expand first issue and let its detail load
+    const ineligibleDetail = { ...mockSummary, state: 'ineligible' };
+    service.toggleExpand('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush(ineligibleDetail);
+    expect(service.issueDetail()).toEqual(ineligibleDetail);
+
+    // Act — switch to a different issue (do NOT flush the second request yet)
+    service.toggleExpand('def456');
+
+    // Assert — stale detail is cleared and loading is true before the new response arrives
+    expect(service.issueDetail()).toBeNull();
+    expect(service.detailLoading()).toBe(true);
+
+    // Cleanup
+    httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
+  });
+
+  // Cycle 8c: toggleExpand — rapid switching does not leak stale state
+  it('should not retain stale detail when rapidly switching between issues', () => {
+    // Arrange — expand first issue, let detail load
+    service.toggleExpand('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary, state: 'ineligible' });
+    expect(service.issueDetail()).not.toBeNull();
+
+    // Act — switch to issue B without waiting for response, then switch to issue C
+    service.toggleExpand('def456');
+    // At this point the def456 request is in flight; switch again
+    service.toggleExpand('ghi789');
+
+    // Assert — issueDetail is null (cleared) and detailLoading is true
+    expect(service.issueDetail()).toBeNull();
+    expect(service.detailLoading()).toBe(true);
+
+    // Cleanup — flush both in-flight requests
+    httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
+    httpMock.expectOne('/api/issues/ghi789').flush({ ...mockSummary, id: 'ghi789' });
+  });
+
   // Cycle 9: SignalR upsert — updates existing issue in list
   it('should upsert an existing issue when IssueUpdated SignalR event is received', () => {
     // Arrange

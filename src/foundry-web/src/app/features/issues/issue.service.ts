@@ -74,6 +74,8 @@ export class IssueService {
       return;
     }
 
+    this.issueDetail.set(null);
+    this.detailLoading.set(true);
     this.expandedIssueId.set(id);
     this.loadDetail(id);
   }

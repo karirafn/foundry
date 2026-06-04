@@ -65,9 +65,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
         <div class="issue-detail__shimmer-bar" style="width: 60%"></div>
         <div class="issue-detail__shimmer-bar" style="width: 40%"></div>
       </div>
-    }
-
-    @if (!error() && detail(); as d) {
+    } @else if (detail(); as d) {
       <div
         class="issue-detail__content"
         role="region"
