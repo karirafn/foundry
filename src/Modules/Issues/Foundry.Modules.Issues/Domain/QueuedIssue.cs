@@ -87,7 +87,9 @@ public sealed class QueuedIssue : Issue
 
     public InProgressIssue Claim(Guid workerRunId)
     {
-        return InProgressIssue.FromQueued(this, workerRunId);
+        InProgressIssue inProgress = InProgressIssue.FromQueued(this, workerRunId);
+        AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
+        return inProgress;
     }
 
     public IneligibleIssue MarkIneligible(IReadOnlyList<EligibilityViolation> violations)
