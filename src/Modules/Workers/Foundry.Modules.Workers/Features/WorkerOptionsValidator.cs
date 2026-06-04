@@ -11,6 +11,9 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
     [GeneratedRegex(@"^[A-Z_][A-Z0-9_]*$")]
     private static partial Regex BuildArgKeyPattern();
 
+    [GeneratedRegex(@"^(Bash|Edit|Read|Write|MultiEdit|Glob|Grep)\(.+\)$")]
+    private static partial Regex DenyRuleFormatPattern();
+
     private static readonly string[] SensitiveContainerPrefixes =
     [
         "/",
@@ -79,6 +82,13 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
         else if (!options.WorkerPromptTemplate.Contains("{issueNumber}", StringComparison.Ordinal))
         {
             failures.Add("Workers:WorkerPromptTemplate must contain the {issueNumber} token.");
+        }
+
+        if (options.BranchNamingInstruction.Contains('\n', StringComparison.Ordinal)
+            || options.BranchNamingInstruction.Contains('\r', StringComparison.Ordinal)
+            || options.BranchNamingInstruction.Contains('\0', StringComparison.Ordinal))
+        {
+            failures.Add("Workers:BranchNamingInstruction must not contain newline or null characters.");
         }
 
         ValidateSettings(options.Settings, failures);
@@ -198,11 +208,31 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
 
     private static void ValidateSettings(WorkerSettingsOptions settings, List<string> failures)
     {
+        foreach (string rule in settings.CiCdDenyRules)
+        {
+            if (string.IsNullOrWhiteSpace(rule))
+            {
+                failures.Add("Workers:Settings:CiCdDenyRules entries must be non-empty.");
+            }
+            else if (!DenyRuleFormatPattern().IsMatch(rule))
+            {
+                failures.Add(
+                    "Workers:Settings:CiCdDenyRules entries must follow the format Tool(pattern:*) " +
+                    "where Tool is one of Bash, Edit, Read, Write, MultiEdit, Glob, Grep.");
+            }
+        }
+
         foreach (string rule in settings.AdditionalDenyRules)
         {
             if (string.IsNullOrWhiteSpace(rule))
             {
                 failures.Add("Workers:Settings:AdditionalDenyRules entries must be non-empty.");
+            }
+            else if (!DenyRuleFormatPattern().IsMatch(rule))
+            {
+                failures.Add(
+                    "Workers:Settings:AdditionalDenyRules entries must follow the format Tool(pattern:*) " +
+                    "where Tool is one of Bash, Edit, Read, Write, MultiEdit, Glob, Grep.");
             }
         }
 
