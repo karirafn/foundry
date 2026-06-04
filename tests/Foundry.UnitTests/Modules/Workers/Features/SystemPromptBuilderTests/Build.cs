@@ -45,7 +45,7 @@ public sealed class Build
         string result = SystemPromptBuilder.Build(7, "Short title", "Some body", options);
 
         // Assert
-        result.ShouldBe("Issue 7.");
+        result.ShouldEndWith("Issue 7.");
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class Build
 
         // Assert
         // {title} is not a supported placeholder — it stays as-is in the output
-        result.ShouldBe("Template with {title} literal.");
+        result.ShouldContain("Template with {title} literal.");
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed class Build
 
         // Assert
         // {body} is not a supported placeholder — it stays as-is in the output
-        result.ShouldBe("Template with {body} literal.");
+        result.ShouldContain("Template with {body} literal.");
     }
 
     [Fact]
@@ -289,5 +289,117 @@ public sealed class Build
 
         instructionIndex.ShouldBeGreaterThan(0);
         instructionIndex.ShouldBeLessThan(openTagIndex);
+    }
+
+    [Fact]
+    public void WhenBuilt_SafetyPreambleAppearsBeforeTemplateContent()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "TEMPLATE_MARKER",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+
+        // Assert
+        int preambleIndex = result.IndexOf("IMPORTANT SAFETY RULES", StringComparison.Ordinal);
+        int templateIndex = result.IndexOf("TEMPLATE_MARKER", StringComparison.Ordinal);
+
+        preambleIndex.ShouldBeGreaterThanOrEqualTo(0);
+        templateIndex.ShouldBeGreaterThan(preambleIndex);
+    }
+
+    [Fact]
+    public void WhenBuilt_SafetyPreambleContainsPriorityStatement()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldContain("IMPORTANT SAFETY RULES"),
+            () => result.ShouldContain("CLAUDE.md"));
+    }
+
+    [Fact]
+    public void WhenBuilt_SafetyPreambleContainsBranchRestriction()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use feat/<issue>-<slug> branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+
+        // Assert
+        result.ShouldContain("Use feat/<issue>-<slug> branch naming");
+    }
+
+    [Fact]
+    public void WhenBuilt_SafetyPreambleContainsScopeRestriction()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+
+        // Assert
+        result.ShouldContain("Only modify files relevant to the issue");
+    }
+
+    [Fact]
+    public void WhenBuilt_SafetyPreambleContainsCiCdGuidance()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+
+        // Assert
+        result.ShouldContain(".github/workflows");
+    }
+
+    [Fact]
+    public void WhenRevisionContextProvided_SafetyPreambleStillPresent()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+        RevisionContext revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            [new ReviewComment("Some feedback.")]);
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options, revision);
+
+        // Assert
+        result.ShouldContain("IMPORTANT SAFETY RULES");
     }
 }
