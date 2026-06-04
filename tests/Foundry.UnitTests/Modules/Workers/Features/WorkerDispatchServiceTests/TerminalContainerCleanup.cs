@@ -97,10 +97,10 @@ public sealed class TerminalContainerCleanup : WorkerDispatchServiceTestBase
             _stopThrows = stopThrows;
         }
 
-        public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken ct)
+        public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test", "No dispatch")));
 
-        public Task StopAsync(string containerId, CancellationToken ct)
+        public Task StopAsync(string containerId, CancellationToken cancellationToken)
         {
             StopAsyncCallCount++;
             if (_stopThrows)
@@ -111,16 +111,16 @@ public sealed class TerminalContainerCleanup : WorkerDispatchServiceTestBase
             return Task.CompletedTask;
         }
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken ct)
+        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
             => Task.FromResult(_status);
 
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
-            CancellationToken ct)
+            CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
             yield break;
