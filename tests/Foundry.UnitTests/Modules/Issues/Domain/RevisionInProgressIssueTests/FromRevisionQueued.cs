@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
@@ -75,5 +76,22 @@ public sealed class FromRevisionQueued
             () => revisionInProgress.Title.ShouldBe(revisionQueued.Title),
             () => revisionInProgress.Body.ShouldBe(revisionQueued.Body),
             () => revisionInProgress.DetectedAt.ShouldBe(revisionQueued.DetectedAt));
+    }
+
+    [Fact]
+    public void WhenClaimed_RaisesIssueRevisionInProgressDomainEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionQueuedIssue revisionQueued = CreateRevisionQueuedIssue(repositoryId);
+
+        // Act
+        revisionQueued.Claim(Guid.NewGuid());
+
+        // Assert
+        IssueRevisionInProgress domainEvent = revisionQueued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionInProgress>();
+        domainEvent.ShouldSatisfyAllConditions(
+            () => domainEvent.IssueId.ShouldBe(revisionQueued.Id),
+            () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }

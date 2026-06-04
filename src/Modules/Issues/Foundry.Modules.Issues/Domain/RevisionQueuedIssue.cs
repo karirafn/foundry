@@ -60,6 +60,8 @@ public sealed class RevisionQueuedIssue : Issue
 
     public RevisionInProgressIssue Claim(Guid workerRunId)
     {
-        return RevisionInProgressIssue.FromRevisionQueued(this, workerRunId);
+        RevisionInProgressIssue revisionInProgress = RevisionInProgressIssue.FromRevisionQueued(this, workerRunId);
+        AddDomainEvent(new Events.IssueRevisionInProgress(Id, MonitoredRepositoryId));
+        return revisionInProgress;
     }
 }
