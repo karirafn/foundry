@@ -285,6 +285,30 @@ public sealed class AddIssuesModule : IAsyncDisposable
         handler.ShouldBeOfType<IssueStateChangedAdapter<IssueRevisionFailed>>();
     }
 
+    [Fact]
+    public void WhenServicesRegistered_IssueInProgressHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueInProgress> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueInProgress>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueInProgress>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueRevisionInProgressHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueRevisionInProgress> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueRevisionInProgress>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueRevisionInProgress>>();
+    }
+
     private sealed class NullIssueBroadcaster : IIssueBroadcaster
     {
         public Task BroadcastAsync(IssueSummary summary, CancellationToken cancellationToken)
