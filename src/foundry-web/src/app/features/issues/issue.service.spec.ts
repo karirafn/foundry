@@ -59,7 +59,7 @@ describe('IssueService', () => {
     httpMock = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => httpMock.verify());
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
 
   // Cycle 1: loadIssues populates the issues signal
   it('should populate issues signal after loadIssues', () => {
@@ -195,6 +195,90 @@ describe('IssueService', () => {
     httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
   });
 
+  // Cycle 8b: toggleExpand — switching clears stale detail immediately
+  it('should clear issueDetail and set detailLoading to true immediately when switching to a different issue', () => {
+    // Arrange — expand first issue and let its detail load
+    const ineligibleDetail = { ...mockSummary, state: 'ineligible' };
+    service.toggleExpand('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush(ineligibleDetail);
+    expect(service.issueDetail()).toEqual(ineligibleDetail);
+
+    // Act — switch to a different issue (do NOT flush the second request yet)
+    service.toggleExpand('def456');
+
+    // Assert — stale detail is cleared and loading is true before the new response arrives
+    expect(service.issueDetail()).toBeNull();
+    expect(service.detailLoading()).toBe(true);
+
+    // Cleanup
+    httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
+  });
+
+  // Cycle 8c: toggleExpand — rapid switching does not leak stale state
+  it('should not retain stale detail when rapidly switching between issues', () => {
+    // Arrange — expand first issue, let detail load
+    service.toggleExpand('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary, state: 'ineligible' });
+    expect(service.issueDetail()).not.toBeNull();
+
+    // Act — switch to issue B without waiting for response, then switch to issue C
+    service.toggleExpand('def456');
+    // At this point the def456 request is in flight; switch again
+    service.toggleExpand('ghi789');
+
+    // Assert — issueDetail is null (cleared) and detailLoading is true
+    expect(service.issueDetail()).toBeNull();
+    expect(service.detailLoading()).toBe(true);
+
+    // Cleanup — the def456 request was cancelled by unsubscribe; only ghi789 is still in flight
+    httpMock.expectOne('/api/issues/ghi789').flush({ ...mockSummary, id: 'ghi789' });
+  });
+
+  // Cycle 8d: late-arriving detail response for a previous issue must not overwrite current detail
+  // This tests the in-callback guard: even if a response arrives after expandedIssueId changed
+  // (e.g. via SignalR triggering loadDetail while the user has already switched), it is discarded.
+  it('should discard a late-arriving detail response when expandedIssueId no longer matches', () => {
+    // Arrange — simulate issue B already loaded as the active issue
+    const detailB: IssueDetail = {
+      ...mockSummary,
+      id: 'def456',
+      body: 'Issue B body',
+      author: 'dev',
+      labels: [],
+      stateDetails: {
+        workerRunId: null,
+        branchName: null,
+        pullRequestUrl: null,
+        feedbackCutoffAt: null,
+        failureReason: null,
+        failedAt: null,
+        completedAt: null,
+        blockedBy: null,
+      },
+    };
+
+    // Expand B so its detail is loaded first
+    service.toggleExpand('def456');
+    httpMock.expectOne('/api/issues/def456').flush(detailB);
+    expect(service.issueDetail()).toEqual(detailB);
+
+    // Simulate an in-flight loadDetail for issue A (e.g. triggered by a SignalR event before
+    // the user switched), but do not flush it yet
+    service.loadDetail('abc123');
+    const reqA = httpMock.expectOne('/api/issues/abc123');
+
+    // User switches to issue B again (or any other change that sets expandedIssueId away from A)
+    // Here we directly set expandedIssueId to simulate switching away from A
+    service.expandedIssueId.set('def456');
+
+    // Act — the stale response for issue A now arrives
+    reqA.flush({ ...mockSummary, id: 'abc123', body: 'Issue A body (stale)' });
+
+    // Assert — issue B's detail is still shown; the stale A response was discarded by the guard
+    expect(service.issueDetail()).toEqual(detailB);
+    expect(service.expandedIssueId()).toBe('def456');
+  });
+
   // Cycle 9: SignalR upsert — updates existing issue in list
   it('should upsert an existing issue when IssueUpdated SignalR event is received', () => {
     // Arrange
@@ -309,6 +393,42 @@ describe('IssueService', () => {
 
     // Assert
     expect(service.loadError()).not.toBeNull();
+  });
+
+  it('should set loadError to a fixed user-facing string when loadIssues fails', () => {
+    // Arrange / Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — must not contain server-influenced text such as err.message
+    expect(service.loadError()).toBe('Failed to load issues');
+  });
+
+  it('should set detailError to a fixed user-facing string when loadDetail fails', () => {
+    // Arrange / Act
+    service.loadDetail('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush('Not Found', {
+      status: 404,
+      statusText: 'Not Found',
+    });
+
+    // Assert — must not contain server-influenced text such as err.message
+    expect(service.detailError()).toBe('Failed to load issue details');
+  });
+
+  it('should set detailError to a fixed user-facing string when retryEligibility fails', () => {
+    // Arrange / Act
+    service.retryEligibility('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — must not contain server-influenced text such as err.message
+    expect(service.detailError()).toBe('Failed to load issue details');
   });
 
   it('should clear loadError on successful loadIssues', () => {
