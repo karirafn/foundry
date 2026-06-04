@@ -50,7 +50,7 @@ Runs on a fixed tick interval (30s default) and checks each repo's eligibility b
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `IneligibleIssue`, `BlockedIssue`, `QueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `IneligibleIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ## Monitored Repository
@@ -97,7 +97,7 @@ A lifecycle state for an issue whose worker completed successfully and produced 
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable.
 Awaits human review of the PR. The monitoring service polls the provider for PR/issue status and review feedback.
 `FeedbackCutoffAt` filters stale feedback — only review comments submitted after this timestamp are considered actionable. Set to the worker run's completion time on first entry; updated on re-entry after a revision cycle.
-Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `FailedIssue` (PR closed without merge); `Retry()` → `QueuedIssue` (manual fresh start).
+Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists); `Retry()` → `ContinuationQueuedIssue` (manual restart with branch context).
 
 ## Unchanged Issue
 
@@ -134,10 +134,34 @@ Created from `UnchangedIssue.Complete()` when the user agrees no changes are nee
 
 ## Failed Issue
 
-A lifecycle state for an issue whose fresh worker run failed or whose PR was closed without merge.
+A lifecycle state for an issue whose fresh worker run failed without producing recoverable work (no branch pushed).
+Also used when a PR is closed without merge and the review had no prior branch context.
 Carries `WorkerRunId`, `FailureReason` (string description), and `FailedAt`.
-Can come from `InProgressIssue` (worker failed) or `ReviewIssue` (PR closed without merge).
+Can come from `InProgressIssue` (worker failed before pushing a branch) or `ReviewIssue` (PR closed without merge, no branch recovery needed).
 Transitions: `FailedIssue.Retry()` → `QueuedIssue`.
+
+## Continuable Failed Issue
+
+A lifecycle state for an issue whose worker run failed but left recoverable work on a pushed branch.
+Carries `WorkerRunId`, `BranchName`, `LatestProgress`, `FailureReason`, and `FailedAt` — all non-nullable.
+Created from `InProgressIssue` when the `WorkerRunFailed` event carries a branch name (captured from a `"branch-created"` or `"milestone"` report).
+Also created from `ReviewIssue.Fail()` since `ReviewIssue` always has a branch.
+Retry dispatches a continuation run that checks out the existing branch and resumes implementation.
+Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue`.
+
+## Continuation Queued Issue
+
+A lifecycle state for an issue queued for continuation from an existing branch with prior work.
+Carries `BranchName` and `LatestProgress` — all non-nullable.
+Created from `ContinuableFailedIssue.Retry()`.
+Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress variant; the continuation context lives in the dispatch payload).
+
+## Continuation Context
+
+The dispatch payload extension for continuation-aware worker execution.
+Carries `BranchName` and `LatestProgress`.
+Present on `ClaimedIssueDispatch` when the claimed issue was a `ContinuationQueuedIssue`; absent for fresh attempts.
+Semantically distinct from `RevisionContext` — continuation resumes interrupted implementation, revision addresses review feedback on a completed PR.
 
 ## Revision Failed Issue
 
@@ -188,12 +212,14 @@ A single execution of a worker against an issue — the primary aggregate for th
 Modeled as a polymorphic aggregate with state variants: `StartingRun` (container creation requested), `ActiveRun` (container running), `CompletedRun` (exited successfully), `FailedRun` (exited with error, timed out, or failed to start).
 An issue can have multiple runs (e.g. after retry from Failed or Review state).
 Each run captures reports, exit status, branch name, and PR/MR URL.
+`ActiveRun` carries an optional `BranchName` — set when a `"branch-created"` report is ingested, propagated to `FailedRun` on failure.
 
 ## WorkerReport
 
 A progress or final report written by a worker during execution.
 Owned by a WorkerRun as a collection — persisted to the database after ingestion from the shared reports volume.
-Periodic reports capture intermediate progress (e.g., "implementing step 3/6"); the final report captures the outcome (branch name, PR URL, summary, error details).
+Report types: `"branch-created"` (branch pushed, captures branch name and summary), `"milestone"` (significant implementation progress, worker-judged), `"final"` (outcome with branch name, PR URL, summary, error details).
+Reporting instructions are hardcoded in the system prompt (appended after the user-configurable template) — the worker must push the branch before writing a `"branch-created"` report.
 JSON format: `{ type, status, summary, error, prUrl, branchName, metrics }`.
 
 ## FailureReason
