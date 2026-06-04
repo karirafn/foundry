@@ -115,6 +115,26 @@ public sealed class ImplementsIIssueStateChanged
     }
 
     [Fact]
+    public void IssueInProgress_ImplementsIIssueStateChanged()
+    {
+        // Arrange
+        IssueInProgress @event = new(AnyIssueId, AnyRepositoryId);
+
+        // Act & Assert
+        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+    }
+
+    [Fact]
+    public void IssueRevisionInProgress_ImplementsIIssueStateChanged()
+    {
+        // Arrange
+        IssueRevisionInProgress @event = new(AnyIssueId, AnyRepositoryId);
+
+        // Act & Assert
+        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+    }
+
+    [Fact]
     public void CircularDependencyDetected_DoesNotImplementIIssueStateChanged()
     {
         // Arrange

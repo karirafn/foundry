@@ -41,6 +41,8 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueDismissed>(services);
         AddIssueStateChangedHandler<IssueRevisionQueued>(services);
         AddIssueStateChangedHandler<IssueRevisionFailed>(services);
+        AddIssueStateChangedHandler<IssueInProgress>(services);
+        AddIssueStateChangedHandler<IssueRevisionInProgress>(services);
 
         return services;
     }
