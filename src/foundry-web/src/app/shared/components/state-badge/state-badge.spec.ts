@@ -190,13 +190,13 @@ describe('StateBadgeComponent', () => {
     expect(el.querySelector('span')?.textContent?.trim()).toBe('INELIGIBLE');
   });
 
-  it('should set aria-label "State: ineligible" for ineligible state', () => {
+  it('should set aria-label "State: not eligible for dispatch" for ineligible state', () => {
     // Arrange / Act
     const fixture = createComponent('ineligible');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: ineligible');
+    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: not eligible for dispatch');
   });
 
   it('should apply badge--ineligible CSS class for ineligible state', () => {

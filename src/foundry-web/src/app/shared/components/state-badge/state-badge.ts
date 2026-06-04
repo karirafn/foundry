@@ -30,7 +30,7 @@ const STATE_ARIA_LABELS: Record<IssueState, string> = {
   revision_queued: 'revision queued',
   revision_in_progress: 'revision in progress',
   revision_failed: 'revision failed',
-  ineligible: 'ineligible',
+  ineligible: 'not eligible for dispatch',
 };
 
 const STATE_CSS_CLASSES: Record<IssueState, string> = {

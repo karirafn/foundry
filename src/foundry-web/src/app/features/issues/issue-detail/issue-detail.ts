@@ -131,14 +131,18 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
             </div>
           }
 
-          @if (d.state === 'ineligible' && d.stateDetails.violations?.length) {
+          @if (d.state === 'ineligible') {
             <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Eligibility Violations</span>
-              <ul class="issue-detail__violations">
-                @for (violation of d.stateDetails.violations!; track violation.rule) {
-                  <li class="issue-detail__violation">{{ violation.description }}</li>
-                }
-              </ul>
+              <span class="issue-detail__field-key" id="eligibility-violations-label">Eligibility Violations</span>
+              @if (d.stateDetails.violations?.length) {
+                <ul class="issue-detail__violations" aria-labelledby="eligibility-violations-label">
+                  @for (violation of d.stateDetails.violations!; track violation.rule) {
+                    <li class="issue-detail__violation">{{ violation.description }}</li>
+                  }
+                </ul>
+              } @else {
+                <span class="issue-detail__field-value">Eligibility details are unavailable</span>
+              }
             </div>
           }
 
@@ -174,8 +178,10 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
             <button
               class="issue-detail__retry-eligibility-btn"
               type="button"
-              (click)="retryEligibility(d)"
-            >Retry</button>
+              [disabled]="_issueService.retryingEligibility()"
+              [attr.aria-label]="'Retry eligibility check for issue #' + d.issueNumber"
+              (click)="retryEligibility(d.id)"
+            >{{ _issueService.retryingEligibility() ? 'Retrying...' : 'Retry Eligibility Check' }}</button>
           </div>
         }
 
@@ -288,7 +294,7 @@ export class IssueDetailComponent implements OnDestroy {
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   protected readonly _logService = inject(WorkerLogService);
-  private readonly _issueService = inject(IssueService);
+  protected readonly _issueService = inject(IssueService);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _mqFactory = inject(MEDIA_QUERY_FACTORY);
 
@@ -348,7 +354,7 @@ export class IssueDetailComponent implements OnDestroy {
     this._overlayCloseBtn?.nativeElement.focus();
   }
 
-  retryEligibility(d: IssueDetail): void {
-    this._issueService.retryEligibility(d.id);
+  retryEligibility(id: string): void {
+    this._issueService.retryEligibility(id);
   }
 }

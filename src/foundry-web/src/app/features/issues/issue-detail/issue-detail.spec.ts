@@ -541,7 +541,7 @@ describe('IssueDetailComponent', () => {
     expect(violations).toBeFalsy();
   });
 
-  it('should not render violations section when violations list is empty', () => {
+  it('should show fallback message when state is ineligible but violations list is empty', () => {
     // Arrange
     const ineligibleNoViolations: IssueDetail = {
       ...mockDetail,
@@ -556,6 +556,29 @@ describe('IssueDetailComponent', () => {
     // Assert
     const violations = el.querySelector('.issue-detail__violations');
     expect(violations).toBeFalsy();
+    const label = el.querySelector('#eligibility-violations-label') as HTMLElement;
+    const fallback = label?.parentElement?.querySelector('.issue-detail__field-value');
+    expect(fallback?.textContent?.trim()).toBe('Eligibility details are unavailable');
+  });
+
+  it('should show fallback message when state is ineligible and violations is null', () => {
+    // Arrange
+    const ineligibleNullViolations: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockDetail.stateDetails, violations: null },
+    };
+
+    // Act
+    const fixture = createComponent(ineligibleNullViolations);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const violations = el.querySelector('.issue-detail__violations');
+    expect(violations).toBeFalsy();
+    const label = el.querySelector('#eligibility-violations-label') as HTMLElement;
+    const fallback = label?.parentElement?.querySelector('.issue-detail__field-value');
+    expect(fallback?.textContent?.trim()).toBe('Eligibility details are unavailable');
   });
 
   // Cycle 17: ineligible state — retry button
@@ -574,7 +597,7 @@ describe('IssueDetailComponent', () => {
     // Assert
     const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
     expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toBe('Retry');
+    expect(btn?.textContent?.trim()).toBe('Retry Eligibility Check');
   });
 
   it('should not render retry eligibility button when state is not ineligible', () => {
@@ -609,5 +632,72 @@ describe('IssueDetailComponent', () => {
     // Service calls loadDetail after success; flush that request too
     http.expectOne(`/api/issues/${ineligibleDetail.id}`).flush(ineligibleDetail);
     http.verify();
+  });
+
+  it('should set aria-label on retry button referencing the issue number', () => {
+    // Arrange
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockDetail.stateDetails, violations: null },
+    };
+
+    // Act
+    const fixture = createComponent(ineligibleDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
+    expect(btn?.getAttribute('aria-label')).toBe('Retry eligibility check for issue #42');
+  });
+
+  it('should disable retry button while retryingEligibility is true', () => {
+    // Arrange
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockDetail.stateDetails, violations: null },
+    };
+    const fixture = createComponent(ineligibleDetail);
+    const el = fixture.nativeElement as HTMLElement;
+    const issueService = TestBed.inject(IssueService);
+    const http = TestBed.inject(HttpTestingController);
+
+    // Act — click starts the request, signal becomes true
+    const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert — button is disabled while request is in flight
+    expect(issueService.retryingEligibility()).toBe(true);
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent?.trim()).toBe('Retrying...');
+
+    // Cleanup
+    http.expectOne(`/api/issues/${ineligibleDetail.id}/retry-eligibility`).flush(null);
+    http.expectOne(`/api/issues/${ineligibleDetail.id}`).flush(ineligibleDetail);
+    http.verify();
+  });
+
+  it('should associate violations list with its label via aria-labelledby', () => {
+    // Arrange
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: {
+        ...mockDetail.stateDetails,
+        violations: [{ rule: 'no-open-pr', description: 'Issue already has an open pull request' }],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(ineligibleDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const label = el.querySelector('#eligibility-violations-label');
+    expect(label).toBeTruthy();
+    const list = el.querySelector('.issue-detail__violations') as HTMLUListElement;
+    expect(list?.getAttribute('aria-labelledby')).toBe('eligibility-violations-label');
   });
 });

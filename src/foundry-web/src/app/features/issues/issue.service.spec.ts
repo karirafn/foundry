@@ -378,6 +378,43 @@ describe('IssueService', () => {
     req.flush({ ...mockSummary });
   });
 
+  it('should set retryingEligibility to true before the retry request resolves', () => {
+    // Arrange / Act
+    service.retryEligibility('abc123');
+
+    // Assert — signal is true while the request is in flight
+    expect(service.retryingEligibility()).toBe(true);
+    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush(null);
+    httpMock.expectOne('/api/issues/abc123').flush({});
+  });
+
+  it('should set retryingEligibility to false after retryEligibility succeeds', () => {
+    // Arrange
+    service.retryEligibility('abc123');
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush(null);
+    httpMock.expectOne('/api/issues/abc123').flush({});
+
+    // Assert
+    expect(service.retryingEligibility()).toBe(false);
+  });
+
+  it('should set retryingEligibility to false and detailError when retryEligibility fails', () => {
+    // Arrange
+    service.retryEligibility('abc123');
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.retryingEligibility()).toBe(false);
+    expect(service.detailError()).not.toBeNull();
+  });
+
   // Cycle 12: Reconnect backfill calls loadIssues
   it('should call loadIssues on reconnect to backfill missed events', () => {
     // Arrange
