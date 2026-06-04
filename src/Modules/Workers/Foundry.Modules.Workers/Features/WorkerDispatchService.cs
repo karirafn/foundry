@@ -101,6 +101,8 @@ internal sealed class WorkerDispatchService(
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
+        await RemoveUnknownContainersAsync(dbContext, orchestrator, cancellationToken);
+
         List<ActiveRun> runsToRemove = [];
 
         foreach (ActiveRun activeRun in activeRuns)
@@ -126,6 +128,8 @@ internal sealed class WorkerDispatchService(
                     "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; marking failed.",
                     activeRun.Id,
                     activeRun.ContainerId.Value);
+
+                await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             }
             else if (!status.IsRunning)
             {
@@ -199,6 +203,8 @@ internal sealed class WorkerDispatchService(
                 "Worker run {WorkerRunId} container {ContainerId} not found; marking failed.",
                 activeRun.Id,
                 activeRun.ContainerId.Value);
+
+            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             return;
         }
 
@@ -249,6 +255,8 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 branchName?.Value ?? "(none)",
                 prUrl?.Value ?? "(none)");
+
+            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
         else
         {
@@ -270,6 +278,44 @@ internal sealed class WorkerDispatchService(
                 "Worker run {WorkerRunId} exited with code {ExitCode}.",
                 activeRun.Id,
                 exitCode);
+
+            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+        }
+    }
+
+    private async Task RemoveUnknownContainersAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)> containers =
+                await orchestrator.ListByLabelAsync(cancellationToken);
+
+            List<WorkerRunId> activeRunIdList = await dbContext.Set<ActiveRun>()
+                .Select(r => r.Id)
+                .ToListAsync(cancellationToken);
+
+            HashSet<WorkerRunId> activeRunIds = activeRunIdList.ToHashSet();
+
+            foreach ((ContainerId containerId, WorkerRunId workerRunId) in containers)
+            {
+                if (activeRunIds.Contains(workerRunId))
+                {
+                    continue;
+                }
+
+                await orchestrator.StopAsync(containerId.Value, cancellationToken);
+            }
+        }
+#pragma warning disable CA1031 // Docker daemon failures during startup must not crash the BackgroundService; the warning log surfaces the issue without blocking reconciliation.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Docker scan failed during startup reconciliation; skipping orphaned container removal.");
         }
     }
 
@@ -288,6 +334,28 @@ internal sealed class WorkerDispatchService(
 #pragma warning restore CA1031
         {
             logger.LogWarning(ex, "Failed to dispatch integration event for WorkerRun {WorkerRunId}", workerRunId);
+        }
+    }
+
+    private async Task TryStopAsync(
+        IWorkerOrchestrator orchestrator,
+        string containerId,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await orchestrator.StopAsync(containerId, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort container removal after a terminal state transition has already succeeded; Docker exceptions must not crash the BackgroundService tick.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after terminal transition.",
+                containerId,
+                workerRunId);
         }
     }
 

@@ -16,6 +16,7 @@ internal sealed class DockerWorkerOrchestrator(
     DockerClient dockerClient,
     IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
 {
+    private const string WorkerRunLabelKey = "foundry.worker-run-id";
     private const long BytesPerMegabyte = 1024L * 1024L;
     private const long NanoCpusPerCpu = 1_000_000_000L;
     private const int DockerErrorMessageMaxLength = 500;
@@ -114,6 +115,45 @@ internal sealed class DockerWorkerOrchestrator(
         {
             return null;
         }
+    }
+
+    public async Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
+        CancellationToken cancellationToken)
+    {
+        ContainersListParameters parameters = new()
+        {
+            All = true,
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool>
+                {
+                    [WorkerRunLabelKey] = true,
+                },
+            },
+        };
+
+        IList<ContainerListResponse> containers = await dockerClient.Containers.ListContainersAsync(
+            parameters,
+            cancellationToken);
+
+        List<(ContainerId ContainerId, WorkerRunId WorkerRunId)> results = [];
+
+        foreach (ContainerListResponse container in containers)
+        {
+            if (!container.Labels.TryGetValue(WorkerRunLabelKey, out string? labelValue))
+            {
+                continue;
+            }
+
+            if (!Guid.TryParse(labelValue, out Guid guid))
+            {
+                continue;
+            }
+
+            results.Add((ContainerId.From(container.ID), WorkerRunId.From(guid)));
+        }
+
+        return results;
     }
 
     public async IAsyncEnumerable<string> StreamLogsAsync(

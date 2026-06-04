@@ -104,5 +104,9 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
             await Task.CompletedTask;
             yield break;
         }
+
+        public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
     }
 }
