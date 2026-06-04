@@ -128,6 +128,8 @@ internal sealed class WorkerDispatchService(
                     "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; marking failed.",
                     activeRun.Id,
                     activeRun.ContainerId.Value);
+
+                await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             }
             else if (!status.IsRunning)
             {
@@ -201,6 +203,8 @@ internal sealed class WorkerDispatchService(
                 "Worker run {WorkerRunId} container {ContainerId} not found; marking failed.",
                 activeRun.Id,
                 activeRun.ContainerId.Value);
+
+            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             return;
         }
 
@@ -251,6 +255,8 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 branchName?.Value ?? "(none)",
                 prUrl?.Value ?? "(none)");
+
+            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
         else
         {
@@ -272,6 +278,8 @@ internal sealed class WorkerDispatchService(
                 "Worker run {WorkerRunId} exited with code {ExitCode}.",
                 activeRun.Id,
                 exitCode);
+
+            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
     }
 
@@ -326,6 +334,28 @@ internal sealed class WorkerDispatchService(
 #pragma warning restore CA1031
         {
             logger.LogWarning(ex, "Failed to dispatch integration event for WorkerRun {WorkerRunId}", workerRunId);
+        }
+    }
+
+    private async Task TryStopAsync(
+        IWorkerOrchestrator orchestrator,
+        string containerId,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await orchestrator.StopAsync(containerId, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort container removal after a terminal state transition has already succeeded; Docker exceptions must not crash the BackgroundService tick.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after terminal transition.",
+                containerId,
+                workerRunId);
         }
     }
 
