@@ -10,6 +10,7 @@ namespace Foundry.Modules.Issues.Features;
 
 internal sealed class ProviderIssueClosedHandler(
     DbContext db,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<ProviderIssueClosedHandler> logger) : IIntegrationEventHandler<ProviderIssueClosed>
 {
     public async Task HandleAsync(ProviderIssueClosed @event, CancellationToken cancellationToken)
@@ -29,6 +30,6 @@ internal sealed class ProviderIssueClosedHandler(
         }
 
         CompletedIssue completed = reviewIssue.Complete(DateTimeOffset.UtcNow);
-        await db.TransitionAsync(reviewIssue, completed, cancellationToken);
+        await db.TransitionAsync(reviewIssue, completed, domainEventDispatcher, cancellationToken);
     }
 }

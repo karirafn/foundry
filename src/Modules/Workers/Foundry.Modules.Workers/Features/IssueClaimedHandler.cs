@@ -15,6 +15,7 @@ internal sealed class IssueClaimedHandler(
     DbContext dbContext,
     IWorkerOrchestrator orchestrator,
     IProviderAuth providerAuth,
+    IDomainEventDispatcher domainEventDispatcher,
     IOptions<WorkerOptions> optionsAccessor,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
@@ -33,7 +34,7 @@ internal sealed class IssueClaimedHandler(
         if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
         {
             FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(specFailure.Error.Message));
-            await dbContext.TransitionAsync(startingRun, failedRun, cancellationToken);
+            await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
 
             logger.LogWarning(
                 "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: {Error}",
@@ -54,7 +55,7 @@ internal sealed class IssueClaimedHandler(
         if (startResult is Result<ContainerId>.Success success)
         {
             ActiveRun activeRun = startingRun.Activate(success.Value);
-            await dbContext.TransitionAsync(startingRun, activeRun, cancellationToken);
+            await dbContext.TransitionAsync(startingRun, activeRun, domainEventDispatcher, cancellationToken);
 
             logger.LogDebug(
                 "Worker run {WorkerRunId} started for issue #{IssueNumber} (container: {ContainerId}).",
@@ -65,7 +66,7 @@ internal sealed class IssueClaimedHandler(
         else if (startResult is Result<ContainerId>.Failure failure)
         {
             FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(failure.Error.Message));
-            await dbContext.TransitionAsync(startingRun, failedRun, cancellationToken);
+            await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
 
             logger.LogWarning(
                 "Worker run {WorkerRunId} failed to start for issue #{IssueNumber}: {Error}",

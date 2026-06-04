@@ -10,6 +10,7 @@ namespace Foundry.Modules.Issues.Features;
 
 internal sealed class ProviderPullRequestClosedHandler(
     DbContext db,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<ProviderPullRequestClosedHandler> logger) : IIntegrationEventHandler<ProviderPullRequestClosed>
 {
     private const string FailureReason = "Pull request closed without merge";
@@ -31,6 +32,6 @@ internal sealed class ProviderPullRequestClosedHandler(
         }
 
         FailedIssue failed = reviewIssue.Fail(FailureReason, DateTimeOffset.UtcNow);
-        await db.TransitionAsync(reviewIssue, failed, cancellationToken);
+        await db.TransitionAsync(reviewIssue, failed, domainEventDispatcher, cancellationToken);
     }
 }

@@ -145,7 +145,7 @@ public sealed class GetDetectedAndIneligibleIssueNumbersAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         // Act
         IReadOnlyList<int> result = await _sut.GetDetectedAndIneligibleIssueNumbersAsync(
