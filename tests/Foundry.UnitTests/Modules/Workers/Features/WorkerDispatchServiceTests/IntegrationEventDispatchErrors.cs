@@ -91,6 +91,10 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
             await Task.CompletedTask;
             yield break;
         }
+
+        public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
     }
 
     // Throws for run-specific events (WorkerRunCompleted/WorkerRunFailed) but not for

@@ -12,4 +12,6 @@ internal interface IWorkerOrchestrator
     Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken);
 
     IAsyncEnumerable<string> StreamLogsAsync(string containerId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(CancellationToken cancellationToken);
 }
