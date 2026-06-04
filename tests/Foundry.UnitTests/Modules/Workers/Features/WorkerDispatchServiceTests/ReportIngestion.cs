@@ -302,6 +302,10 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
             await Task.CompletedTask;
             yield break;
         }
+
+        public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
     }
 
     private sealed class ExitedStubWorkerOrchestrator(int exitCode) : IWorkerOrchestrator
@@ -323,5 +327,9 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
             await Task.CompletedTask;
             yield break;
         }
+
+        public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
     }
 }
