@@ -83,11 +83,10 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         OrphanedContainerCleanupStub orchestrator = new(listThrows: true);
         WorkerDispatchService sut = BuildService(orchestrator);
 
-        // Act — must not throw
+        // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — _reconciled was set to true, proving execution continued past the failed scan
-        // Second tick should skip reconciliation entirely (GetStatusAsync never called, no active runs)
+        // Assert — second tick skips reconciliation (_reconciled=true), proving execution continued
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
         orchestrator.StopAsyncCallCount.ShouldBe(0);
     }
