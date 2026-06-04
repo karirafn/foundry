@@ -395,6 +395,42 @@ describe('IssueService', () => {
     expect(service.loadError()).not.toBeNull();
   });
 
+  it('should set loadError to a fixed user-facing string when loadIssues fails', () => {
+    // Arrange / Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — must not contain server-influenced text such as err.message
+    expect(service.loadError()).toBe('Failed to load issues');
+  });
+
+  it('should set detailError to a fixed user-facing string when loadDetail fails', () => {
+    // Arrange / Act
+    service.loadDetail('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush('Not Found', {
+      status: 404,
+      statusText: 'Not Found',
+    });
+
+    // Assert — must not contain server-influenced text such as err.message
+    expect(service.detailError()).toBe('Failed to load issue details');
+  });
+
+  it('should set detailError to a fixed user-facing string when retryEligibility fails', () => {
+    // Arrange / Act
+    service.retryEligibility('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — must not contain server-influenced text such as err.message
+    expect(service.detailError()).toBe('Failed to load issue details');
+  });
+
   it('should clear loadError on successful loadIssues', () => {
     // Arrange — cause an error first
     service.loadIssues();

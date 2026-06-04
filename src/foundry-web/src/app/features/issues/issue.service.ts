@@ -4,6 +4,9 @@ import { Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
 import { IssueDetail, IssueSummary } from './issue.model';
 
+const LOAD_ISSUES_ERROR = 'Failed to load issues';
+const LOAD_DETAIL_ERROR = 'Failed to load issue details';
+
 @Injectable({ providedIn: 'root' })
 export class IssueService {
   private readonly _http = inject(HttpClient);
@@ -13,10 +16,14 @@ export class IssueService {
   readonly expandedIssueId: WritableSignal<string | null> = signal(null);
   readonly issueDetail: WritableSignal<IssueDetail | null> = signal(null);
   readonly detailLoading: WritableSignal<boolean> = signal(false);
-  readonly loadError: WritableSignal<string | null> = signal(null);
-  readonly detailError: WritableSignal<string | null> = signal(null);
   readonly initialLoading: WritableSignal<boolean> = signal(true);
   readonly retryingEligibility: WritableSignal<boolean> = signal(false);
+
+  private readonly _loadErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly loadError: Signal<string | null> = this._loadErrorSignal.asReadonly();
+
+  private readonly _detailErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly detailError: Signal<string | null> = this._detailErrorSignal.asReadonly();
 
   private _detailSub: Subscription | null = null;
 
@@ -34,7 +41,7 @@ export class IssueService {
   }
 
   loadIssues(repositoryId?: string): void {
-    this.loadError.set(null);
+    this._loadErrorSignal.set(null);
 
     let params = new HttpParams();
     if (repositoryId !== undefined) {
@@ -44,11 +51,12 @@ export class IssueService {
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
       next: (issues) => {
         this.issues.set(issues);
-        this.loadError.set(null);
+        this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
       error: (err: HttpErrorResponse) => {
-        this.loadError.set(err.message);
+        console.error(err);
+        this._loadErrorSignal.set(LOAD_ISSUES_ERROR);
         this.initialLoading.set(false);
       },
     });
@@ -56,7 +64,7 @@ export class IssueService {
 
   loadDetail(id: string): void {
     this._detailSub?.unsubscribe();
-    this.detailError.set(null);
+    this._detailErrorSignal.set(null);
     this.detailLoading.set(true);
     this._detailSub = this._http.get<IssueDetail>(`/api/issues/${id}`).subscribe({
       next: (detail) => {
@@ -66,15 +74,16 @@ export class IssueService {
         }
         this.issueDetail.set(detail);
         this.detailLoading.set(false);
-        this.detailError.set(null);
+        this._detailErrorSignal.set(null);
       },
       error: (err: HttpErrorResponse) => {
         const expanded = this.expandedIssueId();
         if (expanded !== null && expanded !== id) {
           return;
         }
+        console.error(err);
         this.detailLoading.set(false);
-        this.detailError.set(err.message);
+        this._detailErrorSignal.set(LOAD_DETAIL_ERROR);
       },
     });
   }
@@ -100,8 +109,9 @@ export class IssueService {
         this.loadDetail(id);
       },
       error: (err: HttpErrorResponse) => {
+        console.error(err);
         this.retryingEligibility.set(false);
-        this.detailError.set(err.message);
+        this._detailErrorSignal.set(LOAD_DETAIL_ERROR);
       },
     });
   }
