@@ -1,5 +1,6 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
 import { IssueDetail, IssueSummary } from './issue.model';
 
@@ -16,6 +17,8 @@ export class IssueService {
   readonly detailError: WritableSignal<string | null> = signal(null);
   readonly initialLoading: WritableSignal<boolean> = signal(true);
   readonly retryingEligibility: WritableSignal<boolean> = signal(false);
+
+  private _detailSub: Subscription | null = null;
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() =>
     [...this.issues()].sort(
@@ -52,15 +55,24 @@ export class IssueService {
   }
 
   loadDetail(id: string): void {
+    this._detailSub?.unsubscribe();
     this.detailError.set(null);
     this.detailLoading.set(true);
-    this._http.get<IssueDetail>(`/api/issues/${id}`).subscribe({
+    this._detailSub = this._http.get<IssueDetail>(`/api/issues/${id}`).subscribe({
       next: (detail) => {
+        const expanded = this.expandedIssueId();
+        if (expanded !== null && expanded !== id) {
+          return;
+        }
         this.issueDetail.set(detail);
         this.detailLoading.set(false);
         this.detailError.set(null);
       },
       error: (err: HttpErrorResponse) => {
+        const expanded = this.expandedIssueId();
+        if (expanded !== null && expanded !== id) {
+          return;
+        }
         this.detailLoading.set(false);
         this.detailError.set(err.message);
       },
