@@ -85,9 +85,10 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
         }
 
         if (options.BranchNamingInstruction.Contains('\n', StringComparison.Ordinal)
-            || options.BranchNamingInstruction.Contains('\r', StringComparison.Ordinal))
+            || options.BranchNamingInstruction.Contains('\r', StringComparison.Ordinal)
+            || options.BranchNamingInstruction.Contains('\0', StringComparison.Ordinal))
         {
-            failures.Add("Workers:BranchNamingInstruction must not contain newline characters.");
+            failures.Add("Workers:BranchNamingInstruction must not contain newline or null characters.");
         }
 
         ValidateSettings(options.Settings, failures);

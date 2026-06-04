@@ -92,6 +92,8 @@ dotnet user-secrets set "Workers:Settings:Model" "claude-sonnet-4-5" --project s
 dotnet user-secrets set "Workers:Settings:AdditionalDenyRules:0" "Bash(rm -rf:*)" --project src/Foundry.WebApi
 ```
 
+Rules must follow the `Tool(pattern:*)` format. For Bash rules, use `Bash(command:*)` — the `:*` suffix enables glob argument matching. A rule without the colon (e.g. `Bash(curl)`) matches only that exact string.
+
 **CI/CD deny defaults** — a configurable default deny list that blocks edits to CI/CD files.
 Unlike the base deny list, operators can clear it by binding an empty array:
 

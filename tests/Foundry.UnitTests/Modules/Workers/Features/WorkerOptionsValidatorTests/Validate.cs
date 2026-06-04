@@ -1535,6 +1535,25 @@ public sealed class Validate
     }
 
     [Fact]
+    public void WhenBranchNamingInstructionContainsNullByte_ReturnsFailure()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            ApiKey = "sk-ant-key",
+            Image = "ghcr.io/anthropics/claude-code:v1.0",
+            ReportsPath = "./data/reports",
+            BranchNamingInstruction = "feat/\0evil",
+        };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
     public void WhenCiCdDenyRulesContainsEmptyString_FailureMessageMentionsCiCdDenyRules()
     {
         // Arrange
