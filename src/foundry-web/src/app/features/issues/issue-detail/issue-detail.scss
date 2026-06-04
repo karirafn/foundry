@@ -189,6 +189,11 @@
       background: rgba(179, 89, 0, 0.1);
     }
 
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
     &:focus-visible {
       outline: 2px solid var(--fd-state-ineligible);
       outline-offset: 2px;

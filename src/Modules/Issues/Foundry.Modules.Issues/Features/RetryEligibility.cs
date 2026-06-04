@@ -67,10 +67,12 @@ internal static class RetryEligibility
             else
             {
                 Result updateResult = ineligible.UpdateViolations(violations);
-                if (updateResult.IsSuccess)
+                if (!updateResult.IsSuccess)
                 {
-                    await db.SaveChangesAsync(cancellationToken);
+                    return Result<IssueDetail>.Fail(((Result.Failure)updateResult).Error);
                 }
+
+                await db.SaveChangesAsync(cancellationToken);
             }
 
             return await queries.GetIssueDetailAsync(issueId, cancellationToken);

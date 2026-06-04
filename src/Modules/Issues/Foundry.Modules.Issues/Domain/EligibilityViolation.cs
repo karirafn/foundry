@@ -22,22 +22,14 @@ public sealed record EligibilityViolation
         new(rule, description);
 
     public static EligibilityViolation AllowDirectPushes() =>
-        new(
-            AllowDirectPushesRule,
-            "The repository allows direct pushes to the protected branch, which could allow bypassing the worker's pull request workflow.");
+        new(AllowDirectPushesRule, EligibilityViolationInfo.AllowDirectPushesDescription);
 
     public static EligibilityViolation AllowForcePushes() =>
-        new(
-            AllowForcePushesRule,
-            "The repository allows force pushes to the protected branch, which could allow overwriting the worker's commits.");
+        new(AllowForcePushesRule, EligibilityViolationInfo.AllowForcePushesDescription);
 
     public static EligibilityViolation AllowDeletion() =>
-        new(
-            AllowDeletionRule,
-            "The repository allows deletion of the protected branch, which could result in loss of the worker's work.");
+        new(AllowDeletionRule, EligibilityViolationInfo.AllowDeletionDescription);
 
     public static EligibilityViolation Unreachable() =>
-        new(
-            UnreachableRule,
-            "Branch protection could not be verified. The provider API was unreachable or returned an error.");
+        new(UnreachableRule, EligibilityViolationInfo.UnreachableDescription);
 }

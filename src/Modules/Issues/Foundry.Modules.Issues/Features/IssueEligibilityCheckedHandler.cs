@@ -47,11 +47,16 @@ internal sealed class IssueEligibilityCheckedHandler(
             case IneligibleIssue ineligible when violations.Count > 0:
             {
                 Result updateResult = ineligible.UpdateViolations(violations);
-                if (updateResult.IsSuccess)
+                if (!updateResult.IsSuccess)
                 {
-                    await db.SaveChangesAsync(cancellationToken);
+                    logger.LogWarning(
+                        "Failed to update violations for issue {IssueId}: {Error}",
+                        ineligible.Id,
+                        ((Result.Failure)updateResult).Error.Message);
+                    break;
                 }
 
+                await db.SaveChangesAsync(cancellationToken);
                 break;
             }
 
