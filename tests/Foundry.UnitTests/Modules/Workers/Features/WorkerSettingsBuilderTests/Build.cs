@@ -32,12 +32,19 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.Length.ShouldBe(5);
+        rules.Length.ShouldBe(12);
         rules.ShouldContain("Bash(git push --force:*)");
         rules.ShouldContain("Bash(git push * main)");
         rules.ShouldContain("Bash(git push * master)");
         rules.ShouldContain("Bash(npm publish:*)");
         rules.ShouldContain("Bash(npx -y:*)");
+        rules.ShouldContain("Bash(git branch -D:*)");
+        rules.ShouldContain("Bash(git branch -d:*)");
+        rules.ShouldContain("Bash(git push --delete:*)");
+        rules.ShouldContain("Edit(.github/workflows/**:*)");
+        rules.ShouldContain("Edit(.gitlab-ci.yml:*)");
+        rules.ShouldContain("Edit(Dockerfile:*)");
+        rules.ShouldContain("Edit(docker-compose*.yml:*)");
     }
 
     [Fact]
@@ -93,9 +100,9 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.Length.ShouldBe(7);
-        rules[5].ShouldBe("Bash(rm -rf:*)");
-        rules[6].ShouldBe("Bash(curl:*)");
+        rules.Length.ShouldBe(14);
+        rules[12].ShouldBe("Bash(rm -rf:*)");
+        rules[13].ShouldBe("Bash(curl:*)");
     }
 
     [Fact]
@@ -143,6 +150,152 @@ public sealed class Build
     }
 
     [Fact]
+    public void WhenSettingsIsEmpty_BaseDenyListContainsBranchDeletionRules()
+    {
+        // Arrange
+        WorkerSettingsOptions settings = new();
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(settings);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+
+        JsonElement deny = doc.RootElement
+            .GetProperty("permissions")
+            .GetProperty("deny");
+
+        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+
+        rules.ShouldSatisfyAllConditions(
+            () => rules.ShouldContain("Bash(git branch -D:*)"),
+            () => rules.ShouldContain("Bash(git branch -d:*)"),
+            () => rules.ShouldContain("Bash(git push --delete:*)"));
+    }
+
+    [Fact]
+    public void WhenSettingsIsEmpty_IncludesDefaultCiCdDenyRules()
+    {
+        // Arrange
+        WorkerSettingsOptions settings = new();
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(settings);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+
+        JsonElement deny = doc.RootElement
+            .GetProperty("permissions")
+            .GetProperty("deny");
+
+        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+
+        rules.ShouldSatisfyAllConditions(
+            () => rules.ShouldContain("Edit(.github/workflows/**:*)"),
+            () => rules.ShouldContain("Edit(.gitlab-ci.yml:*)"),
+            () => rules.ShouldContain("Edit(Dockerfile:*)"),
+            () => rules.ShouldContain("Edit(docker-compose*.yml:*)"));
+    }
+
+    [Fact]
+    public void WhenCiCdDenyRulesCleared_CiCdRulesAbsentFromOutput()
+    {
+        // Arrange
+        WorkerSettingsOptions settings = new()
+        {
+            CiCdDenyRules = [],
+        };
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(settings);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+
+        JsonElement deny = doc.RootElement
+            .GetProperty("permissions")
+            .GetProperty("deny");
+
+        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+
+        rules.Length.ShouldBe(8);
+        rules.ShouldSatisfyAllConditions(
+            () => rules.ShouldNotContain("Edit(.github/workflows/**:*)"),
+            () => rules.ShouldNotContain("Edit(.gitlab-ci.yml:*)"),
+            () => rules.ShouldNotContain("Edit(Dockerfile:*)"),
+            () => rules.ShouldNotContain("Edit(docker-compose*.yml:*)"));
+    }
+
+    [Fact]
+    public void WhenCiCdDenyRulesCleared_BaseRulesStillPresent()
+    {
+        // Arrange
+        WorkerSettingsOptions settings = new()
+        {
+            CiCdDenyRules = [],
+        };
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(settings);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+
+        JsonElement deny = doc.RootElement
+            .GetProperty("permissions")
+            .GetProperty("deny");
+
+        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+
+        rules.ShouldSatisfyAllConditions(
+            () => rules.ShouldContain("Bash(git push --force:*)"),
+            () => rules.ShouldContain("Bash(git push * main)"),
+            () => rules.ShouldContain("Bash(git push * master)"),
+            () => rules.ShouldContain("Bash(npm publish:*)"),
+            () => rules.ShouldContain("Bash(npx -y:*)"),
+            () => rules.ShouldContain("Bash(git branch -D:*)"),
+            () => rules.ShouldContain("Bash(git branch -d:*)"),
+            () => rules.ShouldContain("Bash(git push --delete:*)"));
+    }
+
+    [Fact]
+    public void WhenAllThreeDenySourcesPopulated_OrderIsBaseThenCiCdThenAdditional()
+    {
+        // Arrange
+        WorkerSettingsOptions settings = new()
+        {
+            CiCdDenyRules = ["Edit(.github/workflows/**:*)"],
+            AdditionalDenyRules = ["Bash(rm -rf:*)"],
+        };
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(settings);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+
+        JsonElement deny = doc.RootElement
+            .GetProperty("permissions")
+            .GetProperty("deny");
+
+        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+
+        // 8 base + 1 CI/CD + 1 additional = 10
+        rules.Length.ShouldBe(10);
+
+        // Base rules come first (indices 0-7)
+        rules[0].ShouldBe("Bash(git push --force:*)");
+        rules[7].ShouldBe("Bash(git push --delete:*)");
+
+        // CI/CD rule follows base (index 8)
+        rules[8].ShouldBe("Edit(.github/workflows/**:*)");
+
+        // Additional rule comes last (index 9)
+        rules[9].ShouldBe("Bash(rm -rf:*)");
+    }
+
+    [Fact]
     public void WhenAllOptionsSet_ProducesCorrectJson()
     {
         // Arrange
@@ -179,9 +332,9 @@ public sealed class Build
 
         string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
 
-        rules.Length.ShouldBe(6);
+        rules.Length.ShouldBe(13);
         rules.ShouldContain("Bash(git push --force:*)");
         rules.ShouldContain("Bash(npx -y:*)");
-        rules[5].ShouldBe("Bash(rm -rf:*)");
+        rules[12].ShouldBe("Bash(rm -rf:*)");
     }
 }

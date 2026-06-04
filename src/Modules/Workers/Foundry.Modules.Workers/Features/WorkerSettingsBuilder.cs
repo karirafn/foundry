@@ -12,6 +12,9 @@ internal static class WorkerSettingsBuilder
         "Bash(git push * master)",
         "Bash(npm publish:*)",
         "Bash(npx -y:*)",
+        "Bash(git branch -D:*)",
+        "Bash(git branch -d:*)",
+        "Bash(git push --delete:*)",
     ];
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -22,9 +25,7 @@ internal static class WorkerSettingsBuilder
 
     public static string Build(WorkerSettingsOptions settings)
     {
-        string[] denyRules = settings.AdditionalDenyRules.Count > 0
-            ? [..BaseDenyList, ..settings.AdditionalDenyRules]
-            : BaseDenyList;
+        string[] denyRules = [..BaseDenyList, ..settings.CiCdDenyRules, ..settings.AdditionalDenyRules];
 
         SettingsDocument document = new()
         {
