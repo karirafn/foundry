@@ -198,6 +198,14 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
 
     private static void ValidateSettings(WorkerSettingsOptions settings, List<string> failures)
     {
+        foreach (string rule in settings.CiCdDenyRules)
+        {
+            if (string.IsNullOrWhiteSpace(rule))
+            {
+                failures.Add("Workers:Settings:CiCdDenyRules entries must be non-empty.");
+            }
+        }
+
         foreach (string rule in settings.AdditionalDenyRules)
         {
             if (string.IsNullOrWhiteSpace(rule))
