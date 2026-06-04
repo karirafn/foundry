@@ -144,6 +144,7 @@ Transitions: `FailedIssue.Retry()` → `QueuedIssue`.
 
 A lifecycle state for an issue whose worker run failed but left recoverable work on a pushed branch.
 Carries `WorkerRunId`, `BranchName`, `LatestProgress`, `FailureReason`, and `FailedAt` — all non-nullable.
+Optionally carries `PullRequestUrl` — present when created from `ReviewIssue.Fail()` (PR was closed without merge), absent when created from `InProgressIssue` (no PR existed).
 Created from `InProgressIssue` when the `WorkerRunFailed` event carries a branch name (captured from a `"branch-created"` or `"milestone"` report).
 Also created from `ReviewIssue.Fail()` since `ReviewIssue` always has a branch.
 Retry dispatches a continuation run that checks out the existing branch and resumes implementation.
