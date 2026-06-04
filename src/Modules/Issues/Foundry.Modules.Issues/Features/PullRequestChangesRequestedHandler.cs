@@ -10,6 +10,7 @@ namespace Foundry.Modules.Issues.Features;
 
 internal sealed class PullRequestChangesRequestedHandler(
     DbContext db,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<PullRequestChangesRequestedHandler> logger) : IIntegrationEventHandler<PullRequestChangesRequested>
 {
     public async Task HandleAsync(PullRequestChangesRequested @event, CancellationToken cancellationToken)
@@ -29,6 +30,6 @@ internal sealed class PullRequestChangesRequestedHandler(
         }
 
         RevisionQueuedIssue revisionQueued = reviewIssue.Revise(@event.Comments);
-        await db.TransitionAsync(reviewIssue, revisionQueued, cancellationToken);
+        await db.TransitionAsync(reviewIssue, revisionQueued, domainEventDispatcher, cancellationToken);
     }
 }

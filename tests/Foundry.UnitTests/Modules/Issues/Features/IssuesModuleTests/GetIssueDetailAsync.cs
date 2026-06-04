@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -140,7 +141,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync(issueNumber: 5);
         BlockedIssue blocked = detected.Block([2, 3]);
-        await _dbContext.TransitionAsync(detected, blocked, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, blocked, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -161,11 +162,11 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
         InProgressIssue inProgress = queued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow.AddDays(1);
         ReviewIssue review = inProgress.MarkInReview(
@@ -173,7 +174,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             branchName: "feat/issue-1",
             pullRequestUrl: "https://github.com/owner/repo/pull/42",
             feedbackCutoffAt: feedbackCutoffAt);
-        await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -199,15 +200,15 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
         InProgressIssue inProgress = queued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
         FailedIssue failed = inProgress.MarkFailed(workerRunId, "Container exited non-zero", failedAt);
-        await _dbContext.TransitionAsync(inProgress, failed, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -232,22 +233,22 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
         InProgressIssue inProgress = queued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = inProgress.MarkInReview(
             workerRunId: workerRunId,
             branchName: "feat/issue-1",
             pullRequestUrl: "https://github.com/owner/repo/pull/42",
             feedbackCutoffAt: DateTimeOffset.UtcNow.AddDays(1));
-        await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
         CompletedIssue completed = review.Complete(completedAt);
-        await _dbContext.TransitionAsync(review, completed, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(review, completed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -63,18 +64,18 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
         InProgressIssue inProgress = queued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid reviewWorkerRunId = Guid.NewGuid();
         ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-55", "https://github.com/owner/repo/pull/7", DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = review.Fail("PR was closed without merge", failedAt);
-        await _dbContext.TransitionAsync(review, failed, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(review, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

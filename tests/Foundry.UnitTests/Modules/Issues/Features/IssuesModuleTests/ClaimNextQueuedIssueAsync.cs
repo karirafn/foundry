@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -106,7 +107,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         return queued;
@@ -360,11 +361,5 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             => Task.FromResult(
                 Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
                     Array.Empty<EligibilityViolationInfo>()));
-    }
-
-    private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
-    {
-        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 }

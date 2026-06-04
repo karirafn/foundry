@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -63,7 +64,7 @@ public sealed class PersistBlockedIssue : IAsyncDisposable
 
         IReadOnlyList<int> blockers = [7, 13];
         BlockedIssue blocked = detected.Block(blockers);
-        await _dbContext.TransitionAsync(detected, blocked, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, blocked, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

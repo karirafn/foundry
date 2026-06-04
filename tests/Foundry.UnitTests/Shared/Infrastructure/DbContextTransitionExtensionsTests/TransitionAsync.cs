@@ -1,8 +1,10 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -64,9 +66,10 @@ public sealed class TransitionAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
+        NullDomainEventDispatcher dispatcher = new();
 
         // Act
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, dispatcher, TestContext.Current.CancellationToken);
 
         // Assert
         Issue? result = await _dbContext.Issues.FindAsync(
@@ -86,14 +89,53 @@ public sealed class TransitionAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
+        NullDomainEventDispatcher dispatcher = new();
 
         // Act
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, dispatcher, TestContext.Current.CancellationToken);
 
         // Assert
         Issue? result = await _dbContext.Issues.FindAsync(
             [queued.Id],
             TestContext.Current.CancellationToken);
         result.ShouldNotBeOfType<DetectedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenTransitioned_DomainEventsFromSourceEntityAreDispatched()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = CreateDetectedIssue(repositoryId);
+        _dbContext.Add(detected);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        QueuedIssue queued = detected.Enqueue();
+        CapturingDomainEventDispatcher dispatcher = new();
+
+        // Act
+        await _dbContext.TransitionAsync(detected, queued, dispatcher, TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.DispatchedEvents.ShouldContain(e => e is IssueQueued);
+    }
+
+    [Fact]
+    public async Task WhenTransitioned_DomainEventsOnSourceEntityAreCleared()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = CreateDetectedIssue(repositoryId);
+        _dbContext.Add(detected);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        QueuedIssue queued = detected.Enqueue();
+        NullDomainEventDispatcher dispatcher = new();
+
+        // Act
+        await _dbContext.TransitionAsync(detected, queued, dispatcher, TestContext.Current.CancellationToken);
+
+        // Assert
+        detected.DomainEvents.ShouldBeEmpty();
     }
 }

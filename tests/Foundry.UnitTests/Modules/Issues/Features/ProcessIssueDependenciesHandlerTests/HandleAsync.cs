@@ -494,17 +494,4 @@ public sealed class HandleAsync : IAsyncDisposable
         reloaded.BlockedBy.ShouldBe([1]);
     }
 
-    private sealed class CapturingDomainEventDispatcher : IDomainEventDispatcher
-    {
-        private readonly List<IDomainEvent> _events = [];
-
-        public IReadOnlyList<IDomainEvent> DispatchedEvents => _events;
-
-        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-        {
-            _events.AddRange(events);
-            return Task.CompletedTask;
-        }
-    }
-
 }

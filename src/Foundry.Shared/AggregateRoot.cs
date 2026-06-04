@@ -1,6 +1,6 @@
 namespace Foundry.Shared;
 
-public abstract class AggregateRoot<TId> : Entity<TId>
+public abstract class AggregateRoot<TId> : Entity<TId>, IDomainEventSource
     where TId : struct, IStronglyTypedId<TId>
 {
     private readonly List<IDomainEvent> _domainEvents = [];

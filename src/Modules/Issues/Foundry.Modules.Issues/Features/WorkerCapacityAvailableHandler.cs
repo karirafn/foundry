@@ -74,8 +74,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         IneligibleIssue ineligible = queued.MarkIneligible(violations);
-        await db.TransitionAsync(queued, ineligible, cancellationToken);
-        await domainEventDispatcher.DispatchAsync(queued.DomainEvents, cancellationToken);
+        await db.TransitionAsync(queued, ineligible, domainEventDispatcher, cancellationToken);
 
         logger.LogWarning(
             "Issue #{IssueNumber} in repository {RepositoryId} failed branch protection check; marked ineligible.",
@@ -104,7 +103,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
-        await db.TransitionAsync(revisionQueued, revisionInProgress, cancellationToken);
+        await db.TransitionAsync(revisionQueued, revisionInProgress, domainEventDispatcher, cancellationToken);
 
         RevisionContext revision = new(
             revisionQueued.BranchName,
@@ -146,7 +145,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         InProgressIssue inProgress = queued.Claim(workerRunId);
-        await db.TransitionAsync(queued, inProgress, cancellationToken);
+        await db.TransitionAsync(queued, inProgress, domainEventDispatcher, cancellationToken);
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,

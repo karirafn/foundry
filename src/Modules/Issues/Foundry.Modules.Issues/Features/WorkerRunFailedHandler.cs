@@ -11,6 +11,7 @@ namespace Foundry.Modules.Issues.Features;
 
 internal sealed class WorkerRunFailedHandler(
     DbContext db,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<WorkerRunFailedHandler> logger) : IIntegrationEventHandler<WorkerRunFailed>
 {
     public async Task HandleAsync(WorkerRunFailed @event, CancellationToken cancellationToken)
@@ -26,7 +27,7 @@ internal sealed class WorkerRunFailedHandler(
                 @event.WorkerRunId,
                 @event.ReasonDescription,
                 DateTimeOffset.UtcNow);
-            await db.TransitionAsync(inProgress, failed, cancellationToken);
+            await db.TransitionAsync(inProgress, failed, domainEventDispatcher, cancellationToken);
             return;
         }
 
@@ -36,7 +37,7 @@ internal sealed class WorkerRunFailedHandler(
                 @event.WorkerRunId,
                 @event.ReasonDescription,
                 DateTimeOffset.UtcNow);
-            await db.TransitionAsync(revisionInProgress, revisionFailed, cancellationToken);
+            await db.TransitionAsync(revisionInProgress, revisionFailed, domainEventDispatcher, cancellationToken);
             return;
         }
 

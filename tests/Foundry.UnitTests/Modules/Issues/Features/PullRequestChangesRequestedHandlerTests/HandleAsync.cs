@@ -1,7 +1,9 @@
 using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -18,6 +20,7 @@ public sealed class HandleAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly IIntegrationEventHandler<PullRequestChangesRequested> _sut;
 
     private static IssueAuthor ValidAuthor =>
@@ -37,8 +40,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
+        _dispatcher = new CapturingDomainEventDispatcher();
         _sut = new PullRequestChangesRequestedHandler(
             _dbContext,
+            _dispatcher,
             NullLogger<PullRequestChangesRequestedHandler>.Instance);
     }
 
@@ -165,5 +170,26 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert — does not throw
         await Should.NotThrowAsync(act);
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueGetsChangesRequested_DispatchesIssueRevisionQueuedEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedReviewIssue(repositoryId, issueNumber: 3);
+
+        PullRequestChangesRequested @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 3,
+            Comments: [new ReviewComment("Please update this.", "src/Service.cs", Line: 10)]);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueRevisionQueued>()
+            .ShouldHaveSingleItem();
     }
 }

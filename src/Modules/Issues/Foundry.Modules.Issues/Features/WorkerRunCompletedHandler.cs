@@ -11,6 +11,7 @@ namespace Foundry.Modules.Issues.Features;
 
 internal sealed class WorkerRunCompletedHandler(
     DbContext db,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<WorkerRunCompletedHandler> logger) : IIntegrationEventHandler<WorkerRunCompleted>
 {
     public async Task HandleAsync(WorkerRunCompleted @event, CancellationToken cancellationToken)
@@ -29,12 +30,12 @@ internal sealed class WorkerRunCompletedHandler(
                     @event.BranchName,
                     @event.PullRequestUrl,
                     DateTimeOffset.UtcNow);
-                await db.TransitionAsync(inProgress, review, cancellationToken);
+                await db.TransitionAsync(inProgress, review, domainEventDispatcher, cancellationToken);
             }
             else
             {
                 UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
-                await db.TransitionAsync(inProgress, unchanged, cancellationToken);
+                await db.TransitionAsync(inProgress, unchanged, domainEventDispatcher, cancellationToken);
             }
 
             return;
@@ -45,12 +46,12 @@ internal sealed class WorkerRunCompletedHandler(
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
                 ReviewIssue review = revisionInProgress.MarkInReview(DateTimeOffset.UtcNow);
-                await db.TransitionAsync(revisionInProgress, review, cancellationToken);
+                await db.TransitionAsync(revisionInProgress, review, domainEventDispatcher, cancellationToken);
             }
             else
             {
                 ReviewIssue review = revisionInProgress.MarkUnchanged(DateTimeOffset.UtcNow);
-                await db.TransitionAsync(revisionInProgress, review, cancellationToken);
+                await db.TransitionAsync(revisionInProgress, review, domainEventDispatcher, cancellationToken);
             }
 
             return;

@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -60,10 +61,10 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         return inProgress;
     }
@@ -80,10 +81,10 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
             "feat/issue-46",
             "https://github.com/owner/repo/pull/2",
             DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         CompletedIssue completed = review.Complete(completedAt);
-        await _dbContext.TransitionAsync(review, completed, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(review, completed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

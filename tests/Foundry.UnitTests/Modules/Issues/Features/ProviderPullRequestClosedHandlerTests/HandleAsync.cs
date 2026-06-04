@@ -1,8 +1,10 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -19,6 +21,7 @@ public sealed class HandleAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly IIntegrationEventHandler<ProviderPullRequestClosed> _sut;
 
     private static IssueAuthor ValidAuthor =>
@@ -38,8 +41,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
+        _dispatcher = new CapturingDomainEventDispatcher();
         _sut = new ProviderPullRequestClosedHandler(
             _dbContext,
+            _dispatcher,
             NullLogger<ProviderPullRequestClosedHandler>.Instance);
     }
 
@@ -137,5 +142,25 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenReviewIssuePrIsClosed_DispatchesIssueFailedEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedReviewIssue(repositoryId, issueNumber: 3);
+
+        ProviderPullRequestClosed @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 3);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueFailed>()
+            .ShouldHaveSingleItem();
     }
 }

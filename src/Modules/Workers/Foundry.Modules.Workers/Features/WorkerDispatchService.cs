@@ -50,6 +50,8 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
+        IDomainEventDispatcher domainEventDispatcher =
+            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
@@ -60,12 +62,19 @@ internal sealed class WorkerDispatchService(
                 dbContext,
                 orchestrator,
                 integrationEventDispatcher,
+                domainEventDispatcher,
                 activeRuns,
                 cancellationToken);
             _reconciled = true;
         }
 
-        await MonitorActiveRunsAsync(dbContext, orchestrator, integrationEventDispatcher, activeRuns, cancellationToken);
+        await MonitorActiveRunsAsync(
+            dbContext,
+            orchestrator,
+            integrationEventDispatcher,
+            domainEventDispatcher,
+            activeRuns,
+            cancellationToken);
 
         int activeCount = activeRuns.Count;
 
@@ -88,6 +97,7 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -100,7 +110,7 @@ internal sealed class WorkerDispatchService(
             if (status is null)
             {
                 FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
-                await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+                await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 runsToRemove.Add(activeRun);
 
                 await TryDispatchAsync(
@@ -123,6 +133,7 @@ internal sealed class WorkerDispatchService(
                     dbContext,
                     orchestrator,
                     integrationEventDispatcher,
+                    domainEventDispatcher,
                     activeRun,
                     cancellationToken,
                     knownStatus: status);
@@ -140,12 +151,19 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
         foreach (ActiveRun activeRun in activeRuns)
         {
-            await MonitorRunAsync(dbContext, orchestrator, integrationEventDispatcher, activeRun, cancellationToken);
+            await MonitorRunAsync(
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                domainEventDispatcher,
+                activeRun,
+                cancellationToken);
         }
     }
 
@@ -153,6 +171,7 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
@@ -165,7 +184,7 @@ internal sealed class WorkerDispatchService(
         if (status is null)
         {
             FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Container not found"));
-            await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+            await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
                 integrationEventDispatcher,
@@ -190,7 +209,7 @@ internal sealed class WorkerDispatchService(
             {
                 await orchestrator.StopAsync(activeRun.ContainerId.Value, cancellationToken);
                 FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut());
-                await dbContext.TransitionAsync(activeRun, timedOut, cancellationToken);
+                await dbContext.TransitionAsync(activeRun, timedOut, domainEventDispatcher, cancellationToken);
 
                 await TryDispatchAsync(
                     integrationEventDispatcher,
@@ -213,7 +232,7 @@ internal sealed class WorkerDispatchService(
         if (status.ExitCode == 0)
         {
             CompletedRun completed = activeRun.Complete(0, branchName, prUrl);
-            await dbContext.TransitionAsync(activeRun, completed, cancellationToken);
+            await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
                 integrationEventDispatcher,
@@ -236,7 +255,7 @@ internal sealed class WorkerDispatchService(
             int exitCode = status.ExitCode ?? -1;
             string exitReason = $"Non-zero exit code: {exitCode}";
             FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode));
-            await dbContext.TransitionAsync(activeRun, failedRun, cancellationToken);
+            await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
                 integrationEventDispatcher,

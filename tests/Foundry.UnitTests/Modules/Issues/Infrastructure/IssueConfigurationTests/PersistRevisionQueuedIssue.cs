@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -63,17 +64,17 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
             "feat/issue-55",
             "https://github.com/owner/repo/pull/10",
             feedbackCutoffAt);
-        await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         IReadOnlyList<ReviewComment> comments =
         [
@@ -81,7 +82,7 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
             new ReviewComment("Rename this variable.", "src/Foo.cs", 42),
         ];
         RevisionQueuedIssue revisionQueued = review.Revise(comments);
-        await _dbContext.TransitionAsync(review, revisionQueued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(review, revisionQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -123,17 +124,17 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
             "feat/issue-56",
             "https://github.com/owner/repo/pull/11",
             feedbackCutoffAt);
-        await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

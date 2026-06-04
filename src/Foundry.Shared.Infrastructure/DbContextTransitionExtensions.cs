@@ -11,8 +11,9 @@ public static class DbContextTransitionExtensions
         this DbContext db,
         TFrom old,
         TTo next,
+        IDomainEventDispatcher dispatcher,
         CancellationToken cancellationToken = default)
-        where TFrom : class, IStateMachine
+        where TFrom : class, IStateMachine, IDomainEventSource
         where TTo : class, IStateMachine
     {
         await using IDbContextTransaction transaction =
@@ -25,5 +26,8 @@ public static class DbContextTransitionExtensions
         await db.SaveChangesAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
+
+        await dispatcher.DispatchAsync(old.DomainEvents, cancellationToken);
+        old.ClearDomainEvents();
     }
 }

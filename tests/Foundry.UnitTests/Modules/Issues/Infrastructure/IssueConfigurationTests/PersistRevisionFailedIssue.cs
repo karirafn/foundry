@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -62,17 +63,17 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         QueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued, inProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
             "feat/issue-61",
             "https://github.com/owner/repo/pull/21",
             DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         IReadOnlyList<ReviewComment> comments =
         [
@@ -80,18 +81,18 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
             new ReviewComment("Rename this variable.", "src/Foo.cs", 42),
         ];
         RevisionQueuedIssue revisionQueued = review.Revise(comments);
-        await _dbContext.TransitionAsync(review, revisionQueued, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(review, revisionQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(revisionQueued, revisionInProgress, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(revisionQueued, revisionInProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 1, 15, 0, 0, TimeSpan.Zero);
         RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
             workerRunId,
             "Container exited with code 1",
             failedAt);
-        await _dbContext.TransitionAsync(revisionInProgress, revisionFailed, TestContext.Current.CancellationToken);
+        await _dbContext.TransitionAsync(revisionInProgress, revisionFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

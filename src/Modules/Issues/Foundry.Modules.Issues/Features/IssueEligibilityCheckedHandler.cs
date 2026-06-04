@@ -1,5 +1,4 @@
 using Foundry.Modules.Issues.Domain;
-using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Shared;
@@ -39,8 +38,7 @@ internal sealed class IssueEligibilityCheckedHandler(
             case DetectedIssue detected when violations.Count > 0:
             {
                 IneligibleIssue ineligible = detected.MarkIneligible(violations);
-                await db.TransitionAsync(detected, ineligible, cancellationToken);
-                await dispatcher.DispatchAsync(detected.DomainEvents, cancellationToken);
+                await db.TransitionAsync(detected, ineligible, dispatcher, cancellationToken);
                 break;
             }
 
@@ -66,14 +64,13 @@ internal sealed class IssueEligibilityCheckedHandler(
                 switch (next)
                 {
                     case QueuedIssue queued:
-                        await db.TransitionAsync(ineligible, queued, cancellationToken);
+                        await db.TransitionAsync(ineligible, queued, dispatcher, cancellationToken);
                         break;
                     case BlockedIssue blocked:
-                        await db.TransitionAsync(ineligible, blocked, cancellationToken);
+                        await db.TransitionAsync(ineligible, blocked, dispatcher, cancellationToken);
                         break;
                 }
 
-                await dispatcher.DispatchAsync(ineligible.DomainEvents, cancellationToken);
                 break;
             }
 

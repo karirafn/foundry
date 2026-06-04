@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -60,6 +61,7 @@ public sealed class HandleAsync : IAsyncDisposable
             _dbContext,
             orchestrator ?? new StubWorkerOrchestrator(succeeds: true, containerId: "container-default"),
             providerAuth ?? new StubProviderAuth("test-token"),
+            new NullDomainEventDispatcher(),
             Options.Create(options),
             NullLogger<IssueClaimedHandler>.Instance);
     }

@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -379,16 +380,4 @@ public sealed class HandleAsync : IAsyncDisposable
         _dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
 
-    private sealed class CapturingDomainEventDispatcher : IDomainEventDispatcher
-    {
-        private readonly List<IDomainEvent> _events = [];
-
-        public IReadOnlyList<IDomainEvent> DispatchedEvents => _events;
-
-        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-        {
-            _events.AddRange(events);
-            return Task.CompletedTask;
-        }
-    }
 }
