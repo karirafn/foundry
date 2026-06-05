@@ -1,15 +1,7 @@
 .issue-list {
-  max-width: 1920px;
+  max-width: 768px;
   margin-inline: auto;
   padding: var(--fd-spacing-lg);
-
-  @media (min-width: 768px) {
-    padding: var(--fd-spacing-xl);
-  }
-
-  @media (min-width: 1025px) {
-    padding: var(--fd-spacing-2xl);
-  }
 
   &__header {
     display: flex;
@@ -35,14 +27,6 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 1rem;
-
-    @media (min-width: 1025px) {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    @media (min-width: 1921px) {
-      grid-template-columns: repeat(3, 1fr);
-    }
   }
 
   &__item {
