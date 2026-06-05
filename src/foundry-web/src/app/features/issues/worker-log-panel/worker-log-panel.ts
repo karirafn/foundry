@@ -12,7 +12,12 @@ import {
   signal,
 } from '@angular/core';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
-import { FinalReportContent, WorkerReportSummary } from '../worker-report.model';
+import {
+  BranchCreatedContent,
+  FinalReportContent,
+  MilestoneContent,
+  WorkerReportSummary,
+} from '../worker-report.model';
 
 @Component({
   selector: 'fd-worker-log-panel',
@@ -28,6 +33,7 @@ export class WorkerLogPanelComponent {
   readonly error: InputSignal<string | null> = input.required<string | null>();
   readonly isLive: InputSignal<boolean> = input.required<boolean>();
   readonly hideHeader: InputSignal<boolean> = input<boolean>(false);
+  readonly issueUrl = input<string | null>(null);
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   @ViewChild('scrollContainer') private readonly _scrollContainer?: ElementRef<HTMLElement>;
@@ -65,6 +71,48 @@ export class WorkerLogPanelComponent {
     } catch {
       return null;
     }
+  }
+
+  parseBranchCreatedContent(content: string): BranchCreatedContent | null {
+    try {
+      const parsed = JSON.parse(content);
+      if (!parsed || typeof parsed.branchName !== 'string' || !parsed.branchName) {
+        return null;
+      }
+      return parsed as BranchCreatedContent;
+    } catch {
+      return null;
+    }
+  }
+
+  parseMilestoneContent(content: string): MilestoneContent | null {
+    try {
+      const parsed = JSON.parse(content);
+      if (!parsed || typeof parsed.summary !== 'string' || !parsed.summary) {
+        return null;
+      }
+      return parsed as MilestoneContent;
+    } catch {
+      return null;
+    }
+  }
+
+  buildBranchUrl(branchName: string): string | null {
+    const url = this.issueUrl();
+    if (!url) {
+      return null;
+    }
+
+    let replaced: string;
+    if (url.includes('/-/issues/')) {
+      replaced = url.replace(/\/-\/issues\/\d+.*/, `/-/tree/${branchName}`);
+    } else if (url.includes('/issues/')) {
+      replaced = url.replace(/\/issues\/\d+.*/, `/tree/${branchName}`);
+    } else {
+      return null;
+    }
+
+    return replaced !== url ? replaced : null;
   }
 
   safeStatus(status: string): string {

@@ -14,16 +14,20 @@ public sealed class FailedRun : WorkerRun
         IssueId issueId,
         DateTimeOffset createdAt,
         FailureReason reason,
-        DateTimeOffset failedAt)
+        DateTimeOffset failedAt,
+        BranchName? branchName)
         : base(id, issueId, createdAt)
     {
         Reason = reason;
         FailedAt = failedAt;
+        BranchName = branchName;
     }
 
     public FailureReason Reason { get; private set; } = null!;
 
     public DateTimeOffset FailedAt { get; private set; }
+
+    public BranchName? BranchName { get; private set; }
 
     internal static FailedRun FromStarting(StartingRun starting, FailureReason reason)
     {
@@ -32,7 +36,8 @@ public sealed class FailedRun : WorkerRun
             starting.IssueId,
             starting.CreatedAt,
             reason,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            branchName: null);
     }
 
     internal static FailedRun FromActive(ActiveRun active, FailureReason reason)
@@ -42,6 +47,7 @@ public sealed class FailedRun : WorkerRun
             active.IssueId,
             active.CreatedAt,
             reason,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            active.BranchName);
     }
 }

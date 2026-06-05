@@ -17,6 +17,45 @@ internal static class SystemPromptBuilder
         - Do not delete branches, force push, or rewrite git history.
         """;
 
+    private const string ReportingInstructions =
+        """
+
+        ---
+
+        ## Reporting
+
+        REPORTING INSTRUCTIONS — Write JSON report files to ./reports/ at key points during implementation.
+
+        Use sequential filenames: report-1.json, report-2.json, etc. The reports directory will be created for you.
+
+        Report types and their schemas:
+
+        branch-created (write this AFTER git push, once the branch is pushed to remote):
+        {
+          "type": "branch-created",
+          "branchName": "<the branch name you just pushed>",
+          "summary": "Branch <name> created and pushed"
+        }
+
+        milestone (write this at significant implementation points — e.g., after completing a major feature component, after tests pass, etc.):
+        {
+          "type": "milestone",
+          "summary": "<description of what was accomplished>",
+          "branchName": "<branch name if known, otherwise omit>"
+        }
+
+        final (write this when implementation is complete):
+        {
+          "type": "final",
+          "status": "success",
+          "summary": "<overall summary of what was implemented>",
+          "branchName": "<the branch name>",
+          "prUrl": "<the PR URL if a PR was created, or omit this field>"
+        }
+
+        Important: Always push the branch to the remote BEFORE writing the branch-created report.
+        """;
+
     public static string Build(
         int issueNumber,
         string title,
@@ -41,7 +80,7 @@ internal static class SystemPromptBuilder
             .Replace("{issueContent}", issueContent, StringComparison.Ordinal)
             .Replace("{branchNamingInstruction}", options.BranchNamingInstruction, StringComparison.Ordinal);
 
-        string prompt = safetyPreamble + "\n\n" + basePrompt;
+        string prompt = safetyPreamble + "\n\n" + basePrompt + "\n\n" + ReportingInstructions;
 
         if (revision is null)
         {

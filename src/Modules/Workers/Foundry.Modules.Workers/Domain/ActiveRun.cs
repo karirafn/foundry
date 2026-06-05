@@ -28,6 +28,8 @@ public sealed class ActiveRun : WorkerRun
 
     public string? LatestProgress { get; private set; }
 
+    public BranchName? BranchName { get; private set; }
+
     internal static ActiveRun FromStarting(StartingRun starting, ContainerId containerId)
     {
         return new ActiveRun(
@@ -43,6 +45,14 @@ public sealed class ActiveRun : WorkerRun
         LatestProgress = progress;
     }
 
+    public void SetBranchName(BranchName branchName)
+    {
+        if (BranchName is null)
+        {
+            BranchName = branchName;
+        }
+    }
+
     public CompletedRun Complete(int exitCode, BranchName? branchName, PullRequestUrl? pullRequestUrl)
     {
         CompletedRun completed = CompletedRun.FromActive(this, exitCode, branchName, pullRequestUrl);
@@ -53,7 +63,7 @@ public sealed class ActiveRun : WorkerRun
     public FailedRun Fail(FailureReason reason)
     {
         FailedRun failed = FailedRun.FromActive(this, reason);
-        AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.ToString()));
+        AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.ToString(), BranchName?.Value, LatestProgress));
         return failed;
     }
 }

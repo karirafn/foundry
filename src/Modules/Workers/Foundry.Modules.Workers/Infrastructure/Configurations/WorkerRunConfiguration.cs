@@ -10,6 +10,15 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Foundry.Modules.Workers.Infrastructure.Configurations;
 
+file static class WorkerRunValueConverters
+{
+    internal const int BranchNameMaxLength = 500;
+
+    internal static readonly ValueConverter<BranchName, string> BranchNameConverter = new(
+        bn => bn.Value,
+        value => BranchName.From(value));
+}
+
 public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 {
     private const int DiscriminatorMaxLength = 20;
@@ -96,17 +105,18 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
             .HasMaxLength(int.MaxValue)
             .IsUnicode(true)
             .HasColumnName("latest_progress");
+
+        builder.Property(r => r.BranchName)
+            .HasConversion(WorkerRunValueConverters.BranchNameConverter)
+            .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("branch_name");
     }
 }
 
 public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<CompletedRun>
 {
-    private const int BranchNameMaxLength = 500;
     private const int PullRequestUrlMaxLength = 2000;
-
-    private static readonly ValueConverter<BranchName, string> BranchNameConverter = new(
-        bn => bn.Value,
-        value => BranchName.From(value));
 
     private static readonly ValueConverter<PullRequestUrl, string> PullRequestUrlConverter = new(
         url => url.Value,
@@ -121,8 +131,8 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             .HasColumnName("completed_at");
 
         builder.Property(r => r.BranchName)
-            .HasConversion(BranchNameConverter)
-            .HasMaxLength(BranchNameMaxLength)
+            .HasConversion(WorkerRunValueConverters.BranchNameConverter)
+            .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
 
@@ -156,5 +166,11 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 
         builder.Property(r => r.FailedAt)
             .HasColumnName("failed_at");
+
+        builder.Property(r => r.BranchName)
+            .HasConversion(WorkerRunValueConverters.BranchNameConverter)
+            .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("branch_name");
     }
 }

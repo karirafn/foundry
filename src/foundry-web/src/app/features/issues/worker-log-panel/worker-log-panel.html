@@ -68,6 +68,36 @@
             </div>
           </div>
         }
+      } @else if (report.reportType === 'branch-created') {
+        @let branchContent = parseBranchCreatedContent(report.content);
+        @if (branchContent) {
+          <div class="worker-log-panel__entry worker-log-panel__entry--final">
+            <div class="worker-log-panel__branch-created-card">
+              <span class="worker-log-panel__branch-created-label">Branch created</span>
+              <code class="worker-log-panel__branch-name">{{ branchContent.branchName }}</code>
+              @if (buildBranchUrl(branchContent.branchName) | safeHref; as safeBranchUrl) {
+                <a
+                  class="worker-log-panel__branch-link"
+                  [href]="safeBranchUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="View branch (opens in new tab)"
+                >View branch</a>
+              }
+              <p class="worker-log-panel__branch-created-summary">{{ branchContent.summary }}</p>
+            </div>
+          </div>
+        }
+      } @else if (report.reportType === 'milestone') {
+        @let milestoneContent = parseMilestoneContent(report.content);
+        @if (milestoneContent) {
+          <div class="worker-log-panel__entry worker-log-panel__entry--milestone">
+            <span class="worker-log-panel__milestone-marker" aria-hidden="true">✓</span>
+            <span class="worker-log-panel__timestamp">{{ formatTimestamp(report.ingestedAt) }}</span>
+            <span class="sr-only">Milestone:</span>
+            <span class="worker-log-panel__content">{{ milestoneContent.summary }}</span>
+          </div>
+        }
       } @else if (report.reportType === 'error') {
         <div
           class="worker-log-panel__entry worker-log-panel__entry--error"

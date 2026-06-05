@@ -93,6 +93,28 @@ public sealed class Fail
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.WorkerRunId.ShouldBe(active.Id),
             () => domainEvent.IssueId.ShouldBe(issueId),
-            () => domainEvent.ReasonDescription.ShouldBe(reason.ToString()));
+            () => domainEvent.ReasonDescription.ShouldBe(reason.ToString()),
+            () => domainEvent.BranchName.ShouldBeNull(),
+            () => domainEvent.LatestProgress.ShouldBeNull());
+    }
+
+    [Fact]
+    public void WhenActiveRunHasBranchNameAndProgress_DomainEventIncludesThoseValues()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        ActiveRun active = CreateActiveRun(issueId);
+        active.SetBranchName(BranchName.From("feat/102-some-work"));
+        active.UpdateProgress("Half done");
+        FailureReason reason = new FailureReason.TimedOut();
+
+        // Act
+        active.Fail(reason);
+
+        // Assert
+        WorkerRunFailed domainEvent = active.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunFailed>();
+        domainEvent.ShouldSatisfyAllConditions(
+            () => domainEvent.BranchName.ShouldBe("feat/102-some-work"),
+            () => domainEvent.LatestProgress.ShouldBe("Half done"));
     }
 }

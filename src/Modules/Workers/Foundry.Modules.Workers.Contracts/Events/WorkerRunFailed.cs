@@ -5,4 +5,6 @@ namespace Foundry.Modules.Workers.Contracts;
 public sealed record WorkerRunFailed(
     Guid WorkerRunId,
     Guid IssueId,
-    string ReasonDescription) : IIntegrationEvent;
+    string ReasonDescription,
+    string? BranchName = null,
+    string? LatestProgress = null) : IIntegrationEvent;
