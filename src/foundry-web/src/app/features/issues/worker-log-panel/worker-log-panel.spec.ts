@@ -551,6 +551,37 @@ describe('WorkerLogPanelComponent', () => {
     expect(content?.textContent?.trim()).toContain('Tests passing, ready to commit');
   });
 
+  it('should render a visually hidden "Milestone:" label in milestone entries for screen readers', () => {
+    // Arrange
+    const { fixture } = setup({ reports: [mockMilestoneReport] });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const entry = el.querySelector('.worker-log-panel__entry--milestone');
+    expect(entry).toBeTruthy();
+    const srLabel = entry?.querySelector('.sr-only');
+    expect(srLabel?.textContent?.trim()).toBe('Milestone:');
+  });
+
+  it('should return null from buildBranchUrl when URL does not contain /issues/ segment', () => {
+    // Arrange
+    const { fixture } = setup({
+      reports: [mockBranchCreatedReport],
+      issueUrl: 'https://example.com/some-other-path/42',
+    });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const link = el.querySelector('.worker-log-panel__branch-link');
+    expect(link).toBeFalsy();
+  });
+
   // Cycle 11: hideHeader input
   it('should show panel header by default', () => {
     // Arrange

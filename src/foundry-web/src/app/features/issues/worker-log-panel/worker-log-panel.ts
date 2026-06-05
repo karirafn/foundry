@@ -73,19 +73,25 @@ export class WorkerLogPanelComponent {
     }
   }
 
-  parseBranchCreatedContent(report: WorkerReportSummary): BranchCreatedContent | null {
+  parseBranchCreatedContent(content: string): BranchCreatedContent | null {
     try {
-      const parsed = JSON.parse(report.content) as BranchCreatedContent;
-      return parsed;
+      const parsed = JSON.parse(content);
+      if (!parsed || typeof parsed.branchName !== 'string' || !parsed.branchName) {
+        return null;
+      }
+      return parsed as BranchCreatedContent;
     } catch {
       return null;
     }
   }
 
-  parseMilestoneContent(report: WorkerReportSummary): MilestoneContent | null {
+  parseMilestoneContent(content: string): MilestoneContent | null {
     try {
-      const parsed = JSON.parse(report.content) as MilestoneContent;
-      return parsed;
+      const parsed = JSON.parse(content);
+      if (!parsed || typeof parsed.summary !== 'string' || !parsed.summary) {
+        return null;
+      }
+      return parsed as MilestoneContent;
     } catch {
       return null;
     }
@@ -96,13 +102,17 @@ export class WorkerLogPanelComponent {
     if (!url) {
       return null;
     }
+
+    let replaced: string;
     if (url.includes('/-/issues/')) {
-      return url.replace(/\/-\/issues\/\d+/, `/-/tree/${branchName}`);
+      replaced = url.replace(/\/-\/issues\/\d+.*/, `/-/tree/${branchName}`);
+    } else if (url.includes('/issues/')) {
+      replaced = url.replace(/\/issues\/\d+.*/, `/tree/${branchName}`);
+    } else {
+      return null;
     }
-    if (url.includes('/issues/')) {
-      return url.replace(/\/issues\/\d+/, `/tree/${branchName}`);
-    }
-    return null;
+
+    return replaced !== url ? replaced : null;
   }
 
   safeStatus(status: string): string {

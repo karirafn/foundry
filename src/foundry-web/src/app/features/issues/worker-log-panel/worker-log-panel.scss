@@ -25,6 +25,18 @@
   border-top: 1px solid var(--fd-border-muted);
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .worker-log-panel {
   &__header {
     display: flex;
@@ -354,7 +366,7 @@
 
   &__milestone-marker {
     font-size: 0.75rem;
-    color: var(--fd-state-completed);
+    color: var(--fd-state-live);
     flex-shrink: 0;
     min-width: 1rem;
   }
