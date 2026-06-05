@@ -111,6 +111,9 @@ internal sealed class WorkerDispatchService(
 
             if (status is null)
             {
+                string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
+                await IngestReportsAsync(dbContext, activeRun, reportsDir, cancellationToken);
+
                 FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 runsToRemove.Add(activeRun);

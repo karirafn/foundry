@@ -12,6 +12,8 @@ namespace Foundry.Modules.Workers.Infrastructure.Configurations;
 
 file static class WorkerRunValueConverters
 {
+    internal const int BranchNameMaxLength = 500;
+
     internal static readonly ValueConverter<BranchName, string> BranchNameConverter = new(
         bn => bn.Value,
         value => BranchName.From(value));
@@ -82,7 +84,6 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 {
     private const int ContainerIdMaxLength = 200;
-    private const int BranchNameMaxLength = 500;
 
     private static readonly ValueConverter<ContainerId, string> ContainerIdConverter = new(
         id => id.Value,
@@ -107,7 +108,7 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 
         builder.Property(r => r.BranchName)
             .HasConversion(WorkerRunValueConverters.BranchNameConverter)
-            .HasMaxLength(BranchNameMaxLength)
+            .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
     }
@@ -115,7 +116,6 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 
 public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<CompletedRun>
 {
-    private const int BranchNameMaxLength = 500;
     private const int PullRequestUrlMaxLength = 2000;
 
     private static readonly ValueConverter<PullRequestUrl, string> PullRequestUrlConverter = new(
@@ -132,7 +132,7 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
 
         builder.Property(r => r.BranchName)
             .HasConversion(WorkerRunValueConverters.BranchNameConverter)
-            .HasMaxLength(BranchNameMaxLength)
+            .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
 
@@ -146,8 +146,6 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
 
 public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 {
-    private const int BranchNameMaxLength = 500;
-
     private static FailureReason DeserializeReason(string json)
     {
         return JsonSerializer.Deserialize<FailureReason>(json, (JsonSerializerOptions?)null)
@@ -171,7 +169,7 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 
         builder.Property(r => r.BranchName)
             .HasConversion(WorkerRunValueConverters.BranchNameConverter)
-            .HasMaxLength(BranchNameMaxLength)
+            .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
     }
