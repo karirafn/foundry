@@ -75,10 +75,15 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 {
     private const int ContainerIdMaxLength = 200;
+    private const int BranchNameMaxLength = 500;
 
     private static readonly ValueConverter<ContainerId, string> ContainerIdConverter = new(
         id => id.Value,
         value => ContainerId.From(value));
+
+    private static readonly ValueConverter<BranchName, string> BranchNameConverter = new(
+        bn => bn.Value,
+        value => BranchName.From(value));
 
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
@@ -96,6 +101,12 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
             .HasMaxLength(int.MaxValue)
             .IsUnicode(true)
             .HasColumnName("latest_progress");
+
+        builder.Property(r => r.BranchName)
+            .HasConversion(BranchNameConverter)
+            .HasMaxLength(BranchNameMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("branch_name");
     }
 }
 
@@ -136,6 +147,12 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
 
 public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 {
+    private const int BranchNameMaxLength = 500;
+
+    private static readonly ValueConverter<BranchName, string> BranchNameConverter = new(
+        bn => bn.Value,
+        value => BranchName.From(value));
+
     private static FailureReason DeserializeReason(string json)
     {
         return JsonSerializer.Deserialize<FailureReason>(json, (JsonSerializerOptions?)null)
@@ -156,5 +173,11 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 
         builder.Property(r => r.FailedAt)
             .HasColumnName("failed_at");
+
+        builder.Property(r => r.BranchName)
+            .HasConversion(BranchNameConverter)
+            .HasMaxLength(BranchNameMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("branch_name");
     }
 }

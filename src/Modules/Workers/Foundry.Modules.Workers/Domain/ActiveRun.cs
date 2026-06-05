@@ -28,6 +28,8 @@ public sealed class ActiveRun : WorkerRun
 
     public string? LatestProgress { get; private set; }
 
+    public BranchName? BranchName { get; private set; }
+
     internal static ActiveRun FromStarting(StartingRun starting, ContainerId containerId)
     {
         return new ActiveRun(
@@ -41,6 +43,14 @@ public sealed class ActiveRun : WorkerRun
     public void UpdateProgress(string progress)
     {
         LatestProgress = progress;
+    }
+
+    public void SetBranchName(BranchName branchName)
+    {
+        if (BranchName is null)
+        {
+            BranchName = branchName;
+        }
     }
 
     public CompletedRun Complete(int exitCode, BranchName? branchName, PullRequestUrl? pullRequestUrl)
