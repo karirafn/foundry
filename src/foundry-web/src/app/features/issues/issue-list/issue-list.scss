@@ -54,12 +54,15 @@
   }
 
   &__error-retry {
+    align-items: center;
     background: transparent;
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-sm);
     color: var(--fd-text-primary);
     cursor: pointer;
+    display: inline-flex;
     font-size: 0.875rem;
+    min-height: 44px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
 
     &:hover {
