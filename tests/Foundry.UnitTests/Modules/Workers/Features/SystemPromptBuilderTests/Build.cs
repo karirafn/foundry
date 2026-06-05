@@ -45,7 +45,7 @@ public sealed class Build
         string result = SystemPromptBuilder.Build(7, "Short title", "Some body", options);
 
         // Assert
-        result.ShouldEndWith("Issue 7.");
+        result.ShouldContain("Issue 7.");
     }
 
     [Fact]
@@ -401,5 +401,50 @@ public sealed class Build
 
         // Assert
         result.ShouldContain("IMPORTANT SAFETY RULES");
+    }
+
+    [Fact]
+    public void WhenBuiltWithoutRevisionContext_ContainsReportingInstructions()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldContain("branch-created"),
+            () => result.ShouldContain("milestone"),
+            () => result.ShouldContain("report-1.json"));
+    }
+
+    [Fact]
+    public void WhenBuiltWithRevisionContext_ReportingInstructionsAppearBeforeRevisionSection()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+        RevisionContext revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            [new ReviewComment("Some feedback.")]);
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options, revision);
+
+        // Assert
+        int reportingIndex = result.IndexOf("branch-created", StringComparison.Ordinal);
+        int revisionIndex = result.IndexOf("You are addressing review feedback", StringComparison.Ordinal);
+
+        reportingIndex.ShouldBeGreaterThan(0);
+        revisionIndex.ShouldBeGreaterThan(reportingIndex);
     }
 }
