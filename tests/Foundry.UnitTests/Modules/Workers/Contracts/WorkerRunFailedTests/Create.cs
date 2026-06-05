@@ -37,11 +37,12 @@ public sealed class Create
         string reasonDescription = "Non-zero exit code: 1";
 
         // Act
-        WorkerRunFailed @event = new(workerRunId, issueId, reasonDescription)
-        {
-            BranchName = "feat/102-in-progress",
-            LatestProgress = "Half done",
-        };
+        WorkerRunFailed @event = new(
+            workerRunId,
+            issueId,
+            reasonDescription,
+            BranchName: "feat/102-in-progress",
+            LatestProgress: "Half done");
 
         // Assert
         @event.ShouldSatisfyAllConditions(

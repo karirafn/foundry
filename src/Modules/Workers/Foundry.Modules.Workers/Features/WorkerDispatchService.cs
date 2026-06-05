@@ -120,11 +120,9 @@ internal sealed class WorkerDispatchService(
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
-                        "Orphaned after restart")
-                    {
-                        BranchName = activeRun.BranchName?.Value,
-                        LatestProgress = activeRun.LatestProgress,
-                    }],
+                        "Orphaned after restart",
+                        BranchName: activeRun.BranchName?.Value,
+                        LatestProgress: activeRun.LatestProgress)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -199,11 +197,9 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    "Container not found")
-                {
-                    BranchName = activeRun.BranchName?.Value,
-                    LatestProgress = activeRun.LatestProgress,
-                }],
+                    "Container not found",
+                    BranchName: activeRun.BranchName?.Value,
+                    LatestProgress: activeRun.LatestProgress)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -230,11 +226,9 @@ internal sealed class WorkerDispatchService(
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
-                        "Timed out")
-                    {
-                        BranchName = activeRun.BranchName?.Value,
-                        LatestProgress = activeRun.LatestProgress,
-                    }],
+                        "Timed out",
+                        BranchName: activeRun.BranchName?.Value,
+                        LatestProgress: activeRun.LatestProgress)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -247,9 +241,11 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
+        BranchName? effectiveBranchName = branchName ?? activeRun.BranchName;
+
         if (status.ExitCode == 0)
         {
-            CompletedRun completed = activeRun.Complete(0, branchName, prUrl);
+            CompletedRun completed = activeRun.Complete(0, effectiveBranchName, prUrl);
             await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -257,7 +253,7 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunCompletedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    branchName?.Value,
+                    effectiveBranchName?.Value,
                     prUrl?.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
@@ -265,7 +261,7 @@ internal sealed class WorkerDispatchService(
             logger.LogInformation(
                 "Worker run {WorkerRunId} completed successfully (branch: {BranchName}, PR: {PrUrl}).",
                 activeRun.Id,
-                branchName?.Value ?? "(none)",
+                effectiveBranchName?.Value ?? "(none)",
                 prUrl?.Value ?? "(none)");
 
             await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
@@ -282,11 +278,9 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    exitReason)
-                {
-                    BranchName = activeRun.BranchName?.Value,
-                    LatestProgress = activeRun.LatestProgress,
-                }],
+                    exitReason,
+                    BranchName: activeRun.BranchName?.Value,
+                    LatestProgress: activeRun.LatestProgress)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -426,7 +420,10 @@ internal sealed class WorkerDispatchService(
 
             if (payload.Summary is not null)
             {
-                activeRun.UpdateProgress(payload.Summary);
+                string summary = payload.Summary.Length > MaxProgressLength
+                    ? payload.Summary[..MaxProgressLength]
+                    : payload.Summary;
+                activeRun.UpdateProgress(summary);
             }
 
             if (payload.BranchName is not null)
@@ -476,6 +473,7 @@ internal sealed class WorkerDispatchService(
         return null;
     }
 
+    private const int MaxProgressLength = 2000;
     private const long MaxReportFileSizeBytes = 1_048_576;
 
     private (WorkerReportPayload? Payload, string? Content) TryParseReport(string filePath)

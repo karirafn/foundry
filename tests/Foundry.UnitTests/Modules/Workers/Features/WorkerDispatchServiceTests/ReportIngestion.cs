@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
@@ -50,7 +51,9 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         return filePath;
     }
 
-    private WorkerDispatchService BuildReportService(IWorkerOrchestrator orchestrator)
+    private WorkerDispatchService BuildReportService(
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher? integrationEventDispatcher = null)
     {
         WorkerOptions options = new()
         {
@@ -62,7 +65,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         };
 
         // Delegates to base.BuildService — accesses inherited instance state.
-        return base.BuildService(orchestrator, options);
+        return base.BuildService(orchestrator, options, integrationEventDispatcher);
     }
 
     [Fact]
@@ -219,6 +222,33 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenOnlyBranchCreatedReportIngested_CompletedRunHasBranchName()
+    {
+        // Arrange — write only a branch-created report (no final report), then container exits with code 0
+        ActiveRun activeRun = SeedActiveRun("container-branch-only-complete");
+        WriteReportFile(activeRun.Id, 1, new
+        {
+            type = "branch-created",
+            status = "in_progress",
+            summary = "Branch created",
+            error = (string?)null,
+            prUrl = (string?)null,
+            branchName = "feat/102-feature",
+            metrics = (object?)null,
+        });
+        WorkerDispatchService sut = BuildReportService(new ExitedStubWorkerOrchestrator(exitCode: 0));
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — CompletedRun falls back to branch name from the branch-created report
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        CompletedRun completedRun = run.ShouldBeOfType<CompletedRun>();
+        completedRun.BranchName.ShouldBe(BranchName.From("feat/102-feature"));
+    }
+
+    [Fact]
     public async Task WhenReportJsonIsInvalid_ReportIsSkippedAndRetried()
     {
         // Arrange — write invalid JSON
@@ -363,7 +393,8 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
             branchName = "feat/102-work-in-progress",
             metrics = (object?)null,
         });
-        WorkerDispatchService sut = BuildReportService(new ExitedStubWorkerOrchestrator(exitCode: 1));
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildReportService(new ExitedStubWorkerOrchestrator(exitCode: 1), dispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -373,6 +404,12 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         failedRun.BranchName.ShouldBe(BranchName.From("feat/102-work-in-progress"));
+
+        // Assert — WorkerRunFailed integration event carries branch name
+        WorkerRunFailed failedEvent = dispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.BranchName.ShouldBe("feat/102-work-in-progress");
     }
 
     private sealed class RunningStubWorkerOrchestrator : IWorkerOrchestrator

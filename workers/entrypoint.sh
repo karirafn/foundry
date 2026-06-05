@@ -33,6 +33,10 @@ git -C /workspace remote set-url origin "$CLONE_URL"
 cd /workspace
 
 if [[ -n "${BRANCH_NAME:-}" ]]; then
+    if [[ ! "$BRANCH_NAME" =~ ^[a-zA-Z0-9_/.-]+$ ]]; then
+        echo "ERROR: BRANCH_NAME contains invalid characters: $BRANCH_NAME" >&2
+        exit 1
+    fi
     git switch -- "$BRANCH_NAME" || git switch -c "$BRANCH_NAME"
 fi
 

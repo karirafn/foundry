@@ -424,6 +424,28 @@ public sealed class Build
     }
 
     [Fact]
+    public void WhenBuilt_ReportingInstructionsSectionHasStructuralSeparator()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "TEMPLATE_MARKER",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+
+        // Assert — separator appears before reporting instructions to isolate from template content
+        int templateIndex = result.IndexOf("TEMPLATE_MARKER", StringComparison.Ordinal);
+        int separatorIndex = result.IndexOf("---", StringComparison.Ordinal);
+        int reportingHeadingIndex = result.IndexOf("## Reporting", StringComparison.Ordinal);
+
+        separatorIndex.ShouldBeGreaterThan(templateIndex);
+        reportingHeadingIndex.ShouldBeGreaterThan(separatorIndex);
+    }
+
+    [Fact]
     public void WhenBuiltWithRevisionContext_ReportingInstructionsAppearBeforeRevisionSection()
     {
         // Arrange

@@ -19,6 +19,11 @@ internal static class SystemPromptBuilder
 
     private const string ReportingInstructions =
         """
+
+        ---
+
+        ## Reporting
+
         REPORTING INSTRUCTIONS — Write JSON report files to ./reports/ at key points during implementation.
 
         Use sequential filenames: report-1.json, report-2.json, etc. The reports directory will be created for you.
@@ -45,7 +50,7 @@ internal static class SystemPromptBuilder
           "status": "success",
           "summary": "<overall summary of what was implemented>",
           "branchName": "<the branch name>",
-          "prUrl": "<the PR URL if a PR was created, otherwise null>"
+          "prUrl": "<the PR URL if a PR was created, or omit this field>"
         }
 
         Important: Always push the branch to the remote BEFORE writing the branch-created report.
