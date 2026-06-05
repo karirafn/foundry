@@ -287,6 +287,78 @@
     font-family: var(--fd-font-mono);
   }
 
+  &__branch-created-card {
+    background: var(--fd-bg-card);
+    border: 1px solid var(--fd-border-default);
+    border-inline-start: 3px solid var(--fd-text-link);
+    border-radius: var(--fd-radius-md);
+    padding: var(--fd-spacing-md) var(--fd-spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__branch-created-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--fd-text-link);
+  }
+
+  &__branch-created-summary {
+    font-size: 0.8125rem;
+    color: var(--fd-text-primary);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  &__branch-name {
+    font-family: var(--fd-font-mono);
+    font-size: 0.75rem;
+    color: var(--fd-text-secondary);
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    padding: 1px 6px;
+    display: inline-block;
+  }
+
+  &__branch-link {
+    font-size: 0.8125rem;
+    color: var(--fd-text-link);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fd-spacing-xs);
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
+
+  &__entry--milestone {
+    border-inline-start: 3px solid var(--fd-state-completed);
+    padding-inline-start: calc(var(--fd-spacing-lg) - 3px);
+
+    & .worker-log-panel__content {
+      color: var(--fd-text-primary);
+      font-weight: 500;
+    }
+  }
+
+  &__milestone-marker {
+    font-size: 0.75rem;
+    color: var(--fd-state-completed);
+    flex-shrink: 0;
+    min-width: 1rem;
+  }
+
   &__scroll-pill {
     position: sticky;
     inset-block-end: var(--fd-spacing-md);

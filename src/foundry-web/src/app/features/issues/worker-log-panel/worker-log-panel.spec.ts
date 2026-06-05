@@ -1,6 +1,35 @@
 import { TestBed } from '@angular/core/testing';
 import { WorkerLogPanelComponent } from './worker-log-panel';
-import { WorkerReportSummary } from '../worker-report.model';
+import { BranchCreatedContent, MilestoneContent, WorkerReportSummary } from '../worker-report.model';
+
+const mockBranchCreatedContent: BranchCreatedContent = {
+  type: 'branch-created',
+  branchName: 'foundry/issue-42/main',
+  summary: 'Created branch and pushed initial commit',
+};
+
+const mockBranchCreatedReport: WorkerReportSummary = {
+  id: 'report-10',
+  workerRunId: 'run-1',
+  sequenceNumber: 10,
+  reportType: 'branch-created',
+  content: JSON.stringify(mockBranchCreatedContent),
+  ingestedAt: '2026-06-01T14:35:00Z',
+};
+
+const mockMilestoneContent: MilestoneContent = {
+  type: 'milestone',
+  summary: 'Tests passing, ready to commit',
+};
+
+const mockMilestoneReport: WorkerReportSummary = {
+  id: 'report-11',
+  workerRunId: 'run-1',
+  sequenceNumber: 11,
+  reportType: 'milestone',
+  content: JSON.stringify(mockMilestoneContent),
+  ingestedAt: '2026-06-01T14:36:00Z',
+};
 
 const mockProgressReport: WorkerReportSummary = {
   id: 'report-1',
@@ -44,6 +73,7 @@ function setup(overrides: {
   error?: string | null;
   isLive?: boolean;
   hideHeader?: boolean;
+  issueUrl?: string | null;
 } = {}) {
   const retryEmitted: boolean[] = [];
 
@@ -57,6 +87,9 @@ function setup(overrides: {
   fixture.componentRef.setInput('error', overrides.error ?? null);
   fixture.componentRef.setInput('isLive', overrides.isLive ?? false);
   fixture.componentRef.setInput('hideHeader', overrides.hideHeader ?? false);
+  if (overrides.issueUrl !== undefined) {
+    fixture.componentRef.setInput('issueUrl', overrides.issueUrl);
+  }
   fixture.componentInstance.retry.subscribe(() => retryEmitted.push(true));
 
   return { fixture, retryEmitted };
@@ -448,6 +481,74 @@ describe('WorkerLogPanelComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const metrics = el.querySelector('.worker-log-panel__final-metrics');
     expect(metrics).toBeFalsy();
+  });
+
+  // Cycle 12: branch-created report rendering
+  it('should render branch-created report as a card with the branch name visible', () => {
+    // Arrange
+    const { fixture } = setup({ reports: [mockBranchCreatedReport] });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const card = el.querySelector('.worker-log-panel__branch-created-card');
+    expect(card).toBeTruthy();
+    const branchName = el.querySelector('.worker-log-panel__branch-name');
+    expect(branchName?.textContent?.trim()).toContain('foundry/issue-42/main');
+  });
+
+  it('should render branch-created report with a View branch link when issueUrl is a GitHub URL', () => {
+    // Arrange
+    const { fixture } = setup({
+      reports: [mockBranchCreatedReport],
+      issueUrl: 'https://github.com/owner/repo/issues/42',
+    });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const link = el.querySelector('.worker-log-panel__branch-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/tree/foundry/issue-42/main');
+    expect(link?.getAttribute('target')).toBe('_blank');
+  });
+
+  it('should not render branch link when issueUrl is null', () => {
+    // Arrange
+    const { fixture } = setup({
+      reports: [mockBranchCreatedReport],
+      issueUrl: null,
+    });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const link = el.querySelector('.worker-log-panel__branch-link');
+    expect(link).toBeFalsy();
+    const branchName = el.querySelector('.worker-log-panel__branch-name');
+    expect(branchName?.textContent?.trim()).toContain('foundry/issue-42/main');
+  });
+
+  // Cycle 13: milestone report rendering
+  it('should render milestone report entry with its summary text', () => {
+    // Arrange
+    const { fixture } = setup({ reports: [mockMilestoneReport] });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const entry = el.querySelector('.worker-log-panel__entry--milestone');
+    expect(entry).toBeTruthy();
+    const content = el.querySelector('.worker-log-panel__content');
+    expect(content?.textContent?.trim()).toContain('Tests passing, ready to commit');
   });
 
   // Cycle 11: hideHeader input

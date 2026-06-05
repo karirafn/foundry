@@ -12,7 +12,12 @@ import {
   signal,
 } from '@angular/core';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
-import { FinalReportContent, WorkerReportSummary } from '../worker-report.model';
+import {
+  BranchCreatedContent,
+  FinalReportContent,
+  MilestoneContent,
+  WorkerReportSummary,
+} from '../worker-report.model';
 
 @Component({
   selector: 'fd-worker-log-panel',
@@ -28,6 +33,7 @@ export class WorkerLogPanelComponent {
   readonly error: InputSignal<string | null> = input.required<string | null>();
   readonly isLive: InputSignal<boolean> = input.required<boolean>();
   readonly hideHeader: InputSignal<boolean> = input<boolean>(false);
+  readonly issueUrl = input<string | null>(null);
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   @ViewChild('scrollContainer') private readonly _scrollContainer?: ElementRef<HTMLElement>;
@@ -65,6 +71,38 @@ export class WorkerLogPanelComponent {
     } catch {
       return null;
     }
+  }
+
+  parseBranchCreatedContent(report: WorkerReportSummary): BranchCreatedContent | null {
+    try {
+      const parsed = JSON.parse(report.content) as BranchCreatedContent;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  parseMilestoneContent(report: WorkerReportSummary): MilestoneContent | null {
+    try {
+      const parsed = JSON.parse(report.content) as MilestoneContent;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  buildBranchUrl(branchName: string): string | null {
+    const url = this.issueUrl();
+    if (!url) {
+      return null;
+    }
+    if (url.includes('/-/issues/')) {
+      return url.replace(/\/-\/issues\/\d+/, `/-/tree/${branchName}`);
+    }
+    if (url.includes('/issues/')) {
+      return url.replace(/\/issues\/\d+/, `/tree/${branchName}`);
+    }
+    return null;
   }
 
   safeStatus(status: string): string {
