@@ -36,8 +36,8 @@
 
   &__separator {
     border: none;
-    border-top: 1px solid var(--fd-border-muted);
-    margin: 0;
+    border-top: 1px solid var(--fd-text-tertiary);
+    margin-block: var(--fd-spacing-xs);
   }
 
   &__detail-wrapper {
