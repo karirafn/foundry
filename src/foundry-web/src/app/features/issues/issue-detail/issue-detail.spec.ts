@@ -104,17 +104,21 @@ const mobileMqFactory = (query: string): MediaQueryList => ({
 describe('IssueDetailComponent', () => {
   // Cycle 1: component creates
   it('should create the component', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, false);
+
+    // Act — component renders on creation
 
     // Assert
     expect(fixture.componentInstance).toBeTruthy();
   });
 
   it('should render with role="region" when detail is provided', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const region = el.querySelector('[role="region"]');
@@ -123,9 +127,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 2: loading skeleton
   it('should show shimmer skeleton when loading is true', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, true);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const skeleton = el.querySelector('.issue-detail__skeleton');
@@ -133,9 +139,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should mark skeleton container as aria-busy when loading', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, true);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const skeleton = el.querySelector('[aria-busy="true"]');
@@ -143,9 +151,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should render three shimmer bars in the skeleton', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, true);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const bars = el.querySelectorAll('.issue-detail__shimmer-bar');
@@ -153,9 +163,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show skeleton when not loading', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail, false);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const skeleton = el.querySelector('.issue-detail__skeleton');
@@ -164,9 +176,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 4: labels
   it('should render each label as a pill', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const pills = el.querySelectorAll('.issue-detail__label-pill');
@@ -178,9 +192,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 5: state detail fields - PR link
   it('should render a PR link when pullRequestUrl is present', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
@@ -190,9 +206,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should set aria-label on PR link to include issue number', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
@@ -233,9 +251,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 6: state detail fields - branchName
   it('should display the branch name when present', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const branch = el.querySelector('.issue-detail__branch');
@@ -260,9 +280,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 7: aria-label includes issue number
   it('should set aria-label referencing the issue number', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const region = el.querySelector('[role="region"]') as HTMLElement;
@@ -271,9 +293,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 8: error state
   it('should show error message when error input is truthy', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, false, 'Http failure');
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const errorEl = el.querySelector('.issue-detail__error');
@@ -282,9 +306,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show detail content when error is present', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, false, 'Http failure');
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const content = el.querySelector('.issue-detail__content');
@@ -292,9 +318,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show skeleton when error is present', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, true, 'Http failure');
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const skeleton = el.querySelector('.issue-detail__skeleton');
@@ -302,9 +330,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show error block when error is null', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail, false, null);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const errorEl = el.querySelector('.issue-detail__error');
@@ -313,9 +343,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 9: View Logs button — appears when workerRunId is non-null
   it('should show "View Logs" button when workerRunId is non-null', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
@@ -324,9 +356,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show "View Logs" button when workerRunId is null', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn');
@@ -335,9 +369,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 10: aria-expanded is false initially
   it('should set aria-expanded="false" on "View Logs" button initially', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
@@ -345,9 +381,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not set aria-controls when log panel is closed', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
@@ -417,9 +455,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not render inline log panel when "View Logs" is not clicked', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const panel = el.querySelector('.issue-detail__log-panel-inline');
@@ -484,9 +524,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 15: terminal icon is present in "View Logs" button
   it('should include an SVG icon inside the "View Logs" button', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
@@ -523,9 +565,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not render violations section when state is not ineligible', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const violations = el.querySelector('.issue-detail__violations');
@@ -592,9 +636,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not render retry eligibility button when state is not ineligible', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__retry-eligibility-btn');
