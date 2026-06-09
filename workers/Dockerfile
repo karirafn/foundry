@@ -17,7 +17,7 @@ RUN mkdir -p /home/node/.claude && chown node:node /home/node/.claude
 ARG INSTALL_DOTNET=false
 RUN if [ "$INSTALL_DOTNET" = "true" ]; then \
         apt-get update && \
-        apt-get install -y --no-install-recommends curl && \
+        apt-get install -y --no-install-recommends curl gnupg && \
         curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
             | gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg && \
         echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/microsoft-debian-bookworm-prod bookworm main" \
