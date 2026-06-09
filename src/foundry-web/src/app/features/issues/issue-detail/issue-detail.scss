@@ -42,14 +42,28 @@
     padding: var(--fd-spacing-lg);
   }
 
-  &__section {
+  &__issue-link {
+    display: inline-block;
     margin-bottom: var(--fd-spacing-lg);
+    color: var(--fd-text-link);
+    font-size: 0.8125rem;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
   }
 
   &__labels {
     display: flex;
     flex-wrap: wrap;
     gap: var(--fd-spacing-xs);
+    margin-bottom: var(--fd-spacing-lg);
   }
 
   &__label-pill {

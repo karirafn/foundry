@@ -775,6 +775,53 @@ describe('IssueDetailComponent', () => {
     expect(retryBtn).toBeFalsy();
   });
 
+  // B10: persistent "View issue" link is always present in the detail panel
+  it('should render a "View issue" link when detail is present', () => {
+    // Arrange
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
+
+    // Assert
+    const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link?.textContent?.trim()).toBe('View issue');
+    expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('should set aria-label on issue link to include issue number', () => {
+    // Arrange
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
+
+    // Assert
+    const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
+    expect(link?.getAttribute('aria-label')).toBe('View issue #42 on provider');
+  });
+
+  it('should render "View issue" link for early-state issues with null stateDetails', () => {
+    // Arrange
+    const detectedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'detected',
+      stateDetails: null,
+    };
+
+    // Act
+    const fixture = createComponent(detectedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
+  });
+
   // B2 guard: null stateDetails must not throw
   it('should render content region without error when stateDetails is null (detected/queued states)', () => {
     // Arrange — detected state returns null stateDetails from the API

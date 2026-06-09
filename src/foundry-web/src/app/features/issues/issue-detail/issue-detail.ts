@@ -73,13 +73,19 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
         role="region"
         [attr.aria-label]="'Issue details for #' + d.issueNumber"
       >
+        <a
+          class="issue-detail__issue-link"
+          [href]="d.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          [attr.aria-label]="'View issue #' + d.issueNumber + ' on provider'"
+        >View issue</a>
+
         @if (d.labels.length > 0) {
-          <div class="issue-detail__section">
-            <div class="issue-detail__labels">
-              @for (label of d.labels; track label) {
-                <span class="issue-detail__label-pill">{{ label }}</span>
-              }
-            </div>
+          <div class="issue-detail__labels">
+            @for (label of d.labels; track label) {
+              <span class="issue-detail__label-pill">{{ label }}</span>
+            }
           </div>
         }
 
