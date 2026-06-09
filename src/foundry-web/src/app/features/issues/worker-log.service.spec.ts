@@ -261,7 +261,21 @@ describe('WorkerLogService', () => {
     expect(svc.isLive()).toBe(false);
   });
 
-  // Cycle 14: close() resets all state
+  // Cycle 14: open() rejects invalid issueId
+  it('should set error and loading false when open is called with an invalid issueId', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.open('run-1', '../../admin', 'completed');
+
+    // Assert
+    expect(svc.error()).toBe('Invalid issue ID');
+    expect(svc.loading()).toBe(false);
+    http.expectNone('/api/workers/run-1/reports');
+  });
+
+  // Cycle 15: close() resets all state
   it('should reset all signals after close', () => {
     // Arrange
     const { svc, http } = setup(true);

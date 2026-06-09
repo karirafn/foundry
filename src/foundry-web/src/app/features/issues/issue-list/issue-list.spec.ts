@@ -343,6 +343,93 @@ describe('IssueListComponent', () => {
     expect(indicator).toBeTruthy();
   });
 
+  // Cycle 7: separator renders between live and non-live issues
+  it('should render an hr separator when there are both live and non-live issues', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
+    const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'non-live', state: 'completed', issueNumber: 43 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([liveIssue, nonLiveIssue]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const separator = el.querySelector('hr.issue-list__separator');
+    expect(separator).toBeTruthy();
+    expect(separator?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('should not render an hr separator when all issues are in-progress', () => {
+    // Arrange
+    const live1: IssueSummary = { ...mockSummary, id: 'live-1', state: 'in_progress' };
+    const live2: IssueSummary = { ...mockSummary, id: 'live-2', state: 'revision_in_progress', issueNumber: 43 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([live1, live2]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const separator = el.querySelector('hr.issue-list__separator');
+    expect(separator).toBeFalsy();
+  });
+
+  it('should not render an hr separator when no issues are in-progress', () => {
+    // Arrange
+    const non1: IssueSummary = { ...mockSummary, id: 'non-1', state: 'completed' };
+    const non2: IssueSummary = { ...mockSummary, id: 'non-2', state: 'failed', issueNumber: 43 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([non1, non2]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const separator = el.querySelector('hr.issue-list__separator');
+    expect(separator).toBeFalsy();
+  });
+
+  it('should not render an hr separator when the list is empty', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const separator = el.querySelector('hr.issue-list__separator');
+    expect(separator).toBeFalsy();
+  });
+
+  // Cycle 8: sr-only span announces section boundary for screen readers
+  it('should render an sr-only span announcing the section boundary when there are both live and non-live issues', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
+    const completedIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'completed', issueNumber: 43 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([liveIssue, completedIssue]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const srSpan = el.querySelector('.sr-only');
+    expect(srSpan).toBeTruthy();
+    expect(srSpan?.textContent).toContain('End of in-progress issues');
+  });
+
   // Cycle 6: expand/collapse wiring - fd-issue-detail appears when card is expanded
   it('should show fd-issue-detail for the expanded issue after card toggle', () => {
     // Arrange

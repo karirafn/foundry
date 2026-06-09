@@ -86,11 +86,11 @@ describe('IssueService', () => {
     expect(req.request.method).toBe('GET');
   });
 
-  // Cycle 3: sortedIssues computed signal returns issues sorted by detectedAt descending
-  it('should sort issues by detectedAt descending in sortedIssues', () => {
+  // Cycle 3: sortedIssues computed signal returns non-live issues sorted by detectedAt descending
+  it('should sort non-live issues by detectedAt descending in sortedIssues', () => {
     // Arrange
-    const older: IssueSummary = { ...mockSummary, id: 'older', detectedAt: '2026-01-01T00:00:00Z' };
-    const newer: IssueSummary = { ...mockSummary, id: 'newer', detectedAt: '2026-06-01T00:00:00Z' };
+    const older: IssueSummary = { ...mockSummary, id: 'older', state: 'completed', detectedAt: '2026-01-01T00:00:00Z' };
+    const newer: IssueSummary = { ...mockSummary, id: 'newer', state: 'completed', detectedAt: '2026-06-01T00:00:00Z' };
 
     // Act
     service.loadIssues();
@@ -99,6 +99,93 @@ describe('IssueService', () => {
     // Assert
     expect(service.sortedIssues()[0].id).toBe('newer');
     expect(service.sortedIssues()[1].id).toBe('older');
+  });
+
+  // Cycle 3b: live issues sort before non-live issues
+  it('should sort live issues before non-live issues in sortedIssues', () => {
+    // Arrange
+    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'completed', detectedAt: '2026-06-01T00:00:00Z' };
+    const live: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([nonLive, live]);
+
+    // Assert — live appears first even though it has an older detectedAt
+    expect(service.sortedIssues()[0].id).toBe('live');
+    expect(service.sortedIssues()[1].id).toBe('non-live');
+  });
+
+  // Cycle 3c: revision_in_progress is treated as a live state
+  it('should treat revision_in_progress as a live state in sortedIssues', () => {
+    // Arrange
+    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'failed', detectedAt: '2026-06-01T00:00:00Z' };
+    const revision: IssueSummary = { ...mockSummary, id: 'revision', state: 'revision_in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([nonLive, revision]);
+
+    // Assert — revision_in_progress appears first even with an older detectedAt
+    expect(service.sortedIssues()[0].id).toBe('revision');
+    expect(service.sortedIssues()[1].id).toBe('non-live');
+  });
+
+  // Cycle 3d: within the live group, issues are sorted by detectedAt descending
+  it('should sort live issues by detectedAt descending within the live group', () => {
+    // Arrange
+    const liveOlder: IssueSummary = { ...mockSummary, id: 'live-older', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+    const liveNewer: IssueSummary = { ...mockSummary, id: 'live-newer', state: 'revision_in_progress', detectedAt: '2026-06-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([liveOlder, liveNewer]);
+
+    // Assert
+    expect(service.sortedIssues()[0].id).toBe('live-newer');
+    expect(service.sortedIssues()[1].id).toBe('live-older');
+  });
+
+  // Cycle 3e: liveIssueCount returns 0 when no live issues
+  it('should return 0 for liveIssueCount when there are no live issues', () => {
+    // Arrange
+    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'completed' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([nonLive]);
+
+    // Assert
+    expect(service.liveIssueCount()).toBe(0);
+  });
+
+  // Cycle 3f: liveIssueCount returns count of live issues when all are live
+  it('should return correct count for liveIssueCount when all issues are live', () => {
+    // Arrange
+    const live1: IssueSummary = { ...mockSummary, id: 'live-1', state: 'in_progress' };
+    const live2: IssueSummary = { ...mockSummary, id: 'live-2', state: 'revision_in_progress' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([live1, live2]);
+
+    // Assert
+    expect(service.liveIssueCount()).toBe(2);
+  });
+
+  // Cycle 3g: liveIssueCount returns correct count in a mixed list
+  it('should return the number of live issues for liveIssueCount in a mixed list', () => {
+    // Arrange
+    const live: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
+    const nonLive1: IssueSummary = { ...mockSummary, id: 'non-live-1', state: 'completed' };
+    const nonLive2: IssueSummary = { ...mockSummary, id: 'non-live-2', state: 'failed' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([live, nonLive1, nonLive2]);
+
+    // Assert
+    expect(service.liveIssueCount()).toBe(1);
   });
 
   // Cycle 4: isEmpty computed signal reflects issue count
@@ -533,6 +620,41 @@ describe('IssueService', () => {
     // Assert
     expect(service.retryingEligibility()).toBe(false);
     expect(service.detailError()).not.toBeNull();
+  });
+
+  // Cycle 14: _upsertIssue rejects ids that do not match safe-id pattern
+  it('should not upsert an issue with an id containing a path traversal sequence', () => {
+    // Arrange
+    const callbacks: Record<string, (data: IssueSummary) => void> = {};
+    const { svc, http } = setupWithCapturingSignalR(callbacks, []);
+
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([]);
+    expect(svc.issues().length).toBe(0);
+
+    const malicious: IssueSummary = { ...mockSummary, id: '../../admin' };
+
+    // Act
+    callbacks['IssueUpdated'](malicious);
+
+    // Assert — issues list stays empty, the malicious id was rejected
+    expect(svc.issues().length).toBe(0);
+    http.verify();
+  });
+
+  // Cycle 15: loadIssues filters out items with invalid IDs
+  it('should filter out issues with invalid ids returned by loadIssues', () => {
+    // Arrange
+    const valid: IssueSummary = { ...mockSummary, id: 'valid-id' };
+    const invalid: IssueSummary = { ...mockSummary, id: '../../admin' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([valid, invalid]);
+
+    // Assert — only the valid issue is stored
+    expect(service.issues().length).toBe(1);
+    expect(service.issues()[0].id).toBe('valid-id');
   });
 
   // Cycle 12: Reconnect backfill calls loadIssues

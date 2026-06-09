@@ -45,3 +45,5 @@ export interface IssueDetail extends IssueSummary {
   labels: string[];
   stateDetails: IssueStateDetails | null;
 }
+
+export const LIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress']);

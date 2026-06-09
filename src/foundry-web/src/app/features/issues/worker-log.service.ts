@@ -1,10 +1,10 @@
 import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
-import { IssueState } from './issue.model';
+import { IssueState, LIVE_STATES } from './issue.model';
 import { WorkerReportSummary } from './worker-report.model';
 
-const LIVE_STATES: ReadonlySet<string> = new Set<IssueState>(['in_progress', 'revision_in_progress']);
+const SAFE_ID_RE = /^[\w-]+$/;
 
 export interface WorkerLogHub {
   on(methodName: string, callback: (report: WorkerReportSummary) => void): void;
@@ -54,7 +54,19 @@ export class WorkerLogService {
 
   private _hub: WorkerLogHub | null = null;
 
-  open(workerRunId: string, issueId: string, issueState: string): void {
+  open(workerRunId: string, issueId: string, issueState: IssueState): void {
+    if (!SAFE_ID_RE.test(issueId)) {
+      this._error.set('Invalid issue ID');
+      this._loading.set(false);
+      return;
+    }
+
+    if (!SAFE_ID_RE.test(workerRunId)) {
+      this._error.set('Invalid worker run ID');
+      this._loading.set(false);
+      return;
+    }
+
     this._activeWorkerRunId.set(workerRunId);
     this._activeIssueId.set(issueId);
     this._isLive.set(LIVE_STATES.has(issueState));
@@ -79,7 +91,7 @@ export class WorkerLogService {
   }
 
   private _loadReports(workerRunId: string): void {
-    this._http.get<WorkerReportSummary[]>(`/api/workers/${workerRunId}/reports`).subscribe({
+    this._http.get<WorkerReportSummary[]>(`/api/workers/${encodeURIComponent(workerRunId)}/reports`).subscribe({
       next: (reports) => {
         this._reports.set([...reports].sort((a, b) => a.sequenceNumber - b.sequenceNumber));
         this._loading.set(false);

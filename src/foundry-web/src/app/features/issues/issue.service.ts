@@ -2,10 +2,11 @@ import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@a
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
-import { IssueDetail, IssueSummary } from './issue.model';
+import { IssueDetail, IssueSummary, LIVE_STATES } from './issue.model';
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
+const SAFE_ID_RE = /^[\w-]+$/;
 
 @Injectable({ providedIn: 'root' })
 export class IssueService {
@@ -27,10 +28,17 @@ export class IssueService {
 
   private _detailSub: Subscription | null = null;
 
-  readonly sortedIssues: Signal<IssueSummary[]> = computed(() =>
-    [...this.issues()].sort(
-      (a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime()
-    )
+  readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
+    const byDate = (a: IssueSummary, b: IssueSummary): number =>
+      new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
+    const all = this.issues();
+    const live = [...all].filter(i => LIVE_STATES.has(i.state)).sort(byDate);
+    const other = [...all].filter(i => !LIVE_STATES.has(i.state)).sort(byDate);
+    return [...live, ...other];
+  });
+
+  readonly liveIssueCount: Signal<number> = computed(() =>
+    this.issues().filter(i => LIVE_STATES.has(i.state)).length
   );
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
@@ -50,7 +58,7 @@ export class IssueService {
 
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
       next: (issues) => {
-        this.issues.set(issues);
+        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id)));
         this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
@@ -66,7 +74,7 @@ export class IssueService {
     this._detailSub?.unsubscribe();
     this._detailErrorSignal.set(null);
     this.detailLoading.set(true);
-    this._detailSub = this._http.get<IssueDetail>(`/api/issues/${id}`).subscribe({
+    this._detailSub = this._http.get<IssueDetail>(`/api/issues/${encodeURIComponent(id)}`).subscribe({
       next: (detail) => {
         const expanded = this.expandedIssueId();
         if (expanded !== null && expanded !== id) {
@@ -103,7 +111,7 @@ export class IssueService {
 
   retryEligibility(id: string): void {
     this.retryingEligibility.set(true);
-    this._http.post<void>(`/api/issues/${id}/retry-eligibility`, {}).subscribe({
+    this._http.post<void>(`/api/issues/${encodeURIComponent(id)}/retry-eligibility`, {}).subscribe({
       next: () => {
         this.retryingEligibility.set(false);
         this.loadDetail(id);
@@ -117,6 +125,11 @@ export class IssueService {
   }
 
   private _upsertIssue(updated: IssueSummary): void {
+    if (!SAFE_ID_RE.test(updated.id)) {
+      console.warn('IssueService: rejected IssueUpdated event with invalid id');
+      return;
+    }
+
     const current = this.issues();
     const index = current.findIndex((i) => i.id === updated.id);
 
