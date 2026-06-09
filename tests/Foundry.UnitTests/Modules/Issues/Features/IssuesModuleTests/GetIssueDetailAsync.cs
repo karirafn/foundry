@@ -19,15 +19,15 @@ namespace Foundry.UnitTests.Modules.Issues.Features.IssuesModuleTests;
 
 public sealed class GetIssueDetailAsync : IAsyncDisposable
 {
-    private readonly SqliteConnection _connection;
-    private readonly FoundryDbContext _dbContext;
-    private readonly IIssueQueries _sut;
-    private readonly StubRepositorySlugQueries _slugQueries;
-
     private const string RepositorySlug = "owner/repo";
     private const string DefaultBody = "Issue body";
 
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
+
+    private readonly SqliteConnection _connection;
+    private readonly FoundryDbContext _dbContext;
+    private readonly IIssueQueries _sut;
+    private readonly StubRepositorySlugQueries _slugQueries;
 
     private static IssueAuthor ValidAuthor =>
         ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;

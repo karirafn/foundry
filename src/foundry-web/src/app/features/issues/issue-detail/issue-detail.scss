@@ -82,12 +82,20 @@
     @media (max-width: 767px) {
       grid-template-columns: 1fr;
     }
+
+    &--author {
+      margin-top: var(--fd-spacing-md);
+    }
   }
 
   &__field {
     display: flex;
     flex-direction: column;
     gap: 2px;
+
+    &--full-width {
+      grid-column: 1 / -1;
+    }
   }
 
   &__field-key {

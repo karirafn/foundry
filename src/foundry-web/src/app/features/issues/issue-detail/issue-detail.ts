@@ -170,8 +170,8 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
           </div>
         }
 
-        <div class="issue-detail__fields">
-          <div class="issue-detail__field">
+        <div class="issue-detail__fields issue-detail__fields--author">
+          <div class="issue-detail__field issue-detail__field--full-width">
             <span class="issue-detail__field-key">Author</span>
             <span class="issue-detail__field-value">{{ d.author }}</span>
           </div>
