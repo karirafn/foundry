@@ -145,6 +145,16 @@ public sealed class ImplementsIIssueStateChanged
     }
 
     [Fact]
+    public void IssueContinuationQueued_ImplementsIIssueStateChanged()
+    {
+        // Arrange
+        IssueContinuationQueued @event = new(AnyIssueId, AnyRepositoryId);
+
+        // Act & Assert
+        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+    }
+
+    [Fact]
     public void CircularDependencyDetected_DoesNotImplementIIssueStateChanged()
     {
         // Arrange

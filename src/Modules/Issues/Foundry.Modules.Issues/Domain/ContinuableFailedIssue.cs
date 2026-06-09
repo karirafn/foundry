@@ -76,4 +76,11 @@ public sealed class ContinuableFailedIssue : Issue
         continuable.FailedAt = failedAt;
         return continuable;
     }
+
+    public ContinuationQueuedIssue Retry()
+    {
+        ContinuationQueuedIssue continuationQueued = ContinuationQueuedIssue.FromContinuableFailed(this);
+        AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
+        return continuationQueued;
+    }
 }
