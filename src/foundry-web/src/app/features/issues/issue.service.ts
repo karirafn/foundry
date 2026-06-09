@@ -6,6 +6,7 @@ import { IssueDetail, IssueSummary, LIVE_STATES } from './issue.model';
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
+const SAFE_ID_RE = /^[\w-]+$/;
 
 @Injectable({ providedIn: 'root' })
 export class IssueService {
@@ -73,7 +74,7 @@ export class IssueService {
     this._detailSub?.unsubscribe();
     this._detailErrorSignal.set(null);
     this.detailLoading.set(true);
-    this._detailSub = this._http.get<IssueDetail>(`/api/issues/${id}`).subscribe({
+    this._detailSub = this._http.get<IssueDetail>(`/api/issues/${encodeURIComponent(id)}`).subscribe({
       next: (detail) => {
         const expanded = this.expandedIssueId();
         if (expanded !== null && expanded !== id) {
@@ -110,7 +111,7 @@ export class IssueService {
 
   retryEligibility(id: string): void {
     this.retryingEligibility.set(true);
-    this._http.post<void>(`/api/issues/${id}/retry-eligibility`, {}).subscribe({
+    this._http.post<void>(`/api/issues/${encodeURIComponent(id)}/retry-eligibility`, {}).subscribe({
       next: () => {
         this.retryingEligibility.set(false);
         this.loadDetail(id);
@@ -124,6 +125,11 @@ export class IssueService {
   }
 
   private _upsertIssue(updated: IssueSummary): void {
+    if (!SAFE_ID_RE.test(updated.id)) {
+      console.warn(`IssueService: rejected issue with invalid id "${updated.id}"`);
+      return;
+    }
+
     const current = this.issues();
     const index = current.findIndex((i) => i.id === updated.id);
 

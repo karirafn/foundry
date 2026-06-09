@@ -622,6 +622,26 @@ describe('IssueService', () => {
     expect(service.detailError()).not.toBeNull();
   });
 
+  // Cycle 14: _upsertIssue rejects ids that do not match safe-id pattern
+  it('should not upsert an issue with an id containing a path traversal sequence', () => {
+    // Arrange
+    const callbacks: Record<string, (data: IssueSummary) => void> = {};
+    const { svc, http } = setupWithCapturingSignalR(callbacks, []);
+
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([]);
+    expect(svc.issues().length).toBe(0);
+
+    const malicious: IssueSummary = { ...mockSummary, id: '../../admin' };
+
+    // Act
+    callbacks['IssueUpdated'](malicious);
+
+    // Assert — issues list stays empty, the malicious id was rejected
+    expect(svc.issues().length).toBe(0);
+    http.verify();
+  });
+
   // Cycle 12: Reconnect backfill calls loadIssues
   it('should call loadIssues on reconnect to backfill missed events', () => {
     // Arrange

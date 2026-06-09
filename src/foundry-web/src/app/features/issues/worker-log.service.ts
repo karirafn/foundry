@@ -4,6 +4,8 @@ import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { IssueState, LIVE_STATES } from './issue.model';
 import { WorkerReportSummary } from './worker-report.model';
 
+const SAFE_ID_RE = /^[\w-]+$/;
+
 export interface WorkerLogHub {
   on(methodName: string, callback: (report: WorkerReportSummary) => void): void;
   off(methodName: string): void;
@@ -53,6 +55,12 @@ export class WorkerLogService {
   private _hub: WorkerLogHub | null = null;
 
   open(workerRunId: string, issueId: string, issueState: IssueState): void {
+    if (!SAFE_ID_RE.test(issueId)) {
+      this._error.set('Invalid issue ID');
+      this._loading.set(false);
+      return;
+    }
+
     this._activeWorkerRunId.set(workerRunId);
     this._activeIssueId.set(issueId);
     this._isLive.set(LIVE_STATES.has(issueState));
