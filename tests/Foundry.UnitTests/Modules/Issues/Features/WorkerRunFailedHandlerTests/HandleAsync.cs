@@ -221,4 +221,108 @@ public sealed class HandleAsync : IAsyncDisposable
             .OfType<IssueFailed>()
             .ShouldHaveSingleItem();
     }
+
+    [Fact]
+    public async Task WhenInProgressIssueFailsWithBranchName_TransitionsToContinuableFailedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Non-zero exit code: 1",
+            BranchName: "feat/1-fix-thing",
+            LatestProgress: "Partially done");
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ContinuableFailedIssue continuable = issue.ShouldBeOfType<ContinuableFailedIssue>();
+        continuable.ShouldSatisfyAllConditions(
+            () => continuable.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
+            () => continuable.BranchName.ShouldBe("feat/1-fix-thing"),
+            () => continuable.LatestProgress.ShouldBe("Partially done"),
+            () => continuable.FailureReason.ShouldBe("Non-zero exit code: 1"));
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueFailsWithBranchName_DispatchesIssueContinuableFailedEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Non-zero exit code: 1",
+            BranchName: "feat/1-fix-thing",
+            LatestProgress: "Partially done");
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueContinuableFailed>()
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueFailsWithNullBranchName_TransitionsToFailedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Non-zero exit code: 1",
+            BranchName: null);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<FailedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueFailsWithEmptyBranchName_TransitionsToFailedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Non-zero exit code: 1",
+            BranchName: string.Empty);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<FailedIssue>();
+    }
 }

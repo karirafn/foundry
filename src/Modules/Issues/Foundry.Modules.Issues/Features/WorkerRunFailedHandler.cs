@@ -23,6 +23,18 @@ internal sealed class WorkerRunFailedHandler(
 
         if (issue is InProgressIssue inProgress)
         {
+            if (!string.IsNullOrEmpty(@event.BranchName))
+            {
+                ContinuableFailedIssue continuable = inProgress.MarkContinuableFailed(
+                    @event.WorkerRunId,
+                    @event.BranchName,
+                    @event.LatestProgress ?? string.Empty,
+                    @event.ReasonDescription,
+                    DateTimeOffset.UtcNow);
+                await db.TransitionAsync(inProgress, continuable, domainEventDispatcher, cancellationToken);
+                return;
+            }
+
             FailedIssue failed = inProgress.MarkFailed(
                 @event.WorkerRunId,
                 @event.ReasonDescription,

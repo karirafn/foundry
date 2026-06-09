@@ -74,7 +74,8 @@ public sealed class HandleAsync : IAsyncDisposable
         string body = "Test body",
         string repositorySlug = "owner/repo",
         string secretKeyName = "GITHUB_PAT",
-        RevisionContext? revision = null)
+        RevisionContext? revision = null,
+        ContinuationContext? continuation = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -85,7 +86,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositorySlug,
             new Uri($"https://github.com/{repositorySlug}.git"),
             secretKeyName,
-            revision);
+            revision,
+            Continuation: continuation);
         return new IssueClaimed(dispatch);
     }
 
@@ -462,6 +464,43 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME");
+    }
+
+    [Fact]
+    public async Task WhenContinuationContextPresent_ContainerSpecHasBranchNameEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ContinuationContext continuation = new("feat/42-continue", "Partial implementation done");
+        IssueClaimed @event = BuildEvent(continuation: continuation);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldContainKey("BRANCH_NAME");
+        spec.EnvironmentVariables["BRANCH_NAME"].ShouldBe("feat/42-continue");
+    }
+
+    [Fact]
+    public async Task WhenContinuationContextPresent_SystemPromptContainsContinuationSection()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation-prompt");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ContinuationContext continuation = new("feat/42-continue", "Some partial progress");
+        IssueClaimed @event = BuildEvent(continuation: continuation);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("continuing implementation from a previous failed attempt");
     }
 
     [Fact]

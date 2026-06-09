@@ -446,6 +446,101 @@ public sealed class Build
     }
 
     [Fact]
+    public void WhenContinuationContextProvided_IncludesContinuationInstructions()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        ContinuationContext continuation = new("feat/103-fix", "Models and handlers were partially implemented");
+
+        // Act
+        string result = SystemPromptBuilder.Build(103, "Fix thing", "Body", options, continuation: continuation);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldContain("continuing implementation from a previous failed attempt"),
+            () => result.ShouldContain("Check out the existing branch: feat/103-fix"),
+            () => result.ShouldContain("<previous-progress>"),
+            () => result.ShouldContain("</previous-progress>"),
+            () => result.ShouldContain("Push your changes to the same branch. Do not create a new branch or PR"));
+    }
+
+    [Fact]
+    public void WhenContinuationContextProvided_IncludesLatestProgressInSection()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        ContinuationContext continuation = new("feat/103-fix", "Models and handlers were partially implemented");
+
+        // Act
+        string result = SystemPromptBuilder.Build(103, "Fix thing", "Body", options, continuation: continuation);
+
+        // Assert
+        result.ShouldContain("Models and handlers were partially implemented");
+    }
+
+    [Fact]
+    public void WhenContinuationContextProvided_ProgressAppearsInsidePreviousProgressTags()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        string progress = "Step 1 done, step 2 pending";
+        ContinuationContext continuation = new("feat/103-fix", progress);
+
+        // Act
+        string result = SystemPromptBuilder.Build(103, "Fix thing", "Body", options, continuation: continuation);
+
+        // Assert
+        int openTagIndex = result.IndexOf("<previous-progress>", StringComparison.Ordinal);
+        int closeTagIndex = result.IndexOf("</previous-progress>", StringComparison.Ordinal);
+        int progressIndex = result.IndexOf(progress, StringComparison.Ordinal);
+
+        openTagIndex.ShouldBeGreaterThan(0);
+        closeTagIndex.ShouldBeGreaterThan(openTagIndex);
+        progressIndex.ShouldBeGreaterThan(openTagIndex);
+        progressIndex.ShouldBeLessThan(closeTagIndex);
+    }
+
+    [Fact]
+    public void WhenContinuationContextProvided_SafetyPreambleStillPresent()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+        ContinuationContext continuation = new("feat/1-fix", "Some progress");
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options, continuation: continuation);
+
+        // Assert
+        result.ShouldContain("IMPORTANT SAFETY RULES");
+    }
+
+    [Fact]
+    public void WhenContinuationContextProvided_ReportingInstructionsAppearBeforeContinuationSection()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+        ContinuationContext continuation = new("feat/1-fix", "Some progress");
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options, continuation: continuation);
+
+        // Assert
+        int reportingIndex = result.IndexOf("branch-created", StringComparison.Ordinal);
+        int continuationIndex = result.IndexOf("continuing implementation from a previous failed attempt", StringComparison.Ordinal);
+
+        reportingIndex.ShouldBeGreaterThan(0);
+        continuationIndex.ShouldBeGreaterThan(reportingIndex);
+    }
+
+    [Fact]
     public void WhenBuiltWithRevisionContext_ReportingInstructionsAppearBeforeRevisionSection()
     {
         // Arrange

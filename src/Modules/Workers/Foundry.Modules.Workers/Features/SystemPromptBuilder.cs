@@ -61,7 +61,8 @@ internal static class SystemPromptBuilder
         string title,
         string body,
         WorkerOptions options,
-        RevisionContext? revision = null)
+        RevisionContext? revision = null,
+        ContinuationContext? continuation = null)
     {
         string safetyPreamble = SafetyPreambleTemplate
             .Replace("{branchNamingInstruction}", options.BranchNamingInstruction, StringComparison.Ordinal);
@@ -82,12 +83,17 @@ internal static class SystemPromptBuilder
 
         string prompt = safetyPreamble + "\n\n" + basePrompt + "\n\n" + ReportingInstructions;
 
-        if (revision is null)
+        if (revision is not null)
         {
-            return prompt;
+            return prompt + "\n\n" + BuildRevisionSection(revision);
         }
 
-        return prompt + "\n\n" + BuildRevisionSection(revision);
+        if (continuation is not null)
+        {
+            return prompt + "\n\n" + BuildContinuationSection(continuation);
+        }
+
+        return prompt;
     }
 
     private static string BuildRevisionSection(RevisionContext revision)
@@ -106,6 +112,27 @@ internal static class SystemPromptBuilder
 
         sb.AppendLine("</review-feedback>");
         sb.Append("Push your changes to the same branch. Do not create a new PR.");
+
+        return sb.ToString();
+    }
+
+    private static string BuildContinuationSection(ContinuationContext continuation)
+    {
+        StringBuilder sb = new();
+
+        sb.AppendLine("You are continuing implementation from a previous failed attempt.");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Check out the existing branch: {continuation.BranchName}");
+        sb.AppendLine();
+        sb.AppendLine("Before proceeding, verify the branch state:");
+        sb.AppendLine("1. Review the existing code changes on the branch");
+        sb.AppendLine("2. Run the test suite to understand what works and what doesn't");
+        sb.AppendLine("3. Do not blindly trust the progress summary below — verify it against the actual code");
+        sb.AppendLine();
+        sb.AppendLine("<previous-progress>");
+        sb.AppendLine(continuation.LatestProgress);
+        sb.AppendLine("</previous-progress>");
+        sb.AppendLine();
+        sb.Append("Push your changes to the same branch. Do not create a new branch or PR — resume where the previous attempt left off.");
 
         return sb.ToString();
     }
