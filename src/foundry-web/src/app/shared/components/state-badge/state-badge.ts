@@ -15,6 +15,8 @@ const STATE_LABELS: Record<IssueState, string> = {
   revision_in_progress: 'REV IN PROGRESS',
   revision_failed: 'REV FAILED',
   ineligible: 'INELIGIBLE',
+  continuable_failed: 'CONTINUABLE',
+  continuation_queued: 'CONT QUEUED',
 };
 
 const STATE_ARIA_LABELS: Record<IssueState, string> = {
@@ -31,6 +33,8 @@ const STATE_ARIA_LABELS: Record<IssueState, string> = {
   revision_in_progress: 'revision in progress',
   revision_failed: 'revision failed',
   ineligible: 'not eligible for dispatch',
+  continuable_failed: 'continuable failed',
+  continuation_queued: 'continuation queued',
 };
 
 const STATE_CSS_CLASSES: Record<IssueState, string> = {
@@ -47,6 +51,8 @@ const STATE_CSS_CLASSES: Record<IssueState, string> = {
   revision_in_progress: 'badge--revision-in-progress',
   revision_failed: 'badge--revision-failed',
   ineligible: 'badge--ineligible',
+  continuable_failed: 'badge--continuable-failed',
+  continuation_queued: 'badge--continuation-queued',
 };
 
 @Component({

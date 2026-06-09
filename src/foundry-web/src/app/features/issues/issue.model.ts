@@ -11,7 +11,9 @@ export type IssueState =
   | 'revision_queued'
   | 'revision_in_progress'
   | 'revision_failed'
-  | 'ineligible';
+  | 'ineligible'
+  | 'continuable_failed'
+  | 'continuation_queued';
 
 export interface IssueSummary {
   id: string;

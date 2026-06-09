@@ -60,4 +60,12 @@
   &--ineligible {
     background-color: var(--fd-state-ineligible);
   }
+
+  &--continuable-failed {
+    background-color: var(--fd-state-failed);
+  }
+
+  &--continuation-queued {
+    background-color: var(--fd-state-queued);
+  }
 }
