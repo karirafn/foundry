@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { IssueDetailComponent, MEDIA_QUERY_FACTORY } from './issue-detail';
-import { IssueDetail } from '../issue.model';
+import { IssueDetail, IssueStateDetails } from '../issue.model';
 import { WorkerLogService, WORKER_LOG_HUB_FACTORY } from '../worker-log.service';
 import { IssueService } from '../issue.service';
 import { SignalRService } from '../../../core/services/signalr.service';
@@ -10,6 +10,18 @@ import { SignalRService } from '../../../core/services/signalr.service';
 const mockSignalRService = {
   on: () => {},
   onReconnected: () => {},
+};
+
+const mockStateDetails: IssueStateDetails = {
+  workerRunId: null,
+  branchName: 'feat/dark-mode',
+  pullRequestUrl: 'https://github.com/owner/repo/pull/99',
+  feedbackCutoffAt: null,
+  failureReason: null,
+  failedAt: null,
+  completedAt: '2026-02-01T12:00:00Z',
+  blockedBy: null,
+  violations: null,
 };
 
 const mockDetail: IssueDetail = {
@@ -20,25 +32,15 @@ const mockDetail: IssueDetail = {
   repositorySlug: 'owner/repo',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
-  body: 'We need a dark mode for the dashboard.',
   author: 'dev',
   labels: ['enhancement', 'ui'],
-  stateDetails: {
-    workerRunId: null,
-    branchName: 'feat/dark-mode',
-    pullRequestUrl: 'https://github.com/owner/repo/pull/99',
-    feedbackCutoffAt: null,
-    failureReason: null,
-    failedAt: null,
-    completedAt: '2026-02-01T12:00:00Z',
-    blockedBy: null,
-  },
+  stateDetails: mockStateDetails,
 };
 
 const mockDetailWithWorkerRun: IssueDetail = {
   ...mockDetail,
   stateDetails: {
-    ...mockDetail.stateDetails,
+    ...mockStateDetails,
     workerRunId: 'run-42',
   },
 };
@@ -102,17 +104,21 @@ const mobileMqFactory = (query: string): MediaQueryList => ({
 describe('IssueDetailComponent', () => {
   // Cycle 1: component creates
   it('should create the component', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, false);
+
+    // Act — component renders on creation
 
     // Assert
     expect(fixture.componentInstance).toBeTruthy();
   });
 
   it('should render with role="region" when detail is provided', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const region = el.querySelector('[role="region"]');
@@ -121,9 +127,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 2: loading skeleton
   it('should show shimmer skeleton when loading is true', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, true);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const skeleton = el.querySelector('.issue-detail__skeleton');
@@ -131,9 +139,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should mark skeleton container as aria-busy when loading', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, true);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const skeleton = el.querySelector('[aria-busy="true"]');
@@ -141,9 +151,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should render three shimmer bars in the skeleton', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, true);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const bars = el.querySelectorAll('.issue-detail__shimmer-bar');
@@ -151,31 +163,24 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show skeleton when not loading', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail, false);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const skeleton = el.querySelector('.issue-detail__skeleton');
     expect(skeleton).toBeFalsy();
   });
 
-  // Cycle 3: body content
-  it('should display the issue body text', () => {
-    // Arrange / Act
-    const fixture = createComponent(mockDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const body = el.querySelector('.issue-detail__body');
-    expect(body?.textContent?.trim()).toContain('We need a dark mode');
-  });
-
   // Cycle 4: labels
   it('should render each label as a pill', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const pills = el.querySelectorAll('.issue-detail__label-pill');
@@ -187,9 +192,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 5: state detail fields - PR link
   it('should render a PR link when pullRequestUrl is present', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
@@ -199,9 +206,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should set aria-label on PR link to include issue number', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
@@ -212,7 +221,7 @@ describe('IssueDetailComponent', () => {
     // Arrange
     const detailHttpPr: IssueDetail = {
       ...mockDetail,
-      stateDetails: { ...mockDetail.stateDetails, pullRequestUrl: 'http://github.com/owner/repo/pull/99' },
+      stateDetails: { ...mockStateDetails, pullRequestUrl: 'http://github.com/owner/repo/pull/99' },
     };
 
     // Act
@@ -228,7 +237,7 @@ describe('IssueDetailComponent', () => {
     // Arrange
     const detailNoPr: IssueDetail = {
       ...mockDetail,
-      stateDetails: { ...mockDetail.stateDetails, pullRequestUrl: null },
+      stateDetails: { ...mockStateDetails, pullRequestUrl: null },
     };
 
     // Act
@@ -242,9 +251,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 6: state detail fields - branchName
   it('should display the branch name when present', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const branch = el.querySelector('.issue-detail__branch');
@@ -255,7 +266,7 @@ describe('IssueDetailComponent', () => {
     // Arrange
     const detailNoBranch: IssueDetail = {
       ...mockDetail,
-      stateDetails: { ...mockDetail.stateDetails, branchName: null },
+      stateDetails: { ...mockStateDetails, branchName: null },
     };
 
     // Act
@@ -269,9 +280,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 7: aria-label includes issue number
   it('should set aria-label referencing the issue number', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const region = el.querySelector('[role="region"]') as HTMLElement;
@@ -280,9 +293,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 8: error state
   it('should show error message when error input is truthy', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, false, 'Http failure');
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const errorEl = el.querySelector('.issue-detail__error');
@@ -291,9 +306,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show detail content when error is present', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, false, 'Http failure');
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const content = el.querySelector('.issue-detail__content');
@@ -301,9 +318,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show skeleton when error is present', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(null, true, 'Http failure');
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const skeleton = el.querySelector('.issue-detail__skeleton');
@@ -311,9 +330,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show error block when error is null', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail, false, null);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const errorEl = el.querySelector('.issue-detail__error');
@@ -322,9 +343,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 9: View Logs button — appears when workerRunId is non-null
   it('should show "View Logs" button when workerRunId is non-null', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
@@ -333,9 +356,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not show "View Logs" button when workerRunId is null', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn');
@@ -344,9 +369,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 10: aria-expanded is false initially
   it('should set aria-expanded="false" on "View Logs" button initially', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
@@ -354,9 +381,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not set aria-controls when log panel is closed', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
@@ -426,9 +455,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not render inline log panel when "View Logs" is not clicked', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const panel = el.querySelector('.issue-detail__log-panel-inline');
@@ -493,9 +524,11 @@ describe('IssueDetailComponent', () => {
 
   // Cycle 15: terminal icon is present in "View Logs" button
   it('should include an SVG icon inside the "View Logs" button', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetailWithWorkerRun);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
@@ -511,7 +544,7 @@ describe('IssueDetailComponent', () => {
       ...mockDetail,
       state: 'ineligible',
       stateDetails: {
-        ...mockDetail.stateDetails,
+        ...mockStateDetails,
         violations: [
           { rule: 'no-open-pr', description: 'Issue already has an open pull request' },
           { rule: 'label-removed', description: 'Trigger label was removed' },
@@ -532,9 +565,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not render violations section when state is not ineligible', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const violations = el.querySelector('.issue-detail__violations');
@@ -546,7 +581,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleNoViolations: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: [] },
+      stateDetails: { ...mockStateDetails, violations: [] },
     };
 
     // Act
@@ -566,7 +601,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleNullViolations: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act
@@ -587,7 +622,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act
@@ -601,9 +636,11 @@ describe('IssueDetailComponent', () => {
   });
 
   it('should not render retry eligibility button when state is not ineligible', () => {
-    // Arrange / Act
+    // Arrange
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
 
     // Assert
     const btn = el.querySelector('.issue-detail__retry-eligibility-btn');
@@ -615,7 +652,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
     const fixture = createComponent(ineligibleDetail);
     const el = fixture.nativeElement as HTMLElement;
@@ -639,7 +676,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act
@@ -656,7 +693,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
     const fixture = createComponent(ineligibleDetail);
     const el = fixture.nativeElement as HTMLElement;
@@ -685,7 +722,7 @@ describe('IssueDetailComponent', () => {
       ...mockDetail,
       state: 'ineligible',
       stateDetails: {
-        ...mockDetail.stateDetails,
+        ...mockStateDetails,
         violations: [{ rule: 'no-open-pr', description: 'Issue already has an open pull request' }],
       },
     };
@@ -707,7 +744,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act — loading=true with stale detail (transition state)
@@ -726,7 +763,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act
@@ -736,5 +773,94 @@ describe('IssueDetailComponent', () => {
     // Assert — retry button is absent while skeleton is shown
     const retryBtn = el.querySelector('.issue-detail__retry-eligibility-btn');
     expect(retryBtn).toBeFalsy();
+  });
+
+  // B10: persistent "View issue" link is always present in the detail panel
+  it('should render a "View issue" link when detail is present', () => {
+    // Arrange
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
+
+    // Assert
+    const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link?.textContent?.trim()).toBe('View issue');
+    expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('should set aria-label on issue link to include issue number', () => {
+    // Arrange
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
+
+    // Assert
+    const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
+    expect(link?.getAttribute('aria-label')).toBe('View issue #42 on provider');
+  });
+
+  it('should render "View issue" link for early-state issues with null stateDetails', () => {
+    // Arrange
+    const detectedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'detected',
+      stateDetails: null,
+    };
+
+    // Act
+    const fixture = createComponent(detectedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
+  });
+
+  // B2 guard: null stateDetails must not throw
+  it('should render content region without error when stateDetails is null (detected/queued states)', () => {
+    // Arrange — detected state returns null stateDetails from the API
+    const detectedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'detected',
+      stateDetails: null,
+    };
+
+    // Act
+    const fixture = createComponent(detectedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — region renders, no state-detail fields, no crash
+    const region = el.querySelector('[role="region"]');
+    expect(region).toBeTruthy();
+    const branch = el.querySelector('.issue-detail__branch');
+    expect(branch).toBeFalsy();
+    const prLink = el.querySelector('.issue-detail__pr-link');
+    expect(prLink).toBeFalsy();
+  });
+
+  it('should render Author field when stateDetails is null', () => {
+    // Arrange
+    const detectedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'detected',
+      author: 'octocat',
+      stateDetails: null,
+    };
+
+    // Act
+    const fixture = createComponent(detectedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const fields = Array.from(el.querySelectorAll('.issue-detail__field'));
+    const authorField = fields.find((f) => f.querySelector('.issue-detail__field-key')?.textContent?.trim() === 'Author');
+    expect(authorField).toBeTruthy();
+    expect(authorField?.querySelector('.issue-detail__field-value')?.textContent?.trim()).toBe('octocat');
   });
 });

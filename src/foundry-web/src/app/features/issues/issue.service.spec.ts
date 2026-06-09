@@ -121,7 +121,6 @@ describe('IssueService', () => {
     // Arrange
     const detail: IssueDetail = {
       ...mockSummary,
-      body: 'The bug is here.',
       author: 'dev',
       labels: ['bug'],
       stateDetails: {
@@ -133,6 +132,7 @@ describe('IssueService', () => {
         failedAt: null,
         completedAt: null,
         blockedBy: null,
+        violations: null,
       },
     };
 
@@ -242,7 +242,6 @@ describe('IssueService', () => {
     const detailB: IssueDetail = {
       ...mockSummary,
       id: 'def456',
-      body: 'Issue B body',
       author: 'dev',
       labels: [],
       stateDetails: {
@@ -254,6 +253,7 @@ describe('IssueService', () => {
         failedAt: null,
         completedAt: null,
         blockedBy: null,
+        violations: null,
       },
     };
 
@@ -272,7 +272,7 @@ describe('IssueService', () => {
     service.expandedIssueId.set('def456');
 
     // Act — the stale response for issue A now arrives
-    reqA.flush({ ...mockSummary, id: 'abc123', body: 'Issue A body (stale)' });
+    reqA.flush({ ...mockSummary, id: 'abc123' });
 
     // Assert — issue B's detail is still shown; the stale A response was discarded by the guard
     expect(service.issueDetail()).toEqual(detailB);

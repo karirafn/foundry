@@ -37,6 +37,8 @@ public sealed class WhenIssueExists : IAsyncDisposable
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
+        // FoundryWebAppFactory creates an isolated in-memory SQLite connection per instance.
+        // Each test class instance gets its own factory, so no explicit DELETE cleanup is needed.
         _client.Dispose();
         await _factory.DisposeAsync();
     }
@@ -65,7 +67,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithIssueDetail()
+    public async Task WhenIssueExists_ReturnsOkWithCoreFields()
     {
         // Arrange
         DetectedIssue issue = await SeedDetectedIssueAsync();
@@ -85,8 +87,8 @@ public sealed class WhenIssueExists : IAsyncDisposable
             () => detail.IssueNumber.ShouldBe(7),
             () => detail.Title.ShouldBe("A detected issue"),
             () => detail.State.ShouldBe("detected"),
-            () => detail.Body.ShouldBe("Issue body text"),
             () => detail.Author.ShouldBe("octocat"),
-            () => detail.Labels.ShouldBe(["bug"]));
+            () => detail.Labels.ShouldBe(["bug"]),
+            () => detail.StateDetails.ShouldBeNull());
     }
 }
