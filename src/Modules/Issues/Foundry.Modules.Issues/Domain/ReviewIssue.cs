@@ -74,11 +74,11 @@ public sealed class ReviewIssue : Issue
         return revisionQueued;
     }
 
-    public QueuedIssue Retry()
+    public ContinuationQueuedIssue Retry()
     {
-        QueuedIssue queued = QueuedIssue.FromRetry(this);
-        AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
-        return queued;
+        ContinuationQueuedIssue continuationQueued = ContinuationQueuedIssue.FromReview(this);
+        AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
+        return continuationQueued;
     }
 
     public CompletedIssue Complete(DateTimeOffset completedAt)
@@ -88,10 +88,10 @@ public sealed class ReviewIssue : Issue
         return completed;
     }
 
-    public FailedIssue Fail(string failureReason, DateTimeOffset failedAt)
+    public ContinuableFailedIssue Fail(string failureReason, DateTimeOffset failedAt)
     {
-        FailedIssue failed = FailedIssue.FromReview(this, failureReason, failedAt);
-        AddDomainEvent(new Events.IssueFailed(Id, MonitoredRepositoryId));
-        return failed;
+        ContinuableFailedIssue continuable = ContinuableFailedIssue.FromReview(this, failureReason, failedAt);
+        AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
+        return continuable;
     }
 }

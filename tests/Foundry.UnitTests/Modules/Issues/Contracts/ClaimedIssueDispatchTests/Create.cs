@@ -31,7 +31,8 @@ public sealed class Create
             () => dispatch.IssueId.ShouldBe(issueId),
             () => dispatch.IssueNumber.ShouldBe(42),
             () => dispatch.RepositorySlug.ShouldBe("org/repo"),
-            () => dispatch.Revision.ShouldBeNull());
+            () => dispatch.Revision.ShouldBeNull(),
+            () => dispatch.Continuation.ShouldBeNull());
     }
 
     [Fact]
@@ -58,5 +59,30 @@ public sealed class Create
 
         // Assert
         dispatch.Revision.ShouldBe(revision);
+    }
+
+    [Fact]
+    public void WhenCreatedWithContinuation_HoldsContinuationContext()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        ContinuationContext continuation = new(
+            BranchName: "foundry/42/add-feature",
+            LatestProgress: "Implemented the core feature");
+
+        // Act
+        ClaimedIssueDispatch dispatch = new(
+            issueId,
+            WorkerRunId: Guid.NewGuid(),
+            IssueNumber: 42,
+            Title: "Fix the bug",
+            Body: "Bug details",
+            RepositorySlug: "org/repo",
+            CloneUrl: new Uri("https://github.com/org/repo.git"),
+            AccountSecretKeyName: "github-pat",
+            Continuation: continuation);
+
+        // Assert
+        dispatch.Continuation.ShouldBe(continuation);
     }
 }

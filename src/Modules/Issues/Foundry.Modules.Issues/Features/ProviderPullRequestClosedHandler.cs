@@ -31,7 +31,7 @@ internal sealed class ProviderPullRequestClosedHandler(
             return;
         }
 
-        FailedIssue failed = reviewIssue.Fail(FailureReason, DateTimeOffset.UtcNow);
-        await db.TransitionAsync(reviewIssue, failed, domainEventDispatcher, cancellationToken);
+        ContinuableFailedIssue continuable = reviewIssue.Fail(FailureReason, DateTimeOffset.UtcNow);
+        await db.TransitionAsync(reviewIssue, continuable, domainEventDispatcher, cancellationToken);
     }
 }

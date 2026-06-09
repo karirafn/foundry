@@ -267,6 +267,80 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
                 .ShouldBe(completedAt, tolerance: TimeSpan.FromSeconds(1)));
     }
 
+    [Fact]
+    public async Task WhenContinuableFailedIssueExists_ReturnsStateDetailsWithContinuableFailedFields()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        Guid workerRunId = Guid.NewGuid();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+        ContinuableFailedIssue continuable = inProgress.MarkContinuableFailed(
+            workerRunId,
+            "foundry/1/add-feature",
+            "Implemented the core feature",
+            "Container exited with code 1",
+            failedAt);
+        await _dbContext.TransitionAsync(inProgress, continuable, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            continuable.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.State.ShouldBe("continuable_failed");
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId),
+            () => stateDetails.BranchName.ShouldBe("foundry/1/add-feature"),
+            () => stateDetails.FailureReason.ShouldBe("Container exited with code 1"),
+            () => stateDetails.FailedAt.ShouldNotBeNull()
+                .ShouldBe(failedAt, tolerance: TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task WhenContinuationQueuedIssueExists_ReturnsStateDetailsWithBranchName()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync(issueNumber: 2);
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ContinuableFailedIssue continuable = inProgress.MarkContinuableFailed(
+            Guid.NewGuid(),
+            "foundry/2/add-feature",
+            "Implemented the core feature",
+            "Container exited with code 1",
+            DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, continuable, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ContinuationQueuedIssue continuationQueued = continuable.Retry();
+        await _dbContext.TransitionAsync(continuable, continuationQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            continuationQueued.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.State.ShouldBe("continuation_queued");
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        stateDetails.BranchName.ShouldBe("foundry/2/add-feature");
+    }
+
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries
     {
         private readonly Dictionary<MonitoredRepositoryId, string> _slugs = [];

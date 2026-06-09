@@ -14,12 +14,12 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Issues.Infrastructure.IssueConfigurationTests;
 
-public sealed class PersistReviewToFailedIssue : IAsyncDisposable
+public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
-    public PersistReviewToFailedIssue()
+    public PersistContinuationQueuedIssue()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -45,16 +45,15 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
 
     [Fact]
-    public async Task WhenReviewIssueFailedTransitioned_CanBeReloadedAsContinuableFailedIssueWithAllFields()
+    public async Task WhenContinuationQueuedIssueTransitioned_CanBeReloadedWithAllFields()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
-            issueNumber: 55,
-            title: "Review to failed issue",
-            body: "PR rejected body",
+            issueNumber: 71,
+            title: "Continuation queued issue",
+            body: "Body",
             author: ValidAuthor,
             url: ValidUrl,
             labels: [],
@@ -66,34 +65,32 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         QueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid reviewWorkerRunId = Guid.NewGuid();
-        ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-55", "https://github.com/owner/repo/pull/7", DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        ContinuableFailedIssue continuable = inProgress.MarkContinuableFailed(
+            Guid.NewGuid(),
+            "foundry/71/add-feature",
+            "Implemented the core feature",
+            "Container exited with code 1",
+            DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, continuable, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ContinuableFailedIssue continuable = review.Fail("PR was closed without merge", failedAt);
-        await _dbContext.TransitionAsync(review, continuable, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        ContinuationQueuedIssue continuationQueued = continuable.Retry();
+        await _dbContext.TransitionAsync(continuable, continuationQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
         Issue? result = await _dbContext
             .Set<Issue>()
-            .FindAsync([continuable.Id], TestContext.Current.CancellationToken);
+            .FindAsync([continuationQueued.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        ContinuableFailedIssue reloaded = result.ShouldBeOfType<ContinuableFailedIssue>();
+        ContinuationQueuedIssue reloaded = result.ShouldBeOfType<ContinuationQueuedIssue>();
         reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.WorkerRunId.ShouldBe(reviewWorkerRunId),
-            () => reloaded.BranchName.ShouldBe("feat/issue-55"),
-            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/7"),
-            () => reloaded.LatestProgress.ShouldBe("PR was opened and reviewed"),
-            () => reloaded.FailureReason.ShouldBe("PR was closed without merge"),
-            () => reloaded.FailedAt.ShouldBe(failedAt),
+            () => reloaded.BranchName.ShouldBe("foundry/71/add-feature"),
+            () => reloaded.LatestProgress.ShouldBe("Implemented the core feature"),
             () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
-            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }

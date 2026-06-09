@@ -97,7 +97,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenReviewIssue_TransitionsToFailedIssue()
+    public async Task WhenReviewIssue_TransitionsToContinuableFailedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -116,8 +116,8 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        FailedIssue failed = issue.ShouldBeOfType<FailedIssue>();
-        failed.FailureReason.ShouldBe("Pull request closed without merge");
+        ContinuableFailedIssue continuable = issue.ShouldBeOfType<ContinuableFailedIssue>();
+        continuable.FailureReason.ShouldBe("Pull request closed without merge");
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenReviewIssuePrIsClosed_DispatchesIssueFailedEvent()
+    public async Task WhenReviewIssuePrIsClosed_DispatchesIssueContinuableFailedEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -160,7 +160,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _dispatcher.DispatchedEvents
-            .OfType<IssueFailed>()
+            .OfType<IssueContinuableFailed>()
             .ShouldHaveSingleItem();
     }
 }

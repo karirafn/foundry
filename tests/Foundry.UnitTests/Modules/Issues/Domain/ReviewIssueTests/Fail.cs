@@ -34,7 +34,7 @@ public sealed class Fail
     }
 
     [Fact]
-    public void WhenFailed_ReturnsFailedIssueWithSameId()
+    public void WhenFailed_ReturnsContinuableFailedIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -42,14 +42,14 @@ public sealed class Fail
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = review.Fail("PR was closed without merge", failedAt);
+        ContinuableFailedIssue continuable = review.Fail("PR was closed without merge", failedAt);
 
         // Assert
-        failed.Id.ShouldBe(review.Id);
+        continuable.Id.ShouldBe(review.Id);
     }
 
     [Fact]
-    public void WhenFailed_FailedIssueHasWorkerRunIdFromReview()
+    public void WhenFailed_ContinuableFailedIssueHasBranchNameAndPullRequestUrlFromReview()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -57,14 +57,16 @@ public sealed class Fail
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = review.Fail("PR was closed without merge", failedAt);
+        ContinuableFailedIssue continuable = review.Fail("PR was closed without merge", failedAt);
 
         // Assert
-        failed.WorkerRunId.ShouldBe(review.WorkerRunId);
+        continuable.ShouldSatisfyAllConditions(
+            () => continuable.BranchName.ShouldBe(review.BranchName),
+            () => continuable.PullRequestUrl.ShouldBe(review.PullRequestUrl));
     }
 
     [Fact]
-    public void WhenFailed_FailedIssueHasCorrectFailureReasonAndFailedAt()
+    public void WhenFailed_ContinuableFailedIssueHasCorrectFailureReasonAndFailedAt()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -73,17 +75,32 @@ public sealed class Fail
         string failureReason = "PR was closed without merge";
 
         // Act
-        FailedIssue failed = review.Fail(failureReason, failedAt);
+        ContinuableFailedIssue continuable = review.Fail(failureReason, failedAt);
 
         // Assert
-        failed.ShouldSatisfyAllConditions(
-            () => failed.FailureReason.ShouldBe(failureReason),
-            () => failed.FailedAt.ShouldBe(failedAt),
-            () => failed.MonitoredRepositoryId.ShouldBe(repositoryId));
+        continuable.ShouldSatisfyAllConditions(
+            () => continuable.FailureReason.ShouldBe(failureReason),
+            () => continuable.FailedAt.ShouldBe(failedAt),
+            () => continuable.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public void WhenFailed_RaisesIssueFailedDomainEvent()
+    public void WhenFailed_LatestProgressDefaultsToPrOpenedAndReviewed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        ReviewIssue review = CreateReviewIssue(repositoryId);
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+
+        // Act
+        ContinuableFailedIssue continuable = review.Fail("PR was closed without merge", failedAt);
+
+        // Assert
+        continuable.LatestProgress.ShouldBe("PR was opened and reviewed");
+    }
+
+    [Fact]
+    public void WhenFailed_RaisesIssueContinuableFailedDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -94,7 +111,7 @@ public sealed class Fail
         review.Fail("PR was closed without merge", failedAt);
 
         // Assert
-        IssueFailed domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueFailed>();
+        IssueContinuableFailed domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueContinuableFailed>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(review.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));

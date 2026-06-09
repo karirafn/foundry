@@ -34,21 +34,21 @@ public sealed class Retry
     }
 
     [Fact]
-    public void WhenRetried_ReturnsQueuedIssueWithSameId()
+    public void WhenRetried_ReturnsContinuationQueuedIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ReviewIssue review = CreateReviewIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = review.Retry();
+        ContinuationQueuedIssue continuationQueued = review.Retry();
 
         // Assert
-        queued.Id.ShouldBe(review.Id);
+        continuationQueued.Id.ShouldBe(review.Id);
     }
 
     [Fact]
-    public void WhenRetried_RaisesIssueQueuedDomainEvent()
+    public void WhenRetried_RaisesIssueContinuationQueuedDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -58,28 +58,56 @@ public sealed class Retry
         review.Retry();
 
         // Assert
-        IssueQueued domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueQueued>();
+        IssueContinuationQueued domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueContinuationQueued>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(review.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public void WhenRetried_QueuedIssueHasSameSharedProperties()
+    public void WhenRetried_ContinuationQueuedIssueHasBranchNameFromReview()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ReviewIssue review = CreateReviewIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = review.Retry();
+        ContinuationQueuedIssue continuationQueued = review.Retry();
 
         // Assert
-        queued.ShouldSatisfyAllConditions(
-            () => queued.MonitoredRepositoryId.ShouldBe(review.MonitoredRepositoryId),
-            () => queued.IssueNumber.ShouldBe(review.IssueNumber),
-            () => queued.Title.ShouldBe(review.Title),
-            () => queued.Body.ShouldBe(review.Body),
-            () => queued.DetectedAt.ShouldBe(review.DetectedAt));
+        continuationQueued.BranchName.ShouldBe(review.BranchName);
+    }
+
+    [Fact]
+    public void WhenRetried_LatestProgressDefaultsToPrOpenedAndReviewed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        ReviewIssue review = CreateReviewIssue(repositoryId);
+
+        // Act
+        ContinuationQueuedIssue continuationQueued = review.Retry();
+
+        // Assert
+        continuationQueued.LatestProgress.ShouldBe("PR was opened and reviewed");
+    }
+
+    [Fact]
+    public void WhenRetried_ContinuationQueuedIssueHasSameSharedProperties()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        ReviewIssue review = CreateReviewIssue(repositoryId);
+
+        // Act
+        ContinuationQueuedIssue continuationQueued = review.Retry();
+
+        // Assert
+        continuationQueued.ShouldSatisfyAllConditions(
+            () => continuationQueued.MonitoredRepositoryId.ShouldBe(review.MonitoredRepositoryId),
+            () => continuationQueued.IssueNumber.ShouldBe(review.IssueNumber),
+            () => continuationQueued.Title.ShouldBe(review.Title),
+            () => continuationQueued.Body.ShouldBe(review.Body),
+            () => continuationQueued.DetectedAt.ShouldBe(review.DetectedAt));
     }
 }

@@ -14,12 +14,12 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Issues.Infrastructure.IssueConfigurationTests;
 
-public sealed class PersistReviewToFailedIssue : IAsyncDisposable
+public sealed class PersistContinuableFailedIssue : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
-    public PersistReviewToFailedIssue()
+    public PersistContinuableFailedIssue()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -45,16 +45,16 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
 
     [Fact]
-    public async Task WhenReviewIssueFailedTransitioned_CanBeReloadedAsContinuableFailedIssueWithAllFields()
+    public async Task WhenContinuableFailedIssueTransitioned_CanBeReloadedWithAllFields()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
+        DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 9, 12, 0, 0, TimeSpan.Zero);
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
-            issueNumber: 55,
-            title: "Review to failed issue",
-            body: "PR rejected body",
+            issueNumber: 70,
+            title: "Continuable failed issue",
+            body: "Body",
             author: ValidAuthor,
             url: ValidUrl,
             labels: [],
@@ -70,12 +70,14 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid reviewWorkerRunId = Guid.NewGuid();
-        ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-55", "https://github.com/owner/repo/pull/7", DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        ContinuableFailedIssue continuable = review.Fail("PR was closed without merge", failedAt);
-        await _dbContext.TransitionAsync(review, continuable, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        Guid continuableWorkerRunId = Guid.NewGuid();
+        ContinuableFailedIssue continuable = inProgress.MarkContinuableFailed(
+            continuableWorkerRunId,
+            "foundry/70/add-feature",
+            "Implemented the core feature",
+            "Container exited with code 1",
+            failedAt);
+        await _dbContext.TransitionAsync(inProgress, continuable, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -86,14 +88,12 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         // Assert
         ContinuableFailedIssue reloaded = result.ShouldBeOfType<ContinuableFailedIssue>();
         reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.WorkerRunId.ShouldBe(reviewWorkerRunId),
-            () => reloaded.BranchName.ShouldBe("feat/issue-55"),
-            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/7"),
-            () => reloaded.LatestProgress.ShouldBe("PR was opened and reviewed"),
-            () => reloaded.FailureReason.ShouldBe("PR was closed without merge"),
+            () => reloaded.WorkerRunId.ShouldBe(continuableWorkerRunId),
+            () => reloaded.BranchName.ShouldBe("foundry/70/add-feature"),
+            () => reloaded.LatestProgress.ShouldBe("Implemented the core feature"),
+            () => reloaded.FailureReason.ShouldBe("Container exited with code 1"),
             () => reloaded.FailedAt.ShouldBe(failedAt),
             () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
-            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }

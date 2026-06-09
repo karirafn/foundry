@@ -52,4 +52,11 @@ public sealed class ContinuationQueuedIssue : Issue
         continuationQueued.LatestProgress = DefaultProgressFromReview;
         return continuationQueued;
     }
+
+    public InProgressIssue Claim(Guid workerRunId)
+    {
+        InProgressIssue inProgress = InProgressIssue.FromContinuationQueued(this, workerRunId);
+        AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
+        return inProgress;
+    }
 }

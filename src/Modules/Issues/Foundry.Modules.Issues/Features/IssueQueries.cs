@@ -214,6 +214,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             RevisionQueuedIssue => "revision_queued",
             RevisionInProgressIssue => "revision_in_progress",
             RevisionFailedIssue => "revision_failed",
+            ContinuableFailedIssue => "continuable_failed",
+            ContinuationQueuedIssue => "continuation_queued",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -339,6 +341,28 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FeedbackCutoffAt: null,
                 FailureReason: revisionFailed.FailureReason,
                 FailedAt: revisionFailed.FailedAt,
+                CompletedAt: null,
+                BlockedBy: null,
+                Violations: null),
+
+            ContinuableFailedIssue continuableFailed => new IssueStateDetails(
+                WorkerRunId: continuableFailed.WorkerRunId,
+                BranchName: continuableFailed.BranchName,
+                PullRequestUrl: continuableFailed.PullRequestUrl,
+                FeedbackCutoffAt: null,
+                FailureReason: continuableFailed.FailureReason,
+                FailedAt: continuableFailed.FailedAt,
+                CompletedAt: null,
+                BlockedBy: null,
+                Violations: null),
+
+            ContinuationQueuedIssue continuationQueued => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: continuationQueued.BranchName,
+                PullRequestUrl: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
                 Violations: null),
