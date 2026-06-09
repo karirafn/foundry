@@ -32,6 +32,16 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
+        ContinuationQueuedIssue? continuationQueued = await db.Set<ContinuationQueuedIssue>()
+            .OrderBy(i => i.DetectedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (continuationQueued is not null)
+        {
+            await ClaimContinuationQueuedAsync(continuationQueued, @event.WorkerRunId, cancellationToken);
+            return;
+        }
+
         QueuedIssue? queued = await db.Set<QueuedIssue>()
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
@@ -120,6 +130,47 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountSecretKeyName,
             revision);
+
+        await integrationEventDispatcher.DispatchAsync(
+            [new IssueClaimed(dispatch)],
+            cancellationToken);
+    }
+
+    private async Task ClaimContinuationQueuedAsync(
+        ContinuationQueuedIssue continuationQueued,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
+            continuationQueued.MonitoredRepositoryId,
+            cancellationToken);
+
+        if (dispatchInfo is null)
+        {
+            logger.LogWarning(
+                "Could not find dispatch info for repository {RepositoryId}; continuation issue #{IssueNumber} not claimed.",
+                continuationQueued.MonitoredRepositoryId,
+                continuationQueued.IssueNumber);
+            return;
+        }
+
+        InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
+        await db.TransitionAsync(continuationQueued, inProgress, domainEventDispatcher, cancellationToken);
+
+        ContinuationContext continuation = new(
+            continuationQueued.BranchName,
+            continuationQueued.LatestProgress);
+
+        ClaimedIssueDispatch dispatch = new(
+            inProgress.Id,
+            workerRunId,
+            inProgress.IssueNumber,
+            inProgress.Title,
+            inProgress.Body,
+            dispatchInfo.RepositorySlug,
+            dispatchInfo.CloneUrl,
+            dispatchInfo.AccountSecretKeyName,
+            Continuation: continuation);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],
