@@ -1,10 +1,8 @@
 import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
-import { IssueState } from './issue.model';
+import { IssueState, LIVE_STATES } from './issue.model';
 import { WorkerReportSummary } from './worker-report.model';
-
-const LIVE_STATES: ReadonlySet<string> = new Set<IssueState>(['in_progress', 'revision_in_progress']);
 
 export interface WorkerLogHub {
   on(methodName: string, callback: (report: WorkerReportSummary) => void): void;
@@ -54,7 +52,7 @@ export class WorkerLogService {
 
   private _hub: WorkerLogHub | null = null;
 
-  open(workerRunId: string, issueId: string, issueState: string): void {
+  open(workerRunId: string, issueId: string, issueState: IssueState): void {
     this._activeWorkerRunId.set(workerRunId);
     this._activeIssueId.set(issueId);
     this._isLive.set(LIVE_STATES.has(issueState));
