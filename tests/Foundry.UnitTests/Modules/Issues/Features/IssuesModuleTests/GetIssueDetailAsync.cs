@@ -19,13 +19,15 @@ namespace Foundry.UnitTests.Modules.Issues.Features.IssuesModuleTests;
 
 public sealed class GetIssueDetailAsync : IAsyncDisposable
 {
+    private const string RepositorySlug = "owner/repo";
+    private const string DefaultBody = "Issue body";
+
+    private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
+
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly IIssueQueries _sut;
     private readonly StubRepositorySlugQueries _slugQueries;
-
-    private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
-    private const string RepositorySlug = "owner/repo";
 
     private static IssueAuthor ValidAuthor =>
         ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
@@ -58,14 +60,13 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     private async Task<DetectedIssue> SaveDetectedIssueAsync(
         int issueNumber = 1,
         string title = "Issue title",
-        string body = "Issue body",
         IReadOnlyList<string>? labels = null)
     {
         DetectedIssue issue = DetectedIssue.Detect(
             RepositoryId,
             issueNumber: issueNumber,
             title: title,
-            body: body,
+            body: DefaultBody,
             author: ValidAuthor,
             url: ValidUrl,
             labels: labels ?? [],
@@ -104,7 +105,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             RepositoryId,
             issueNumber: 7,
             title: "A detected issue",
-            body: "Body text",
+            body: DefaultBody,
             author: ValidAuthor,
             url: ValidUrl,
             labels: ["bug", "foundry"],
@@ -129,7 +130,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             () => detail.RepositorySlug.ShouldBe(RepositorySlug),
             () => detail.DetectedAt.ShouldBe(detectedAt, tolerance: TimeSpan.FromSeconds(1)),
             () => detail.Url.ShouldBe(ValidUrl.Value.ToString()),
-            () => detail.Body.ShouldBe("Body text"),
             () => detail.Author.ShouldBe("octocat"),
             () => detail.Labels.ShouldBe(["bug", "foundry"]),
             () => detail.StateDetails.ShouldBeNull());

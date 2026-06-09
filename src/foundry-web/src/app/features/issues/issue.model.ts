@@ -36,15 +36,14 @@ export interface IssueStateDetails {
   failureReason: string | null;
   failedAt: string | null;
   completedAt: string | null;
-  blockedBy: string | null;
-  violations?: EligibilityViolation[] | null;
+  blockedBy: number[] | null;
+  violations: EligibilityViolation[] | null;
 }
 
 export interface IssueDetail extends IssueSummary {
-  body: string;
   author: string;
   labels: string[];
-  stateDetails: IssueStateDetails;
+  stateDetails: IssueStateDetails | null;
 }
 
 export const LIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress']);

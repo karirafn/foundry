@@ -8,7 +8,6 @@ public sealed record IssueDetail(
     string RepositorySlug,
     DateTimeOffset DetectedAt,
     string Url,
-    string Body,
     string Author,
     IReadOnlyList<string> Labels,
     IssueStateDetails? StateDetails);

@@ -42,25 +42,28 @@
     padding: var(--fd-spacing-lg);
   }
 
-  &__section {
+  &__issue-link {
+    display: inline-block;
     margin-bottom: var(--fd-spacing-lg);
-  }
+    color: var(--fd-text-link);
+    font-size: 0.8125rem;
+    text-decoration: none;
 
-  &__body {
-    white-space: pre-wrap;
-    color: var(--fd-text-primary);
-    font-size: 0.875rem;
-    line-height: 1.6;
-    max-height: 12rem;
-    overflow-y: auto;
-    margin: 0;
-    padding: 0;
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
   }
 
   &__labels {
     display: flex;
     flex-wrap: wrap;
     gap: var(--fd-spacing-xs);
+    margin-bottom: var(--fd-spacing-lg);
   }
 
   &__label-pill {
@@ -79,12 +82,20 @@
     @media (max-width: 767px) {
       grid-template-columns: 1fr;
     }
+
+    &--author {
+      margin-top: var(--fd-spacing-md);
+    }
   }
 
   &__field {
     display: flex;
     flex-direction: column;
     gap: 2px;
+
+    &--full-width {
+      grid-column: 1 / -1;
+    }
   }
 
   &__field-key {
