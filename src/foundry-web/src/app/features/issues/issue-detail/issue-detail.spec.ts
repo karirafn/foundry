@@ -843,4 +843,24 @@ describe('IssueDetailComponent', () => {
     const prLink = el.querySelector('.issue-detail__pr-link');
     expect(prLink).toBeFalsy();
   });
+
+  it('should render Author field when stateDetails is null', () => {
+    // Arrange
+    const detectedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'detected',
+      author: 'octocat',
+      stateDetails: null,
+    };
+
+    // Act
+    const fixture = createComponent(detectedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const fields = Array.from(el.querySelectorAll('.issue-detail__field'));
+    const authorField = fields.find((f) => f.querySelector('.issue-detail__field-key')?.textContent?.trim() === 'Author');
+    expect(authorField).toBeTruthy();
+    expect(authorField?.querySelector('.issue-detail__field-value')?.textContent?.trim()).toBe('octocat');
+  });
 });

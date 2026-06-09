@@ -125,10 +125,10 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
               </div>
             }
 
-            @if (s.blockedBy) {
+            @if (s.blockedBy?.length) {
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Blocked By</span>
-                <span class="issue-detail__field-value">{{ s.blockedBy }}</span>
+                <span class="issue-detail__field-value">{{ s.blockedBy?.join(', ') }}</span>
               </div>
             }
 
@@ -167,13 +167,15 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
                 <span class="issue-detail__field-value">{{ s.feedbackCutoffAt | date: 'medium' }}</span>
               </div>
             }
-
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Author</span>
-              <span class="issue-detail__field-value">{{ d.author }}</span>
-            </div>
           </div>
         }
+
+        <div class="issue-detail__fields">
+          <div class="issue-detail__field">
+            <span class="issue-detail__field-key">Author</span>
+            <span class="issue-detail__field-value">{{ d.author }}</span>
+          </div>
+        </div>
 
         @if (d.state === 'ineligible') {
           <div class="issue-detail__actions">

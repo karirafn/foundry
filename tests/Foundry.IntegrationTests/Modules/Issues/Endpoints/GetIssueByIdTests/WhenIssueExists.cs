@@ -88,6 +88,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
             () => detail.Title.ShouldBe("A detected issue"),
             () => detail.State.ShouldBe("detected"),
             () => detail.Author.ShouldBe("octocat"),
-            () => detail.Labels.ShouldBe(["bug"]));
+            () => detail.Labels.ShouldBe(["bug"]),
+            () => detail.StateDetails.ShouldBeNull());
     }
 }

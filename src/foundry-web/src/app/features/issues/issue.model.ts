@@ -36,7 +36,7 @@ export interface IssueStateDetails {
   failureReason: string | null;
   failedAt: string | null;
   completedAt: string | null;
-  blockedBy: string | null;
+  blockedBy: number[] | null;
   violations: EligibilityViolation[] | null;
 }
 

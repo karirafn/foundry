@@ -105,7 +105,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             RepositoryId,
             issueNumber: 7,
             title: "A detected issue",
-            body: "Body text",
+            body: DefaultBody,
             author: ValidAuthor,
             url: ValidUrl,
             labels: ["bug", "foundry"],
