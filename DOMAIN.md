@@ -223,6 +223,14 @@ Report types: `"branch-created"` (branch pushed, captures branch name and summar
 Reporting instructions are hardcoded in the system prompt (appended after the user-configurable template) — the worker must push the branch before writing a `"branch-created"` report.
 JSON format: `{ type, status, summary, error, prUrl, branchName, metrics }`.
 
+## Container Output
+
+The captured tail of a failed worker container's stdout/stderr, stored on `FailedRun` as a nullable string.
+Captured by Foundry (not the worker) from the Docker API after the container stops but before removal.
+Best-effort — null when the container is already gone, never started, or the Docker API call fails.
+Distinct from `WorkerReport` entries, which are structured JSON written by the worker itself.
+Displayed in the worker-log-panel as a collapsible section below reports.
+
 ## FailureReason
 
 A value object on FailedRun that classifies how the run failed.
