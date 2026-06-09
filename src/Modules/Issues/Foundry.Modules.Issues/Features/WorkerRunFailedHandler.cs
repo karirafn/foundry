@@ -16,6 +16,7 @@ internal sealed class WorkerRunFailedHandler(
 {
     public async Task HandleAsync(WorkerRunFailed @event, CancellationToken cancellationToken)
     {
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
         IssueId issueId = IssueId.From(@event.IssueId);
 
         Issue? issue = await db.Set<Issue>()
@@ -25,12 +26,16 @@ internal sealed class WorkerRunFailedHandler(
         {
             if (@event.BranchName is not null)
             {
+                const int MaxLatestProgressLength = 2000;
+                string latestProgress = (@event.LatestProgress ?? string.Empty).Length > MaxLatestProgressLength
+                    ? (@event.LatestProgress ?? string.Empty)[..MaxLatestProgressLength]
+                    : @event.LatestProgress ?? string.Empty;
                 ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
                     @event.WorkerRunId,
                     @event.BranchName,
-                    @event.LatestProgress ?? string.Empty,
+                    latestProgress,
                     @event.ReasonDescription,
-                    DateTimeOffset.UtcNow);
+                    failedAt);
                 await db.TransitionAsync(inProgress, continuableFailed, domainEventDispatcher, cancellationToken);
             }
             else
@@ -38,18 +43,20 @@ internal sealed class WorkerRunFailedHandler(
                 FailedIssue failed = inProgress.MarkFailed(
                     @event.WorkerRunId,
                     @event.ReasonDescription,
-                    DateTimeOffset.UtcNow);
+                    failedAt);
                 await db.TransitionAsync(inProgress, failed, domainEventDispatcher, cancellationToken);
             }
             return;
         }
 
+        // Revision failures always become RevisionFailedIssue regardless of branch presence —
+        // the revision path has its own retry mechanism (RevisionFailedIssue.Retry → RevisionQueuedIssue).
         if (issue is RevisionInProgressIssue revisionInProgress)
         {
             RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
                 @event.WorkerRunId,
                 @event.ReasonDescription,
-                DateTimeOffset.UtcNow);
+                failedAt);
             await db.TransitionAsync(revisionInProgress, revisionFailed, domainEventDispatcher, cancellationToken);
             return;
         }

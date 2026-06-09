@@ -305,4 +305,32 @@ public sealed class HandleAsync : IAsyncDisposable
         ContinuableFailedIssue continuableFailed = issue.ShouldBeOfType<ContinuableFailedIssue>();
         continuableFailed.LatestProgress.ShouldBe(string.Empty);
     }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithVeryLongLatestProgress_TruncatesTo2000Characters()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        string longProgress = new('x', 2001);
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Non-zero exit code: 1",
+            BranchName: "feat/123-fix",
+            LatestProgress: longProgress);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ContinuableFailedIssue continuableFailed = issue.ShouldBeOfType<ContinuableFailedIssue>();
+        continuableFailed.LatestProgress.Length.ShouldBe(2000);
+    }
 }
