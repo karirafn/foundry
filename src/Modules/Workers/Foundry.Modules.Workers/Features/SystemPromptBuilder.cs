@@ -101,7 +101,7 @@ internal static class SystemPromptBuilder
         StringBuilder sb = new();
 
         sb.AppendLine("You are resuming work on an existing branch from a previous interrupted session.");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Check out the existing branch: {continuation.BranchName}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Check out the existing branch: `{continuation.BranchName}`");
         sb.AppendLine();
         sb.AppendLine("IMPORTANT: Before trusting the progress summary below, verify the branch state:");
         sb.AppendLine("- Review the code that was written");
@@ -110,10 +110,20 @@ internal static class SystemPromptBuilder
         sb.AppendLine();
         sb.AppendLine("The following progress summary is from the previous session. It is orientation, not ground truth:");
         sb.AppendLine("<latest-progress>");
-        sb.AppendLine(continuation.LatestProgress);
-        sb.Append("</latest-progress>");
+        sb.AppendLine(EscapeXml(continuation.LatestProgress));
+        sb.AppendLine("</latest-progress>");
+        sb.AppendLine();
+        sb.Append("Push your changes to the same branch. If a pull request already exists for this branch, do not create a new one.");
 
         return sb.ToString();
+    }
+
+    private static string EscapeXml(string value)
+    {
+        return value
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
     }
 
     private static string BuildRevisionSection(RevisionContext revision)

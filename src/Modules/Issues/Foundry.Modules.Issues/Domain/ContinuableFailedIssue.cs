@@ -46,7 +46,6 @@ public sealed class ContinuableFailedIssue : Issue
         failed.WorkerRunId = workerRunId;
         failed.BranchName = branchName;
         failed.LatestProgress = latestProgress;
-        failed.PullRequestUrl = string.Empty;
         failed.FailureReason = failureReason;
         failed.FailedAt = failedAt;
         return failed;

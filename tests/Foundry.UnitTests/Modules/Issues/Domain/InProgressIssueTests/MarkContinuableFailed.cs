@@ -74,4 +74,38 @@ public sealed class MarkContinuableFailed
             () => domainEvent.IssueId.ShouldBe(inProgress.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
+
+    [Fact]
+    public void WhenMarkedContinuableFailed_ContinuableFailedIssueHasCorrectProperties()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = CreateInProgressIssue(repositoryId);
+        Guid workerRunId = Guid.NewGuid();
+        string branchName = "foundry/1/add-feature";
+        string latestProgress = "Implemented the feature";
+        string failureReason = "Container exited with code 1";
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+
+        // Act
+        ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
+            workerRunId,
+            branchName,
+            latestProgress,
+            failureReason,
+            failedAt);
+
+        // Assert
+        failed.ShouldSatisfyAllConditions(
+            () => failed.WorkerRunId.ShouldBe(workerRunId),
+            () => failed.BranchName.ShouldBe(branchName),
+            () => failed.LatestProgress.ShouldBe(latestProgress),
+            () => failed.FailureReason.ShouldBe(failureReason),
+            () => failed.FailedAt.ShouldBe(failedAt),
+            () => failed.PullRequestUrl.ShouldBe(string.Empty),
+            () => failed.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => failed.IssueNumber.ShouldBe(inProgress.IssueNumber),
+            () => failed.Title.ShouldBe(inProgress.Title),
+            () => failed.DetectedAt.ShouldBe(inProgress.DetectedAt));
+    }
 }
