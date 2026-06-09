@@ -85,7 +85,7 @@ export class WorkerLogService {
   }
 
   private _loadReports(workerRunId: string): void {
-    this._http.get<WorkerReportSummary[]>(`/api/workers/${workerRunId}/reports`).subscribe({
+    this._http.get<WorkerReportSummary[]>(`/api/workers/${encodeURIComponent(workerRunId)}/reports`).subscribe({
       next: (reports) => {
         this._reports.set([...reports].sort((a, b) => a.sequenceNumber - b.sequenceNumber));
         this._loading.set(false);

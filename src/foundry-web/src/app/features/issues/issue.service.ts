@@ -58,7 +58,7 @@ export class IssueService {
 
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
       next: (issues) => {
-        this.issues.set(issues);
+        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id)));
         this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
@@ -126,7 +126,7 @@ export class IssueService {
 
   private _upsertIssue(updated: IssueSummary): void {
     if (!SAFE_ID_RE.test(updated.id)) {
-      console.warn(`IssueService: rejected issue with invalid id "${updated.id}"`);
+      console.warn('IssueService: rejected IssueUpdated event with invalid id');
       return;
     }
 

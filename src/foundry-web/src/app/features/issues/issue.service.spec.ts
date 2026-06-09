@@ -642,6 +642,21 @@ describe('IssueService', () => {
     http.verify();
   });
 
+  // Cycle 15: loadIssues filters out items with invalid IDs
+  it('should filter out issues with invalid ids returned by loadIssues', () => {
+    // Arrange
+    const valid: IssueSummary = { ...mockSummary, id: 'valid-id' };
+    const invalid: IssueSummary = { ...mockSummary, id: '../../admin' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([valid, invalid]);
+
+    // Assert — only the valid issue is stored
+    expect(service.issues().length).toBe(1);
+    expect(service.issues()[0].id).toBe('valid-id');
+  });
+
   // Cycle 12: Reconnect backfill calls loadIssues
   it('should call loadIssues on reconnect to backfill missed events', () => {
     // Arrange
