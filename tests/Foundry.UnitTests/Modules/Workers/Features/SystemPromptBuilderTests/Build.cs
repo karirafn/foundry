@@ -469,4 +469,56 @@ public sealed class Build
         reportingIndex.ShouldBeGreaterThan(0);
         revisionIndex.ShouldBeGreaterThan(reportingIndex);
     }
+
+    [Fact]
+    public void WhenContinuationContextProvided_AppendsContinuationSection()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        ContinuationContext continuation = new("feat/103-my-feature", "Completed steps 1-3, tests pass.");
+
+        // Act
+        string result = SystemPromptBuilder.Build(103, "My feature", "Body", options, null, continuation);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldContain("resuming work"),
+            () => result.ShouldContain("feat/103-my-feature"),
+            () => result.ShouldContain("Review the code that was written"),
+            () => result.ShouldContain("<latest-progress>"),
+            () => result.ShouldContain("</latest-progress>"),
+            () => result.ShouldContain("Completed steps 1-3, tests pass."));
+    }
+
+    [Fact]
+    public void WhenContinuationContextProvided_DoesNotAppendRevisionSection()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        ContinuationContext continuation = new("feat/103-my-feature", "Some progress.");
+
+        // Act
+        string result = SystemPromptBuilder.Build(103, "My feature", "Body", options, null, continuation);
+
+        // Assert
+        result.ShouldNotContain("You are addressing review feedback on an existing PR.");
+    }
+
+    [Fact]
+    public void WhenRevisionContextProvided_DoesNotAppendContinuationSection()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        RevisionContext revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            [new ReviewComment("Some feedback.")]);
+        ContinuationContext continuation = new("feat/1-fix", "Some progress.");
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Fix", "Body", options, revision, continuation);
+
+        // Assert
+        result.ShouldNotContain("resuming work");
+    }
 }
