@@ -24,8 +24,10 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     private readonly IIssueQueries _sut;
     private readonly StubRepositorySlugQueries _slugQueries;
 
-    private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
     private const string RepositorySlug = "owner/repo";
+    private const string DefaultBody = "Issue body";
+
+    private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
 
     private static IssueAuthor ValidAuthor =>
         ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
@@ -58,14 +60,13 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     private async Task<DetectedIssue> SaveDetectedIssueAsync(
         int issueNumber = 1,
         string title = "Issue title",
-        string body = "Issue body",
         IReadOnlyList<string>? labels = null)
     {
         DetectedIssue issue = DetectedIssue.Detect(
             RepositoryId,
             issueNumber: issueNumber,
             title: title,
-            body: body,
+            body: DefaultBody,
             author: ValidAuthor,
             url: ValidUrl,
             labels: labels ?? [],

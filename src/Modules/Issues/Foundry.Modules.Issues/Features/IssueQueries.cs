@@ -161,6 +161,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
         IssueId issueId,
         CancellationToken cancellationToken)
     {
+        // Full entity load is required here — EF cannot translate the is-pattern discriminator
+        // matching used in BuildStateDetails into SQL, so projection is not feasible.
         Issue? issue = await db.Set<Issue>()
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
