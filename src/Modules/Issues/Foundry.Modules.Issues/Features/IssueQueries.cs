@@ -191,7 +191,6 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             RepositorySlug: repositorySlug,
             DetectedAt: issue.DetectedAt,
             Url: issue.Url.Value.ToString(),
-            Body: issue.Body,
             Author: issue.Author.Value,
             Labels: issue.Labels,
             StateDetails: stateDetails);

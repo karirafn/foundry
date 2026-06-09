@@ -129,7 +129,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             () => detail.RepositorySlug.ShouldBe(RepositorySlug),
             () => detail.DetectedAt.ShouldBe(detectedAt, tolerance: TimeSpan.FromSeconds(1)),
             () => detail.Url.ShouldBe(ValidUrl.Value.ToString()),
-            () => detail.Body.ShouldBe("Body text"),
             () => detail.Author.ShouldBe("octocat"),
             () => detail.Labels.ShouldBe(["bug", "foundry"]),
             () => detail.StateDetails.ShouldBeNull());
