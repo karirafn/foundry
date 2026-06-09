@@ -411,6 +411,25 @@ describe('IssueListComponent', () => {
     expect(separator).toBeFalsy();
   });
 
+  // Cycle 8: sr-only span announces section boundary for screen readers
+  it('should render an sr-only span announcing the section boundary when there are both live and non-live issues', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
+    const completedIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'completed', issueNumber: 43 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([liveIssue, completedIssue]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const srSpan = el.querySelector('.sr-only');
+    expect(srSpan).toBeTruthy();
+    expect(srSpan?.textContent).toContain('End of in-progress issues');
+  });
+
   // Cycle 6: expand/collapse wiring - fd-issue-detail appears when card is expanded
   it('should show fd-issue-detail for the expanded issue after card toggle', () => {
     // Arrange

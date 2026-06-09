@@ -35,6 +35,7 @@
   }
 
   &__separator {
+    align-self: center;
     border: none;
     border-top: 1px solid var(--fd-text-tertiary);
     margin-block: var(--fd-spacing-xs);

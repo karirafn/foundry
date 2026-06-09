@@ -40,6 +40,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       <div class="issue-list__grid">
         @for (issue of issueService.sortedIssues(); track issue.id; let idx = $index) {
           @if (issueService.liveIssueCount() > 0 && idx === issueService.liveIssueCount()) {
+            <span class="sr-only">End of in-progress issues. Other issues follow.</span>
             <hr class="issue-list__separator" aria-hidden="true" />
           }
           <div class="issue-list__item">
