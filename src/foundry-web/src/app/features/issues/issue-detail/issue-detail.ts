@@ -23,7 +23,9 @@ import { IssueService } from '../issue.service';
 const LOG_PANEL_ID = 'issue-detail-log-panel';
 const MOBILE_QUERY = '(max-width: 767px)';
 
-const noopMediaQuery: MediaQueryList = {
+// SSR and test environments lack window.matchMedia; this no-op satisfies the
+// MediaQueryList interface without actually querying the viewport.
+const SSR_NOOP_MEDIA_QUERY = {
   matches: false,
   media: MOBILE_QUERY,
   onchange: null,
@@ -41,7 +43,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
     factory: () =>
       typeof window !== 'undefined' && typeof window.matchMedia === 'function'
         ? (q: string) => window.matchMedia(q)
-        : () => noopMediaQuery,
+        : () => SSR_NOOP_MEDIA_QUERY,
   }
 );
 
@@ -81,89 +83,91 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
           </div>
         }
 
-        <div class="issue-detail__fields">
-          @if (d.stateDetails.branchName) {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Branch</span>
-              <span class="issue-detail__branch issue-detail__field-value">{{ d.stateDetails.branchName }}</span>
-            </div>
-          }
+        @if (d.stateDetails; as s) {
+          <div class="issue-detail__fields">
+            @if (s.branchName) {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key">Branch</span>
+                <span class="issue-detail__branch issue-detail__field-value">{{ s.branchName }}</span>
+              </div>
+            }
 
-          @if (d.stateDetails.pullRequestUrl | safeHref; as safePrUrl) {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Pull Request</span>
-              <a
-                class="issue-detail__pr-link issue-detail__field-value"
-                [href]="safePrUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                [attr.aria-label]="'Open pull request for issue #' + d.issueNumber"
-              >View PR</a>
-            </div>
-          }
+            @if (s.pullRequestUrl | safeHref; as safePrUrl) {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key">Pull Request</span>
+                <a
+                  class="issue-detail__pr-link issue-detail__field-value"
+                  [href]="safePrUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [attr.aria-label]="'Open pull request for issue #' + d.issueNumber"
+                >View PR</a>
+              </div>
+            }
 
-          @if (d.stateDetails.workerRunId) {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Worker Run</span>
-              <span class="issue-detail__field-value">{{ d.stateDetails.workerRunId }}</span>
-            </div>
-          }
+            @if (s.workerRunId) {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key">Worker Run</span>
+                <span class="issue-detail__field-value">{{ s.workerRunId }}</span>
+              </div>
+            }
 
-          @if (d.stateDetails.failureReason) {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Failure Reason</span>
-              <span class="issue-detail__field-value">{{ d.stateDetails.failureReason }}</span>
-            </div>
-          }
+            @if (s.failureReason) {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key">Failure Reason</span>
+                <span class="issue-detail__field-value">{{ s.failureReason }}</span>
+              </div>
+            }
 
-          @if (d.stateDetails.blockedBy) {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Blocked By</span>
-              <span class="issue-detail__field-value">{{ d.stateDetails.blockedBy }}</span>
-            </div>
-          }
+            @if (s.blockedBy) {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key">Blocked By</span>
+                <span class="issue-detail__field-value">{{ s.blockedBy }}</span>
+              </div>
+            }
 
-          @if (d.state === 'ineligible') {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key" id="eligibility-violations-label">Eligibility Violations</span>
-              @if (d.stateDetails.violations?.length) {
-                <ul class="issue-detail__violations" aria-labelledby="eligibility-violations-label">
-                  @for (violation of d.stateDetails.violations!; track violation.rule) {
-                    <li class="issue-detail__violation">{{ violation.description }}</li>
-                  }
-                </ul>
-              } @else {
-                <span class="issue-detail__field-value">Eligibility details are unavailable</span>
-              }
-            </div>
-          }
+            @if (d.state === 'ineligible') {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key" id="eligibility-violations-label">Eligibility Violations</span>
+                @if (s.violations?.length) {
+                  <ul class="issue-detail__violations" aria-labelledby="eligibility-violations-label">
+                    @for (violation of s.violations!; track violation.rule) {
+                      <li class="issue-detail__violation">{{ violation.description }}</li>
+                    }
+                  </ul>
+                } @else {
+                  <span class="issue-detail__field-value">Eligibility details are unavailable</span>
+                }
+              </div>
+            }
 
-          @if (d.stateDetails.completedAt) {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Completed</span>
-              <span class="issue-detail__field-value">{{ d.stateDetails.completedAt | date: 'medium' }}</span>
-            </div>
-          }
+            @if (s.completedAt) {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key">Completed</span>
+                <span class="issue-detail__field-value">{{ s.completedAt | date: 'medium' }}</span>
+              </div>
+            }
 
-          @if (d.stateDetails.failedAt) {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Failed At</span>
-              <span class="issue-detail__field-value">{{ d.stateDetails.failedAt | date: 'medium' }}</span>
-            </div>
-          }
+            @if (s.failedAt) {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key">Failed At</span>
+                <span class="issue-detail__field-value">{{ s.failedAt | date: 'medium' }}</span>
+              </div>
+            }
 
-          @if (d.stateDetails.feedbackCutoffAt) {
-            <div class="issue-detail__field">
-              <span class="issue-detail__field-key">Feedback Cutoff</span>
-              <span class="issue-detail__field-value">{{ d.stateDetails.feedbackCutoffAt | date: 'medium' }}</span>
-            </div>
-          }
+            @if (s.feedbackCutoffAt) {
+              <div class="issue-detail__field">
+                <span class="issue-detail__field-key">Feedback Cutoff</span>
+                <span class="issue-detail__field-value">{{ s.feedbackCutoffAt | date: 'medium' }}</span>
+              </div>
+            }
 
-          <div class="issue-detail__field">
-            <span class="issue-detail__field-key">Author</span>
-            <span class="issue-detail__field-value">{{ d.author }}</span>
+            <div class="issue-detail__field">
+              <span class="issue-detail__field-key">Author</span>
+              <span class="issue-detail__field-value">{{ d.author }}</span>
+            </div>
           </div>
-        </div>
+        }
 
         @if (d.state === 'ineligible') {
           <div class="issue-detail__actions">
@@ -177,7 +181,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
           </div>
         }
 
-        @if (d.stateDetails.workerRunId) {
+        @if (d.stateDetails?.workerRunId) {
           <div class="issue-detail__log-section">
             <button
               #viewLogsBtn
@@ -317,7 +321,7 @@ export class IssueDetailComponent implements OnDestroy {
       this.closeLogPanel();
     } else {
       this._logPanelOpen.set(true);
-      if (d.stateDetails.workerRunId) {
+      if (d.stateDetails?.workerRunId) {
         this._logService.open(d.stateDetails.workerRunId, d.id, d.state);
       }
       if (this._isMobile()) {
@@ -333,7 +337,7 @@ export class IssueDetailComponent implements OnDestroy {
   }
 
   onLogRetry(d: IssueDetail): void {
-    if (d.stateDetails.workerRunId) {
+    if (d.stateDetails?.workerRunId) {
       this._logService.open(d.stateDetails.workerRunId, d.id, d.state);
     }
   }

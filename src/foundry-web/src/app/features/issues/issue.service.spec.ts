@@ -132,6 +132,7 @@ describe('IssueService', () => {
         failedAt: null,
         completedAt: null,
         blockedBy: null,
+        violations: null,
       },
     };
 
@@ -252,6 +253,7 @@ describe('IssueService', () => {
         failedAt: null,
         completedAt: null,
         blockedBy: null,
+        violations: null,
       },
     };
 
@@ -270,7 +272,7 @@ describe('IssueService', () => {
     service.expandedIssueId.set('def456');
 
     // Act — the stale response for issue A now arrives
-    reqA.flush({ ...mockSummary, id: 'abc123', body: 'Issue A body (stale)' });
+    reqA.flush({ ...mockSummary, id: 'abc123' });
 
     // Assert — issue B's detail is still shown; the stale A response was discarded by the guard
     expect(service.issueDetail()).toEqual(detailB);

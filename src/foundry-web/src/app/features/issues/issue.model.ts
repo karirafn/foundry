@@ -37,11 +37,11 @@ export interface IssueStateDetails {
   failedAt: string | null;
   completedAt: string | null;
   blockedBy: string | null;
-  violations?: EligibilityViolation[] | null;
+  violations: EligibilityViolation[] | null;
 }
 
 export interface IssueDetail extends IssueSummary {
   author: string;
   labels: string[];
-  stateDetails: IssueStateDetails;
+  stateDetails: IssueStateDetails | null;
 }

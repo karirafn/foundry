@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { IssueDetailComponent, MEDIA_QUERY_FACTORY } from './issue-detail';
-import { IssueDetail } from '../issue.model';
+import { IssueDetail, IssueStateDetails } from '../issue.model';
 import { WorkerLogService, WORKER_LOG_HUB_FACTORY } from '../worker-log.service';
 import { IssueService } from '../issue.service';
 import { SignalRService } from '../../../core/services/signalr.service';
@@ -10,6 +10,18 @@ import { SignalRService } from '../../../core/services/signalr.service';
 const mockSignalRService = {
   on: () => {},
   onReconnected: () => {},
+};
+
+const mockStateDetails: IssueStateDetails = {
+  workerRunId: null,
+  branchName: 'feat/dark-mode',
+  pullRequestUrl: 'https://github.com/owner/repo/pull/99',
+  feedbackCutoffAt: null,
+  failureReason: null,
+  failedAt: null,
+  completedAt: '2026-02-01T12:00:00Z',
+  blockedBy: null,
+  violations: null,
 };
 
 const mockDetail: IssueDetail = {
@@ -22,22 +34,13 @@ const mockDetail: IssueDetail = {
   url: 'https://github.com/owner/repo/issues/42',
   author: 'dev',
   labels: ['enhancement', 'ui'],
-  stateDetails: {
-    workerRunId: null,
-    branchName: 'feat/dark-mode',
-    pullRequestUrl: 'https://github.com/owner/repo/pull/99',
-    feedbackCutoffAt: null,
-    failureReason: null,
-    failedAt: null,
-    completedAt: '2026-02-01T12:00:00Z',
-    blockedBy: null,
-  },
+  stateDetails: mockStateDetails,
 };
 
 const mockDetailWithWorkerRun: IssueDetail = {
   ...mockDetail,
   stateDetails: {
-    ...mockDetail.stateDetails,
+    ...mockStateDetails,
     workerRunId: 'run-42',
   },
 };
@@ -200,7 +203,7 @@ describe('IssueDetailComponent', () => {
     // Arrange
     const detailHttpPr: IssueDetail = {
       ...mockDetail,
-      stateDetails: { ...mockDetail.stateDetails, pullRequestUrl: 'http://github.com/owner/repo/pull/99' },
+      stateDetails: { ...mockStateDetails, pullRequestUrl: 'http://github.com/owner/repo/pull/99' },
     };
 
     // Act
@@ -216,7 +219,7 @@ describe('IssueDetailComponent', () => {
     // Arrange
     const detailNoPr: IssueDetail = {
       ...mockDetail,
-      stateDetails: { ...mockDetail.stateDetails, pullRequestUrl: null },
+      stateDetails: { ...mockStateDetails, pullRequestUrl: null },
     };
 
     // Act
@@ -243,7 +246,7 @@ describe('IssueDetailComponent', () => {
     // Arrange
     const detailNoBranch: IssueDetail = {
       ...mockDetail,
-      stateDetails: { ...mockDetail.stateDetails, branchName: null },
+      stateDetails: { ...mockStateDetails, branchName: null },
     };
 
     // Act
@@ -499,7 +502,7 @@ describe('IssueDetailComponent', () => {
       ...mockDetail,
       state: 'ineligible',
       stateDetails: {
-        ...mockDetail.stateDetails,
+        ...mockStateDetails,
         violations: [
           { rule: 'no-open-pr', description: 'Issue already has an open pull request' },
           { rule: 'label-removed', description: 'Trigger label was removed' },
@@ -534,7 +537,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleNoViolations: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: [] },
+      stateDetails: { ...mockStateDetails, violations: [] },
     };
 
     // Act
@@ -554,7 +557,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleNullViolations: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act
@@ -575,7 +578,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act
@@ -603,7 +606,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
     const fixture = createComponent(ineligibleDetail);
     const el = fixture.nativeElement as HTMLElement;
@@ -627,7 +630,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act
@@ -644,7 +647,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
     const fixture = createComponent(ineligibleDetail);
     const el = fixture.nativeElement as HTMLElement;
@@ -673,7 +676,7 @@ describe('IssueDetailComponent', () => {
       ...mockDetail,
       state: 'ineligible',
       stateDetails: {
-        ...mockDetail.stateDetails,
+        ...mockStateDetails,
         violations: [{ rule: 'no-open-pr', description: 'Issue already has an open pull request' }],
       },
     };
@@ -695,7 +698,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act — loading=true with stale detail (transition state)
@@ -714,7 +717,7 @@ describe('IssueDetailComponent', () => {
     const ineligibleDetail: IssueDetail = {
       ...mockDetail,
       state: 'ineligible',
-      stateDetails: { ...mockDetail.stateDetails, violations: null },
+      stateDetails: { ...mockStateDetails, violations: null },
     };
 
     // Act
@@ -724,5 +727,27 @@ describe('IssueDetailComponent', () => {
     // Assert — retry button is absent while skeleton is shown
     const retryBtn = el.querySelector('.issue-detail__retry-eligibility-btn');
     expect(retryBtn).toBeFalsy();
+  });
+
+  // B2 guard: null stateDetails must not throw
+  it('should render content region without error when stateDetails is null (detected/queued states)', () => {
+    // Arrange — detected state returns null stateDetails from the API
+    const detectedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'detected',
+      stateDetails: null,
+    };
+
+    // Act
+    const fixture = createComponent(detectedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — region renders, no state-detail fields, no crash
+    const region = el.querySelector('[role="region"]');
+    expect(region).toBeTruthy();
+    const branch = el.querySelector('.issue-detail__branch');
+    expect(branch).toBeFalsy();
+    const prLink = el.querySelector('.issue-detail__pr-link');
+    expect(prLink).toBeFalsy();
   });
 });
