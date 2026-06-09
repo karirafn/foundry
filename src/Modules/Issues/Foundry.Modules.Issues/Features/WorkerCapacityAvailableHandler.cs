@@ -21,7 +21,8 @@ internal sealed class WorkerCapacityAvailableHandler(
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
     {
-        // Revision queue takes priority — claim the oldest revision first, then fall back to fresh queue.
+        // Claim priority: revision queued first (addressing review feedback takes precedence),
+        // then continuation queued (resuming interrupted work), then fresh queued issues.
         RevisionQueuedIssue? revisionQueued = await db.Set<RevisionQueuedIssue>()
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);

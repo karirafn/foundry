@@ -379,6 +379,35 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBothContinuationQueuedAndQueuedIssueExist_ClaimsContinuationQueuedFirst()
+    {
+        // Arrange
+        MonitoredRepositoryId continuationRepositoryId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId queuedRepositoryId = MonitoredRepositoryId.New();
+        SeedContinuationQueuedIssue(continuationRepositoryId);
+        SeedQueuedIssue(queuedRepositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler();
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? continuationIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == continuationRepositoryId,
+                TestContext.Current.CancellationToken);
+        Issue? queuedIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == queuedRepositoryId,
+                TestContext.Current.CancellationToken);
+        continuationIssue.ShouldBeOfType<InProgressIssue>();
+        queuedIssue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    [Fact]
     public async Task WhenRevisionQueuedAndContinuationQueuedBothExist_PrioritizesRevisionQueued()
     {
         // Arrange

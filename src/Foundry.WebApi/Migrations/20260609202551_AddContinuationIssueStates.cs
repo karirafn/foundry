@@ -20,7 +20,7 @@ namespace Foundry.WebApi.Migrations
             migrationBuilder.AddCheckConstraint(
                 name: "ck_issues_continuable_failed_fields",
                 table: "issues",
-                sql: "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+                sql: "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
 
             migrationBuilder.AddCheckConstraint(
                 name: "ck_issues_continuation_queued_branch_name",
