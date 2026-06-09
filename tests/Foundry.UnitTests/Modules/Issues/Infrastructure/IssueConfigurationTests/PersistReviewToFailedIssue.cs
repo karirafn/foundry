@@ -45,7 +45,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
 
     [Fact]
-    public async Task WhenReviewIssueFailedTransitioned_CanBeReloadedAsFailedIssueWithAllFields()
+    public async Task WhenReviewIssueFailedTransitioned_CanBeReloadedAsContinuableFailedIssueWithAllFields()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -74,7 +74,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-55", "https://github.com/owner/repo/pull/7", DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        FailedIssue failed = review.Fail("PR was closed without merge", failedAt);
+        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", failedAt);
         await _dbContext.TransitionAsync(review, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -84,11 +84,14 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
             .FindAsync([failed.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        FailedIssue reloaded = result.ShouldBeOfType<FailedIssue>();
+        ContinuableFailedIssue reloaded = result.ShouldBeOfType<ContinuableFailedIssue>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.WorkerRunId.ShouldBe(reviewWorkerRunId),
             () => reloaded.FailureReason.ShouldBe("PR was closed without merge"),
             () => reloaded.FailedAt.ShouldBe(failedAt),
+            () => reloaded.BranchName.ShouldBe("feat/issue-55"),
+            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/7"),
+            () => reloaded.LatestProgress.ShouldBe("PR was opened and reviewed"),
             () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
             () => reloaded.Url.Value.ShouldBe(ValidUrl.Value),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));

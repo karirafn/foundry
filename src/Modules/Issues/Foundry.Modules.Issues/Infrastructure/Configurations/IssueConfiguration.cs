@@ -159,6 +159,8 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<ReviewIssue>("review")
             .HasValue<UnchangedIssue>("unchanged")
             .HasValue<FailedIssue>("failed")
+            .HasValue<ContinuableFailedIssue>("continuable_failed")
+            .HasValue<ContinuationQueuedIssue>("continuation_queued")
             .HasValue<CompletedIssue>("completed")
             .HasValue<DismissedIssue>("dismissed")
             .HasValue<RevisionQueuedIssue>("revision_queued")
