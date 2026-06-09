@@ -34,6 +34,12 @@
     flex-direction: column;
   }
 
+  &__separator {
+    border: none;
+    border-top: 1px solid var(--fd-border-muted);
+    margin: 0;
+  }
+
   &__detail-wrapper {
     overflow: hidden;
   }

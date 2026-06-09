@@ -38,7 +38,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
       }
 
       <div class="issue-list__grid">
-        @for (issue of issueService.sortedIssues(); track issue.id) {
+        @for (issue of issueService.sortedIssues(); track issue.id; let idx = $index) {
+          @if (issueService.liveIssueCount() > 0 && idx === issueService.liveIssueCount()) {
+            <hr class="issue-list__separator" aria-hidden="true" />
+          }
           <div class="issue-list__item">
             <fd-issue-card
               [issue]="issue"
