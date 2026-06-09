@@ -65,6 +65,12 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             t.HasCheckConstraint(
                 "ck_issues_ineligible_violations",
                 "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_issues_continuable_failed_fields",
+                "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_continuation_queued_branch_name",
+                "state <> 'continuation_queued' OR branch_name IS NOT NULL");
         });
 
         builder.HasKey(i => i.Id);

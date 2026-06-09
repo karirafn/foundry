@@ -7,8 +7,6 @@ namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
 public sealed class ContinuationQueuedIssueConfiguration : IEntityTypeConfiguration<ContinuationQueuedIssue>
 {
-    private const int LatestProgressMaxLength = 1000;
-
     public void Configure(EntityTypeBuilder<ContinuationQueuedIssue> builder)
     {
         builder.Property(i => i.BranchName)
@@ -17,8 +15,8 @@ public sealed class ContinuationQueuedIssueConfiguration : IEntityTypeConfigurat
             .HasColumnName("branch_name");
 
         builder.Property(i => i.LatestProgress)
-            .HasMaxLength(LatestProgressMaxLength)
-            .IsUnicode(true)
+            .HasMaxLength(int.MaxValue) // unlimited
+            .HasColumnType("TEXT")
             .HasColumnName("latest_progress");
     }
 }

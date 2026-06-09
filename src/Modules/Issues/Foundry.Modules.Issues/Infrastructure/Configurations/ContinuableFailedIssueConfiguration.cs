@@ -8,7 +8,6 @@ namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 public sealed class ContinuableFailedIssueConfiguration : IEntityTypeConfiguration<ContinuableFailedIssue>
 {
     private const int FailureReasonMaxLength = 500;
-    private const int LatestProgressMaxLength = 1000;
 
     public void Configure(EntityTypeBuilder<ContinuableFailedIssue> builder)
     {
@@ -26,8 +25,8 @@ public sealed class ContinuableFailedIssueConfiguration : IEntityTypeConfigurati
             .HasColumnName("pull_request_url");
 
         builder.Property(i => i.LatestProgress)
-            .HasMaxLength(LatestProgressMaxLength)
-            .IsUnicode(true)
+            .HasMaxLength(int.MaxValue) // unlimited
+            .HasColumnType("TEXT")
             .HasColumnName("latest_progress");
 
         builder.Property(i => i.FailureReason)
