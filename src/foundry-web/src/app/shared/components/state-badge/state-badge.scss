@@ -37,6 +37,14 @@
     background-color: var(--fd-state-failed);
   }
 
+  &--continuable-failed {
+    background-color: var(--fd-state-failed);
+  }
+
+  &--continuation-queued {
+    background-color: var(--fd-state-queued);
+  }
+
   &--completed {
     background-color: var(--fd-state-completed);
   }

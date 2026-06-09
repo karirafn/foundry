@@ -6,6 +6,8 @@ export type IssueState =
   | 'review'
   | 'unchanged'
   | 'failed'
+  | 'continuable_failed'
+  | 'continuation_queued'
   | 'completed'
   | 'dismissed'
   | 'revision_queued'
