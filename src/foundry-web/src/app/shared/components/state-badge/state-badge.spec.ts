@@ -209,13 +209,13 @@ describe('StateBadgeComponent', () => {
   });
 
   // Cycle 6: continuable_failed state
-  it('should display "CONTINUABLE" for continuable_failed state', () => {
+  it('should display "CONT FAILED" for continuable_failed state', () => {
     // Arrange / Act
     const fixture = createComponent('continuable_failed');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    expect(el.querySelector('span')?.textContent?.trim()).toBe('CONTINUABLE');
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('CONT FAILED');
   });
 
   it('should set aria-label "State: continuable failed" for continuable_failed state', () => {

@@ -9,7 +9,7 @@ const STATE_LABELS: Record<IssueState, string> = {
   review: 'REVIEW',
   unchanged: 'UNCHANGED',
   failed: 'FAILED',
-  continuable_failed: 'CONTINUABLE',
+  continuable_failed: 'CONT FAILED',
   continuation_queued: 'CONT QUEUED',
   completed: 'COMPLETED',
   dismissed: 'DISMISSED',

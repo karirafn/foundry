@@ -40,6 +40,7 @@ export interface IssueStateDetails {
   completedAt: string | null;
   blockedBy: number[] | null;
   violations: EligibilityViolation[] | null;
+  latestProgress: string | null;
 }
 
 export interface IssueDetail extends IssueSummary {
@@ -48,4 +49,6 @@ export interface IssueDetail extends IssueSummary {
   stateDetails: IssueStateDetails | null;
 }
 
-export const LIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress']);
+// 'queued' is intentionally absent — it uses the same separator logic as detected and is not
+// operationally active. 'continuation_queued' is included because work is about to be re-dispatched.
+export const LIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress', 'continuation_queued']);

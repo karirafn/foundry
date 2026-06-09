@@ -22,6 +22,7 @@ const mockStateDetails: IssueStateDetails = {
   completedAt: '2026-02-01T12:00:00Z',
   blockedBy: null,
   violations: null,
+  latestProgress: null,
 };
 
 const mockDetail: IssueDetail = {
