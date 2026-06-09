@@ -41,7 +41,6 @@ export interface IssueStateDetails {
 }
 
 export interface IssueDetail extends IssueSummary {
-  body: string;
   author: string;
   labels: string[];
   stateDetails: IssueStateDetails;

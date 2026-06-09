@@ -121,7 +121,6 @@ describe('IssueService', () => {
     // Arrange
     const detail: IssueDetail = {
       ...mockSummary,
-      body: 'The bug is here.',
       author: 'dev',
       labels: ['bug'],
       stateDetails: {
@@ -242,7 +241,6 @@ describe('IssueService', () => {
     const detailB: IssueDetail = {
       ...mockSummary,
       id: 'def456',
-      body: 'Issue B body',
       author: 'dev',
       labels: [],
       stateDetails: {

@@ -46,17 +46,6 @@
     margin-bottom: var(--fd-spacing-lg);
   }
 
-  &__body {
-    white-space: pre-wrap;
-    color: var(--fd-text-primary);
-    font-size: 0.875rem;
-    line-height: 1.6;
-    max-height: 12rem;
-    overflow-y: auto;
-    margin: 0;
-    padding: 0;
-  }
-
   &__labels {
     display: flex;
     flex-wrap: wrap;

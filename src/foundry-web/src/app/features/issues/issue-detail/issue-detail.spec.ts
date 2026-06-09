@@ -20,7 +20,6 @@ const mockDetail: IssueDetail = {
   repositorySlug: 'owner/repo',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
-  body: 'We need a dark mode for the dashboard.',
   author: 'dev',
   labels: ['enhancement', 'ui'],
   stateDetails: {
@@ -158,17 +157,6 @@ describe('IssueDetailComponent', () => {
     // Assert
     const skeleton = el.querySelector('.issue-detail__skeleton');
     expect(skeleton).toBeFalsy();
-  });
-
-  // Cycle 3: body content
-  it('should display the issue body text', () => {
-    // Arrange / Act
-    const fixture = createComponent(mockDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const body = el.querySelector('.issue-detail__body');
-    expect(body?.textContent?.trim()).toContain('We need a dark mode');
   });
 
   // Cycle 4: labels

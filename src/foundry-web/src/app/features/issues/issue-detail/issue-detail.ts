@@ -71,12 +71,6 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
         role="region"
         [attr.aria-label]="'Issue details for #' + d.issueNumber"
       >
-        @if (d.body) {
-          <div class="issue-detail__section">
-            <p class="issue-detail__body">{{ d.body }}</p>
-          </div>
-        }
-
         @if (d.labels.length > 0) {
           <div class="issue-detail__section">
             <div class="issue-detail__labels">
