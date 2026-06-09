@@ -2,7 +2,7 @@ import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@a
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { SignalRService } from '../../core/services/signalr.service';
-import { IssueDetail, IssueSummary } from './issue.model';
+import { IssueDetail, IssueSummary, LIVE_STATES } from './issue.model';
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
@@ -27,10 +27,17 @@ export class IssueService {
 
   private _detailSub: Subscription | null = null;
 
-  readonly sortedIssues: Signal<IssueSummary[]> = computed(() =>
-    [...this.issues()].sort(
-      (a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime()
-    )
+  readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
+    const byDate = (a: IssueSummary, b: IssueSummary): number =>
+      new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
+    const all = this.issues();
+    const live = [...all].filter(i => LIVE_STATES.has(i.state)).sort(byDate);
+    const other = [...all].filter(i => !LIVE_STATES.has(i.state)).sort(byDate);
+    return [...live, ...other];
+  });
+
+  readonly liveIssueCount: Signal<number> = computed(() =>
+    this.issues().filter(i => LIVE_STATES.has(i.state)).length
   );
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
