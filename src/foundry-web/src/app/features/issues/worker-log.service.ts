@@ -61,6 +61,12 @@ export class WorkerLogService {
       return;
     }
 
+    if (!SAFE_ID_RE.test(workerRunId)) {
+      this._error.set('Invalid worker run ID');
+      this._loading.set(false);
+      return;
+    }
+
     this._activeWorkerRunId.set(workerRunId);
     this._activeIssueId.set(issueId);
     this._isLive.set(LIVE_STATES.has(issueState));
