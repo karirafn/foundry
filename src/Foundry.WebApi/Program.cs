@@ -7,6 +7,7 @@ using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Hubs;
 using Foundry.WebApi.Persistence;
 
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 const string AngularDevServerPolicy = "AngularDevServer";
@@ -14,6 +15,8 @@ const string AngularDevServerPolicy = "AngularDevServer";
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("data/dp-keys"));
 builder.Services.AddDbContext<FoundryDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db"));
 builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
