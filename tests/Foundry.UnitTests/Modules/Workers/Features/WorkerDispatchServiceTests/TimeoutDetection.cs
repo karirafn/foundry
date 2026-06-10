@@ -204,7 +204,6 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
     {
         private readonly List<string> _callOrder = [];
 
-        public string? StoppedContainerId { get; private set; }
         public string? StopContainerCalledWith { get; private set; }
         public string? RemoveContainerCalledWith { get; private set; }
         public int GetLogsCallCount { get; private set; }
@@ -215,10 +214,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in timeout tests")));
 
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
-        {
-            StoppedContainerId = containerId;
-            return Task.CompletedTask;
-        }
+            => Task.CompletedTask;
 
         public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
             => Task.FromResult<WorkerStatus?>(new WorkerStatus(IsRunning: isRunning, ExitCode: null, FinishedAt: null));

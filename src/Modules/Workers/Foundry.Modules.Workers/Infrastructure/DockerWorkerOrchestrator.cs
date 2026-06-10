@@ -21,6 +21,7 @@ internal sealed class DockerWorkerOrchestrator(
     private const long BytesPerMegabyte = 1024L * 1024L;
     private const long NanoCpusPerCpu = 1_000_000_000L;
     private const int DockerErrorMessageMaxLength = 500;
+    private const int ContainerOutputMaxBytes = 65_536;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
@@ -235,7 +236,10 @@ internal sealed class DockerWorkerOrchestrator(
                 outputStream,
                 cancellationToken);
 
-            outputStream.Seek(0, SeekOrigin.Begin);
+            long startPosition = outputStream.Length > ContainerOutputMaxBytes
+                ? outputStream.Length - ContainerOutputMaxBytes
+                : 0;
+            outputStream.Seek(startPosition, SeekOrigin.Begin);
             using StreamReader reader = new(outputStream);
             return await reader.ReadToEndAsync(cancellationToken);
         }

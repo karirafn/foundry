@@ -21,15 +21,22 @@ internal static class GetReports
             Query query,
             CancellationToken cancellationToken)
         {
-            WorkerRun? run = await dbContext.Set<WorkerRun>()
+            bool exists = await dbContext.Set<WorkerRun>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(r => r.Id == query.WorkerRunId, cancellationToken);
+                .AnyAsync(r => r.Id == query.WorkerRunId, cancellationToken);
 
-            if (run is null)
+            if (!exists)
             {
                 return Result<GetReportsResponse>.Fail(
                     WorkerRunErrors.NotFound(query.WorkerRunId));
             }
+
+            string? containerOutput = await dbContext.Set<WorkerRun>()
+                .AsNoTracking()
+                .Where(r => r.Id == query.WorkerRunId)
+                .OfType<FailedRun>()
+                .Select(r => r.ContainerOutput)
+                .FirstOrDefaultAsync(cancellationToken);
 
             List<WorkerReportSummary> reports = await dbContext.Set<WorkerReport>()
                 .AsNoTracking()
@@ -43,10 +50,6 @@ internal static class GetReports
                     r.Content,
                     r.IngestedAt))
                 .ToListAsync(cancellationToken);
-
-            string? containerOutput = run is FailedRun failedRun
-                ? failedRun.ContainerOutput
-                : null;
 
             return new GetReportsResponse(reports, containerOutput);
         }
