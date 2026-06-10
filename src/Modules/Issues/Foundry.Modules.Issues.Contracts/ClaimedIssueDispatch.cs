@@ -10,4 +10,12 @@ public sealed record ClaimedIssueDispatch(
     Uri CloneUrl,
     string AccountSecretKeyName,
     RevisionContext? Revision = null,
-    ContinuationContext? Continuation = null);
+    ContinuationContext? Continuation = null)
+{
+    // Field exists only to enforce the invariant at construction time via its initializer.
+#pragma warning disable CA1823
+    private readonly bool _ = Revision is not null && Continuation is not null
+        ? throw new ArgumentException("Revision and Continuation are mutually exclusive.")
+        : true;
+#pragma warning restore CA1823
+}

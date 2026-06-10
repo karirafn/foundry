@@ -85,4 +85,34 @@ public sealed class Create
         // Assert
         dispatch.Continuation.ShouldBe(continuation);
     }
+
+    [Fact]
+    public void WhenCreatedWithBothRevisionAndContinuation_Throws()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        RevisionContext revision = new(
+            BranchName: "foundry/42",
+            PullRequestUrl: "https://github.com/org/repo/pull/7",
+            Comments: [new ReviewComment("Please fix this")]);
+        ContinuationContext continuation = new(
+            BranchName: "foundry/42/add-feature",
+            LatestProgress: "Implemented the core feature");
+
+        // Act
+        ArgumentException ex = Should.Throw<ArgumentException>(() => new ClaimedIssueDispatch(
+            issueId,
+            WorkerRunId: Guid.NewGuid(),
+            IssueNumber: 42,
+            Title: "Fix the bug",
+            Body: "Bug details",
+            RepositorySlug: "org/repo",
+            CloneUrl: new Uri("https://github.com/org/repo.git"),
+            AccountSecretKeyName: "github-pat",
+            Revision: revision,
+            Continuation: continuation));
+
+        // Assert
+        ex.Message.ShouldContain("mutually exclusive");
+    }
 }

@@ -20,8 +20,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueQueued @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -30,8 +33,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueBlocked @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -40,8 +46,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueCompleted @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -50,8 +59,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueFailed @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -60,8 +72,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueInReview @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -70,8 +85,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueUnchanged @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -80,8 +98,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueDismissed @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -90,8 +111,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueRevisionQueued @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -100,8 +124,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueRevisionFailed @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -110,8 +137,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueIneligible @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -120,8 +150,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueInProgress @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -130,8 +163,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueRevisionInProgress @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -140,8 +176,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueContinuableFailed @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -150,8 +189,11 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         IssueContinuationQueued @event = new(AnyIssueId, AnyRepositoryId);
 
-        // Act & Assert
-        @event.ShouldBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldBeAssignableTo<IIssueStateChanged>();
     }
 
     [Fact]
@@ -160,7 +202,10 @@ public sealed class ImplementsIIssueStateChanged
         // Arrange
         CircularDependencyDetected @event = new(AnyRepositoryId, []);
 
-        // Act & Assert
-        @event.ShouldNotBeAssignableTo<IIssueStateChanged>();
+        // Act
+        object subject = @event;
+
+        // Assert
+        subject.ShouldNotBeAssignableTo<IIssueStateChanged>();
     }
 }

@@ -391,6 +391,34 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenContinuationQueuedAndDispatchInfoIsNull_DoesNotTransitionAndDoesNotDispatchIssueClaimed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedContinuationQueuedIssue(repositoryId);
+
+        CapturingIntegrationEventDispatcher integrationDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryDispatchQueries: new StubRepositoryDispatchQueries(info: null),
+            integrationEventDispatcher: integrationDispatcher);
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<ContinuationQueuedIssue>();
+        integrationDispatcher.Events
+            .OfType<IssueClaimed>()
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenContinuationQueuedAndFreshQueuedBothPresent_ClaimsContinuationQueuedFirst()
     {
         // Arrange
