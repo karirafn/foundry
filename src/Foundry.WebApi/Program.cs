@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
+using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -26,6 +27,7 @@ builder.Services.AddProviderAuth();
 builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule(builder.Configuration);
 builder.Services.AddWorkersModule(builder.Configuration);
+builder.Services.AddSettingsModule();
 builder.Services.AddOpenApi();
 
 builder.Services.AddSignalR();
@@ -62,6 +64,7 @@ app.MapDefaultEndpoints();
 app.MapIssuesEndpoints();
 app.MapMonitoringEndpoints();
 app.MapWorkersEndpoints();
+app.MapSettingsEndpoints();
 app.MapHub<IssueHub>("/hubs/issues");
 app.MapHub<WorkerLogHub>("/hubs/worker-log");
 
