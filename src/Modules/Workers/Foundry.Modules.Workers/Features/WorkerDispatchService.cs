@@ -220,8 +220,15 @@ internal sealed class WorkerDispatchService(
             DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(_options.TimeoutMinutes);
             if (DateTimeOffset.UtcNow >= timeout)
             {
-                await orchestrator.StopAsync(activeRun.ContainerId.Value, cancellationToken);
-                FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut());
+                await TryStopContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+
+                string? containerOutput = await TryGetLogsAsync(
+                    orchestrator,
+                    activeRun.ContainerId.Value,
+                    activeRun.Id.Value,
+                    cancellationToken);
+
+                FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut(), containerOutput);
                 await dbContext.TransitionAsync(activeRun, timedOut, domainEventDispatcher, cancellationToken);
 
                 await TryDispatchAsync(
@@ -239,6 +246,8 @@ internal sealed class WorkerDispatchService(
                     "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
                     activeRun.Id,
                     _options.TimeoutMinutes);
+
+                await TryRemoveContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             }
 
             return;
@@ -374,6 +383,50 @@ internal sealed class WorkerDispatchService(
             logger.LogWarning(
                 ex,
                 "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after terminal transition.",
+                containerId,
+                workerRunId);
+        }
+    }
+
+    private async Task TryStopContainerAsync(
+        IWorkerOrchestrator orchestrator,
+        string containerId,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await orchestrator.StopContainerAsync(containerId, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort stop before log capture on timeout path; Docker exceptions must not crash the BackgroundService tick or prevent log capture and cleanup.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to stop container {ContainerId} for WorkerRun {WorkerRunId}.",
+                containerId,
+                workerRunId);
+        }
+    }
+
+    private async Task TryRemoveContainerAsync(
+        IWorkerOrchestrator orchestrator,
+        string containerId,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await orchestrator.RemoveContainerAsync(containerId, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort container removal after terminal state transition; Docker exceptions must not crash the BackgroundService tick.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after timeout.",
                 containerId,
                 workerRunId);
         }
