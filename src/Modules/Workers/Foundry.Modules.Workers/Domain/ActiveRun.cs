@@ -60,9 +60,9 @@ public sealed class ActiveRun : WorkerRun
         return completed;
     }
 
-    public FailedRun Fail(FailureReason reason)
+    public FailedRun Fail(FailureReason reason, string? containerOutput = null)
     {
-        FailedRun failed = FailedRun.FromActive(this, reason);
+        FailedRun failed = FailedRun.FromActive(this, reason, containerOutput);
         AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.ToString(), BranchName?.Value, LatestProgress));
         return failed;
     }
