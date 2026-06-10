@@ -8,8 +8,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     private const int MaxMaxConcurrent = 20;
     private const int MinTimeoutMinutes = 1;
     private const int MaxTimeoutMinutes = 1440;
-    private const int DefaultMaxConcurrent = 3;
-    private const int DefaultTimeoutMinutes = 120;
+    internal const int DefaultMaxConcurrent = 3;
+    internal const int DefaultTimeoutMinutes = 120;
 
     // Private parameterless constructor for EF Core materialization.
     private GlobalSettings() : base(GlobalSettingsId.Default)

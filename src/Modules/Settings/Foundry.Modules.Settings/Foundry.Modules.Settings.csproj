@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Foundry.Shared.Infrastructure\Foundry.Shared.Infrastructure.csproj" />
+    <ProjectReference Include="..\Foundry.Modules.Settings.Contracts\Foundry.Modules.Settings.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

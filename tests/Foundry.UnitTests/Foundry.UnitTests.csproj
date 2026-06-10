@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\src\Modules\Issues\Foundry.Modules.Issues\Foundry.Modules.Issues.csproj" />
     <ProjectReference Include="..\..\src\Modules\Workers\Foundry.Modules.Workers\Foundry.Modules.Workers.csproj" />
     <ProjectReference Include="..\..\src\Modules\Settings\Foundry.Modules.Settings\Foundry.Modules.Settings.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Settings\Foundry.Modules.Settings.Contracts\Foundry.Modules.Settings.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

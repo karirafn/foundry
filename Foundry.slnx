@@ -21,6 +21,10 @@
     <Project Path="src/Modules/Monitoring/Foundry.Modules.Monitoring.Contracts/Foundry.Modules.Monitoring.Contracts.csproj" />
     <Project Path="src/Modules/Monitoring/Foundry.Modules.Monitoring/Foundry.Modules.Monitoring.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Settings/">
+    <Project Path="src/Modules/Settings/Foundry.Modules.Settings/Foundry.Modules.Settings.csproj" />
+    <Project Path="src/Modules/Settings/Foundry.Modules.Settings.Contracts/Foundry.Modules.Settings.Contracts.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Workers/">
     <Project Path="src/Modules/Workers/Foundry.Modules.Workers.Contracts/Foundry.Modules.Workers.Contracts.csproj" />
     <Project Path="src/Modules/Workers/Foundry.Modules.Workers/Foundry.Modules.Workers.csproj" />
