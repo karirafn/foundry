@@ -15,12 +15,12 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Workers.Endpoints.GetReportsTests;
 
-public sealed class WhenRunHasReports : IAsyncDisposable
+public sealed class WhenRunFailedWithContainerOutput : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenRunHasReports()
+    public WhenRunFailedWithContainerOutput()
     {
         _factory = new FoundryWebAppFactory();
         _client = _factory.CreateClient();
@@ -32,34 +32,30 @@ public sealed class WhenRunHasReports : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task<WorkerRunId> SeedRunWithReportsAsync()
+    private async Task<WorkerRunId> SeedFailedRunWithContainerOutputAsync(string containerOutput)
     {
-        // No HTTP endpoint exists to create active runs — seeded directly via DbContext.
+        // No HTTP endpoint exists to create failed runs — seeded directly via DbContext.
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         IssueId issueId = IssueId.New();
         WorkerRunId runId = WorkerRunId.New();
         StartingRun starting = StartingRun.Begin(issueId, runId);
-        ActiveRun active = starting.Activate(ContainerId.From("container-with-reports"));
+        ActiveRun active = starting.Activate(ContainerId.From("container-failed-with-output"));
+        FailedRun failed = active.Fail(new FailureReason.NonZeroExit(1), containerOutput);
 
-        dbContext.Set<WorkerRun>().Add(active);
-
-        // Seed reports out of order to verify ordering by sequence number.
-        dbContext.Set<WorkerReport>().Add(WorkerReport.Create(runId, 3, "progress", "Step 3"));
-        dbContext.Set<WorkerReport>().Add(WorkerReport.Create(runId, 1, "progress", "Step 1"));
-        dbContext.Set<WorkerReport>().Add(WorkerReport.Create(runId, 2, "progress", "Step 2"));
-
+        dbContext.Set<WorkerRun>().Add(failed);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         return runId;
     }
 
     [Fact]
-    public async Task WhenRunHasReports_ReturnsReportsOrderedBySequenceNumber()
+    public async Task WhenRunFailedWithContainerOutput_ReturnsContainerOutputInResponse()
     {
         // Arrange
-        WorkerRunId runId = await SeedRunWithReportsAsync();
+        const string expectedOutput = "Error: something went wrong\nProcess exited with code 1";
+        WorkerRunId runId = await SeedFailedRunWithContainerOutputAsync(expectedOutput);
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(
@@ -72,10 +68,7 @@ public sealed class WhenRunHasReports : IAsyncDisposable
         GetReportsResponse? result = await response.Content
             .ReadFromJsonAsync<GetReportsResponse>(TestContext.Current.CancellationToken);
         result.ShouldNotBeNull();
-        result.Reports.Count.ShouldBe(3);
-        result.Reports[0].SequenceNumber.ShouldBe(1);
-        result.Reports[1].SequenceNumber.ShouldBe(2);
-        result.Reports[2].SequenceNumber.ShouldBe(3);
-        result.ContainerOutput.ShouldBeNull();
+        result.ContainerOutput.ShouldBe(expectedOutput);
+        result.Reports.ShouldBeEmpty();
     }
 }
