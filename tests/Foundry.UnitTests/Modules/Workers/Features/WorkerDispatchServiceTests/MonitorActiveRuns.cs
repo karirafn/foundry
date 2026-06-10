@@ -4,7 +4,6 @@ using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -21,10 +20,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         WorkerOptions options = workerOptions ?? new WorkerOptions
         {
             Image = "test-image:latest",
-            MaxConcurrent = 3,
             ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-            ApiKey = "test-api-key",
-            TimeoutMinutes = 120,
         };
 
         // Delegates to base.BuildService — accesses inherited instance state.

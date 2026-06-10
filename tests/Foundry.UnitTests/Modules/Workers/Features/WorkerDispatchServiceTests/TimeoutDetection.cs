@@ -4,7 +4,6 @@ using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -21,14 +20,13 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         WorkerOptions options = new()
         {
             Image = "test-image:latest",
-            MaxConcurrent = 3,
             ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-            ApiKey = "test-api-key",
-            TimeoutMinutes = timeoutMinutes,
         };
 
+        StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: timeoutMinutes);
+
         // Delegates to base.BuildService — accesses inherited instance state.
-        return base.BuildService(orchestrator, options);
+        return base.BuildService(orchestrator, options, settingsQueries: settingsQueries);
     }
 
     [Fact]

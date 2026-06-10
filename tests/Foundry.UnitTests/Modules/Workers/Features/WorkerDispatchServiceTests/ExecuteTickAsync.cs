@@ -23,15 +23,16 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         WorkerOptions workerOptions = new()
         {
             Image = "test-image:latest",
-            MaxConcurrent = maxConcurrent,
             ReportsPath = "/tmp/reports",
-            ApiKey = "test-api-key",
         };
+
+        StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: maxConcurrent, timeoutMinutes: 120);
 
         return base.BuildService(
             new NullWorkerOrchestrator(),
             workerOptions,
-            dispatcher);
+            dispatcher,
+            settingsQueries: settingsQueries);
     }
 
     [Fact]

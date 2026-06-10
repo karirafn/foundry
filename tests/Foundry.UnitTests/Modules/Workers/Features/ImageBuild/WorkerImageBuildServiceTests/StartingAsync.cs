@@ -151,7 +151,6 @@ public sealed class StartingAsync
     {
         WorkerOptions workerOptions = new()
         {
-            ApiKey = "test-key",
             Image = workerImage,
             ImageBuild = imageBuildOptions ?? new ImageBuildOptions { Enabled = false },
         };

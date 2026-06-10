@@ -29,18 +29,6 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
     {
         List<string> failures = [];
 
-        bool hasApiKey = !string.IsNullOrWhiteSpace(options.ApiKey);
-        bool hasOAuthToken = !string.IsNullOrWhiteSpace(options.OAuthToken);
-
-        if (hasApiKey && hasOAuthToken)
-        {
-            failures.Add("Set exactly one of Workers:ApiKey or Workers:OAuthToken, not both.");
-        }
-        else if (!hasApiKey && !hasOAuthToken)
-        {
-            failures.Add("Set exactly one of Workers:ApiKey (pay-per-use) or Workers:OAuthToken (Max plan via claude setup-token).");
-        }
-
         if (string.IsNullOrWhiteSpace(options.Image))
         {
             failures.Add("Workers:Image must be non-empty.");

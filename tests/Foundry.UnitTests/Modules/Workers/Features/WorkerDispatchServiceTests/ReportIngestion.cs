@@ -8,7 +8,6 @@ using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -60,14 +59,18 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         WorkerOptions options = new()
         {
             Image = "test-image:latest",
-            MaxConcurrent = 3,
             ReportsPath = _reportsBasePath,
-            ApiKey = "test-api-key",
-            TimeoutMinutes = 99999,
         };
 
+        StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: 99999);
+
         // Delegates to base.BuildService — accesses inherited instance state.
-        return base.BuildService(orchestrator, options, integrationEventDispatcher, broadcaster: broadcaster);
+        return base.BuildService(
+            orchestrator,
+            options,
+            integrationEventDispatcher,
+            broadcaster: broadcaster,
+            settingsQueries: settingsQueries);
     }
 
     [Fact]

@@ -43,13 +43,11 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         WorkerOptions options = new()
         {
             Image = "test-image:latest",
-            MaxConcurrent = 3,
             ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-            ApiKey = "test-api-key",
-            TimeoutMinutes = 9999,
         };
+        StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: 9999);
         OrphanedContainerCleanupStub orchestrator = new(containers: containers, status: runningStatus);
-        WorkerDispatchService sut = BuildService(orchestrator, workerOptions: options);
+        WorkerDispatchService sut = BuildService(orchestrator, workerOptions: options, settingsQueries: settingsQueries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

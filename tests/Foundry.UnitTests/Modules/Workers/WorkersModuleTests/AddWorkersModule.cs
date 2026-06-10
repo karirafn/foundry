@@ -40,8 +40,7 @@ public sealed class AddWorkersModule
         // Arrange
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Workers:MaxConcurrent"] = "5",
-            ["Workers:ApiKey"] = "sk-ant-test",
+            ["Workers:Image"] = "ghcr.io/anthropics/claude-code:v1.0",
         });
         ServiceCollection services = new();
 
@@ -51,17 +50,14 @@ public sealed class AddWorkersModule
 
         // Assert
         IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
-        options.Value.MaxConcurrent.ShouldBe(5);
+        options.Value.Image.ShouldBe("ghcr.io/anthropics/claude-code:v1.0");
     }
 
     [Fact]
     public void WhenCalled_RegistersIWorkerOrchestrator()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Workers:ApiKey"] = "sk-ant-test",
-        });
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
@@ -76,24 +72,19 @@ public sealed class AddWorkersModule
     [Fact]
     public void WhenCalled_RegistersWorkerOptionsValidator()
     {
-        // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
+        // Arrange — empty image triggers validation failure
+        IConfiguration emptyConfig = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Workers:ApiKey"] = "sk-ant-test",
+            ["Workers:Image"] = string.Empty,
         });
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule(emptyConfig);
         ServiceProvider provider = services.BuildServiceProvider();
 
-        // Assert — accessing Value with empty ApiKey triggers validation failure
-        IConfiguration emptyConfig = BuildConfiguration(new Dictionary<string, string?>());
-        ServiceCollection servicesWithEmptyKey = new();
-        servicesWithEmptyKey.AddWorkersModule(emptyConfig);
-        ServiceProvider providerWithEmptyKey = servicesWithEmptyKey.BuildServiceProvider();
-
-        IOptions<WorkerOptions> options = providerWithEmptyKey.GetRequiredService<IOptions<WorkerOptions>>();
+        // Assert — accessing Value with empty Image triggers validation failure
+        IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
         Should.Throw<OptionsValidationException>(() => _ = options.Value);
     }
 
@@ -101,10 +92,7 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersWorkerDispatchServiceAsHostedService()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Workers:ApiKey"] = "sk-ant-test",
-        });
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
@@ -122,10 +110,7 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersWorkerImageBuildServiceAsHostedService()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Workers:ApiKey"] = "sk-ant-test",
-        });
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
@@ -143,10 +128,7 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersIImageOperations()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Workers:ApiKey"] = "sk-ant-test",
-        });
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
