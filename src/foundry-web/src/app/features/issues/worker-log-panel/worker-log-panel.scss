@@ -130,7 +130,7 @@
     font-family: var(--fd-font-mono);
 
     &:not(:last-child) { border-block-end: 1px solid var(--fd-border-muted); }
-    &--final { display: block; padding: var(--fd-spacing-md) var(--fd-spacing-lg); }
+    &--final { display: block; }
 
     &--error, &--milestone { padding-inline-start: calc(var(--fd-spacing-lg) - 3px); }
 
@@ -206,7 +206,6 @@
   }
 
   &__final-branch, &__branch-name {
-    font-family: var(--fd-font-mono);
     font-size: 0.75rem;
     color: var(--fd-text-secondary);
     background: var(--fd-bg-page);
@@ -230,7 +229,6 @@
   &__final-metrics {
     font-size: 0.75rem;
     color: var(--fd-text-secondary);
-    font-family: var(--fd-font-mono);
   }
 
   &__branch-created-label {
