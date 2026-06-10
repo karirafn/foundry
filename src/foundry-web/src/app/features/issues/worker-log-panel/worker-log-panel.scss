@@ -215,6 +215,8 @@
     display: inline-block;
   }
 
+  &__final-branch { font-family: var(--fd-font-mono); }
+
   &__pr-link, &__branch-link {
     font-size: 0.8125rem;
     color: var(--fd-text-link);
@@ -322,10 +324,4 @@
     &:focus-visible { outline: 2px solid var(--fd-text-link); outline-offset: 2px; }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    &__live-dot { animation: none; }
-    &__shimmer-bar { animation: none; background: var(--fd-bg-card); }
-    &__container-output-chevron { transition: none; }
-    &__container-output-toggle, &__retry, &__scroll-pill { transition: none; }
-  }
 }
