@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Pipelines;
 using System.Runtime.CompilerServices;
 
@@ -203,5 +204,74 @@ internal sealed class DockerWorkerOrchestrator(
         }
 
         await copyTask;
+    }
+
+    public async Task<string?> GetLogsAsync(
+        string containerId,
+        int tailLines,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            ContainerLogsParameters logsParams = new()
+            {
+                Follow = false,
+                ShowStdout = true,
+                ShowStderr = true,
+                Timestamps = false,
+                Tail = tailLines.ToString(CultureInfo.InvariantCulture),
+            };
+
+            using MultiplexedStream multiplexedStream = await dockerClient.Containers.GetContainerLogsAsync(
+                containerId,
+                false,
+                logsParams,
+                cancellationToken);
+
+            using MemoryStream outputStream = new();
+            await multiplexedStream.CopyOutputToAsync(
+                Stream.Null,
+                outputStream,
+                outputStream,
+                cancellationToken);
+
+            outputStream.Seek(0, SeekOrigin.Begin);
+            using StreamReader reader = new(outputStream);
+            return await reader.ReadToEndAsync(cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    public async Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dockerClient.Containers.StopContainerAsync(
+                containerId,
+                new ContainerStopParameters { WaitBeforeKillSeconds = 10 },
+                cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            // Container already gone — treat as successful stop.
+        }
+    }
+
+    public async Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dockerClient.Containers.RemoveContainerAsync(
+                containerId,
+                new ContainerRemoveParameters { Force = true },
+                cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            // Container already gone — treat as successful removal.
+        }
     }
 }

@@ -151,5 +151,14 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
+
+        public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+
+        public Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

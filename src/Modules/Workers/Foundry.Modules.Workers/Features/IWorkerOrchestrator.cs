@@ -14,4 +14,10 @@ internal interface IWorkerOrchestrator
     IAsyncEnumerable<string> StreamLogsAsync(string containerId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(CancellationToken cancellationToken);
+
+    Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken);
+
+    Task StopContainerAsync(string containerId, CancellationToken cancellationToken);
+
+    Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken);
 }
