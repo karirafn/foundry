@@ -24,7 +24,7 @@ internal static class SystemPromptBuilder
 
         ## Reporting
 
-        REPORTING INSTRUCTIONS — Write JSON report files to ./reports/ at key points during implementation.
+        REPORTING INSTRUCTIONS — Write JSON report files to /reports/ at key points during implementation.
 
         Use sequential filenames: report-1.json, report-2.json, etc. The reports directory will be created for you.
 
