@@ -62,9 +62,10 @@ public sealed class WhenRunHasNoReports : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<WorkerReportSummary>? reports = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<WorkerReportSummary>>(TestContext.Current.CancellationToken);
-        reports.ShouldNotBeNull();
-        reports.ShouldBeEmpty();
+        GetReportsResponse? result = await response.Content
+            .ReadFromJsonAsync<GetReportsResponse>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Reports.ShouldBeEmpty();
+        result.ContainerOutput.ShouldBeNull();
     }
 }

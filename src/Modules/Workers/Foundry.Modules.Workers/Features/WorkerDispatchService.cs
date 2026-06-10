@@ -134,7 +134,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id,
                     activeRun.ContainerId.Value);
 
-                await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+                await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             }
             else if (!status.IsRunning)
             {
@@ -211,7 +211,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 activeRun.ContainerId.Value);
 
-            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             return;
         }
 
@@ -220,8 +220,15 @@ internal sealed class WorkerDispatchService(
             DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(_options.TimeoutMinutes);
             if (DateTimeOffset.UtcNow >= timeout)
             {
-                await orchestrator.StopAsync(activeRun.ContainerId.Value, cancellationToken);
-                FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut());
+                await TryStopContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+
+                string? containerOutput = await TryGetLogsAsync(
+                    orchestrator,
+                    activeRun.ContainerId.Value,
+                    activeRun.Id.Value,
+                    cancellationToken);
+
+                FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut(), containerOutput);
                 await dbContext.TransitionAsync(activeRun, timedOut, domainEventDispatcher, cancellationToken);
 
                 await TryDispatchAsync(
@@ -239,6 +246,8 @@ internal sealed class WorkerDispatchService(
                     "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
                     activeRun.Id,
                     _options.TimeoutMinutes);
+
+                await TryRemoveContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             }
 
             return;
@@ -267,13 +276,20 @@ internal sealed class WorkerDispatchService(
                 effectiveBranchName?.Value ?? "(none)",
                 prUrl?.Value ?? "(none)");
 
-            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
         else
         {
             int exitCode = status.ExitCode ?? -1;
             string exitReason = $"Non-zero exit code: {exitCode}";
-            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode));
+
+            string? containerOutput = await TryGetLogsAsync(
+                orchestrator,
+                activeRun.ContainerId.Value,
+                activeRun.Id.Value,
+                cancellationToken);
+
+            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode), containerOutput);
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -292,7 +308,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 exitCode);
 
-            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
     }
 
@@ -319,7 +335,7 @@ internal sealed class WorkerDispatchService(
                     continue;
                 }
 
-                await orchestrator.StopAsync(containerId.Value, cancellationToken);
+                await orchestrator.StopAndRemoveAsync(containerId.Value, cancellationToken);
             }
         }
 #pragma warning disable CA1031 // Docker daemon failures during startup must not crash the BackgroundService; the warning log surfaces the issue without blocking reconciliation.
@@ -350,7 +366,7 @@ internal sealed class WorkerDispatchService(
         }
     }
 
-    private async Task TryStopAsync(
+    private async Task TryStopAndRemoveAsync(
         IWorkerOrchestrator orchestrator,
         string containerId,
         Guid workerRunId,
@@ -358,7 +374,7 @@ internal sealed class WorkerDispatchService(
     {
         try
         {
-            await orchestrator.StopAsync(containerId, cancellationToken);
+            await orchestrator.StopAndRemoveAsync(containerId, cancellationToken);
         }
 #pragma warning disable CA1031 // Best-effort container removal after a terminal state transition has already succeeded; Docker exceptions must not crash the BackgroundService tick.
         catch (Exception ex)
@@ -369,6 +385,77 @@ internal sealed class WorkerDispatchService(
                 "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after terminal transition.",
                 containerId,
                 workerRunId);
+        }
+    }
+
+    private async Task TryStopContainerAsync(
+        IWorkerOrchestrator orchestrator,
+        string containerId,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await orchestrator.StopContainerAsync(containerId, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort stop before log capture on timeout path; Docker exceptions must not crash the BackgroundService tick or prevent log capture and cleanup.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to stop container {ContainerId} for WorkerRun {WorkerRunId}.",
+                containerId,
+                workerRunId);
+        }
+    }
+
+    private async Task TryRemoveContainerAsync(
+        IWorkerOrchestrator orchestrator,
+        string containerId,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await orchestrator.RemoveContainerAsync(containerId, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort container removal after terminal state transition; Docker exceptions must not crash the BackgroundService tick.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after timeout.",
+                containerId,
+                workerRunId);
+        }
+    }
+
+    private async Task<string?> TryGetLogsAsync(
+        IWorkerOrchestrator orchestrator,
+        string containerId,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? output = await orchestrator.GetLogsAsync(containerId, LogTailLines, cancellationToken);
+
+            return output is not null && output.Length > MaxContainerOutputLength
+                ? output[..MaxContainerOutputLength]
+                : output;
+        }
+#pragma warning disable CA1031 // Best-effort log capture before transition; Docker exceptions must not crash the BackgroundService tick or prevent the failure transition.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to capture logs for container {ContainerId} (WorkerRun {WorkerRunId}).",
+                containerId,
+                workerRunId);
+            return null;
         }
     }
 
@@ -476,6 +563,8 @@ internal sealed class WorkerDispatchService(
         return null;
     }
 
+    private const int LogTailLines = 500;
+    private const int MaxContainerOutputLength = 65_536;
     private const int MaxProgressLength = 2000;
     private const long MaxReportFileSizeBytes = 1_048_576;
 

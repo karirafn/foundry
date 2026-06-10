@@ -135,7 +135,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in reconciliation tests")));
 
-        public Task StopAsync(string containerId, CancellationToken cancellationToken)
+        public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
         public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
@@ -155,5 +155,14 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
+
+        public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+
+        public Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

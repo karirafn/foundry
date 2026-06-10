@@ -117,4 +117,5 @@ public sealed class Fail
             () => domainEvent.BranchName.ShouldBe("feat/102-some-work"),
             () => domainEvent.LatestProgress.ShouldBe("Half done"));
     }
+
 }

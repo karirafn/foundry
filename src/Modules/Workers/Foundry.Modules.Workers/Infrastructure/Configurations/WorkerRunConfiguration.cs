@@ -172,5 +172,11 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
             .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
+
+        builder.Property(r => r.ContainerOutput)
+            .HasMaxLength(int.MaxValue)
+            .IsUnicode(true)
+            .HasColumnType("TEXT")
+            .HasColumnName("container_output");
     }
 }

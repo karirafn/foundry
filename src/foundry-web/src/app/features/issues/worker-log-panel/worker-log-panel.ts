@@ -4,6 +4,7 @@ import {
   ElementRef,
   InputSignal,
   OutputEmitterRef,
+  Signal,
   ViewChild,
   computed,
   effect,
@@ -34,15 +35,24 @@ export class WorkerLogPanelComponent {
   readonly isLive: InputSignal<boolean> = input.required<boolean>();
   readonly hideHeader: InputSignal<boolean> = input<boolean>(false);
   readonly issueUrl = input<string | null>(null);
+  readonly containerOutput = input<string | null>(null);
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   @ViewChild('scrollContainer') private readonly _scrollContainer?: ElementRef<HTMLElement>;
 
   protected readonly _userScrolledUp = signal(false);
+  protected readonly _containerOutputExpanded = signal<boolean>(false);
+
+  private static _nextId = 0;
+  protected readonly panelId = `container-output-${WorkerLogPanelComponent._nextId++}`;
+
+  private _initialExpandSet = false;
 
   readonly showEmpty = computed<boolean>(
     () => !this.loading() && !this.error() && this.reports().length === 0
   );
+
+  readonly isContainerOutputExpanded: Signal<boolean> = this._containerOutputExpanded.asReadonly();
 
   constructor() {
     effect(() => {
@@ -50,6 +60,14 @@ export class WorkerLogPanelComponent {
       const isLive = this.isLive();
       if (reports.length > 0 && isLive && !this._userScrolledUp()) {
         this._scrollToBottom();
+      }
+    });
+
+    effect(() => {
+      const output = this.containerOutput();
+      if (output && !this._initialExpandSet) {
+        this._initialExpandSet = true;
+        this._containerOutputExpanded.set(this.reports().length === 0);
       }
     });
   }
@@ -121,6 +139,10 @@ export class WorkerLogPanelComponent {
 
   onRetry(): void {
     this.retry.emit();
+  }
+
+  toggleContainerOutput(): void {
+    this._containerOutputExpanded.update(v => !v);
   }
 
   onScrollToBottom(): void {

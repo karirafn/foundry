@@ -67,12 +67,12 @@ public sealed class WhenReportFieldsAreProjected : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        IReadOnlyList<WorkerReportSummary>? reports = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<WorkerReportSummary>>(TestContext.Current.CancellationToken);
-        reports.ShouldNotBeNull();
-        reports.Count.ShouldBe(1);
+        GetReportsResponse? result = await response.Content
+            .ReadFromJsonAsync<GetReportsResponse>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Reports.Count.ShouldBe(1);
 
-        WorkerReportSummary summary = reports[0];
+        WorkerReportSummary summary = result.Reports[0];
         summary.ShouldSatisfyAllConditions(
             () => summary.Id.ShouldBe(report.Id.Value),
             () => summary.WorkerRunId.ShouldBe(runId.Value),

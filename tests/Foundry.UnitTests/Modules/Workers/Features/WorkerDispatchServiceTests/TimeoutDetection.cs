@@ -50,7 +50,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenRunHasExceededTimeout_CallsStopOnOrchestrator()
+    public async Task WhenRunHasExceededTimeout_CallsStopContainerAsyncOnOrchestrator()
     {
         // Arrange — use TimeoutMinutes = 0 so any run started in the past is immediately timed out
         SeedActiveRun("container-timeout-test");
@@ -60,8 +60,123 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — orchestrator.StopAsync was called with the container ID
-        orchestrator.StoppedContainerId.ShouldBe("container-timeout-test");
+        // Assert — orchestrator.StopContainerAsync was called with the container ID
+        orchestrator.StopContainerCalledWith.ShouldBe("container-timeout-test");
+    }
+
+    [Fact]
+    public async Task WhenRunTimesOut_ContainerOutputStoredOnFailedRun()
+    {
+        // Arrange
+        SeedActiveRun("container-timeout-output");
+        TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, logs: "timeout output captured");
+        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.ContainerOutput.ShouldBe("timeout output captured");
+    }
+
+    [Fact]
+    public async Task WhenRunTimesOut_CallsStopContainerAsync()
+    {
+        // Arrange
+        SeedActiveRun("container-timeout-stop");
+        TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
+        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.StopContainerCalledWith.ShouldBe("container-timeout-stop");
+    }
+
+    [Fact]
+    public async Task WhenRunTimesOut_CallsRemoveContainerAsync()
+    {
+        // Arrange
+        SeedActiveRun("container-timeout-remove");
+        TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
+        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.RemoveContainerCalledWith.ShouldBe("container-timeout-remove");
+    }
+
+    [Fact]
+    public async Task WhenRunTimesOut_CapturesLogsAfterStoppingContainer()
+    {
+        // Arrange
+        SeedActiveRun("container-timeout-order");
+        TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, logs: "some output");
+        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — logs captured after stop
+        orchestrator.GetLogsCallCount.ShouldBe(1);
+        orchestrator.GetLogsCalledAfterStopContainer.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenRunTimesOut_RemoveCalledAfterGetLogs()
+    {
+        // Arrange
+        SeedActiveRun("container-timeout-remove-order");
+        TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, logs: "some output");
+        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — remove called after log capture
+        orchestrator.RemoveCalledAfterGetLogs.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenRemoveContainerAsyncThrows_TransitionSucceedsAndDoesNotThrow()
+    {
+        // Arrange
+        SeedActiveRun("container-timeout-remove-throws");
+        TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, removeContainerThrows: true);
+        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+
+        // Act — must not throw even though RemoveContainerAsync throws
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — transition still succeeded
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<FailedRun>();
+    }
+
+    [Fact]
+    public async Task WhenStopContainerAsyncThrows_StillCapturesLogsAndTransitions()
+    {
+        // Arrange
+        SeedActiveRun("container-timeout-stop-throws");
+        TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, logs: "output after stop failure", stopContainerThrows: true);
+        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+
+        // Act — must not throw even though StopContainerAsync throws
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — logs still captured and transition succeeded
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.ContainerOutput.ShouldBe("output after stop failure");
+        orchestrator.GetLogsCallCount.ShouldBe(1);
     }
 
     [Fact]
@@ -81,18 +196,25 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         run.ShouldBeOfType<ActiveRun>();
     }
 
-    internal sealed class TimeoutStubWorkerOrchestrator(bool isRunning) : IWorkerOrchestrator
+    internal sealed class TimeoutStubWorkerOrchestrator(
+        bool isRunning,
+        string? logs = null,
+        bool stopContainerThrows = false,
+        bool removeContainerThrows = false) : IWorkerOrchestrator
     {
-        public string? StoppedContainerId { get; private set; }
+        private readonly List<string> _callOrder = [];
+
+        public string? StopContainerCalledWith { get; private set; }
+        public string? RemoveContainerCalledWith { get; private set; }
+        public int GetLogsCallCount { get; private set; }
+        public bool GetLogsCalledAfterStopContainer { get; private set; }
+        public bool RemoveCalledAfterGetLogs { get; private set; }
 
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in timeout tests")));
 
-        public Task StopAsync(string containerId, CancellationToken cancellationToken)
-        {
-            StoppedContainerId = containerId;
-            return Task.CompletedTask;
-        }
+        public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
 
         public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
             => Task.FromResult<WorkerStatus?>(new WorkerStatus(IsRunning: isRunning, ExitCode: null, FinishedAt: null));
@@ -108,5 +230,38 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
+
+        public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
+        {
+            GetLogsCallCount++;
+            GetLogsCalledAfterStopContainer = _callOrder.Contains("stop_container");
+            _callOrder.Add("get_logs");
+            return Task.FromResult(logs);
+        }
+
+        public Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
+        {
+            if (stopContainerThrows)
+            {
+                throw new InvalidOperationException("StopContainer failed");
+            }
+
+            StopContainerCalledWith = containerId;
+            _callOrder.Add("stop_container");
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+        {
+            if (removeContainerThrows)
+            {
+                throw new InvalidOperationException("RemoveContainer failed");
+            }
+
+            RemoveContainerCalledWith = containerId;
+            RemoveCalledAfterGetLogs = _callOrder.Contains("get_logs");
+            _callOrder.Add("remove_container");
+            return Task.CompletedTask;
+        }
     }
 }

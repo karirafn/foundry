@@ -2,7 +2,7 @@ import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } fr
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { IssueState, LIVE_STATES } from './issue.model';
-import { WorkerReportSummary } from './worker-report.model';
+import { GetReportsResponse, WorkerReportSummary } from './worker-report.model';
 
 const SAFE_ID_RE = /^[\w-]+$/;
 
@@ -45,12 +45,14 @@ export class WorkerLogService {
   private readonly _isLive: WritableSignal<boolean> = signal(false);
   private readonly _activeWorkerRunId: WritableSignal<string | null> = signal(null);
   private readonly _activeIssueId: WritableSignal<string | null> = signal(null);
+  private readonly _containerOutput: WritableSignal<string | null> = signal(null);
 
   readonly reports: Signal<WorkerReportSummary[]> = this._reports.asReadonly();
   readonly loading: Signal<boolean> = this._loading.asReadonly();
   readonly error: Signal<string | null> = this._error.asReadonly();
   readonly isLive: Signal<boolean> = this._isLive.asReadonly();
   readonly activeWorkerRunId: Signal<string | null> = this._activeWorkerRunId.asReadonly();
+  readonly containerOutput: Signal<string | null> = this._containerOutput.asReadonly();
 
   private _hub: WorkerLogHub | null = null;
 
@@ -88,12 +90,14 @@ export class WorkerLogService {
     this._isLive.set(false);
     this._activeWorkerRunId.set(null);
     this._activeIssueId.set(null);
+    this._containerOutput.set(null);
   }
 
   private _loadReports(workerRunId: string): void {
-    this._http.get<WorkerReportSummary[]>(`/api/workers/${encodeURIComponent(workerRunId)}/reports`).subscribe({
-      next: (reports) => {
-        this._reports.set([...reports].sort((a, b) => a.sequenceNumber - b.sequenceNumber));
+    this._http.get<GetReportsResponse>(`/api/workers/${encodeURIComponent(workerRunId)}/reports`).subscribe({
+      next: (response) => {
+        this._reports.set([...response.reports].sort((a, b) => a.sequenceNumber - b.sequenceNumber));
+        this._containerOutput.set(response.containerOutput);
         this._loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
