@@ -41,19 +41,20 @@ export class WorkerLogPanelComponent {
   @ViewChild('scrollContainer') private readonly _scrollContainer?: ElementRef<HTMLElement>;
 
   protected readonly _userScrolledUp = signal(false);
-  protected readonly _containerOutputExpanded = signal<boolean | null>(null);
+  protected readonly _containerOutputExpanded = signal<boolean>(false);
+
+  private static _nextId = 0;
+  protected readonly panelId = `container-output-${WorkerLogPanelComponent._nextId++}`;
+
+  private _initialExpandSet = false;
 
   readonly showEmpty = computed<boolean>(
     () => !this.loading() && !this.error() && this.reports().length === 0
   );
 
-  readonly isContainerOutputExpanded: Signal<boolean> = computed(() => {
-    const override = this._containerOutputExpanded();
-    if (override !== null) {
-      return override;
-    }
-    return this.reports().length === 0;
-  });
+  readonly isContainerOutputExpanded: Signal<boolean> = computed(
+    () => this._containerOutputExpanded()
+  );
 
   constructor() {
     effect(() => {
@@ -61,6 +62,14 @@ export class WorkerLogPanelComponent {
       const isLive = this.isLive();
       if (reports.length > 0 && isLive && !this._userScrolledUp()) {
         this._scrollToBottom();
+      }
+    });
+
+    effect(() => {
+      const output = this.containerOutput();
+      if (output && !this._initialExpandSet) {
+        this._initialExpandSet = true;
+        this._containerOutputExpanded.set(this.reports().length === 0);
       }
     });
   }

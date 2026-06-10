@@ -140,9 +140,7 @@
   }
 </div>
 
-@let output = containerOutput();
-@if (output) {
-  @let panelId = 'container-output-pre';
+@if (containerOutput(); as output) {
   <div class="worker-log-panel__container-output">
     <button
       class="worker-log-panel__container-output-toggle"
@@ -169,13 +167,11 @@
       </svg>
       Container Output
     </button>
-    @if (isContainerOutputExpanded()) {
-      <pre
-        [id]="panelId"
-        class="worker-log-panel__container-output-pre"
-        role="region"
-        aria-label="Container output"
-      >{{ output }}</pre>
-    }
+    <pre
+      [id]="panelId"
+      class="worker-log-panel__container-output-pre"
+      aria-label="Container output"
+      [hidden]="!isContainerOutputExpanded()"
+    >{{ output }}</pre>
   </div>
 }

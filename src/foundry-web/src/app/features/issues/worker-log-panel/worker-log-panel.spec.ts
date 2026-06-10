@@ -641,7 +641,7 @@ describe('WorkerLogPanelComponent', () => {
     expect(section).toBeFalsy();
   });
 
-  // Cycle 16: auto-expand when reports empty
+  // Cycle 16: auto-expand when reports empty — pre stays in DOM, hidden attribute controls visibility
   it('should auto-expand container output when reports are empty', () => {
     // Arrange
     const { fixture } = setup({ reports: [], containerOutput: 'crash log' });
@@ -651,8 +651,9 @@ describe('WorkerLogPanelComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const pre = el.querySelector('.worker-log-panel__container-output-pre');
+    const pre = el.querySelector('.worker-log-panel__container-output-pre') as HTMLElement;
     expect(pre).toBeTruthy();
+    expect(pre.hidden).toBe(false);
   });
 
   // Cycle 17: collapsed when reports exist alongside container output
@@ -665,8 +666,9 @@ describe('WorkerLogPanelComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const pre = el.querySelector('.worker-log-panel__container-output-pre');
-    expect(pre).toBeFalsy();
+    const pre = el.querySelector('.worker-log-panel__container-output-pre') as HTMLElement;
+    expect(pre).toBeTruthy();
+    expect(pre.hidden).toBe(true);
   });
 
   // Cycle 18: toggle button expands the section
@@ -682,8 +684,9 @@ describe('WorkerLogPanelComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const pre = el.querySelector('.worker-log-panel__container-output-pre');
+    const pre = el.querySelector('.worker-log-panel__container-output-pre') as HTMLElement;
     expect(pre).toBeTruthy();
+    expect(pre.hidden).toBe(false);
   });
 
   // Cycle 19: explicit toggle collapses auto-expanded section
@@ -699,7 +702,65 @@ describe('WorkerLogPanelComponent', () => {
     fixture.detectChanges();
 
     // Assert
+    const pre = el.querySelector('.worker-log-panel__container-output-pre') as HTMLElement;
+    expect(pre).toBeTruthy();
+    expect(pre.hidden).toBe(true);
+  });
+
+  // Finding 1: unique per-instance panelId — two fixtures from the same TestBed config
+  it('should generate unique panelId values for separate component instances', () => {
+    // Arrange — configure once, create two fixtures
+    TestBed.configureTestingModule({ imports: [WorkerLogPanelComponent] });
+    const fixture1 = TestBed.createComponent(WorkerLogPanelComponent);
+    fixture1.componentRef.setInput('reports', []);
+    fixture1.componentRef.setInput('loading', false);
+    fixture1.componentRef.setInput('error', null);
+    fixture1.componentRef.setInput('isLive', false);
+    const fixture2 = TestBed.createComponent(WorkerLogPanelComponent);
+    fixture2.componentRef.setInput('reports', []);
+    fixture2.componentRef.setInput('loading', false);
+    fixture2.componentRef.setInput('error', null);
+    fixture2.componentRef.setInput('isLive', false);
+
+    // Act
+    fixture1.detectChanges();
+    fixture2.detectChanges();
+
+    // Assert — access via index signature since panelId is protected
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const id1 = (fixture1.componentInstance as any).panelId as string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const id2 = (fixture2.componentInstance as any).panelId as string;
+    expect(id1).not.toEqual(id2);
+  });
+
+  // Finding 2: aria-controls always points to present element
+  it('should keep pre element in DOM when collapsed so aria-controls always references a valid element', () => {
+    // Arrange
+    const { fixture } = setup({ reports: [mockProgressReport], containerOutput: 'crash log' });
+    fixture.detectChanges();
+
+    // Assert — pre must exist regardless of collapsed state
+    const el = fixture.nativeElement as HTMLElement;
     const pre = el.querySelector('.worker-log-panel__container-output-pre');
-    expect(pre).toBeFalsy();
+    expect(pre).toBeTruthy();
+  });
+
+  // Finding 5: initial expanded state is set once and does not flip when reports arrive
+  it('should not re-collapse expanded container output when reports arrive after initial set', () => {
+    // Arrange — start with containerOutput but no reports
+    const { fixture } = setup({ reports: [], containerOutput: 'crash log' });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const preInitial = el.querySelector('.worker-log-panel__container-output-pre') as HTMLElement;
+    expect(preInitial.hidden).toBe(false);
+
+    // Act — reports arrive (simulate by setting input)
+    fixture.componentRef.setInput('reports', [mockProgressReport]);
+    fixture.detectChanges();
+
+    // Assert — still expanded, user did not interact
+    const pre = el.querySelector('.worker-log-panel__container-output-pre') as HTMLElement;
+    expect(pre.hidden).toBe(false);
   });
 });
