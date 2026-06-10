@@ -362,6 +362,23 @@ describe('IssueListComponent', () => {
     expect(separator?.getAttribute('aria-hidden')).toBe('true');
   });
 
+  it('should sort continuation_queued above the separator alongside other live states', () => {
+    // Arrange — continuation_queued is operationally equivalent to queued and must appear above the separator
+    const continuationQueued: IssueSummary = { ...mockSummary, id: 'cont-queued', state: 'continuation_queued' };
+    const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'completed', issueNumber: 43 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush([nonLiveIssue, continuationQueued]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — separator must appear, meaning continuation_queued is treated as live
+    const el = fixture.nativeElement as HTMLElement;
+    const separator = el.querySelector('hr.issue-list__separator');
+    expect(separator).toBeTruthy();
+  });
+
   it('should not render an hr separator when all issues are in-progress', () => {
     // Arrange
     const live1: IssueSummary = { ...mockSummary, id: 'live-1', state: 'in_progress' };

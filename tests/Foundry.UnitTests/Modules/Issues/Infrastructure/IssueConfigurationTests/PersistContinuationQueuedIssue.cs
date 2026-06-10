@@ -14,12 +14,12 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Issues.Infrastructure.IssueConfigurationTests;
 
-public sealed class PersistReviewToFailedIssue : IAsyncDisposable
+public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
-    public PersistReviewToFailedIssue()
+    public PersistContinuationQueuedIssue()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -45,16 +45,16 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
 
     [Fact]
-    public async Task WhenReviewIssueFailedTransitioned_CanBeReloadedAsContinuableFailedIssueWithAllFields()
+    public async Task WhenContinuableFailedRetried_CanBeReloadedAsContinuationQueuedWithAllFields()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
+        DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 9, 11, 0, 0, TimeSpan.Zero);
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
-            issueNumber: 55,
-            title: "Review to failed issue",
-            body: "PR rejected body",
+            issueNumber: 72,
+            title: "Continuation queued issue",
+            body: "Issue body",
             author: ValidAuthor,
             url: ValidUrl,
             labels: [],
@@ -70,30 +70,29 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid reviewWorkerRunId = Guid.NewGuid();
-        ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-55", "https://github.com/owner/repo/pull/7", DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
+            workerRunId,
+            "feat/issue-72",
+            "Partial implementation completed",
+            "Container OOM",
+            failedAt);
+        await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", failedAt);
-        await _dbContext.TransitionAsync(review, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        await _dbContext.TransitionAsync(continuableFailed, continuationQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
         Issue? result = await _dbContext
             .Set<Issue>()
-            .FindAsync([failed.Id], TestContext.Current.CancellationToken);
+            .FindAsync([continuationQueued.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        ContinuableFailedIssue reloaded = result.ShouldBeOfType<ContinuableFailedIssue>();
+        ContinuationQueuedIssue reloaded = result.ShouldBeOfType<ContinuationQueuedIssue>();
         reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.WorkerRunId.ShouldBe(reviewWorkerRunId),
-            () => reloaded.FailureReason.ShouldBe("PR was closed without merge"),
-            () => reloaded.FailedAt.ShouldBe(failedAt),
-            () => reloaded.BranchName.ShouldBe("feat/issue-55"),
-            () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/7"),
-            () => reloaded.LatestProgress.ShouldBe("PR was opened and reviewed"),
+            () => reloaded.BranchName.ShouldBe("feat/issue-72"),
+            () => reloaded.LatestProgress.ShouldBe("Partial implementation completed"),
             () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
-            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }

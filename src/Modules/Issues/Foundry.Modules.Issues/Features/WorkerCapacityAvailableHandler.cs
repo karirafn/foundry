@@ -21,7 +21,8 @@ internal sealed class WorkerCapacityAvailableHandler(
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
     {
-        // Revision queue takes priority — claim the oldest revision first, then fall back to fresh queue.
+        // Claim priority: revision queued first (addressing review feedback takes precedence),
+        // then continuation queued (resuming interrupted work), then fresh queued issues.
         RevisionQueuedIssue? revisionQueued = await db.Set<RevisionQueuedIssue>()
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
@@ -29,6 +30,16 @@ internal sealed class WorkerCapacityAvailableHandler(
         if (revisionQueued is not null)
         {
             await ClaimRevisionQueuedAsync(revisionQueued, @event.WorkerRunId, cancellationToken);
+            return;
+        }
+
+        ContinuationQueuedIssue? continuationQueued = await db.Set<ContinuationQueuedIssue>()
+            .OrderBy(i => i.DetectedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (continuationQueued is not null)
+        {
+            await ClaimContinuationQueuedAsync(continuationQueued, @event.WorkerRunId, cancellationToken);
             return;
         }
 
@@ -120,6 +131,47 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountSecretKeyName,
             revision);
+
+        await integrationEventDispatcher.DispatchAsync(
+            [new IssueClaimed(dispatch)],
+            cancellationToken);
+    }
+
+    private async Task ClaimContinuationQueuedAsync(
+        ContinuationQueuedIssue continuationQueued,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
+            continuationQueued.MonitoredRepositoryId,
+            cancellationToken);
+
+        if (dispatchInfo is null)
+        {
+            logger.LogWarning(
+                "Could not find dispatch info for repository {RepositoryId}; continuation issue #{IssueNumber} not claimed.",
+                continuationQueued.MonitoredRepositoryId,
+                continuationQueued.IssueNumber);
+            return;
+        }
+
+        InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
+        await db.TransitionAsync(continuationQueued, inProgress, domainEventDispatcher, cancellationToken);
+
+        ContinuationContext continuation = new(
+            continuationQueued.BranchName,
+            continuationQueued.LatestProgress);
+
+        ClaimedIssueDispatch dispatch = new(
+            inProgress.Id,
+            workerRunId,
+            inProgress.IssueNumber,
+            inProgress.Title,
+            inProgress.Body,
+            dispatchInfo.RepositorySlug,
+            dispatchInfo.CloneUrl,
+            dispatchInfo.AccountSecretKeyName,
+            Continuation: continuation);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

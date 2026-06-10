@@ -9,4 +9,5 @@ public sealed record ClaimedIssueDispatch(
     string RepositorySlug,
     Uri CloneUrl,
     string AccountSecretKeyName,
-    RevisionContext? Revision = null);
+    RevisionContext? Revision = null,
+    ContinuationContext? Continuation = null);

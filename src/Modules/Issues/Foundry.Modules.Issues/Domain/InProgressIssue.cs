@@ -60,4 +60,38 @@ public sealed class InProgressIssue : Issue
         AddDomainEvent(new Events.IssueFailed(Id, MonitoredRepositoryId));
         return failed;
     }
+
+    public ContinuableFailedIssue MarkContinuableFailed(
+        Guid workerRunId,
+        string branchName,
+        string latestProgress,
+        string failureReason,
+        DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromInProgress(
+            this,
+            workerRunId,
+            branchName,
+            latestProgress,
+            failureReason,
+            failedAt);
+        AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
+        return failed;
+    }
+
+    internal static InProgressIssue FromContinuationQueued(ContinuationQueuedIssue source, Guid workerRunId)
+    {
+        InProgressIssue inProgress = new(source.Id);
+        inProgress.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Body,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        inProgress.WorkerRunId = workerRunId;
+        return inProgress;
+    }
 }

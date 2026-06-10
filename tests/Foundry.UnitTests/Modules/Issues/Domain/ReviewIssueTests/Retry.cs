@@ -34,21 +34,21 @@ public sealed class Retry
     }
 
     [Fact]
-    public void WhenRetried_ReturnsQueuedIssueWithSameId()
+    public void WhenRetried_ReturnsContinuationQueuedIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ReviewIssue review = CreateReviewIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = review.Retry();
+        ContinuationQueuedIssue queued = review.Retry();
 
         // Assert
         queued.Id.ShouldBe(review.Id);
     }
 
     [Fact]
-    public void WhenRetried_RaisesIssueQueuedDomainEvent()
+    public void WhenRetried_RaisesIssueContinuationQueuedDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -58,21 +58,21 @@ public sealed class Retry
         review.Retry();
 
         // Assert
-        IssueQueued domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueQueued>();
+        IssueContinuationQueued domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueContinuationQueued>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(review.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public void WhenRetried_QueuedIssueHasSameSharedProperties()
+    public void WhenRetried_ContinuationQueuedIssueHasSharedPropertiesAndContinuationContext()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ReviewIssue review = CreateReviewIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = review.Retry();
+        ContinuationQueuedIssue queued = review.Retry();
 
         // Assert
         queued.ShouldSatisfyAllConditions(
@@ -80,6 +80,8 @@ public sealed class Retry
             () => queued.IssueNumber.ShouldBe(review.IssueNumber),
             () => queued.Title.ShouldBe(review.Title),
             () => queued.Body.ShouldBe(review.Body),
-            () => queued.DetectedAt.ShouldBe(review.DetectedAt));
+            () => queued.DetectedAt.ShouldBe(review.DetectedAt),
+            () => queued.BranchName.ShouldBe(review.BranchName),
+            () => queued.LatestProgress.ShouldBe("PR was opened and reviewed"));
     }
 }

@@ -95,7 +95,8 @@ internal sealed class IssueClaimedHandler(
             claimed.Title,
             claimed.Body,
             _options,
-            claimed.Revision);
+            claimed.Revision,
+            claimed.Continuation);
 
         string reportsHostPath = Path.Combine(_options.ReportsPath, startingRun.Id.Value.ToString());
 
@@ -120,6 +121,10 @@ internal sealed class IssueClaimedHandler(
         if (claimed.Revision is not null)
         {
             envVars["BRANCH_NAME"] = claimed.Revision.BranchName;
+        }
+        else if (claimed.Continuation is not null)
+        {
+            envVars["BRANCH_NAME"] = claimed.Continuation.BranchName;
         }
 
         Result<List<BindMount>> mountsResult = BuildBindMounts(reportsHostPath);

@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
@@ -289,6 +290,152 @@ public sealed class HandleAsync : IAsyncDisposable
                     new Error("BranchProtection.Unreachable", "Branch protection check failed")));
     }
 
+    private ContinuationQueuedIssue SeedContinuationQueuedIssue(
+        MonitoredRepositoryId repositoryId,
+        string branchName = "feat/103-fix",
+        string latestProgress = "Step 1 complete")
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 10,
+            title: "Issue 10",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
+            Guid.NewGuid(),
+            branchName,
+            latestProgress,
+            "Non-zero exit code: 1",
+            DateTimeOffset.UtcNow);
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        _dbContext.Set<Issue>().Add(continuationQueued);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return continuationQueued;
+    }
+
+    private RevisionQueuedIssue SeedRevisionQueuedIssue(MonitoredRepositoryId repositoryId)
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 20,
+            title: "Issue 20",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ReviewIssue review = inProgress.MarkInReview(
+            Guid.NewGuid(),
+            "feat/issue-20",
+            "https://github.com/owner/repo/pull/20",
+            DateTimeOffset.UtcNow);
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
+        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+        _dbContext.Set<Issue>().Add(revisionQueued);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return revisionQueued;
+    }
+
+    [Fact]
+    public async Task WhenContinuationQueuedIssueExists_ClaimsContinuationQueued()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedContinuationQueuedIssue(repositoryId, branchName: "feat/103-fix", latestProgress: "Step 1 complete");
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.Continuation.ShouldNotBeNull()
+            .ShouldSatisfyAllConditions(
+                c => c.BranchName.ShouldBe("feat/103-fix"),
+                c => c.LatestProgress.ShouldBe("Step 1 complete"));
+    }
+
+    [Fact]
+    public async Task WhenBothContinuationQueuedAndQueuedIssueExist_ClaimsContinuationQueuedFirst()
+    {
+        // Arrange
+        MonitoredRepositoryId continuationRepositoryId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId queuedRepositoryId = MonitoredRepositoryId.New();
+        SeedContinuationQueuedIssue(continuationRepositoryId);
+        SeedQueuedIssue(queuedRepositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler();
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? continuationIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == continuationRepositoryId,
+                TestContext.Current.CancellationToken);
+        Issue? queuedIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == queuedRepositoryId,
+                TestContext.Current.CancellationToken);
+        continuationIssue.ShouldBeOfType<InProgressIssue>();
+        queuedIssue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenRevisionQueuedAndContinuationQueuedBothExist_PrioritizesRevisionQueued()
+    {
+        // Arrange
+        MonitoredRepositoryId revisionRepositoryId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId continuationRepositoryId = MonitoredRepositoryId.New();
+        SeedRevisionQueuedIssue(revisionRepositoryId);
+        SeedContinuationQueuedIssue(continuationRepositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler();
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? revisionIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == revisionRepositoryId,
+                TestContext.Current.CancellationToken);
+        Issue? continuationIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == continuationRepositoryId,
+                TestContext.Current.CancellationToken);
+        revisionIssue.ShouldBeOfType<RevisionInProgressIssue>();
+        continuationIssue.ShouldBeOfType<ContinuationQueuedIssue>();
+    }
+
     private sealed class StubRepositoryDispatchQueries(RepositoryDispatchInfo? info) : IRepositoryDispatchQueries
     {
         public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
@@ -301,5 +448,18 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        private readonly List<IIntegrationEvent> _events = [];
+
+        public IReadOnlyList<IIntegrationEvent> DispatchedEvents => _events;
+
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+        {
+            _events.AddRange(events);
+            return Task.CompletedTask;
+        }
     }
 }

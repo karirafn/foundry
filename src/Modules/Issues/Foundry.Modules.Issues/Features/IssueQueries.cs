@@ -209,6 +209,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             ReviewIssue => "review",
             UnchangedIssue => "unchanged",
             FailedIssue => "failed",
+            ContinuableFailedIssue => "continuable_failed",
+            ContinuationQueuedIssue => "continuation_queued",
             CompletedIssue => "completed",
             DismissedIssue => "dismissed",
             RevisionQueuedIssue => "revision_queued",
@@ -342,6 +344,30 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 CompletedAt: null,
                 BlockedBy: null,
                 Violations: null),
+
+            ContinuableFailedIssue continuableFailed => new IssueStateDetails(
+                WorkerRunId: continuableFailed.WorkerRunId,
+                BranchName: continuableFailed.BranchName,
+                PullRequestUrl: continuableFailed.PullRequestUrl.Length > 0 ? continuableFailed.PullRequestUrl : null,
+                FeedbackCutoffAt: null,
+                FailureReason: continuableFailed.FailureReason,
+                FailedAt: continuableFailed.FailedAt,
+                CompletedAt: null,
+                BlockedBy: null,
+                Violations: null,
+                LatestProgress: continuableFailed.LatestProgress.Length > 0 ? continuableFailed.LatestProgress : null),
+
+            ContinuationQueuedIssue continuationQueued => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: continuationQueued.BranchName,
+                PullRequestUrl: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                Violations: null,
+                LatestProgress: continuationQueued.LatestProgress.Length > 0 ? continuationQueued.LatestProgress : null),
 
             _ => null
         };

@@ -74,7 +74,8 @@ public sealed class HandleAsync : IAsyncDisposable
         string body = "Test body",
         string repositorySlug = "owner/repo",
         string secretKeyName = "GITHUB_PAT",
-        RevisionContext? revision = null)
+        RevisionContext? revision = null,
+        ContinuationContext? continuation = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -85,7 +86,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositorySlug,
             new Uri($"https://github.com/{repositorySlug}.git"),
             secretKeyName,
-            revision);
+            revision,
+            continuation);
         return new IssueClaimed(dispatch);
     }
 
@@ -575,6 +577,44 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldSatisfyAllConditions(
             () => spec.EnvironmentVariables["CLAUDE_CODE_OAUTH_TOKEN"].ShouldBe("test-oauth-token"),
             () => spec.EnvironmentVariables.ShouldNotContainKey("ANTHROPIC_API_KEY"));
+    }
+
+    [Fact]
+    public async Task WhenContinuationContext_SetsBranchNameEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ContinuationContext continuation = new("feat/103-my-feature", "Steps 1-3 complete.");
+        IssueClaimed @event = BuildEvent(continuation: continuation);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldContainKey("BRANCH_NAME");
+        spec.EnvironmentVariables["BRANCH_NAME"].ShouldBe("feat/103-my-feature");
+    }
+
+    [Fact]
+    public async Task WhenContinuationContext_PassesContinuationToSystemPromptBuilder()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation-prompt");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ContinuationContext continuation = new("feat/103-my-feature", "Steps 1-3 complete, tests pass.");
+        IssueClaimed @event = BuildEvent(continuation: continuation);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("resuming work");
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Steps 1-3 complete, tests pass.");
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

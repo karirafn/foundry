@@ -21,4 +21,5 @@ public sealed record IssueStateDetails(
     DateTimeOffset? FailedAt,
     DateTimeOffset? CompletedAt,
     IReadOnlyList<int>? BlockedBy,
-    IReadOnlyList<EligibilityViolationDto>? Violations);
+    IReadOnlyList<EligibilityViolationDto>? Violations,
+    string? LatestProgress = null);

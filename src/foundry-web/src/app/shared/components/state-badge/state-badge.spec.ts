@@ -207,4 +207,60 @@ describe('StateBadgeComponent', () => {
     // Assert
     expect(el.querySelector('span')?.classList.contains('badge--ineligible')).toBe(true);
   });
+
+  // Cycle 6: continuable_failed state
+  it('should display "CONT FAILED" for continuable_failed state', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuable_failed');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('CONT FAILED');
+  });
+
+  it('should set aria-label "State: continuable failed" for continuable_failed state', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuable_failed');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: continuable failed');
+  });
+
+  it('should apply badge--continuable-failed CSS class for continuable_failed state', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuable_failed');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.classList.contains('badge--continuable-failed')).toBe(true);
+  });
+
+  // Cycle 7: continuation_queued state
+  it('should display "CONT QUEUED" for continuation_queued state', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuation_queued');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('CONT QUEUED');
+  });
+
+  it('should set aria-label "State: continuation queued" for continuation_queued state', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuation_queued');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: continuation queued');
+  });
+
+  it('should apply badge--continuation-queued CSS class for continuation_queued state', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuation_queued');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.classList.contains('badge--continuation-queued')).toBe(true);
+  });
 });
