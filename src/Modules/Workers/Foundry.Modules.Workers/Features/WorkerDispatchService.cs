@@ -273,7 +273,14 @@ internal sealed class WorkerDispatchService(
         {
             int exitCode = status.ExitCode ?? -1;
             string exitReason = $"Non-zero exit code: {exitCode}";
-            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode));
+
+            string? containerOutput = await TryGetLogsAsync(
+                orchestrator,
+                activeRun.ContainerId.Value,
+                activeRun.Id.Value,
+                cancellationToken);
+
+            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode), containerOutput);
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -369,6 +376,29 @@ internal sealed class WorkerDispatchService(
                 "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after terminal transition.",
                 containerId,
                 workerRunId);
+        }
+    }
+
+    private async Task<string?> TryGetLogsAsync(
+        IWorkerOrchestrator orchestrator,
+        string containerId,
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await orchestrator.GetLogsAsync(containerId, LogTailLines, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort log capture before transition; Docker exceptions must not crash the BackgroundService tick or prevent the failure transition.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to capture logs for container {ContainerId} (WorkerRun {WorkerRunId}).",
+                containerId,
+                workerRunId);
+            return null;
         }
     }
 
@@ -476,6 +506,7 @@ internal sealed class WorkerDispatchService(
         return null;
     }
 
+    private const int LogTailLines = 500;
     private const int MaxProgressLength = 2000;
     private const long MaxReportFileSizeBytes = 1_048_576;
 
