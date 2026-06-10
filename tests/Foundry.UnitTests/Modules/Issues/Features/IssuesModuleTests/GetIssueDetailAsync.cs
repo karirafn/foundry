@@ -267,6 +267,84 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
                 .ShouldBe(completedAt, tolerance: TimeSpan.FromSeconds(1)));
     }
 
+    [Fact]
+    public async Task WhenContinuableFailedIssueExists_ReturnsStateDetailsWithContinuableFailedFields()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        Guid workerRunId = Guid.NewGuid();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
+            workerRunId,
+            branchName: "feat/issue-1",
+            latestProgress: "Tests passing, PR not yet created",
+            failureReason: "Container timeout",
+            failedAt: failedAt);
+        await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            continuableFailed.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.State.ShouldBe("continuable_failed");
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId),
+            () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
+            () => stateDetails.FailureReason.ShouldBe("Container timeout"),
+            () => stateDetails.FailedAt.ShouldNotBeNull()
+                .ShouldBe(failedAt, tolerance: TimeSpan.FromSeconds(1)),
+            () => stateDetails.LatestProgress.ShouldBe("Tests passing, PR not yet created"));
+    }
+
+    [Fact]
+    public async Task WhenContinuationQueuedIssueExists_ReturnsStateDetailsWithBranchName()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        Guid workerRunId = Guid.NewGuid();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
+            workerRunId,
+            branchName: "feat/issue-1",
+            latestProgress: "Initial implementation done",
+            failureReason: "Container timeout",
+            failedAt: DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        await _dbContext.TransitionAsync(continuableFailed, continuationQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            continuationQueued.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.State.ShouldBe("continuation_queued");
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
+            () => stateDetails.LatestProgress.ShouldBe("Initial implementation done"));
+    }
+
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries
     {
         private readonly Dictionary<MonitoredRepositoryId, string> _slugs = [];

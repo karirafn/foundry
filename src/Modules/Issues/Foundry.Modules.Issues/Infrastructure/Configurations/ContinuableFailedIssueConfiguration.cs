@@ -25,7 +25,7 @@ public sealed class ContinuableFailedIssueConfiguration : IEntityTypeConfigurati
             .HasColumnName("pull_request_url");
 
         builder.Property(i => i.LatestProgress)
-            .HasMaxLength(2000)
+            .HasMaxLength(IssueColumnLimits.LatestProgressMaxLength)
             .HasColumnType("TEXT")
             .HasColumnName("latest_progress");
 
