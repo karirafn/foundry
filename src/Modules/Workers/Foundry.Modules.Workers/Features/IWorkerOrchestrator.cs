@@ -7,7 +7,7 @@ internal interface IWorkerOrchestrator
 {
     Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken);
 
-    Task StopAsync(string containerId, CancellationToken cancellationToken);
+    Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken);
 
     Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken);
 

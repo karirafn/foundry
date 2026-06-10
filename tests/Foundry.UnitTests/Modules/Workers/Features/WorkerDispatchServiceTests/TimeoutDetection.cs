@@ -113,7 +113,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenRunTimesOut_GetLogsCalledAfterStopContainer()
+    public async Task WhenRunTimesOut_CapturesLogsAfterStoppingContainer()
     {
         // Arrange
         SeedActiveRun("container-timeout-order");
@@ -214,7 +214,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in timeout tests")));
 
-        public Task StopAsync(string containerId, CancellationToken cancellationToken)
+        public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
         {
             StoppedContainerId = containerId;
             return Task.CompletedTask;

@@ -1147,6 +1147,7 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<string>("ContainerOutput")
                         .HasMaxLength(2147483647)
+                        .IsUnicode(true)
                         .HasColumnType("TEXT")
                         .HasColumnName("container_output");
 

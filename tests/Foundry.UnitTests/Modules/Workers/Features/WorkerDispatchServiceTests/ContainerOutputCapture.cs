@@ -88,6 +88,27 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenContainerOutputExceedsMaxLength_OutputIsTruncatedBeforeStore()
+    {
+        // Arrange
+        SeedActiveRun("container-output-overflow");
+        WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        string oversizedOutput = new('x', 65537);
+        LogCapturingStub orchestrator = new(status: failedStatus, logs: oversizedOutput);
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.ContainerOutput.ShouldNotBeNull();
+        failedRun.ContainerOutput!.Length.ShouldBeLessThanOrEqualTo(65536);
+    }
+
+    [Fact]
     public async Task WhenContainerExitsWithNonZero_GetLogsAsyncCalledBeforeStop()
     {
         // Arrange
@@ -124,7 +145,7 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in log capture tests")));
 
-        public Task StopAsync(string containerId, CancellationToken cancellationToken)
+        public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
         {
             _stopCalled = true;
             return Task.CompletedTask;

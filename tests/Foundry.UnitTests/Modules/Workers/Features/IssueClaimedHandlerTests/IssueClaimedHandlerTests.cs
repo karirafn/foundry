@@ -641,7 +641,7 @@ public sealed class HandleAsync : IAsyncDisposable
             return Task.FromResult(result);
         }
 
-        public Task StopAsync(string containerId, CancellationToken cancellationToken)
+        public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
         public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)

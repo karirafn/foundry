@@ -141,7 +141,7 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test", "No dispatch")));
 
-        public Task StopAsync(string containerId, CancellationToken cancellationToken)
+        public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
         {
             StopAsyncCallCount++;
             StoppedContainerIds.Add(containerId);

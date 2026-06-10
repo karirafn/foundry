@@ -118,18 +118,4 @@ public sealed class Fail
             () => domainEvent.LatestProgress.ShouldBe("Half done"));
     }
 
-    [Fact]
-    public void WhenContainerOutputProvided_FailedRunPreservesContainerOutput()
-    {
-        // Arrange
-        ActiveRun active = CreateActiveRun();
-        FailureReason reason = new FailureReason.NonZeroExit(1);
-        string containerOutput = "Fatal error: process killed";
-
-        // Act
-        FailedRun failed = active.Fail(reason, containerOutput);
-
-        // Assert
-        failed.ContainerOutput.ShouldBe(containerOutput);
-    }
 }

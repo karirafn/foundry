@@ -70,7 +70,7 @@ internal sealed class DockerWorkerOrchestrator(
         }
     }
 
-    public async Task StopAsync(string containerId, CancellationToken cancellationToken)
+    public async Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
     {
         try
         {

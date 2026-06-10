@@ -175,6 +175,7 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 
         builder.Property(r => r.ContainerOutput)
             .HasMaxLength(int.MaxValue)
+            .IsUnicode(true)
             .HasColumnType("TEXT")
             .HasColumnName("container_output");
     }

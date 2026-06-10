@@ -134,7 +134,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id,
                     activeRun.ContainerId.Value);
 
-                await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+                await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             }
             else if (!status.IsRunning)
             {
@@ -211,7 +211,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 activeRun.ContainerId.Value);
 
-            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             return;
         }
 
@@ -276,7 +276,7 @@ internal sealed class WorkerDispatchService(
                 effectiveBranchName?.Value ?? "(none)",
                 prUrl?.Value ?? "(none)");
 
-            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
         else
         {
@@ -308,7 +308,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 exitCode);
 
-            await TryStopAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
     }
 
@@ -335,7 +335,7 @@ internal sealed class WorkerDispatchService(
                     continue;
                 }
 
-                await orchestrator.StopAsync(containerId.Value, cancellationToken);
+                await orchestrator.StopAndRemoveAsync(containerId.Value, cancellationToken);
             }
         }
 #pragma warning disable CA1031 // Docker daemon failures during startup must not crash the BackgroundService; the warning log surfaces the issue without blocking reconciliation.
@@ -366,7 +366,7 @@ internal sealed class WorkerDispatchService(
         }
     }
 
-    private async Task TryStopAsync(
+    private async Task TryStopAndRemoveAsync(
         IWorkerOrchestrator orchestrator,
         string containerId,
         Guid workerRunId,
@@ -374,7 +374,7 @@ internal sealed class WorkerDispatchService(
     {
         try
         {
-            await orchestrator.StopAsync(containerId, cancellationToken);
+            await orchestrator.StopAndRemoveAsync(containerId, cancellationToken);
         }
 #pragma warning disable CA1031 // Best-effort container removal after a terminal state transition has already succeeded; Docker exceptions must not crash the BackgroundService tick.
         catch (Exception ex)
@@ -440,7 +440,11 @@ internal sealed class WorkerDispatchService(
     {
         try
         {
-            return await orchestrator.GetLogsAsync(containerId, LogTailLines, cancellationToken);
+            string? output = await orchestrator.GetLogsAsync(containerId, LogTailLines, cancellationToken);
+
+            return output is not null && output.Length > MaxContainerOutputLength
+                ? output[..MaxContainerOutputLength]
+                : output;
         }
 #pragma warning disable CA1031 // Best-effort log capture before transition; Docker exceptions must not crash the BackgroundService tick or prevent the failure transition.
         catch (Exception ex)
@@ -560,6 +564,7 @@ internal sealed class WorkerDispatchService(
     }
 
     private const int LogTailLines = 500;
+    private const int MaxContainerOutputLength = 65_536;
     private const int MaxProgressLength = 2000;
     private const long MaxReportFileSizeBytes = 1_048_576;
 

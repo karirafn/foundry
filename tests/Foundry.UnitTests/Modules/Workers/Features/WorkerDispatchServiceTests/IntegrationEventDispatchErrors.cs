@@ -78,7 +78,7 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in error tests")));
 
-        public Task StopAsync(string containerId, CancellationToken cancellationToken)
+        public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
         public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
