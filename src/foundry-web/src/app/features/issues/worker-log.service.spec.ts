@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { WorkerLogService, WorkerLogHub, WORKER_LOG_HUB_FACTORY } from './worker-log.service';
-import { WorkerReportSummary } from './worker-report.model';
+import { GetReportsResponse, WorkerReportSummary } from './worker-report.model';
 
 const mockReport: WorkerReportSummary = {
   id: 'report-1',
@@ -12,6 +12,9 @@ const mockReport: WorkerReportSummary = {
   content: 'Building...',
   ingestedAt: '2026-01-01T00:00:00Z',
 };
+
+const emptyResponse: GetReportsResponse = { reports: [], containerOutput: null };
+const singleReportResponse: GetReportsResponse = { reports: [mockReport], containerOutput: null };
 
 interface CapturedHubCallbacks {
   onReportReceived: ((report: WorkerReportSummary) => void) | null;
@@ -115,7 +118,7 @@ describe('WorkerLogService', () => {
 
     // Assert
     expect(svc.loading()).toBe(true);
-    http.expectOne('/api/workers/run-1/reports').flush([]);
+    http.expectOne('/api/workers/run-1/reports').flush(emptyResponse);
   });
 
   // Cycle 7: open() populates reports signal sorted by sequenceNumber
@@ -127,7 +130,7 @@ describe('WorkerLogService', () => {
 
     // Act
     svc.open('run-1', 'issue-1', 'completed');
-    http.expectOne('/api/workers/run-1/reports').flush([report2, report1]);
+    http.expectOne('/api/workers/run-1/reports').flush({ reports: [report2, report1], containerOutput: null });
 
     // Assert
     expect(svc.reports()[0].sequenceNumber).toBe(1);
@@ -141,7 +144,7 @@ describe('WorkerLogService', () => {
 
     // Act
     svc.open('run-1', 'issue-1', 'completed');
-    http.expectOne('/api/workers/run-1/reports').flush([mockReport]);
+    http.expectOne('/api/workers/run-1/reports').flush(singleReportResponse);
 
     // Assert
     expect(svc.loading()).toBe(false);
@@ -154,7 +157,7 @@ describe('WorkerLogService', () => {
 
     // Act
     svc.open('run-42', 'issue-1', 'completed');
-    http.expectOne('/api/workers/run-42/reports').flush([]);
+    http.expectOne('/api/workers/run-42/reports').flush(emptyResponse);
 
     // Assert
     expect(svc.activeWorkerRunId()).toBe('run-42');
@@ -167,7 +170,7 @@ describe('WorkerLogService', () => {
 
     // Act
     svc.open('run-1', 'issue-1', 'in_progress');
-    http.expectOne('/api/workers/run-1/reports').flush([]);
+    http.expectOne('/api/workers/run-1/reports').flush(emptyResponse);
 
     // Assert
     expect(svc.isLive()).toBe(true);
@@ -180,7 +183,7 @@ describe('WorkerLogService', () => {
 
     // Act
     svc.open('run-1', 'issue-1', 'revision_in_progress');
-    http.expectOne('/api/workers/run-1/reports').flush([]);
+    http.expectOne('/api/workers/run-1/reports').flush(emptyResponse);
 
     // Assert
     expect(svc.isLive()).toBe(true);
@@ -193,7 +196,7 @@ describe('WorkerLogService', () => {
 
     // Act
     svc.open('run-1', 'issue-1', 'completed');
-    http.expectOne('/api/workers/run-1/reports').flush([]);
+    http.expectOne('/api/workers/run-1/reports').flush(emptyResponse);
 
     // Assert
     expect(svc.isLive()).toBe(false);
@@ -253,7 +256,7 @@ describe('WorkerLogService', () => {
 
     // Act
     svc.open('run-1', 'issue-1', 'in_progress');
-    http.expectOne('/api/workers/run-1/reports').flush([]);
+    http.expectOne('/api/workers/run-1/reports').flush(emptyResponse);
     // Flush all pending microtasks (rejected promise + catch handler)
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -280,7 +283,7 @@ describe('WorkerLogService', () => {
     // Arrange
     const { svc, http } = setup(true);
     svc.open('run-1', 'issue-1', 'in_progress');
-    http.expectOne('/api/workers/run-1/reports').flush([mockReport]);
+    http.expectOne('/api/workers/run-1/reports').flush(singleReportResponse);
 
     // Act
     svc.close();
@@ -298,7 +301,7 @@ describe('WorkerLogService', () => {
     // Arrange
     const { svc, http, captured } = setup(true);
     svc.open('run-1', 'issue-1', 'in_progress');
-    http.expectOne('/api/workers/run-1/reports').flush([mockReport]);
+    http.expectOne('/api/workers/run-1/reports').flush(singleReportResponse);
 
     const liveReport: WorkerReportSummary = {
       ...mockReport,
@@ -321,7 +324,7 @@ describe('WorkerLogService', () => {
     const { svc, http, captured } = setup(true);
     svc.open('run-1', 'issue-1', 'in_progress');
     const report3: WorkerReportSummary = { ...mockReport, id: 'report-3', sequenceNumber: 3 };
-    http.expectOne('/api/workers/run-1/reports').flush([report3]);
+    http.expectOne('/api/workers/run-1/reports').flush({ reports: [report3], containerOutput: null });
 
     const report2: WorkerReportSummary = { ...mockReport, id: 'report-2', sequenceNumber: 2 };
 
@@ -331,5 +334,56 @@ describe('WorkerLogService', () => {
     // Assert
     expect(svc.reports()[0].sequenceNumber).toBe(2);
     expect(svc.reports()[1].sequenceNumber).toBe(3);
+  });
+
+  // Cycle 17: containerOutput starts null
+  it('should start with containerOutput null', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert
+    expect(svc.containerOutput()).toBeNull();
+  });
+
+  // Cycle 18: containerOutput is populated from response
+  it('should populate containerOutput signal from response', () => {
+    // Arrange
+    const { svc, http } = setup();
+    const response: GetReportsResponse = { reports: [], containerOutput: 'Error: container crashed\nexit code 1' };
+
+    // Act
+    svc.open('run-1', 'issue-1', 'failed');
+    http.expectOne('/api/workers/run-1/reports').flush(response);
+
+    // Assert
+    expect(svc.containerOutput()).toBe('Error: container crashed\nexit code 1');
+  });
+
+  // Cycle 19: containerOutput is null when response has null
+  it('should set containerOutput to null when response containerOutput is null', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.open('run-1', 'issue-1', 'completed');
+    http.expectOne('/api/workers/run-1/reports').flush(emptyResponse);
+
+    // Assert
+    expect(svc.containerOutput()).toBeNull();
+  });
+
+  // Cycle 20: close() resets containerOutput to null
+  it('should reset containerOutput to null on close', () => {
+    // Arrange
+    const { svc, http } = setup();
+    const response: GetReportsResponse = { reports: [], containerOutput: 'container logs here' };
+    svc.open('run-1', 'issue-1', 'failed');
+    http.expectOne('/api/workers/run-1/reports').flush(response);
+
+    // Act
+    svc.close();
+
+    // Assert
+    expect(svc.containerOutput()).toBeNull();
   });
 });

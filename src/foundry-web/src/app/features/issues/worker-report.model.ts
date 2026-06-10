@@ -34,3 +34,8 @@ export interface WorkerReportSummary {
   readonly content: string;
   readonly ingestedAt: string;
 }
+
+export interface GetReportsResponse {
+  readonly reports: WorkerReportSummary[];
+  readonly containerOutput: string | null;
+}
