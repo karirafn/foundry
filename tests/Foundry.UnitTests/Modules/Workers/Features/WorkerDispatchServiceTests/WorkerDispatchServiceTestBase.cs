@@ -1,4 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Workers;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
@@ -57,7 +59,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IWorkerOrchestrator orchestrator,
         WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
-        IProviderAuth? providerAuth = null)
+        IProviderAuth? providerAuth = null,
+        IWorkerLogBroadcaster? broadcaster = null)
     {
         SqliteConnection connection = _connection;
 
@@ -75,6 +78,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             _ => integrationEventDispatcher ?? new NullIntegrationEventDispatcher());
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
         services.AddScoped<IProviderAuth>(_ => providerAuth ?? new StubProviderAuth("test-token"));
+        services.AddScoped<IWorkerLogBroadcaster>(_ => broadcaster ?? new NullWorkerLogBroadcaster());
 
         ServiceProvider sp = services.BuildServiceProvider();
 
@@ -122,5 +126,11 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             _captured.AddRange(events);
             return Task.CompletedTask;
         }
+    }
+
+    protected sealed class NullWorkerLogBroadcaster : IWorkerLogBroadcaster
+    {
+        public Task PushAsync(Guid issueId, WorkerReportSummary report, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

@@ -52,6 +52,8 @@ internal sealed class WorkerDispatchService(
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
         IDomainEventDispatcher domainEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
+        IWorkerLogBroadcaster workerLogBroadcaster =
+            scope.ServiceProvider.GetRequiredService<IWorkerLogBroadcaster>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
@@ -63,6 +65,7 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
+                workerLogBroadcaster,
                 activeRuns,
                 cancellationToken);
             _reconciled = true;
@@ -73,6 +76,7 @@ internal sealed class WorkerDispatchService(
             orchestrator,
             integrationEventDispatcher,
             domainEventDispatcher,
+            workerLogBroadcaster,
             activeRuns,
             cancellationToken);
 
@@ -98,6 +102,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        IWorkerLogBroadcaster workerLogBroadcaster,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -112,7 +117,7 @@ internal sealed class WorkerDispatchService(
             if (status is null)
             {
                 string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
-                await IngestReportsAsync(dbContext, activeRun, reportsDir, cancellationToken);
+                await IngestReportsAsync(dbContext, activeRun, reportsDir, workerLogBroadcaster, cancellationToken);
 
                 FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
@@ -143,6 +148,7 @@ internal sealed class WorkerDispatchService(
                     orchestrator,
                     integrationEventDispatcher,
                     domainEventDispatcher,
+                    workerLogBroadcaster,
                     activeRun,
                     cancellationToken,
                     knownStatus: status);
@@ -161,6 +167,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        IWorkerLogBroadcaster workerLogBroadcaster,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -171,6 +178,7 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
+                workerLogBroadcaster,
                 activeRun,
                 cancellationToken);
         }
@@ -181,12 +189,18 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        IWorkerLogBroadcaster workerLogBroadcaster,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
     {
         string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
-        (BranchName? branchName, PullRequestUrl? prUrl) = await IngestReportsAsync(dbContext, activeRun, reportsDir, cancellationToken);
+        (BranchName? branchName, PullRequestUrl? prUrl) = await IngestReportsAsync(
+            dbContext,
+            activeRun,
+            reportsDir,
+            workerLogBroadcaster,
+            cancellationToken);
 
         WorkerStatus? status = knownStatus ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
 
@@ -463,6 +477,7 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         ActiveRun activeRun,
         string reportsDir,
+        IWorkerLogBroadcaster workerLogBroadcaster,
         CancellationToken cancellationToken)
     {
         if (!Directory.Exists(reportsDir))
@@ -483,6 +498,8 @@ internal sealed class WorkerDispatchService(
         IEnumerable<string> reportFiles = Directory
             .EnumerateFiles(reportsDir, "report-*.json")
             .OrderBy(f => f);
+
+        List<WorkerReport> newReports = [];
 
         foreach (string filePath in reportFiles)
         {
@@ -507,6 +524,7 @@ internal sealed class WorkerDispatchService(
                 content);
 
             dbContext.Set<WorkerReport>().Add(report);
+            newReports.Add(report);
 
             if (payload.Summary is not null)
             {
@@ -535,6 +553,32 @@ internal sealed class WorkerDispatchService(
         if (dbContext.ChangeTracker.HasChanges())
         {
             await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        foreach (WorkerReport report in newReports)
+        {
+            WorkerReportSummary summary = new(
+                report.Id.Value,
+                report.WorkerRunId.Value,
+                report.SequenceNumber,
+                report.ReportType,
+                report.Content,
+                report.IngestedAt);
+
+            try
+            {
+                await workerLogBroadcaster.PushAsync(activeRun.IssueId.Value, summary, cancellationToken);
+            }
+#pragma warning disable CA1031 // Broadcast is best-effort; a SignalR failure must not prevent the persisted report from being visible on the next tick or crash the BackgroundService.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                logger.LogWarning(
+                    ex,
+                    "Failed to broadcast report {SequenceNumber} for WorkerRun {WorkerRunId} to SignalR.",
+                    report.SequenceNumber,
+                    report.WorkerRunId);
+            }
         }
 
         return (branchName, prUrl);

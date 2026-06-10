@@ -568,4 +568,22 @@ public sealed class Build
         result.ShouldContain("Push your changes to the same branch.");
         result.ShouldContain("If a pull request already exists for this branch, do not create a new one.");
     }
+
+    [Fact]
+    public void WhenBuilt_ReportingInstructionsReferenceAbsolutePath()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+
+        // Assert
+        result.ShouldContain("/reports/");
+        result.ShouldNotContain("./reports/");
+    }
 }
