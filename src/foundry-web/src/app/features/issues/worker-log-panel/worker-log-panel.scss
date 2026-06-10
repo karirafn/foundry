@@ -73,12 +73,7 @@
   &__shimmer-bar {
     height: 0.875rem;
     border-radius: var(--fd-radius-sm);
-    background: linear-gradient(
-      90deg,
-      var(--fd-bg-card) 25%,
-      var(--fd-bg-card-hover) 50%,
-      var(--fd-bg-card) 75%
-    );
+    background: linear-gradient(90deg, var(--fd-bg-card) 25%, var(--fd-bg-card-hover) 50%, var(--fd-bg-card) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
   }
@@ -135,12 +130,9 @@
     font-family: var(--fd-font-mono);
 
     &:not(:last-child) { border-block-end: 1px solid var(--fd-border-muted); }
-    &--final { display: block; }
+    &--final { display: block; padding: var(--fd-spacing-md) var(--fd-spacing-lg); }
 
-    &--error,
-    &--milestone {
-      padding-inline-start: calc(var(--fd-spacing-lg) - 3px);
-    }
+    &--error, &--milestone { padding-inline-start: calc(var(--fd-spacing-lg) - 3px); }
 
     &--error {
       border-inline-start: 3px solid var(--fd-state-failed);
@@ -172,8 +164,7 @@
     line-height: 1.5;
   }
 
-  &__final-card,
-  &__branch-created-card {
+  &__final-card, &__branch-created-card {
     background: var(--fd-bg-card);
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-md);
@@ -183,9 +174,7 @@
     gap: var(--fd-spacing-sm);
   }
 
-  &__branch-created-card {
-    border-inline-start: 3px solid var(--fd-text-link);
-  }
+  &__branch-created-card { border-inline-start: 3px solid var(--fd-text-link); }
 
   &__final-header {
     display: flex;
@@ -209,16 +198,14 @@
     &--unknown { background: var(--fd-bg-card-hover); color: var(--fd-text-secondary); }
   }
 
-  &__final-summary,
-  &__branch-created-summary {
+  &__final-summary, &__branch-created-summary {
     font-size: 0.8125rem;
     color: var(--fd-text-primary);
     margin: 0;
     line-height: 1.5;
   }
 
-  &__final-branch,
-  &__branch-name {
+  &__final-branch, &__branch-name {
     font-family: var(--fd-font-mono);
     font-size: 0.75rem;
     color: var(--fd-text-secondary);
@@ -229,8 +216,7 @@
     display: inline-block;
   }
 
-  &__pr-link,
-  &__branch-link {
+  &__pr-link, &__branch-link {
     font-size: 0.8125rem;
     color: var(--fd-text-link);
     text-decoration: none;
@@ -334,20 +320,14 @@
     scrollbar-color: var(--fd-border-default) transparent;
   }
 
-  &__retry,
-  &__pr-link,
-  &__branch-link,
-  &__scroll-pill,
-  &__container-output-toggle {
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
+  &__retry, &__pr-link, &__branch-link, &__scroll-pill, &__container-output-toggle {
+    &:focus-visible { outline: 2px solid var(--fd-text-link); outline-offset: 2px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     &__live-dot { animation: none; }
     &__shimmer-bar { animation: none; background: var(--fd-bg-card); }
     &__container-output-chevron { transition: none; }
+    &__container-output-toggle, &__retry, &__scroll-pill { transition: none; }
   }
 }
