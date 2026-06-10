@@ -11,7 +11,6 @@ internal static class WorkerEndpoints
         RouteGroupBuilder group = routes.MapGroup("/api/workers")
             .WithTags("Workers");
 
-        IngestReport.Endpoint.Map(group);
         GetReports.Endpoint.Map(group);
 
         return routes;
