@@ -15,16 +15,22 @@ function createComponent(state: IssueState) {
 describe('StateBadgeComponent', () => {
   // Cycle 1: component creates and renders a pill element
   it('should create the component', () => {
-    // Arrange / Act
-    const fixture = createComponent('detected');
+    // Arrange
+    const state: IssueState = 'detected';
+
+    // Act
+    const fixture = createComponent(state);
 
     // Assert
     expect(fixture.componentInstance).toBeTruthy();
   });
 
   it('should render a span with role="img" so aria-label is honored', () => {
-    // Arrange / Act
-    const fixture = createComponent('detected');
+    // Arrange
+    const state: IssueState = 'detected';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -35,8 +41,11 @@ describe('StateBadgeComponent', () => {
 
   // Cycle 2: label text for each state
   it('should display "DETECTED" for detected state', () => {
-    // Arrange / Act
-    const fixture = createComponent('detected');
+    // Arrange
+    const state: IssueState = 'detected';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -44,8 +53,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "QUEUED" for queued state', () => {
-    // Arrange / Act
-    const fixture = createComponent('queued');
+    // Arrange
+    const state: IssueState = 'queued';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -53,8 +65,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "BLOCKED" for blocked state', () => {
-    // Arrange / Act
-    const fixture = createComponent('blocked');
+    // Arrange
+    const state: IssueState = 'blocked';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -62,8 +77,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "IN PROGRESS" for in_progress state', () => {
-    // Arrange / Act
-    const fixture = createComponent('in_progress');
+    // Arrange
+    const state: IssueState = 'in_progress';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -71,8 +89,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "REVIEW" for review state', () => {
-    // Arrange / Act
-    const fixture = createComponent('review');
+    // Arrange
+    const state: IssueState = 'review';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -80,8 +101,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "UNCHANGED" for unchanged state', () => {
-    // Arrange / Act
-    const fixture = createComponent('unchanged');
+    // Arrange
+    const state: IssueState = 'unchanged';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -89,8 +113,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "FAILED" for failed state', () => {
-    // Arrange / Act
-    const fixture = createComponent('failed');
+    // Arrange
+    const state: IssueState = 'failed';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -98,8 +125,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "COMPLETED" for completed state', () => {
-    // Arrange / Act
-    const fixture = createComponent('completed');
+    // Arrange
+    const state: IssueState = 'completed';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -107,8 +137,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "DISMISSED" for dismissed state', () => {
-    // Arrange / Act
-    const fixture = createComponent('dismissed');
+    // Arrange
+    const state: IssueState = 'dismissed';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -116,8 +149,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "REV QUEUED" for revision_queued state', () => {
-    // Arrange / Act
-    const fixture = createComponent('revision_queued');
+    // Arrange
+    const state: IssueState = 'revision_queued';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -125,8 +161,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "REV IN PROGRESS" for revision_in_progress state', () => {
-    // Arrange / Act
-    const fixture = createComponent('revision_in_progress');
+    // Arrange
+    const state: IssueState = 'revision_in_progress';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -134,8 +173,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should display "REV FAILED" for revision_failed state', () => {
-    // Arrange / Act
-    const fixture = createComponent('revision_failed');
+    // Arrange
+    const state: IssueState = 'revision_failed';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -144,8 +186,11 @@ describe('StateBadgeComponent', () => {
 
   // Cycle 3: aria-label is human-readable
   it('should set aria-label with human-readable state description', () => {
-    // Arrange / Act
-    const fixture = createComponent('in_progress');
+    // Arrange
+    const state: IssueState = 'in_progress';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -153,8 +198,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should set aria-label for revision_in_progress', () => {
-    // Arrange / Act
-    const fixture = createComponent('revision_in_progress');
+    // Arrange
+    const state: IssueState = 'revision_in_progress';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -163,8 +211,11 @@ describe('StateBadgeComponent', () => {
 
   // Cycle 4: CSS class reflects state for color binding
   it('should apply a CSS class based on the current state', () => {
-    // Arrange / Act
-    const fixture = createComponent('completed');
+    // Arrange
+    const state: IssueState = 'completed';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -172,8 +223,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should apply CSS class for revision_queued state', () => {
-    // Arrange / Act
-    const fixture = createComponent('revision_queued');
+    // Arrange
+    const state: IssueState = 'revision_queued';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -182,8 +236,11 @@ describe('StateBadgeComponent', () => {
 
   // Cycle 5: ineligible state
   it('should display "INELIGIBLE" for ineligible state', () => {
-    // Arrange / Act
-    const fixture = createComponent('ineligible');
+    // Arrange
+    const state: IssueState = 'ineligible';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -191,8 +248,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should set aria-label "State: not eligible for dispatch" for ineligible state', () => {
-    // Arrange / Act
-    const fixture = createComponent('ineligible');
+    // Arrange
+    const state: IssueState = 'ineligible';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -200,8 +260,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should apply badge--ineligible CSS class for ineligible state', () => {
-    // Arrange / Act
-    const fixture = createComponent('ineligible');
+    // Arrange
+    const state: IssueState = 'ineligible';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -209,18 +272,24 @@ describe('StateBadgeComponent', () => {
   });
 
   // Cycle 6: continuable_failed state
-  it('should display "CONTINUABLE" for continuable_failed state', () => {
-    // Arrange / Act
-    const fixture = createComponent('continuable_failed');
+  it('should display "CONT FAILED" for continuable_failed state', () => {
+    // Arrange
+    const state: IssueState = 'continuable_failed';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    expect(el.querySelector('span')?.textContent?.trim()).toBe('CONTINUABLE');
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('CONT FAILED');
   });
 
   it('should set aria-label "State: continuable failed" for continuable_failed state', () => {
-    // Arrange / Act
-    const fixture = createComponent('continuable_failed');
+    // Arrange
+    const state: IssueState = 'continuable_failed';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -228,8 +297,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should apply badge--continuable-failed CSS class for continuable_failed state', () => {
-    // Arrange / Act
-    const fixture = createComponent('continuable_failed');
+    // Arrange
+    const state: IssueState = 'continuable_failed';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -238,8 +310,11 @@ describe('StateBadgeComponent', () => {
 
   // Cycle 7: continuation_queued state
   it('should display "CONT QUEUED" for continuation_queued state', () => {
-    // Arrange / Act
-    const fixture = createComponent('continuation_queued');
+    // Arrange
+    const state: IssueState = 'continuation_queued';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -247,8 +322,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should set aria-label "State: continuation queued" for continuation_queued state', () => {
-    // Arrange / Act
-    const fixture = createComponent('continuation_queued');
+    // Arrange
+    const state: IssueState = 'continuation_queued';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -256,8 +334,11 @@ describe('StateBadgeComponent', () => {
   });
 
   it('should apply badge--continuation-queued CSS class for continuation_queued state', () => {
-    // Arrange / Act
-    const fixture = createComponent('continuation_queued');
+    // Arrange
+    const state: IssueState = 'continuation_queued';
+
+    // Act
+    const fixture = createComponent(state);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert

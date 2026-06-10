@@ -15,7 +15,7 @@ const STATE_LABELS: Record<IssueState, string> = {
   revision_in_progress: 'REV IN PROGRESS',
   revision_failed: 'REV FAILED',
   ineligible: 'INELIGIBLE',
-  continuable_failed: 'CONTINUABLE',
+  continuable_failed: 'CONT FAILED',
   continuation_queued: 'CONT QUEUED',
 };
 
