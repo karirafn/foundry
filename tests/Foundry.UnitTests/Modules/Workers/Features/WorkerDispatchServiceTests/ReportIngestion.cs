@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
@@ -53,7 +54,8 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
     private WorkerDispatchService BuildReportService(
         IWorkerOrchestrator orchestrator,
-        IIntegrationEventDispatcher? integrationEventDispatcher = null)
+        IIntegrationEventDispatcher? integrationEventDispatcher = null,
+        IWorkerLogBroadcaster? broadcaster = null)
     {
         WorkerOptions options = new()
         {
@@ -65,7 +67,7 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         };
 
         // Delegates to base.BuildService — accesses inherited instance state.
-        return base.BuildService(orchestrator, options, integrationEventDispatcher);
+        return base.BuildService(orchestrator, options, integrationEventDispatcher, broadcaster: broadcaster);
     }
 
     [Fact]
@@ -412,6 +414,38 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
         failedEvent.BranchName.ShouldBe("feat/102-work-in-progress");
     }
 
+    [Fact]
+    public async Task WhenReportIngested_BroadcastsPushAsyncWithCorrectIssueIdAndSummary()
+    {
+        // Arrange
+        ActiveRun activeRun = SeedActiveRun("container-broadcast-test");
+        WriteReportFile(activeRun.Id, 1, new
+        {
+            type = "progress",
+            status = "in_progress",
+            summary = "Broadcasting step",
+            error = (string?)null,
+            prUrl = (string?)null,
+            branchName = (string?)null,
+            metrics = new { testsRun = 0, testsPassed = 0 },
+        });
+
+        CapturingWorkerLogBroadcaster broadcaster = new();
+        WorkerDispatchService sut = BuildReportService(new RunningStubWorkerOrchestrator(), broadcaster: broadcaster);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        broadcaster.PushedReports.Count.ShouldBe(1);
+        (Guid pushedIssueId, WorkerReportSummary pushedSummary) = broadcaster.PushedReports[0];
+        pushedIssueId.ShouldBe(activeRun.IssueId.Value);
+        pushedSummary.ShouldSatisfyAllConditions(
+            () => pushedSummary.WorkerRunId.ShouldBe(activeRun.Id.Value),
+            () => pushedSummary.SequenceNumber.ShouldBe(1),
+            () => pushedSummary.ReportType.ShouldBe("progress"));
+    }
+
     private sealed class RunningStubWorkerOrchestrator : IWorkerOrchestrator
     {
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
@@ -477,5 +511,16 @@ public sealed class ReportIngestion : WorkerDispatchServiceTestBase
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    private sealed class CapturingWorkerLogBroadcaster : IWorkerLogBroadcaster
+    {
+        public List<(Guid IssueId, WorkerReportSummary Report)> PushedReports { get; } = [];
+
+        public Task PushAsync(Guid issueId, WorkerReportSummary report, CancellationToken cancellationToken)
+        {
+            PushedReports.Add((issueId, report));
+            return Task.CompletedTask;
+        }
     }
 }
