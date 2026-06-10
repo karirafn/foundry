@@ -229,6 +229,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
                   [error]="_logService.error()"
                   [isLive]="_logService.isLive()"
                   [issueUrl]="d.url"
+                  [containerOutput]="_logService.containerOutput()"
                   (retry)="onLogRetry(d)"
                 />
               </div>
@@ -282,6 +283,7 @@ export const MEDIA_QUERY_FACTORY = new InjectionToken<(query: string) => MediaQu
                 [isLive]="_logService.isLive()"
                 [hideHeader]="true"
                 [issueUrl]="d.url"
+                [containerOutput]="_logService.containerOutput()"
                 (retry)="onLogRetry(d)"
               />
             </div>

@@ -74,6 +74,7 @@ function setup(overrides: {
   isLive?: boolean;
   hideHeader?: boolean;
   issueUrl?: string | null;
+  containerOutput?: string | null;
 } = {}) {
   const retryEmitted: boolean[] = [];
 
@@ -89,6 +90,9 @@ function setup(overrides: {
   fixture.componentRef.setInput('hideHeader', overrides.hideHeader ?? false);
   if (overrides.issueUrl !== undefined) {
     fixture.componentRef.setInput('issueUrl', overrides.issueUrl);
+  }
+  if (overrides.containerOutput !== undefined) {
+    fixture.componentRef.setInput('containerOutput', overrides.containerOutput);
   }
   fixture.componentInstance.retry.subscribe(() => retryEmitted.push(true));
 
@@ -607,5 +611,95 @@ describe('WorkerLogPanelComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const header = el.querySelector('.worker-log-panel__header');
     expect(header).toBeFalsy();
+  });
+
+  // Container output section — Cycle 14
+  it('should render container output section when containerOutput is non-null', () => {
+    // Arrange
+    const { fixture } = setup({ containerOutput: 'Error: container crashed' });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const section = el.querySelector('.worker-log-panel__container-output');
+    expect(section).toBeTruthy();
+  });
+
+  // Cycle 15: no section when containerOutput is null
+  it('should not render container output section when containerOutput is null', () => {
+    // Arrange
+    const { fixture } = setup({ containerOutput: null });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const section = el.querySelector('.worker-log-panel__container-output');
+    expect(section).toBeFalsy();
+  });
+
+  // Cycle 16: auto-expand when reports empty
+  it('should auto-expand container output when reports are empty', () => {
+    // Arrange
+    const { fixture } = setup({ reports: [], containerOutput: 'crash log' });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const pre = el.querySelector('.worker-log-panel__container-output-pre');
+    expect(pre).toBeTruthy();
+  });
+
+  // Cycle 17: collapsed when reports exist alongside container output
+  it('should collapse container output by default when reports also exist', () => {
+    // Arrange
+    const { fixture } = setup({ reports: [mockProgressReport], containerOutput: 'crash log' });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const pre = el.querySelector('.worker-log-panel__container-output-pre');
+    expect(pre).toBeFalsy();
+  });
+
+  // Cycle 18: toggle button expands the section
+  it('should expand container output when toggle button is clicked while collapsed', () => {
+    // Arrange
+    const { fixture } = setup({ reports: [mockProgressReport], containerOutput: 'crash log' });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const toggle = el.querySelector('.worker-log-panel__container-output-toggle') as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    // Assert
+    const pre = el.querySelector('.worker-log-panel__container-output-pre');
+    expect(pre).toBeTruthy();
+  });
+
+  // Cycle 19: explicit toggle collapses auto-expanded section
+  it('should collapse auto-expanded container output when toggle is clicked', () => {
+    // Arrange — no reports, so auto-expands
+    const { fixture } = setup({ reports: [], containerOutput: 'crash log' });
+    fixture.detectChanges();
+
+    // Act — click to collapse
+    const el = fixture.nativeElement as HTMLElement;
+    const toggle = el.querySelector('.worker-log-panel__container-output-toggle') as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    // Assert
+    const pre = el.querySelector('.worker-log-panel__container-output-pre');
+    expect(pre).toBeFalsy();
   });
 });
