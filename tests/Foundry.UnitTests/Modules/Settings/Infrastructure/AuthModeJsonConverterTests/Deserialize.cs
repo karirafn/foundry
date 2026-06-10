@@ -30,7 +30,7 @@ public sealed class Deserialize
 
         // Assert
         AuthMode.ApiKey apiKey = result.ShouldBeOfType<AuthMode.ApiKey>();
-        apiKey.EncryptedKey.ShouldBe("my-key");
+        apiKey.Key.ShouldBe("my-key");
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class Deserialize
 
         // Assert
         AuthMode.ApiKey apiKey = result.ShouldBeOfType<AuthMode.ApiKey>();
-        apiKey.EncryptedKey.ShouldBe("round-trip-key");
+        apiKey.Key.ShouldBe("round-trip-key");
     }
 
     [Fact]

@@ -2,17 +2,22 @@ using System.Security.Cryptography;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.Modules.Settings.Infrastructure;
 
-public sealed class EncryptedStringConverter : ValueConverter<string, string>
+internal sealed class EncryptedStringConverter : ValueConverter<string, string>
 {
     private const string ProtectorPurpose = "Foundry.Settings.Encryption";
 
-    public EncryptedStringConverter(IDataProtectionProvider provider)
+    internal EncryptedStringConverter(IDataProtectionProvider provider, ILogger<EncryptedStringConverter>? logger = null)
         : base(
             value => Protect(provider.CreateProtector(ProtectorPurpose), value),
-            protectedValue => Unprotect(provider.CreateProtector(ProtectorPurpose), protectedValue))
+            protectedValue => Unprotect(
+                provider.CreateProtector(ProtectorPurpose),
+                protectedValue,
+                logger ?? NullLogger<EncryptedStringConverter>.Instance))
     {
     }
 
@@ -23,7 +28,7 @@ public sealed class EncryptedStringConverter : ValueConverter<string, string>
         return Convert.ToBase64String(protectedBytes);
     }
 
-    private static string Unprotect(IDataProtector protector, string protectedValue)
+    private static string Unprotect(IDataProtector protector, string protectedValue, ILogger logger)
     {
         try
         {
@@ -31,8 +36,12 @@ public sealed class EncryptedStringConverter : ValueConverter<string, string>
             byte[] bytes = protector.Unprotect(protectedBytes);
             return System.Text.Encoding.UTF8.GetString(bytes);
         }
-        catch (CryptographicException)
+        catch (CryptographicException ex)
         {
+            // Data Protection key may have been rotated — the stored value cannot be decrypted.
+            logger.LogWarning(
+                ex,
+                "Failed to decrypt a settings value; the Data Protection key may have been rotated. Returning empty string.");
             return string.Empty;
         }
     }

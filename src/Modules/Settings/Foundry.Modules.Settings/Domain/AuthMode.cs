@@ -4,7 +4,7 @@ public abstract record AuthMode
 {
     private AuthMode() { }
 
-    public sealed record ApiKey(string EncryptedKey) : AuthMode;
+    public sealed record ApiKey(string Key) : AuthMode;
 
     // CA1724 suppressed: nested type name 'OAuth' is intentional domain terminology
     // and is unambiguous in this namespace context despite the conflict with

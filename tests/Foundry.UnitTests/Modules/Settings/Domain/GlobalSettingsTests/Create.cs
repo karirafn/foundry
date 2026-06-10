@@ -46,7 +46,7 @@ public sealed class Create
 
         // Assert
         AuthMode.ApiKey apiKey = settings.AuthMode.ShouldBeOfType<AuthMode.ApiKey>();
-        apiKey.EncryptedKey.ShouldBe(string.Empty);
+        apiKey.Key.ShouldBe(string.Empty);
     }
 
     [Fact]

@@ -66,7 +66,7 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAuthMode.Handler sut = new(dbContext, SuccessfulScanner(
             new OAuthCredentials("at", "rt", DateTimeOffset.UtcNow.AddHours(1), "pro")));
 
-        UpdateAuthMode.Command command = new("api_key", "sk-ant-abc123", null);
+        UpdateAuthMode.Command command = new("api_key", "sk-ant-abc123");
 
         // Act
         Result<UpdateAuthMode.Response> result = await sut.HandleAsync(
@@ -96,7 +96,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateAuthMode.Handler sut = new(dbContext, SuccessfulScanner(credentials));
 
-        UpdateAuthMode.Command command = new("oauth", null, null);
+        UpdateAuthMode.Command command = new("oauth", null);
 
         // Act
         Result<UpdateAuthMode.Response> result = await sut.HandleAsync(
@@ -128,7 +128,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateAuthMode.Handler sut = new(dbContext, FailingScanner());
 
-        UpdateAuthMode.Command command = new("oauth", null, null);
+        UpdateAuthMode.Command command = new("oauth", null);
 
         // Act
         Result<UpdateAuthMode.Response> result = await sut.HandleAsync(
@@ -148,7 +148,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateAuthMode.Handler sut = new(dbContext, FailingScanner());
 
-        UpdateAuthMode.Command command = new("api_key", "sk-ant-abc123", null);
+        UpdateAuthMode.Command command = new("api_key", "sk-ant-abc123");
 
         // Act
         Result<UpdateAuthMode.Response> result = await sut.HandleAsync(
@@ -176,7 +176,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             UpdateAuthMode.Handler sut = new(dbContext, FailingScanner());
-            UpdateAuthMode.Command command = new("api_key", "sk-ant-new-key", null);
+            UpdateAuthMode.Command command = new("api_key", "sk-ant-new-key");
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
 

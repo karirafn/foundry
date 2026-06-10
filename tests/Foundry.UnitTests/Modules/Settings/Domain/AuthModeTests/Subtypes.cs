@@ -9,17 +9,17 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.AuthModeTests;
 public sealed class Subtypes
 {
     [Fact]
-    public void WhenApiKeyCreated_StoresEncryptedKey()
+    public void WhenApiKeyCreated_StoresKey()
     {
         // Arrange
-        const string encryptedKey = "encrypted-api-key";
+        const string key = "plaintext-api-key";
 
         // Act
-        AuthMode mode = new AuthMode.ApiKey(encryptedKey);
+        AuthMode mode = new AuthMode.ApiKey(key);
 
         // Assert
         AuthMode.ApiKey apiKey = mode.ShouldBeOfType<AuthMode.ApiKey>();
-        apiKey.EncryptedKey.ShouldBe(encryptedKey);
+        apiKey.Key.ShouldBe(key);
     }
 
     [Fact]

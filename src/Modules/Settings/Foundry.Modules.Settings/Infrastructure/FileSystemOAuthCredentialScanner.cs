@@ -6,7 +6,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Settings.Infrastructure;
 
-public sealed class FileSystemOAuthCredentialScanner : IOAuthCredentialScanner
+internal sealed class FileSystemOAuthCredentialScanner : IOAuthCredentialScanner
 {
     private const string CredentialsFileName = ".credentials.json";
     private const string ClaudeFolderName = ".claude";

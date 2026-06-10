@@ -29,28 +29,7 @@ internal static class GetSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            return MapToSummary(settings);
-        }
-
-        private static GlobalSettingsSummary MapToSummary(GlobalSettings settings)
-        {
-            AuthMode.OAuth? oauth = settings.AuthMode as AuthMode.OAuth;
-
-            string authModeName = settings.AuthMode switch
-            {
-                AuthMode.ApiKey => "ApiKey",
-                AuthMode.OAuth => "OAuth",
-                _ => "Unknown",
-            };
-
-            return new GlobalSettingsSummary(
-                authModeName,
-                settings.MaxConcurrent,
-                settings.TimeoutMinutes,
-                oauth is not null && oauth.AccessToken.Length > 0,
-                oauth is not null && oauth.RefreshToken.Length > 0,
-                oauth?.ExpiresAt,
-                oauth?.SubscriptionType);
+            return GlobalSettingsMapper.ToSummary(settings);
         }
     }
 

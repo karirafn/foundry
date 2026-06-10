@@ -12,7 +12,7 @@ namespace Foundry.UnitTests.Modules.Settings.Features.ScanOAuthCredentialsTests;
 public sealed class HandleAsync
 {
     [Fact]
-    public async Task WhenScannerReturnsCredentials_ReturnsSuccessWithCredentials()
+    public async Task WhenScannerReturnsCredentials_ReturnsSuccessWithPresenceFlags()
     {
         // Arrange
         DateTimeOffset expiresAt = new(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
@@ -21,17 +21,37 @@ public sealed class HandleAsync
         ScanOAuthCredentials.Handler sut = new(scanner);
 
         // Act
-        Result<OAuthCredentials> result = await sut.HandleAsync(
+        Result<ScanOAuthCredentials.OAuthScanResponse> result = await sut.HandleAsync(
             new ScanOAuthCredentials.Query(),
             TestContext.Current.CancellationToken);
 
         // Assert
-        Result<OAuthCredentials>.Success success = result.ShouldBeOfType<Result<OAuthCredentials>.Success>();
+        Result<ScanOAuthCredentials.OAuthScanResponse>.Success success =
+            result.ShouldBeOfType<Result<ScanOAuthCredentials.OAuthScanResponse>.Success>();
         success.Value.ShouldSatisfyAllConditions(
-            () => success.Value.AccessToken.ShouldBe("access-token"),
-            () => success.Value.RefreshToken.ShouldBe("refresh-token"),
+            () => success.Value.AccessTokenPresent.ShouldBeTrue(),
+            () => success.Value.RefreshTokenPresent.ShouldBeTrue(),
             () => success.Value.ExpiresAt.ShouldBe(expiresAt),
             () => success.Value.SubscriptionType.ShouldBe("pro"));
+    }
+
+    [Fact]
+    public async Task WhenScannerReturnsCredentials_DoesNotExposeRawTokens()
+    {
+        // Arrange
+        OAuthCredentials credentials = new("secret-access-token", "secret-refresh-token", DateTimeOffset.UtcNow, "pro");
+        FakeOAuthCredentialScanner scanner = new(Result<OAuthCredentials>.Ok(credentials));
+        ScanOAuthCredentials.Handler sut = new(scanner);
+
+        // Act
+        Result<ScanOAuthCredentials.OAuthScanResponse> result = await sut.HandleAsync(
+            new ScanOAuthCredentials.Query(),
+            TestContext.Current.CancellationToken);
+
+        // Assert — response contains presence flags, not raw token strings
+        Result<ScanOAuthCredentials.OAuthScanResponse>.Success success =
+            result.ShouldBeOfType<Result<ScanOAuthCredentials.OAuthScanResponse>.Success>();
+        success.Value.ShouldBeOfType<ScanOAuthCredentials.OAuthScanResponse>();
     }
 
     [Fact]
@@ -43,12 +63,13 @@ public sealed class HandleAsync
         ScanOAuthCredentials.Handler sut = new(scanner);
 
         // Act
-        Result<OAuthCredentials> result = await sut.HandleAsync(
+        Result<ScanOAuthCredentials.OAuthScanResponse> result = await sut.HandleAsync(
             new ScanOAuthCredentials.Query(),
             TestContext.Current.CancellationToken);
 
         // Assert
-        Result<OAuthCredentials>.Failure failure = result.ShouldBeOfType<Result<OAuthCredentials>.Failure>();
+        Result<ScanOAuthCredentials.OAuthScanResponse>.Failure failure =
+            result.ShouldBeOfType<Result<ScanOAuthCredentials.OAuthScanResponse>.Failure>();
         failure.Error.Code.ShouldBe(SettingsErrors.OAuthCredentialsNotFoundCode);
     }
 }

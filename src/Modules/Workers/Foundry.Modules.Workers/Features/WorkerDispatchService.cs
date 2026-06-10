@@ -61,6 +61,8 @@ internal sealed class WorkerDispatchService(
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
 
+        int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
+
         if (!_reconciled)
         {
             await ReconcileOrphanedRunsAsync(
@@ -69,7 +71,7 @@ internal sealed class WorkerDispatchService(
                 integrationEventDispatcher,
                 domainEventDispatcher,
                 workerLogBroadcaster,
-                settingsQueries,
+                timeoutMinutes,
                 activeRuns,
                 cancellationToken);
             _reconciled = true;
@@ -81,7 +83,7 @@ internal sealed class WorkerDispatchService(
             integrationEventDispatcher,
             domainEventDispatcher,
             workerLogBroadcaster,
-            settingsQueries,
+            timeoutMinutes,
             activeRuns,
             cancellationToken);
 
@@ -109,7 +111,7 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IWorkerLogBroadcaster workerLogBroadcaster,
-        IGlobalSettingsQueries settingsQueries,
+        int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -156,7 +158,7 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     domainEventDispatcher,
                     workerLogBroadcaster,
-                    settingsQueries,
+                    timeoutMinutes,
                     activeRun,
                     cancellationToken,
                     knownStatus: status);
@@ -176,7 +178,7 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IWorkerLogBroadcaster workerLogBroadcaster,
-        IGlobalSettingsQueries settingsQueries,
+        int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -188,7 +190,7 @@ internal sealed class WorkerDispatchService(
                 integrationEventDispatcher,
                 domainEventDispatcher,
                 workerLogBroadcaster,
-                settingsQueries,
+                timeoutMinutes,
                 activeRun,
                 cancellationToken);
         }
@@ -200,7 +202,7 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IWorkerLogBroadcaster workerLogBroadcaster,
-        IGlobalSettingsQueries settingsQueries,
+        int timeoutMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
@@ -242,7 +244,6 @@ internal sealed class WorkerDispatchService(
 
         if (status.IsRunning)
         {
-            int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
             DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(timeoutMinutes);
             if (DateTimeOffset.UtcNow >= timeout)
             {

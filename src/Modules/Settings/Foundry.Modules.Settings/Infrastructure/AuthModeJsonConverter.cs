@@ -5,12 +5,12 @@ using Foundry.Modules.Settings.Domain;
 
 namespace Foundry.Modules.Settings.Infrastructure;
 
-public sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
+internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 {
     private const string TypeProperty = "type";
     private const string ApiKeyType = "api_key";
     private const string OAuthType = "oauth";
-    private const string EncryptedKeyProperty = "encrypted_key";
+    private const string KeyProperty = "encrypted_key";
     private const string AccessTokenProperty = "access_token";
     private const string RefreshTokenProperty = "refresh_token";
     private const string ExpiresAtProperty = "expires_at";
@@ -46,7 +46,7 @@ public sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
         {
             case AuthMode.ApiKey apiKey:
                 writer.WriteString(TypeProperty, ApiKeyType);
-                writer.WriteString(EncryptedKeyProperty, apiKey.EncryptedKey);
+                writer.WriteString(KeyProperty, apiKey.Key);
                 break;
 
             case AuthMode.OAuth oauth:
@@ -63,9 +63,9 @@ public sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 
     private static AuthMode.ApiKey ReadApiKey(JsonElement root)
     {
-        string encryptedKey = root.GetProperty(EncryptedKeyProperty).GetString()
+        string key = root.GetProperty(KeyProperty).GetString()
             ?? string.Empty;
-        return new AuthMode.ApiKey(encryptedKey);
+        return new AuthMode.ApiKey(key);
     }
 
     private static AuthMode.OAuth ReadOAuth(JsonElement root)

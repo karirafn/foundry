@@ -7,10 +7,13 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Settings.Infrastructure.Configurations;
 
-public sealed class GlobalSettingsConfiguration(IDataProtectionProvider dataProtectionProvider)
+internal sealed class GlobalSettingsConfiguration(
+    IDataProtectionProvider dataProtectionProvider,
+    ILogger<EncryptedStringConverter>? encryptedStringConverterLogger = null)
     : IEntityTypeConfiguration<GlobalSettings>
 {
     private static readonly JsonSerializerOptions SerializerOptions = BuildSerializerOptions();
@@ -25,7 +28,7 @@ public sealed class GlobalSettingsConfiguration(IDataProtectionProvider dataProt
             .HasConversion(new StronglyTypedIdValueConverter<GlobalSettingsId>())
             .HasColumnName("id");
 
-        EncryptedStringConverter encryptedConverter = new(dataProtectionProvider);
+        EncryptedStringConverter encryptedConverter = new(dataProtectionProvider, encryptedStringConverterLogger);
         Func<string, string> encrypt = encryptedConverter.ConvertToProviderExpression.Compile();
         Func<string, string> decrypt = encryptedConverter.ConvertFromProviderExpression.Compile();
 

@@ -11,12 +11,37 @@ namespace Foundry.Modules.Settings.Features;
 
 internal static class ScanOAuthCredentials
 {
-    internal sealed record Query : IQuery<OAuthCredentials>;
+    internal sealed record Query : IQuery<OAuthScanResponse>;
 
-    internal sealed class Handler(IOAuthCredentialScanner scanner) : IQueryHandler<Query, OAuthCredentials>
+    internal sealed record OAuthScanResponse(
+        bool AccessTokenPresent,
+        bool RefreshTokenPresent,
+        DateTimeOffset? ExpiresAt,
+        string? SubscriptionType);
+
+    internal sealed class Handler(IOAuthCredentialScanner scanner) : IQueryHandler<Query, OAuthScanResponse>
     {
-        public Task<Result<OAuthCredentials>> HandleAsync(Query query, CancellationToken cancellationToken) =>
-            scanner.ScanAsync(cancellationToken);
+        public async Task<Result<OAuthScanResponse>> HandleAsync(Query query, CancellationToken cancellationToken)
+        {
+            Result<OAuthCredentials> result = await scanner.ScanAsync(cancellationToken);
+
+            if (result is Result<OAuthCredentials>.Failure failure)
+            {
+                return Result<OAuthScanResponse>.Fail(failure.Error);
+            }
+
+            if (result is not Result<OAuthCredentials>.Success success)
+            {
+                return Result<OAuthScanResponse>.Fail(SettingsErrors.OAuthCredentialsNotFound);
+            }
+
+            OAuthCredentials credentials = success.Value;
+            return new OAuthScanResponse(
+                AccessTokenPresent: credentials.AccessToken.Length > 0,
+                RefreshTokenPresent: credentials.RefreshToken.Length > 0,
+                ExpiresAt: credentials.ExpiresAt,
+                SubscriptionType: credentials.SubscriptionType);
+        }
     }
 
     internal static class Endpoint
@@ -24,20 +49,20 @@ internal static class ScanOAuthCredentials
         public static void Map(RouteGroupBuilder group)
         {
             group.MapGet("/oauth/scan", static async (
-                    IQueryHandler<Query, OAuthCredentials> handler,
+                    IQueryHandler<Query, OAuthScanResponse> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Result<OAuthCredentials> result = await handler.HandleAsync(
+                    Result<OAuthScanResponse> result = await handler.HandleAsync(
                         new Query(),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<OAuthCredentials>, BadRequest<string>>>(
-                        credentials => TypedResults.Ok(credentials),
+                    return result.Match<Results<Ok<OAuthScanResponse>, BadRequest<string>>>(
+                        response => TypedResults.Ok(response),
                         error => TypedResults.BadRequest(error.Message));
                 })
                 .WithName("ScanOAuthCredentials")
                 .WithSummary("Scans for OAuth credentials in well-known file system locations")
-                .Produces<OAuthCredentials>()
+                .Produces<OAuthScanResponse>()
                 .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }

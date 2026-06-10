@@ -14,7 +14,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
-        return settings is null ? null : MapToSummary(settings);
+        return settings is null ? null : GlobalSettingsMapper.ToSummary(settings);
     }
 
     public async Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(
@@ -31,7 +31,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
         return settings.AuthMode switch
         {
-            AuthMode.ApiKey apiKey => ("ANTHROPIC_API_KEY", apiKey.EncryptedKey),
+            AuthMode.ApiKey apiKey => ("ANTHROPIC_API_KEY", apiKey.Key),
             AuthMode.OAuth oauth => ("ANTHROPIC_AUTH_TOKEN", oauth.AccessToken),
             _ => null,
         };
@@ -55,24 +55,4 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return settings?.TimeoutMinutes ?? GlobalSettings.DefaultTimeoutMinutes;
     }
 
-    private static GlobalSettingsSummary MapToSummary(GlobalSettings settings)
-    {
-        AuthMode.OAuth? oauth = settings.AuthMode as AuthMode.OAuth;
-
-        string authModeName = settings.AuthMode switch
-        {
-            AuthMode.ApiKey => "ApiKey",
-            AuthMode.OAuth => "OAuth",
-            _ => "Unknown",
-        };
-
-        return new GlobalSettingsSummary(
-            authModeName,
-            settings.MaxConcurrent,
-            settings.TimeoutMinutes,
-            oauth is not null && oauth.AccessToken.Length > 0,
-            oauth is not null && oauth.RefreshToken.Length > 0,
-            oauth?.ExpiresAt,
-            oauth?.SubscriptionType);
-    }
 }

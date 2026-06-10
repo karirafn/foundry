@@ -18,7 +18,7 @@ public sealed class ValidateCommand
     public void WhenModeIsValid_ReturnsSuccess(string mode)
     {
         // Arrange
-        UpdateAuthMode.Command command = new(mode, mode == "api_key" ? "sk-ant-key" : null, null);
+        UpdateAuthMode.Command command = new(mode, mode == "api_key" ? "sk-ant-key" : null);
 
         // Act
         Result result = _sut.Validate(command);
@@ -35,7 +35,7 @@ public sealed class ValidateCommand
     public void WhenModeIsInvalid_ReturnsInvalidAuthModeError(string mode)
     {
         // Arrange
-        UpdateAuthMode.Command command = new(mode, null, null);
+        UpdateAuthMode.Command command = new(mode, null);
 
         // Act
         Result result = _sut.Validate(command);
@@ -52,7 +52,7 @@ public sealed class ValidateCommand
     public void WhenModeIsApiKeyAndKeyIsNullOrWhiteSpace_ReturnsInvalidAuthModeError(string? apiKey)
     {
         // Arrange
-        UpdateAuthMode.Command command = new("api_key", apiKey, null);
+        UpdateAuthMode.Command command = new("api_key", apiKey);
 
         // Act
         Result result = _sut.Validate(command);
@@ -67,7 +67,36 @@ public sealed class ValidateCommand
     {
         // Arrange
         // For oauth mode, apiKey is not required
-        UpdateAuthMode.Command command = new("oauth", null, null);
+        UpdateAuthMode.Command command = new("oauth", null);
+
+        // Act
+        Result result = _sut.Validate(command);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenApiKeyExceeds256Characters_ReturnsInvalidAuthModeError()
+    {
+        // Arrange
+        string oversizedKey = new('a', 257);
+        UpdateAuthMode.Command command = new("api_key", oversizedKey);
+
+        // Act
+        Result result = _sut.Validate(command);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.InvalidAuthModeCode);
+    }
+
+    [Fact]
+    public void WhenApiKeyIsExactly256Characters_ReturnsSuccess()
+    {
+        // Arrange
+        string maxLengthKey = new('a', 256);
+        UpdateAuthMode.Command command = new("api_key", maxLengthKey);
 
         // Act
         Result result = _sut.Validate(command);

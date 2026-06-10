@@ -16,7 +16,7 @@ internal static class UpdateAuthMode
     private const string ApiKeyMode = "api_key";
     private const string OAuthMode = "oauth";
 
-    internal sealed record Command(string Mode, string? ApiKey, string? Placeholder) : ICommand<Response>;
+    internal sealed record Command(string Mode, string? ApiKey) : ICommand<Response>;
 
     internal sealed record Response(
         string AuthMode,
@@ -29,6 +29,8 @@ internal static class UpdateAuthMode
 
     internal sealed class Validator : ICommandValidator<Command>
     {
+        private const int MaxApiKeyLength = 256;
+
         public Result Validate(Command command)
         {
             if (command.Mode != ApiKeyMode && command.Mode != OAuthMode)
@@ -37,6 +39,11 @@ internal static class UpdateAuthMode
             }
 
             if (command.Mode == ApiKeyMode && string.IsNullOrWhiteSpace(command.ApiKey))
+            {
+                return SettingsErrors.InvalidAuthMode;
+            }
+
+            if (command.Mode == ApiKeyMode && command.ApiKey?.Length > MaxApiKeyLength)
             {
                 return SettingsErrors.InvalidAuthMode;
             }
@@ -72,7 +79,12 @@ internal static class UpdateAuthMode
                     return Result<Response>.Fail(failure.Error);
                 }
 
-                OAuthCredentials credentials = ((Result<OAuthCredentials>.Success)scanResult).Value;
+                if (scanResult is not Result<OAuthCredentials>.Success success)
+                {
+                    return Result<Response>.Fail(SettingsErrors.OAuthCredentialsNotFound);
+                }
+
+                OAuthCredentials credentials = success.Value;
                 mode = new AuthMode.OAuth(
                     credentials.AccessToken,
                     credentials.RefreshToken,
@@ -83,28 +95,15 @@ internal static class UpdateAuthMode
             settings.SetAuthMode(mode);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return MapToResponse(settings);
-        }
-
-        private static Response MapToResponse(GlobalSettings settings)
-        {
-            AuthMode.OAuth? oauth = settings.AuthMode as AuthMode.OAuth;
-
-            string authModeName = settings.AuthMode switch
-            {
-                AuthMode.ApiKey => "ApiKey",
-                AuthMode.OAuth => "OAuth",
-                _ => "Unknown",
-            };
-
+            GlobalSettingsSummary summary = GlobalSettingsMapper.ToSummary(settings);
             return new Response(
-                authModeName,
-                settings.MaxConcurrent,
-                settings.TimeoutMinutes,
-                oauth is not null && oauth.AccessToken.Length > 0,
-                oauth is not null && oauth.RefreshToken.Length > 0,
-                oauth?.ExpiresAt,
-                oauth?.SubscriptionType);
+                summary.AuthMode,
+                summary.MaxConcurrent,
+                summary.TimeoutMinutes,
+                summary.AccessTokenPresent,
+                summary.RefreshTokenPresent,
+                summary.ExpiresAt,
+                summary.SubscriptionType);
         }
     }
 
@@ -119,7 +118,7 @@ internal static class UpdateAuthMode
                     ICommandHandler<Command, Response> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(body.Mode, body.ApiKey, null);
+                    Command command = new(body.Mode, body.ApiKey);
                     Result<Response> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Ok<Response>, NotFound, BadRequest<string>>>(

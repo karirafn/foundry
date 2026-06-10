@@ -20,7 +20,7 @@ public static class SettingsModule
         services.AddHostedService<SettingsSeeder>();
 
         services.AddQueryHandler<GetSettings.Query, GlobalSettingsSummary, GetSettings.Handler>();
-        services.AddQueryHandler<ScanOAuthCredentials.Query, OAuthCredentials, ScanOAuthCredentials.Handler>();
+        services.AddQueryHandler<ScanOAuthCredentials.Query, ScanOAuthCredentials.OAuthScanResponse, ScanOAuthCredentials.Handler>();
         services.AddCommandHandler<UpdateAuthMode.Command, UpdateAuthMode.Response, UpdateAuthMode.Handler, UpdateAuthMode.Validator>();
 
         return services;
