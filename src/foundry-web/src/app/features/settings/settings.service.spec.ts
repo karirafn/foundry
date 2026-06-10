@@ -1,12 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { WritableSignal } from '@angular/core';
 import { SettingsService } from './settings.service';
 import { AuthSettings } from './settings.model';
 
 const mockAuthSettings: AuthSettings = {
   mode: 'api_key',
-  apiKeyConfigured: true,
+  apiKeyConfigured: false,
   oauth: null,
 };
 
@@ -77,7 +78,7 @@ describe('SettingsService', () => {
     const settings = service.authSettings();
     expect(settings).not.toBeNull();
     expect(settings!.mode).toBe('api_key');
-    expect(settings!.apiKeyConfigured).toBe(true);
+    expect(settings!.apiKeyConfigured).toBe(false);
   });
 
   // Cycle 3: loadSettings sets loading true during request
@@ -263,7 +264,7 @@ describe('SettingsService', () => {
     });
   });
 
-  // Cycle 8: scanOAuthCredentials calls GET /api/settings/oauth/scan
+  // Cycle 8: scanOAuthCredentials calls GET /api/settings/oauth/scan and applies result
   it('should GET /api/settings/oauth/scan when scanOAuthCredentials is called', () => {
     // Arrange / Act
     service.scanOAuthCredentials();
@@ -272,8 +273,11 @@ describe('SettingsService', () => {
     // Assert
     expect(req.request.method).toBe('GET');
     req.flush({
-      accessToken: 'token',
-      refreshToken: 'refresh',
+      authMode: 'OAuth',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
       expiresAt: '2027-01-01T00:00:00Z',
       subscriptionType: 'pro',
     });
@@ -286,11 +290,33 @@ describe('SettingsService', () => {
     // Assert — before flush
     expect(service.switching()).toBe(true);
     httpMock.expectOne('/api/settings/oauth/scan').flush({
-      accessToken: 'token',
-      refreshToken: 'refresh',
+      authMode: 'OAuth',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
       expiresAt: '2027-01-01T00:00:00Z',
       subscriptionType: 'pro',
     });
+  });
+
+  it('should update authSettings and set saveSuccess after scanOAuthCredentials succeeds', () => {
+    // Arrange / Act
+    service.scanOAuthCredentials();
+    httpMock.expectOne('/api/settings/oauth/scan').flush({
+      authMode: 'OAuth',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
+      expiresAt: '2027-01-01T00:00:00Z',
+      subscriptionType: 'pro',
+    });
+
+    // Assert
+    expect(service.switching()).toBe(false);
+    expect(service.saveSuccess()).toBe(true);
+    expect(service.authSettings()!.mode).toBe('oauth');
   });
 
   it('should set switchError when scanOAuthCredentials fails', () => {
@@ -315,7 +341,37 @@ describe('SettingsService', () => {
     });
 
     // Assert
-    expect(service.switchError()).toBe('Failed to scan for OAuth credentials');
+    expect(service.switchError()).toBe('Failed to switch to OAuth mode');
+  });
+
+  // Cycle 8b: loadSettings resets stale signals
+  it('should reset saveSuccess, saveError, switchError, saving, and switching when loadSettings is called', () => {
+    // Arrange — put signals into a dirty state
+    service.saveSuccess.set(true);
+    service.saving.set(true);
+    service.switching.set(true);
+    (service as unknown as { _saveErrorSignal: WritableSignal<string | null> })._saveErrorSignal.set('old error');
+    (service as unknown as { _switchErrorSignal: WritableSignal<string | null> })._switchErrorSignal.set('old switch error');
+
+    // Act
+    service.loadSettings();
+
+    // Assert — all cleared before the response arrives
+    expect(service.saveSuccess()).toBe(false);
+    expect(service.saving()).toBe(false);
+    expect(service.switching()).toBe(false);
+    expect(service.saveError()).toBeNull();
+    expect(service.switchError()).toBeNull();
+
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
   });
 
   // Cycle 9: updateAuthMode updates authSettings on success

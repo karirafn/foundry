@@ -4,7 +4,7 @@ import { AuthMode, AuthSettings, OAuthCredentialInfo } from './settings.model';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
-const SCAN_OAUTH_ERROR = 'Failed to scan for OAuth credentials';
+const SWITCH_OAUTH_ERROR = 'Failed to switch to OAuth mode';
 
 interface GlobalSettingsResponse {
   authMode: string;
@@ -14,13 +14,6 @@ interface GlobalSettingsResponse {
   refreshTokenPresent: boolean;
   expiresAt: string | null;
   subscriptionType: string | null;
-}
-
-interface OAuthScanResponse {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: string;
-  subscriptionType: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -44,6 +37,11 @@ export class SettingsService {
 
   loadSettings(): void {
     this._loadErrorSignal.set(null);
+    this._saveErrorSignal.set(null);
+    this._switchErrorSignal.set(null);
+    this.saveSuccess.set(false);
+    this.saving.set(false);
+    this.switching.set(false);
     this.loading.set(true);
 
     this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
@@ -85,13 +83,15 @@ export class SettingsService {
     this._switchErrorSignal.set(null);
     this.switching.set(true);
 
-    this._http.get<OAuthScanResponse>('/api/settings/oauth/scan').subscribe({
-      next: () => {
+    this._http.get<GlobalSettingsResponse>('/api/settings/oauth/scan').subscribe({
+      next: (response) => {
+        this.authSettings.set(this._mapToAuthSettings(response));
         this.switching.set(false);
+        this.saveSuccess.set(true);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this._switchErrorSignal.set(SCAN_OAUTH_ERROR);
+        this._switchErrorSignal.set(SWITCH_OAUTH_ERROR);
         this.switching.set(false);
       },
     });
@@ -114,7 +114,7 @@ export class SettingsService {
 
     return {
       mode,
-      apiKeyConfigured: !isOAuth,
+      apiKeyConfigured: false,
       oauth,
     };
   }

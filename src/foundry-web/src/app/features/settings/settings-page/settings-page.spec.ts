@@ -2,28 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { signal } from '@angular/core';
 import { SettingsPageComponent } from './settings-page';
 import { SettingsService } from '../settings.service';
-import { AuthSettings } from '../settings.model';
-
-const mockApiKeySettings: AuthSettings = {
-  mode: 'api_key',
-  apiKeyConfigured: true,
-  oauth: null,
-};
-
-const mockOAuthSettings: AuthSettings = {
-  mode: 'oauth',
-  apiKeyConfigured: false,
-  oauth: {
-    accessTokenPresent: true,
-    refreshTokenPresent: true,
-    expiresAt: '2027-01-01T00:00:00Z',
-    subscriptionType: 'pro',
-    status: 'valid',
-  },
-};
 
 function setupComponent() {
   TestBed.configureTestingModule({
@@ -255,5 +235,111 @@ describe('SettingsPageComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const backLink = el.querySelector('.settings-page__back-link');
     expect(backLink).toBeTruthy();
+  });
+
+  // Cycle 9: loading state
+  it('should show a loading indicator while settings are loading', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act — detectChanges triggers ngOnInit which calls loadSettings
+    fixture.detectChanges();
+
+    // Assert — loading spinner visible before response
+    const el = fixture.nativeElement as HTMLElement;
+    const loadingEl = el.querySelector('.settings-page__loading');
+    expect(loadingEl).toBeTruthy();
+    expect(loadingEl?.getAttribute('role')).toBe('status');
+
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+  });
+
+  it('should hide the loading indicator after settings load', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const loadingEl = el.querySelector('.settings-page__loading');
+    expect(loadingEl).toBeFalsy();
+  });
+
+  // Cycle 10: fieldset wraps radio group
+  it('should wrap the radio group in a fieldset', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const fieldset = el.querySelector('fieldset.settings-page__mode-fieldset');
+    expect(fieldset).toBeTruthy();
+    const legend = fieldset?.querySelector('legend');
+    expect(legend?.classList.contains('sr-only')).toBe(true);
+  });
+
+  // Cycle 11: aria-invalid on input when saveError is set
+  it('should set aria-invalid on the API key input when saveError is present', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    fixture.detectChanges();
+
+    // Act — trigger a save error
+    const service = TestBed.inject(SettingsService);
+    service.updateAuthMode('api_key', 'bad-key');
+    const httpMock2 = TestBed.inject(HttpTestingController);
+    httpMock2.expectOne('/api/settings/auth').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const input = el.querySelector('.settings-page__api-key-input') as HTMLInputElement;
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    const errorEl = el.querySelector('#api-key-error');
+    expect(errorEl).toBeTruthy();
   });
 });

@@ -1,4 +1,4 @@
-import { Component, OnInit, WritableSignal, effect, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnInit, ViewChild, WritableSignal, afterNextRender, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
@@ -26,35 +26,45 @@ import { AuthMode } from '../settings.model';
         </div>
       }
 
+      @if (settingsService.loading()) {
+        <div class="settings-page__loading" role="status" aria-label="Loading settings">
+          <span class="settings-page__loading-spinner" aria-hidden="true"></span>
+          <span class="sr-only">Loading settings</span>
+        </div>
+      }
+
       @if (!settingsService.loading() && !settingsService.loadError()) {
         <section class="settings-page__section">
-          <h2 class="settings-page__section-title">Worker Authentication</h2>
+          <h2 class="settings-page__section-title" #sectionHeading tabindex="-1">Worker Authentication</h2>
           <p class="settings-page__section-description">
             Configure how worker containers authenticate with the AI provider.
           </p>
 
-          <div class="settings-page__mode-selector" role="radiogroup" aria-label="Authentication mode">
-            <label class="settings-page__mode-option">
-              <input
-                type="radio"
-                name="authMode"
-                value="api_key"
-                [checked]="_selectedMode() === 'api_key'"
-                (change)="onModeChange('api_key')"
-              />
-              <span class="settings-page__mode-label">API Key</span>
-            </label>
-            <label class="settings-page__mode-option">
-              <input
-                type="radio"
-                name="authMode"
-                value="oauth"
-                [checked]="_selectedMode() === 'oauth'"
-                (change)="onModeChange('oauth')"
-              />
-              <span class="settings-page__mode-label">OAuth</span>
-            </label>
-          </div>
+          <fieldset class="settings-page__mode-fieldset">
+            <legend class="sr-only">Authentication mode</legend>
+            <div class="settings-page__mode-selector">
+              <label class="settings-page__mode-option">
+                <input
+                  type="radio"
+                  name="authMode"
+                  value="api_key"
+                  [checked]="_selectedMode() === 'api_key'"
+                  (change)="onModeChange('api_key')"
+                />
+                <span class="settings-page__mode-label">API Key</span>
+              </label>
+              <label class="settings-page__mode-option">
+                <input
+                  type="radio"
+                  name="authMode"
+                  value="oauth"
+                  [checked]="_selectedMode() === 'oauth'"
+                  (change)="onModeChange('oauth')"
+                />
+                <span class="settings-page__mode-label">OAuth</span>
+              </label>
+            </div>
+          </fieldset>
 
           @if (_selectedMode() === 'api_key') {
             <div class="settings-page__api-key-form">
@@ -68,7 +78,8 @@ import { AuthMode } from '../settings.model';
                     autocomplete="off"
                     placeholder="Enter your API key"
                     [(ngModel)]="_apiKeyValue"
-                    [attr.aria-describedby]="settingsService.authSettings()?.apiKeyConfigured ? 'api-key-configured' : null"
+                    [attr.aria-invalid]="!!settingsService.saveError() || null"
+                    aria-describedby="api-key-error api-key-configured"
                   />
                   <button
                     class="settings-page__toggle-visibility-btn"
@@ -99,7 +110,7 @@ import { AuthMode } from '../settings.model';
               </div>
 
               @if (settingsService.saveError()) {
-                <div class="settings-page__save-error" role="alert">{{ settingsService.saveError() }}</div>
+                <div id="api-key-error" class="settings-page__save-error" role="alert">{{ settingsService.saveError() }}</div>
               }
 
               @if (settingsService.saveSuccess()) {
@@ -163,6 +174,10 @@ import { AuthMode } from '../settings.model';
                 <div class="settings-page__switch-error" role="alert">{{ settingsService.switchError() }}</div>
               }
 
+              @if (settingsService.saveSuccess()) {
+                <div class="settings-page__save-success" role="status">OAuth credentials applied successfully</div>
+              }
+
               <button
                 class="settings-page__scan-btn"
                 type="button"
@@ -179,6 +194,8 @@ import { AuthMode } from '../settings.model';
 })
 export class SettingsPageComponent implements OnInit {
   protected readonly settingsService = inject(SettingsService);
+
+  @ViewChild('sectionHeading') private readonly _sectionHeading?: ElementRef<HTMLElement>;
 
   protected readonly _selectedMode: WritableSignal<AuthMode> = signal('api_key');
   protected readonly _showApiKey: WritableSignal<boolean> = signal(false);
@@ -201,6 +218,9 @@ export class SettingsPageComponent implements OnInit {
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
+    afterNextRender(() => {
+      this._sectionHeading?.nativeElement.focus();
+    });
   }
 
   saveApiKey(): void {
