@@ -19,8 +19,9 @@ Workers clone the repo, implement the issue, push a branch, and write reports to
 ## Worker Authentication
 
 How a worker container authenticates with the Anthropic API (Claude Code).
-Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use) and OAuth token (`CLAUDE_CODE_OAUTH_TOKEN`, Max/Pro/Team/Enterprise plan, generated via `claude setup-token`).
-Exactly one method is configured per Foundry instance — enforced at startup by `WorkerOptionsValidator`.
+Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use, stored encrypted in DB) and OAuth token (`CLAUDE_CODE_OAUTH_TOKEN`, Max/Pro/Team/Enterprise plan, auto-detected from Claude Code's `~/.claude/.credentials.json`).
+Exactly one method is configured per Foundry instance — selected via auth mode in Global Settings.
+OAuth mode auto-scans known credential paths across platforms (Linux, macOS, Windows), validates the token, and auto-refreshes using the stored refresh token.
 Distinct from provider authentication (Account / PAT), which authenticates git operations against GitHub or GitLab.
 
 ## Provider
@@ -39,8 +40,15 @@ Validated at issue detection time and re-validated at claim time.
 
 Credentials for accessing a specific provider's API.
 Modeled as polymorphic variants (`GitHubAccount`, `GitLabAccount`) — each provider may carry provider-specific configuration (e.g., API base URL for self-hosted instances).
-The actual PAT is stored externally (user secrets / Key Vault); the Account holds a `SecretKeyName` referencing the configuration key.
+The PAT is stored encrypted in the database using Data Protection API + EF Core Value Converters.
 Multiple accounts can exist per provider. A Monitored Repository references a specific Account.
+
+## Global Settings
+
+A strongly-typed single-row entity storing all UI-configurable settings.
+Includes worker settings (max concurrent, timeout, prompt templates) and authentication mode (API key or OAuth).
+DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.
+Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`.
 
 ## Monitor
 
@@ -230,6 +238,13 @@ Captured by Foundry (not the worker) from the Docker API after the container sto
 Best-effort — null when the container is already gone, never started, or the Docker API call fails.
 Distinct from `WorkerReport` entries, which are structured JSON written by the worker itself.
 Displayed in the worker-log-panel as a collapsible section below reports.
+
+## First-Run Wizard
+
+A guided setup flow (`/setup`) that runs when no accounts are configured.
+Three steps: select auth mode (API key or OAuth), add first account (provider, name, base URL, PAT), select repositories to monitor (fetched from provider API).
+Auto-redirects from `/issues` when no accounts exist. Redirects to `/issues` on completion.
+The wizard reuses the same form components as the settings page.
 
 ## FailureReason
 
