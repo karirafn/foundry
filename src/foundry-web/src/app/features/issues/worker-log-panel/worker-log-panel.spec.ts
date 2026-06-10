@@ -746,6 +746,21 @@ describe('WorkerLogPanelComponent', () => {
     expect(pre).toBeTruthy();
   });
 
+  // Finding: keyboard-accessible scrollable pre has tabindex="0"
+  it('should have tabindex="0" on the container output pre element so keyboard users can scroll it', () => {
+    // Arrange
+    const { fixture } = setup({ containerOutput: 'some output' });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const pre = el.querySelector('.worker-log-panel__container-output-pre') as HTMLElement;
+    expect(pre).toBeTruthy();
+    expect(pre.getAttribute('tabindex')).toBe('0');
+  });
+
   // Finding 5: initial expanded state is set once and does not flip when reports arrive
   it('should not re-collapse expanded container output when reports arrive after initial set', () => {
     // Arrange — start with containerOutput but no reports

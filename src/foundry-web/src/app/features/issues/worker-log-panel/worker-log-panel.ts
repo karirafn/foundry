@@ -52,9 +52,7 @@ export class WorkerLogPanelComponent {
     () => !this.loading() && !this.error() && this.reports().length === 0
   );
 
-  readonly isContainerOutputExpanded: Signal<boolean> = computed(
-    () => this._containerOutputExpanded()
-  );
+  readonly isContainerOutputExpanded: Signal<boolean> = this._containerOutputExpanded.asReadonly();
 
   constructor() {
     effect(() => {
@@ -144,7 +142,7 @@ export class WorkerLogPanelComponent {
   }
 
   toggleContainerOutput(): void {
-    this._containerOutputExpanded.set(!this.isContainerOutputExpanded());
+    this._containerOutputExpanded.update(v => !v);
   }
 
   onScrollToBottom(): void {
