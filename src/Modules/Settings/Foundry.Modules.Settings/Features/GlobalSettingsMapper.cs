@@ -7,7 +7,7 @@ internal static class GlobalSettingsMapper
 {
     internal static GlobalSettingsSummary ToSummary(GlobalSettings settings)
     {
-        AuthMode.OAuth? oauth = settings.AuthMode as AuthMode.OAuth;
+        AuthMode.OAuth? oauth = settings.AuthMode is AuthMode.OAuth o ? o : null;
 
         string authModeName = settings.AuthMode switch
         {

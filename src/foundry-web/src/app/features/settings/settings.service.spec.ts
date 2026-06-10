@@ -273,6 +273,12 @@ describe('SettingsService', () => {
     // Assert
     expect(req.request.method).toBe('GET');
     req.flush({
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
+      expiresAt: '2027-01-01T00:00:00Z',
+      subscriptionType: 'pro',
+    });
+    httpMock.expectOne('/api/settings/auth').flush({
       authMode: 'OAuth',
       maxConcurrent: 3,
       timeoutMinutes: 60,
@@ -290,6 +296,37 @@ describe('SettingsService', () => {
     // Assert — before flush
     expect(service.switching()).toBe(true);
     httpMock.expectOne('/api/settings/oauth/scan').flush({
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
+      expiresAt: '2027-01-01T00:00:00Z',
+      subscriptionType: 'pro',
+    });
+    httpMock.expectOne('/api/settings/auth').flush({
+      authMode: 'OAuth',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
+      expiresAt: '2027-01-01T00:00:00Z',
+      subscriptionType: 'pro',
+    });
+  });
+
+  it('should PUT to /api/settings/auth with oauth mode after scan succeeds', () => {
+    // Arrange / Act
+    service.scanOAuthCredentials();
+    httpMock.expectOne('/api/settings/oauth/scan').flush({
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
+      expiresAt: '2027-01-01T00:00:00Z',
+      subscriptionType: 'pro',
+    });
+    const putReq = httpMock.expectOne('/api/settings/auth');
+
+    // Assert
+    expect(putReq.request.method).toBe('PUT');
+    expect(putReq.request.body).toEqual({ mode: 'oauth' });
+    putReq.flush({
       authMode: 'OAuth',
       maxConcurrent: 3,
       timeoutMinutes: 60,
@@ -304,6 +341,12 @@ describe('SettingsService', () => {
     // Arrange / Act
     service.scanOAuthCredentials();
     httpMock.expectOne('/api/settings/oauth/scan').flush({
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
+      expiresAt: '2027-01-01T00:00:00Z',
+      subscriptionType: 'pro',
+    });
+    httpMock.expectOne('/api/settings/auth').flush({
       authMode: 'OAuth',
       maxConcurrent: 3,
       timeoutMinutes: 60,
@@ -319,7 +362,7 @@ describe('SettingsService', () => {
     expect(service.authSettings()!.mode).toBe('oauth');
   });
 
-  it('should set switchError when scanOAuthCredentials fails', () => {
+  it('should set switchError when scanOAuthCredentials scan fails', () => {
     // Arrange
     service.scanOAuthCredentials();
     httpMock.expectOne('/api/settings/oauth/scan').flush('Not Found', {
@@ -332,7 +375,7 @@ describe('SettingsService', () => {
     expect(service.switching()).toBe(false);
   });
 
-  it('should set switchError to a fixed user-facing string when scanOAuthCredentials fails', () => {
+  it('should set switchError to a fixed user-facing string when scan fails', () => {
     // Arrange
     service.scanOAuthCredentials();
     httpMock.expectOne('/api/settings/oauth/scan').flush('Not Found', {
@@ -342,6 +385,25 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.switchError()).toBe('Failed to switch to OAuth mode');
+  });
+
+  it('should set switchError when updateAuthMode call fails after scan', () => {
+    // Arrange
+    service.scanOAuthCredentials();
+    httpMock.expectOne('/api/settings/oauth/scan').flush({
+      accessTokenPresent: true,
+      refreshTokenPresent: true,
+      expiresAt: '2027-01-01T00:00:00Z',
+      subscriptionType: 'pro',
+    });
+    httpMock.expectOne('/api/settings/auth').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.switchError()).toBe('Failed to switch to OAuth mode');
+    expect(service.switching()).toBe(false);
   });
 
   // Cycle 8b: loadSettings resets stale signals

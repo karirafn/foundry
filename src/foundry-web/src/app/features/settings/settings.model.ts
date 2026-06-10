@@ -1,5 +1,12 @@
 export type AuthMode = 'api_key' | 'oauth';
 
+export interface OAuthScanResponse {
+  accessTokenPresent: boolean;
+  refreshTokenPresent: boolean;
+  expiresAt: string | null;
+  subscriptionType: string | null;
+}
+
 export interface OAuthCredentialInfo {
   accessTokenPresent: boolean;
   refreshTokenPresent: boolean;

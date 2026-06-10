@@ -1,6 +1,6 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { AuthMode, AuthSettings, OAuthCredentialInfo } from './settings.model';
+import { AuthMode, AuthSettings, OAuthCredentialInfo, OAuthScanResponse } from './settings.model';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
@@ -83,11 +83,20 @@ export class SettingsService {
     this._switchErrorSignal.set(null);
     this.switching.set(true);
 
-    this._http.get<GlobalSettingsResponse>('/api/settings/oauth/scan').subscribe({
-      next: (response) => {
-        this.authSettings.set(this._mapToAuthSettings(response));
-        this.switching.set(false);
-        this.saveSuccess.set(true);
+    this._http.get<OAuthScanResponse>('/api/settings/oauth/scan').subscribe({
+      next: () => {
+        this._http.put<GlobalSettingsResponse>('/api/settings/auth', { mode: 'oauth' }).subscribe({
+          next: (response) => {
+            this.authSettings.set(this._mapToAuthSettings(response));
+            this.switching.set(false);
+            this.saveSuccess.set(true);
+          },
+          error: (err: HttpErrorResponse) => {
+            console.error(err);
+            this._switchErrorSignal.set(SWITCH_OAUTH_ERROR);
+            this.switching.set(false);
+          },
+        });
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
