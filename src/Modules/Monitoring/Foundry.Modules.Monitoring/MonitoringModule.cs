@@ -2,7 +2,6 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
-using Foundry.Shared;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -12,12 +11,6 @@ namespace Foundry.Modules.Monitoring;
 
 public static class MonitoringModule
 {
-    public static IServiceCollection AddProviderAuth(this IServiceCollection services)
-    {
-        services.AddScoped<IProviderAuth, ConfigurationProviderAuth>();
-        return services;
-    }
-
     public static IServiceCollection AddMonitoringModule(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -32,7 +25,6 @@ public static class MonitoringModule
         services.AddScoped<IBranchProtectionValidator, BranchProtectionValidator>();
         services.AddScoped<RepositoryPoller>();
 
-        services.AddHostedService<MonitoringSeeder>();
         services.AddHostedService<MonitoringService>();
 
         return services;
