@@ -105,6 +105,10 @@
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-md);
     padding: var(--fd-spacing-xl);
+
+    & + & {
+      margin-top: var(--fd-spacing-lg);
+    }
   }
 
   &__section-title {

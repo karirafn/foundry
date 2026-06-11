@@ -6,12 +6,35 @@ import { SettingsPageComponent } from './settings-page';
 import { SettingsService } from '../settings.service';
 import { By } from '@angular/platform-browser';
 import { NgModel } from '@angular/forms';
+import { AccountService } from '../accounts/account.service';
+
+const API_KEY_RESPONSE = {
+  authMode: 'ApiKey',
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  accessTokenPresent: false,
+  refreshTokenPresent: false,
+  expiresAt: null,
+  subscriptionType: null,
+};
+
+const OAUTH_RESPONSE = {
+  authMode: 'OAuth',
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  accessTokenPresent: true,
+  refreshTokenPresent: true,
+  expiresAt: '2027-01-01T00:00:00Z',
+  subscriptionType: 'pro',
+};
 
 function setupComponent() {
+  TestBed.resetTestingModule();
   TestBed.configureTestingModule({
     imports: [SettingsPageComponent],
     providers: [
       SettingsService,
+      AccountService,
       provideHttpClient(),
       provideHttpClientTesting(),
       provideRouter([]),
@@ -21,6 +44,11 @@ function setupComponent() {
   const fixture = TestBed.createComponent(SettingsPageComponent);
   const httpMock = TestBed.inject(HttpTestingController);
   return { fixture, httpMock };
+}
+
+function flushInit(httpMock: HttpTestingController, settingsResponse: object = API_KEY_RESPONSE): void {
+  httpMock.expectOne('/api/accounts').flush([]);
+  httpMock.expectOne('/api/settings').flush(settingsResponse);
 }
 
 describe('SettingsPageComponent', () => {
@@ -33,15 +61,7 @@ describe('SettingsPageComponent', () => {
     // Arrange / Act
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
 
     // Assert
     expect(fixture.componentInstance).toBeTruthy();
@@ -53,15 +73,7 @@ describe('SettingsPageComponent', () => {
 
     // Act
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -79,16 +91,9 @@ describe('SettingsPageComponent', () => {
     fixture.detectChanges();
 
     // Assert — the HTTP call proves loadSettings was called
+    httpMock.expectOne('/api/accounts').flush([]);
     const req = httpMock.expectOne('/api/settings');
-    req.flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    req.flush(API_KEY_RESPONSE);
   });
 
   // Cycle 3: renders Worker Authentication section
@@ -96,21 +101,14 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const section = el.querySelector('.settings-page__section-title');
-    expect(section?.textContent).toContain('Worker Authentication');
+    const titles = Array.from(el.querySelectorAll('.settings-page__section-title'));
+    const workerTitle = titles.find(t => t.textContent?.includes('Worker Authentication'));
+    expect(workerTitle).toBeTruthy();
   });
 
   // Cycle 4: shows API key form when mode is api_key
@@ -118,15 +116,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -139,15 +129,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
+    flushInit(httpMock, OAUTH_RESPONSE);
     fixture.detectChanges();
 
     // Assert
@@ -161,15 +143,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
+    flushInit(httpMock, OAUTH_RESPONSE);
     fixture.detectChanges();
 
     // Assert
@@ -183,6 +157,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
+    httpMock.expectOne('/api/accounts').flush([]);
     httpMock.expectOne('/api/settings').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -200,15 +175,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -222,15 +189,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -253,30 +212,14 @@ describe('SettingsPageComponent', () => {
     expect(loadingEl).toBeTruthy();
     expect(loadingEl?.getAttribute('role')).toBe('status');
 
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
   });
 
   it('should hide the loading indicator after settings load', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
 
     // Act
     fixture.detectChanges();
@@ -292,15 +235,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -316,15 +251,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 5,
-      timeoutMinutes: 90,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock, { ...API_KEY_RESPONSE, maxConcurrent: 5, timeoutMinutes: 90 });
 
     // Act
     fixture.detectChanges();
@@ -349,15 +276,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     const service = TestBed.inject(SettingsService);
@@ -389,15 +308,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Act
@@ -426,15 +337,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Act
@@ -459,15 +362,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Act — trigger save (in-flight, not yet complete)
@@ -497,15 +392,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
 
     // Act
     fixture.detectChanges();
@@ -522,15 +409,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Act — trigger a save error
@@ -549,5 +428,61 @@ describe('SettingsPageComponent', () => {
     expect(input.getAttribute('aria-invalid')).toBe('true');
     const errorEl = el.querySelector('#api-key-error');
     expect(errorEl).toBeTruthy();
+  });
+
+  // Cycle 12: Accounts section is rendered above Worker Authentication
+  it('should render the Accounts section', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const titles = Array.from(el.querySelectorAll('.settings-page__section-title'));
+    const accountsTitle = titles.find(t => t.textContent?.includes('Accounts'));
+    expect(accountsTitle).toBeTruthy();
+  });
+
+  it('should render the Accounts section above the Worker Authentication section', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const titles = Array.from(el.querySelectorAll('.settings-page__section-title'));
+    const accountsIndex = titles.findIndex(t => t.textContent?.includes('Accounts'));
+    const workerIndex = titles.findIndex(t => t.textContent?.includes('Worker Authentication'));
+    expect(accountsIndex).toBeLessThan(workerIndex);
+  });
+
+  it('should call loadAccounts on initialization', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — the HTTP call proves loadAccounts was called
+    const req = httpMock.expectOne('/api/accounts');
+    req.flush([]);
+    httpMock.expectOne('/api/settings').flush(API_KEY_RESPONSE);
+  });
+
+  it('should render fd-account-list component', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const accountList = el.querySelector('fd-account-list');
+    expect(accountList).toBeTruthy();
   });
 });

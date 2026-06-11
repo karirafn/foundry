@@ -1,8 +1,13 @@
-import { Component, ElementRef, OnInit, ViewChild, WritableSignal, afterNextRender, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, Signal, ViewChild, WritableSignal, afterNextRender, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
 import { AuthMode } from '../settings.model';
+import { AccountService } from '../accounts/account.service';
+import { AccountSummary } from '../accounts/account.model';
+import { AccountListComponent } from '../accounts/account-list/account-list';
+
+type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account: AccountSummary };
 
 const MAX_CONCURRENT_MIN = 1;
 const MAX_CONCURRENT_MAX = 20;
@@ -12,7 +17,7 @@ const TIMEOUT_MINUTES_MAX = 1440;
 @Component({
   selector: 'fd-settings-page',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, AccountListComponent],
   template: `
     <div class="settings-page">
       <header class="settings-page__header">
@@ -40,6 +45,27 @@ const TIMEOUT_MINUTES_MAX = 1440;
 
       @if (!settingsService.loading() && !settingsService.loadError()) {
         <div class="settings-page__sections">
+          <section class="settings-page__section settings-page__section--accounts">
+            <h2 class="settings-page__section-title">Accounts</h2>
+            <p class="settings-page__section-description">
+              Manage provider accounts for repository monitoring.
+            </p>
+
+            @switch (_accountView().kind) {
+              @case ('list') {
+                <fd-account-list
+                  [accounts]="accountService.accounts()"
+                  [loading]="accountService.loading()"
+                  [error]="_accountError()"
+                  (add)="onAddAccount()"
+                  (edit)="onEditAccount($event)"
+                  (delete)="onDeleteAccount($event)"
+                  (retry)="accountService.loadAccounts()"
+                />
+              }
+            }
+          </section>
+
           <section class="settings-page__section">
             <h2 class="settings-page__section-title" #sectionHeading tabindex="-1">Worker Authentication</h2>
             <p class="settings-page__section-description">
@@ -262,6 +288,7 @@ const TIMEOUT_MINUTES_MAX = 1440;
 })
 export class SettingsPageComponent implements OnInit {
   protected readonly settingsService = inject(SettingsService);
+  protected readonly accountService = inject(AccountService);
 
   @ViewChild('sectionHeading') private readonly _sectionHeading?: ElementRef<HTMLElement>;
 
@@ -272,12 +299,15 @@ export class SettingsPageComponent implements OnInit {
 
   protected readonly _selectedMode: WritableSignal<AuthMode> = signal('api_key');
   protected readonly _showApiKey: WritableSignal<boolean> = signal(false);
+  protected readonly _accountView: WritableSignal<AccountView> = signal({ kind: 'list' });
   private _modeInitialized = false;
   protected _apiKeyValue = '';
 
   protected readonly _maxConcurrentValue: WritableSignal<number> = signal(MAX_CONCURRENT_MIN);
   protected readonly _timeoutMinutesValue: WritableSignal<number> = signal(TIMEOUT_MINUTES_MIN);
   private _limitsInitialized = false;
+
+  protected readonly _accountError: Signal<string | null> = computed(() => null);
 
   constructor() {
     effect(() => {
@@ -300,6 +330,7 @@ export class SettingsPageComponent implements OnInit {
 
   ngOnInit(): void {
     this.settingsService.loadSettings();
+    this.accountService.loadAccounts();
   }
 
   onModeChange(mode: AuthMode): void {
@@ -330,5 +361,19 @@ export class SettingsPageComponent implements OnInit {
 
   saveLimits(): void {
     this.settingsService.updateWorkerLimits(this._maxConcurrentValue(), this._timeoutMinutesValue());
+  }
+
+  onAddAccount(): void {
+    this._accountView.set({ kind: 'add' });
+  }
+
+  onEditAccount(account: AccountSummary): void {
+    this._accountView.set({ kind: 'edit', account });
+  }
+
+  onDeleteAccount(account: AccountSummary): void {
+    if (window.confirm(`Delete account "${account.name}"?`)) {
+      this.accountService.deleteAccount(account.id);
+    }
   }
 }
