@@ -1,5 +1,5 @@
 @if (activeNotifications().length > 0) {
-  <div class="system-banner" role="region" aria-label="System notifications">
+  <div class="system-banner" role="region" aria-label="System notifications" tabindex="0">
     @for (notification of activeNotifications(); track notification.category) {
       <div class="system-banner__bar" role="alert">
         <svg

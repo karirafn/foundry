@@ -252,17 +252,43 @@ public sealed class ValidateAsync
             () => result.IsValid.ShouldBeTrue(),
             () => result.PassedOptimistically.ShouldBeTrue());
     }
+
+    [Fact]
+    public async Task WhenApiKeyRequestTimesOut_ReturnsValidOptimistic()
+    {
+        // Arrange
+        FakeGlobalSettingsQueries queries = new()
+        {
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null),
+            AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
+        };
+        FakeAnthropicApiHandler handler = new(throwTimeoutError: true);
+        AnthropicAuthValidator sut = BuildSut(handler: handler, queries: queries);
+
+        // Act
+        AuthValidationResult result = await sut.ValidateAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.IsValid.ShouldBeTrue(),
+            () => result.PassedOptimistically.ShouldBeTrue());
+    }
 }
 
 internal sealed class FakeAnthropicApiHandler : DelegatingHandler
 {
     private readonly HttpStatusCode _statusCode;
     private readonly bool _throwNetworkError;
+    private readonly bool _throwTimeoutError;
 
-    public FakeAnthropicApiHandler(HttpStatusCode statusCode = HttpStatusCode.OK, bool throwNetworkError = false)
+    public FakeAnthropicApiHandler(
+        HttpStatusCode statusCode = HttpStatusCode.OK,
+        bool throwNetworkError = false,
+        bool throwTimeoutError = false)
     {
         _statusCode = statusCode;
         _throwNetworkError = throwNetworkError;
+        _throwTimeoutError = throwTimeoutError;
     }
 
     protected override Task<HttpResponseMessage> SendAsync(
@@ -272,6 +298,11 @@ internal sealed class FakeAnthropicApiHandler : DelegatingHandler
         if (_throwNetworkError)
         {
             throw new HttpRequestException("Simulated network error");
+        }
+
+        if (_throwTimeoutError)
+        {
+            throw new TaskCanceledException("timeout", null, new CancellationTokenSource().Token);
         }
 
         return Task.FromResult(new HttpResponseMessage(_statusCode));
