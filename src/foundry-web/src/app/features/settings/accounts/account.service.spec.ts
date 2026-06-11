@@ -538,4 +538,39 @@ describe('AccountService', () => {
     // Assert
     expect(service.validating()).toBe(false);
   });
+
+  it('should set validationError when validateToken fails', () => {
+    // Arrange
+    const request = { token: 'bad', baseUrl: 'https://api.github.com' };
+    service.validateToken(request);
+
+    // Act
+    httpMock.expectOne('/api/accounts/validate-token').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Assert
+    expect(service.validationError()).not.toBeNull();
+  });
+
+  it('should clear validationError at start of validateToken', () => {
+    // Arrange — first call that fails
+    service.validateToken({ token: 'bad', baseUrl: 'https://api.github.com' });
+    httpMock.expectOne('/api/accounts/validate-token').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Act — second call clears error immediately
+    service.validateToken({ token: 'good', baseUrl: 'https://api.github.com' });
+
+    // Assert — error is cleared before response
+    expect(service.validationError()).toBeNull();
+    httpMock.expectOne('/api/accounts/validate-token').flush({
+      isValid: true,
+      isAuthFailure: false,
+      missingScopes: [],
+    });
+  });
 });
