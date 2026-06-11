@@ -4,6 +4,8 @@ using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -44,6 +46,8 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
         services.AddScoped<IBranchProtectionValidator, NullBranchProtectionValidator>();
         services.AddScoped<IIssueBroadcaster, NullIssueBroadcaster>();
+        services.AddScoped<IAuthValidator, NullAuthValidator>();
+        services.AddScoped<ISystemNotificationBroadcaster, NullSystemNotificationBroadcaster>();
         services.AddIssuesModule();
 
         _serviceProvider = services.BuildServiceProvider();
@@ -337,5 +341,17 @@ public sealed class AddIssuesModule : IAsyncDisposable
             => Task.FromResult(
                 Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
                     Array.Empty<EligibilityViolationInfo>()));
+    }
+
+    private sealed class NullAuthValidator : IAuthValidator
+    {
+        public Task<AuthValidationResult> ValidateAsync(CancellationToken cancellationToken)
+            => Task.FromResult(AuthValidationResult.Valid());
+    }
+
+    private sealed class NullSystemNotificationBroadcaster : ISystemNotificationBroadcaster
+    {
+        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

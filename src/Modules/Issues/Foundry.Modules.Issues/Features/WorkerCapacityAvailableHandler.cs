@@ -2,6 +2,8 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -17,10 +19,28 @@ internal sealed class WorkerCapacityAvailableHandler(
     IIntegrationEventDispatcher integrationEventDispatcher,
     IBranchProtectionValidator branchProtectionValidator,
     IDomainEventDispatcher domainEventDispatcher,
+    IAuthValidator authValidator,
+    ISystemNotificationBroadcaster systemNotificationBroadcaster,
     ILogger<WorkerCapacityAvailableHandler> logger) : IIntegrationEventHandler<WorkerCapacityAvailable>
 {
+    private const string ClaudeAuthCategory = "claude-auth";
+
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
     {
+        AuthValidationResult authResult = await authValidator.ValidateAsync(cancellationToken);
+
+        if (!authResult.IsValid)
+        {
+            await systemNotificationBroadcaster.SendAsync(
+                new SystemNotification(ClaudeAuthCategory, true, authResult.ErrorMessage!),
+                cancellationToken);
+            return;
+        }
+
+        await systemNotificationBroadcaster.SendAsync(
+            new SystemNotification(ClaudeAuthCategory, false, ""),
+            cancellationToken);
+
         // Claim priority: revision queued first (addressing review feedback takes precedence),
         // then continuation queued (resuming interrupted work), then fresh queued issues.
         RevisionQueuedIssue? revisionQueued = await db.Set<RevisionQueuedIssue>()
