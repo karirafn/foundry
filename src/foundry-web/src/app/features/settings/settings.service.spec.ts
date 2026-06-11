@@ -436,6 +436,185 @@ describe('SettingsService', () => {
     });
   });
 
+  // Cycle 10: loadSettings populates workerLimits signal
+  it('should populate workerLimits from loadSettings response', () => {
+    // Arrange / Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 5,
+      timeoutMinutes: 90,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+
+    // Assert
+    const limits = service.workerLimits();
+    expect(limits).not.toBeNull();
+    expect(limits!.maxConcurrent).toBe(5);
+    expect(limits!.timeoutMinutes).toBe(90);
+  });
+
+  it('should start with null workerLimits', () => {
+    // Arrange / Act — no calls yet
+
+    // Assert
+    expect(service.workerLimits()).toBeNull();
+  });
+
+  // Cycle 11: updateWorkerLimits sends PUT and updates signal on success
+  it('should PUT to /api/settings/limits when updateWorkerLimits is called', () => {
+    // Arrange / Act
+    service.updateWorkerLimits(3, 120);
+    const req = httpMock.expectOne('/api/settings/limits');
+
+    // Assert
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ maxConcurrent: 3, timeoutMinutes: 120 });
+    req.flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 120,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+  });
+
+  it('should set savingLimits to true while updateWorkerLimits is in flight', () => {
+    // Arrange / Act
+    service.updateWorkerLimits(3, 120);
+
+    // Assert — before flush
+    expect(service.savingLimits()).toBe(true);
+    httpMock.expectOne('/api/settings/limits').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 120,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+  });
+
+  it('should update workerLimits and set saveLimitsSuccess to true after updateWorkerLimits succeeds', () => {
+    // Arrange
+    service.updateWorkerLimits(3, 120);
+    httpMock.expectOne('/api/settings/limits').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 120,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+
+    // Assert
+    expect(service.savingLimits()).toBe(false);
+    expect(service.saveLimitsSuccess()).toBe(true);
+    expect(service.saveLimitsError()).toBeNull();
+    expect(service.workerLimits()!.maxConcurrent).toBe(3);
+    expect(service.workerLimits()!.timeoutMinutes).toBe(120);
+  });
+
+  // Cycle 12: updateWorkerLimits sets error signal on failure
+  it('should set saveLimitsError when updateWorkerLimits fails', () => {
+    // Arrange
+    service.updateWorkerLimits(3, 120);
+    httpMock.expectOne('/api/settings/limits').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Assert
+    expect(service.saveLimitsError()).not.toBeNull();
+    expect(service.savingLimits()).toBe(false);
+    expect(service.saveLimitsSuccess()).toBe(false);
+  });
+
+  it('should set saveLimitsError to a fixed user-facing string when updateWorkerLimits fails', () => {
+    // Arrange
+    service.updateWorkerLimits(3, 120);
+    httpMock.expectOne('/api/settings/limits').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Assert
+    expect(service.saveLimitsError()).toBe('Failed to save worker limits');
+  });
+
+  // Cycle 13: signal state transitions for limits
+  it('should clear saveLimitsError and saveLimitsSuccess when updateWorkerLimits is called', () => {
+    // Arrange — put signals into dirty state
+    service.updateWorkerLimits(1, 60);
+    httpMock.expectOne('/api/settings/limits').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(service.saveLimitsError()).not.toBeNull();
+
+    // Act — call again
+    service.updateWorkerLimits(2, 90);
+
+    // Assert — cleared before request completes
+    expect(service.saveLimitsError()).toBeNull();
+    expect(service.saveLimitsSuccess()).toBe(false);
+    expect(service.savingLimits()).toBe(true);
+    httpMock.expectOne('/api/settings/limits').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 2,
+      timeoutMinutes: 90,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+  });
+
+  it('should reset limits signals in loadSettings', () => {
+    // Arrange — put signals into dirty state via public API
+    service.updateWorkerLimits(1, 60);
+    httpMock.expectOne('/api/settings/limits').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 1,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    // saveLimitsSuccess is now true; force an error state for saveLimitsError
+    service.updateWorkerLimits(99999, 60);
+    httpMock.expectOne('/api/settings/limits').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Act
+    service.loadSettings();
+
+    // Assert — cleared before the response arrives
+    expect(service.saveLimitsSuccess()).toBe(false);
+    expect(service.savingLimits()).toBe(false);
+    expect(service.saveLimitsError()).toBeNull();
+
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 1,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+  });
+
   // Cycle 9: updateAuthMode updates authSettings on success
   it('should update authSettings signal after updateAuthMode succeeds', () => {
     // Arrange — first load settings

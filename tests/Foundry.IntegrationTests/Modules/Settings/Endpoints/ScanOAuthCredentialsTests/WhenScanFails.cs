@@ -20,7 +20,7 @@ public sealed class WhenScanFails : IAsyncDisposable
 
     public WhenScanFails()
     {
-        _factory = new FoundryWebAppFactory(services =>
+        _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IOAuthCredentialScanner>();
             services.AddScoped<IOAuthCredentialScanner>(_ => new StubOAuthCredentialScanner(

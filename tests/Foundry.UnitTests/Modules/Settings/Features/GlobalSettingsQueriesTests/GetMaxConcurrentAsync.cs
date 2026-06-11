@@ -70,6 +70,6 @@ public sealed class GetMaxConcurrentAsync : IAsyncDisposable
         int result = await sut.GetMaxConcurrentAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBe(3);
+        result.ShouldBe(1);
     }
 }

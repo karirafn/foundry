@@ -22,6 +22,7 @@ public static class SettingsModule
         services.AddQueryHandler<GetSettings.Query, GlobalSettingsSummary, GetSettings.Handler>();
         services.AddQueryHandler<ScanOAuthCredentials.Query, ScanOAuthCredentials.OAuthScanResponse, ScanOAuthCredentials.Handler>();
         services.AddCommandHandler<UpdateAuthMode.Command, UpdateAuthMode.Response, UpdateAuthMode.Handler, UpdateAuthMode.Validator>();
+        services.AddCommandHandler<UpdateWorkerLimits.Command, GlobalSettingsSummary, UpdateWorkerLimits.Handler, UpdateWorkerLimits.Validator>();
 
         return services;
     }

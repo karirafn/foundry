@@ -12,14 +12,14 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.GetSettingsTests;
+namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateWorkerLimitsTests;
 
-public sealed class WhenSettingsExist : IAsyncDisposable
+public sealed class WhenValuesAreValid : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenSettingsExist()
+    public WhenValuesAreValid()
     {
         _factory = new FoundryWebAppFactory();
         _client = _factory.CreateClient();
@@ -43,10 +43,39 @@ public sealed class WhenSettingsExist : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithDefaultValues()
+    public async Task ReturnsOkWithUpdatedLimits()
     {
         // Arrange
         await SeedDefaultSettingsAsync();
+        object body = new { maxConcurrent = 5, timeoutMinutes = 90 };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri("/api/settings/limits", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        GlobalSettingsSummary? summary = await response.Content
+            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+        summary.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.MaxConcurrent.ShouldBe(5),
+            () => summary.TimeoutMinutes.ShouldBe(90));
+    }
+
+    [Fact]
+    public async Task SubsequentGetReturnsUpdatedLimits()
+    {
+        // Arrange
+        await SeedDefaultSettingsAsync();
+        object body = new { maxConcurrent = 10, timeoutMinutes = 180 };
+
+        await _client.PutAsJsonAsync(
+            new Uri("/api/settings/limits", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(
@@ -59,30 +88,7 @@ public sealed class WhenSettingsExist : IAsyncDisposable
             .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
-            () => summary.MaxConcurrent.ShouldBe(1),
-            () => summary.TimeoutMinutes.ShouldBe(120),
-            () => summary.AccessTokenPresent.ShouldBeFalse(),
-            () => summary.RefreshTokenPresent.ShouldBeFalse(),
-            () => summary.ExpiresAt.ShouldBeNull(),
-            () => summary.SubscriptionType.ShouldBeNull());
-    }
-
-    [Fact]
-    public async Task ReturnsApiKeyAuthModeByDefault()
-    {
-        // Arrange
-        await SeedDefaultSettingsAsync();
-
-        // Act
-        HttpResponseMessage response = await _client.GetAsync(
-            new Uri("/api/settings", UriKind.Relative),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
-        summary.ShouldNotBeNull();
-        summary.AuthMode.ShouldBe("ApiKey");
+            () => summary.MaxConcurrent.ShouldBe(10),
+            () => summary.TimeoutMinutes.ShouldBe(180));
     }
 }

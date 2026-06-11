@@ -163,6 +163,11 @@
     color: var(--fd-text-secondary);
   }
 
+  &__field-hint {
+    color: var(--fd-text-tertiary);
+    font-size: 0.75rem;
+  }
+
   &__api-key-wrapper {
     display: flex;
     align-items: center;
@@ -366,6 +371,50 @@
     &:not(:disabled):hover {
       background: var(--fd-bg-card-hover);
       border-color: var(--fd-text-secondary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
+
+  // Sections wrapper
+  &__sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xl);
+  }
+
+  // Worker Limits form
+  &__limits-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-md);
+  }
+
+  &__limits-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--fd-spacing-md);
+
+    @media (max-width: 30rem) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__number-input {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    min-height: 40px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    width: 100%;
+
+    &:focus {
+      border-color: var(--fd-text-link);
     }
 
     &:focus-visible {
