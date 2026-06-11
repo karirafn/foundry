@@ -1,7 +1,7 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
-import { SignalRService } from '../../core/services/signalr.service';
+import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueSummary, LIVE_STATES } from './issue.model';
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
@@ -11,7 +11,7 @@ const SAFE_ID_RE = /^[\w-]+$/;
 @Injectable({ providedIn: 'root' })
 export class IssueService {
   private readonly _http = inject(HttpClient);
-  private readonly _signalR = inject(SignalRService);
+  private readonly _signalR = inject(IssueSignalRService);
 
   readonly issues: WritableSignal<IssueSummary[]> = signal([]);
   readonly expandedIssueId: WritableSignal<string | null> = signal(null);

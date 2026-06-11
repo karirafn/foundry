@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { IssueService } from '../issue.service';
-import { SignalRService } from '../../../core/services/signalr.service';
+import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { IssueCardComponent } from '../issue-card/issue-card';
 import { IssueDetailComponent } from '../issue-detail/issue-detail';
 import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
@@ -73,7 +73,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 })
 export class IssueListComponent implements OnInit {
   protected readonly issueService = inject(IssueService);
-  protected readonly signalR = inject(SignalRService);
+  protected readonly signalR = inject(IssueSignalRService);
 
   ngOnInit(): void {
     this.issueService.loadIssues();
