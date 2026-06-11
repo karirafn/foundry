@@ -21,7 +21,7 @@ public sealed class WhenTokenIsUnauthorized : IAsyncDisposable
     public WhenTokenIsUnauthorized()
     {
         ValidateToken.Response authFailureResponse = new(IsValid: false, IsAuthFailure: true, MissingScopes: []);
-        _factory = new FoundryWebAppFactory(services =>
+        _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
