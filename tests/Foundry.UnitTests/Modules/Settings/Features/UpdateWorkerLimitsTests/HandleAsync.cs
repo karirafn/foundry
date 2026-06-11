@@ -113,4 +113,30 @@ public sealed class HandleAsync : IAsyncDisposable
             result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
         failure.Error.Code.ShouldBe(SettingsErrors.NotFoundCode);
     }
+
+    [Fact]
+    public async Task WhenUpdateLimitsReturnsDomainError_ReturnsDomainErrorWithoutSaving()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateWorkerLimits.Handler sut = new(dbContext);
+        UpdateWorkerLimits.Command command = new(MaxConcurrent: 0, TimeoutMinutes: 60);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<GlobalSettingsSummary>.Failure failure =
+            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.InvalidMaxConcurrentCode);
+    }
 }

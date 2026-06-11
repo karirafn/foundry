@@ -4,10 +4,10 @@ namespace Foundry.Modules.Settings.Domain;
 
 public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 {
-    private const int MinMaxConcurrent = 1;
-    private const int MaxMaxConcurrent = 20;
-    private const int MinTimeoutMinutes = 1;
-    private const int MaxTimeoutMinutes = 1440;
+    internal const int MinMaxConcurrent = 1;
+    internal const int MaxMaxConcurrent = 20;
+    internal const int MinTimeoutMinutes = 1;
+    internal const int MaxTimeoutMinutes = 1440;
     internal const int DefaultMaxConcurrent = 1;
     internal const int DefaultTimeoutMinutes = 120;
 

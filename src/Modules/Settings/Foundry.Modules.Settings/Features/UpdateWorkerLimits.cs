@@ -12,23 +12,20 @@ namespace Foundry.Modules.Settings.Features;
 
 internal static class UpdateWorkerLimits
 {
-    private const int MinMaxConcurrent = 1;
-    private const int MaxMaxConcurrent = 20;
-    private const int MinTimeoutMinutes = 1;
-    private const int MaxTimeoutMinutes = 1440;
-
     internal sealed record Command(int MaxConcurrent, int TimeoutMinutes) : ICommand<GlobalSettingsSummary>;
 
     internal sealed class Validator : ICommandValidator<Command>
     {
         public Result Validate(Command command)
         {
-            if (command.MaxConcurrent < MinMaxConcurrent || command.MaxConcurrent > MaxMaxConcurrent)
+            if (command.MaxConcurrent < GlobalSettings.MinMaxConcurrent
+                || command.MaxConcurrent > GlobalSettings.MaxMaxConcurrent)
             {
                 return SettingsErrors.InvalidMaxConcurrent(command.MaxConcurrent);
             }
 
-            if (command.TimeoutMinutes < MinTimeoutMinutes || command.TimeoutMinutes > MaxTimeoutMinutes)
+            if (command.TimeoutMinutes < GlobalSettings.MinTimeoutMinutes
+                || command.TimeoutMinutes > GlobalSettings.MaxTimeoutMinutes)
             {
                 return SettingsErrors.InvalidTimeout(command.TimeoutMinutes);
             }
@@ -51,7 +48,12 @@ internal static class UpdateWorkerLimits
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            settings.UpdateLimits(command.MaxConcurrent, command.TimeoutMinutes);
+            Result updateResult = settings.UpdateLimits(command.MaxConcurrent, command.TimeoutMinutes);
+            if (updateResult is Result.Failure failure)
+            {
+                return Result<GlobalSettingsSummary>.Fail(failure.Error);
+            }
+
             await dbContext.SaveChangesAsync(cancellationToken);
 
             return GlobalSettingsMapper.ToSummary(settings);
