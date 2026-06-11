@@ -164,7 +164,7 @@ public sealed class ValidateTokenAsync
     }
 
     [Fact]
-    public async Task WhenScopesHeaderIsAbsent_ReturnsInvalidWithMissingRepoScope()
+    public async Task WhenScopesHeaderIsAbsent_ReturnsValidForFineGrainedToken()
     {
         // Arrange
         string json = """{ "login": "octocat" }""";
@@ -182,7 +182,7 @@ public sealed class ValidateTokenAsync
         result.IsSuccess.ShouldBeTrue();
         Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
         success.Value.ShouldSatisfyAllConditions(
-            () => success.Value.IsValid.ShouldBeFalse(),
-            () => success.Value.MissingScopes.ShouldContain("repo"));
+            () => success.Value.IsValid.ShouldBeTrue(),
+            () => success.Value.MissingScopes.ShouldBeEmpty());
     }
 }

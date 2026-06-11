@@ -441,9 +441,10 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             return Result<TokenValidationResult>.Fail(ErrorFromNonSuccess(response));
         }
 
-        IEnumerable<string> scopeValues = response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? values)
-            ? values
-            : [];
+        if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
+        {
+            return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated([]));
+        }
 
         IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
 

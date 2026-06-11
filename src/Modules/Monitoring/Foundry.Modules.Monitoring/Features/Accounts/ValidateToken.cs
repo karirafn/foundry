@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
@@ -50,8 +51,9 @@ internal static class ValidateToken
                         return Results.BadRequest("Invalid base URL.") as IResult;
                     }
 
+                    Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
                     Result<Response> result = await handler.HandleAsync(
-                        new Query(body.Token, baseUrl),
+                        new Query(body.Token, apiBaseUrl),
                         cancellationToken);
 
                     return result.Match<IResult>(
