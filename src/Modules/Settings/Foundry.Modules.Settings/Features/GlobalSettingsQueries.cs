@@ -32,7 +32,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return settings.AuthMode switch
         {
             AuthMode.ApiKey apiKey => ("ANTHROPIC_API_KEY", apiKey.Key),
-            AuthMode.OAuth oauth => ("ANTHROPIC_AUTH_TOKEN", oauth.AccessToken),
+            AuthMode.OAuth oauth => ("CLAUDE_CODE_OAUTH_TOKEN", oauth.AccessToken),
             _ => null,
         };
     }
