@@ -30,6 +30,8 @@ public static class MonitoringModule
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<AccountSummary>, GetAccounts.Handler>();
         services.AddCommandHandler<CreateAccount.Command, AccountSummary, CreateAccount.Handler, CreateAccount.Validator>();
+        services.AddCommandHandler<UpdateAccount.Command, AccountSummary, UpdateAccount.Handler, UpdateAccount.Validator>();
+        services.AddCommandHandler<DeleteAccount.Command, bool, DeleteAccount.Handler>();
         services.AddQueryHandler<ValidateToken.Query, ValidateToken.Response, ValidateToken.Handler>();
 
         services.AddHostedService<MonitoringService>();

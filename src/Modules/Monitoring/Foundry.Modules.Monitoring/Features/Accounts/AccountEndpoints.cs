@@ -13,6 +13,8 @@ internal static class AccountEndpoints
 
         GetAccounts.Endpoint.Map(group);
         CreateAccount.Endpoint.Map(group);
+        UpdateAccount.Endpoint.Map(group);
+        DeleteAccount.Endpoint.Map(group);
         ValidateToken.Endpoint.Map(group);
 
         return routes;
