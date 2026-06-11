@@ -7,14 +7,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
 
-internal sealed class EncryptedStringConverter : ValueConverter<string, string>
+internal sealed class EncryptedStringConverter : ValueConverter<string?, string?>
 {
     private const string ProtectorPurpose = "Foundry.Monitoring.Encryption";
 
     internal EncryptedStringConverter(IDataProtectionProvider provider, ILogger<EncryptedStringConverter>? logger = null)
         : base(
-            value => Protect(provider.CreateProtector(ProtectorPurpose), value),
-            protectedValue => Unprotect(
+            value => value == null ? null : Protect(provider.CreateProtector(ProtectorPurpose), value),
+            protectedValue => protectedValue == null ? null : Unprotect(
                 provider.CreateProtector(ProtectorPurpose),
                 protectedValue,
                 logger ?? NullLogger<EncryptedStringConverter>.Instance))

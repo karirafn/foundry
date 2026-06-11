@@ -38,9 +38,7 @@ internal sealed class AccountConfiguration(
         EncryptedStringConverter encryptedConverter = new(dataProtectionProvider, encryptedStringConverterLogger);
 
         builder.Property(a => a.Token)
-            .HasConversion(
-                token => token == null ? null : encryptedConverter.ConvertToProviderExpression.Compile()(token),
-                stored => stored == null ? null : encryptedConverter.ConvertFromProviderExpression.Compile()(stored))
+            .HasConversion(encryptedConverter)
             .HasMaxLength(TokenMaxLength)
             .IsUnicode(false)
             .HasColumnName("token");
