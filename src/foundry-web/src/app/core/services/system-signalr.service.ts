@@ -42,6 +42,8 @@ export class SystemSignalRService {
       });
     });
 
-    hub.start().catch(() => {});
+    hub.start().catch(() => {
+      console.warn('[SystemSignalRService] Failed to connect to /hubs/system');
+    });
   }
 }

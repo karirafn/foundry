@@ -6,6 +6,8 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  max-height: 30vh;
+  overflow-y: auto;
 }
 
 .system-banner__bar {
