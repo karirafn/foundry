@@ -45,7 +45,7 @@ internal static class CreateAccount
                 return new Error(TokenEmptyCode, "Token must not be empty.");
             }
 
-            if (command.ProviderType != GitHubProviderType)
+            if (!string.Equals(command.ProviderType, GitHubProviderType, StringComparison.OrdinalIgnoreCase))
             {
                 return new Error(InvalidProviderTypeCode, $"Provider type '{command.ProviderType}' is not supported. Only 'github' is supported.");
             }

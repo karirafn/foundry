@@ -68,6 +68,28 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenProviderTypeIsMixedCase_ReturnsCreated()
+    {
+        // Arrange
+        object body = new
+        {
+            name = "My GitHub Mixed",
+            providerType = "GitHub",
+            baseUrl = "https://github.com",
+            token = "ghp_test_token",
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
     public async Task AppearsInSubsequentGetAccounts()
     {
         // Arrange
