@@ -28,6 +28,8 @@ public static class MonitoringModule
         services.AddScoped<IBranchProtectionValidator, BranchProtectionValidator>();
         services.AddScoped<RepositoryPoller>();
 
+        services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<AccountSummary>, GetAccounts.Handler>();
+        services.AddCommandHandler<CreateAccount.Command, AccountSummary, CreateAccount.Handler, CreateAccount.Validator>();
         services.AddQueryHandler<ValidateToken.Query, ValidateToken.Response, ValidateToken.Handler>();
 
         services.AddHostedService<MonitoringService>();

@@ -11,6 +11,8 @@ internal static class AccountEndpoints
         RouteGroupBuilder group = routes.MapGroup("/api/accounts")
             .WithTags("Accounts");
 
+        GetAccounts.Endpoint.Map(group);
+        CreateAccount.Endpoint.Map(group);
         ValidateToken.Endpoint.Map(group);
 
         return routes;
