@@ -72,8 +72,8 @@ internal static class UpdateAccount
 
             if (command.Token is not null)
             {
-                GitHubAccount temp = GitHubAccount.Create(account.Name, command.Token, baseUrl);
-                ValidateToken.Query tokenQuery = new(command.Token, temp.ApiBaseUrl);
+                Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
+                ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl);
                 Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
                     tokenQuery,
                     cancellationToken);

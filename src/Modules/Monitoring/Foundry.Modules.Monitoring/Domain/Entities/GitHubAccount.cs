@@ -6,9 +6,12 @@ public sealed class GitHubAccount : Account
 {
     private static readonly Uri GitHubApiBaseUrl = new("https://api.github.com");
 
-    public override Uri ApiBaseUrl => BaseUrl.Host == "github.com"
-        ? GitHubApiBaseUrl
-        : new Uri(BaseUrl.ToString().TrimEnd('/') + "/api/v3/");
+    public override Uri ApiBaseUrl => DeriveApiBaseUrl(BaseUrl);
+
+    public static Uri DeriveApiBaseUrl(Uri baseUrl) =>
+        baseUrl.Host == "github.com"
+            ? GitHubApiBaseUrl
+            : new Uri(baseUrl.ToString().TrimEnd('/') + "/api/v3/");
 
     // Private parameterless constructor for EF Core materialization.
     private GitHubAccount() : base(AccountId.New())

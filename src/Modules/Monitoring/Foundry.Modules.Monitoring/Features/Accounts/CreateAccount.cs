@@ -73,9 +73,9 @@ internal static class CreateAccount
             }
 
             Uri baseUrl = new(command.BaseUrl);
-            GitHubAccount temp = GitHubAccount.Create(command.Name, command.Token, baseUrl);
+            Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
 
-            ValidateToken.Query tokenQuery = new(command.Token, temp.ApiBaseUrl);
+            ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl);
             Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
                 tokenQuery,
                 cancellationToken);
