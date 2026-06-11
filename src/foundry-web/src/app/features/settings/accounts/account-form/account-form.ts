@@ -8,6 +8,7 @@ import {
   Signal,
   ViewChild,
   WritableSignal,
+  afterNextRender,
   computed,
   input,
   output,
@@ -48,6 +49,7 @@ const DEFAULT_BASE_URL = 'https://github.com';
           [value]="_name()"
           (input)="_name.set($any($event.target).value)"
           autocomplete="off"
+          required
         />
       </div>
 
@@ -92,6 +94,8 @@ const DEFAULT_BASE_URL = 'https://github.com';
             [value]="_token()"
             (input)="_token.set($any($event.target).value)"
             autocomplete="off"
+            [required]="!_isEditMode()"
+            [attr.aria-required]="!_isEditMode() || null"
             aria-describedby="account-token-hint account-token-validation account-token-error"
           />
           <button
@@ -128,33 +132,44 @@ const DEFAULT_BASE_URL = 'https://github.com';
         }
       </div>
 
-      @if (validationResult()) {
-        <div
-          id="account-token-validation"
-          class="account-form__validation-result"
-          role="status"
-          aria-live="polite"
-        >
-          @if (validationResult()!.isValid) {
+      <div
+        id="account-token-validation"
+        class="account-form__validation-result"
+        role="status"
+        aria-live="polite"
+      >
+        @if (validationResult(); as result) {
+          @if (result.isValid) {
             <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
             <span class="account-form__validation-message account-form__validation-message--valid">Token is valid</span>
-          } @else if (validationResult()!.isAuthFailure) {
+          } @else if (result.isAuthFailure) {
             <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
             <span class="account-form__validation-message account-form__validation-message--error">Authentication failed — check that the token is correct</span>
           } @else {
             <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--warning">Missing required scopes: {{ validationResult()!.missingScopes.join(', ') }}</span>
+            <span class="account-form__validation-message account-form__validation-message--warning">Missing required scopes: {{ result.missingScopes.join(', ') }}</span>
           }
-        </div>
-      }
+        }
+      </div>
 
-      @if (saveError()) {
-        <div
-          id="account-token-error"
-          class="account-form__save-error"
-          role="alert"
-        >{{ saveError() }}</div>
-      }
+      <div
+        class="account-form__validation-error"
+        role="alert"
+      >
+        @if (validationError()) {
+          {{ validationError() }}
+        }
+      </div>
+
+      <div
+        id="account-token-error"
+        class="account-form__save-error"
+        role="alert"
+      >
+        @if (saveError()) {
+          {{ saveError() }}
+        }
+      </div>
 
       <button
         class="account-form__save-btn"
@@ -172,6 +187,7 @@ export class AccountFormComponent implements OnInit {
   readonly validating: InputSignal<boolean> = input<boolean>(false);
   readonly validationResult: InputSignal<TokenValidationResult | null> = input<TokenValidationResult | null>(null);
   readonly saveError: InputSignal<string | null> = input<string | null>(null);
+  readonly validationError: InputSignal<string | null> = input<string | null>(null);
 
   readonly save: OutputEmitterRef<CreateAccountRequest | UpdateAccountRequest> = output<CreateAccountRequest | UpdateAccountRequest>();
   readonly validateToken: OutputEmitterRef<{ token: string; baseUrl: string }> = output<{ token: string; baseUrl: string }>();
@@ -205,6 +221,12 @@ export class AccountFormComponent implements OnInit {
     }
     return !!this._token() && !!this._baseUrl();
   });
+
+  constructor() {
+    afterNextRender(() => {
+      this.formHeading?.nativeElement.focus();
+    });
+  }
 
   ngOnInit(): void {
     const acc = this.account();

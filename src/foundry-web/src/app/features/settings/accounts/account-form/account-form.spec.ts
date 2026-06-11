@@ -16,6 +16,7 @@ function setup(overrides: {
   validating?: boolean;
   validationResult?: TokenValidationResult | null;
   saveError?: string | null;
+  validationError?: string | null;
 } = {}) {
   const fixture = TestBed.createComponent(AccountFormComponent);
   fixture.componentRef.setInput('account', overrides.account ?? null);
@@ -23,6 +24,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('validating', overrides.validating ?? false);
   fixture.componentRef.setInput('validationResult', overrides.validationResult ?? null);
   fixture.componentRef.setInput('saveError', overrides.saveError ?? null);
+  fixture.componentRef.setInput('validationError', overrides.validationError ?? null);
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
@@ -307,14 +309,16 @@ describe('AccountFormComponent', () => {
     expect(msg?.textContent).toContain('workflow');
   });
 
-  // Cycle 23: no validation result shown when null
-  it('should not show validation result when validationResult is null', () => {
+  // Cycle 23: no validation result content shown when null
+  it('should not show validation result content when validationResult is null', () => {
     // Arrange / Act
     const { el } = setup({ validationResult: null });
 
-    // Assert
+    // Assert — wrapper is always present (aria-live must persist), content is empty
     const result = el.querySelector('.account-form__validation-result');
-    expect(result).toBeNull();
+    expect(result).toBeTruthy();
+    const dot = el.querySelector('.account-form__validation-dot');
+    expect(dot).toBeNull();
   });
 
   // Cycle 24: server error is shown
@@ -329,14 +333,14 @@ describe('AccountFormComponent', () => {
     expect(errorEl?.textContent).toContain('Something went wrong');
   });
 
-  // Cycle 25: no error shown when saveError null
-  it('should not show save error when saveError is null', () => {
+  // Cycle 25: no error content shown when saveError null
+  it('should not show save error content when saveError is null', () => {
     // Arrange / Act
     const { el } = setup({ saveError: null });
 
-    // Assert
+    // Assert — wrapper always present, but inner content is empty
     const errorEl = el.querySelector('.account-form__save-error');
-    expect(errorEl).toBeNull();
+    expect(errorEl?.textContent?.trim()).toBeFalsy();
   });
 
   // Cycle 26: save button is rendered
@@ -470,5 +474,57 @@ describe('AccountFormComponent', () => {
     // Assert
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
     expect(btn.disabled).toBe(false);
+  });
+
+  // Cycle 34: validationError is shown when set
+  it('should show validation error when validationError is set', () => {
+    // Arrange / Act
+    const { el } = setup({ validationError: 'Token validation failed' });
+
+    // Assert
+    const errorEl = el.querySelector('.account-form__validation-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
+    expect(errorEl?.textContent).toContain('Token validation failed');
+  });
+
+  // Cycle 35: no validationError content shown when null
+  it('should not show validation error content when validationError is null', () => {
+    // Arrange / Act
+    const { el } = setup({ validationError: null });
+
+    // Assert — wrapper always present, content is empty
+    const errorEl = el.querySelector('.account-form__validation-error');
+    expect(errorEl?.textContent?.trim()).toBeFalsy();
+  });
+
+  // Cycle 36: name input has required attribute
+  it('should have required attribute on name input', () => {
+    // Arrange / Act
+    const { el } = setup({ account: null });
+
+    // Assert
+    const nameInput = el.querySelector('#account-name') as HTMLInputElement;
+    expect(nameInput.required).toBe(true);
+  });
+
+  // Cycle 37: token input has required attribute in add mode
+  it('should have required attribute on token input in add mode', () => {
+    // Arrange / Act
+    const { el } = setup({ account: null });
+
+    // Assert
+    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    expect(tokenInput.required).toBe(true);
+  });
+
+  // Cycle 38: token input does not have required attribute in edit mode
+  it('should not have required attribute on token input in edit mode', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_ACCOUNT });
+
+    // Assert
+    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    expect(tokenInput.required).toBe(false);
   });
 });

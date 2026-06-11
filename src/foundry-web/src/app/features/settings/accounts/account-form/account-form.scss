@@ -228,6 +228,11 @@ $text-warning: #d29922;
     }
   }
 
+  &__validation-error {
+    color: var(--fd-state-failed);
+    font-size: 0.875rem;
+  }
+
   &__save-error {
     color: var(--fd-state-failed);
     font-size: 0.875rem;
