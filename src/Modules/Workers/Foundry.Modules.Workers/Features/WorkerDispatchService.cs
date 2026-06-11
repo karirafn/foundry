@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
@@ -54,9 +55,13 @@ internal sealed class WorkerDispatchService(
             scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
         IWorkerLogBroadcaster workerLogBroadcaster =
             scope.ServiceProvider.GetRequiredService<IWorkerLogBroadcaster>();
+        IGlobalSettingsQueries settingsQueries =
+            scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
+
+        int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
 
         if (!_reconciled)
         {
@@ -66,6 +71,7 @@ internal sealed class WorkerDispatchService(
                 integrationEventDispatcher,
                 domainEventDispatcher,
                 workerLogBroadcaster,
+                timeoutMinutes,
                 activeRuns,
                 cancellationToken);
             _reconciled = true;
@@ -77,17 +83,19 @@ internal sealed class WorkerDispatchService(
             integrationEventDispatcher,
             domainEventDispatcher,
             workerLogBroadcaster,
+            timeoutMinutes,
             activeRuns,
             cancellationToken);
 
         int activeCount = activeRuns.Count;
+        int maxConcurrent = await settingsQueries.GetMaxConcurrentAsync(cancellationToken);
 
-        if (activeCount >= _options.MaxConcurrent)
+        if (activeCount >= maxConcurrent)
         {
             logger.LogDebug(
                 "Dispatch skipped: {ActiveCount}/{MaxConcurrent} slots in use.",
                 activeCount,
-                _options.MaxConcurrent);
+                maxConcurrent);
             return;
         }
 
@@ -103,6 +111,7 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IWorkerLogBroadcaster workerLogBroadcaster,
+        int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -149,6 +158,7 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     domainEventDispatcher,
                     workerLogBroadcaster,
+                    timeoutMinutes,
                     activeRun,
                     cancellationToken,
                     knownStatus: status);
@@ -168,6 +178,7 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IWorkerLogBroadcaster workerLogBroadcaster,
+        int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -179,6 +190,7 @@ internal sealed class WorkerDispatchService(
                 integrationEventDispatcher,
                 domainEventDispatcher,
                 workerLogBroadcaster,
+                timeoutMinutes,
                 activeRun,
                 cancellationToken);
         }
@@ -190,6 +202,7 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IWorkerLogBroadcaster workerLogBroadcaster,
+        int timeoutMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
@@ -231,7 +244,7 @@ internal sealed class WorkerDispatchService(
 
         if (status.IsRunning)
         {
-            DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(_options.TimeoutMinutes);
+            DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(timeoutMinutes);
             if (DateTimeOffset.UtcNow >= timeout)
             {
                 await TryStopContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
@@ -259,7 +272,7 @@ internal sealed class WorkerDispatchService(
                 logger.LogWarning(
                     "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
                     activeRun.Id,
-                    _options.TimeoutMinutes);
+                    timeoutMinutes);
 
                 await TryRemoveContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             }

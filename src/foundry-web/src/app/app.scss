@@ -16,10 +16,41 @@
 }
 
 .app-header__logo {
+  flex: 1;
   font-size: 1rem;
   font-weight: 600;
   color: var(--fd-text-primary);
   letter-spacing: 0.02em;
+}
+
+.app-header__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--fd-spacing-sm);
+}
+
+.app-header__settings-link {
+  align-items: center;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-tertiary);
+  display: inline-flex;
+  justify-content: center;
+  padding: var(--fd-spacing-xs);
+  text-decoration: none;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: var(--fd-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+
+  &--active {
+    color: var(--fd-text-link);
+  }
 }
 
 .app-content {

@@ -18,8 +18,6 @@ public sealed class Defaults
         // Assert
         options.ShouldSatisfyAllConditions(
             () => options.Image.ShouldBe("ghcr.io/anthropics/claude-code"),
-            () => options.MaxConcurrent.ShouldBe(3),
-            () => options.TimeoutMinutes.ShouldBe(120),
             () => options.Mounts.ShouldBeEmpty(),
             () => options.WritableMounts.ShouldBeEmpty(),
             () => options.BranchNamingInstruction.ShouldBe("Use conventional branch naming"),

@@ -1,4 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
@@ -60,7 +62,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IProviderAuth? providerAuth = null,
-        IWorkerLogBroadcaster? broadcaster = null)
+        IWorkerLogBroadcaster? broadcaster = null,
+        IGlobalSettingsQueries? settingsQueries = null)
     {
         SqliteConnection connection = _connection;
 
@@ -79,16 +82,15 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
         services.AddScoped<IProviderAuth>(_ => providerAuth ?? new StubProviderAuth("test-token"));
         services.AddScoped<IWorkerLogBroadcaster>(_ => broadcaster ?? new NullWorkerLogBroadcaster());
+        services.AddScoped<IGlobalSettingsQueries>(
+            _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
 
         ServiceProvider sp = services.BuildServiceProvider();
 
         WorkerOptions options = workerOptions ?? new WorkerOptions
         {
             Image = "test-image:latest",
-            MaxConcurrent = 3,
             ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-            ApiKey = "test-api-key",
-            TimeoutMinutes = 120,
         };
 
         return new WorkerDispatchService(
@@ -132,5 +134,21 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     {
         public Task PushAsync(Guid issueId, WorkerReportSummary report, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)
+        : IGlobalSettingsQueries
+    {
+        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<GlobalSettingsSummary?>(null);
+
+        public Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(CancellationToken cancellationToken)
+            => Task.FromResult<(string Key, string Value)?>(("ANTHROPIC_API_KEY", "test-api-key"));
+
+        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
+            => Task.FromResult(maxConcurrent);
+
+        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(timeoutMinutes);
     }
 }

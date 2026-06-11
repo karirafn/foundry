@@ -7,4 +7,9 @@ export const routes: Routes = [
     loadChildren: () =>
       import('./features/issues/issue.routes').then((m) => m.ISSUE_ROUTES),
   },
+  {
+    path: 'settings',
+    loadChildren: () =>
+      import('./features/settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
+  },
 ];

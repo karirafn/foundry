@@ -2,6 +2,8 @@ using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
@@ -46,15 +48,13 @@ public sealed class HandleAsync : IAsyncDisposable
     private IssueClaimedHandler BuildHandler(
         IWorkerOrchestrator? orchestrator = null,
         IProviderAuth? providerAuth = null,
-        WorkerOptions? workerOptions = null)
+        WorkerOptions? workerOptions = null,
+        IGlobalSettingsQueries? settingsQueries = null)
     {
         WorkerOptions options = workerOptions ?? new WorkerOptions
         {
             Image = "test-image:latest",
-            MaxConcurrent = 3,
             ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-            ApiKey = "test-api-key",
-            TimeoutMinutes = 120,
         };
 
         return new IssueClaimedHandler(
@@ -63,6 +63,7 @@ public sealed class HandleAsync : IAsyncDisposable
             providerAuth ?? new StubProviderAuth("test-token"),
             new NullDomainEventDispatcher(),
             Options.Create(options),
+            settingsQueries ?? new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -147,21 +148,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOrchestratorSucceeds_ContainerSpecHasCorrectEnvironmentVariables()
+    public async Task WhenApiKeyConfigured_ContainerSpecHasApiKeyEnvVar()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c1");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
             providerAuth: new StubProviderAuth("ghp_my_token"),
-            workerOptions: new WorkerOptions
-            {
-                Image = "test-image:latest",
-                MaxConcurrent = 3,
-                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-                ApiKey = "test-api-key",
-                TimeoutMinutes = 120,
-            });
+            settingsQueries: new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")));
         IssueClaimed @event = BuildEvent(
             issueNumber: 7,
             title: "My Issue",
@@ -181,6 +175,46 @@ public sealed class HandleAsync : IAsyncDisposable
             () => spec.EnvironmentVariables["CLONE_URL"].ShouldBe("https://github.com/org/repo.git"),
             () => spec.EnvironmentVariables["ISSUE_NUMBER"].ShouldBe("7"),
             () => spec.EnvironmentVariables.ShouldNotContainKey("CLAUDE_CODE_OAUTH_TOKEN"));
+    }
+
+    [Fact]
+    public async Task WhenOAuthTokenConfigured_ContainerSpecHasOAuthTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(("CLAUDE_CODE_OAUTH_TOKEN", "test-oauth-token")));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.EnvironmentVariables["CLAUDE_CODE_OAUTH_TOKEN"].ShouldBe("test-oauth-token"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("ANTHROPIC_API_KEY"));
+    }
+
+    [Fact]
+    public async Task WhenNoAuthConfigured_CreatesFailedRunWithNoAuthError()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler(
+            settingsQueries: new StubGlobalSettingsQueries(null));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        error.Message.ShouldContain("authentication");
     }
 
     [Fact]
@@ -216,7 +250,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 {
                     Image = "test-image:latest",
                     ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-                    ApiKey = "test-api-key",
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -252,7 +285,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 {
                     Image = "test-image:latest",
                     ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-                    ApiKey = "test-api-key",
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -282,7 +314,6 @@ public sealed class HandleAsync : IAsyncDisposable
             {
                 Image = "test-image:latest",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-                ApiKey = "test-api-key",
                 Mounts = new Dictionary<string, string> { ["/container/config"] = nonExistentPath },
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -309,7 +340,6 @@ public sealed class HandleAsync : IAsyncDisposable
             {
                 Image = "test-image:latest",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-                ApiKey = "test-api-key",
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = nonExistentPath },
             });
@@ -342,7 +372,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 {
                     Image = "test-image:latest",
                     ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-                    ApiKey = "test-api-key",
                     Mounts = new Dictionary<string, string>(),
                     WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = hostDir },
                 });
@@ -373,7 +402,6 @@ public sealed class HandleAsync : IAsyncDisposable
             {
                 Image = "test-image:latest",
                 ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-                ApiKey = "test-api-key",
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -551,35 +579,6 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOAuthTokenConfigured_ContainerSpecHasOAuthTokenEnvVar()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8");
-        IssueClaimedHandler sut = BuildHandler(
-            orchestrator: orchestrator,
-            workerOptions: new WorkerOptions
-            {
-                Image = "test-image:latest",
-                MaxConcurrent = 3,
-                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-                OAuthToken = "test-oauth-token",
-                ApiKey = "",
-                TimeoutMinutes = 120,
-            });
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.ShouldSatisfyAllConditions(
-            () => spec.EnvironmentVariables["CLAUDE_CODE_OAUTH_TOKEN"].ShouldBe("test-oauth-token"),
-            () => spec.EnvironmentVariables.ShouldNotContainKey("ANTHROPIC_API_KEY"));
-    }
-
-    [Fact]
     public async Task WhenContinuationContext_SetsBranchNameEnvVar()
     {
         // Arrange
@@ -673,5 +672,20 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(token));
+    }
+
+    private sealed class StubGlobalSettingsQueries((string Key, string Value)? authVar) : IGlobalSettingsQueries
+    {
+        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<GlobalSettingsSummary?>(null);
+
+        public Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(CancellationToken cancellationToken)
+            => Task.FromResult(authVar);
+
+        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
+            => Task.FromResult(3);
+
+        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(120);
     }
 }

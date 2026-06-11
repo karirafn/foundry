@@ -1,5 +1,6 @@
 using Foundry.WebApi.Persistence;
 
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -32,6 +33,11 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
 
             services.RemoveAll<IHostedService>();
 
+            // Use ephemeral data protection keys so tests do not depend on
+            // a persistent key store and encryption works within a single test run.
+            services.AddDataProtection()
+                .UseEphemeralDataProtectionProvider();
+
             _serviceOverrides?.Invoke(services);
 
             using ServiceProvider sp = services.BuildServiceProvider();
@@ -43,7 +49,7 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         builder.UseEnvironment("Testing");
     }
 
-async ValueTask IAsyncDisposable.DisposeAsync()
+    async ValueTask IAsyncDisposable.DisposeAsync()
     {
         await _connection.DisposeAsync();
         await base.DisposeAsync();

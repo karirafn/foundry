@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -17,6 +18,7 @@ internal sealed class IssueClaimedHandler(
     IProviderAuth providerAuth,
     IDomainEventDispatcher domainEventDispatcher,
     IOptions<WorkerOptions> optionsAccessor,
+    IGlobalSettingsQueries settingsQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     private readonly WorkerOptions _options = optionsAccessor.Value;
@@ -105,6 +107,14 @@ internal sealed class IssueClaimedHandler(
         string workerPrompt = _options.WorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
+        (string Key, string Value)? authVar = await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
+
+        if (authVar is null)
+        {
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
+        }
+
         Dictionary<string, string> envVars = new()
         {
             ["GIT_PAT"] = gitPat,
@@ -113,10 +123,8 @@ internal sealed class IssueClaimedHandler(
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),
+            [authVar.Value.Key] = authVar.Value.Value,
         };
-
-        KeyValuePair<string, string> authVar = _options.GetAuthEnvironmentVariable();
-        envVars[authVar.Key] = authVar.Value;
 
         if (claimed.Revision is not null)
         {

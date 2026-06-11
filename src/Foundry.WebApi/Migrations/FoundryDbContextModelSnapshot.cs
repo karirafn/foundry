@@ -205,6 +205,38 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("monitored_repositories", (string)null);
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Settings.Domain.GlobalSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AuthMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("auth_mode");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("MaxConcurrent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_concurrent");
+
+                    b.Property<int>("TimeoutMinutes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("timeout_minutes");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("global_settings", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Modules.Workers.Domain.WorkerReport", b =>
                 {
                     b.Property<Guid>("Id")
