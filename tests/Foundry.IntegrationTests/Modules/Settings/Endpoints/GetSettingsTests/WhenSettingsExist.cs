@@ -59,7 +59,7 @@ public sealed class WhenSettingsExist : IAsyncDisposable
             .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
-            () => summary.MaxConcurrent.ShouldBe(3),
+            () => summary.MaxConcurrent.ShouldBe(1),
             () => summary.TimeoutMinutes.ShouldBe(120),
             () => summary.AccessTokenPresent.ShouldBeFalse(),
             () => summary.RefreshTokenPresent.ShouldBeFalse(),

@@ -25,7 +25,7 @@ public sealed class Create
         GlobalSettings settings = GlobalSettings.Create();
 
         // Assert
-        settings.MaxConcurrent.ShouldBe(3);
+        settings.MaxConcurrent.ShouldBe(1);
     }
 
     [Fact]
