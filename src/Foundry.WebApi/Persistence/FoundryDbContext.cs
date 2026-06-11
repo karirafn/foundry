@@ -1,12 +1,14 @@
 using Foundry.Modules.Issues.Infrastructure.Configurations;
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
-using Foundry.Modules.Settings.Infrastructure;
 using Foundry.Modules.Settings.Infrastructure.Configurations;
 using Foundry.Modules.Workers.Infrastructure.Configurations;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
+using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure;
+using SettingsInfrastructure = Foundry.Modules.Settings.Infrastructure;
 
 namespace Foundry.WebApi.Persistence;
 
@@ -20,14 +22,20 @@ public sealed class FoundryDbContext(
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AccountConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IssueConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(WorkerRunConfiguration).Assembly);
 
-        ILogger<EncryptedStringConverter>? encryptedStringConverterLogger =
-            loggerFactory?.CreateLogger<EncryptedStringConverter>();
+        ILogger<SettingsInfrastructure.EncryptedStringConverter>? settingsConverterLogger =
+            loggerFactory?.CreateLogger<SettingsInfrastructure.EncryptedStringConverter>();
+
+        ILogger<MonitoringInfrastructure.EncryptedStringConverter>? monitoringConverterLogger =
+            loggerFactory?.CreateLogger<MonitoringInfrastructure.EncryptedStringConverter>();
+
+        modelBuilder.ApplyConfiguration(new MonitoredRepositoryConfiguration());
+        modelBuilder.ApplyConfiguration(
+            new AccountConfiguration(_dataProtectionProvider, monitoringConverterLogger));
 
         modelBuilder.ApplyConfiguration(
-            new GlobalSettingsConfiguration(_dataProtectionProvider, encryptedStringConverterLogger));
+            new GlobalSettingsConfiguration(_dataProtectionProvider, settingsConverterLogger));
     }
 }

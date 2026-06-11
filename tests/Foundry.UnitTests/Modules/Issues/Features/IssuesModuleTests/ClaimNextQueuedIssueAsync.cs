@@ -65,11 +65,11 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
 
     private async Task<(MonitoredRepository, GitHubAccount)> SeedRepositoryAsync(
         string slug = "owner/repo",
-        string secretKeyName = "GITHUB_TOKEN")
+        string? token = "ghp_test_token")
     {
         GitHubAccount account = GitHubAccount.Create(
             "Test Account",
-            secretKeyName,
+            token,
             new Uri("https://github.com"));
 
         RepositorySlug repositorySlug =
@@ -165,7 +165,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
     {
         // Arrange
         (MonitoredRepository repository, GitHubAccount account) =
-            await SeedRepositoryAsync("myorg/myrepo", "MY_GITHUB_TOKEN");
+            await SeedRepositoryAsync("myorg/myrepo", token: "ghp_my_github_token");
 
         QueuedIssue queued = await SeedQueuedIssueAsync(
             repository.Id,
@@ -191,7 +191,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             () => dispatch.Title.ShouldBe("Fix the bug"),
             () => dispatch.Body.ShouldBe("Detailed description"),
             () => dispatch.RepositorySlug.ShouldBe("myorg/myrepo"),
-            () => dispatch.AccountSecretKeyName.ShouldBe("MY_GITHUB_TOKEN"),
+            () => dispatch.AccountToken.ShouldBe("ghp_my_github_token"),
             () => dispatch.CloneUrl.ToString().ShouldBe("https://github.com/myorg/myrepo.git"));
     }
 
@@ -245,7 +245,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
     public async Task WhenRevisionQueuedIssueExists_DispatchIncludesRevisionContext()
     {
         // Arrange
-        (MonitoredRepository repository, _) = await SeedRepositoryAsync("myorg/myrepo", "MY_GITHUB_TOKEN");
+        (MonitoredRepository repository, _) = await SeedRepositoryAsync("myorg/myrepo");
 
         IReadOnlyList<ReviewComment> comments =
         [

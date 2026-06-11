@@ -47,7 +47,6 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private IssueClaimedHandler BuildHandler(
         IWorkerOrchestrator? orchestrator = null,
-        IProviderAuth? providerAuth = null,
         WorkerOptions? workerOptions = null,
         IGlobalSettingsQueries? settingsQueries = null)
     {
@@ -60,7 +59,6 @@ public sealed class HandleAsync : IAsyncDisposable
         return new IssueClaimedHandler(
             _dbContext,
             orchestrator ?? new StubWorkerOrchestrator(succeeds: true, containerId: "container-default"),
-            providerAuth ?? new StubProviderAuth("test-token"),
             new NullDomainEventDispatcher(),
             Options.Create(options),
             settingsQueries ?? new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")),
@@ -74,7 +72,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string title = "Test Issue",
         string body = "Test body",
         string repositorySlug = "owner/repo",
-        string secretKeyName = "GITHUB_PAT",
+        string? accountToken = "ghp_test_token",
         RevisionContext? revision = null,
         ContinuationContext? continuation = null)
     {
@@ -86,7 +84,7 @@ public sealed class HandleAsync : IAsyncDisposable
             body,
             repositorySlug,
             new Uri($"https://github.com/{repositorySlug}.git"),
-            secretKeyName,
+            accountToken,
             revision,
             continuation);
         return new IssueClaimed(dispatch);
@@ -154,14 +152,13 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c1");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            providerAuth: new StubProviderAuth("ghp_my_token"),
             settingsQueries: new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")));
         IssueClaimed @event = BuildEvent(
             issueNumber: 7,
             title: "My Issue",
             body: "Issue details",
             repositorySlug: "org/repo",
-            secretKeyName: "MY_SECRET");
+            accountToken: "ghp_my_token");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -437,12 +434,11 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGitPatIsEmpty_CreatesFailedRunWithEmptyPatError()
+    public async Task WhenAccountTokenIsNull_CreatesFailedRunWithEmptyPatError()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(
-            providerAuth: new StubProviderAuth(string.Empty));
-        IssueClaimed @event = BuildEvent(secretKeyName: "MY_SECRET");
+        IssueClaimedHandler sut = BuildHandler();
+        IssueClaimed @event = BuildEvent(accountToken: null);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -451,8 +447,24 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
-        error.Message.ShouldContain("MY_SECRET");
+        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+    }
+
+    [Fact]
+    public async Task WhenAccountTokenIsEmpty_CreatesFailedRunWithEmptyPatError()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler();
+        IssueClaimed @event = BuildEvent(accountToken: string.Empty);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
     }
 
     [Fact]
@@ -666,12 +678,6 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
-    }
-
-    private sealed class StubProviderAuth(string token) : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(token));
     }
 
     private sealed class StubGlobalSettingsQueries((string Key, string Value)? authVar) : IGlobalSettingsQueries

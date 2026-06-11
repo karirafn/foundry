@@ -9,7 +9,6 @@ namespace Foundry.Modules.Monitoring.Features;
 
 internal sealed class BranchProtectionValidator(
     DbContext dbContext,
-    IProviderAuth providerAuth,
     IIssueProviderFactory providerFactory) : IBranchProtectionValidator
 {
     public async Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
@@ -36,17 +35,13 @@ internal sealed class BranchProtectionValidator(
                 BranchProtectionValidatorErrors.AccountNotFound(repo.AccountId));
         }
 
-        Result<string> tokenResult = await providerAuth.GetTokenAsync(
-            account.SecretKeyName,
-            cancellationToken);
-
-        if (tokenResult is not Result<string>.Success tokenSuccess)
+        if (string.IsNullOrEmpty(account.Token))
         {
-            Error error = ((Result<string>.Failure)tokenResult).Error;
-            return Result<IReadOnlyList<EligibilityViolationInfo>>.Fail(error);
+            return Result<IReadOnlyList<EligibilityViolationInfo>>.Fail(
+                BranchProtectionValidatorErrors.AccountTokenNotConfigured(account.Id));
         }
 
-        IIssueProvider provider = providerFactory.CreateProvider(account, tokenSuccess.Value);
+        IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
 
         Result<BranchProtection> protectionResult = await provider.GetBranchProtectionAsync(
             repo.Slug,
@@ -97,4 +92,8 @@ internal static class BranchProtectionValidatorErrors
     public static Error AccountNotFound(AccountId id) =>
         new("BranchProtectionValidator.AccountNotFound",
             $"No account found with id '{id.Value}'.");
+
+    public static Error AccountTokenNotConfigured(AccountId id) =>
+        new("BranchProtectionValidator.AccountTokenNotConfigured",
+            $"Account with id '{id.Value}' has no token configured.");
 }

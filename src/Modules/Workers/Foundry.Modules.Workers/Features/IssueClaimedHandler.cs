@@ -15,7 +15,6 @@ namespace Foundry.Modules.Workers.Features;
 internal sealed class IssueClaimedHandler(
     DbContext dbContext,
     IWorkerOrchestrator orchestrator,
-    IProviderAuth providerAuth,
     IDomainEventDispatcher domainEventDispatcher,
     IOptions<WorkerOptions> optionsAccessor,
     IGlobalSettingsQueries settingsQueries,
@@ -83,14 +82,13 @@ internal sealed class IssueClaimedHandler(
         ClaimedIssueDispatch claimed,
         CancellationToken cancellationToken)
     {
-        Result<string> patResult = await ResolveGitPatAsync(claimed.AccountSecretKeyName, cancellationToken);
-
-        if (patResult is not Result<string>.Success patSuccess)
+        if (string.IsNullOrEmpty(claimed.AccountToken))
         {
-            return Result<WorkerContainerSpec>.Fail(((Result<string>.Failure)patResult).Error);
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings."));
         }
 
-        string gitPat = patSuccess.Value;
+        string gitPat = claimed.AccountToken;
 
         string systemPrompt = SystemPromptBuilder.Build(
             claimed.IssueNumber,
@@ -220,29 +218,5 @@ internal sealed class IssueClaimedHandler(
         }
 
         return Result<string>.Ok(resolvedPath);
-    }
-
-    private async Task<Result<string>> ResolveGitPatAsync(
-        string secretKeyName,
-        CancellationToken cancellationToken)
-    {
-        Result<string> result = await providerAuth.GetTokenAsync(secretKeyName, cancellationToken);
-
-        if (result is Result<string>.Success success)
-        {
-            if (string.IsNullOrEmpty(success.Value))
-            {
-                return Result<string>.Fail(
-                    new Error("Worker.EmptyGitPat", $"Git PAT not configured for account: {secretKeyName}"));
-            }
-
-            return result;
-        }
-
-        logger.LogWarning(
-            "Could not resolve Git PAT for secret key '{SecretKeyName}'.",
-            secretKeyName);
-
-        return result;
     }
 }

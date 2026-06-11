@@ -55,7 +55,7 @@ internal sealed class MonitoringSeeder(
             {
                 GitHubAccount account = GitHubAccount.Create(
                     accountOption.Name,
-                    accountOption.SecretKeyName,
+                    null,
                     new Uri(accountOption.BaseUrl));
 
                 dbContext.Set<Account>().Add(account);

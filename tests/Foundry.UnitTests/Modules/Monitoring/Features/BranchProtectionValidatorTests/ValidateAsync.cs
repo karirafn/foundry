@@ -36,7 +36,6 @@ public sealed class ValidateAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
         _sut = new BranchProtectionValidator(
             _dbContext,
-            new StubProviderAuth("ghp_token"),
             new StubProviderFactory(() => _stubProvider));
     }
 
@@ -46,9 +45,11 @@ public sealed class ValidateAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private async Task<(MonitoredRepositoryId, RepositorySlug)> SeedRepoAsync(string slug = "owner/repo")
+    private async Task<(MonitoredRepositoryId, RepositorySlug)> SeedRepoAsync(
+        string slug = "owner/repo",
+        string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", "GITHUB_TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", token, new Uri("https://github.com"));
         _dbContext.Set<Account>().Add(account);
 
         Result<RepositorySlug> slugResult = RepositorySlug.Create(slug);
@@ -217,40 +218,18 @@ public sealed class ValidateAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAuthFails_ReturnsFailure()
+    public async Task WhenAccountHasNoToken_ReturnsFailure()
     {
         // Arrange
-        IBranchProtectionValidator sutWithFailingAuth = new BranchProtectionValidator(
-            _dbContext,
-            new FailingProviderAuth(),
-            new StubProviderFactory(() => _stubProvider));
-
-        (MonitoredRepositoryId repoId, _) = await SeedRepoAsync();
+        (MonitoredRepositoryId repoId, _) = await SeedRepoAsync(token: null);
 
         // Act
-        Result<IReadOnlyList<EligibilityViolationInfo>> result = await sutWithFailingAuth.ValidateAsync(
+        Result<IReadOnlyList<EligibilityViolationInfo>> result = await _sut.ValidateAsync(
             repoId,
             TestContext.Current.CancellationToken);
 
         // Assert
         result.ShouldBeOfType<Result<IReadOnlyList<EligibilityViolationInfo>>.Failure>();
-    }
-
-    private sealed class StubProviderAuth(string token) : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(Result<string>.Ok(token));
-        }
-    }
-
-    private sealed class FailingProviderAuth : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(Result<string>.Fail(
-                new Error("Auth.Failed", "No token available")));
-        }
     }
 
     private sealed class StubProviderFactory(Func<StubIssueProvider> providerFactory) : IIssueProviderFactory

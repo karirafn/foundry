@@ -11,7 +11,7 @@ public abstract class Account : AggregateRoot<AccountId>
 
     public string Name { get; private protected set; } = string.Empty;
 
-    public string SecretKeyName { get; private protected set; } = string.Empty;
+    public string? Token { get; private protected set; }
 
     public Uri BaseUrl { get; private protected set; } = null!;
 

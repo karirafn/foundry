@@ -66,15 +66,12 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             NullLogger<MonitoringService>.Instance);
     }
 
-    private ServiceProvider BuildServiceProvider(
-        IProviderAuth providerAuth,
-        IIssueProviderFactory providerFactory)
+    private ServiceProvider BuildServiceProvider(IIssueProviderFactory providerFactory)
     {
         SqliteConnection connection = _connection;
 
         ServiceCollection services = new();
 
-        // Register as transient so the scope does not dispose our shared connection's underlying context.
         // Register as scoped so that MonitoringService and RepositoryPoller share the same
         // DbContext instance within a single tick scope — required for entity change tracking.
         services.AddScoped<FoundryDbContext>(_ =>
@@ -89,17 +86,16 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         services.AddScoped<IIssueQueries, StubIssueQueries>();
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
-        services.AddScoped<IProviderAuth>(_ => providerAuth);
         services.AddScoped<IIssueProviderFactory>(_ => providerFactory);
         services.AddScoped<RepositoryPoller>();
         return services.BuildServiceProvider();
     }
 
-    private async Task<MonitoredRepositoryId> SeedActiveRepoAsync(string slug = "owner/repo")
+    private async Task<MonitoredRepositoryId> SeedActiveRepoAsync(string slug = "owner/repo", string? token = "ghp_test_token")
     {
         await using FoundryDbContext db = CreateDbContext();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "GITHUB_TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", token, new Uri("https://github.com"));
         db.Set<Account>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -116,9 +112,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repoId = await SeedActiveRepoAsync();
 
-        using ServiceProvider sp = BuildServiceProvider(
-            new StubProviderAuth("ghp_token"),
-            new EmptyIssueProviderFactory());
+        using ServiceProvider sp = BuildServiceProvider(new EmptyIssueProviderFactory());
         MonitoringService sut = BuildService(sp);
 
         // Act
@@ -133,14 +127,12 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAuthFails_RepoLastPolledAtIsNotUpdated()
+    public async Task WhenAccountHasNoToken_RepoLastPolledAtIsNotUpdated()
     {
         // Arrange
-        MonitoredRepositoryId repoId = await SeedActiveRepoAsync();
+        MonitoredRepositoryId repoId = await SeedActiveRepoAsync(token: null);
 
-        using ServiceProvider sp = BuildServiceProvider(
-            new FailingProviderAuth(),
-            new EmptyIssueProviderFactory());
+        using ServiceProvider sp = BuildServiceProvider(new EmptyIssueProviderFactory());
         MonitoringService sut = BuildService(sp);
 
         // Act
@@ -170,9 +162,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        using ServiceProvider sp = BuildServiceProvider(
-            new StubProviderAuth("ghp_token"),
-            new EmptyIssueProviderFactory());
+        using ServiceProvider sp = BuildServiceProvider(new EmptyIssueProviderFactory());
         MonitoringService sut = BuildService(sp);
 
         // Act — tick 1 second later
@@ -190,9 +180,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     public async Task WhenNoActiveRepos_CompletesWithoutError()
     {
         // Arrange — no repos seeded
-        using ServiceProvider sp = BuildServiceProvider(
-            new StubProviderAuth("ghp_token"),
-            new EmptyIssueProviderFactory());
+        using ServiceProvider sp = BuildServiceProvider(new EmptyIssueProviderFactory());
         MonitoringService sut = BuildService(sp);
 
         // Act
@@ -201,23 +189,6 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
         // Assert
         exception.ShouldBeNull();
-    }
-
-    private sealed class StubProviderAuth(string token) : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(Result<string>.Ok(token));
-        }
-    }
-
-    private sealed class FailingProviderAuth : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(Result<string>.Fail(
-                new Error("Auth.Failed", "No token available")));
-        }
     }
 
     private sealed class EmptyIssueProviderFactory : IIssueProviderFactory

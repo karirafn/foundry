@@ -92,7 +92,6 @@ public sealed class StartingAsync : IAsyncDisposable
         GitHubAccount account = accounts[0].ShouldBeOfType<GitHubAccount>();
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe("my-org"),
-            () => account.SecretKeyName.ShouldBe("GITHUB_TOKEN"),
             () => account.BaseUrl.ShouldBe(new Uri("https://github.com")));
     }
 

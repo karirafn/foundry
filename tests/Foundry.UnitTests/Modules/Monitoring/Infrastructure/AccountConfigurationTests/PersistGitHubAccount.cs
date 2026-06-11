@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.WebApi.Persistence;
 
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,11 +21,13 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
 
+        IDataProtectionProvider dataProtectionProvider = DataProtectionProvider.Create("Foundry.Test");
+
         DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
             .UseSqlite(_connection)
             .Options;
 
-        _dbContext = new FoundryDbContext(options);
+        _dbContext = new FoundryDbContext(options, dataProtectionProvider);
         _dbContext.Database.EnsureCreated();
     }
 
@@ -39,7 +42,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     {
         // Arrange
         Uri baseUrl = new("https://github.com");
-        GitHubAccount account = GitHubAccount.Create("my-org", "MY_GITHUB_TOKEN", baseUrl);
+        GitHubAccount account = GitHubAccount.Create("my-org", "ghp_mytoken", baseUrl);
 
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -55,7 +58,28 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
         gitHub.ShouldSatisfyAllConditions(
             () => gitHub.Id.ShouldBe(account.Id),
             () => gitHub.Name.ShouldBe("my-org"),
-            () => gitHub.SecretKeyName.ShouldBe("MY_GITHUB_TOKEN"),
+            () => gitHub.Token.ShouldBe("ghp_mytoken"),
             () => gitHub.BaseUrl.ShouldBe(baseUrl));
+    }
+
+    [Fact]
+    public async Task WhenGitHubAccountPersistedWithNullToken_CanBeReloadedWithNullToken()
+    {
+        // Arrange
+        Uri baseUrl = new("https://github.com");
+        GitHubAccount account = GitHubAccount.Create("my-org", null, baseUrl);
+
+        _dbContext.Set<Account>().Add(account);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Account? result = await _dbContext
+            .Set<Account>()
+            .FindAsync([account.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        GitHubAccount gitHub = result.ShouldBeOfType<GitHubAccount>();
+        gitHub.Token.ShouldBeNull();
     }
 }
