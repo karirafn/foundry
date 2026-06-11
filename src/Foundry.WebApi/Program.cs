@@ -32,6 +32,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
 builder.Services.AddScoped<IWorkerLogBroadcaster, SignalRWorkerLogBroadcaster>();
+builder.Services.AddScoped<ISystemNotificationBroadcaster, SignalRSystemNotificationBroadcaster>();
 
 builder.Services.AddCors(options =>
 {
@@ -66,5 +67,6 @@ app.MapWorkersEndpoints();
 app.MapSettingsEndpoints();
 app.MapHub<IssueHub>("/hubs/issues");
 app.MapHub<WorkerLogHub>("/hubs/worker-log");
+app.MapHub<SystemNotificationHub>("/hubs/system");
 
 app.Run();
