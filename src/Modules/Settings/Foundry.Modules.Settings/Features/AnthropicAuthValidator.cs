@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
@@ -60,9 +59,14 @@ internal sealed class AnthropicAuthValidator(
                 HttpStatusCode.OK => AuthValidationResult.Valid(),
                 HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
                     AuthValidationResult.Invalid("API key is invalid — check Settings"),
+                HttpStatusCode.TooManyRequests => AuthValidationResult.ValidOptimistic(),
                 _ when (int)response.StatusCode >= 500 => AuthValidationResult.ValidOptimistic(),
                 _ => AuthValidationResult.Invalid("API key is invalid — check Settings"),
             };
+        }
+        catch (TaskCanceledException ex) when (ex.CancellationToken != cancellationToken)
+        {
+            return AuthValidationResult.ValidOptimistic();
         }
         catch (HttpRequestException)
         {

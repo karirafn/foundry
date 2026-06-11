@@ -32,7 +32,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         if (!authResult.IsValid)
         {
             await systemNotificationBroadcaster.SendAsync(
-                new SystemNotification(ClaudeAuthCategory, true, authResult.ErrorMessage!),
+                new SystemNotification(ClaudeAuthCategory, true, authResult.ErrorMessage ?? string.Empty),
                 cancellationToken);
             return;
         }

@@ -86,6 +86,26 @@ public sealed class ValidateAsync
     }
 
     [Fact]
+    public async Task WhenOAuthExpiresAtIsNull_ReturnsInvalid()
+    {
+        // Arrange
+        FakeGlobalSettingsQueries queries = new()
+        {
+            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, null, "pro"),
+        };
+        AnthropicAuthValidator sut = BuildSut(queries: queries);
+
+        // Act
+        AuthValidationResult result = await sut.ValidateAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.IsValid.ShouldBeFalse(),
+            () => result.ErrorMessage.ShouldBe(
+                "OAuth token expired — run `claude setup-token` to generate a new one"));
+    }
+
+    [Fact]
     public async Task WhenOAuthValid_ReturnsValid()
     {
         // Arrange
@@ -180,6 +200,27 @@ public sealed class ValidateAsync
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.InternalServerError);
+        AnthropicAuthValidator sut = BuildSut(handler: handler, queries: queries);
+
+        // Act
+        AuthValidationResult result = await sut.ValidateAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.IsValid.ShouldBeTrue(),
+            () => result.PassedOptimistically.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task WhenApiKeyReturns429_ReturnsValidOptimistic()
+    {
+        // Arrange
+        FakeGlobalSettingsQueries queries = new()
+        {
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null),
+            AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
+        };
+        FakeAnthropicApiHandler handler = new(HttpStatusCode.TooManyRequests);
         AnthropicAuthValidator sut = BuildSut(handler: handler, queries: queries);
 
         // Act

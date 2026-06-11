@@ -24,7 +24,7 @@ public static class SettingsModule
             client.BaseAddress = new Uri("https://api.anthropic.com");
             client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
         });
-        services.AddScoped<IAuthValidator, AnthropicAuthValidator>();
+        services.AddTransient<IAuthValidator>(sp => sp.GetRequiredService<AnthropicAuthValidator>());
 
         services.AddQueryHandler<GetSettings.Query, GlobalSettingsSummary, GetSettings.Handler>();
         services.AddQueryHandler<ScanOAuthCredentials.Query, ScanOAuthCredentials.OAuthScanResponse, ScanOAuthCredentials.Handler>();
