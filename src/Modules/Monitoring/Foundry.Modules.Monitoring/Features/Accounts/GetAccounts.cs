@@ -26,7 +26,7 @@ internal static class GetAccounts
                 .Select(a => new AccountSummary(
                     a.Id.Value,
                     a.Name,
-                    a is GitHubAccount ? "github" : "unknown",
+                    EF.Property<string>(a, "type"),
                     a.BaseUrl.ToString(),
                     a.Token != null))
                 .ToListAsync(cancellationToken);
