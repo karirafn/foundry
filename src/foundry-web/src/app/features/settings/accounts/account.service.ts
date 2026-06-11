@@ -23,7 +23,17 @@ export class AccountService {
   private readonly _validationResultSignal: WritableSignal<TokenValidationResult | null> = signal(null);
   readonly validationResult: Signal<TokenValidationResult | null> = this._validationResultSignal.asReadonly();
 
+  private readonly _saveErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveError: Signal<string | null> = this._saveErrorSignal.asReadonly();
+
+  private readonly _deleteErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly deleteError: Signal<string | null> = this._deleteErrorSignal.asReadonly();
+
+  private readonly _loadErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly loadError: Signal<string | null> = this._loadErrorSignal.asReadonly();
+
   loadAccounts(): void {
+    this._loadErrorSignal.set(null);
     this.saveSuccess.set(false);
     this.loading.set(true);
 
@@ -34,12 +44,14 @@ export class AccountService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
+        this._loadErrorSignal.set(this._extractErrorMessage(err));
         this.loading.set(false);
       },
     });
   }
 
   createAccount(request: CreateAccountRequest): void {
+    this._saveErrorSignal.set(null);
     this.saveSuccess.set(false);
     this.saving.set(true);
 
@@ -51,6 +63,7 @@ export class AccountService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
+        this._saveErrorSignal.set(this._extractErrorMessage(err));
         this.saving.set(false);
         this.saveSuccess.set(false);
       },
@@ -58,6 +71,7 @@ export class AccountService {
   }
 
   updateAccount(id: string, request: UpdateAccountRequest): void {
+    this._saveErrorSignal.set(null);
     this.saveSuccess.set(false);
     this.saving.set(true);
 
@@ -71,6 +85,7 @@ export class AccountService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
+        this._saveErrorSignal.set(this._extractErrorMessage(err));
         this.saving.set(false);
         this.saveSuccess.set(false);
       },
@@ -78,6 +93,7 @@ export class AccountService {
   }
 
   deleteAccount(id: string): void {
+    this._deleteErrorSignal.set(null);
     this.deleting.set(true);
 
     this._http.delete(`${API_BASE}/${id}`).subscribe({
@@ -87,9 +103,17 @@ export class AccountService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
+        this._deleteErrorSignal.set(this._extractErrorMessage(err));
         this.deleting.set(false);
       },
     });
+  }
+
+  private _extractErrorMessage(err: HttpErrorResponse): string {
+    if (typeof err.error === 'string' && err.error) {
+      return err.error;
+    }
+    return err.message;
   }
 
   validateToken(request: ValidateTokenRequest): void {

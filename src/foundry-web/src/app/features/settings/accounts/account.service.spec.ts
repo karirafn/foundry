@@ -58,6 +58,9 @@ describe('AccountService', () => {
     expect(service.validating()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
     expect(service.validationResult()).toBeNull();
+    expect(service.saveError()).toBeNull();
+    expect(service.deleteError()).toBeNull();
+    expect(service.loadError()).toBeNull();
   });
 
   // Cycle 2: loadAccounts populates accounts signal
@@ -101,6 +104,36 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.loading()).toBe(false);
+  });
+
+  it('should set loadError when loadAccounts fails with a string body', () => {
+    // Arrange
+    service.loadAccounts();
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush('Forbidden', {
+      status: 403,
+      statusText: 'Forbidden',
+    });
+
+    // Assert
+    expect(service.loadError()).toBe('Forbidden');
+  });
+
+  it('should clear loadError at start of loadAccounts', () => {
+    // Arrange — first call that fails
+    service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Act — second call clears error immediately
+    service.loadAccounts();
+
+    // Assert — error is cleared before response
+    expect(service.loadError()).toBeNull();
+    httpMock.expectOne('/api/accounts').flush([]);
   });
 
   // Cycle 4: loadAccounts loads multiple accounts
@@ -207,13 +240,80 @@ describe('AccountService', () => {
     expect(service.saveSuccess()).toBe(false);
   });
 
+  it('should set saveError when createAccount fails with a string body', () => {
+    // Arrange
+    const request: CreateAccountRequest = {
+      name: 'Duplicate',
+      providerType: 'github',
+      baseUrl: 'https://api.github.com',
+      token: 'ghp_test',
+    };
+    service.createAccount(request);
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush('An account with this name already exists.', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Assert
+    expect(service.saveError()).toBe('An account with this name already exists.');
+  });
+
+  it('should clear saveError at start of createAccount', () => {
+    // Arrange — first call that fails
+    service.createAccount({ name: 'X', providerType: 'github', baseUrl: 'https://api.github.com', token: 'x' });
+    httpMock.expectOne('/api/accounts').flush('Conflict', { status: 409, statusText: 'Conflict' });
+
+    // Act — second call clears error immediately
+    service.createAccount({ name: 'Y', providerType: 'github', baseUrl: 'https://api.github.com', token: 'y' });
+
+    // Assert — error is cleared before response
+    expect(service.saveError()).toBeNull();
+    httpMock.expectOne('/api/accounts').flush(MOCK_ACCOUNT, { status: 201, statusText: 'Created' });
+  });
+
+  it('should set saveError when updateAccount fails with a string body', () => {
+    // Arrange
+    const id = MOCK_ACCOUNT.id;
+    const request: UpdateAccountRequest = {
+      name: 'Duplicate Name',
+      baseUrl: 'https://api.github.com',
+    };
+    service.updateAccount(id, request);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${id}`).flush('An account with this name already exists.', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Assert
+    expect(service.saveError()).toBe('An account with this name already exists.');
+  });
+
+  it('should clear saveError at start of updateAccount', () => {
+    // Arrange — updateAccount call that fails
+    service.updateAccount(MOCK_ACCOUNT.id, { name: 'X', baseUrl: 'https://api.github.com' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Conflict', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Act — second updateAccount call clears error immediately
+    service.updateAccount(MOCK_ACCOUNT.id, { name: 'Y', baseUrl: 'https://api.github.com' });
+
+    // Assert — error is cleared before response
+    expect(service.saveError()).toBeNull();
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(MOCK_ACCOUNT);
+  });
+
   // Cycle 6: updateAccount calls PUT /api/accounts/{id}
   it('should PUT to /api/accounts/{id} when updateAccount is called', () => {
     // Arrange
     const id = '00000000-0000-0000-0000-000000000001';
     const request: UpdateAccountRequest = {
       name: 'Updated GitHub',
-      providerType: 'github',
       baseUrl: 'https://api.github.com',
       token: 'ghp_updated',
     };
@@ -233,7 +333,6 @@ describe('AccountService', () => {
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
       name: 'Updated',
-      providerType: 'github',
       baseUrl: 'https://api.github.com',
     };
 
@@ -250,7 +349,6 @@ describe('AccountService', () => {
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
       name: 'Updated',
-      providerType: 'github',
       baseUrl: 'https://api.github.com',
     };
     service.loadAccounts();
@@ -273,7 +371,6 @@ describe('AccountService', () => {
     const updatedAccount: AccountSummary = { ...MOCK_ACCOUNT, name: 'Updated GitHub' };
     const request: UpdateAccountRequest = {
       name: 'Updated GitHub',
-      providerType: 'github',
       baseUrl: 'https://api.github.com',
     };
 
@@ -326,6 +423,41 @@ describe('AccountService', () => {
     expect(service.deleting()).toBe(false);
   });
 
+  it('should set deleteError when deleteAccount fails with a string body', () => {
+    // Arrange
+    service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    service.deleteAccount(MOCK_ACCOUNT.id);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Account is in use.', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Assert
+    expect(service.deleteError()).toBe('Account is in use.');
+  });
+
+  it('should clear deleteError at start of deleteAccount', () => {
+    // Arrange — first call that fails
+    service.deleteAccount(MOCK_ACCOUNT.id);
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Conflict', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Act — second call clears error immediately
+    service.deleteAccount(MOCK_ACCOUNT.id);
+
+    // Assert — error is cleared before response
+    expect(service.deleteError()).toBeNull();
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(null, {
+      status: 204,
+      statusText: 'No Content',
+    });
+  });
+
   it('should remove the deleted account from accounts signal after deleteAccount succeeds', () => {
     // Arrange
     service.loadAccounts();
@@ -356,7 +488,7 @@ describe('AccountService', () => {
     // Assert
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(request);
-    req.flush({ isValid: true, scopes: ['repo'], missingScopes: [] });
+    req.flush({ isValid: true, isAuthFailure: false, missingScopes: [] });
   });
 
   it('should set validating to true while validateToken is in flight', () => {
@@ -370,7 +502,7 @@ describe('AccountService', () => {
     expect(service.validating()).toBe(true);
     httpMock.expectOne('/api/accounts/validate-token').flush({
       isValid: true,
-      scopes: ['repo'],
+      isAuthFailure: false,
       missingScopes: [],
     });
   });
@@ -381,7 +513,7 @@ describe('AccountService', () => {
     service.validateToken(request);
     httpMock.expectOne('/api/accounts/validate-token').flush({
       isValid: true,
-      scopes: ['repo'],
+      isAuthFailure: false,
       missingScopes: [],
     });
 
@@ -389,7 +521,7 @@ describe('AccountService', () => {
     expect(service.validating()).toBe(false);
     expect(service.validationResult()).toEqual({
       isValid: true,
-      scopes: ['repo'],
+      isAuthFailure: false,
       missingScopes: [],
     });
   });

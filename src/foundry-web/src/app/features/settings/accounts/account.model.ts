@@ -17,13 +17,12 @@ export interface CreateAccountRequest {
 
 export interface UpdateAccountRequest {
   name: string;
-  providerType: string;
   baseUrl: string;
   token?: string;
 }
 
 export interface TokenValidationResult {
   isValid: boolean;
-  scopes: string[];
+  isAuthFailure: boolean;
   missingScopes: string[];
 }
