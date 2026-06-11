@@ -197,6 +197,33 @@ public sealed class ScanAsync
     }
 
     [Fact]
+    public async Task WhenExpiresAtIsUnixTimestamp_ReturnsCredentials()
+    {
+        // Arrange
+        long unixMs = 1735689600000;
+        DateTimeOffset expectedExpiry = DateTimeOffset.FromUnixTimeMilliseconds(unixMs);
+        string json = $$"""
+            {
+              "claudeAiOauth": {
+                "accessToken": "my-access-token",
+                "refreshToken": "my-refresh-token",
+                "expiresAt": {{unixMs}},
+                "subscriptionType": "max"
+              }
+            }
+            """;
+        _fileSystem.AddFile(PrimaryPath, json);
+        FileSystemOAuthCredentialScanner sut = CreateSut(PrimaryPath);
+
+        // Act
+        Result<OAuthCredentials> result = await sut.ScanAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<OAuthCredentials>.Success success = result.ShouldBeOfType<Result<OAuthCredentials>.Success>();
+        success.Value.ExpiresAt.ShouldBe(expectedExpiry);
+    }
+
+    [Fact]
     public async Task WhenFileReadThrowsIoException_ReturnsError()
     {
         // Arrange

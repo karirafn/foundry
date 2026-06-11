@@ -115,11 +115,19 @@ internal sealed class FileSystemOAuthCredentialScanner : IOAuthCredentialScanner
 
     private static bool TryGetDateTimeOffset(JsonElement element, string propertyName, out DateTimeOffset value)
     {
-        if (element.TryGetProperty(propertyName, out JsonElement prop) &&
-            prop.TryGetDateTimeOffset(out DateTimeOffset dto))
+        if (element.TryGetProperty(propertyName, out JsonElement prop))
         {
-            value = dto;
-            return true;
+            if (prop.ValueKind == JsonValueKind.String && prop.TryGetDateTimeOffset(out DateTimeOffset dto))
+            {
+                value = dto;
+                return true;
+            }
+
+            if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt64(out long epochMs))
+            {
+                value = DateTimeOffset.FromUnixTimeMilliseconds(epochMs);
+                return true;
+            }
         }
 
         value = default;
