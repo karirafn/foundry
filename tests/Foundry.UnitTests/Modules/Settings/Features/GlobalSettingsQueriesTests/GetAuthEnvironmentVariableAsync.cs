@@ -79,7 +79,7 @@ public sealed class GetAuthEnvironmentVariableAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOAuthMode_ReturnsAnthropicAuthTokenVariable()
+    public async Task WhenOAuthMode_ReturnsClaudeCodeOAuthTokenVariable()
     {
         // Arrange
         await using (FoundryDbContext seedDb = CreateDbContext())
@@ -101,7 +101,7 @@ public sealed class GetAuthEnvironmentVariableAsync : IAsyncDisposable
         // Assert
         (string Key, string Value) pair = result.ShouldNotBeNull();
         pair.ShouldSatisfyAllConditions(
-            () => pair.Key.ShouldBe("ANTHROPIC_AUTH_TOKEN"),
+            () => pair.Key.ShouldBe("CLAUDE_CODE_OAUTH_TOKEN"),
             () => pair.Value.ShouldBe("my-access-token"));
     }
 }
