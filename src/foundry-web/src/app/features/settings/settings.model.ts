@@ -25,3 +25,8 @@ export interface UpdateAuthModeRequest {
   mode: AuthMode;
   apiKey?: string;
 }
+
+export interface WorkerLimits {
+  maxConcurrent: number;
+  timeoutMinutes: number;
+}
