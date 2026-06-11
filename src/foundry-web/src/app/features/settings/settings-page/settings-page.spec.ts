@@ -309,6 +309,207 @@ describe('SettingsPageComponent', () => {
     expect(legend?.classList.contains('sr-only')).toBe(true);
   });
 
+  // Cycle 12: Worker Limits section renders with current values
+  it('should render the "Worker Limits" section with values from the service', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 5,
+      timeoutMinutes: 90,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — inputs are present and component state reflects the loaded values
+    const el = fixture.nativeElement as HTMLElement;
+    const maxInput = el.querySelector('#maxConcurrent') as HTMLInputElement;
+    const timeoutInput = el.querySelector('#timeoutMinutes') as HTMLInputElement;
+    expect(maxInput).toBeTruthy();
+    expect(timeoutInput).toBeTruthy();
+    expect(fixture.componentInstance['_maxConcurrentValue']()).toBe(5);
+    expect(fixture.componentInstance['_timeoutMinutesValue']()).toBe(90);
+  });
+
+  // Cycle 13: Save button calls updateWorkerLimits with current values
+  it('should call updateWorkerLimits with current input values when Save is clicked', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    fixture.detectChanges();
+
+    const service = TestBed.inject(SettingsService);
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const saveBtn = Array.from(el.querySelectorAll('button')).find(
+      btn => btn.textContent?.trim() === 'Save' && btn.closest('.settings-page__limits-form')
+    ) as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    const req = httpMock.expectOne('/api/settings/limits');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ maxConcurrent: 3, timeoutMinutes: 60 });
+    req.flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+  });
+
+  // Cycle 14: success message displays after save
+  it('should show "Worker limits saved successfully" after a successful save', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    fixture.detectChanges();
+
+    // Act
+    const service = TestBed.inject(SettingsService);
+    service.updateWorkerLimits(3, 60);
+    httpMock.expectOne('/api/settings/limits').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const successEls = Array.from(el.querySelectorAll('[role="status"]'));
+    const limitsSuccess = successEls.find(e => e.textContent?.includes('Worker limits saved successfully'));
+    expect(limitsSuccess).toBeTruthy();
+  });
+
+  // Cycle 15: error message displays on save error
+  it('should show error message when save limits fails', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    fixture.detectChanges();
+
+    // Act
+    const service = TestBed.inject(SettingsService);
+    service.updateWorkerLimits(3, 60);
+    httpMock.expectOne('/api/settings/limits').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const errorEl = el.querySelector('#limits-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
+    expect(errorEl?.textContent).toContain('Failed to save worker limits');
+  });
+
+  // Cycle 16: Save button is disabled while saving
+  it('should disable the Save button while limits are saving', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    fixture.detectChanges();
+
+    // Act — trigger save (in-flight, not yet complete)
+    const service = TestBed.inject(SettingsService);
+    service.updateWorkerLimits(3, 60);
+    fixture.detectChanges();
+
+    // Assert — button disabled while saving
+    const el = fixture.nativeElement as HTMLElement;
+    const limitsForm = el.querySelector('.settings-page__limits-form') as HTMLElement;
+    const saveBtn = limitsForm.querySelector('.settings-page__save-btn') as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true);
+    expect(saveBtn.textContent?.trim()).toBe('Saving...');
+
+    httpMock.expectOne('/api/settings/limits').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+  });
+
+  it('should render the "Worker Limits" heading', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const headings = Array.from(el.querySelectorAll('h2'));
+    const limitsHeading = headings.find(h => h.textContent?.trim() === 'Worker Limits');
+    expect(limitsHeading).toBeTruthy();
+  });
+
   // Cycle 11: aria-invalid on input when saveError is set
   it('should set aria-invalid on the API key input when saveError is present', () => {
     // Arrange
