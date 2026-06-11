@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, Signal, ViewChild, WritableSignal, afterNextRender, computed, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, Signal, ViewChild, WritableSignal, afterNextRender, computed, effect, inject, runInInjectionContext, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
@@ -47,7 +47,7 @@ const TIMEOUT_MINUTES_MAX = 1440;
       @if (!settingsService.loading() && !settingsService.loadError()) {
         <div class="settings-page__sections">
           <section class="settings-page__section settings-page__section--accounts">
-            <h2 class="settings-page__section-title">Accounts</h2>
+            <h2 class="settings-page__section-title" #accountsSectionHeading tabindex="-1">Accounts</h2>
             <p class="settings-page__section-description">
               Manage provider accounts for repository monitoring.
             </p>
@@ -63,12 +63,18 @@ const TIMEOUT_MINUTES_MAX = 1440;
                   (delete)="onDeleteAccount($event)"
                   (retry)="accountService.loadAccounts()"
                 />
+                <div class="settings-page__delete-error" role="alert">
+                  @if (accountService.deleteError(); as deleteError) {
+                    {{ deleteError }}
+                  }
+                </div>
               }
               @case ('add') {
                 <fd-account-form
                   [saving]="accountService.saving()"
                   [validating]="accountService.validating()"
                   [validationResult]="accountService.validationResult()"
+                  [validationError]="accountService.validationError()"
                   [saveError]="accountService.saveError()"
                   (save)="onSaveNewAccount($event)"
                   (validateToken)="onValidateToken($event)"
@@ -81,6 +87,7 @@ const TIMEOUT_MINUTES_MAX = 1440;
                   [saving]="accountService.saving()"
                   [validating]="accountService.validating()"
                   [validationResult]="accountService.validationResult()"
+                  [validationError]="accountService.validationError()"
                   [saveError]="accountService.saveError()"
                   (save)="onSaveExistingAccount($event)"
                   (validateToken)="onValidateToken($event)"
@@ -165,13 +172,17 @@ const TIMEOUT_MINUTES_MAX = 1440;
                   }
                 </div>
 
-                @if (settingsService.saveError()) {
-                  <div id="api-key-error" class="settings-page__save-error" role="alert">{{ settingsService.saveError() }}</div>
-                }
+                <div id="api-key-error" class="settings-page__save-error" role="alert">
+                  @if (settingsService.saveError()) {
+                    {{ settingsService.saveError() }}
+                  }
+                </div>
 
-                @if (settingsService.saveSuccess()) {
-                  <div class="settings-page__save-success" role="status">Settings saved successfully</div>
-                }
+                <div class="settings-page__save-success" role="status">
+                  @if (settingsService.saveSuccess()) {
+                    Settings saved successfully
+                  }
+                </div>
 
                 <button
                   class="settings-page__save-btn"
@@ -226,13 +237,17 @@ const TIMEOUT_MINUTES_MAX = 1440;
                   </div>
                 }
 
-                @if (settingsService.switchError()) {
-                  <div class="settings-page__switch-error" role="alert">{{ settingsService.switchError() }}</div>
-                }
+                <div class="settings-page__switch-error" role="alert">
+                  @if (settingsService.switchError()) {
+                    {{ settingsService.switchError() }}
+                  }
+                </div>
 
-                @if (settingsService.saveSuccess()) {
-                  <div class="settings-page__save-success" role="status">OAuth credentials applied successfully</div>
-                }
+                <div class="settings-page__save-success" role="status">
+                  @if (settingsService.saveSuccess()) {
+                    OAuth credentials applied successfully
+                  }
+                </div>
 
                 <button
                   class="settings-page__scan-btn"
@@ -313,8 +328,10 @@ const TIMEOUT_MINUTES_MAX = 1440;
 export class SettingsPageComponent implements OnInit {
   protected readonly settingsService = inject(SettingsService);
   protected readonly accountService = inject(AccountService);
+  private readonly _injector = inject(Injector);
 
   @ViewChild('sectionHeading') private readonly _sectionHeading?: ElementRef<HTMLElement>;
+  @ViewChild('accountsSectionHeading') private readonly _accountsSectionHeading?: ElementRef<HTMLElement>;
 
   protected readonly maxConcurrentMin = MAX_CONCURRENT_MIN;
   protected readonly maxConcurrentMax = MAX_CONCURRENT_MAX;
@@ -359,6 +376,11 @@ export class SettingsPageComponent implements OnInit {
       if (this.accountService.saveSuccess() && this._accountView().kind !== 'list') {
         this._accountView.set({ kind: 'list' });
         this.accountService.loadAccounts();
+        runInInjectionContext(this._injector, () => {
+          afterNextRender(() => {
+            this._accountsSectionHeading?.nativeElement.focus();
+          });
+        });
       }
     });
   }
@@ -370,8 +392,10 @@ export class SettingsPageComponent implements OnInit {
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
-    afterNextRender(() => {
-      this._sectionHeading?.nativeElement.focus();
+    runInInjectionContext(this._injector, () => {
+      afterNextRender(() => {
+        this._sectionHeading?.nativeElement.focus();
+      });
     });
   }
 
@@ -427,5 +451,10 @@ export class SettingsPageComponent implements OnInit {
 
   onAccountCancelled(): void {
     this._accountView.set({ kind: 'list' });
+    runInInjectionContext(this._injector, () => {
+      afterNextRender(() => {
+        this._accountsSectionHeading?.nativeElement.focus();
+      });
+    });
   }
 }

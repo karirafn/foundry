@@ -236,6 +236,12 @@
     font-size: 0.8125rem;
   }
 
+  &__delete-error {
+    color: var(--fd-state-failed);
+    font-size: 0.875rem;
+    margin-top: var(--fd-spacing-sm);
+  }
+
   &__save-error {
     color: var(--fd-state-failed);
     font-size: 0.875rem;

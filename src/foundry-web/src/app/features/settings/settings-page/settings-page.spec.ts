@@ -570,4 +570,52 @@ describe('SettingsPageComponent', () => {
     const form = el.querySelector('fd-account-form');
     expect(form).toBeFalsy();
   });
+
+  // Cycle 21: delete error is displayed in accounts section
+  it('should display delete error in accounts section when deleteAccount fails', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts').flush([account]);
+    httpMock.expectOne('/api/settings').flush(API_KEY_RESPONSE);
+    fixture.detectChanges();
+
+    // Act — trigger a delete error
+    const accountService = TestBed.inject(AccountService);
+    accountService.deleteAccount(account.id);
+    httpMock.expectOne(`/api/accounts/${account.id}`).flush('Account is in use.', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const deleteError = el.querySelector('.settings-page__delete-error');
+    expect(deleteError).toBeTruthy();
+    expect(deleteError?.getAttribute('role')).toBe('alert');
+    expect(deleteError?.textContent).toContain('Account is in use.');
+  });
+
+  // Cycle 22: delete error wrapper is present even when no error
+  it('should render delete error container even when no delete error is present', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert — wrapper is always in DOM for aria-live
+    const el = fixture.nativeElement as HTMLElement;
+    const deleteError = el.querySelector('.settings-page__delete-error');
+    expect(deleteError).toBeTruthy();
+    expect(deleteError?.textContent?.trim()).toBeFalsy();
+  });
 });
