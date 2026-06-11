@@ -163,6 +163,11 @@
     color: var(--fd-text-secondary);
   }
 
+  &__field-hint {
+    color: var(--fd-text-tertiary);
+    font-size: 0.75rem;
+  }
+
   &__api-key-wrapper {
     display: flex;
     align-items: center;

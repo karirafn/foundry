@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { WritableSignal } from '@angular/core';
 import { SettingsService } from './settings.service';
-import { AuthSettings, WorkerLimits } from './settings.model';
+import { AuthSettings } from './settings.model';
 
 const mockAuthSettings: AuthSettings = {
   mode: 'api_key',
@@ -578,10 +578,23 @@ describe('SettingsService', () => {
   });
 
   it('should reset limits signals in loadSettings', () => {
-    // Arrange — dirty state
-    service.saveLimitsSuccess.set(true);
-    service.savingLimits.set(true);
-    (service as unknown as { _saveLimitsErrorSignal: WritableSignal<string | null> })._saveLimitsErrorSignal.set('old limits error');
+    // Arrange — put signals into dirty state via public API
+    service.updateWorkerLimits(1, 60);
+    httpMock.expectOne('/api/settings/limits').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 1,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+    });
+    // saveLimitsSuccess is now true; force an error state for saveLimitsError
+    service.updateWorkerLimits(99999, 60);
+    httpMock.expectOne('/api/settings/limits').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
 
     // Act
     service.loadSettings();

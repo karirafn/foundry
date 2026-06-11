@@ -22,13 +22,19 @@ export class SettingsService {
   private readonly _http = inject(HttpClient);
 
   readonly authSettings: WritableSignal<AuthSettings | null> = signal(null);
-  readonly workerLimits: WritableSignal<WorkerLimits | null> = signal(null);
   readonly loading: WritableSignal<boolean> = signal(false);
   readonly saving: WritableSignal<boolean> = signal(false);
-  readonly savingLimits: WritableSignal<boolean> = signal(false);
   readonly switching: WritableSignal<boolean> = signal(false);
   readonly saveSuccess: WritableSignal<boolean> = signal(false);
-  readonly saveLimitsSuccess: WritableSignal<boolean> = signal(false);
+
+  private readonly _workerLimitsSignal: WritableSignal<WorkerLimits | null> = signal(null);
+  readonly workerLimits: Signal<WorkerLimits | null> = this._workerLimitsSignal.asReadonly();
+
+  private readonly _savingLimitsSignal: WritableSignal<boolean> = signal(false);
+  readonly savingLimits: Signal<boolean> = this._savingLimitsSignal.asReadonly();
+
+  private readonly _saveLimitsSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveLimitsSuccess: Signal<boolean> = this._saveLimitsSuccessSignal.asReadonly();
 
   private readonly _loadErrorSignal: WritableSignal<string | null> = signal(null);
   readonly loadError: Signal<string | null> = this._loadErrorSignal.asReadonly();
@@ -48,16 +54,16 @@ export class SettingsService {
     this._switchErrorSignal.set(null);
     this._saveLimitsErrorSignal.set(null);
     this.saveSuccess.set(false);
-    this.saveLimitsSuccess.set(false);
+    this._saveLimitsSuccessSignal.set(false);
     this.saving.set(false);
-    this.savingLimits.set(false);
+    this._savingLimitsSignal.set(false);
     this.switching.set(false);
     this.loading.set(true);
 
     this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
       next: (response) => {
         this.authSettings.set(this._mapToAuthSettings(response));
-        this.workerLimits.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
+        this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -92,19 +98,19 @@ export class SettingsService {
 
   updateWorkerLimits(maxConcurrent: number, timeoutMinutes: number): void {
     this._saveLimitsErrorSignal.set(null);
-    this.saveLimitsSuccess.set(false);
-    this.savingLimits.set(true);
+    this._saveLimitsSuccessSignal.set(false);
+    this._savingLimitsSignal.set(true);
 
     this._http.put<GlobalSettingsResponse>('/api/settings/limits', { maxConcurrent, timeoutMinutes }).subscribe({
       next: (response) => {
-        this.workerLimits.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
-        this.savingLimits.set(false);
-        this.saveLimitsSuccess.set(true);
+        this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
+        this._savingLimitsSignal.set(false);
+        this._saveLimitsSuccessSignal.set(true);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
         this._saveLimitsErrorSignal.set(SAVE_LIMITS_ERROR);
-        this.savingLimits.set(false);
+        this._savingLimitsSignal.set(false);
       },
     });
   }

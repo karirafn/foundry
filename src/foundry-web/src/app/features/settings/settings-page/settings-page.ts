@@ -208,13 +208,14 @@ const TIMEOUT_MINUTES_MAX = 1440;
                     class="settings-page__number-input"
                     type="number"
                     id="maxConcurrent"
-                    min="{{ maxConcurrentMin }}"
-                    max="{{ maxConcurrentMax }}"
+                    [min]="maxConcurrentMin"
+                    [max]="maxConcurrentMax"
+                    step="1"
                     [ngModel]="_maxConcurrentValue()"
                     (ngModelChange)="_maxConcurrentValue.set($event)"
-                    [attr.aria-invalid]="!!settingsService.saveLimitsError() || null"
-                    aria-describedby="limits-error"
+                    aria-describedby="max-concurrent-hint limits-error"
                   />
+                  <span id="max-concurrent-hint" class="settings-page__field-hint">1–20 workers</span>
                 </div>
                 <div class="settings-page__field">
                   <label class="settings-page__field-label" for="timeoutMinutes">Timeout (minutes)</label>
@@ -222,17 +223,20 @@ const TIMEOUT_MINUTES_MAX = 1440;
                     class="settings-page__number-input"
                     type="number"
                     id="timeoutMinutes"
-                    min="{{ timeoutMinutesMin }}"
-                    max="{{ timeoutMinutesMax }}"
+                    [min]="timeoutMinutesMin"
+                    [max]="timeoutMinutesMax"
+                    step="1"
                     [ngModel]="_timeoutMinutesValue()"
                     (ngModelChange)="_timeoutMinutesValue.set($event)"
-                    [attr.aria-invalid]="!!settingsService.saveLimitsError() || null"
-                    aria-describedby="limits-error"
+                    aria-describedby="timeout-minutes-hint limits-error"
                   />
+                  <span id="timeout-minutes-hint" class="settings-page__field-hint">1–1,440 minutes</span>
                 </div>
               </div>
 
-              <div id="limits-error" role="alert">{{ settingsService.saveLimitsError() }}</div>
+              @if (settingsService.saveLimitsError()) {
+                <div id="limits-error" class="settings-page__save-error" role="alert">{{ settingsService.saveLimitsError() }}</div>
+              }
 
               @if (settingsService.saveLimitsSuccess()) {
                 <div class="settings-page__save-success" role="status">Worker limits saved successfully</div>
