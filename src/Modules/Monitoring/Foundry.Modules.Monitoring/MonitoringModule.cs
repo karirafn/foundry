@@ -1,7 +1,10 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -25,6 +28,8 @@ public static class MonitoringModule
         services.AddScoped<IBranchProtectionValidator, BranchProtectionValidator>();
         services.AddScoped<RepositoryPoller>();
 
+        services.AddQueryHandler<ValidateToken.Query, ValidateToken.Response, ValidateToken.Handler>();
+
         services.AddHostedService<MonitoringService>();
 
         return services;
@@ -32,6 +37,7 @@ public static class MonitoringModule
 
     public static IEndpointRouteBuilder MapMonitoringEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapAccountEndpoints();
         return app;
     }
 }

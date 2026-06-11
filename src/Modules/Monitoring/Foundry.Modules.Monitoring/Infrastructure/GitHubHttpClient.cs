@@ -411,6 +411,65 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Ok(dtos ?? []);
     }
 
+    public async Task<Result<TokenValidationResult>> ValidateTokenAsync(
+        Uri apiBaseUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<TokenValidationResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        Uri requestUri = new(apiBaseUrl, "user");
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode is HttpStatusCode.Unauthorized)
+        {
+            return Result<TokenValidationResult>.Ok(TokenValidationResult.AuthFailure());
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<TokenValidationResult>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        IEnumerable<string> scopeValues = response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? values)
+            ? values
+            : [];
+
+        IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
+
+        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missingScopes));
+    }
+
+    private static List<string> ParseMissingScopes(IEnumerable<string> scopeHeaders)
+    {
+        HashSet<string> grantedScopes = [];
+        foreach (string header in scopeHeaders)
+        {
+            foreach (string scope in header.Split(','))
+            {
+                grantedScopes.Add(scope.Trim());
+            }
+        }
+
+        List<string> missing = [];
+        if (!grantedScopes.Contains("repo"))
+        {
+            missing.Add("repo");
+        }
+
+        return missing;
+    }
+
     [GeneratedRegex(@"/pull/(\d+)(?:[/?#]|$)")]
     private static partial Regex PrNumberRegex();
 
@@ -512,6 +571,28 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
+
+internal sealed class TokenValidationResult
+{
+    private TokenValidationResult(bool isValid, bool isAuthFailure, IReadOnlyList<string> missingScopes)
+    {
+        IsValid = isValid;
+        IsAuthFailure = isAuthFailure;
+        MissingScopes = missingScopes;
+    }
+
+    public bool IsValid { get; }
+
+    public bool IsAuthFailure { get; }
+
+    public IReadOnlyList<string> MissingScopes { get; }
+
+    public static TokenValidationResult Validated(IReadOnlyList<string> missingScopes) =>
+        new(missingScopes.Count == 0, false, missingScopes);
+
+    public static TokenValidationResult AuthFailure() =>
+        new(false, true, []);
+}
 
 internal static class GitHubErrors
 {
