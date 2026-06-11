@@ -33,7 +33,7 @@ public sealed class WhenRetrySucceedsWithBlockedDependencies : IAsyncDisposable
 
     public WhenRetrySucceedsWithBlockedDependencies()
     {
-        _factory = new FoundryWebAppFactory(services =>
+        _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IBranchProtectionValidator>();
             services.AddScoped<IBranchProtectionValidator>(_ => new NoViolationsBranchProtectionValidator());

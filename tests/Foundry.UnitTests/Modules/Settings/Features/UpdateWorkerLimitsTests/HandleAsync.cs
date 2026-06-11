@@ -13,20 +13,24 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Settings.Features.UpdateWorkerLimitsTests;
 
-public sealed class HandleAsync : IAsyncDisposable
+public sealed class HandleAsync : IAsyncLifetime
 {
     private readonly SqliteConnection _connection;
 
     public HandleAsync()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
     }
 
-    async ValueTask IAsyncDisposable.DisposeAsync()
+    public async ValueTask InitializeAsync()
+    {
+        await _connection.OpenAsync();
+
+        await using FoundryDbContext setup = CreateDbContext();
+        await setup.Database.EnsureCreatedAsync();
+    }
+
+    public async ValueTask DisposeAsync()
     {
         await _connection.DisposeAsync();
     }

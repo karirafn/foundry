@@ -16,12 +16,21 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
     private readonly SqliteConnection _connection;
     private readonly Action<IServiceCollection>? _serviceOverrides;
 
-    public FoundryWebAppFactory(Action<IServiceCollection>? serviceOverrides = null)
+    public FoundryWebAppFactory()
+    {
+        _connection = new SqliteConnection("Data Source=:memory:");
+        _connection.Open();
+    }
+
+    private FoundryWebAppFactory(Action<IServiceCollection> serviceOverrides)
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
         _serviceOverrides = serviceOverrides;
     }
+
+    public static FoundryWebAppFactory WithOverrides(Action<IServiceCollection> serviceOverrides) =>
+        new(serviceOverrides);
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

@@ -4,6 +4,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { SettingsPageComponent } from './settings-page';
 import { SettingsService } from '../settings.service';
+import { By } from '@angular/platform-browser';
+import { NgModel } from '@angular/forms';
 
 function setupComponent() {
   TestBed.configureTestingModule({
@@ -327,14 +329,19 @@ describe('SettingsPageComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert — inputs are present and component state reflects the loaded values
+    // Assert — inputs are present and their ngModel bindings carry the loaded values.
+    // Number inputs in JSDOM do not reflect programmatic value writes to input.value;
+    // querying the NgModel directive on each input is the correct way to assert the binding.
     const el = fixture.nativeElement as HTMLElement;
     const maxInput = el.querySelector('#maxConcurrent') as HTMLInputElement;
     const timeoutInput = el.querySelector('#timeoutMinutes') as HTMLInputElement;
     expect(maxInput).toBeTruthy();
     expect(timeoutInput).toBeTruthy();
-    expect(fixture.componentInstance['_maxConcurrentValue']()).toBe(5);
-    expect(fixture.componentInstance['_timeoutMinutesValue']()).toBe(90);
+
+    const maxNgModel = fixture.debugElement.query(By.css('#maxConcurrent')).injector.get(NgModel);
+    const timeoutNgModel = fixture.debugElement.query(By.css('#timeoutMinutes')).injector.get(NgModel);
+    expect(maxNgModel.model).toBe(5);
+    expect(timeoutNgModel.model).toBe(90);
   });
 
   // Cycle 13: Save button calls updateWorkerLimits with current values

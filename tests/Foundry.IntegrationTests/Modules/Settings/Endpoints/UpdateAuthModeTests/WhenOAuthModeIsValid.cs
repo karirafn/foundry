@@ -32,7 +32,7 @@ public sealed class WhenOAuthModeIsValid : IAsyncDisposable
 
     public WhenOAuthModeIsValid()
     {
-        _factory = new FoundryWebAppFactory(services =>
+        _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IOAuthCredentialScanner>();
             services.AddScoped<IOAuthCredentialScanner>(_ => new StubOAuthCredentialScanner(
@@ -111,7 +111,7 @@ public sealed class WhenOAuthModeIsValid : IAsyncDisposable
         // Arrange
         await SeedDefaultSettingsAsync();
 
-        FoundryWebAppFactory factory = new(services =>
+        FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IOAuthCredentialScanner>();
             services.AddScoped<IOAuthCredentialScanner>(_ => new StubOAuthCredentialScanner(

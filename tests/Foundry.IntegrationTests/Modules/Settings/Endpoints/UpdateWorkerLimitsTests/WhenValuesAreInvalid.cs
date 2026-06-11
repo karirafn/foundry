@@ -7,22 +7,9 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateWorkerLimitsTests;
 
-public sealed class WhenValuesAreInvalid : IAsyncDisposable
+public sealed class WhenValuesAreInvalid(FoundryWebAppFactory factory) : IClassFixture<FoundryWebAppFactory>
 {
-    private readonly FoundryWebAppFactory _factory;
-    private readonly HttpClient _client;
-
-    public WhenValuesAreInvalid()
-    {
-        _factory = new FoundryWebAppFactory();
-        _client = _factory.CreateClient();
-    }
-
-    async ValueTask IAsyncDisposable.DisposeAsync()
-    {
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
+    private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
     public async Task WhenMaxConcurrentIsZero_ReturnsBadRequest()
