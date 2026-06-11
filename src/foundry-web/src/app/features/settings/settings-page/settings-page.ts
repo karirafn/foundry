@@ -4,8 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
 import { AuthMode } from '../settings.model';
 import { AccountService } from '../accounts/account.service';
-import { AccountSummary } from '../accounts/account.model';
+import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from '../accounts/account.model';
 import { AccountListComponent } from '../accounts/account-list/account-list';
+import { AccountFormComponent } from '../accounts/account-form/account-form';
 
 type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account: AccountSummary };
 
@@ -17,7 +18,7 @@ const TIMEOUT_MINUTES_MAX = 1440;
 @Component({
   selector: 'fd-settings-page',
   standalone: true,
-  imports: [RouterLink, FormsModule, AccountListComponent],
+  imports: [RouterLink, FormsModule, AccountListComponent, AccountFormComponent],
   template: `
     <div class="settings-page">
       <header class="settings-page__header">
@@ -61,6 +62,29 @@ const TIMEOUT_MINUTES_MAX = 1440;
                   (edit)="onEditAccount($event)"
                   (delete)="onDeleteAccount($event)"
                   (retry)="accountService.loadAccounts()"
+                />
+              }
+              @case ('add') {
+                <fd-account-form
+                  [saving]="accountService.saving()"
+                  [validating]="accountService.validating()"
+                  [validationResult]="accountService.validationResult()"
+                  [saveError]="accountService.saveError()"
+                  (save)="onSaveNewAccount($event)"
+                  (validateToken)="onValidateToken($event)"
+                  (cancel)="onAccountCancelled()"
+                />
+              }
+              @case ('edit') {
+                <fd-account-form
+                  [account]="_editAccount"
+                  [saving]="accountService.saving()"
+                  [validating]="accountService.validating()"
+                  [validationResult]="accountService.validationResult()"
+                  [saveError]="accountService.saveError()"
+                  (save)="onSaveExistingAccount($event)"
+                  (validateToken)="onValidateToken($event)"
+                  (cancel)="onAccountCancelled()"
                 />
               }
             }
@@ -307,7 +331,11 @@ export class SettingsPageComponent implements OnInit {
   protected readonly _timeoutMinutesValue: WritableSignal<number> = signal(TIMEOUT_MINUTES_MIN);
   private _limitsInitialized = false;
 
-  protected readonly _accountError: Signal<string | null> = computed(() => null);
+  protected readonly _accountError: Signal<string | null> = computed(() => this.accountService.loadError());
+
+  protected get _editAccount(): AccountSummary {
+    return (this._accountView() as { kind: 'edit'; account: AccountSummary }).account;
+  }
 
   constructor() {
     effect(() => {
@@ -324,6 +352,13 @@ export class SettingsPageComponent implements OnInit {
         this._limitsInitialized = true;
         this._maxConcurrentValue.set(limits.maxConcurrent);
         this._timeoutMinutesValue.set(limits.timeoutMinutes);
+      }
+    });
+
+    effect(() => {
+      if (this.accountService.saveSuccess() && this._accountView().kind !== 'list') {
+        this._accountView.set({ kind: 'list' });
+        this.accountService.loadAccounts();
       }
     });
   }
@@ -375,5 +410,22 @@ export class SettingsPageComponent implements OnInit {
     if (window.confirm(`Delete account "${account.name}"?`)) {
       this.accountService.deleteAccount(account.id);
     }
+  }
+
+  onSaveNewAccount(request: CreateAccountRequest | UpdateAccountRequest): void {
+    this.accountService.createAccount(request as CreateAccountRequest);
+  }
+
+  onSaveExistingAccount(request: CreateAccountRequest | UpdateAccountRequest): void {
+    const view = this._accountView() as { kind: 'edit'; account: AccountSummary };
+    this.accountService.updateAccount(view.account.id, request as UpdateAccountRequest);
+  }
+
+  onValidateToken(event: { token: string; baseUrl: string }): void {
+    this.accountService.validateToken(event);
+  }
+
+  onAccountCancelled(): void {
+    this._accountView.set({ kind: 'list' });
   }
 }

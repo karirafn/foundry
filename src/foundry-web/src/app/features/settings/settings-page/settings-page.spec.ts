@@ -7,6 +7,7 @@ import { SettingsService } from '../settings.service';
 import { By } from '@angular/platform-browser';
 import { NgModel } from '@angular/forms';
 import { AccountService } from '../accounts/account.service';
+import { AccountSummary } from '../accounts/account.model';
 
 const API_KEY_RESPONSE = {
   authMode: 'ApiKey',
@@ -484,5 +485,89 @@ describe('SettingsPageComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const accountList = el.querySelector('fd-account-list');
     expect(accountList).toBeTruthy();
+  });
+
+  // Cycle 17: clicking Add Account renders fd-account-form (no [account] input)
+  it('should render fd-account-form without account input when Add Account is clicked', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const component = fixture.componentInstance;
+    component.onAddAccount();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const form = el.querySelector('fd-account-form');
+    expect(form).toBeTruthy();
+    const accountList = el.querySelector('fd-account-list');
+    expect(accountList).toBeFalsy();
+  });
+
+  // Cycle 18: clicking Edit renders fd-account-form with [account] input bound
+  it('should render fd-account-form with account when Edit is clicked', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    const account: AccountSummary = { id: '1', name: 'My Org', providerType: 'GitHub', baseUrl: 'https://github.com', hasToken: true };
+    httpMock.expectOne('/api/accounts').flush([account]);
+    httpMock.expectOne('/api/settings').flush(API_KEY_RESPONSE);
+    fixture.detectChanges();
+
+    // Act
+    const component = fixture.componentInstance;
+    component.onEditAccount(account);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const form = el.querySelector('fd-account-form');
+    expect(form).toBeTruthy();
+    const accountList = el.querySelector('fd-account-list');
+    expect(accountList).toBeFalsy();
+  });
+
+  // Cycle 20: _accountError reflects accountService.loadError()
+  it('should display load error in account list when accounts fail to load', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+
+    // Act — fail the accounts request
+    httpMock.expectOne('/api/accounts').flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+    httpMock.expectOne('/api/settings').flush(API_KEY_RESPONSE);
+    fixture.detectChanges();
+
+    // Assert — account-list receives the error and renders it
+    const el = fixture.nativeElement as HTMLElement;
+    const errorEl = el.querySelector('.account-list__error');
+    expect(errorEl).toBeTruthy();
+  });
+
+  // Cycle 19: cancel from form returns to list view
+  it('should show fd-account-list after cancelling from the form', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    component.onAddAccount();
+    fixture.detectChanges();
+
+    // Act
+    component.onAccountCancelled();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const accountList = el.querySelector('fd-account-list');
+    expect(accountList).toBeTruthy();
+    const form = el.querySelector('fd-account-form');
+    expect(form).toBeFalsy();
   });
 });
