@@ -234,13 +234,17 @@ const TIMEOUT_MINUTES_MAX = 1440;
                 </div>
               </div>
 
-              @if (settingsService.saveLimitsError()) {
-                <div id="limits-error" class="settings-page__save-error" role="alert">{{ settingsService.saveLimitsError() }}</div>
-              }
+              <div id="limits-error" role="alert" class="settings-page__save-error">
+                @if (settingsService.saveLimitsError()) {
+                  {{ settingsService.saveLimitsError() }}
+                }
+              </div>
 
-              @if (settingsService.saveLimitsSuccess()) {
-                <div class="settings-page__save-success" role="status">Worker limits saved successfully</div>
-              }
+              <div role="status" class="settings-page__save-success">
+                @if (settingsService.saveLimitsSuccess()) {
+                  Worker limits saved successfully
+                }
+              </div>
 
               <button
                 class="settings-page__save-btn"

@@ -30,7 +30,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await setup.Database.EnsureCreatedAsync();
     }
 
-    public async ValueTask DisposeAsync()
+    async ValueTask IAsyncDisposable.DisposeAsync()
     {
         await _connection.DisposeAsync();
     }
