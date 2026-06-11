@@ -61,7 +61,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IWorkerOrchestrator orchestrator,
         WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
-        IProviderAuth? providerAuth = null,
         IWorkerLogBroadcaster? broadcaster = null,
         IGlobalSettingsQueries? settingsQueries = null)
     {
@@ -80,7 +79,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher>(
             _ => integrationEventDispatcher ?? new NullIntegrationEventDispatcher());
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
-        services.AddScoped<IProviderAuth>(_ => providerAuth ?? new StubProviderAuth("test-token"));
         services.AddScoped<IWorkerLogBroadcaster>(_ => broadcaster ?? new NullWorkerLogBroadcaster());
         services.AddScoped<IGlobalSettingsQueries>(
             _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
@@ -97,12 +95,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             sp.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(options),
             NullLogger<WorkerDispatchService>.Instance);
-    }
-
-    protected sealed class StubProviderAuth(string token) : IProviderAuth
-    {
-        public Task<Result<string>> GetTokenAsync(string secretKeyName, CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(token));
     }
 
     protected sealed class NullDomainEventDispatcher : IDomainEventDispatcher

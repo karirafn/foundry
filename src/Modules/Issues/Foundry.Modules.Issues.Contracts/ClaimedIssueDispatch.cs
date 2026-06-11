@@ -8,6 +8,6 @@ public sealed record ClaimedIssueDispatch(
     string Body,
     string RepositorySlug,
     Uri CloneUrl,
-    string AccountSecretKeyName,
+    string? AccountToken,
     RevisionContext? Revision = null,
     ContinuationContext? Continuation = null);

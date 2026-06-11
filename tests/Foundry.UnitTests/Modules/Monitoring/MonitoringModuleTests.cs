@@ -1,7 +1,6 @@
 using Foundry.Modules.Monitoring;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features;
-using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -81,25 +80,6 @@ public sealed class MonitoringModuleTests
         using IServiceScope scope = provider.CreateScope();
         IRepositorySlugQueries queries = scope.ServiceProvider.GetRequiredService<IRepositorySlugQueries>();
         queries.ShouldNotBeNull();
-    }
-
-    [Fact]
-    public void AddMonitoringModule_DoesNotRegisterIProviderAuth()
-    {
-        // Arrange — IProviderAuth is registered in Program.cs (composition root), not by the module.
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
-        ServiceCollection services = new();
-        services.AddHttpClient();
-        services.AddSingleton(configuration);
-
-        // Act
-        services.AddMonitoringModule(configuration);
-        ServiceProvider provider = services.BuildServiceProvider();
-
-        // Assert — IProviderAuth is not resolvable from the module alone
-        using IServiceScope scope = provider.CreateScope();
-        IProviderAuth? auth = scope.ServiceProvider.GetService<IProviderAuth>();
-        auth.ShouldBeNull();
     }
 
     [Fact]

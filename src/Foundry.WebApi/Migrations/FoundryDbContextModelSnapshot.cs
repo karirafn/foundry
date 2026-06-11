@@ -142,12 +142,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
 
-                    b.Property<string>("SecretKeyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
+                    b.Property<string>("Token")
+                        .HasMaxLength(2000)
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
-                        .HasColumnName("secret_key_name");
+                        .HasColumnName("token");
 
                     b.Property<string>("type")
                         .IsRequired()

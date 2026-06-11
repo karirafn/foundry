@@ -129,7 +129,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             revisionInProgress.Body,
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
-            dispatchInfo.AccountSecretKeyName,
+            dispatchInfo.AccountToken,
             revision);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -170,7 +170,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             inProgress.Body,
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
-            dispatchInfo.AccountSecretKeyName,
+            dispatchInfo.AccountToken,
             Continuation: continuation);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -207,7 +207,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             inProgress.Body,
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
-            dispatchInfo.AccountSecretKeyName);
+            dispatchInfo.AccountToken);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

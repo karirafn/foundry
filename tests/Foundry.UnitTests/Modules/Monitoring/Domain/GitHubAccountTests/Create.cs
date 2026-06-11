@@ -13,16 +13,16 @@ public sealed class Create
     {
         // Arrange
         string name = "my-github-account";
-        string secretKeyName = "GITHUB_TOKEN";
+        string token = "ghp_mytoken";
         Uri baseUrl = new("https://github.com");
 
         // Act
-        GitHubAccount account = GitHubAccount.Create(name, secretKeyName, baseUrl);
+        GitHubAccount account = GitHubAccount.Create(name, token, baseUrl);
 
         // Assert
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe(name),
-            () => account.SecretKeyName.ShouldBe(secretKeyName),
+            () => account.Token.ShouldBe(token),
             () => account.BaseUrl.ShouldBe(baseUrl));
     }
 
@@ -33,8 +33,8 @@ public sealed class Create
         Uri baseUrl = new("https://github.com");
 
         // Act
-        GitHubAccount a = GitHubAccount.Create("account-a", "KEY_A", baseUrl);
-        GitHubAccount b = GitHubAccount.Create("account-b", "KEY_B", baseUrl);
+        GitHubAccount a = GitHubAccount.Create("account-a", "token-a", baseUrl);
+        GitHubAccount b = GitHubAccount.Create("account-b", "token-b", baseUrl);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);
@@ -47,9 +47,23 @@ public sealed class Create
         Uri baseUrl = new("http://github.example.com");
 
         // Act
-        Action act = () => GitHubAccount.Create("my-account", "MY_TOKEN", baseUrl);
+        Action act = () => GitHubAccount.Create("my-account", "my-token", baseUrl);
 
         // Assert
         Should.Throw<ArgumentException>(act);
+    }
+
+    [Fact]
+    public void WhenTokenIsNull_ReturnsGitHubAccountWithNullToken()
+    {
+        // Arrange
+        string name = "my-github-account";
+        Uri baseUrl = new("https://github.com");
+
+        // Act
+        GitHubAccount account = GitHubAccount.Create(name, null, baseUrl);
+
+        // Assert
+        account.Token.ShouldBeNull();
     }
 }

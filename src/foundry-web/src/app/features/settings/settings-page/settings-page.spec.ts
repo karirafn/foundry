@@ -6,12 +6,36 @@ import { SettingsPageComponent } from './settings-page';
 import { SettingsService } from '../settings.service';
 import { By } from '@angular/platform-browser';
 import { NgModel } from '@angular/forms';
+import { AccountService } from '../accounts/account.service';
+import { AccountSummary } from '../accounts/account.model';
+
+const API_KEY_RESPONSE = {
+  authMode: 'ApiKey',
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  accessTokenPresent: false,
+  refreshTokenPresent: false,
+  expiresAt: null,
+  subscriptionType: null,
+};
+
+const OAUTH_RESPONSE = {
+  authMode: 'OAuth',
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  accessTokenPresent: true,
+  refreshTokenPresent: true,
+  expiresAt: '2027-01-01T00:00:00Z',
+  subscriptionType: 'pro',
+};
 
 function setupComponent() {
+  TestBed.resetTestingModule();
   TestBed.configureTestingModule({
     imports: [SettingsPageComponent],
     providers: [
       SettingsService,
+      AccountService,
       provideHttpClient(),
       provideHttpClientTesting(),
       provideRouter([]),
@@ -21,6 +45,11 @@ function setupComponent() {
   const fixture = TestBed.createComponent(SettingsPageComponent);
   const httpMock = TestBed.inject(HttpTestingController);
   return { fixture, httpMock };
+}
+
+function flushInit(httpMock: HttpTestingController, settingsResponse: object = API_KEY_RESPONSE): void {
+  httpMock.expectOne('/api/accounts').flush([]);
+  httpMock.expectOne('/api/settings').flush(settingsResponse);
 }
 
 describe('SettingsPageComponent', () => {
@@ -33,15 +62,7 @@ describe('SettingsPageComponent', () => {
     // Arrange / Act
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
 
     // Assert
     expect(fixture.componentInstance).toBeTruthy();
@@ -53,15 +74,7 @@ describe('SettingsPageComponent', () => {
 
     // Act
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -79,16 +92,9 @@ describe('SettingsPageComponent', () => {
     fixture.detectChanges();
 
     // Assert — the HTTP call proves loadSettings was called
+    httpMock.expectOne('/api/accounts').flush([]);
     const req = httpMock.expectOne('/api/settings');
-    req.flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    req.flush(API_KEY_RESPONSE);
   });
 
   // Cycle 3: renders Worker Authentication section
@@ -96,21 +102,14 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const section = el.querySelector('.settings-page__section-title');
-    expect(section?.textContent).toContain('Worker Authentication');
+    const titles = Array.from(el.querySelectorAll('.settings-page__section-title'));
+    const workerTitle = titles.find(t => t.textContent?.includes('Worker Authentication'));
+    expect(workerTitle).toBeTruthy();
   });
 
   // Cycle 4: shows API key form when mode is api_key
@@ -118,15 +117,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -139,15 +130,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
+    flushInit(httpMock, OAUTH_RESPONSE);
     fixture.detectChanges();
 
     // Assert
@@ -161,15 +144,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
+    flushInit(httpMock, OAUTH_RESPONSE);
     fixture.detectChanges();
 
     // Assert
@@ -183,6 +158,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
+    httpMock.expectOne('/api/accounts').flush([]);
     httpMock.expectOne('/api/settings').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -200,15 +176,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -222,15 +190,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -253,30 +213,14 @@ describe('SettingsPageComponent', () => {
     expect(loadingEl).toBeTruthy();
     expect(loadingEl?.getAttribute('role')).toBe('status');
 
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
   });
 
   it('should hide the loading indicator after settings load', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
 
     // Act
     fixture.detectChanges();
@@ -292,15 +236,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -316,15 +252,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 5,
-      timeoutMinutes: 90,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock, { ...API_KEY_RESPONSE, maxConcurrent: 5, timeoutMinutes: 90 });
 
     // Act
     fixture.detectChanges();
@@ -349,15 +277,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     const service = TestBed.inject(SettingsService);
@@ -389,15 +309,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Act
@@ -426,15 +338,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Act
@@ -459,15 +363,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Act — trigger save (in-flight, not yet complete)
@@ -497,15 +393,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
 
     // Act
     fixture.detectChanges();
@@ -522,15 +410,7 @@ describe('SettingsPageComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Act — trigger a save error
@@ -549,5 +429,193 @@ describe('SettingsPageComponent', () => {
     expect(input.getAttribute('aria-invalid')).toBe('true');
     const errorEl = el.querySelector('#api-key-error');
     expect(errorEl).toBeTruthy();
+  });
+
+  // Cycle 12: Accounts section is rendered above Worker Authentication
+  it('should render the Accounts section', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const titles = Array.from(el.querySelectorAll('.settings-page__section-title'));
+    const accountsTitle = titles.find(t => t.textContent?.includes('Accounts'));
+    expect(accountsTitle).toBeTruthy();
+  });
+
+  it('should render the Accounts section above the Worker Authentication section', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const titles = Array.from(el.querySelectorAll('.settings-page__section-title'));
+    const accountsIndex = titles.findIndex(t => t.textContent?.includes('Accounts'));
+    const workerIndex = titles.findIndex(t => t.textContent?.includes('Worker Authentication'));
+    expect(accountsIndex).toBeLessThan(workerIndex);
+  });
+
+  it('should call loadAccounts on initialization', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — the HTTP call proves loadAccounts was called
+    const req = httpMock.expectOne('/api/accounts');
+    req.flush([]);
+    httpMock.expectOne('/api/settings').flush(API_KEY_RESPONSE);
+  });
+
+  it('should render fd-account-list component', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const accountList = el.querySelector('fd-account-list');
+    expect(accountList).toBeTruthy();
+  });
+
+  // Cycle 17: clicking Add Account renders fd-account-form (no [account] input)
+  it('should render fd-account-form without account input when Add Account is clicked', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const component = fixture.componentInstance;
+    component.onAddAccount();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const form = el.querySelector('fd-account-form');
+    expect(form).toBeTruthy();
+    const accountList = el.querySelector('fd-account-list');
+    expect(accountList).toBeFalsy();
+  });
+
+  // Cycle 18: clicking Edit renders fd-account-form with [account] input bound
+  it('should render fd-account-form with account when Edit is clicked', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    const account: AccountSummary = { id: '1', name: 'My Org', providerType: 'GitHub', baseUrl: 'https://github.com', hasToken: true };
+    httpMock.expectOne('/api/accounts').flush([account]);
+    httpMock.expectOne('/api/settings').flush(API_KEY_RESPONSE);
+    fixture.detectChanges();
+
+    // Act
+    const component = fixture.componentInstance;
+    component.onEditAccount(account);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const form = el.querySelector('fd-account-form');
+    expect(form).toBeTruthy();
+    const accountList = el.querySelector('fd-account-list');
+    expect(accountList).toBeFalsy();
+  });
+
+  // Cycle 20: _accountError reflects accountService.loadError()
+  it('should display load error in account list when accounts fail to load', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+
+    // Act — fail the accounts request
+    httpMock.expectOne('/api/accounts').flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+    httpMock.expectOne('/api/settings').flush(API_KEY_RESPONSE);
+    fixture.detectChanges();
+
+    // Assert — account-list receives the error and renders it
+    const el = fixture.nativeElement as HTMLElement;
+    const errorEl = el.querySelector('.account-list__error');
+    expect(errorEl).toBeTruthy();
+  });
+
+  // Cycle 19: cancel from form returns to list view
+  it('should show fd-account-list after cancelling from the form', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    component.onAddAccount();
+    fixture.detectChanges();
+
+    // Act
+    component.onAccountCancelled();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const accountList = el.querySelector('fd-account-list');
+    expect(accountList).toBeTruthy();
+    const form = el.querySelector('fd-account-form');
+    expect(form).toBeFalsy();
+  });
+
+  // Cycle 21: delete error is displayed in accounts section
+  it('should display delete error in accounts section when deleteAccount fails', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts').flush([account]);
+    httpMock.expectOne('/api/settings').flush(API_KEY_RESPONSE);
+    fixture.detectChanges();
+
+    // Act — trigger a delete error
+    const accountService = TestBed.inject(AccountService);
+    accountService.deleteAccount(account.id);
+    httpMock.expectOne(`/api/accounts/${account.id}`).flush('Account is in use.', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const deleteError = el.querySelector('.settings-page__delete-error');
+    expect(deleteError).toBeTruthy();
+    expect(deleteError?.getAttribute('role')).toBe('alert');
+    expect(deleteError?.textContent).toContain('Account is in use.');
+  });
+
+  // Cycle 22: delete error wrapper is present even when no error
+  it('should render delete error container even when no delete error is present', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert — wrapper is always in DOM for aria-live
+    const el = fixture.nativeElement as HTMLElement;
+    const deleteError = el.querySelector('.settings-page__delete-error');
+    expect(deleteError).toBeTruthy();
+    expect(deleteError?.textContent?.trim()).toBeFalsy();
   });
 });

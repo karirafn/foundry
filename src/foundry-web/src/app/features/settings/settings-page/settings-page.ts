@@ -1,8 +1,14 @@
-import { Component, ElementRef, OnInit, ViewChild, WritableSignal, afterNextRender, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, Signal, ViewChild, WritableSignal, afterNextRender, computed, effect, inject, runInInjectionContext, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
 import { AuthMode } from '../settings.model';
+import { AccountService } from '../accounts/account.service';
+import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from '../accounts/account.model';
+import { AccountListComponent } from '../accounts/account-list/account-list';
+import { AccountFormComponent } from '../accounts/account-form/account-form';
+
+type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account: AccountSummary };
 
 const MAX_CONCURRENT_MIN = 1;
 const MAX_CONCURRENT_MAX = 20;
@@ -12,7 +18,7 @@ const TIMEOUT_MINUTES_MAX = 1440;
 @Component({
   selector: 'fd-settings-page',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, AccountListComponent, AccountFormComponent],
   template: `
     <div class="settings-page">
       <header class="settings-page__header">
@@ -40,6 +46,57 @@ const TIMEOUT_MINUTES_MAX = 1440;
 
       @if (!settingsService.loading() && !settingsService.loadError()) {
         <div class="settings-page__sections">
+          <section class="settings-page__section settings-page__section--accounts">
+            <h2 class="settings-page__section-title" #accountsSectionHeading tabindex="-1">Accounts</h2>
+            <p class="settings-page__section-description">
+              Manage provider accounts for repository monitoring.
+            </p>
+
+            @switch (_accountView().kind) {
+              @case ('list') {
+                <fd-account-list
+                  [accounts]="accountService.accounts()"
+                  [loading]="accountService.loading()"
+                  [error]="_accountError()"
+                  (add)="onAddAccount()"
+                  (edit)="onEditAccount($event)"
+                  (delete)="onDeleteAccount($event)"
+                  (retry)="accountService.loadAccounts()"
+                />
+                <div class="settings-page__delete-error" role="alert">
+                  @if (accountService.deleteError(); as deleteError) {
+                    {{ deleteError }}
+                  }
+                </div>
+              }
+              @case ('add') {
+                <fd-account-form
+                  [saving]="accountService.saving()"
+                  [validating]="accountService.validating()"
+                  [validationResult]="accountService.validationResult()"
+                  [validationError]="accountService.validationError()"
+                  [saveError]="accountService.saveError()"
+                  (save)="onSaveNewAccount($event)"
+                  (validateToken)="onValidateToken($event)"
+                  (cancel)="onAccountCancelled()"
+                />
+              }
+              @case ('edit') {
+                <fd-account-form
+                  [account]="_editAccount"
+                  [saving]="accountService.saving()"
+                  [validating]="accountService.validating()"
+                  [validationResult]="accountService.validationResult()"
+                  [validationError]="accountService.validationError()"
+                  [saveError]="accountService.saveError()"
+                  (save)="onSaveExistingAccount($event)"
+                  (validateToken)="onValidateToken($event)"
+                  (cancel)="onAccountCancelled()"
+                />
+              }
+            }
+          </section>
+
           <section class="settings-page__section">
             <h2 class="settings-page__section-title" #sectionHeading tabindex="-1">Worker Authentication</h2>
             <p class="settings-page__section-description">
@@ -115,13 +172,17 @@ const TIMEOUT_MINUTES_MAX = 1440;
                   }
                 </div>
 
-                @if (settingsService.saveError()) {
-                  <div id="api-key-error" class="settings-page__save-error" role="alert">{{ settingsService.saveError() }}</div>
-                }
+                <div id="api-key-error" class="settings-page__save-error" role="alert">
+                  @if (settingsService.saveError()) {
+                    {{ settingsService.saveError() }}
+                  }
+                </div>
 
-                @if (settingsService.saveSuccess()) {
-                  <div class="settings-page__save-success" role="status">Settings saved successfully</div>
-                }
+                <div class="settings-page__save-success" role="status">
+                  @if (settingsService.saveSuccess()) {
+                    Settings saved successfully
+                  }
+                </div>
 
                 <button
                   class="settings-page__save-btn"
@@ -176,13 +237,17 @@ const TIMEOUT_MINUTES_MAX = 1440;
                   </div>
                 }
 
-                @if (settingsService.switchError()) {
-                  <div class="settings-page__switch-error" role="alert">{{ settingsService.switchError() }}</div>
-                }
+                <div class="settings-page__switch-error" role="alert">
+                  @if (settingsService.switchError()) {
+                    {{ settingsService.switchError() }}
+                  }
+                </div>
 
-                @if (settingsService.saveSuccess()) {
-                  <div class="settings-page__save-success" role="status">OAuth credentials applied successfully</div>
-                }
+                <div class="settings-page__save-success" role="status">
+                  @if (settingsService.saveSuccess()) {
+                    OAuth credentials applied successfully
+                  }
+                </div>
 
                 <button
                   class="settings-page__scan-btn"
@@ -262,8 +327,11 @@ const TIMEOUT_MINUTES_MAX = 1440;
 })
 export class SettingsPageComponent implements OnInit {
   protected readonly settingsService = inject(SettingsService);
+  protected readonly accountService = inject(AccountService);
+  private readonly _injector = inject(Injector);
 
   @ViewChild('sectionHeading') private readonly _sectionHeading?: ElementRef<HTMLElement>;
+  @ViewChild('accountsSectionHeading') private readonly _accountsSectionHeading?: ElementRef<HTMLElement>;
 
   protected readonly maxConcurrentMin = MAX_CONCURRENT_MIN;
   protected readonly maxConcurrentMax = MAX_CONCURRENT_MAX;
@@ -272,12 +340,19 @@ export class SettingsPageComponent implements OnInit {
 
   protected readonly _selectedMode: WritableSignal<AuthMode> = signal('api_key');
   protected readonly _showApiKey: WritableSignal<boolean> = signal(false);
+  protected readonly _accountView: WritableSignal<AccountView> = signal({ kind: 'list' });
   private _modeInitialized = false;
   protected _apiKeyValue = '';
 
   protected readonly _maxConcurrentValue: WritableSignal<number> = signal(MAX_CONCURRENT_MIN);
   protected readonly _timeoutMinutesValue: WritableSignal<number> = signal(TIMEOUT_MINUTES_MIN);
   private _limitsInitialized = false;
+
+  protected readonly _accountError: Signal<string | null> = computed(() => this.accountService.loadError());
+
+  protected get _editAccount(): AccountSummary {
+    return (this._accountView() as { kind: 'edit'; account: AccountSummary }).account;
+  }
 
   constructor() {
     effect(() => {
@@ -296,16 +371,31 @@ export class SettingsPageComponent implements OnInit {
         this._timeoutMinutesValue.set(limits.timeoutMinutes);
       }
     });
+
+    effect(() => {
+      if (this.accountService.saveSuccess() && this._accountView().kind !== 'list') {
+        this._accountView.set({ kind: 'list' });
+        this.accountService.loadAccounts();
+        runInInjectionContext(this._injector, () => {
+          afterNextRender(() => {
+            this._accountsSectionHeading?.nativeElement.focus();
+          });
+        });
+      }
+    });
   }
 
   ngOnInit(): void {
     this.settingsService.loadSettings();
+    this.accountService.loadAccounts();
   }
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
-    afterNextRender(() => {
-      this._sectionHeading?.nativeElement.focus();
+    runInInjectionContext(this._injector, () => {
+      afterNextRender(() => {
+        this._sectionHeading?.nativeElement.focus();
+      });
     });
   }
 
@@ -330,5 +420,41 @@ export class SettingsPageComponent implements OnInit {
 
   saveLimits(): void {
     this.settingsService.updateWorkerLimits(this._maxConcurrentValue(), this._timeoutMinutesValue());
+  }
+
+  onAddAccount(): void {
+    this._accountView.set({ kind: 'add' });
+  }
+
+  onEditAccount(account: AccountSummary): void {
+    this._accountView.set({ kind: 'edit', account });
+  }
+
+  onDeleteAccount(account: AccountSummary): void {
+    if (window.confirm(`Delete account "${account.name}"?`)) {
+      this.accountService.deleteAccount(account.id);
+    }
+  }
+
+  onSaveNewAccount(request: CreateAccountRequest | UpdateAccountRequest): void {
+    this.accountService.createAccount(request as CreateAccountRequest);
+  }
+
+  onSaveExistingAccount(request: CreateAccountRequest | UpdateAccountRequest): void {
+    const view = this._accountView() as { kind: 'edit'; account: AccountSummary };
+    this.accountService.updateAccount(view.account.id, request as UpdateAccountRequest);
+  }
+
+  onValidateToken(event: { token: string; baseUrl: string }): void {
+    this.accountService.validateToken(event);
+  }
+
+  onAccountCancelled(): void {
+    this._accountView.set({ kind: 'list' });
+    runInInjectionContext(this._injector, () => {
+      afterNextRender(() => {
+        this._accountsSectionHeading?.nativeElement.focus();
+      });
+    });
   }
 }

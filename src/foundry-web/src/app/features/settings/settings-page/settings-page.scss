@@ -1,3 +1,8 @@
+@mixin focus-ring {
+  outline: 2px solid var(--fd-text-link);
+  outline-offset: 2px;
+}
+
 .settings-page {
   max-width: 768px;
   margin-inline: auto;
@@ -20,8 +25,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
       border-radius: var(--fd-radius-sm);
     }
   }
@@ -65,8 +69,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
@@ -105,6 +108,10 @@
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-md);
     padding: var(--fd-spacing-xl);
+
+    & + & {
+      margin-top: var(--fd-spacing-lg);
+    }
   }
 
   &__section-title {
@@ -144,7 +151,6 @@
     color: inherit;
   }
 
-  // API Key form
   &__api-key-form {
     display: flex;
     flex-direction: column;
@@ -174,29 +180,36 @@
     gap: var(--fd-spacing-sm);
   }
 
-  &__api-key-input {
-    flex: 1;
+  &__api-key-input,
+  &__number-input {
     background: var(--fd-bg-page);
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-sm);
     color: var(--fd-text-primary);
-    font-family: var(--fd-font-mono);
     font-size: 0.875rem;
     min-height: 40px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
-
-    &::placeholder {
-      color: var(--fd-text-tertiary);
-    }
 
     &:focus {
       border-color: var(--fd-text-link);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
+  }
+
+  &__api-key-input {
+    flex: 1;
+    font-family: var(--fd-font-mono);
+
+    &::placeholder {
+      color: var(--fd-text-tertiary);
+    }
+  }
+
+  &__number-input {
+    width: 100%;
   }
 
   &__toggle-visibility-btn {
@@ -218,12 +231,10 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
-  // Local text variants for status colors — lighter shades for AA contrast on dark backgrounds
   --fd-text-success: #3fb950;
   --fd-text-warning: #d29922;
 
@@ -232,9 +243,15 @@
     font-size: 0.8125rem;
   }
 
-  &__save-error {
+  &__delete-error,
+  &__save-error,
+  &__switch-error {
     color: var(--fd-state-failed);
     font-size: 0.875rem;
+  }
+
+  &__delete-error {
+    margin-top: var(--fd-spacing-sm);
   }
 
   &__save-success {
@@ -242,35 +259,47 @@
     font-size: 0.875rem;
   }
 
-  &__save-btn {
+  &__save-btn,
+  &__scan-btn {
     align-self: flex-start;
     background: transparent;
-    border: 1px solid var(--fd-text-link);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-link);
     cursor: pointer;
     font-size: 0.875rem;
-    font-weight: 500;
     min-height: 44px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
-    transition: background 0.15s ease;
 
     &:disabled {
       cursor: not-allowed;
       opacity: 0.5;
     }
 
-    &:not(:disabled):hover {
-      background: var(--fd-bg-card-hover);
-    }
-
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
-  // OAuth section
+  &__save-btn {
+    border: 1px solid var(--fd-text-link);
+    color: var(--fd-text-link);
+    font-weight: 500;
+    transition: background 0.15s ease;
+
+    &:not(:disabled):hover {
+      background: var(--fd-bg-card-hover);
+    }
+  }
+
+  &__scan-btn {
+    border: 1px solid var(--fd-border-default);
+    color: var(--fd-text-primary);
+
+    &:not(:disabled):hover {
+      background: var(--fd-bg-card-hover);
+      border-color: var(--fd-text-secondary);
+    }
+  }
+
   &__oauth-section {
     display: flex;
     flex-direction: column;
@@ -347,46 +376,12 @@
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
   }
 
-  &__switch-error {
-    color: var(--fd-state-failed);
-    font-size: 0.875rem;
-  }
-
-  &__scan-btn {
-    align-self: flex-start;
-    background: transparent;
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-primary);
-    cursor: pointer;
-    font-size: 0.875rem;
-    min-height: 44px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
-    &:not(:disabled):hover {
-      background: var(--fd-bg-card-hover);
-      border-color: var(--fd-text-secondary);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
-  }
-
-  // Sections wrapper
   &__sections {
     display: flex;
     flex-direction: column;
     gap: var(--fd-spacing-xl);
   }
 
-  // Worker Limits form
   &__limits-form {
     display: flex;
     flex-direction: column;
@@ -400,26 +395,6 @@
 
     @media (max-width: 30rem) {
       grid-template-columns: 1fr;
-    }
-  }
-
-  &__number-input {
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-primary);
-    font-size: 0.875rem;
-    min-height: 40px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
-    width: 100%;
-
-    &:focus {
-      border-color: var(--fd-text-link);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
     }
   }
 }

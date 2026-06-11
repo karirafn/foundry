@@ -24,7 +24,7 @@ public sealed class Create
             Body: "Bug details",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
-            AccountSecretKeyName: "github-pat");
+            AccountToken: "ghp_test_token");
 
         // Assert
         dispatch.ShouldSatisfyAllConditions(
@@ -53,7 +53,7 @@ public sealed class Create
             Body: "Bug details",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
-            AccountSecretKeyName: "github-pat",
+            AccountToken: "ghp_test_token",
             Revision: revision);
 
         // Assert

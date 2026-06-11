@@ -35,7 +35,6 @@ internal sealed class MonitoringService(
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
-        IProviderAuth providerAuth = scope.ServiceProvider.GetRequiredService<IProviderAuth>();
         IIssueProviderFactory providerFactory = scope.ServiceProvider.GetRequiredService<IIssueProviderFactory>();
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
 
@@ -48,7 +47,6 @@ internal sealed class MonitoringService(
             await ProcessAccountGroupAsync(
                 accountGroup,
                 dbContext,
-                providerAuth,
                 providerFactory,
                 poller,
                 now,
@@ -70,7 +68,6 @@ internal sealed class MonitoringService(
     private async Task ProcessAccountGroupAsync(
         IGrouping<AccountId, MonitoredRepository> accountGroup,
         DbContext dbContext,
-        IProviderAuth providerAuth,
         IIssueProviderFactory providerFactory,
         RepositoryPoller poller,
         DateTimeOffset now,
@@ -89,21 +86,16 @@ internal sealed class MonitoringService(
             return;
         }
 
-        Result<string> tokenResult = await providerAuth.GetTokenAsync(
-            account.SecretKeyName,
-            cancellationToken);
-
-        if (tokenResult is not Result<string>.Success tokenSuccess)
+        if (string.IsNullOrEmpty(account.Token))
         {
             logger.LogWarning(
-                "Could not retrieve token for account '{AccountName}' ({ErrorCode}); skipping {Count} repo(s).",
+                "Account '{AccountName}' has no token configured; skipping {Count} repo(s).",
                 account.Name,
-                tokenResult is Result<string>.Failure f ? f.Error.Code : "unknown",
                 accountGroup.Count());
             return;
         }
 
-        IIssueProvider provider = providerFactory.CreateProvider(account, tokenSuccess.Value);
+        IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
 
         foreach (MonitoredRepository repo in accountGroup)
         {
