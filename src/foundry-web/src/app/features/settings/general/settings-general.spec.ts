@@ -70,6 +70,23 @@ describe('SettingsGeneralComponent', () => {
     expect(authTitle).toBeTruthy();
   });
 
+  it('should set tabindex="-1" on the Worker Authentication heading for focus management', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication'));
+
+    // Assert
+    expect(authHeading?.getAttribute('tabindex')).toBe('-1');
+  });
+
   it('should render API Key and OAuth radio options', () => {
     // Arrange
     const { httpMock } = setup();

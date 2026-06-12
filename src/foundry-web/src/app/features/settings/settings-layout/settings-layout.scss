@@ -111,9 +111,12 @@
   }
 
   &__nav-link {
+    align-items: center;
     border-radius: var(--fd-radius-sm);
     color: var(--fd-text-secondary);
+    display: flex;
     font-size: 0.875rem;
+    min-height: 44px;
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
     text-decoration: none;
     transition: color 0.15s ease, background 0.15s ease;
@@ -130,7 +133,7 @@
     &--active {
       color: var(--fd-text-primary);
       background: var(--fd-bg-card);
-      border-inline-start: 2px solid var(--fd-border-default);
+      border-inline-start: 2px solid var(--fd-text-link);
     }
   }
 
@@ -152,7 +155,7 @@
 
     &__nav-link--active {
       border-inline-start: none;
-      border-block-end: 2px solid var(--fd-border-default);
+      border-block-end: 2px solid var(--fd-text-link);
     }
   }
 }

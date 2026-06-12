@@ -1,4 +1,16 @@
-import { Component, ChangeDetectionStrategy, WritableSignal, inject, signal, effect } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  ElementRef,
+  Injector,
+  ViewChild,
+  WritableSignal,
+  afterNextRender,
+  inject,
+  runInInjectionContext,
+  signal,
+  effect,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
 import { AuthMode } from '../settings.model';
@@ -15,7 +27,7 @@ const TIMEOUT_MINUTES_MAX = 1440;
   template: `
     <div class="general-settings">
       <section class="general-settings__section">
-        <h2 class="general-settings__section-title">Worker Authentication</h2>
+        <h2 class="general-settings__section-title" #authHeading tabindex="-1">Worker Authentication</h2>
         <p class="general-settings__section-description">
           Configure how worker containers authenticate with the AI provider.
         </p>
@@ -242,6 +254,9 @@ const TIMEOUT_MINUTES_MAX = 1440;
 })
 export class SettingsGeneralComponent {
   protected readonly settingsService = inject(SettingsService);
+  private readonly _injector = inject(Injector);
+
+  @ViewChild('authHeading') private readonly _authHeading?: ElementRef<HTMLHeadingElement>;
 
   protected readonly MAX_CONCURRENT_MIN = MAX_CONCURRENT_MIN;
   protected readonly MAX_CONCURRENT_MAX = MAX_CONCURRENT_MAX;
@@ -278,6 +293,9 @@ export class SettingsGeneralComponent {
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => this._authHeading?.nativeElement.focus())
+    );
   }
 
   saveApiKey(): void {

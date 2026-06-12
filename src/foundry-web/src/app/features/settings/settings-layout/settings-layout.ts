@@ -27,7 +27,6 @@ import { SettingsService } from '../settings.service';
       @if (settingsService.loading()) {
         <div class="settings-layout__loading" role="status" aria-label="Loading settings">
           <span class="settings-layout__loading-spinner" aria-hidden="true"></span>
-          <span class="sr-only">Loading settings</span>
         </div>
       }
 
@@ -56,9 +55,9 @@ import { SettingsService } from '../settings.service';
               [attr.aria-current]="repositoriesLink.isActive ? 'page' : null"
             >Repositories</a>
           </nav>
-          <main class="settings-layout__content">
+          <section class="settings-layout__content">
             <router-outlet />
-          </main>
+          </section>
         </div>
       }
     </div>
