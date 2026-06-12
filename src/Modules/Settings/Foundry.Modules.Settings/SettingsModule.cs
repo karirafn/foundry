@@ -19,6 +19,13 @@ public static class SettingsModule
         services.AddScoped<IOAuthCredentialScanner, FileSystemOAuthCredentialScanner>();
         services.AddHostedService<SettingsSeeder>();
 
+        services.AddHttpClient<AnthropicAuthValidator>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.anthropic.com");
+            client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+        });
+        services.AddTransient<IAuthValidator>(sp => sp.GetRequiredService<AnthropicAuthValidator>());
+
         services.AddQueryHandler<GetSettings.Query, GlobalSettingsSummary, GetSettings.Handler>();
         services.AddQueryHandler<ScanOAuthCredentials.Query, ScanOAuthCredentials.OAuthScanResponse, ScanOAuthCredentials.Handler>();
         services.AddCommandHandler<UpdateAuthMode.Command, UpdateAuthMode.Response, UpdateAuthMode.Handler, UpdateAuthMode.Validator>();

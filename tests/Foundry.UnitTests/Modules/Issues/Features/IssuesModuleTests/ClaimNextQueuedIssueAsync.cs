@@ -5,6 +5,8 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -48,6 +50,8 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             _dispatcher,
             new PassingBranchProtectionValidator(),
             new NullDomainEventDispatcher(),
+            new StubAuthValidator(AuthValidationResult.Valid()),
+            new NullSystemNotificationBroadcaster(),
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
@@ -361,5 +365,17 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             => Task.FromResult(
                 Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
                     Array.Empty<EligibilityViolationInfo>()));
+    }
+
+    private sealed class StubAuthValidator(AuthValidationResult result) : IAuthValidator
+    {
+        public Task<AuthValidationResult> ValidateAsync(CancellationToken cancellationToken)
+            => Task.FromResult(result);
+    }
+
+    private sealed class NullSystemNotificationBroadcaster : ISystemNotificationBroadcaster
+    {
+        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

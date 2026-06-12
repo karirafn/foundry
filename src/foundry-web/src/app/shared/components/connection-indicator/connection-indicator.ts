@@ -1,5 +1,5 @@
 import { Component, input, InputSignal } from '@angular/core';
-import { ConnectionStatus } from '../../../core/services/signalr.service';
+import { ConnectionStatus } from '../../../core/services/issue-signalr.service';
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
   connected: 'Connected',

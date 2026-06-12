@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ConnectionIndicatorComponent } from './connection-indicator';
-import { ConnectionStatus } from '../../../core/services/signalr.service';
+import { ConnectionStatus } from '../../../core/services/issue-signalr.service';
 
 function createComponent(status: ConnectionStatus) {
   TestBed.configureTestingModule({

@@ -2,12 +2,21 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { App } from './app';
 import { routes } from './app.routes';
+import { SYSTEM_HUB_FACTORY, SystemHub } from './core/services/system-signalr.service';
+
+const mockSystemHubFactory = (): SystemHub => ({
+  on: () => {},
+  start: () => Promise.resolve(),
+});
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter(routes)],
+      providers: [
+        provideRouter(routes),
+        { provide: SYSTEM_HUB_FACTORY, useValue: mockSystemHubFactory },
+      ],
     }).compileComponents();
   });
 

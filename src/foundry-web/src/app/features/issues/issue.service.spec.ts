@@ -2,10 +2,10 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
-import { SignalRService } from '../../core/services/signalr.service';
+import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueSummary, IssueDetail } from './issue.model';
 
-const mockSignalRService = {
+const mockIssueSignalRService = {
   on: () => {},
   onReconnected: () => {},
 };
@@ -32,7 +32,7 @@ function setupWithCapturingSignalR(callbacks: Record<string, (data: IssueSummary
       IssueService,
       provideHttpClient(),
       provideHttpClientTesting(),
-      { provide: SignalRService, useValue: capturingSignalR },
+      { provide: IssueSignalRService, useValue: capturingSignalR },
     ],
   });
 
@@ -52,7 +52,7 @@ describe('IssueService', () => {
         IssueService,
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: SignalRService, useValue: mockSignalRService },
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
       ],
     });
     service = TestBed.inject(IssueService);

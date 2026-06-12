@@ -4,10 +4,10 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { signal } from '@angular/core';
 import { IssueListComponent } from './issue-list';
 import { IssueService } from '../issue.service';
-import { SignalRService } from '../../../core/services/signalr.service';
+import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { IssueSummary } from '../issue.model';
 
-const mockSignalRService = {
+const mockIssueSignalRService = {
   on: () => {},
   onReconnected: () => {},
   connectionStatus: signal<'connected' | 'reconnecting' | 'disconnected'>('disconnected'),
@@ -30,7 +30,7 @@ function setupComponent() {
       IssueService,
       provideHttpClient(),
       provideHttpClientTesting(),
-      { provide: SignalRService, useValue: mockSignalRService },
+      { provide: IssueSignalRService, useValue: mockIssueSignalRService },
     ],
   });
 

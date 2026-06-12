@@ -5,9 +5,9 @@ import { IssueDetailComponent, MEDIA_QUERY_FACTORY } from './issue-detail';
 import { IssueDetail, IssueStateDetails } from '../issue.model';
 import { WorkerLogService, WORKER_LOG_HUB_FACTORY } from '../worker-log.service';
 import { IssueService } from '../issue.service';
-import { SignalRService } from '../../../core/services/signalr.service';
+import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 
-const mockSignalRService = {
+const mockIssueSignalRService = {
   on: () => {},
   onReconnected: () => {},
 };
@@ -69,7 +69,7 @@ function createComponent(
       provideHttpClientTesting(),
       { provide: WORKER_LOG_HUB_FACTORY, useValue: mockHubFactory },
       { provide: MEDIA_QUERY_FACTORY, useValue: mqFactory },
-      { provide: SignalRService, useValue: mockSignalRService },
+      { provide: IssueSignalRService, useValue: mockIssueSignalRService },
     ],
   });
   const fixture = TestBed.createComponent(IssueDetailComponent);

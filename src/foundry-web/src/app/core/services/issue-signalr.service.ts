@@ -4,7 +4,7 @@ import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
 @Injectable({ providedIn: 'root' })
-export class SignalRService {
+export class IssueSignalRService {
   readonly connectionStatus: WritableSignal<ConnectionStatus> = signal('disconnected');
 
   private readonly _connection: HubConnection;
