@@ -1,0 +1,31 @@
+.accounts-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  &__section {
+    background: var(--fd-bg-card);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-md);
+    padding: var(--fd-spacing-xl);
+  }
+
+  &__section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--fd-text-primary);
+    margin: 0 0 var(--fd-spacing-xs) 0;
+  }
+
+  &__section-description {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0 0 var(--fd-spacing-xl) 0;
+  }
+
+  &__delete-error {
+    color: var(--fd-state-failed);
+    font-size: 0.875rem;
+    margin-block-start: var(--fd-spacing-sm);
+  }
+}
