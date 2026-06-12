@@ -72,7 +72,7 @@ Used by `BranchName.Generate()` to derive the branch prefix (`feat/`, `fix/`, `r
 
 A repository configured for Foundry to poll.
 References an Account (for credentials) and specifies an optional per-repo poll interval.
-Uniquely identified by its Repository Slug within the context of its Account.
+Uniquely identified by its Repository Slug globally — the same repo cannot be monitored through multiple accounts (prevents duplicate issue detection).
 Tracks `LastPolledAt` for per-repo poll timing.
 
 ## Issue Dependency
