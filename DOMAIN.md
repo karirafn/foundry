@@ -61,6 +61,13 @@ A provider-side issue tagged for Foundry processing.
 Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `IneligibleIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
+## Issue Kind
+
+A value object on the base `Issue` type classifying the nature of the work — `Feature`, `Bug`, `Refactor`, `Documentation`, etc.
+Extracted during issue detection by the provider adapter: GitHub maps flat labels (`feature`, `bug`), GitLab maps scoped labels (`type::feature`, `type::bug`).
+Falls back to `Feature` when no recognized label is present.
+Used by `BranchName.Generate()` to derive the branch prefix (`feat/`, `fix/`, `refactor/`, `docs/`).
+
 ## Monitored Repository
 
 A repository configured for Foundry to poll.
