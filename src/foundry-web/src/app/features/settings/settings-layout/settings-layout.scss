@@ -151,6 +151,7 @@
       flex-direction: row;
       width: auto;
       overflow-x: auto;
+      gap: var(--fd-spacing-sm);
     }
 
     &__nav-link--active {

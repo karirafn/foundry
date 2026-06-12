@@ -23,6 +23,10 @@
     font-weight: 600;
     color: var(--fd-text-primary);
     margin: 0 0 var(--fd-spacing-xs) 0;
+
+    &:focus-visible {
+      outline: none;
+    }
   }
 
   &__section-description {
@@ -131,9 +135,9 @@
     cursor: pointer;
     display: inline-flex;
     justify-content: center;
-    min-height: 40px;
+    min-height: 44px;
     padding: var(--fd-spacing-xs);
-    width: 40px;
+    width: 44px;
 
     &:hover {
       background: var(--fd-bg-card-hover);
