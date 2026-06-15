@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
@@ -63,10 +65,14 @@ internal static class CreateRepository
             }
 
             Result<RepositorySlug> slugResult = RepositorySlug.Create(command.Slug);
+            if (slugResult is Result<RepositorySlug>.Failure slugFailure)
+            {
+                return Result<RepositorySummary>.Fail(slugFailure.Error);
+            }
+
             if (slugResult is not Result<RepositorySlug>.Success slugSuccess)
             {
-                Error error = ((Result<RepositorySlug>.Failure)slugResult).Error;
-                return Result<RepositorySummary>.Fail(error);
+                throw new UnreachableException();
             }
 
             RepositorySlug repositorySlug = slugSuccess.Value;

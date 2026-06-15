@@ -149,6 +149,10 @@
     padding: var(--fd-spacing-xs) 0;
   }
 
+  &__picker-listbox[hidden] {
+    display: none;
+  }
+
   &__picker-spinner {
     animation: spin 1s linear infinite;
     border: 2px solid var(--fd-border-default);
@@ -158,6 +162,10 @@
     flex-shrink: 0;
     height: 14px;
     width: 14px;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   }
 
   &__picker-error {

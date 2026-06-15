@@ -50,9 +50,8 @@ internal static class UpdateRepository
             MonitoredRepositoryId repositoryId = MonitoredRepositoryId.From(command.Id);
 
             MonitoredRepository? repository = await dbContext.Set<MonitoredRepository>()
-                .FirstOrDefaultAsync(
-                    r => r.Id == repositoryId && r.AccountId == accountId,
-                    cancellationToken);
+                .Where(r => r.Id == repositoryId)
+                .FirstOrDefaultAsync(r => r.AccountId == accountId, cancellationToken);
 
             if (repository is null)
             {

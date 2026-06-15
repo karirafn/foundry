@@ -24,9 +24,8 @@ internal static class DeleteRepository
             MonitoredRepositoryId repositoryId = MonitoredRepositoryId.From(command.Id);
 
             if (await dbContext.Set<MonitoredRepository>()
-                    .FirstOrDefaultAsync(
-                        r => r.Id == repositoryId && r.AccountId == accountId,
-                        cancellationToken)
+                    .Where(r => r.Id == repositoryId)
+                    .FirstOrDefaultAsync(r => r.AccountId == accountId, cancellationToken)
                 is not MonitoredRepository repository)
             {
                 return Result<bool>.Fail(RepositoryErrors.NotFound(repositoryId));

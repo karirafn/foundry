@@ -74,6 +74,10 @@
     display: inline-block;
     height: 24px;
     width: 24px;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   }
 
   &__header {

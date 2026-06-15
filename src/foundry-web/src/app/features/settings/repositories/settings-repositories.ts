@@ -91,12 +91,12 @@ export class SettingsRepositoriesComponent implements OnInit {
 
   @ViewChild('sectionHeading') private readonly _sectionHeading?: ElementRef<HTMLElement>;
 
-  readonly _repositoryView: WritableSignal<RepositoryView> = signal({ kind: 'list' });
+  protected readonly _repositoryView: WritableSignal<RepositoryView> = signal({ kind: 'list' });
   private readonly _selectedAccountId: WritableSignal<string> = signal('');
   private readonly _accountIdsKey: Signal<string> = computed(() =>
     this.accountService.accounts().map(a => a.id).sort().join(',')
   );
-  private _lastLoadedAccountIdsKey = '';
+  private readonly _lastLoadedAccountIdsKey: WritableSignal<string> = signal('');
 
   protected get _editRepository(): RepositorySummary {
     return (this._repositoryView() as { kind: 'edit'; repository: RepositorySummary }).repository;
@@ -105,8 +105,8 @@ export class SettingsRepositoriesComponent implements OnInit {
   constructor() {
     effect(() => {
       const key = this._accountIdsKey();
-      if (key !== this._lastLoadedAccountIdsKey) {
-        this._lastLoadedAccountIdsKey = key;
+      if (key !== this._lastLoadedAccountIdsKey()) {
+        this._lastLoadedAccountIdsKey.set(key);
         const accountIds = this.accountService.accounts().map(a => a.id);
         this.repositoryService.loadAllRepositories(accountIds);
       }
@@ -184,7 +184,7 @@ export class SettingsRepositoriesComponent implements OnInit {
 
   private _reloadAll(): void {
     const accountIds = this.accountService.accounts().map(a => a.id);
-    this._lastLoadedAccountIdsKey = this._accountIdsKey();
+    this._lastLoadedAccountIdsKey.set(this._accountIdsKey());
     this.repositoryService.loadAllRepositories(accountIds);
   }
 }
