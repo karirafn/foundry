@@ -10,6 +10,7 @@ import {
   WritableSignal,
   afterNextRender,
   computed,
+  effect,
   input,
   output,
   signal,
@@ -105,30 +106,29 @@ const MAX_POLL_INTERVAL_MINUTES = 1440;
                   (keydown)="onPickerKeydown($event)"
                 />
 
-                @if (_pickerOpen()) {
-                  <ul
-                    class="repository-form__picker-listbox"
-                    id="repository-picker-listbox"
-                    role="listbox"
-                  >
-                    @if (_filteredRepositories().length === 0) {
-                      <li class="repository-form__picker-empty">No matching repositories</li>
-                    }
-                    @for (repo of _filteredRepositories(); track repo.slug; let i = $index) {
-                      <li
-                        class="repository-form__picker-option"
-                        [class.repository-form__picker-option--active]="i === _activeOptionIndex()"
-                        [id]="'repo-option-' + i"
-                        role="option"
-                        [attr.aria-selected]="_repoSlug() === repo.slug"
-                        (click)="selectRepo(repo.slug)"
-                        (mousedown)="$event.preventDefault()"
-                      >
-                        {{ repo.slug }}
-                      </li>
-                    }
-                  </ul>
-                }
+                <ul
+                  class="repository-form__picker-listbox"
+                  id="repository-picker-listbox"
+                  role="listbox"
+                  [hidden]="!_pickerOpen()"
+                >
+                  @if (_filteredRepositories().length === 0) {
+                    <li class="repository-form__picker-empty">No matching repositories</li>
+                  }
+                  @for (repo of _filteredRepositories(); track repo.slug; let i = $index) {
+                    <li
+                      class="repository-form__picker-option"
+                      [class.repository-form__picker-option--active]="i === _activeOptionIndex()"
+                      [id]="'repo-option-' + i"
+                      role="option"
+                      [attr.aria-selected]="_repoSlug() === repo.slug"
+                      (click)="selectRepo(repo.slug)"
+                      (mousedown)="$event.preventDefault()"
+                    >
+                      {{ repo.slug }}
+                    </li>
+                  }
+                </ul>
               </div>
             }
           </div>
@@ -238,6 +238,11 @@ export class RepositoryFormComponent implements OnInit {
   constructor() {
     afterNextRender(() => {
       this.formHeading?.nativeElement.focus();
+    });
+
+    effect(() => {
+      this._filteredRepositories();
+      this._activeOptionIndex.set(-1);
     });
   }
 

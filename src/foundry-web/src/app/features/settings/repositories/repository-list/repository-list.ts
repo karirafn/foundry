@@ -18,6 +18,7 @@ import { RepositorySummary } from '../repository.model';
 
     @if (loading()) {
       <div class="repository-list__loading" role="status" aria-label="Loading repositories">
+        <span class="repository-list__loading-spinner" aria-hidden="true"></span>
         <span class="sr-only">Loading repositories</span>
       </div>
     }

@@ -2,7 +2,9 @@ import {
   Component,
   ChangeDetectionStrategy,
   OnInit,
+  Signal,
   WritableSignal,
+  computed,
   effect,
   inject,
   signal,
@@ -91,7 +93,10 @@ export class SettingsRepositoriesComponent implements OnInit {
 
   readonly _repositoryView: WritableSignal<RepositoryView> = signal({ kind: 'list' });
   private readonly _selectedAccountId: WritableSignal<string> = signal('');
-  private _lastLoadedAccountIds: string[] = [];
+  private readonly _accountIdsKey: Signal<string> = computed(() =>
+    this.accountService.accounts().map(a => a.id).sort().join(',')
+  );
+  private _lastLoadedAccountIdsKey = '';
 
   protected get _editRepository(): RepositorySummary {
     return (this._repositoryView() as { kind: 'edit'; repository: RepositorySummary }).repository;
@@ -99,12 +104,10 @@ export class SettingsRepositoriesComponent implements OnInit {
 
   constructor() {
     effect(() => {
-      const accounts = this.accountService.accounts();
-      const accountIds = accounts.map(a => a.id);
-      const idsChanged = accountIds.length !== this._lastLoadedAccountIds.length ||
-        accountIds.some((id, i) => id !== this._lastLoadedAccountIds[i]);
-      if (idsChanged) {
-        this._lastLoadedAccountIds = accountIds;
+      const key = this._accountIdsKey();
+      if (key !== this._lastLoadedAccountIdsKey) {
+        this._lastLoadedAccountIdsKey = key;
+        const accountIds = this.accountService.accounts().map(a => a.id);
         this.repositoryService.loadAllRepositories(accountIds);
       }
     });
@@ -181,8 +184,7 @@ export class SettingsRepositoriesComponent implements OnInit {
 
   private _reloadAll(): void {
     const accountIds = this.accountService.accounts().map(a => a.id);
-    this._lastLoadedAccountIds = accountIds;
-    this.accountService.loadAccounts();
+    this._lastLoadedAccountIdsKey = this._accountIdsKey();
     this.repositoryService.loadAllRepositories(accountIds);
   }
 }

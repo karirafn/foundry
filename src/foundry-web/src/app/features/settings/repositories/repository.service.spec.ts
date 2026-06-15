@@ -66,7 +66,8 @@ describe('RepositoryService', () => {
 
   // Cycle 1: initial signal state
   it('should start with empty state and no errors', () => {
-    // Arrange / Act — no calls yet
+    // Arrange
+    // (service initialized in beforeEach)
 
     // Assert
     expect(service.repositories()).toEqual([]);
@@ -84,7 +85,9 @@ describe('RepositoryService', () => {
 
   // Cycle 2: loadRepositories populates repositories signal
   it('should GET /api/accounts/{accountId}/repositories when loadRepositories is called', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     service.loadRepositories(ACCOUNT_ID);
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
 
@@ -94,7 +97,9 @@ describe('RepositoryService', () => {
   });
 
   it('should populate repositories after loadRepositories succeeds', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
 
@@ -104,7 +109,9 @@ describe('RepositoryService', () => {
   });
 
   it('should set loading to true while loadRepositories is in flight', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     service.loadRepositories(ACCOUNT_ID);
 
     // Assert — before flush
@@ -155,7 +162,9 @@ describe('RepositoryService', () => {
   });
 
   it('should populate multiple repositories', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY, MOCK_REPOSITORY_2]);
 
@@ -167,7 +176,9 @@ describe('RepositoryService', () => {
 
   // Cycle 3: loadAvailableRepositories
   it('should GET /api/accounts/{accountId}/repositories/available-repositories when loadAvailableRepositories is called', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     service.loadAvailableRepositories(ACCOUNT_ID);
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`);
 
@@ -177,7 +188,9 @@ describe('RepositoryService', () => {
   });
 
   it('should populate availableRepositories after loadAvailableRepositories succeeds', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     service.loadAvailableRepositories(ACCOUNT_ID);
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
@@ -189,7 +202,9 @@ describe('RepositoryService', () => {
   });
 
   it('should set loadingAvailable to true while loadAvailableRepositories is in flight', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     service.loadAvailableRepositories(ACCOUNT_ID);
 
     // Assert — before flush
@@ -235,7 +250,7 @@ describe('RepositoryService', () => {
     };
 
     // Act
-    service.createRepository(ACCOUNT_ID, request);
+    service.createRepository(ACCOUNT_ID, request).subscribe();
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
 
     // Assert
@@ -249,7 +264,7 @@ describe('RepositoryService', () => {
     const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
 
     // Act
-    service.createRepository(ACCOUNT_ID, request);
+    service.createRepository(ACCOUNT_ID, request).subscribe();
 
     // Assert — before flush
     expect(service.saving()).toBe(true);
@@ -262,7 +277,7 @@ describe('RepositoryService', () => {
   it('should set saving to false and saveSuccess to true after createRepository succeeds', () => {
     // Arrange
     const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
-    service.createRepository(ACCOUNT_ID, request);
+    service.createRepository(ACCOUNT_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`)
       .flush(MOCK_REPOSITORY, { status: 201, statusText: 'Created' });
@@ -280,7 +295,7 @@ describe('RepositoryService', () => {
     const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: 300 };
 
     // Act
-    service.createRepository(ACCOUNT_ID, request);
+    service.createRepository(ACCOUNT_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`)
       .flush(MOCK_REPOSITORY, { status: 201, statusText: 'Created' });
@@ -292,7 +307,7 @@ describe('RepositoryService', () => {
   it('should set saving to false and saveSuccess to false when createRepository fails', () => {
     // Arrange
     const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
-    service.createRepository(ACCOUNT_ID, request);
+    service.createRepository(ACCOUNT_ID, request).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
@@ -306,7 +321,7 @@ describe('RepositoryService', () => {
   it('should set saveError when createRepository fails with a string body', () => {
     // Arrange
     const request: CreateRepositoryRequest = { slug: 'my-org/duplicate', pollIntervalSeconds: null };
-    service.createRepository(ACCOUNT_ID, request);
+    service.createRepository(ACCOUNT_ID, request).subscribe({ error: () => {} });
 
     // Act
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Repository already exists.', {
@@ -320,14 +335,14 @@ describe('RepositoryService', () => {
 
   it('should clear saveError at start of createRepository', () => {
     // Arrange — first call that fails
-    service.createRepository(ACCOUNT_ID, { slug: 'x', pollIntervalSeconds: null });
+    service.createRepository(ACCOUNT_ID, { slug: 'x', pollIntervalSeconds: null }).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Conflict', {
       status: 409,
       statusText: 'Conflict',
     });
 
     // Act — second call clears error immediately
-    service.createRepository(ACCOUNT_ID, { slug: 'y', pollIntervalSeconds: null });
+    service.createRepository(ACCOUNT_ID, { slug: 'y', pollIntervalSeconds: null }).subscribe();
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
@@ -342,7 +357,7 @@ describe('RepositoryService', () => {
     const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
 
     // Act
-    service.updateRepository(ACCOUNT_ID, REPO_ID, request);
+    service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`);
 
     // Assert
@@ -356,7 +371,7 @@ describe('RepositoryService', () => {
     const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
 
     // Act
-    service.updateRepository(ACCOUNT_ID, REPO_ID, request);
+    service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
 
     // Assert — before flush
     expect(service.saving()).toBe(true);
@@ -366,7 +381,7 @@ describe('RepositoryService', () => {
   it('should set saving to false and saveSuccess to true after updateRepository succeeds', () => {
     // Arrange
     const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
-    service.updateRepository(ACCOUNT_ID, REPO_ID, request);
+    service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`)
       .flush({ ...MOCK_REPOSITORY, pollIntervalSeconds: 600 });
@@ -385,7 +400,7 @@ describe('RepositoryService', () => {
     const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
 
     // Act
-    service.updateRepository(ACCOUNT_ID, REPO_ID, request);
+    service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush(updatedRepo);
 
     // Assert
@@ -398,7 +413,7 @@ describe('RepositoryService', () => {
   it('should set saveError when updateRepository fails with a string body', () => {
     // Arrange
     const request: UpdateRepositoryRequest = { pollIntervalSeconds: -1, isActive: true };
-    service.updateRepository(ACCOUNT_ID, REPO_ID, request);
+    service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe({ error: () => {} });
 
     // Act
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Invalid interval.', {
@@ -412,14 +427,14 @@ describe('RepositoryService', () => {
 
   it('should clear saveError at start of updateRepository', () => {
     // Arrange — first call that fails
-    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: -1, isActive: true });
+    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: -1, isActive: true }).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
     });
 
     // Act — second call clears error immediately
-    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: 600, isActive: true });
+    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: 600, isActive: true }).subscribe();
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
@@ -428,8 +443,10 @@ describe('RepositoryService', () => {
 
   // Cycle 6: deleteRepository calls DELETE
   it('should DELETE /api/accounts/{accountId}/repositories/{id} when deleteRepository is called', () => {
-    // Arrange / Act
-    service.deleteRepository(ACCOUNT_ID, REPO_ID);
+    // Arrange
+
+    // Act
+    service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe();
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`);
 
     // Assert
@@ -438,8 +455,10 @@ describe('RepositoryService', () => {
   });
 
   it('should set deleting to true while deleteRepository is in flight', () => {
-    // Arrange / Act
-    service.deleteRepository(ACCOUNT_ID, REPO_ID);
+    // Arrange
+
+    // Act
+    service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe();
 
     // Assert — before flush
     expect(service.deleting()).toBe(true);
@@ -450,7 +469,7 @@ describe('RepositoryService', () => {
 
   it('should set deleting to false after deleteRepository succeeds', () => {
     // Arrange
-    service.deleteRepository(ACCOUNT_ID, REPO_ID);
+    service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`)
       .flush(null, { status: 204, statusText: 'No Content' });
@@ -465,7 +484,7 @@ describe('RepositoryService', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY, MOCK_REPOSITORY_2]);
 
     // Act
-    service.deleteRepository(ACCOUNT_ID, REPO_ID);
+    service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`)
       .flush(null, { status: 204, statusText: 'No Content' });
@@ -478,7 +497,7 @@ describe('RepositoryService', () => {
 
   it('should set deleteError when deleteRepository fails with a string body', () => {
     // Arrange
-    service.deleteRepository(ACCOUNT_ID, REPO_ID);
+    service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
 
     // Act
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Repository is in use.', {
@@ -492,14 +511,14 @@ describe('RepositoryService', () => {
 
   it('should clear deleteError at start of deleteRepository', () => {
     // Arrange — first call that fails
-    service.deleteRepository(ACCOUNT_ID, REPO_ID);
+    service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Conflict', {
       status: 409,
       statusText: 'Conflict',
     });
 
     // Act — second call clears error immediately
-    service.deleteRepository(ACCOUNT_ID, REPO_ID);
+    service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe();
 
     // Assert — error is cleared before response
     expect(service.deleteError()).toBeNull();
@@ -538,7 +557,9 @@ describe('RepositoryService', () => {
   });
 
   it('should set loading to true while loadAllRepositories is in flight', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     service.loadAllRepositories([ACCOUNT_ID]);
 
     // Assert — before flush

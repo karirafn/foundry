@@ -75,8 +75,10 @@ describe('SettingsRepositoriesComponent', () => {
   });
 
   it('should call loadAccounts on initialization', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture, httpMock } = setup();
+
+    // Act
     fixture.detectChanges();
 
     // Assert
@@ -209,7 +211,6 @@ describe('SettingsRepositoriesComponent', () => {
     req.flush(REPO_1, { status: 201, statusText: 'Created' });
 
     // Flush reload
-    flushAccounts(httpMock, [ACCOUNT_1]);
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
   });
 
@@ -233,7 +234,6 @@ describe('SettingsRepositoriesComponent', () => {
     req.flush({ ...REPO_1, pollIntervalSeconds: 600, isActive: false });
 
     // Flush reload
-    flushAccounts(httpMock, [ACCOUNT_1]);
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
   });
 
@@ -262,7 +262,6 @@ describe('SettingsRepositoriesComponent', () => {
     expect(form).toBeFalsy();
 
     // Flush the reload requests
-    flushAccounts(httpMock, [ACCOUNT_1]);
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
   });
 
@@ -286,7 +285,6 @@ describe('SettingsRepositoriesComponent', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
 
     // Flush reload
-    flushAccounts(httpMock, [ACCOUNT_1]);
     flushRepositories(httpMock, ACCOUNT_1.id, []);
   });
 
@@ -352,7 +350,7 @@ describe('SettingsRepositoriesComponent', () => {
 
     // Act
     const repositoryService = TestBed.inject(RepositoryService);
-    repositoryService.deleteRepository(ACCOUNT_1.id, REPO_1.id);
+    repositoryService.deleteRepository(ACCOUNT_1.id, REPO_1.id).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`).flush('Repository is in use.', {
       status: 409,
       statusText: 'Conflict',

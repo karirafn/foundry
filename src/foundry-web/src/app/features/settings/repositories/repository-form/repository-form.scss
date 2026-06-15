@@ -29,10 +29,6 @@
     font-size: 1rem;
     font-weight: 600;
     margin: 0 0 var(--fd-spacing-xs) 0;
-
-    &:focus-visible {
-      outline: none;
-    }
   }
 
   &__field {

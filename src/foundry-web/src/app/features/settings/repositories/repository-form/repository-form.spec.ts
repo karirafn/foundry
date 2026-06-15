@@ -65,7 +65,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 1: add mode renders heading "Add Repository"
   it('should render "Add Repository" heading in add mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: null });
 
     // Assert
@@ -75,7 +77,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 2: edit mode renders heading "Edit Repository"
   it('should render "Edit Repository" heading in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY });
 
     // Assert
@@ -85,7 +89,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 3: cancel link renders and emits cancel
   it('should render a cancel link', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -110,7 +116,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 4: add mode shows account dropdown
   it('should render account dropdown in add mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
@@ -124,7 +132,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should populate account dropdown options from accounts input', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
@@ -139,7 +149,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should not render account dropdown in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY });
 
     // Assert
@@ -169,7 +181,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 6: repository picker appears after account is selected
   it('should not render repository picker before account is selected', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
@@ -299,8 +313,9 @@ describe('RepositoryFormComponent', () => {
 
     // Assert
     expect(combobox.value).toBe('my-org/my-repo');
-    const listbox = el.querySelector('[role="listbox"]');
-    expect(listbox).toBeNull();
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox).toBeTruthy();
+    expect(listbox.hidden).toBe(true);
   });
 
   // Cycle 11: no matching repos shows empty message
@@ -334,7 +349,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 12: poll interval field
   it('should render poll interval field with label and number input', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -348,7 +365,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should default poll interval to 5 in add mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: null });
 
     // Assert
@@ -358,7 +377,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 13: edit mode shows read-only slug and account
   it('should show read-only repository slug in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY });
 
     // Assert
@@ -368,7 +389,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should show read-only account name in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY });
 
     // Assert
@@ -379,7 +402,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 14: edit mode pre-populates poll interval
   it('should pre-populate poll interval from repository in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY });
 
     // Assert — MOCK_REPOSITORY has pollIntervalSeconds: 300 = 5 minutes
@@ -388,7 +413,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should show empty poll interval when repository has null pollIntervalSeconds', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({
       repository: { ...MOCK_REPOSITORY, pollIntervalSeconds: null },
     });
@@ -400,7 +427,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 15: edit mode active toggle
   it('should render active toggle in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY });
 
     // Assert
@@ -410,7 +439,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should pre-populate active toggle from repository in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY });
 
     // Assert — MOCK_REPOSITORY.isActive = true
@@ -419,7 +450,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should not render active toggle in add mode', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: null });
 
     // Assert
@@ -429,7 +462,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 16: save error alert
   it('should show save error when saveError is set', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ saveError: 'Something went wrong' });
 
     // Assert
@@ -440,7 +475,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should not show save error content when saveError is null', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ saveError: null });
 
     // Assert — wrapper always present, content is empty
@@ -450,7 +487,9 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 17: save button disabled states
   it('should render the save button', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -460,7 +499,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should disable save button in add mode when no account selected', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: null, accounts: [MOCK_ACCOUNT] });
 
     // Assert
@@ -488,7 +529,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should disable save button when saving is true', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY, saving: true });
 
     // Assert
@@ -497,7 +540,9 @@ describe('RepositoryFormComponent', () => {
   });
 
   it('should enable save button in edit mode when no saving', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repository: MOCK_REPOSITORY, saving: false });
 
     // Assert
@@ -603,7 +648,9 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     // Assert dropdown not open initially
-    expect(el.querySelector('[role="listbox"]')).toBeNull();
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox).toBeTruthy();
+    expect(listbox.hidden).toBe(true);
 
     // Act — press ArrowDown
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
@@ -611,7 +658,7 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    expect(el.querySelector('[role="listbox"]')).toBeTruthy();
+    expect(listbox.hidden).toBe(false);
   });
 
   // Cycle 21: keyboard navigation — Escape closes dropdown
@@ -632,14 +679,15 @@ describe('RepositoryFormComponent', () => {
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
     combobox.click();
     fixture.detectChanges();
-    expect(el.querySelector('[role="listbox"]')).toBeTruthy();
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
 
     // Act — press Escape
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
 
     // Assert
-    expect(el.querySelector('[role="listbox"]')).toBeNull();
+    expect(listbox.hidden).toBe(true);
   });
 
   // Cycle 22: keyboard navigation — Enter selects highlighted option
@@ -668,7 +716,8 @@ describe('RepositoryFormComponent', () => {
 
     // Assert
     expect(combobox.value).toBe('my-org/my-repo');
-    expect(el.querySelector('[role="listbox"]')).toBeNull();
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(true);
   });
 
   // Cycle 23: disable save when poll interval is invalid

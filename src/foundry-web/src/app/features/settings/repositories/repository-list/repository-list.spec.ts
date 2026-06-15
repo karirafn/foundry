@@ -44,7 +44,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 1: empty state renders when no repositories
   it('should render the empty state when there are no repositories', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [] });
 
     // Assert
@@ -55,7 +57,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 2: empty state includes description and add button
   it('should render the empty state description and Add Repository button', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [] });
 
     // Assert
@@ -67,7 +71,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 3: loading state
   it('should render loading state with accessible role and label', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ loading: true });
 
     // Assert
@@ -80,7 +86,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 4: error state
   it('should render error message in alert region', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ error: 'Failed to load repositories' });
 
     // Assert
@@ -90,7 +98,9 @@ describe('RepositoryListComponent', () => {
   });
 
   it('should render a Retry button in the error state', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ error: 'Network error' });
 
     // Assert
@@ -101,7 +111,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 5: populated list shows list element
   it('should render a list when repositories are provided', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
@@ -113,7 +125,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 6: account badge abbreviation (2-letter)
   it('should render a 2-letter account badge for each repository', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
@@ -124,7 +138,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 7: slug and account name shown
   it('should render slug as primary text and account name as secondary text', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
@@ -136,7 +152,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 8: poll interval in minutes
   it('should render poll interval in minutes', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
@@ -146,7 +164,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 9: active status indicator
   it('should render "Active" status with dot for active repositories', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
@@ -158,7 +178,9 @@ describe('RepositoryListComponent', () => {
   });
 
   it('should render "Paused" status for inactive repositories', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO_2] });
 
     // Assert
@@ -170,7 +192,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 10: last polled — "Never" when null
   it('should show "Never" for last polled when lastPolledAt is null', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO_2] });
 
     // Assert
@@ -180,7 +204,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 11: action buttons with aria-labels
   it('should render edit and delete buttons with accessible labels', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
@@ -192,7 +218,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 12: populated state shows Add Repository button in header
   it('should render Add Repository button in header when repositories exist', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
@@ -203,7 +231,9 @@ describe('RepositoryListComponent', () => {
 
   // Cycle 13: multiple repositories
   it('should render a row for each repository', () => {
-    // Arrange / Act
+    // Arrange
+
+    // Act
     const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
 
     // Assert

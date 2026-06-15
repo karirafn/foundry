@@ -66,6 +66,16 @@
     padding: var(--fd-spacing-2xl);
   }
 
+  &__loading-spinner {
+    animation: spin 1s linear infinite;
+    border: 2px solid var(--fd-border-default);
+    border-radius: 50%;
+    border-top-color: var(--fd-text-link);
+    display: inline-block;
+    height: 24px;
+    width: 24px;
+  }
+
   &__header {
     display: flex;
     align-items: center;
@@ -189,10 +199,10 @@
 
   &__status-label {
     color: var(--fd-text-secondary);
+  }
 
-    &:has(+ .repository-list__status-dot--active) {
-      color: var(--fd-state-completed);
-    }
+  &__status:has(.repository-list__status-dot--active) &__status-label {
+    color: var(--fd-state-completed);
   }
 
   &__last-polled {
@@ -236,5 +246,11 @@
     &:hover {
       background: var(--fd-bg-card-hover);
     }
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
