@@ -136,15 +136,20 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         List<GitHubIssueDto>? dtos = JsonSerializer.Deserialize<List<GitHubIssueDto>>(body, JsonOptions);
 
         IReadOnlyList<ProviderIssue> issues = (dtos ?? [])
-            .Select(dto => new ProviderIssue(
-                Number: dto.Number,
-                Title: dto.Title,
-                Body: dto.Body ?? string.Empty,
-                Author: dto.User.Login,
-                Url: dto.HtmlUrl,
-                Labels: dto.Labels
+            .Select(dto =>
+            {
+                IReadOnlyList<string> labels = dto.Labels
                     .Select(l => l.Name)
-                    .ToList()))
+                    .ToList();
+                return new ProviderIssue(
+                    Number: dto.Number,
+                    Title: dto.Title,
+                    Body: dto.Body ?? string.Empty,
+                    Author: dto.User.Login,
+                    Url: dto.HtmlUrl,
+                    Labels: labels,
+                    IssueKindLabel: LabelClassifier.ClassifyKind(labels));
+            })
             .ToList();
 
         return Result<IReadOnlyList<ProviderIssue>>.Ok(issues);

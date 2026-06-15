@@ -23,6 +23,8 @@ internal sealed class CreateIssueHandler(
             return;
         }
 
+        IssueKind issueKind = IssueKind.FromLabel(@event.IssueKindLabel);
+
         DetectedIssue detected = DetectedIssue.Detect(
             @event.MonitoredRepositoryId,
             @event.IssueNumber,
@@ -31,7 +33,8 @@ internal sealed class CreateIssueHandler(
             authorSuccess.Value,
             urlSuccess.Value,
             @event.Labels,
-            @event.DetectedAt);
+            @event.DetectedAt,
+            issueKind);
 
         db.Set<Issue>().Add(detected);
         await db.SaveChangesAsync(cancellationToken);

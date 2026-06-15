@@ -63,7 +63,8 @@ public sealed class GetIssuesAsync
             () => issue.Body.ShouldBe("Bug description"),
             () => issue.Author.ShouldBe("octocat"),
             () => issue.Url.ShouldBe("https://github.com/owner/repo/issues/42"),
-            () => issue.Labels.ShouldBe(["bug", "foundry"]));
+            () => issue.Labels.ShouldBe(["bug", "foundry"]),
+            () => issue.IssueKindLabel.ShouldBe("bug"));
     }
 
     [Fact]

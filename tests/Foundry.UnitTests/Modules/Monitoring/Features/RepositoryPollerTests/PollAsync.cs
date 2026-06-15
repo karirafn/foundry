@@ -71,7 +71,8 @@ public sealed class PollAsync : IAsyncDisposable
             Body: "Bug description",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/1",
-            Labels: ["bug"]);
+            Labels: ["bug"],
+            IssueKindLabel: "bug");
         StubIssueProvider provider = new([newIssue]);
 
         // Act
@@ -89,7 +90,8 @@ public sealed class PollAsync : IAsyncDisposable
             () => detected.Body.ShouldBe("Bug description"),
             () => detected.Author.ShouldBe("octocat"),
             () => detected.Url.ShouldBe("https://github.com/owner/repo/issues/1"),
-            () => detected.Labels.ShouldBe(["bug"]));
+            () => detected.Labels.ShouldBe(["bug"]),
+            () => detected.IssueKindLabel.ShouldBe("bug"));
     }
 
     [Fact]
@@ -103,7 +105,8 @@ public sealed class PollAsync : IAsyncDisposable
             Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/5",
-            Labels: ["bug"]);
+            Labels: ["bug"],
+            IssueKindLabel: "bug");
 
         IssueSnapshot snapshot = new("Existing", "Body", ["bug"]);
         StubIssueQueries issueQueries = new(
@@ -133,7 +136,8 @@ public sealed class PollAsync : IAsyncDisposable
             Body: "Same body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/7",
-            Labels: ["bug"]);
+            Labels: ["bug"],
+            IssueKindLabel: "bug");
 
         IssueSnapshot oldSnapshot = new("Old Title", "Same body", ["bug"]);
         StubIssueQueries issueQueries = new(
@@ -170,7 +174,8 @@ public sealed class PollAsync : IAsyncDisposable
             Body: "Same",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/3",
-            Labels: ["feature", "bug"]);
+            Labels: ["feature", "bug"],
+            IssueKindLabel: "bug");
 
         IssueSnapshot snapshot = new("Same", "Same", ["bug", "feature"]);
         StubIssueQueries issueQueries = new(
@@ -200,7 +205,8 @@ public sealed class PollAsync : IAsyncDisposable
             Body: "Same",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/9",
-            Labels: ["bug", "priority"]);
+            Labels: ["bug", "priority"],
+            IssueKindLabel: "bug");
 
         IssueSnapshot snapshot = new("Same", "Same", ["bug"]);
         StubIssueQueries issueQueries = new(
@@ -249,14 +255,16 @@ public sealed class PollAsync : IAsyncDisposable
             Body: "Body",
             Author: "user",
             Url: "https://github.com/owner/repo/issues/10",
-            Labels: []);
+            Labels: [],
+            IssueKindLabel: "feature");
         ProviderIssue issue2 = new(
             Number: 11,
             Title: "Issue Eleven",
             Body: "Body",
             Author: "user",
             Url: "https://github.com/owner/repo/issues/11",
-            Labels: []);
+            Labels: [],
+            IssueKindLabel: "feature");
         StubIssueProvider provider = new([issue1, issue2]);
 
         // Act
@@ -390,7 +398,8 @@ public sealed class PollAsync : IAsyncDisposable
             Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/15",
-            Labels: []);
+            Labels: [],
+            IssueKindLabel: "feature");
 
         // Pass 1: issue 15 is new (not in initial known numbers).
         // After dispatch, issue 15 is now persisted — second call returns {15, 16}.

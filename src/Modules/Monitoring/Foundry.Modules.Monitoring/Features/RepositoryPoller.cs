@@ -124,6 +124,7 @@ internal sealed class RepositoryPoller(
                     issue.Author,
                     issue.Url,
                     issue.Labels,
+                    issue.IssueKindLabel,
                     now));
             }
         }

@@ -50,6 +50,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/42",
             Labels: ["bug"],
+            IssueKindLabel: "bug",
             DetectedAt: DateTimeOffset.UtcNow);
 
         IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
@@ -70,6 +71,34 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenIssueDetectedWithBugKindLabel_SetsIssueKindToBug()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        IssueDetected @event = new(
+            MonitoredRepositoryId: repositoryId,
+            IssueNumber: 1,
+            Title: "Bug fix",
+            Body: "Body",
+            Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/1",
+            Labels: ["bug"],
+            IssueKindLabel: "bug",
+            DetectedAt: DateTimeOffset.UtcNow);
+
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        DetectedIssue detected = _dbContext.Set<Issue>()
+            .OfType<DetectedIssue>()
+            .ShouldHaveSingleItem();
+        detected.IssueKind.ShouldBe(IssueKind.Bug);
+    }
+
+    [Fact]
     public async Task WhenIssueDetectedEventReceived_MapsAuthorAndUrl()
     {
         // Arrange
@@ -82,6 +111,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Author: "user",
             Url: "https://github.com/owner/repo/issues/7",
             Labels: [],
+            IssueKindLabel: "feature",
             DetectedAt: DateTimeOffset.UtcNow);
 
         IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
