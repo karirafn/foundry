@@ -2,6 +2,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -34,6 +35,12 @@ public static class MonitoringModule
         services.AddCommandHandler<DeleteAccount.Command, bool, DeleteAccount.Handler>();
         services.AddQueryHandler<ValidateToken.Query, ValidateToken.Response, ValidateToken.Handler>();
 
+        services.AddQueryHandler<GetRepositories.Query, IReadOnlyList<RepositorySummary>, GetRepositories.Handler>();
+        services.AddQueryHandler<GetAvailableRepositories.Query, IReadOnlyList<AvailableRepository>, GetAvailableRepositories.Handler>();
+        services.AddCommandHandler<CreateRepository.Command, RepositorySummary, CreateRepository.Handler, CreateRepository.Validator>();
+        services.AddCommandHandler<UpdateRepository.Command, RepositorySummary, UpdateRepository.Handler, UpdateRepository.Validator>();
+        services.AddCommandHandler<DeleteRepository.Command, bool, DeleteRepository.Handler>();
+
         services.AddHostedService<MonitoringService>();
 
         return services;
@@ -42,6 +49,7 @@ public static class MonitoringModule
     public static IEndpointRouteBuilder MapMonitoringEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapAccountEndpoints();
+        app.MapRepositoryEndpoints();
         return app;
     }
 }

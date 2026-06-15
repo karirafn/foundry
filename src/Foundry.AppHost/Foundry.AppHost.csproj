@@ -9,6 +9,11 @@
     <PackageReference Include="Aspire.Hosting.JavaScript" />
   </ItemGroup>
 
+  <ItemGroup Label="Audit Suppressions">
+    <!-- MessagePack 2.5.192 transitive from Aspire — cannot update directly; suppress until Aspire ships a fix -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-hv8m-jj95-wg3x" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Foundry.WebApi\Foundry.WebApi.csproj" />
   </ItemGroup>
