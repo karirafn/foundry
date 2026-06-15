@@ -4,6 +4,24 @@ export const SETTINGS_ROUTES: Routes = [
   {
     path: '',
     loadComponent: () =>
-      import('./settings-page/settings-page').then((m) => m.SettingsPageComponent),
+      import('./settings-layout/settings-layout').then((m) => m.SettingsLayoutComponent),
+    children: [
+      { path: '', redirectTo: 'general', pathMatch: 'full' },
+      {
+        path: 'general',
+        loadComponent: () =>
+          import('./general/settings-general').then((m) => m.SettingsGeneralComponent),
+      },
+      {
+        path: 'accounts',
+        loadComponent: () =>
+          import('./accounts/settings-accounts').then((m) => m.SettingsAccountsComponent),
+      },
+      {
+        path: 'repositories',
+        loadComponent: () =>
+          import('./repositories/settings-repositories').then((m) => m.SettingsRepositoriesComponent),
+      },
+    ],
   },
 ];
