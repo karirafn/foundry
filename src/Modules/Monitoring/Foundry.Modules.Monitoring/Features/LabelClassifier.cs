@@ -17,13 +17,9 @@ internal static class LabelClassifier
 
     public static string ClassifyKind(IReadOnlyList<string> labels)
     {
-        HashSet<string> normalizedLabels = labels
-            .Select(l => l.ToLowerInvariant())
-            .ToHashSet();
-
         foreach (string kind in PriorityOrder)
         {
-            if (normalizedLabels.Contains(kind))
+            if (labels.Any(l => string.Equals(l, kind, StringComparison.OrdinalIgnoreCase)))
             {
                 return kind;
             }

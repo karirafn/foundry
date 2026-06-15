@@ -98,4 +98,17 @@ public sealed class ClassifyKind
         // Assert
         result.ShouldBe("bug");
     }
+
+    [Fact]
+    public void WhenLabelsEmpty_ReturnsFeature()
+    {
+        // Arrange
+        string[] labels = [];
+
+        // Act
+        string result = LabelClassifier.ClassifyKind(labels);
+
+        // Assert
+        result.ShouldBe("feature");
+    }
 }

@@ -13,6 +13,9 @@ public readonly partial record struct BranchName(string Value)
     [GeneratedRegex(@"-{2,}")]
     private static partial Regex ConsecutiveHyphensPattern();
 
+    [GeneratedRegex(@"^[a-z][a-z0-9-]*$")]
+    private static partial Regex ValidBranchPrefixPattern();
+
     public static BranchName From(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -25,6 +28,13 @@ public readonly partial record struct BranchName(string Value)
 
     public static BranchName Generate(string branchPrefix, int issueNumber, string title)
     {
+        if (!ValidBranchPrefixPattern().IsMatch(branchPrefix))
+        {
+            throw new ArgumentException(
+                "Branch prefix must start with a lowercase letter and contain only lowercase letters, digits, and hyphens.",
+                nameof(branchPrefix));
+        }
+
         string prefix = $"{branchPrefix}/{issueNumber}";
 
         if (string.IsNullOrWhiteSpace(title))

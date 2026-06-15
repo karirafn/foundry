@@ -6,6 +6,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -53,7 +54,7 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "bug",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -86,7 +87,7 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "bug",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -114,7 +115,7 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "feature",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -125,6 +126,8 @@ public sealed class HandleAsync : IAsyncDisposable
             .ShouldHaveSingleItem();
         detected.ShouldSatisfyAllConditions(
             () => detected.MonitoredRepositoryId.ShouldBe(repositoryId),
-            () => detected.IssueNumber.ShouldBe(7));
+            () => detected.IssueNumber.ShouldBe(7),
+            () => detected.Author.Value.ShouldBe("user"),
+            () => detected.Url.Value.ToString().ShouldBe("https://github.com/owner/repo/issues/7"));
     }
 }

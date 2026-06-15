@@ -21,7 +21,7 @@ public sealed class Generate
     }
 
     [Fact]
-    public void WhenTitleHasUpperCase_SlugifiestoLowerKebabCase()
+    public void WhenTitleHasUpperCase_SlugifiesToLowerKebabCase()
     {
         // Arrange
 
@@ -115,5 +115,18 @@ public sealed class Generate
 
         // Assert
         result.Value.ShouldBe("feat/42");
+    }
+
+    [Fact]
+    public void WhenBranchPrefixIsInvalid_ThrowsArgumentException()
+    {
+        // Arrange
+        string invalidPrefix = "Feat/my-type";
+
+        // Act
+        ArgumentException ex = Should.Throw<ArgumentException>(() => BranchName.Generate(invalidPrefix, 1, "title"));
+
+        // Assert
+        ex.ParamName.ShouldBe("branchPrefix");
     }
 }
