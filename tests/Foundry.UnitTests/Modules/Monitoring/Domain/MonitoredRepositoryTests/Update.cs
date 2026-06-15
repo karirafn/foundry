@@ -17,7 +17,7 @@ public sealed class Update
         MonitoredRepository.Create(ValidSlug, AccountId.New(), pollInterval);
 
     [Fact]
-    public void WhenCalled_SetsPollIntervalAndIsActive()
+    public void WhenPollIntervalAndActiveStatusProvided_UpdatesBothProperties()
     {
         // Arrange
         MonitoredRepository repository = CreateRepository(pollInterval: TimeSpan.FromMinutes(5));
@@ -33,7 +33,7 @@ public sealed class Update
     }
 
     [Fact]
-    public void WhenCalled_PreservesSlugAndAccountId()
+    public void WhenUpdated_PreservesSlugAndAccountId()
     {
         // Arrange
         RepositorySlug slug = ValidSlug;

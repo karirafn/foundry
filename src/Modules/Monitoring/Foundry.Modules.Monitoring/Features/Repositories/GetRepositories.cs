@@ -29,7 +29,7 @@ internal static class GetRepositories
                 .AsNoTracking()
                 .Where(r => r.AccountId == accountId)
                 .Join(
-                    dbContext.Set<Account>().AsNoTracking(),
+                    dbContext.Set<Account>(),
                     r => r.AccountId,
                     a => a.Id,
                     (r, a) => new
@@ -50,7 +50,7 @@ internal static class GetRepositories
                     r.Slug,
                     r.AccountId.Value,
                     r.AccountName,
-                    r.PollInterval.HasValue ? (int?)r.PollInterval.Value.TotalSeconds : null,
+                    RepositoryMappings.ToSeconds(r.PollInterval),
                     r.IsActive,
                     r.LastPolledAt))
                 .ToList();
@@ -78,7 +78,8 @@ internal static class GetRepositories
                 })
                 .WithName("GetRepositories")
                 .WithSummary("Gets all monitored repositories for an account")
-                .Produces<IReadOnlyList<RepositorySummary>>();
+                .Produces<IReadOnlyList<RepositorySummary>>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
@@ -21,7 +22,7 @@ internal static class GetAvailableRepositories
             Query query,
             CancellationToken cancellationToken)
         {
-            Contracts.AccountId accountId = Contracts.AccountId.From(query.AccountId);
+            AccountId accountId = AccountId.From(query.AccountId);
 
             Account? account = await dbContext.Set<Account>()
                 .AsNoTracking()
@@ -33,11 +34,15 @@ internal static class GetAvailableRepositories
                     RepositoryErrors.AccountNotFound(accountId));
             }
 
-            string token = account.Token ?? string.Empty;
+            if (account.Token is null)
+            {
+                return Result<IReadOnlyList<AvailableRepository>>.Fail(
+                    RepositoryErrors.AccountHasNoToken(accountId));
+            }
 
             return await gitHubHttpClient.ListRepositoriesAsync(
                 account.ApiBaseUrl,
-                token,
+                account.Token,
                 cancellationToken);
         }
     }
@@ -65,7 +70,9 @@ internal static class GetAvailableRepositories
                 })
                 .WithName("GetAvailableRepositories")
                 .WithSummary("Gets all repositories available for a given account")
-                .Produces<IReadOnlyList<AvailableRepository>>();
+                .Produces<IReadOnlyList<AvailableRepository>>()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

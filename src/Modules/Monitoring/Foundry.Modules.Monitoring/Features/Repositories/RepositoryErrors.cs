@@ -8,6 +8,7 @@ internal static class RepositoryErrors
     internal const string NotFoundCode = "Repository.NotFound";
     internal const string DuplicateSlugCode = "Repository.DuplicateSlug";
     internal const string AccountNotFoundCode = "Repository.AccountNotFound";
+    internal const string AccountHasNoTokenCode = "Repository.AccountHasNoToken";
 
     internal static Error NotFound(MonitoredRepositoryId id) =>
         new(NotFoundCode, $"Repository with ID '{id.Value}' was not found.");
@@ -17,4 +18,7 @@ internal static class RepositoryErrors
 
     internal static Error AccountNotFound(AccountId id) =>
         new(AccountNotFoundCode, $"Account with ID '{id.Value}' was not found.");
+
+    internal static Error AccountHasNoToken(AccountId id) =>
+        new(AccountHasNoTokenCode, $"Account with ID '{id.Value}' has no token configured.");
 }

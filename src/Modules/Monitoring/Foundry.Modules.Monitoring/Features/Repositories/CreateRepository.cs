@@ -21,6 +21,8 @@ internal static class CreateRepository
     {
         internal const string SlugEmptyCode = "CreateRepository.SlugEmpty";
         internal const string PollIntervalNotPositiveCode = "CreateRepository.PollIntervalNotPositive";
+        internal const string PollIntervalTooLargeCode = "CreateRepository.PollIntervalTooLarge";
+        internal const int MaxPollIntervalSeconds = 86400;
 
         public Result Validate(Command command)
         {
@@ -32,6 +34,11 @@ internal static class CreateRepository
             if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value <= 0)
             {
                 return new Error(PollIntervalNotPositiveCode, "Poll interval must be a positive number of seconds.");
+            }
+
+            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value > MaxPollIntervalSeconds)
+            {
+                return new Error(PollIntervalTooLargeCode, $"Poll interval must not exceed {MaxPollIntervalSeconds} seconds.");
             }
 
             return Result.Ok();
@@ -90,7 +97,7 @@ internal static class CreateRepository
                 repository.Slug.ToString(),
                 repository.AccountId.Value,
                 account.Name,
-                repository.PollInterval.HasValue ? (int?)repository.PollInterval.Value.TotalSeconds : null,
+                RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
                 repository.LastPolledAt);
 

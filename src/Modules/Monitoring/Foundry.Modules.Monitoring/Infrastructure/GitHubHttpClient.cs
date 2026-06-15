@@ -38,7 +38,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}";
-        Uri requestUri = new(apiBaseUrl, relativePath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -75,7 +75,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string repo = Uri.EscapeDataString(slug.Name);
         string encodedBranch = Uri.EscapeDataString(branch);
         string relativePath = $"repos/{owner}/{repo}/rules/branches/{encodedBranch}";
-        Uri requestUri = new(apiBaseUrl, relativePath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -117,7 +117,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         string relativePath = $"repos/{Uri.EscapeDataString(slug.Owner)}/{Uri.EscapeDataString(slug.Name)}/issues?labels=foundry&state=open";
-        Uri requestUri = new(apiBaseUrl, relativePath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -165,7 +165,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}/issues/{issueNumber}/dependencies/blocked_by";
-        Uri requestUri = new(apiBaseUrl, relativePath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -207,7 +207,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}/issues/{issueNumber}";
-        Uri requestUri = new(apiBaseUrl, relativePath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -249,7 +249,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}";
-        Uri requestUri = new(apiBaseUrl, relativePath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -359,7 +359,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         CancellationToken cancellationToken)
     {
         string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}/reviews";
-        Uri requestUri = new(apiBaseUrl, relativePath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -391,7 +391,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         CancellationToken cancellationToken)
     {
         string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}/reviews/{reviewId}/comments";
-        Uri requestUri = new(apiBaseUrl, relativePath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -423,7 +423,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             return Result<TokenValidationResult>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
-        Uri requestUri = new(apiBaseUrl, "user");
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), "user");
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -468,7 +468,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         for (int page = 1; page <= MaxRepositoryPages; page++)
         {
             string relativePath = $"user/repos?sort=full_name&per_page={RepositoriesPerPage}&page={page}";
-            Uri requestUri = new(apiBaseUrl, relativePath);
+            Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
             using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -500,6 +500,12 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         return Result<IReadOnlyList<AvailableRepository>>.Ok(repositories);
+    }
+
+    private static Uri EnsureTrailingSlash(Uri uri)
+    {
+        string uriString = uri.ToString();
+        return uriString.EndsWith('/') ? uri : new Uri(uriString + '/');
     }
 
     private static List<string> ParseMissingScopes(IEnumerable<string> scopeHeaders)
