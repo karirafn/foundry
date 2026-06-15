@@ -1,5 +1,6 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, Subject, forkJoin } from 'rxjs';
 import { AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
 
 @Injectable({ providedIn: 'root' })
@@ -56,6 +57,33 @@ export class RepositoryService {
     });
   }
 
+  loadAllRepositories(accountIds: string[]): void {
+    this._loadErrorSignal.set(null);
+    this._loadingSignal.set(true);
+
+    if (accountIds.length === 0) {
+      this._repositoriesSignal.set([]);
+      this._loadingSignal.set(false);
+      return;
+    }
+
+    const requests = accountIds.map(accountId =>
+      this._http.get<RepositorySummary[]>(this._repositoriesUrl(accountId))
+    );
+
+    forkJoin(requests).subscribe({
+      next: (results) => {
+        this._repositoriesSignal.set(results.flat());
+        this._loadingSignal.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._loadErrorSignal.set(this._extractErrorMessage(err));
+        this._loadingSignal.set(false);
+      },
+    });
+  }
+
   loadAvailableRepositories(accountId: string): void {
     this._loadAvailableErrorSignal.set(null);
     this._loadingAvailableSignal.set(true);
@@ -73,30 +101,39 @@ export class RepositoryService {
     });
   }
 
-  createRepository(accountId: string, request: CreateRepositoryRequest): void {
+  createRepository(accountId: string, request: CreateRepositoryRequest): Observable<RepositorySummary> {
     this._saveErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
     this._savingSignal.set(true);
+
+    const subject = new Subject<RepositorySummary>();
 
     this._http.post<RepositorySummary>(this._repositoriesUrl(accountId), request).subscribe({
       next: (repository) => {
         this._repositoriesSignal.update(repositories => [...repositories, repository]);
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(true);
+        subject.next(repository);
+        subject.complete();
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
         this._saveErrorSignal.set(this._extractErrorMessage(err));
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(false);
+        subject.error(err);
       },
     });
+
+    return subject.asObservable();
   }
 
-  updateRepository(accountId: string, id: string, request: UpdateRepositoryRequest): void {
+  updateRepository(accountId: string, id: string, request: UpdateRepositoryRequest): Observable<RepositorySummary> {
     this._saveErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
     this._savingSignal.set(true);
+
+    const subject = new Subject<RepositorySummary>();
 
     this._http.put<RepositorySummary>(`${this._repositoriesUrl(accountId)}/${id}`, request).subscribe({
       next: (updated) => {
@@ -105,31 +142,43 @@ export class RepositoryService {
         );
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(true);
+        subject.next(updated);
+        subject.complete();
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
         this._saveErrorSignal.set(this._extractErrorMessage(err));
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(false);
+        subject.error(err);
       },
     });
+
+    return subject.asObservable();
   }
 
-  deleteRepository(accountId: string, id: string): void {
+  deleteRepository(accountId: string, id: string): Observable<void> {
     this._deleteErrorSignal.set(null);
     this._deletingSignal.set(true);
+
+    const subject = new Subject<void>();
 
     this._http.delete(`${this._repositoriesUrl(accountId)}/${id}`).subscribe({
       next: () => {
         this._repositoriesSignal.update(repositories => repositories.filter(r => r.id !== id));
         this._deletingSignal.set(false);
+        subject.next();
+        subject.complete();
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
         this._deleteErrorSignal.set(this._extractErrorMessage(err));
         this._deletingSignal.set(false);
+        subject.error(err);
       },
     });
+
+    return subject.asObservable();
   }
 
   private _repositoriesUrl(accountId: string): string {

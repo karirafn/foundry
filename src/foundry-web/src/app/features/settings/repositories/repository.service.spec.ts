@@ -507,4 +507,101 @@ describe('RepositoryService', () => {
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`)
       .flush(null, { status: 204, statusText: 'No Content' });
   });
+
+  // Cycle 7: loadAllRepositories — loads across multiple accounts and combines results
+  it('should GET repositories for each accountId when loadAllRepositories is called', () => {
+    // Arrange
+    const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
+
+    // Act
+    service.loadAllRepositories([ACCOUNT_ID, ACCOUNT_ID_2]);
+
+    // Assert
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush([MOCK_REPOSITORY_2]);
+  });
+
+  it('should combine repositories from all accounts into a single signal', () => {
+    // Arrange
+    const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
+    const repoForAccount2: RepositorySummary = { ...MOCK_REPOSITORY_2, accountId: ACCOUNT_ID_2 };
+
+    // Act
+    service.loadAllRepositories([ACCOUNT_ID, ACCOUNT_ID_2]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush([repoForAccount2]);
+
+    // Assert
+    expect(service.repositories().length).toBe(2);
+    expect(service.repositories().some(r => r.id === MOCK_REPOSITORY.id)).toBe(true);
+    expect(service.repositories().some(r => r.id === MOCK_REPOSITORY_2.id)).toBe(true);
+  });
+
+  it('should set loading to true while loadAllRepositories is in flight', () => {
+    // Arrange / Act
+    service.loadAllRepositories([ACCOUNT_ID]);
+
+    // Assert — before flush
+    expect(service.loading()).toBe(true);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([]);
+  });
+
+  it('should set loading to false after all account repositories have loaded', () => {
+    // Arrange
+    const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
+    service.loadAllRepositories([ACCOUNT_ID, ACCOUNT_ID_2]);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush([]);
+
+    // Assert
+    expect(service.loading()).toBe(false);
+  });
+
+  it('should set loadError when any account repository load fails', () => {
+    // Arrange
+    const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
+    service.loadAllRepositories([ACCOUNT_ID, ACCOUNT_ID_2]);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush('Forbidden', {
+      status: 403,
+      statusText: 'Forbidden',
+    });
+
+    // Assert
+    expect(service.loadError()).toBe('Forbidden');
+    expect(service.loading()).toBe(false);
+  });
+
+  it('should clear loadError at start of loadAllRepositories', () => {
+    // Arrange — first call that fails
+    service.loadAllRepositories([ACCOUNT_ID]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Act — second call clears error immediately
+    service.loadAllRepositories([ACCOUNT_ID]);
+
+    // Assert — error is cleared before response
+    expect(service.loadError()).toBeNull();
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([]);
+  });
+
+  it('should set repositories to empty array when loadAllRepositories is called with no account IDs', () => {
+    // Arrange — seed some data first
+    service.loadRepositories(ACCOUNT_ID);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
+
+    // Act
+    service.loadAllRepositories([]);
+
+    // Assert
+    expect(service.repositories()).toEqual([]);
+    expect(service.loading()).toBe(false);
+  });
 });
