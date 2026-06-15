@@ -1,40 +1,34 @@
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Shared;
-using Foundry.WebApi.Persistence;
+using System.Net.Http.Json;
 
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+using Foundry.Modules.Monitoring.Contracts;
+
+using Shouldly;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring;
 
 internal static class RepositorySeeder
 {
-    // Seeds a MonitoredRepository directly via DbContext — no POST endpoint exists yet.
     internal static async Task<Guid> SeedRepositoryAsync(
         FoundryWebAppFactory factory,
         Guid accountId,
         string slug = "owner/repo",
         int? pollIntervalSeconds = null)
     {
-        using IServiceScope scope = factory.Services.CreateScope();
-        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        using HttpClient client = factory.CreateClient();
 
-        Result<RepositorySlug> slugResult = RepositorySlug.Create(slug);
-        RepositorySlug repositorySlug = ((Result<RepositorySlug>.Success)slugResult).Value;
+        object body = new { slug, pollIntervalSeconds };
 
-        TimeSpan? pollInterval = pollIntervalSeconds.HasValue
-            ? TimeSpan.FromSeconds(pollIntervalSeconds.Value)
-            : null;
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
+            CancellationToken.None);
 
-        MonitoredRepository repository = MonitoredRepository.Create(
-            repositorySlug,
-            AccountId.From(accountId),
-            pollInterval);
+        response.EnsureSuccessStatusCode();
 
-        dbContext.Set<MonitoredRepository>().Add(repository);
-        await dbContext.SaveChangesAsync(CancellationToken.None);
+        RepositorySummary summary = (await response.Content
+            .ReadFromJsonAsync<RepositorySummary>(CancellationToken.None))
+            .ShouldNotBeNull();
 
-        return repository.Id.Value;
+        return summary.Id;
     }
 }
