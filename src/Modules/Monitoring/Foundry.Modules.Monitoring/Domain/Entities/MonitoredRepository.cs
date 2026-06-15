@@ -49,6 +49,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         return LastPolledAt.Value + effectiveInterval < now;
     }
 
+    public void Update(TimeSpan? pollInterval, bool isActive)
+    {
+        PollInterval = pollInterval;
+        IsActive = isActive;
+    }
+
     public void MarkPolled(DateTimeOffset polledAt)
     {
         LastPolledAt = polledAt;
