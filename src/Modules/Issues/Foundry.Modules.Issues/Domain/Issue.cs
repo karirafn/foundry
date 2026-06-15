@@ -9,11 +9,14 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     // Private parameterless constructor for EF Core materialization.
     private protected Issue() : base(IssueId.New())
     {
+        IssueKind = IssueKind.Feature;
     }
 
     protected Issue(IssueId id) : base(id)
     {
     }
+
+    public IssueKind IssueKind { get; protected set; } = IssueKind.Feature;
 
     public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
 

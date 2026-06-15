@@ -22,7 +22,8 @@ public sealed class DetectedIssue : Issue
         IssueAuthor author,
         ProviderUrl url,
         IReadOnlyList<string> labels,
-        DateTimeOffset detectedAt)
+        DateTimeOffset detectedAt,
+        IssueKind? issueKind = null)
     {
         DetectedIssue issue = new(IssueId.New());
         issue.SetSharedProperties(
@@ -34,6 +35,7 @@ public sealed class DetectedIssue : Issue
             url,
             labels,
             detectedAt);
+        issue.IssueKind = issueKind ?? IssueKind.Feature;
         return issue;
     }
 

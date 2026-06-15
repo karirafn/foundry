@@ -83,4 +83,40 @@ public sealed class Detect
         // Assert
         issue.BlockedBy.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void WhenIssueKindProvided_SetsIssueKindOnIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+
+        // Act
+        DetectedIssue issue = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 1,
+            title: "Title",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow,
+            issueKind: IssueKind.Bug);
+
+        // Assert
+        issue.IssueKind.ShouldBe(IssueKind.Bug);
+    }
+
+    [Fact]
+    public void WhenIssueKindNotProvided_DefaultsToFeature()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+
+        // Act
+        DetectedIssue issue = DetectedIssue.Detect(
+            repositoryId, 1, "Title", "Body", ValidAuthor, ValidUrl, [], DateTimeOffset.UtcNow);
+
+        // Assert
+        issue.IssueKind.ShouldBe(IssueKind.Feature);
+    }
 }

@@ -37,6 +37,12 @@ internal sealed class IssueTestDbContext(DbContextOptions<IssueTestDbContext> op
                             ? Array.Empty<string>()
                             : v.Split(',', StringSplitOptions.RemoveEmptyEntries)));
 
+            builder.Property(x => x.IssueKind)
+                .HasConversion(
+                    new ValueConverter<IssueKind, string>(
+                        kind => kind.Value,
+                        value => IssueKind.FromLabel(value)));
+
             builder.HasDiscriminator<string>("State")
                 .HasValue<DetectedIssue>("detected")
                 .HasValue<QueuedIssue>("queued");
