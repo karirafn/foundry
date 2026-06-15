@@ -16,6 +16,8 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private const int MaxComments = 50;
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
+    private const int MaxRepositoryPages = 5;
+    private const int RepositoriesPerPage = 100;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -451,6 +453,55 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missingScopes));
     }
 
+    public async Task<Result<IReadOnlyList<AvailableRepository>>> ListRepositoriesAsync(
+        Uri apiBaseUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<IReadOnlyList<AvailableRepository>>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        List<AvailableRepository> repositories = [];
+
+        for (int page = 1; page <= MaxRepositoryPages; page++)
+        {
+            string relativePath = $"user/repos?sort=full_name&per_page={RepositoriesPerPage}&page={page}";
+            Uri requestUri = new(apiBaseUrl, relativePath);
+
+            using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+            request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+            using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result<IReadOnlyList<AvailableRepository>>.Fail(ErrorFromNonSuccess(response));
+            }
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            List<GitHubRepositoryListItemDto>? dtos =
+                JsonSerializer.Deserialize<List<GitHubRepositoryListItemDto>>(body, JsonOptions);
+
+            List<GitHubRepositoryListItemDto> pageItems = dtos ?? [];
+            foreach (GitHubRepositoryListItemDto dto in pageItems)
+            {
+                repositories.Add(new AvailableRepository(dto.FullName, dto.Private));
+            }
+
+            if (pageItems.Count < RepositoriesPerPage)
+            {
+                break;
+            }
+        }
+
+        return Result<IReadOnlyList<AvailableRepository>>.Ok(repositories);
+    }
+
     private static List<string> ParseMissingScopes(IEnumerable<string> scopeHeaders)
     {
         HashSet<string> grantedScopes = [];
@@ -569,6 +620,8 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string Path,
         int? Line,
         int? OriginalLine);
+
+    private sealed record GitHubRepositoryListItemDto(string FullName, bool Private);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
@@ -594,6 +647,8 @@ internal sealed class TokenValidationResult
     public static TokenValidationResult AuthFailure() =>
         new(false, true, []);
 }
+
+internal sealed record AvailableRepository(string Slug, bool IsPrivate);
 
 internal static class GitHubErrors
 {
