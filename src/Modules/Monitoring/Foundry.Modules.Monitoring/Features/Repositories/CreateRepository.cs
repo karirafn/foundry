@@ -77,15 +77,6 @@ internal static class CreateRepository
 
             RepositorySlug repositorySlug = slugSuccess.Value;
 
-            bool slugExists = await dbContext.Set<MonitoredRepository>()
-                .AsNoTracking()
-                .AnyAsync(r => r.Slug == repositorySlug, cancellationToken);
-
-            if (slugExists)
-            {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.DuplicateSlug(command.Slug));
-            }
-
             TimeSpan? pollInterval = command.PollIntervalSeconds.HasValue
                 ? TimeSpan.FromSeconds(command.PollIntervalSeconds.Value)
                 : null;
@@ -96,7 +87,15 @@ internal static class CreateRepository
                 pollInterval);
 
             dbContext.Set<MonitoredRepository>().Add(repository);
-            await dbContext.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                return Result<RepositorySummary>.Fail(RepositoryErrors.DuplicateSlug(command.Slug));
+            }
 
             RepositorySummary summary = new(
                 repository.Id.Value,
