@@ -37,6 +37,7 @@ public static class MonitoringModule
 
         services.AddQueryHandler<GetRepositories.Query, IReadOnlyList<RepositorySummary>, GetRepositories.Handler>();
         services.AddCommandHandler<CreateRepository.Command, RepositorySummary, CreateRepository.Handler, CreateRepository.Validator>();
+        services.AddCommandHandler<UpdateRepository.Command, RepositorySummary, UpdateRepository.Handler, UpdateRepository.Validator>();
 
         services.AddHostedService<MonitoringService>();
 

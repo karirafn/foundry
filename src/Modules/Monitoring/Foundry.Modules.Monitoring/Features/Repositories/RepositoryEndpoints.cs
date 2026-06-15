@@ -13,6 +13,7 @@ internal static class RepositoryEndpoints
 
         GetRepositories.Endpoint.Map(group);
         CreateRepository.Endpoint.Map(group);
+        UpdateRepository.Endpoint.Map(group);
 
         return routes;
     }
