@@ -12,6 +12,7 @@ internal static class RepositoryEndpoints
             .WithTags("Repositories");
 
         GetRepositories.Endpoint.Map(group);
+        GetAvailableRepositories.Endpoint.Map(group);
         CreateRepository.Endpoint.Map(group);
         UpdateRepository.Endpoint.Map(group);
         DeleteRepository.Endpoint.Map(group);
