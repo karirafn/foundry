@@ -28,8 +28,6 @@ internal sealed class WorkerOptions
     public string WorkerPromptTemplate { get; set; } =
         "Implement GitHub issue #{issueNumber}. Create a feature branch, make the changes, commit, and push to the remote. Do not create a pull request unless explicitly instructed.";
 
-    public string ReportsPath { get; set; } = "./data/reports";
-
     /// <summary>Memory limit for worker containers in megabytes.</summary>
     public int MemoryLimitMb { get; set; } = 8192;
 

@@ -12,7 +12,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 
@@ -61,7 +60,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IWorkerOrchestrator orchestrator,
         WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
-        IWorkerLogBroadcaster? broadcaster = null,
         IGlobalSettingsQueries? settingsQueries = null)
     {
         SqliteConnection connection = _connection;
@@ -79,21 +77,13 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher>(
             _ => integrationEventDispatcher ?? new NullIntegrationEventDispatcher());
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
-        services.AddScoped<IWorkerLogBroadcaster>(_ => broadcaster ?? new NullWorkerLogBroadcaster());
         services.AddScoped<IGlobalSettingsQueries>(
             _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        WorkerOptions options = workerOptions ?? new WorkerOptions
-        {
-            Image = "test-image:latest",
-            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
-        };
-
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(options),
             NullLogger<WorkerDispatchService>.Instance);
     }
 
@@ -120,12 +110,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             _captured.AddRange(events);
             return Task.CompletedTask;
         }
-    }
-
-    protected sealed class NullWorkerLogBroadcaster : IWorkerLogBroadcaster
-    {
-        public Task PushAsync(Guid issueId, WorkerReportSummary report, CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 
     protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)

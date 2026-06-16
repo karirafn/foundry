@@ -43,7 +43,6 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         WorkerOptions options = new()
         {
             Image = "test-image:latest",
-            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
         };
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: 9999);
         OrphanedContainerCleanupStub orchestrator = new(containers: containers, status: runningStatus);

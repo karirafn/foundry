@@ -53,7 +53,6 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerOptions options = workerOptions ?? new WorkerOptions
         {
             Image = "test-image:latest",
-            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
         };
 
         return new IssueClaimedHandler(
@@ -215,7 +214,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOrchestratorSucceeds_ContainerSpecHasCorrectBindMounts()
+    public async Task WhenNoCustomMountsConfigured_BindMountsIsEmpty()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c2");
@@ -228,7 +227,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/");
+        spec.BindMounts.ShouldBeEmpty();
     }
 
     [Fact]
@@ -246,7 +245,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 workerOptions: new WorkerOptions
                 {
                     Image = "test-image:latest",
-                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -267,21 +265,20 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenMountsConfigured_ReportsMountIsAlwaysPresentAndReadWrite()
+    public async Task WhenMountsConfigured_BindMountsContainsOnlyConfiguredMounts()
     {
         // Arrange
-        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-reports-test-{Guid.NewGuid()}");
+        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-mount-only-test-{Guid.NewGuid()}");
         Directory.CreateDirectory(hostDir);
 
         try
         {
-            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-reports-rw");
+            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-only");
             IssueClaimedHandler sut = BuildHandler(
                 orchestrator: orchestrator,
                 workerOptions: new WorkerOptions
                 {
                     Image = "test-image:latest",
-                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -293,7 +290,8 @@ public sealed class HandleAsync : IAsyncDisposable
             // Assert
             WorkerContainerSpec? spec = orchestrator.LastSpec;
             spec.ShouldNotBeNull();
-            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/" && !m.ReadOnly);
+            spec.BindMounts.Count.ShouldBe(1);
+            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/container/config" && m.ReadOnly);
         }
         finally
         {
@@ -310,7 +308,6 @@ public sealed class HandleAsync : IAsyncDisposable
             workerOptions: new WorkerOptions
             {
                 Image = "test-image:latest",
-                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 Mounts = new Dictionary<string, string> { ["/container/config"] = nonExistentPath },
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -336,7 +333,6 @@ public sealed class HandleAsync : IAsyncDisposable
             workerOptions: new WorkerOptions
             {
                 Image = "test-image:latest",
-                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = nonExistentPath },
             });
@@ -368,7 +364,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 workerOptions: new WorkerOptions
                 {
                     Image = "test-image:latest",
-                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     Mounts = new Dictionary<string, string>(),
                     WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = hostDir },
                 });
@@ -389,7 +384,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNoMountsConfigured_BindMountsContainsOnlyReportsMount()
+    public async Task WhenNoMountsConfigured_BindMountsIsEmpty()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-empty");
@@ -398,7 +393,6 @@ public sealed class HandleAsync : IAsyncDisposable
             workerOptions: new WorkerOptions
             {
                 Image = "test-image:latest",
-                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -410,9 +404,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.Count.ShouldBe(1);
-        spec.BindMounts[0].ContainerPath.ShouldBe("/reports/");
-        spec.BindMounts[0].ReadOnly.ShouldBeFalse();
+        spec.BindMounts.ShouldBeEmpty();
     }
 
     [Fact]

@@ -23,7 +23,6 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         WorkerOptions workerOptions = new()
         {
             Image = "test-image:latest",
-            ReportsPath = "/tmp/reports",
         };
 
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: maxConcurrent, timeoutMinutes: 120);

@@ -98,10 +98,6 @@ internal sealed class IssueClaimedHandler(
             claimed.Revision,
             claimed.Continuation);
 
-        string reportsHostPath = Path.Combine(_options.ReportsPath, startingRun.Id.Value.ToString());
-
-        Directory.CreateDirectory(reportsHostPath);
-
         string workerPrompt = _options.WorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
@@ -133,7 +129,7 @@ internal sealed class IssueClaimedHandler(
             envVars["BRANCH_NAME"] = claimed.Continuation.BranchName;
         }
 
-        Result<List<BindMount>> mountsResult = BuildBindMounts(reportsHostPath);
+        Result<List<BindMount>> mountsResult = BuildBindMounts();
 
         if (mountsResult is not Result<List<BindMount>>.Success mountsSuccess)
         {
@@ -155,9 +151,9 @@ internal sealed class IssueClaimedHandler(
             ["/entrypoint.sh"]));
     }
 
-    private Result<List<BindMount>> BuildBindMounts(string reportsHostPath)
+    private Result<List<BindMount>> BuildBindMounts()
     {
-        List<BindMount> mounts = [new BindMount(Path.GetFullPath(reportsHostPath), "/reports/")];
+        List<BindMount> mounts = [];
 
         Result<List<BindMount>> readOnlyResult = ResolveBindMounts(_options.Mounts, readOnly: true);
         if (readOnlyResult is not Result<List<BindMount>>.Success readOnlySuccess)

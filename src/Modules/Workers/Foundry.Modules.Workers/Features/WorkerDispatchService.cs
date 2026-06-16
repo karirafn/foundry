@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
@@ -19,17 +17,10 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
-    IOptions<WorkerOptions> optionsAccessor,
     ILogger<WorkerDispatchService> logger) : BackgroundService
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(10);
 
-    private static readonly JsonSerializerOptions ReportJsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
-    private readonly WorkerOptions _options = optionsAccessor.Value;
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
 
@@ -53,8 +44,6 @@ internal sealed class WorkerDispatchService(
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
         IDomainEventDispatcher domainEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
-        IWorkerLogBroadcaster workerLogBroadcaster =
-            scope.ServiceProvider.GetRequiredService<IWorkerLogBroadcaster>();
         IGlobalSettingsQueries settingsQueries =
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
 
@@ -70,7 +59,6 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
-                workerLogBroadcaster,
                 timeoutMinutes,
                 activeRuns,
                 cancellationToken);
@@ -82,7 +70,6 @@ internal sealed class WorkerDispatchService(
             orchestrator,
             integrationEventDispatcher,
             domainEventDispatcher,
-            workerLogBroadcaster,
             timeoutMinutes,
             activeRuns,
             cancellationToken);
@@ -110,7 +97,6 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
-        IWorkerLogBroadcaster workerLogBroadcaster,
         int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
@@ -125,9 +111,6 @@ internal sealed class WorkerDispatchService(
 
             if (status is null)
             {
-                string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
-                await IngestReportsAsync(dbContext, activeRun, reportsDir, workerLogBroadcaster, cancellationToken);
-
                 FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 runsToRemove.Add(activeRun);
@@ -156,7 +139,6 @@ internal sealed class WorkerDispatchService(
                     orchestrator,
                     integrationEventDispatcher,
                     domainEventDispatcher,
-                    workerLogBroadcaster,
                     timeoutMinutes,
                     activeRun,
                     cancellationToken,
@@ -176,7 +158,6 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
-        IWorkerLogBroadcaster workerLogBroadcaster,
         int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
@@ -188,7 +169,6 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
-                workerLogBroadcaster,
                 timeoutMinutes,
                 activeRun,
                 cancellationToken);
@@ -200,20 +180,11 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
-        IWorkerLogBroadcaster workerLogBroadcaster,
         int timeoutMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
     {
-        string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
-        (BranchName? branchName, PullRequestUrl? prUrl) = await IngestReportsAsync(
-            dbContext,
-            activeRun,
-            reportsDir,
-            workerLogBroadcaster,
-            cancellationToken);
-
         WorkerStatus? status = knownStatus ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
 
         if (status is null)
@@ -277,11 +248,9 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        BranchName? effectiveBranchName = branchName ?? activeRun.BranchName;
-
         if (status.ExitCode == 0)
         {
-            CompletedRun completed = activeRun.Complete(0, effectiveBranchName, prUrl);
+            CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null);
             await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -289,16 +258,15 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunCompletedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    effectiveBranchName?.Value,
-                    prUrl?.Value)],
+                    activeRun.BranchName?.Value,
+                    null)],
                 activeRun.Id.Value,
                 cancellationToken);
 
             logger.LogInformation(
-                "Worker run {WorkerRunId} completed successfully (branch: {BranchName}, PR: {PrUrl}).",
+                "Worker run {WorkerRunId} completed successfully (branch: {BranchName}).",
                 activeRun.Id,
-                effectiveBranchName?.Value ?? "(none)",
-                prUrl?.Value ?? "(none)");
+                activeRun.BranchName?.Value ?? "(none)");
 
             await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
@@ -482,176 +450,6 @@ internal sealed class WorkerDispatchService(
         }
     }
 
-    private async Task<(BranchName? BranchName, PullRequestUrl? PrUrl)> IngestReportsAsync(
-        DbContext dbContext,
-        ActiveRun activeRun,
-        string reportsDir,
-        IWorkerLogBroadcaster workerLogBroadcaster,
-        CancellationToken cancellationToken)
-    {
-        if (!Directory.Exists(reportsDir))
-        {
-            return (null, null);
-        }
-
-        List<int> ingestedList = await dbContext.Set<WorkerReport>()
-            .Where(r => r.WorkerRunId == activeRun.Id)
-            .Select(r => r.SequenceNumber)
-            .ToListAsync(cancellationToken);
-
-        HashSet<int> ingestedSequenceNumbers = ingestedList.ToHashSet();
-
-        BranchName? branchName = null;
-        PullRequestUrl? prUrl = null;
-
-        IEnumerable<string> reportFiles = Directory
-            .EnumerateFiles(reportsDir, "report-*.json")
-            .OrderBy(f => f);
-
-        List<WorkerReport> newReports = [];
-
-        foreach (string filePath in reportFiles)
-        {
-            int? sequenceNumber = ParseSequenceNumber(filePath);
-
-            if (sequenceNumber is null || ingestedSequenceNumbers.Contains(sequenceNumber.Value))
-            {
-                continue;
-            }
-
-            (WorkerReportPayload? payload, string? content) = TryParseReport(filePath);
-
-            if (payload is null || content is null)
-            {
-                continue;
-            }
-
-            WorkerReport report = WorkerReport.Create(
-                activeRun.Id,
-                sequenceNumber.Value,
-                payload.Type,
-                content);
-
-            dbContext.Set<WorkerReport>().Add(report);
-            newReports.Add(report);
-
-            if (payload.Summary is not null)
-            {
-                string summary = payload.Summary.Length > MaxProgressLength
-                    ? payload.Summary[..MaxProgressLength]
-                    : payload.Summary;
-                activeRun.UpdateProgress(summary);
-            }
-
-            if (payload.BranchName is not null)
-            {
-                activeRun.SetBranchName(BranchName.From(payload.BranchName));
-            }
-
-            if (payload.Type == "final")
-            {
-                branchName = payload.BranchName is not null
-                    ? BranchName.From(payload.BranchName)
-                    : null;
-                prUrl = payload.PrUrl is not null
-                    ? PullRequestUrl.From(payload.PrUrl)
-                    : null;
-            }
-        }
-
-        if (dbContext.ChangeTracker.HasChanges())
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        foreach (WorkerReport report in newReports)
-        {
-            WorkerReportSummary summary = new(
-                report.Id.Value,
-                report.WorkerRunId.Value,
-                report.SequenceNumber,
-                report.ReportType,
-                report.Content,
-                report.IngestedAt);
-
-            try
-            {
-                await workerLogBroadcaster.PushAsync(activeRun.IssueId.Value, summary, cancellationToken);
-            }
-#pragma warning disable CA1031 // Broadcast is best-effort; a SignalR failure must not prevent the persisted report from being visible on the next tick or crash the BackgroundService.
-            catch (Exception ex)
-#pragma warning restore CA1031
-            {
-                logger.LogWarning(
-                    ex,
-                    "Failed to broadcast report {SequenceNumber} for WorkerRun {WorkerRunId} to SignalR.",
-                    report.SequenceNumber,
-                    report.WorkerRunId);
-            }
-        }
-
-        return (branchName, prUrl);
-    }
-
-    private const string ReportFilePrefix = "report-";
-
-    private static int? ParseSequenceNumber(string filePath)
-    {
-        string fileName = Path.GetFileNameWithoutExtension(filePath);
-
-        if (fileName.Length <= ReportFilePrefix.Length
-            || !fileName.StartsWith(ReportFilePrefix, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        // File name format: report-{sequenceNumber}
-        ReadOnlySpan<char> suffix = fileName.AsSpan(ReportFilePrefix.Length);
-
-        if (int.TryParse(suffix, out int number))
-        {
-            return number;
-        }
-
-        return null;
-    }
-
     private const int LogTailLines = 500;
     private const int MaxContainerOutputLength = 65_536;
-    private const int MaxProgressLength = 2000;
-    private const long MaxReportFileSizeBytes = 1_048_576;
-
-    private (WorkerReportPayload? Payload, string? Content) TryParseReport(string filePath)
-    {
-        try
-        {
-            if (new FileInfo(filePath).Length > MaxReportFileSizeBytes)
-            {
-                logger.LogWarning(
-                    "Report file {FilePath} exceeds the 1 MB size limit; skipping.",
-                    filePath);
-                return (null, null);
-            }
-
-            string content = File.ReadAllText(filePath);
-            WorkerReportPayload? payload = JsonSerializer.Deserialize<WorkerReportPayload>(content, ReportJsonOptions);
-            return (payload, content);
-        }
-        catch (IOException ex)
-        {
-            logger.LogDebug(
-                ex,
-                "Could not read report file {FilePath}; will retry next tick.",
-                filePath);
-            return (null, null);
-        }
-        catch (JsonException ex)
-        {
-            logger.LogDebug(
-                ex,
-                "Could not parse report file {FilePath}; will retry next tick.",
-                filePath);
-            return (null, null);
-        }
-    }
 }
