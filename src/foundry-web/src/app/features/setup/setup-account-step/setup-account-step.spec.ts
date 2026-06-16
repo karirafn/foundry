@@ -280,6 +280,21 @@ describe('SetupAccountStepComponent', () => {
     expect(validationResult?.textContent).toContain('valid');
   });
 
+  // Cycle 11: aria-live validation message span is permanently in the DOM
+  it('should keep the validation message span in the DOM with empty text when no result is present', () => {
+    // Arrange
+    const { fixture } = setup();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — message span is always rendered so screen readers can track text changes
+    const el = fixture.nativeElement as HTMLElement;
+    const messageSpan = el.querySelector('.setup-account-step__validation-message');
+    expect(messageSpan).toBeTruthy();
+    expect(messageSpan?.textContent?.trim()).toBe('');
+  });
+
   // Cycle 10: Validate button calls AccountService.validateToken()
   it('should call AccountService.validateToken() when the Validate Token button is clicked', () => {
     // Arrange

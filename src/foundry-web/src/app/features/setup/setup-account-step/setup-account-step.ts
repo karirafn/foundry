@@ -105,18 +105,16 @@ const PROVIDER_TYPE = 'GitHub';
           role="status"
           aria-live="polite"
         >
-          @if (_accountService.validationResult(); as result) {
-            @if (result.isValid) {
-              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
-              <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">Token is valid</span>
-            } @else if (result.isAuthFailure) {
-              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
-              <span class="setup-account-step__validation-message setup-account-step__validation-message--error">Authentication failed — check that the token is correct</span>
-            } @else {
-              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
-              <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">Missing required scopes: {{ result.missingScopes.join(', ') }}</span>
-            }
-          }
+          <span
+            class="setup-account-step__validation-dot"
+            [class]="'setup-account-step__validation-dot' + (_validationModifier() ? ' setup-account-step__validation-dot--' + _validationModifier() : '')"
+            [style.display]="_validationModifier() ? '' : 'none'"
+            aria-hidden="true"
+          ></span>
+          <span
+            class="setup-account-step__validation-message"
+            [class]="'setup-account-step__validation-message' + (_validationModifier() ? ' setup-account-step__validation-message--' + _validationModifier() : '')"
+          >{{ _validationMessage() }}</span>
         </div>
 
         <div
@@ -169,6 +167,34 @@ export class SetupAccountStepComponent {
       return false;
     }
     return !!this._token() && !!this._baseUrl();
+  });
+
+  protected readonly _validationModifier: Signal<'valid' | 'error' | 'warning' | null> = computed(() => {
+    const result = this._accountService.validationResult();
+    if (!result) {
+      return null;
+    }
+    if (result.isValid) {
+      return 'valid';
+    }
+    if (result.isAuthFailure) {
+      return 'error';
+    }
+    return 'warning';
+  });
+
+  protected readonly _validationMessage: Signal<string> = computed(() => {
+    const result = this._accountService.validationResult();
+    if (!result) {
+      return '';
+    }
+    if (result.isValid) {
+      return 'Token is valid';
+    }
+    if (result.isAuthFailure) {
+      return 'Authentication failed — check that the token is correct';
+    }
+    return `Missing required scopes: ${result.missingScopes.join(', ')}`;
   });
 
   constructor() {

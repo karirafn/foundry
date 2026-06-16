@@ -35,7 +35,7 @@
     flex: 1;
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     padding: var(--fd-spacing-sm) 0;
     position: relative;
 
@@ -53,10 +53,6 @@
 
     &--active {
       color: var(--fd-text-primary);
-
-      &::before {
-        background: var(--fd-text-link);
-      }
     }
 
     &--completed {
