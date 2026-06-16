@@ -22,17 +22,14 @@ import { SettingsService } from '../../settings/settings.service';
             id="apiKey"
             autocomplete="off"
             placeholder="Enter your API key"
+            required
             [(ngModel)]="_apiKeyValue"
             [attr.aria-invalid]="!!_settingsService.saveError() || null"
             aria-describedby="api-key-error"
           />
         </div>
 
-        <div id="api-key-error" class="setup-auth-step__error" role="alert">
-          @if (_settingsService.saveError()) {
-            {{ _settingsService.saveError() }}
-          }
-        </div>
+        <div id="api-key-error" class="setup-auth-step__error" role="alert">{{ _settingsService.saveError() ?? '' }}</div>
 
         <button
           class="setup-auth-step__next-btn"

@@ -78,11 +78,7 @@ const ERROR_TRUNCATE_LENGTH = 200;
         </ul>
       }
 
-      @if (_saveError()) {
-        <div class="setup-repos-step__save-error" role="alert">
-          {{ _saveError() }}
-        </div>
-      }
+      <div class="setup-repos-step__save-error" role="alert">{{ _saveError() ?? '' }}</div>
 
       @if (_saving()) {
         <div class="setup-repos-step__saving-indicator" role="status" aria-live="polite">

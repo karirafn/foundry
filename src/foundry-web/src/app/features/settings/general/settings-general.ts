@@ -101,17 +101,9 @@ const TIMEOUT_MINUTES_MAX = 1440;
               }
             </div>
 
-            <div id="api-key-error" class="general-settings__save-error" role="alert">
-              @if (settingsService.saveError()) {
-                {{ settingsService.saveError() }}
-              }
-            </div>
+            <div id="api-key-error" class="general-settings__save-error" role="alert">{{ settingsService.saveError() ?? '' }}</div>
 
-            <div class="general-settings__save-success" role="status">
-              @if (settingsService.saveSuccess()) {
-                Settings saved successfully
-              }
-            </div>
+            <div class="general-settings__save-success" role="status">{{ settingsService.saveSuccess() ? 'Settings saved successfully' : '' }}</div>
 
             <button
               class="general-settings__save-btn"
@@ -166,17 +158,9 @@ const TIMEOUT_MINUTES_MAX = 1440;
               </div>
             }
 
-            <div class="general-settings__switch-error" role="alert">
-              @if (settingsService.switchError()) {
-                {{ settingsService.switchError() }}
-              }
-            </div>
+            <div class="general-settings__switch-error" role="alert">{{ settingsService.switchError() ?? '' }}</div>
 
-            <div class="general-settings__save-success" role="status">
-              @if (settingsService.saveSuccess()) {
-                OAuth credentials applied successfully
-              }
-            </div>
+            <div class="general-settings__save-success" role="status">{{ settingsService.saveSuccess() ? 'OAuth credentials applied successfully' : '' }}</div>
 
             <button
               class="general-settings__scan-btn"
@@ -228,17 +212,9 @@ const TIMEOUT_MINUTES_MAX = 1440;
             </div>
           </div>
 
-          <div id="limits-error" role="alert" class="general-settings__save-error">
-            @if (settingsService.saveLimitsError()) {
-              {{ settingsService.saveLimitsError() }}
-            }
-          </div>
+          <div id="limits-error" role="alert" class="general-settings__save-error">{{ settingsService.saveLimitsError() ?? '' }}</div>
 
-          <div role="status" class="general-settings__save-success">
-            @if (settingsService.saveLimitsSuccess()) {
-              Worker limits saved successfully
-            }
-          </div>
+          <div role="status" class="general-settings__save-success">{{ settingsService.saveLimitsSuccess() ? 'Worker limits saved successfully' : '' }}</div>
 
           <button
             class="general-settings__save-btn"
@@ -280,17 +256,9 @@ const TIMEOUT_MINUTES_MAX = 1440;
             ></textarea>
           </div>
 
-          <div id="prompts-error" role="alert" class="general-settings__save-error">
-            @if (settingsService.savePromptsError()) {
-              {{ settingsService.savePromptsError() }}
-            }
-          </div>
+          <div id="prompts-error" role="alert" class="general-settings__save-error">{{ settingsService.savePromptsError() ?? '' }}</div>
 
-          <div role="status" class="general-settings__save-success">
-            @if (settingsService.savePromptsSuccess()) {
-              Prompt templates saved successfully
-            }
-          </div>
+          <div role="status" class="general-settings__save-success">{{ settingsService.savePromptsSuccess() ? 'Prompt templates saved successfully' : '' }}</div>
 
           <button
             class="general-settings__save-btn"

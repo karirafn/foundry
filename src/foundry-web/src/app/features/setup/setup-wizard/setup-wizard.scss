@@ -8,13 +8,24 @@
   margin-inline: auto;
   padding: var(--fd-spacing-lg);
 
+  &__title {
+    color: var(--fd-text-primary);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 var(--fd-spacing-xl);
+  }
+
   &__progress {
-    display: flex;
-    align-items: center;
-    gap: 0;
     margin-block-end: var(--fd-spacing-2xl);
-    padding: 0;
+  }
+
+  &__steps {
+    align-items: center;
+    display: flex;
+    gap: 0;
     list-style: none;
+    margin: 0;
+    padding: 0;
   }
 
   &__step {
@@ -49,10 +60,10 @@
     }
 
     &--completed {
-      color: var(--fd-state-completed);
+      color: var(--fd-text-completed);
 
       &::after {
-        background: var(--fd-state-completed);
+        background: var(--fd-text-completed);
       }
     }
   }

@@ -101,9 +101,10 @@ $text-warning: #d29922;
     display: inline-flex;
     flex-shrink: 0;
     justify-content: center;
-    min-height: 40px;
+    min-height: 44px;
+    min-width: 44px;
     padding: var(--fd-spacing-xs);
-    width: 40px;
+    width: 44px;
 
     &:hover {
       background: var(--fd-bg-card-hover);
@@ -125,7 +126,7 @@ $text-warning: #d29922;
     display: inline-flex;
     flex-shrink: 0;
     font-size: 0.875rem;
-    min-height: 40px;
+    min-height: 44px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
     white-space: nowrap;
 
@@ -167,7 +168,7 @@ $text-warning: #d29922;
     }
 
     &--error {
-      background: var(--fd-state-failed);
+      background: var(--fd-text-error);
     }
   }
 
@@ -181,12 +182,12 @@ $text-warning: #d29922;
     }
 
     &--error {
-      color: var(--fd-state-failed);
+      color: var(--fd-text-error);
     }
   }
 
   &__save-error {
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
     font-size: 0.875rem;
     min-height: 1.25rem;
   }

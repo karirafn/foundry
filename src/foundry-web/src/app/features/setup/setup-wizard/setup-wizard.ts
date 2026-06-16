@@ -20,15 +20,19 @@ const STEPS: WizardStep[] = [1, 2, 3];
   imports: [SetupAuthStepComponent, SetupAccountStepComponent, SetupReposStepComponent],
   template: `
     <div class="setup-wizard">
+      <h1 class="setup-wizard__title">Foundry Setup</h1>
+
       <nav class="setup-wizard__progress" aria-label="Setup progress">
-        @for (step of steps; track step) {
-          <div
-            class="setup-wizard__step"
-            [class.setup-wizard__step--active]="step === _currentStep()"
-            [class.setup-wizard__step--completed]="step < _currentStep()"
-            [attr.aria-current]="step === _currentStep() ? 'step' : null"
-          >{{ stepLabels[step] }}</div>
-        }
+        <ol class="setup-wizard__steps">
+          @for (step of steps; track step) {
+            <li
+              class="setup-wizard__step"
+              [class.setup-wizard__step--active]="step === _currentStep()"
+              [class.setup-wizard__step--completed]="step < _currentStep()"
+              [attr.aria-current]="step === _currentStep() ? 'step' : null"
+            >{{ stepLabels[step] }}</li>
+          }
+        </ol>
       </nav>
 
       <div class="setup-wizard__body">

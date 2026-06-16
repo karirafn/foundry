@@ -93,6 +93,7 @@ const PROVIDER_TYPE = 'GitHub';
               class="setup-account-step__validate-btn"
               type="button"
               [disabled]="!_canValidate()"
+              [attr.aria-busy]="_accountService.validating() || null"
               (click)="onValidate()"
             >{{ _accountService.validating() ? 'Validating...' : 'Validate Token' }}</button>
           </div>
@@ -122,11 +123,7 @@ const PROVIDER_TYPE = 'GitHub';
           id="account-save-error"
           class="setup-account-step__save-error"
           role="alert"
-        >
-          @if (_accountService.saveError()) {
-            {{ _accountService.saveError() }}
-          }
-        </div>
+        >{{ _accountService.saveError() ?? '' }}</div>
 
         <div class="setup-account-step__actions">
           <button

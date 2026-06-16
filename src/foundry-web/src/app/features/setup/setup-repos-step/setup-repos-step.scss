@@ -48,7 +48,7 @@
 
   &__load-error {
     align-items: center;
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
     display: flex;
     font-size: 0.875rem;
     gap: var(--fd-spacing-md);
@@ -56,15 +56,16 @@
 
   &__retry-btn {
     background: transparent;
-    border: 1px solid var(--fd-state-failed);
+    border: 1px solid var(--fd-text-error);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
     cursor: pointer;
     font-size: 0.75rem;
-    padding: 2px var(--fd-spacing-sm);
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
 
     &:hover {
-      background: color-mix(in srgb, var(--fd-state-failed) 10%, transparent);
+      background: color-mix(in srgb, var(--fd-text-error) 10%, transparent);
     }
 
     &:focus-visible {
@@ -170,7 +171,7 @@
   }
 
   &__save-error {
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
     font-size: 0.875rem;
     min-height: 1.25rem;
   }
