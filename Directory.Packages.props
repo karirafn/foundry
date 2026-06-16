@@ -24,7 +24,7 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
   </ItemGroup>
   <ItemGroup Label="Aspire AppHost">
-    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.4.3" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.4.4" />
   </ItemGroup>
   <ItemGroup Label="Testing">
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
