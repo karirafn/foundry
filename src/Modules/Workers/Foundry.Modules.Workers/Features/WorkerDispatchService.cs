@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
@@ -11,15 +12,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
-    ILogger<WorkerDispatchService> logger) : BackgroundService
+    ILogger<WorkerDispatchService> logger,
+    TimeSpan? prRetryDelay = null) : BackgroundService
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan DefaultPrRetryDelay = TimeSpan.FromSeconds(10);
+
+    private readonly TimeSpan _prRetryDelay = prRetryDelay ?? DefaultPrRetryDelay;
 
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
@@ -46,6 +50,8 @@ internal sealed class WorkerDispatchService(
             scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
         IGlobalSettingsQueries settingsQueries =
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
+        IPostExitProviderQueries postExitProviderQueries =
+            scope.ServiceProvider.GetRequiredService<IPostExitProviderQueries>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
@@ -59,6 +65,7 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
+                postExitProviderQueries,
                 timeoutMinutes,
                 activeRuns,
                 cancellationToken);
@@ -70,6 +77,7 @@ internal sealed class WorkerDispatchService(
             orchestrator,
             integrationEventDispatcher,
             domainEventDispatcher,
+            postExitProviderQueries,
             timeoutMinutes,
             activeRuns,
             cancellationToken);
@@ -97,6 +105,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        IPostExitProviderQueries postExitProviderQueries,
         int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
@@ -139,6 +148,7 @@ internal sealed class WorkerDispatchService(
                     orchestrator,
                     integrationEventDispatcher,
                     domainEventDispatcher,
+                    postExitProviderQueries,
                     timeoutMinutes,
                     activeRun,
                     cancellationToken,
@@ -158,6 +168,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        IPostExitProviderQueries postExitProviderQueries,
         int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
@@ -169,6 +180,7 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
+                postExitProviderQueries,
                 timeoutMinutes,
                 activeRun,
                 cancellationToken);
@@ -180,6 +192,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        IPostExitProviderQueries postExitProviderQueries,
         int timeoutMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
@@ -248,9 +261,97 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        if (status.ExitCode == 0)
+        await ProcessExitedRunAsync(
+            dbContext,
+            orchestrator,
+            integrationEventDispatcher,
+            domainEventDispatcher,
+            postExitProviderQueries,
+            activeRun,
+            status,
+            cancellationToken);
+    }
+
+    private async Task ProcessExitedRunAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        IPostExitProviderQueries postExitProviderQueries,
+        ActiveRun activeRun,
+        WorkerStatus status,
+        CancellationToken cancellationToken)
+    {
+        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
+            activeRun.MonitoredRepositoryId,
+            activeRun.BranchName.Value,
+            cancellationToken);
+
+        bool hasCommits = commitsResult is Result<bool>.Success { Value: true };
+
+        if (status.ExitCode == 0 && hasCommits)
         {
-            CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null);
+            await ProcessSuccessWithCommitsAsync(
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                domainEventDispatcher,
+                postExitProviderQueries,
+                activeRun,
+                cancellationToken);
+        }
+        else if (status.ExitCode == 0 && !hasCommits)
+        {
+            await ProcessSuccessWithoutCommitsAsync(
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                domainEventDispatcher,
+                activeRun,
+                cancellationToken);
+        }
+        else
+        {
+            int exitCode = status.ExitCode ?? -1;
+            string? containerOutput = await TryGetLogsAsync(
+                orchestrator,
+                activeRun.ContainerId.Value,
+                activeRun.Id.Value,
+                cancellationToken);
+
+            await ProcessNonZeroExitAsync(
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                domainEventDispatcher,
+                activeRun,
+                exitCode,
+                hasCommits,
+                containerOutput,
+                cancellationToken);
+        }
+    }
+
+    private async Task ProcessSuccessWithCommitsAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        IPostExitProviderQueries postExitProviderQueries,
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        string? prUrl = await TryGetPullRequestUrlAsync(
+            postExitProviderQueries,
+            activeRun,
+            cancellationToken);
+
+        if (prUrl is not null)
+        {
+            CompletedRun completed = activeRun.Complete(
+                0,
+                activeRun.BranchName,
+                PullRequestUrl.From(prUrl));
             await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -259,29 +360,20 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     activeRun.BranchName.Value,
-                    null)],
+                    prUrl)],
                 activeRun.Id.Value,
                 cancellationToken);
 
             logger.LogInformation(
-                "Worker run {WorkerRunId} completed successfully (branch: {BranchName}).",
+                "Worker run {WorkerRunId} completed with PR {PullRequestUrl} (branch: {BranchName}).",
                 activeRun.Id,
+                prUrl,
                 activeRun.BranchName.Value);
-
-            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
         else
         {
-            int exitCode = status.ExitCode ?? -1;
-            string exitReason = $"Non-zero exit code: {exitCode}";
-
-            string? containerOutput = await TryGetLogsAsync(
-                orchestrator,
-                activeRun.ContainerId.Value,
-                activeRun.Id.Value,
-                cancellationToken);
-
-            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode), containerOutput);
+            // Commits pushed but no PR found after retries — treat as continuable failure
+            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(0));
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -289,19 +381,115 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    exitReason,
+                    "No pull request found after retries",
                     BranchName: activeRun.BranchName.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
 
             logger.LogWarning(
-                "Worker run {WorkerRunId} exited with code {ExitCode}.",
+                "Worker run {WorkerRunId} exited with 0 but no PR found after retries (branch: {BranchName}).",
                 activeRun.Id,
-                exitCode);
-
-            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+                activeRun.BranchName.Value);
         }
+
+        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
     }
+
+    private async Task ProcessSuccessWithoutCommitsAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        // Exit code 0 with no commits — unchanged
+        CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null);
+        await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
+
+        await TryDispatchAsync(
+            integrationEventDispatcher,
+            [new WorkerRunCompletedEvent(
+                activeRun.Id.Value,
+                activeRun.IssueId.Value,
+                activeRun.BranchName.Value,
+                null)],
+            activeRun.Id.Value,
+            cancellationToken);
+
+        logger.LogInformation(
+            "Worker run {WorkerRunId} completed with no commits (branch: {BranchName}).",
+            activeRun.Id,
+            activeRun.BranchName.Value);
+
+        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+    }
+
+    private async Task ProcessNonZeroExitAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        ActiveRun activeRun,
+        int exitCode,
+        bool hasCommits,
+        string? containerOutput,
+        CancellationToken cancellationToken)
+    {
+        string exitReason = $"Non-zero exit code: {exitCode}";
+
+        // Null branch name when no commits → FailedIssue; non-null → ContinuableFailedIssue
+        string? branchNameForEvent = hasCommits ? activeRun.BranchName.Value : null;
+
+        FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode), containerOutput);
+        await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
+
+        await TryDispatchAsync(
+            integrationEventDispatcher,
+            [new WorkerRunFailedEvent(
+                activeRun.Id.Value,
+                activeRun.IssueId.Value,
+                exitReason,
+                BranchName: branchNameForEvent)],
+            activeRun.Id.Value,
+            cancellationToken);
+
+        logger.LogWarning(
+            "Worker run {WorkerRunId} exited with code {ExitCode} (commits: {HasCommits}).",
+            activeRun.Id,
+            exitCode,
+            hasCommits);
+
+        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+    }
+
+    private async Task<string?> TryGetPullRequestUrlAsync(
+        IPostExitProviderQueries postExitProviderQueries,
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        for (int attempt = 0; attempt < PrRetryAttempts; attempt++)
+        {
+            if (attempt > 0)
+            {
+                await Task.Delay(_prRetryDelay, cancellationToken);
+            }
+
+            Result<string> prResult = await postExitProviderQueries.GetPullRequestByBranchAsync(
+                activeRun.MonitoredRepositoryId,
+                activeRun.BranchName.Value,
+                cancellationToken);
+
+            if (prResult is Result<string>.Success { Value: { Length: > 0 } prUrl })
+            {
+                return prUrl;
+            }
+        }
+
+        return null;
+    }
+
+    private const int PrRetryAttempts = 3;
 
     private async Task RemoveUnknownContainersAsync(
         DbContext dbContext,

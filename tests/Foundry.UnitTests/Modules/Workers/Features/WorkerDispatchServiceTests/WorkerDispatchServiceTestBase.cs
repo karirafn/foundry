@@ -1,4 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers;
@@ -47,12 +49,16 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
     internal ActiveRun SeedActiveRun(
         string containerId = "container-123",
-        string branchName = "feat/1-default")
+        string branchName = "feat/1-default",
+        MonitoredRepositoryId? monitoredRepositoryId = null)
     {
         using FoundryDbContext db = CreateDbContext();
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun activeRun = starting.Activate(ContainerId.From(containerId), BranchName.From(branchName));
+        ActiveRun activeRun = starting.Activate(
+            ContainerId.From(containerId),
+            BranchName.From(branchName),
+            monitoredRepositoryId ?? MonitoredRepositoryId.New());
         db.Set<WorkerRun>().Add(activeRun);
         db.SaveChanges();
         return activeRun;
@@ -62,7 +68,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IWorkerOrchestrator orchestrator,
         WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
-        IGlobalSettingsQueries? settingsQueries = null)
+        IGlobalSettingsQueries? settingsQueries = null,
+        IPostExitProviderQueries? postExitProviderQueries = null)
     {
         SqliteConnection connection = _connection;
 
@@ -81,12 +88,39 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
         services.AddScoped<IGlobalSettingsQueries>(
             _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
+        services.AddScoped<IPostExitProviderQueries>(
+            _ => postExitProviderQueries ?? new StubPostExitProviderQueries(hasCommits: false, prUrl: null));
 
         ServiceProvider sp = services.BuildServiceProvider();
 
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<WorkerDispatchService>.Instance);
+            NullLogger<WorkerDispatchService>.Instance,
+            prRetryDelay: TimeSpan.Zero);
+    }
+
+    protected sealed class StubPostExitProviderQueries(bool hasCommits, string? prUrl) : IPostExitProviderQueries
+    {
+        public Task<Result<bool>> CreateBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<bool>> HasBranchCommitsAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(hasCommits));
+
+        public Task<Result<string>> GetPullRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            string value = prUrl ?? string.Empty;
+            return Task.FromResult(Result<string>.Ok(value));
+        }
     }
 
     protected sealed class NullDomainEventDispatcher : IDomainEventDispatcher
