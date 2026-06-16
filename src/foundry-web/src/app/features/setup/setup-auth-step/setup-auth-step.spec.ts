@@ -163,6 +163,26 @@ describe('SetupAuthStepComponent', () => {
     expect(errorEl?.textContent?.trim()).toBeTruthy();
   });
 
+  // Cycle 8: does not emit complete when saveSuccess is already true from a previous unrelated save
+  it('should not emit complete if saveSuccess is already true when the component initializes', () => {
+    // Arrange
+    const { fixture, component, httpMock } = setup();
+    // Directly prime the service saveSuccess signal (simulates stale state from prior navigation)
+    component['_settingsService'].saveSuccess.set(true);
+
+    let emitted = false;
+    component.complete.subscribe(() => (emitted = true));
+
+    // Act — detect changes without user clicking Next
+    fixture.detectChanges();
+
+    // Assert — must not auto-complete on mount
+    expect(emitted).toBe(false);
+
+    // Cleanup
+    httpMock.expectNone('/api/settings/auth');
+  });
+
   // Cycle 7: does not emit complete on failure
   it('should not emit the complete event when the save fails', () => {
     // Arrange

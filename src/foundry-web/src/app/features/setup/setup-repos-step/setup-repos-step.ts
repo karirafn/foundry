@@ -11,11 +11,13 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { forkJoin } from 'rxjs';
+import { from } from 'rxjs';
+import { concatMap } from 'rxjs/operators';
 import { RepositoryService } from '../../settings/repositories/repository.service';
 import { AvailableRepository } from '../../settings/repositories/repository.model';
+
+const ERROR_TRUNCATE_LENGTH = 200;
 
 @Component({
   selector: 'fd-setup-repos-step',
@@ -116,10 +118,10 @@ import { AvailableRepository } from '../../settings/repositories/repository.mode
 })
 export class SetupReposStepComponent implements OnInit {
   protected readonly _repositoryService = inject(RepositoryService);
-  private readonly _router = inject(Router);
 
   readonly accountId = input.required<string>();
 
+  readonly complete: OutputEmitterRef<void> = output<void>();
   readonly back: OutputEmitterRef<void> = output<void>();
 
   protected readonly _filterText: WritableSignal<string> = signal('');
@@ -164,31 +166,34 @@ export class SetupReposStepComponent implements OnInit {
   }
 
   onSkip(): void {
-    this._router.navigate(['/issues']);
+    this.complete.emit();
   }
 
   onFinish(): void {
     const accountId = this.accountId();
     const slugs = Array.from(this._selectedSlugs());
+    const total = slugs.length;
+    let successCount = 0;
 
     this._saving.set(true);
     this._saveError.set(null);
 
-    const requests = slugs.map(slug =>
-      this._repositoryService.createRepository(accountId, { slug, pollIntervalSeconds: null })
-    );
-
-    forkJoin(requests).subscribe({
+    from(slugs).pipe(
+      concatMap(slug => this._repositoryService.createRepository(accountId, { slug, pollIntervalSeconds: null })),
+    ).subscribe({
       next: () => {
+        successCount++;
+      },
+      complete: () => {
         this._saving.set(false);
-        this._router.navigate(['/issues']);
+        this.complete.emit();
       },
       error: (err: HttpErrorResponse) => {
         this._saving.set(false);
-        const message = typeof err.error === 'string' && err.error
-          ? err.error
-          : (err.message ?? 'Failed to create repositories');
-        this._saveError.set(message);
+        const rawMessage = typeof err.error === 'string' && err.error
+          ? err.error.slice(0, ERROR_TRUNCATE_LENGTH)
+          : (err.message ?? 'Failed to create repositories').slice(0, ERROR_TRUNCATE_LENGTH);
+        this._saveError.set(`Created ${successCount} of ${total} repositories. Error: ${rawMessage}`);
       },
     });
   }

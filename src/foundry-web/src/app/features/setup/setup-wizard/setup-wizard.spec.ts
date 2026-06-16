@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { Component } from '@angular/core';
+import { vi } from 'vitest';
 import { SetupWizardComponent } from './setup-wizard';
 
 @Component({ template: '', standalone: true })
@@ -89,6 +90,8 @@ describe('SetupWizardComponent', () => {
     const activeStep = el.querySelector('.setup-wizard__step--active');
     expect(activeStep?.textContent?.trim()).toBe('Repositories');
     expect(component.createdAccountId()).toBe('account-42');
+    // createdAccountId is a readonly Signal — it must not expose a set() method
+    expect(typeof (component.createdAccountId as unknown as { set?: unknown }).set).toBe('undefined');
 
     // Cleanup
     httpMock.expectOne('/api/accounts/account-42/repositories/available-repositories').flush([]);
@@ -204,6 +207,22 @@ describe('SetupWizardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const activeStep = el.querySelector('.setup-wizard__step--active');
     expect(activeStep?.textContent?.trim()).toBe('Auth');
+  });
+
+  // Cycle 11: onReposComplete navigates to /issues
+  it('should navigate to /issues when onReposComplete is called', async () => {
+    // Arrange
+    const { fixture, component } = setup();
+    fixture.detectChanges();
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    // Act
+    component.onReposComplete();
+    fixture.detectChanges();
+
+    // Assert
+    expect(navigateSpy).toHaveBeenCalledWith(['/issues']);
   });
 
   // Cycle 10: back navigation from step 3 returns to step 2

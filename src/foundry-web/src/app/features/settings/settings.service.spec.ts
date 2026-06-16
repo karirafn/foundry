@@ -51,7 +51,11 @@ describe('SettingsService', () => {
 
   // Cycle 1: initial signal state
   it('should start with null authSettings and loading false', () => {
-    // Arrange / Act — no calls yet
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    // (no action — testing initial state)
 
     // Assert
     expect(service.authSettings()).toBeNull();
@@ -458,7 +462,11 @@ describe('SettingsService', () => {
   });
 
   it('should start with null workerLimits', () => {
-    // Arrange / Act — no calls yet
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    // (no action — testing initial state)
 
     // Assert
     expect(service.workerLimits()).toBeNull();
@@ -652,7 +660,11 @@ describe('SettingsService', () => {
 
   // Cycle 14: loadSettings populates prompt template signals
   it('should start with null systemPromptTemplate and workerPromptTemplate', () => {
-    // Arrange / Act — no calls yet
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    // (no action — testing initial state)
 
     // Assert
     expect(service.systemPromptTemplate()).toBeNull();

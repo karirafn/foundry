@@ -158,7 +158,7 @@ export class SetupAccountStepComponent {
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
 
-  private _previousSaving = false;
+  private readonly _hasSaved: WritableSignal<boolean> = signal(false);
 
   protected readonly _canCreate: Signal<boolean> = computed(() => {
     if (this._accountService.saving()) {
@@ -176,22 +176,22 @@ export class SetupAccountStepComponent {
 
   constructor() {
     effect(() => {
+      const hasSaved = this._hasSaved();
       const saving = this._accountService.saving();
       const saveSuccess = this._accountService.saveSuccess();
       const accounts = this._accountService.accounts();
 
-      if (this._previousSaving && !saving && saveSuccess) {
+      if (hasSaved && !saving && saveSuccess) {
         const created = accounts[accounts.length - 1];
         if (created) {
           this.complete.emit(created.id);
         }
       }
-
-      this._previousSaving = saving;
     });
   }
 
   onCreate(): void {
+    this._hasSaved.set(true);
     this._accountService.createAccount({
       name: this._name(),
       providerType: PROVIDER_TYPE,

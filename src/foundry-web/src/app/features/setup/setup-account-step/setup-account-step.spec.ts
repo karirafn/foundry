@@ -231,6 +231,26 @@ describe('SetupAccountStepComponent', () => {
     expect(emitted).toBe(false);
   });
 
+  // Cycle 8b: does not emit complete when saveSuccess is already true from a previous unrelated save
+  it('should not emit complete if saveSuccess is already true when the component initializes', () => {
+    // Arrange
+    const { fixture, component, httpMock } = setup();
+    // Access private writable signal to prime stale service state (simulates prior wizard navigation)
+    (component['_accountService'] as unknown as { _saveSuccessSignal: { set: (v: boolean) => void } })._saveSuccessSignal.set(true);
+
+    let emitted = false;
+    component.complete.subscribe(() => (emitted = true));
+
+    // Act — detect changes without user clicking Create Account
+    fixture.detectChanges();
+
+    // Assert — must not auto-complete on mount
+    expect(emitted).toBe(false);
+
+    // Cleanup
+    httpMock.expectNone('/api/accounts');
+  });
+
   // Cycle 9: shows validation result from service
   it('should show a validation success message after a successful token validation', () => {
     // Arrange

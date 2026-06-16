@@ -1,4 +1,5 @@
-import { Component, ChangeDetectionStrategy, WritableSignal, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy, Signal, WritableSignal, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { SetupAuthStepComponent } from '../setup-auth-step/setup-auth-step';
 import { SetupAccountStepComponent } from '../setup-account-step/setup-account-step';
 import { SetupReposStepComponent } from '../setup-repos-step/setup-repos-step';
@@ -39,7 +40,7 @@ const STEPS: WizardStep[] = [1, 2, 3];
             <fd-setup-account-step (back)="onBack()" (complete)="onAccountComplete($event)" />
           }
           @case (3) {
-            <fd-setup-repos-step [accountId]="createdAccountId()" (back)="onBack()" />
+            <fd-setup-repos-step [accountId]="createdAccountId()" (back)="onBack()" (complete)="onReposComplete()" />
           }
         }
       </div>
@@ -48,9 +49,12 @@ const STEPS: WizardStep[] = [1, 2, 3];
   styleUrl: './setup-wizard.scss',
 })
 export class SetupWizardComponent {
+  private readonly _router = inject(Router);
+
   protected readonly _currentStep: WritableSignal<WizardStep> = signal(1);
 
-  readonly createdAccountId: WritableSignal<string> = signal('');
+  private readonly _createdAccountId: WritableSignal<string> = signal('');
+  readonly createdAccountId: Signal<string> = this._createdAccountId.asReadonly();
 
   protected readonly steps = STEPS;
   protected readonly stepLabels = STEP_LABELS;
@@ -60,12 +64,12 @@ export class SetupWizardComponent {
   }
 
   onAccountComplete(accountId: string): void {
-    this.createdAccountId.set(accountId);
+    this._createdAccountId.set(accountId);
     this._currentStep.set(3);
   }
 
   onReposComplete(): void {
-    // Navigation to /issues is handled by SetupReposStepComponent internally
+    this._router.navigate(['/issues']);
   }
 
   onBack(): void {

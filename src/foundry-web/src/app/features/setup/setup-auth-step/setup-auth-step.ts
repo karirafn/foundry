@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, effect, inject, output } from '@angular/core';
+import { Component, ChangeDetectionStrategy, WritableSignal, effect, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../settings/settings.service';
 
@@ -52,22 +52,22 @@ export class SetupAuthStepComponent {
 
   protected _apiKeyValue = '';
 
-  private _previousSaving = false;
+  private readonly _hasSaved: WritableSignal<boolean> = signal(false);
 
   constructor() {
     effect(() => {
+      const hasSaved = this._hasSaved();
       const saving = this._settingsService.saving();
       const saveSuccess = this._settingsService.saveSuccess();
 
-      if (this._previousSaving && !saving && saveSuccess) {
+      if (hasSaved && !saving && saveSuccess) {
         this.complete.emit();
       }
-
-      this._previousSaving = saving;
     });
   }
 
   onNext(): void {
+    this._hasSaved.set(true);
     this._settingsService.updateAuthMode('api_key', this._apiKeyValue);
   }
 }

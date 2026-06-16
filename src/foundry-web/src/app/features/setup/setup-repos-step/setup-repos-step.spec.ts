@@ -129,7 +129,7 @@ describe('SetupReposStepComponent', () => {
     expect(label?.textContent).toContain('alpha');
   });
 
-  // Cycle 6: clicking Finish calls createRepository for each selected repo
+  // Cycle 6: clicking Finish calls createRepository for each selected repo sequentially
   it('should call createRepository for each selected repository when Finish is clicked', () => {
     // Arrange
     const { fixture, httpMock } = setup();
@@ -150,14 +150,20 @@ describe('SetupReposStepComponent', () => {
     finishBtn.click();
     fixture.detectChanges();
 
-    // Assert
-    const reqs = httpMock.match(`/api/accounts/${ACCOUNT_ID}/repositories`);
-    expect(reqs.length).toBe(2);
-    const slugs = reqs.map(r => r.request.body.slug).sort();
-    expect(slugs).toEqual(['org/repo-alpha', 'org/repo-beta'].sort());
+    // Assert — repositories are created sequentially, one at a time
+    const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+    expect(req1.request.method).toBe('POST');
+    req1.flush({ id: 'r1', slug: req1.request.body.slug, accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null });
+    fixture.detectChanges();
 
-    // Cleanup
-    reqs.forEach(r => r.flush({ id: 'r1', slug: r.request.body.slug, accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null }));
+    const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+    expect(req2.request.method).toBe('POST');
+    req2.flush({ id: 'r2', slug: req2.request.body.slug, accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null });
+    fixture.detectChanges();
+
+    // Both slugs should have been sent
+    const slugs = [req1.request.body.slug, req2.request.body.slug].sort();
+    expect(slugs).toEqual(['org/repo-alpha', 'org/repo-beta'].sort());
   });
 
   // Cycle 7: Finish button is disabled while saving
@@ -208,13 +214,16 @@ describe('SetupReposStepComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  // Cycle 9: Skip button navigates to /issues without creating repos
-  it('should navigate to /issues and not call createRepository when Skip is clicked', () => {
+  // Cycle 9: Skip button emits complete output without creating repos
+  it('should emit the complete event and not call createRepository when Skip is clicked', () => {
     // Arrange
-    const { fixture, httpMock } = setup();
+    const { fixture, component, httpMock } = setup();
     fixture.detectChanges();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
     fixture.detectChanges();
+
+    let emitted = false;
+    component.complete.subscribe(() => (emitted = true));
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -222,8 +231,46 @@ describe('SetupReposStepComponent', () => {
     btn.click();
     fixture.detectChanges();
 
-    // Assert — no create requests should be pending
+    // Assert
+    expect(emitted).toBe(true);
     httpMock.expectNone(`/api/accounts/${ACCOUNT_ID}/repositories`);
+  });
+
+  // Cycle 9b: Finish button emits complete output after successful repository creation
+  it('should emit the complete event after all repositories are created successfully', () => {
+    // Arrange
+    const { fixture, component, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    fixture.detectChanges();
+
+    let emitted = false;
+    component.complete.subscribe(() => (emitted = true));
+
+    const el = fixture.nativeElement as HTMLElement;
+    const checkbox = el.querySelectorAll('input[type="checkbox"]')[0] as HTMLInputElement;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act
+    const finishBtn = el.querySelector('button.setup-repos-step__finish-btn') as HTMLButtonElement;
+    finishBtn.click();
+    fixture.detectChanges();
+
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush({
+      id: 'r1',
+      slug: 'org/repo-alpha',
+      accountId: ACCOUNT_ID,
+      accountName: 'acc',
+      pollIntervalSeconds: null,
+      isActive: true,
+      lastPolledAt: null,
+    });
+    fixture.detectChanges();
+
+    // Assert
+    expect(emitted).toBe(true);
   });
 
   // Cycle 10: shows error message when load fails
@@ -299,5 +346,79 @@ describe('SetupReposStepComponent', () => {
 
     // Assert
     expect(el.querySelector('.setup-repos-step__save-error')?.textContent?.trim()).toBeTruthy();
+  });
+
+  // Cycle 13: error message includes partial success count when some repos fail
+  it('should include a count of successful repositories in the error message on partial failure', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    checkboxes[0].checked = true;
+    checkboxes[0].dispatchEvent(new Event('change'));
+    checkboxes[1].checked = true;
+    checkboxes[1].dispatchEvent(new Event('change'));
+    checkboxes[2].checked = true;
+    checkboxes[2].dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act
+    const finishBtn = el.querySelector('button.setup-repos-step__finish-btn') as HTMLButtonElement;
+    finishBtn.click();
+    fixture.detectChanges();
+
+    // Repositories are created sequentially — first succeeds, second fails
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush({
+      id: 'r1', slug: 'org/repo-alpha', accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null,
+    });
+    fixture.detectChanges();
+
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const errorText = el.querySelector('.setup-repos-step__save-error')?.textContent?.trim() ?? '';
+    expect(errorText).toContain('1 of 3');
+  });
+
+  // Cycle 14: error strings are truncated to 200 characters
+  it('should truncate long server error strings to at most 200 characters in the error detail', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const checkbox = el.querySelectorAll('input[type="checkbox"]')[0] as HTMLInputElement;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const longError = 'A'.repeat(300);
+
+    // Act
+    const finishBtn = el.querySelector('button.setup-repos-step__finish-btn') as HTMLButtonElement;
+    finishBtn.click();
+    fixture.detectChanges();
+
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush(longError, {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — the raw error portion appended is at most 200 characters (full string may be longer due to the prefix)
+    const errorText = el.querySelector('.setup-repos-step__save-error')?.textContent?.trim() ?? '';
+    expect(errorText).toBeTruthy();
+    // The error should not contain more than 200 A's (the raw error is truncated)
+    expect((errorText.match(/A+/)?.[0] ?? '').length).toBeLessThanOrEqual(200);
   });
 });
