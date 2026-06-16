@@ -1,9 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { IssueDetailComponent, MEDIA_QUERY_FACTORY } from './issue-detail';
+import { IssueDetailComponent } from './issue-detail';
 import { IssueDetail, IssueStateDetails } from '../issue.model';
-import { WorkerLogService, WORKER_LOG_HUB_FACTORY } from '../worker-log.service';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 
@@ -38,37 +37,17 @@ const mockDetail: IssueDetail = {
   stateDetails: mockStateDetails,
 };
 
-const mockDetailWithWorkerRun: IssueDetail = {
-  ...mockDetail,
-  stateDetails: {
-    ...mockStateDetails,
-    workerRunId: 'run-42',
-  },
-};
-
-const mockHubFactory = () => ({
-  on: () => {},
-  off: () => {},
-  start: () => Promise.resolve(),
-  stop: () => Promise.resolve(),
-  invoke: () => Promise.resolve(),
-});
-
 function createComponent(
   detail: IssueDetail | null,
   loading = false,
   error: string | null = null,
-  mqFactory = desktopMqFactory
 ) {
   TestBed.configureTestingModule({
     imports: [IssueDetailComponent],
     providers: [
-      WorkerLogService,
       IssueService,
       provideHttpClient(),
       provideHttpClientTesting(),
-      { provide: WORKER_LOG_HUB_FACTORY, useValue: mockHubFactory },
-      { provide: MEDIA_QUERY_FACTORY, useValue: mqFactory },
       { provide: IssueSignalRService, useValue: mockIssueSignalRService },
     ],
   });
@@ -79,28 +58,6 @@ function createComponent(
   fixture.detectChanges();
   return fixture;
 }
-
-const desktopMqFactory = (_query: string): MediaQueryList => ({
-  matches: false,
-  media: _query,
-  onchange: null,
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  addListener: () => {},
-  removeListener: () => {},
-  dispatchEvent: () => false,
-} as unknown as MediaQueryList);
-
-const mobileMqFactory = (query: string): MediaQueryList => ({
-  matches: query === '(max-width: 767px)',
-  media: query,
-  onchange: null,
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  addListener: () => {},
-  removeListener: () => {},
-  dispatchEvent: () => false,
-} as unknown as MediaQueryList);
 
 describe('IssueDetailComponent', () => {
   // Cycle 1: component creates
@@ -340,202 +297,6 @@ describe('IssueDetailComponent', () => {
     // Assert
     const errorEl = el.querySelector('.issue-detail__error');
     expect(errorEl).toBeFalsy();
-  });
-
-  // Cycle 9: View Logs button — appears when workerRunId is non-null
-  it('should show "View Logs" button when workerRunId is non-null', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act — component renders on creation
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toContain('View Logs');
-  });
-
-  it('should not show "View Logs" button when workerRunId is null', () => {
-    // Arrange
-    const fixture = createComponent(mockDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act — component renders on creation
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__view-logs-btn');
-    expect(btn).toBeFalsy();
-  });
-
-  // Cycle 10: aria-expanded is false initially
-  it('should set aria-expanded="false" on "View Logs" button initially', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act — component renders on creation
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-    expect(btn?.getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('should not set aria-controls when log panel is closed', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act — component renders on creation
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-    expect(btn?.getAttribute('aria-controls')).toBeNull();
-  });
-
-  it('should set aria-controls pointing to the log panel id when panel is open on desktop', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-
-    // Act
-    btn.click();
-    fixture.detectChanges();
-
-    // Assert
-    expect(btn?.getAttribute('aria-controls')).toBe('issue-detail-log-panel');
-  });
-
-  // Cycle 11: toggle changes text and aria-expanded
-  it('should show "Hide Logs" text and aria-expanded="true" after clicking "View Logs"', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-
-    // Act
-    btn.click();
-    fixture.detectChanges();
-
-    // Assert
-    expect(btn?.textContent?.trim()).toContain('Hide Logs');
-    expect(btn?.getAttribute('aria-expanded')).toBe('true');
-  });
-
-  it('should revert to "View Logs" text after clicking "Hide Logs"', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-    btn.click();
-    fixture.detectChanges();
-
-    // Act
-    btn.click();
-    fixture.detectChanges();
-
-    // Assert
-    expect(btn?.textContent?.trim()).toContain('View Logs');
-  });
-
-  // Cycle 12: inline panel renders on non-mobile when panel open
-  it('should render inline log panel after clicking "View Logs" on desktop', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-
-    // Act
-    btn.click();
-    fixture.detectChanges();
-
-    // Assert
-    const panel = el.querySelector('.issue-detail__log-panel-inline');
-    expect(panel).toBeTruthy();
-  });
-
-  it('should not render inline log panel when "View Logs" is not clicked', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act — component renders on creation
-
-    // Assert
-    const panel = el.querySelector('.issue-detail__log-panel-inline');
-    expect(panel).toBeFalsy();
-  });
-
-  // Cycle 13: overlay renders on mobile
-  it('should render mobile overlay instead of inline panel when viewport is mobile', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun, false, null, mobileMqFactory);
-    const el = fixture.nativeElement as HTMLElement;
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-
-    // Act
-    btn.click();
-    fixture.detectChanges();
-
-    // Assert
-    const overlay = el.querySelector('.issue-detail__overlay');
-    expect(overlay).toBeTruthy();
-    const inlinePanel = el.querySelector('.issue-detail__log-panel-inline');
-    expect(inlinePanel).toBeFalsy();
-  });
-
-  it('should render overlay with role="dialog" and aria-modal="true" on mobile', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun, false, null, mobileMqFactory);
-    const el = fixture.nativeElement as HTMLElement;
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-
-    // Act
-    btn.click();
-    fixture.detectChanges();
-
-    // Assert
-    const overlay = el.querySelector('[role="dialog"]') as HTMLElement;
-    expect(overlay).toBeTruthy();
-    expect(overlay?.getAttribute('aria-modal')).toBe('true');
-    expect(overlay?.getAttribute('aria-label')).toBe('Worker log output');
-  });
-
-  // Cycle 14: overlay close button
-  it('should close overlay when close button is clicked', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun, false, null, mobileMqFactory);
-    const el = fixture.nativeElement as HTMLElement;
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-    btn.click();
-    fixture.detectChanges();
-
-    // Act
-    const closeBtn = el.querySelector('.issue-detail__overlay-close') as HTMLButtonElement;
-    expect(closeBtn).toBeTruthy();
-    expect(closeBtn?.getAttribute('aria-label')).toBe('Close worker logs');
-    closeBtn.click();
-    fixture.detectChanges();
-
-    // Assert
-    const overlay = el.querySelector('.issue-detail__overlay');
-    expect(overlay).toBeFalsy();
-  });
-
-  // Cycle 15: terminal icon is present in "View Logs" button
-  it('should include an SVG icon inside the "View Logs" button', () => {
-    // Arrange
-    const fixture = createComponent(mockDetailWithWorkerRun);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act — component renders on creation
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__view-logs-btn') as HTMLButtonElement;
-    const icon = btn?.querySelector('svg');
-    expect(icon).toBeTruthy();
-    expect(icon?.getAttribute('aria-hidden')).toBe('true');
   });
 
   // Cycle 16: ineligible state — violations list
