@@ -65,7 +65,12 @@ internal sealed class IssueClaimedHandler(
             return;
         }
 
-        WorkerContainerSpec spec = ((Result<WorkerContainerSpec>.Success)specResult).Value;
+        if (specResult is not Result<WorkerContainerSpec>.Success specSuccess)
+        {
+            return;
+        }
+
+        WorkerContainerSpec spec = specSuccess.Value;
         Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
 
         if (startResult is Result<ContainerId>.Success success)
