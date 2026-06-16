@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.Events;
 
 namespace Foundry.Modules.Workers.Domain;
@@ -16,11 +17,13 @@ public sealed class ActiveRun : WorkerRun
         DateTimeOffset createdAt,
         ContainerId containerId,
         BranchName branchName,
+        MonitoredRepositoryId monitoredRepositoryId,
         DateTimeOffset startedAt)
         : base(id, issueId, createdAt)
     {
         ContainerId = containerId;
         BranchName = branchName;
+        MonitoredRepositoryId = monitoredRepositoryId;
         StartedAt = startedAt;
     }
 
@@ -30,7 +33,13 @@ public sealed class ActiveRun : WorkerRun
 
     public BranchName BranchName { get; private set; }
 
-    internal static ActiveRun FromStarting(StartingRun starting, ContainerId containerId, BranchName branchName)
+    public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
+
+    internal static ActiveRun FromStarting(
+        StartingRun starting,
+        ContainerId containerId,
+        BranchName branchName,
+        MonitoredRepositoryId monitoredRepositoryId)
     {
         return new ActiveRun(
             starting.Id,
@@ -38,6 +47,7 @@ public sealed class ActiveRun : WorkerRun
             starting.CreatedAt,
             containerId,
             branchName,
+            monitoredRepositoryId,
             DateTimeOffset.UtcNow);
     }
 

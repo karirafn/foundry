@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
@@ -18,6 +19,7 @@ internal sealed class IssueClaimedHandler(
     IDomainEventDispatcher domainEventDispatcher,
     IOptions<WorkerOptions> optionsAccessor,
     IGlobalSettingsQueries settingsQueries,
+    IPostExitProviderQueries postExitProviderQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     private readonly WorkerOptions _options = optionsAccessor.Value;
@@ -29,6 +31,24 @@ internal sealed class IssueClaimedHandler(
         StartingRun startingRun = StartingRun.Begin(claimed.IssueId, WorkerRunId.From(claimed.WorkerRunId));
         dbContext.Set<WorkerRun>().Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        Result<bool> branchResult = await postExitProviderQueries.CreateBranchAsync(
+            claimed.MonitoredRepositoryId,
+            claimed.BranchName,
+            cancellationToken);
+
+        if (branchResult is Result<bool>.Failure branchFailure)
+        {
+            FailedRun branchFailedRun = startingRun.Fail(new FailureReason.ContainerError(branchFailure.Error.Message));
+            await dbContext.TransitionAsync(startingRun, branchFailedRun, domainEventDispatcher, cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: branch pre-creation failed: {Error}",
+                startingRun.Id,
+                claimed.IssueNumber,
+                branchFailure.Error.Message);
+            return;
+        }
 
         Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, cancellationToken);
 
@@ -56,7 +76,7 @@ internal sealed class IssueClaimedHandler(
         if (startResult is Result<ContainerId>.Success success)
         {
             BranchName branchName = BranchName.From(claimed.BranchName);
-            ActiveRun activeRun = startingRun.Activate(success.Value, branchName);
+            ActiveRun activeRun = startingRun.Activate(success.Value, branchName, claimed.MonitoredRepositoryId);
             await dbContext.TransitionAsync(startingRun, activeRun, domainEventDispatcher, cancellationToken);
 
             logger.LogDebug(
@@ -97,7 +117,8 @@ internal sealed class IssueClaimedHandler(
             claimed.Body,
             _options,
             claimed.Revision,
-            claimed.Continuation);
+            claimed.Continuation,
+            claimed.BranchName);
 
         string workerPrompt = _options.WorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);

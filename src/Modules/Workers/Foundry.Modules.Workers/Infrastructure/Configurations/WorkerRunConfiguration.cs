@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared.Infrastructure;
 
@@ -89,6 +90,10 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         id => id.Value,
         value => ContainerId.From(value));
 
+    private static readonly ValueConverter<MonitoredRepositoryId, Guid> MonitoredRepositoryIdConverter = new(
+        id => id.Value,
+        value => MonitoredRepositoryId.From(value));
+
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
         builder.Property(r => r.ContainerId)
@@ -107,6 +112,10 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
             .IsUnicode(false)
             .IsRequired()
             .HasColumnName("branch_name");
+
+        builder.Property(r => r.MonitoredRepositoryId)
+            .HasConversion(MonitoredRepositoryIdConverter)
+            .HasColumnName("monitored_repository_id");
     }
 }
 

@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.Events;
 
@@ -95,5 +96,22 @@ public sealed class Activate
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.WorkerRunId.ShouldBe(starting.Id),
             () => domainEvent.IssueId.ShouldBe(issueId));
+    }
+
+    [Fact]
+    public void WhenCalledWithRepositoryId_SetsMonitoredRepositoryIdOnActiveRun()
+    {
+        // Arrange
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+
+        // Act
+        ActiveRun active = starting.Activate(
+            ContainerId.From("container-123"),
+            BranchName.From("feat/1-my-feature"),
+            repositoryId);
+
+        // Assert
+        active.MonitoredRepositoryId.ShouldBe(repositoryId);
     }
 }

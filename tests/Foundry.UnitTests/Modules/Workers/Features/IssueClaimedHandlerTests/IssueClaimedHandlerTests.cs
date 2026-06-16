@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
@@ -48,7 +49,8 @@ public sealed class HandleAsync : IAsyncDisposable
     private IssueClaimedHandler BuildHandler(
         IWorkerOrchestrator? orchestrator = null,
         WorkerOptions? workerOptions = null,
-        IGlobalSettingsQueries? settingsQueries = null)
+        IGlobalSettingsQueries? settingsQueries = null,
+        IPostExitProviderQueries? postExitProviderQueries = null)
     {
         WorkerOptions options = workerOptions ?? new WorkerOptions
         {
@@ -61,6 +63,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             Options.Create(options),
             settingsQueries ?? new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")),
+            postExitProviderQueries ?? new StubPostExitProviderQueries(branchCreationSucceeds: true),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -73,6 +76,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string repositorySlug = "owner/repo",
         string? accountToken = "ghp_test_token",
         string branchName = "feat/42-test-issue",
+        MonitoredRepositoryId? monitoredRepositoryId = null,
         RevisionContext? revision = null,
         ContinuationContext? continuation = null)
     {
@@ -86,6 +90,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new Uri($"https://github.com/{repositorySlug}.git"),
             accountToken,
             branchName,
+            monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             revision,
             continuation);
         return new IssueClaimed(dispatch);
@@ -605,6 +610,41 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBranchCreationFails_CreatesFailedRunWithBranchCreationError()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler(
+            postExitProviderQueries: new StubPostExitProviderQueries(branchCreationSucceeds: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+    }
+
+    [Fact]
+    public async Task WhenBranchCreationFails_DoesNotStartContainer()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-start");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            postExitProviderQueries: new StubPostExitProviderQueries(branchCreationSucceeds: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenContinuationContext_PassesContinuationToSystemPromptBuilder()
     {
         // Arrange
@@ -621,6 +661,32 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("resuming work");
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("feat/103-my-feature");
+    }
+
+    private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
+    {
+        public Task<Result<bool>> CreateBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            Result<bool> result = branchCreationSucceeds
+                ? Result<bool>.Ok(true)
+                : Result<bool>.Fail(new Error("Provider.BranchCreationFailed", "Branch creation failed"));
+            return Task.FromResult(result);
+        }
+
+        public Task<Result<bool>> HasBranchCommitsAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(false));
+
+        public Task<Result<string>> GetPullRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok(string.Empty));
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

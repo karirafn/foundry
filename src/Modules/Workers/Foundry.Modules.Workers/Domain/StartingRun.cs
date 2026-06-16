@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.Events;
 
 namespace Foundry.Modules.Workers.Domain;
@@ -20,9 +21,12 @@ public sealed class StartingRun : WorkerRun
         return new StartingRun(workerRunId, issueId, DateTimeOffset.UtcNow);
     }
 
-    public ActiveRun Activate(ContainerId containerId, BranchName branchName)
+    public ActiveRun Activate(
+        ContainerId containerId,
+        BranchName branchName,
+        MonitoredRepositoryId monitoredRepositoryId = default)
     {
-        ActiveRun active = ActiveRun.FromStarting(this, containerId, branchName);
+        ActiveRun active = ActiveRun.FromStarting(this, containerId, branchName, monitoredRepositoryId);
         AddDomainEvent(new WorkerRunStarted(Id, IssueId));
         return active;
     }

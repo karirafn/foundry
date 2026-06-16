@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.WebApi.Persistence;
 
@@ -40,9 +41,10 @@ public sealed class PersistActiveRun : IAsyncDisposable
     {
         // Arrange
         IssueId issueId = IssueId.New();
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         BranchName branchName = BranchName.From("feat/42-my-feature");
-        ActiveRun run = starting.Activate(ContainerId.From("container-abc123"), branchName);
+        ActiveRun run = starting.Activate(ContainerId.From("container-abc123"), branchName, repositoryId);
 
         _dbContext.Set<WorkerRun>().Add(run);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -60,6 +62,7 @@ public sealed class PersistActiveRun : IAsyncDisposable
             () => reloaded.IssueId.ShouldBe(issueId),
             () => reloaded.ContainerId.ShouldBe(ContainerId.From("container-abc123")),
             () => reloaded.StartedAt.ShouldBe(run.StartedAt),
-            () => reloaded.BranchName.ShouldBe(branchName));
+            () => reloaded.BranchName.ShouldBe(branchName),
+            () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }
