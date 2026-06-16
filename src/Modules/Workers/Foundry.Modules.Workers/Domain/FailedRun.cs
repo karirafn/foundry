@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Domain;
 

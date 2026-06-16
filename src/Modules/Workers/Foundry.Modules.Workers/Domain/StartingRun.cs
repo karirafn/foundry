@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.Events;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Domain;
 

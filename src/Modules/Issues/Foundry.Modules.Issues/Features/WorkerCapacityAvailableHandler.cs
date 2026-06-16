@@ -221,7 +221,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await db.TransitionAsync(queued, inProgress, domainEventDispatcher, cancellationToken);
 
-        string branchName = $"{queued.IssueKind.BranchPrefix}/{queued.IssueNumber}";
+        string branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title).Value;
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,

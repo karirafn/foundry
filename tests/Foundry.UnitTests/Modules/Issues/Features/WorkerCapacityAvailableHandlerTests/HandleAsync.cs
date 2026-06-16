@@ -418,6 +418,41 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenQueuedIssueIsClaimed_BranchNameIncludesTitleSlug()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 42,
+            title: "Add Health Check",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        _dbContext.Set<Issue>().Add(queued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.BranchName.ShouldBe("feat/42-add-health-check");
+    }
+
+    [Fact]
     public async Task WhenContinuationQueuedIssueExists_ClaimsContinuationQueued()
     {
         // Arrange
