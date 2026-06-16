@@ -1,4 +1,7 @@
 import { Component, ChangeDetectionStrategy, WritableSignal, signal } from '@angular/core';
+import { SetupAuthStepComponent } from '../setup-auth-step/setup-auth-step';
+import { SetupAccountStepComponent } from '../setup-account-step/setup-account-step';
+import { SetupReposStepComponent } from '../setup-repos-step/setup-repos-step';
 
 type WizardStep = 1 | 2 | 3;
 
@@ -13,6 +16,7 @@ const STEPS: WizardStep[] = [1, 2, 3];
 @Component({
   selector: 'fd-setup-wizard',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SetupAuthStepComponent, SetupAccountStepComponent, SetupReposStepComponent],
   template: `
     <div class="setup-wizard">
       <nav class="setup-wizard__progress" aria-label="Setup progress">
@@ -29,19 +33,13 @@ const STEPS: WizardStep[] = [1, 2, 3];
       <div class="setup-wizard__body">
         @switch (_currentStep()) {
           @case (1) {
-            <div class="setup-wizard__step-content" data-step="1">
-              <p>Configure worker authentication.</p>
-            </div>
+            <fd-setup-auth-step (complete)="onAuthComplete()" />
           }
           @case (2) {
-            <div class="setup-wizard__step-content" data-step="2">
-              <p>Add a provider account.</p>
-            </div>
+            <fd-setup-account-step (back)="onBack()" (complete)="onAccountComplete($event)" />
           }
           @case (3) {
-            <div class="setup-wizard__step-content" data-step="3">
-              <p>Select repositories to monitor.</p>
-            </div>
+            <fd-setup-repos-step [accountId]="createdAccountId()" (back)="onBack()" />
           }
         }
       </div>
@@ -67,6 +65,10 @@ export class SetupWizardComponent {
   }
 
   onReposComplete(): void {
-    // Navigation to /issues will be handled when step 3 component is implemented
+    // Navigation to /issues is handled by SetupReposStepComponent internally
+  }
+
+  onBack(): void {
+    this._currentStep.update(step => (step > 1 ? ((step - 1) as WizardStep) : step));
   }
 }
