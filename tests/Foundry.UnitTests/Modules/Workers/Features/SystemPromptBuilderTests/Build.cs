@@ -404,7 +404,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBuiltWithoutRevisionContext_ContainsReportingInstructions()
+    public void WhenBuilt_DoesNotContainReportingInstructions()
     {
         // Arrange
         WorkerOptions options = new()
@@ -414,39 +414,18 @@ public sealed class Build
         };
 
         // Act
-        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options, branchName: "feat/1-title");
 
         // Assert
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("branch-created"),
-            () => result.ShouldContain("milestone"),
-            () => result.ShouldContain("report-1.json"));
+            () => result.ShouldNotContain("branch-created"),
+            () => result.ShouldNotContain("## Reporting"),
+            () => result.ShouldNotContain("report-1.json"),
+            () => result.ShouldNotContain("/reports/"));
     }
 
     [Fact]
-    public void WhenBuilt_ReportingInstructionsSectionHasStructuralSeparator()
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            SystemPromptTemplate = "TEMPLATE_MARKER",
-            BranchNamingInstruction = "Use conventional branch naming",
-        };
-
-        // Act
-        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
-
-        // Assert — separator appears before reporting instructions to isolate from template content
-        int templateIndex = result.IndexOf("TEMPLATE_MARKER", StringComparison.Ordinal);
-        int separatorIndex = result.IndexOf("---", StringComparison.Ordinal);
-        int reportingHeadingIndex = result.IndexOf("## Reporting", StringComparison.Ordinal);
-
-        separatorIndex.ShouldBeGreaterThan(templateIndex);
-        reportingHeadingIndex.ShouldBeGreaterThan(separatorIndex);
-    }
-
-    [Fact]
-    public void WhenBuiltWithRevisionContext_ReportingInstructionsAppearBeforeRevisionSection()
+    public void WhenBuiltForFreshRun_ContainsCheckoutInstruction()
     {
         // Arrange
         WorkerOptions options = new()
@@ -454,20 +433,12 @@ public sealed class Build
             SystemPromptTemplate = "Template content.",
             BranchNamingInstruction = "Use conventional branch naming",
         };
-        RevisionContext revision = new(
-            "feat/1-fix",
-            "https://github.com/org/repo/pull/1",
-            [new ReviewComment("Some feedback.")]);
 
         // Act
-        string result = SystemPromptBuilder.Build(1, "Title", "Body", options, revision);
+        string result = SystemPromptBuilder.Build(42, "Title", "Body", options, branchName: "feat/42-title");
 
         // Assert
-        int reportingIndex = result.IndexOf("branch-created", StringComparison.Ordinal);
-        int revisionIndex = result.IndexOf("You are addressing review feedback", StringComparison.Ordinal);
-
-        reportingIndex.ShouldBeGreaterThan(0);
-        revisionIndex.ShouldBeGreaterThan(reportingIndex);
+        result.ShouldContain("`feat/42-title`");
     }
 
     [Fact]
@@ -565,7 +536,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBuilt_ReportingInstructionsReferenceAbsolutePath()
+    public void WhenBuilt_DoesNotContainReportsPath()
     {
         // Arrange
         WorkerOptions options = new()
@@ -575,10 +546,9 @@ public sealed class Build
         };
 
         // Act
-        string result = SystemPromptBuilder.Build(1, "Title", "Body", options);
+        string result = SystemPromptBuilder.Build(1, "Title", "Body", options, branchName: "feat/1-title");
 
         // Assert
-        result.ShouldContain("/reports/");
-        result.ShouldNotContain("./reports/");
+        result.ShouldNotContain("/reports/");
     }
 }
