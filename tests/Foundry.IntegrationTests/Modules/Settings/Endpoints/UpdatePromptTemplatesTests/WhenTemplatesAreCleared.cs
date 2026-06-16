@@ -69,4 +69,58 @@ public sealed class WhenTemplatesAreCleared : IAsyncDisposable
             () => summary.SystemPromptTemplate.ShouldBeNull(),
             () => summary.WorkerPromptTemplate.ShouldBeNull());
     }
+
+    [Fact]
+    public async Task WhenOnlySystemPromptTemplateIsNull_ClearsSystemPromptAndRetainsWorkerPrompt()
+    {
+        // Arrange
+        await SeedSettingsWithTemplatesAsync();
+        object body = new
+        {
+            systemPromptTemplate = (string?)null,
+            workerPromptTemplate = "Retained worker prompt.",
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri("/api/settings/prompts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        GlobalSettingsSummary? summary = await response.Content
+            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+        summary.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.SystemPromptTemplate.ShouldBeNull(),
+            () => summary.WorkerPromptTemplate.ShouldBe("Retained worker prompt."));
+    }
+
+    [Fact]
+    public async Task WhenOnlyWorkerPromptTemplateIsNull_ClearsWorkerPromptAndRetainsSystemPrompt()
+    {
+        // Arrange
+        await SeedSettingsWithTemplatesAsync();
+        object body = new
+        {
+            systemPromptTemplate = "Retained system prompt.",
+            workerPromptTemplate = (string?)null,
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri("/api/settings/prompts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        GlobalSettingsSummary? summary = await response.Content
+            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+        summary.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.SystemPromptTemplate.ShouldBe("Retained system prompt."),
+            () => summary.WorkerPromptTemplate.ShouldBeNull());
+    }
 }

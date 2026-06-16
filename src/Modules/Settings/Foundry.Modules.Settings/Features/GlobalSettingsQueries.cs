@@ -64,5 +64,4 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
         return (settings?.SystemPromptTemplate, settings?.WorkerPromptTemplate);
     }
-
 }

@@ -22,6 +22,7 @@ internal static class SystemPromptBuilder
         string title,
         string body,
         WorkerOptions options,
+        string systemPromptTemplate,
         RevisionContext? revision = null,
         ContinuationContext? continuation = null,
         string? branchName = null)
@@ -38,7 +39,7 @@ internal static class SystemPromptBuilder
             </issue-content>
             """;
 
-        string basePrompt = options.SystemPromptTemplate
+        string basePrompt = systemPromptTemplate
             .Replace("{issueNumber}", issueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("{issueContent}", issueContent, StringComparison.Ordinal)
             .Replace("{branchNamingInstruction}", options.BranchNamingInstruction, StringComparison.Ordinal);

@@ -10,6 +10,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MaxTimeoutMinutes = 1440;
     internal const int DefaultMaxConcurrent = 1;
     internal const int DefaultTimeoutMinutes = 120;
+    internal const int MaxPromptTemplateLength = 32768;
 
     // Private parameterless constructor for EF Core materialization.
     private GlobalSettings() : base(GlobalSettingsId.Default)
@@ -51,11 +52,32 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    public void UpdatePromptTemplates(string? systemPromptTemplate, string? workerPromptTemplate)
+    public Result UpdatePromptTemplates(string? systemPromptTemplate, string? workerPromptTemplate)
     {
+        if (systemPromptTemplate is not null && systemPromptTemplate.Length == 0)
+        {
+            return SettingsErrors.InvalidPromptTemplate;
+        }
+
+        if (workerPromptTemplate is not null && workerPromptTemplate.Length == 0)
+        {
+            return SettingsErrors.InvalidPromptTemplate;
+        }
+
+        if (systemPromptTemplate is not null && systemPromptTemplate.Length > MaxPromptTemplateLength)
+        {
+            return SettingsErrors.InvalidPromptTemplateTooLong;
+        }
+
+        if (workerPromptTemplate is not null && workerPromptTemplate.Length > MaxPromptTemplateLength)
+        {
+            return SettingsErrors.InvalidPromptTemplateTooLong;
+        }
+
         SystemPromptTemplate = systemPromptTemplate;
         WorkerPromptTemplate = workerPromptTemplate;
         UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
     }
 
     public Result UpdateLimits(int maxConcurrent, int timeoutMinutes)

@@ -47,7 +47,13 @@ internal static class UpdatePromptTemplates
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            settings.UpdatePromptTemplates(command.SystemPromptTemplate, command.WorkerPromptTemplate);
+            Result updateResult = settings.UpdatePromptTemplates(command.SystemPromptTemplate, command.WorkerPromptTemplate);
+
+            if (updateResult is Result.Failure updateFailure)
+            {
+                return Result<GlobalSettingsSummary>.Fail(updateFailure.Error);
+            }
+
             await dbContext.SaveChangesAsync(cancellationToken);
 
             return GlobalSettingsMapper.ToSummary(settings);

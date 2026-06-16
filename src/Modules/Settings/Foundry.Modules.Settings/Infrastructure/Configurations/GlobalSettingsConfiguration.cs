@@ -48,9 +48,11 @@ internal sealed class GlobalSettingsConfiguration(
             .HasColumnName("timeout_minutes");
 
         builder.Property(s => s.SystemPromptTemplate)
+            .HasMaxLength(GlobalSettings.MaxPromptTemplateLength)
             .HasColumnName("system_prompt_template");
 
         builder.Property(s => s.WorkerPromptTemplate)
+            .HasMaxLength(GlobalSettings.MaxPromptTemplateLength)
             .HasColumnName("worker_prompt_template");
 
         builder.Property(s => s.CreatedAt)
