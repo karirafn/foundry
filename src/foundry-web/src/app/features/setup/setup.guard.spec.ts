@@ -5,6 +5,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { setupGuard } from './setup.guard';
+import { routes } from '../../app.routes';
 import { AccountSummary } from '../settings/accounts/account.model';
 
 const MOCK_ACCOUNT: AccountSummary = {
@@ -66,8 +67,8 @@ describe('setupGuard', () => {
     expect(result).toBe(true);
   });
 
-  // Cycle 3: handles HTTP error gracefully (allow navigation on error)
-  it('should return true when the accounts request fails', async () => {
+  // Cycle 3: allows navigation when the API returns a server error (API is up but erroring — setup is not the problem)
+  it('should return true when the accounts request returns a server error', async () => {
     // Arrange
     const { httpMock } = setup();
 
@@ -81,5 +82,31 @@ describe('setupGuard', () => {
 
     // Assert
     expect(result).toBe(true);
+  });
+
+  // Cycle 4: allows navigation when the API is unreachable (network error — fresh install may not have API running)
+  it('should return true when the accounts request fails with a network error', async () => {
+    // Arrange
+    const { httpMock } = setup();
+
+    // Act
+    const resultPromise = runGuard();
+    httpMock.expectOne('/api/accounts').error(new ProgressEvent('network error'));
+    const result = await resultPromise;
+
+    // Assert
+    expect(result).toBe(true);
+  });
+});
+
+describe('app routes', () => {
+  // Cycle 5: setupGuard protects the settings route
+  it('should apply setupGuard to the settings route', () => {
+    // Arrange
+    const settingsRoute = routes.find((r) => r.path === 'settings');
+
+    // Assert
+    expect(settingsRoute?.canActivate).toBeDefined();
+    expect(settingsRoute?.canActivate).toContain(setupGuard);
   });
 });

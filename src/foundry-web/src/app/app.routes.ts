@@ -11,6 +11,7 @@ export const routes: Routes = [
   },
   {
     path: 'settings',
+    canActivate: [setupGuard],
     loadChildren: () =>
       import('./features/settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
   },
