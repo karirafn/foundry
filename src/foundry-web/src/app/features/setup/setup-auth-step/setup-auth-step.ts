@@ -1,0 +1,73 @@
+import { Component, ChangeDetectionStrategy, effect, inject, output } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { SettingsService } from '../../settings/settings.service';
+
+@Component({
+  selector: 'fd-setup-auth-step',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [FormsModule],
+  template: `
+    <div class="setup-auth-step">
+      <h2 class="setup-auth-step__title">Worker Authentication</h2>
+      <p class="setup-auth-step__description">
+        Enter your Anthropic API key. Workers will use this key to authenticate with Claude.
+      </p>
+
+      <div class="setup-auth-step__form">
+        <div class="setup-auth-step__field">
+          <label class="setup-auth-step__field-label" for="apiKey">API Key</label>
+          <input
+            class="setup-auth-step__api-key-input"
+            type="password"
+            id="apiKey"
+            autocomplete="off"
+            placeholder="Enter your API key"
+            [(ngModel)]="_apiKeyValue"
+            [attr.aria-invalid]="!!_settingsService.saveError() || null"
+            aria-describedby="api-key-error"
+          />
+        </div>
+
+        <div id="api-key-error" class="setup-auth-step__error" role="alert">
+          @if (_settingsService.saveError()) {
+            {{ _settingsService.saveError() }}
+          }
+        </div>
+
+        <button
+          class="setup-auth-step__next-btn"
+          type="button"
+          [disabled]="_settingsService.saving() || !_apiKeyValue"
+          (click)="onNext()"
+        >{{ _settingsService.saving() ? 'Saving...' : 'Next' }}</button>
+      </div>
+    </div>
+  `,
+  styleUrl: './setup-auth-step.scss',
+})
+export class SetupAuthStepComponent {
+  protected readonly _settingsService = inject(SettingsService);
+
+  readonly complete = output<void>();
+
+  protected _apiKeyValue = '';
+
+  private _previousSaving = false;
+
+  constructor() {
+    effect(() => {
+      const saving = this._settingsService.saving();
+      const saveSuccess = this._settingsService.saveSuccess();
+
+      if (this._previousSaving && !saving && saveSuccess) {
+        this.complete.emit();
+      }
+
+      this._previousSaving = saving;
+    });
+  }
+
+  onNext(): void {
+    this._settingsService.updateAuthMode('api_key', this._apiKeyValue);
+  }
+}

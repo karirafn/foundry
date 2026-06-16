@@ -1,0 +1,98 @@
+@mixin focus-ring {
+  outline: 2px solid var(--fd-text-link);
+  outline-offset: 2px;
+}
+
+.setup-auth-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  &__title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--fd-text-primary);
+    margin: 0;
+  }
+
+  &__description {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-md);
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__field-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--fd-text-secondary);
+  }
+
+  &__api-key-input {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 0.875rem;
+    min-height: 40px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    width: 100%;
+
+    &::placeholder {
+      color: var(--fd-text-tertiary);
+    }
+
+    &:focus {
+      border-color: var(--fd-text-link);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__error {
+    color: var(--fd-state-failed);
+    font-size: 0.875rem;
+    min-height: 1.25rem;
+  }
+
+  &__next-btn {
+    align-self: flex-end;
+    background: var(--fd-text-link);
+    border: none;
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-bg-page);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-xl);
+    transition: opacity 0.15s ease;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    &:not(:disabled):hover {
+      opacity: 0.85;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}
