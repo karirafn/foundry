@@ -85,4 +85,52 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         summary.ShouldNotBeNull();
         summary.AuthMode.ShouldBe("ApiKey");
     }
+
+    [Fact]
+    public async Task ReturnsPromptTemplatesWhenSet()
+    {
+        // Arrange
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.UpdatePromptTemplates("system-prompt", "worker-prompt");
+        dbContext.Set<GlobalSettings>().Add(settings);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/settings", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        GlobalSettingsSummary? summary = await response.Content
+            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+        summary.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.SystemPromptTemplate.ShouldBe("system-prompt"),
+            () => summary.WorkerPromptTemplate.ShouldBe("worker-prompt"));
+    }
+
+    [Fact]
+    public async Task ReturnsNullPromptTemplatesByDefault()
+    {
+        // Arrange
+        await SeedDefaultSettingsAsync();
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/settings", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        GlobalSettingsSummary? summary = await response.Content
+            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+        summary.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.SystemPromptTemplate.ShouldBeNull(),
+            () => summary.WorkerPromptTemplate.ShouldBeNull());
+    }
 }

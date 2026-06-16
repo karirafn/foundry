@@ -23,6 +23,8 @@ internal static class GlobalSettingsMapper
             oauth is not null && oauth.AccessToken.Length > 0,
             oauth is not null && oauth.RefreshToken.Length > 0,
             oauth?.ExpiresAt,
-            oauth?.SubscriptionType);
+            oauth?.SubscriptionType,
+            settings.SystemPromptTemplate,
+            settings.WorkerPromptTemplate);
     }
 }

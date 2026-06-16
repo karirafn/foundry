@@ -7,4 +7,6 @@ public sealed record GlobalSettingsSummary(
     bool AccessTokenPresent,
     bool RefreshTokenPresent,
     DateTimeOffset? ExpiresAt,
-    string? SubscriptionType);
+    string? SubscriptionType,
+    string? SystemPromptTemplate,
+    string? WorkerPromptTemplate);
