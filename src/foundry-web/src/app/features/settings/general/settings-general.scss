@@ -297,4 +297,34 @@
       grid-template-columns: 1fr;
     }
   }
+
+  &__prompts-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-md);
+  }
+
+  &__textarea {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 0.875rem;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    resize: vertical;
+    width: 100%;
+
+    &::placeholder {
+      color: var(--fd-text-tertiary);
+    }
+
+    &:focus {
+      border-color: var(--fd-text-link);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
 }
