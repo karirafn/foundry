@@ -1,0 +1,209 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OutputEmitterRef,
+  Signal,
+  WritableSignal,
+  computed,
+  effect,
+  inject,
+  output,
+  signal,
+} from '@angular/core';
+import { AccountService } from '../../settings/accounts/account.service';
+import { TokenValidationResult } from '../../settings/accounts/account.model';
+
+const DEFAULT_BASE_URL = 'https://github.com';
+const PROVIDER_TYPE = 'GitHub';
+
+@Component({
+  selector: 'fd-setup-account-step',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <div class="setup-account-step">
+      <h2 class="setup-account-step__title">Add a Provider Account</h2>
+      <p class="setup-account-step__description">
+        Connect a GitHub account so Foundry can monitor repositories for issues.
+      </p>
+
+      <div class="setup-account-step__form">
+        <div class="setup-account-step__field">
+          <label class="setup-account-step__field-label" for="account-name">Account Name</label>
+          <input
+            class="setup-account-step__input"
+            type="text"
+            id="account-name"
+            autocomplete="off"
+            [value]="_name()"
+            (input)="_name.set($any($event.target).value)"
+            required
+          />
+        </div>
+
+        <div class="setup-account-step__field">
+          <span class="setup-account-step__field-label">Provider</span>
+          <span class="setup-account-step__provider-badge">GitHub</span>
+        </div>
+
+        <div class="setup-account-step__field">
+          <label class="setup-account-step__field-label" for="account-base-url">Base URL</label>
+          <input
+            class="setup-account-step__input"
+            type="text"
+            id="account-base-url"
+            autocomplete="off"
+            [value]="_baseUrl()"
+            (input)="_baseUrl.set($any($event.target).value)"
+          />
+        </div>
+
+        <div class="setup-account-step__field">
+          <label class="setup-account-step__field-label" for="account-token">Token</label>
+          <div class="setup-account-step__token-wrapper">
+            <input
+              class="setup-account-step__input"
+              [type]="_showToken() ? 'text' : 'password'"
+              id="account-token"
+              autocomplete="off"
+              [value]="_token()"
+              (input)="_token.set($any($event.target).value)"
+              required
+              aria-describedby="account-token-validation account-save-error"
+            />
+            <button
+              class="setup-account-step__toggle-visibility-btn"
+              type="button"
+              [attr.aria-label]="_showToken() ? 'Hide token' : 'Show token'"
+              (click)="_showToken.set(!_showToken())"
+            >
+              @if (_showToken()) {
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+              } @else {
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              }
+            </button>
+            <button
+              class="setup-account-step__validate-btn"
+              type="button"
+              [disabled]="!_canValidate()"
+              (click)="onValidate()"
+            >{{ _accountService.validating() ? 'Validating...' : 'Validate Token' }}</button>
+          </div>
+        </div>
+
+        <div
+          id="account-token-validation"
+          class="setup-account-step__validation-result"
+          role="status"
+          aria-live="polite"
+        >
+          @if (_accountService.validationResult(); as result) {
+            @if (result.isValid) {
+              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
+              <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">Token is valid</span>
+            } @else if (result.isAuthFailure) {
+              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+              <span class="setup-account-step__validation-message setup-account-step__validation-message--error">Authentication failed — check that the token is correct</span>
+            } @else {
+              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+              <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">Missing required scopes: {{ result.missingScopes.join(', ') }}</span>
+            }
+          }
+        </div>
+
+        <div
+          id="account-save-error"
+          class="setup-account-step__save-error"
+          role="alert"
+        >
+          @if (_accountService.saveError()) {
+            {{ _accountService.saveError() }}
+          }
+        </div>
+
+        <div class="setup-account-step__actions">
+          <button
+            class="setup-account-step__back-btn"
+            type="button"
+            (click)="back.emit()"
+          >Back</button>
+
+          <button
+            class="setup-account-step__create-btn"
+            type="button"
+            [disabled]="!_canCreate()"
+            (click)="onCreate()"
+          >{{ _accountService.saving() ? 'Creating...' : 'Create Account' }}</button>
+        </div>
+      </div>
+    </div>
+  `,
+  styleUrl: './setup-account-step.scss',
+})
+export class SetupAccountStepComponent {
+  protected readonly _accountService = inject(AccountService);
+
+  readonly complete: OutputEmitterRef<string> = output<string>();
+  readonly back: OutputEmitterRef<void> = output<void>();
+
+  protected readonly _name: WritableSignal<string> = signal('');
+  protected readonly _baseUrl: WritableSignal<string> = signal(DEFAULT_BASE_URL);
+  protected readonly _token: WritableSignal<string> = signal('');
+  protected readonly _showToken: WritableSignal<boolean> = signal(false);
+
+  private _previousSaving = false;
+
+  protected readonly _canCreate: Signal<boolean> = computed(() => {
+    if (this._accountService.saving()) {
+      return false;
+    }
+    return !!this._name() && !!this._token();
+  });
+
+  protected readonly _canValidate: Signal<boolean> = computed(() => {
+    if (this._accountService.validating()) {
+      return false;
+    }
+    return !!this._token() && !!this._baseUrl();
+  });
+
+  constructor() {
+    effect(() => {
+      const saving = this._accountService.saving();
+      const saveSuccess = this._accountService.saveSuccess();
+      const accounts = this._accountService.accounts();
+
+      if (this._previousSaving && !saving && saveSuccess) {
+        const created = accounts[accounts.length - 1];
+        if (created) {
+          this.complete.emit(created.id);
+        }
+      }
+
+      this._previousSaving = saving;
+    });
+  }
+
+  onCreate(): void {
+    this._accountService.createAccount({
+      name: this._name(),
+      providerType: PROVIDER_TYPE,
+      baseUrl: this._baseUrl(),
+      token: this._token(),
+    });
+  }
+
+  onValidate(): void {
+    this._accountService.validateToken({
+      token: this._token(),
+      baseUrl: this._baseUrl(),
+    });
+  }
+}
