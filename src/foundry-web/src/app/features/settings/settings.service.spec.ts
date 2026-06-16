@@ -627,6 +627,8 @@ describe('SettingsService', () => {
       refreshTokenPresent: false,
       expiresAt: null,
       subscriptionType: null,
+      systemPromptTemplate: null,
+      workerPromptTemplate: null,
     });
     expect(service.authSettings()!.mode).toBe('api_key');
 
@@ -640,9 +642,217 @@ describe('SettingsService', () => {
       refreshTokenPresent: true,
       expiresAt: '2027-01-01T00:00:00Z',
       subscriptionType: 'pro',
+      systemPromptTemplate: null,
+      workerPromptTemplate: null,
     });
 
     // Assert
     expect(service.authSettings()!.mode).toBe('oauth');
+  });
+
+  // Cycle 14: loadSettings populates prompt template signals
+  it('should start with null systemPromptTemplate and workerPromptTemplate', () => {
+    // Arrange / Act — no calls yet
+
+    // Assert
+    expect(service.systemPromptTemplate()).toBeNull();
+    expect(service.workerPromptTemplate()).toBeNull();
+  });
+
+  it('should populate systemPromptTemplate from loadSettings response', () => {
+    // Arrange / Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+      systemPromptTemplate: 'You are a helpful assistant.',
+      workerPromptTemplate: null,
+    });
+
+    // Assert
+    expect(service.systemPromptTemplate()).toBe('You are a helpful assistant.');
+    expect(service.workerPromptTemplate()).toBeNull();
+  });
+
+  it('should populate workerPromptTemplate from loadSettings response', () => {
+    // Arrange / Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+      systemPromptTemplate: null,
+      workerPromptTemplate: 'Fix the issue.',
+    });
+
+    // Assert
+    expect(service.systemPromptTemplate()).toBeNull();
+    expect(service.workerPromptTemplate()).toBe('Fix the issue.');
+  });
+
+  // Cycle 15: updatePromptTemplates calls PUT /api/settings/prompts
+  it('should PUT to /api/settings/prompts when updatePromptTemplates is called', () => {
+    // Arrange / Act
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
+    const req = httpMock.expectOne('/api/settings/prompts');
+
+    // Assert
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
+    req.flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+      systemPromptTemplate: 'sys',
+      workerPromptTemplate: 'worker',
+    });
+  });
+
+  it('should set savingPrompts to true while updatePromptTemplates is in flight', () => {
+    // Arrange / Act
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: null });
+
+    // Assert — before flush
+    expect(service.savingPrompts()).toBe(true);
+    httpMock.expectOne('/api/settings/prompts').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+      systemPromptTemplate: 'sys',
+      workerPromptTemplate: null,
+    });
+  });
+
+  it('should update prompt template signals and set savePromptsSuccess to true after updatePromptTemplates succeeds', () => {
+    // Arrange
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
+    httpMock.expectOne('/api/settings/prompts').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+      systemPromptTemplate: 'sys',
+      workerPromptTemplate: 'worker',
+    });
+
+    // Assert
+    expect(service.savingPrompts()).toBe(false);
+    expect(service.savePromptsSuccess()).toBe(true);
+    expect(service.savePromptsError()).toBeNull();
+    expect(service.systemPromptTemplate()).toBe('sys');
+    expect(service.workerPromptTemplate()).toBe('worker');
+  });
+
+  // Cycle 16: updatePromptTemplates error handling
+  it('should set savePromptsError when updatePromptTemplates fails', () => {
+    // Arrange
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: null });
+    httpMock.expectOne('/api/settings/prompts').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Assert
+    expect(service.savePromptsError()).not.toBeNull();
+    expect(service.savingPrompts()).toBe(false);
+    expect(service.savePromptsSuccess()).toBe(false);
+  });
+
+  it('should set savePromptsError to a fixed user-facing string when updatePromptTemplates fails', () => {
+    // Arrange
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: null });
+    httpMock.expectOne('/api/settings/prompts').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Assert
+    expect(service.savePromptsError()).toBe('Failed to save prompt templates');
+  });
+
+  it('should clear savePromptsError and savePromptsSuccess when updatePromptTemplates is called again', () => {
+    // Arrange — put signals into dirty state
+    service.updatePromptTemplates({ systemPromptTemplate: 'bad', workerPromptTemplate: null });
+    httpMock.expectOne('/api/settings/prompts').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(service.savePromptsError()).not.toBeNull();
+
+    // Act — call again
+    service.updatePromptTemplates({ systemPromptTemplate: 'good', workerPromptTemplate: null });
+
+    // Assert — cleared before request completes
+    expect(service.savePromptsError()).toBeNull();
+    expect(service.savePromptsSuccess()).toBe(false);
+    expect(service.savingPrompts()).toBe(true);
+    httpMock.expectOne('/api/settings/prompts').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+      systemPromptTemplate: 'good',
+      workerPromptTemplate: null,
+    });
+  });
+
+  it('should reset prompt signals in loadSettings', () => {
+    // Arrange — put signals into dirty state
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
+    httpMock.expectOne('/api/settings/prompts').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+      systemPromptTemplate: 'sys',
+      workerPromptTemplate: 'worker',
+    });
+    expect(service.savePromptsSuccess()).toBe(true);
+
+    // Act
+    service.loadSettings();
+
+    // Assert — cleared before the response arrives
+    expect(service.savePromptsSuccess()).toBe(false);
+    expect(service.savingPrompts()).toBe(false);
+    expect(service.savePromptsError()).toBeNull();
+
+    httpMock.expectOne('/api/settings').flush({
+      authMode: 'ApiKey',
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      expiresAt: null,
+      subscriptionType: null,
+      systemPromptTemplate: null,
+      workerPromptTemplate: null,
+    });
   });
 });
