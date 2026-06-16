@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -507,6 +508,148 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<IReadOnlyList<AvailableRepository>>.Ok(repositories);
     }
 
+    public async Task<Result<bool>> CreateBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string defaultBranch,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string encodedBranch = Uri.EscapeDataString(defaultBranch);
+
+        string getRefPath = $"repos/{owner}/{repo}/git/refs/heads/{encodedBranch}";
+        Uri getRefUri = new(EnsureTrailingSlash(apiBaseUrl), getRefPath);
+
+        using HttpRequestMessage getRefRequest = new(HttpMethod.Get, getRefUri);
+        getRefRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        getRefRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        getRefRequest.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        getRefRequest.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage getRefResponse = await httpClient.SendAsync(getRefRequest, cancellationToken);
+
+        if (!getRefResponse.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(getRefResponse));
+        }
+
+        string getRefBody = await getRefResponse.Content.ReadAsStringAsync(cancellationToken);
+        GitHubGitRefDto? gitRef = JsonSerializer.Deserialize<GitHubGitRefDto>(getRefBody, JsonOptions);
+        string sha = gitRef?.Object?.Sha ?? string.Empty;
+
+        string createRefsPath = $"repos/{owner}/{repo}/git/refs";
+        Uri createRefsUri = new(EnsureTrailingSlash(apiBaseUrl), createRefsPath);
+
+        string createBody = JsonSerializer.Serialize(
+            new { @ref = $"refs/heads/{branchName}", sha },
+            JsonOptions);
+
+        using HttpRequestMessage createRefRequest = new(HttpMethod.Post, createRefsUri);
+        createRefRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        createRefRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        createRefRequest.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        createRefRequest.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+        createRefRequest.Content = new StringContent(createBody, Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage createRefResponse = await httpClient.SendAsync(createRefRequest, cancellationToken);
+
+        if (createRefResponse.StatusCode == HttpStatusCode.UnprocessableEntity)
+        {
+            return Result<bool>.Ok(false);
+        }
+
+        if (!createRefResponse.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(createRefResponse));
+        }
+
+        return Result<bool>.Ok(true);
+    }
+
+    public async Task<Result<bool>> HasBranchCommitsAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string defaultBranch,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string relativePath = $"repos/{owner}/{repo}/compare/{defaultBranch}...{branchName}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubCompareDto? dto = JsonSerializer.Deserialize<GitHubCompareDto>(body, JsonOptions);
+
+        return Result<bool>.Ok((dto?.AheadBy ?? 0) > 0);
+    }
+
+    public async Task<Result<string>> GetPullRequestByBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<string>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string encodedHead = Uri.EscapeDataString($"{slug.Owner}:{branchName}");
+        string relativePath = $"repos/{owner}/{repo}/pulls?head={encodedHead}&state=open";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<string>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitHubPullRequestListItemDto>? dtos =
+            JsonSerializer.Deserialize<List<GitHubPullRequestListItemDto>>(body, JsonOptions);
+
+        string pullRequestUrl = (dtos ?? []).FirstOrDefault()?.HtmlUrl ?? string.Empty;
+        return Result<string>.Ok(pullRequestUrl);
+    }
+
     private static Uri EnsureTrailingSlash(Uri uri)
     {
         string uriString = uri.ToString();
@@ -633,6 +776,14 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         int? OriginalLine);
 
     private sealed record GitHubRepositoryListItemDto(string FullName, bool Private);
+
+    private sealed record GitHubGitRefDto(GitHubGitObjectDto? Object);
+
+    private sealed record GitHubGitObjectDto(string Sha);
+
+    private sealed record GitHubCompareDto(int AheadBy);
+
+    private sealed record GitHubPullRequestListItemDto(string HtmlUrl);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
