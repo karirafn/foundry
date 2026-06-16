@@ -15,6 +15,7 @@ internal static class SettingsEndpoints
         ScanOAuthCredentials.Endpoint.Map(group);
         UpdateAuthMode.Endpoint.Map(group);
         UpdateWorkerLimits.Endpoint.Map(group);
+        UpdatePromptTemplates.Endpoint.Map(group);
 
         return routes;
     }
