@@ -24,6 +24,7 @@ public sealed class Create
             Author: "alice",
             Url: "https://github.com/org/repo/issues/42",
             Labels: ["bug"],
+            IssueKindLabel: "bug",
             DetectedAt: DateTimeOffset.UtcNow);
 
         // Assert

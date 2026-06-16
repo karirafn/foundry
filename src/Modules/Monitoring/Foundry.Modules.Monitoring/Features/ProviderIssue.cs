@@ -6,4 +6,5 @@ public sealed record ProviderIssue(
     string Body,
     string Author,
     string Url,
-    IReadOnlyList<string> Labels);
+    IReadOnlyList<string> Labels,
+    string IssueKindLabel);

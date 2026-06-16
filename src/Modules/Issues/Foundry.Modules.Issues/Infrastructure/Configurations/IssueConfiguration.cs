@@ -20,6 +20,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
     private const int AuthorMaxLength = 200;
     private const int UrlMaxLength = 2000;
     private const int DiscriminatorMaxLength = 30;
+    private const int IssueKindMaxLength = 50;
 
     private static IssueAuthor ConvertToIssueAuthor(string value) =>
         IssueAuthor.Create(value) is Result<IssueAuthor>.Success s
@@ -155,6 +156,18 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
                 s => DateTimeOffset.Parse(s, null, DateTimeStyles.RoundtripKind))
             .HasColumnType("TEXT")
             .HasColumnName("detected_at");
+
+        ValueConverter<IssueKind, string> issueKindConverter = new(
+            kind => kind.Value,
+            value => IssueKind.FromLabel(value));
+
+        builder.Property(i => i.IssueKind)
+            .HasConversion(issueKindConverter)
+            .HasMaxLength(IssueKindMaxLength)
+            .IsUnicode(false)
+            .IsRequired()
+            .HasDefaultValueSql("'feature'")
+            .HasColumnName("issue_kind");
 
         builder.HasDiscriminator<string>("state")
             .HasValue<DetectedIssue>("detected")

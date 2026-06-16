@@ -15,6 +15,8 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     {
     }
 
+    public IssueKind IssueKind { get; protected set; } = IssueKind.Feature;
+
     public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
 
     public int IssueNumber { get; private set; }

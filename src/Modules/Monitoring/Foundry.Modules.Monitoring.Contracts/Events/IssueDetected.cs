@@ -10,4 +10,5 @@ public sealed record IssueDetected(
     string Author,
     string Url,
     IReadOnlyList<string> Labels,
+    string IssueKindLabel,
     DateTimeOffset DetectedAt) : IIntegrationEvent;

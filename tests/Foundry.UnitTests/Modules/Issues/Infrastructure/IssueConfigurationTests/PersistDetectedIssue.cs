@@ -79,6 +79,65 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDetectedIssuePersistedWithNonDefaultIssueKind_ReloadsWithCorrectIssueKind()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue issue = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 77,
+            title: "Fix the crash",
+            body: "Body text",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: ["foundry", "bug"],
+            detectedAt: DateTimeOffset.UtcNow,
+            issueKind: IssueKind.Bug);
+
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([issue.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        DetectedIssue detected = result.ShouldBeOfType<DetectedIssue>();
+        detected.IssueKind.ShouldBe(IssueKind.Bug);
+    }
+
+    [Fact]
+    public async Task WhenDetectedIssuePersistedWithoutIssueKind_ReloadsAsFeature()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue issue = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 78,
+            title: "Add a feature",
+            body: "Body text",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: ["foundry"],
+            detectedAt: DateTimeOffset.UtcNow);
+
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([issue.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        DetectedIssue detected = result.ShouldBeOfType<DetectedIssue>();
+        detected.IssueKind.ShouldBe(IssueKind.Feature);
+    }
+
+    [Fact]
     public async Task WhenDetectedIssuePersistedWithEmptyBlockedBy_ReloadsAsEmptyList()
     {
         // Arrange
