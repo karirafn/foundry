@@ -1125,6 +1125,30 @@ public sealed class PollAsync : IAsyncDisposable
                 branchProtectionResult
                 ?? Result<BranchProtection>.Ok(new BranchProtection("main", true, true, true)));
         }
+
+        public Task<Result<bool>> CreateBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Ok(true));
+        }
+
+        public Task<Result<bool>> HasBranchCommitsAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Ok(false));
+        }
+
+        public Task<Result<string>> GetPullRequestByBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<string>.Ok(string.Empty));
+        }
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
@@ -1174,6 +1198,30 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<BranchProtection>.Fail(error));
+        }
+
+        public Task<Result<bool>> CreateBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Fail(error));
+        }
+
+        public Task<Result<bool>> HasBranchCommitsAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Fail(error));
+        }
+
+        public Task<Result<string>> GetPullRequestByBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<string>.Fail(error));
         }
     }
 

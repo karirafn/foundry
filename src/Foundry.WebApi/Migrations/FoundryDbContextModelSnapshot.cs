@@ -103,7 +103,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -245,46 +245,6 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("global_settings", (string)null);
                 });
 
-            modelBuilder.Entity("Foundry.Modules.Workers.Domain.WorkerReport", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasMaxLength(2147483647)
-                        .IsUnicode(true)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("content");
-
-                    b.Property<DateTimeOffset>("IngestedAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("ingested_at");
-
-                    b.Property<string>("ReportType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .IsUnicode(false)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("report_type");
-
-                    b.Property<int>("SequenceNumber")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("sequence_number");
-
-                    b.Property<Guid>("WorkerRunId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("worker_run_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkerRunId", "SequenceNumber")
-                        .HasDatabaseName("ix_worker_reports_worker_run_id_sequence_number");
-
-                    b.ToTable("worker_reports", (string)null);
-                });
-
             modelBuilder.Entity("Foundry.Modules.Workers.Domain.WorkerRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -338,7 +298,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -393,7 +353,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -444,13 +404,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("failure_reason");
 
-                    b.Property<string>("LatestProgress")
-                        .IsRequired()
-                        .ValueGeneratedOnUpdateSometimes()
-                        .HasMaxLength(2000)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("latest_progress");
-
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()
@@ -468,7 +421,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -506,18 +459,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
-                    b.Property<string>("LatestProgress")
-                        .IsRequired()
-                        .ValueGeneratedOnUpdateSometimes()
-                        .HasMaxLength(2000)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("latest_progress");
-
                     b.ToTable(t =>
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -551,7 +497,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -590,7 +536,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -642,7 +588,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -681,7 +627,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -720,7 +666,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -754,7 +700,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -813,7 +759,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -889,7 +835,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -952,7 +898,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -1010,7 +956,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -1049,7 +995,7 @@ namespace Foundry.WebApi.Migrations
                         {
                             t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL AND latest_progress IS NOT NULL)");
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
 
@@ -1087,6 +1033,7 @@ namespace Foundry.WebApi.Migrations
                     b.HasBaseType("Foundry.Modules.Workers.Domain.WorkerRun");
 
                     b.Property<string>("BranchName")
+                        .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(500)
                         .IsUnicode(false)
@@ -1100,11 +1047,9 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("container_id");
 
-                    b.Property<string>("LatestProgress")
-                        .HasMaxLength(2147483647)
-                        .IsUnicode(true)
+                    b.Property<Guid>("MonitoredRepositoryId")
                         .HasColumnType("TEXT")
-                        .HasColumnName("latest_progress");
+                        .HasColumnName("monitored_repository_id");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("TEXT")
@@ -1243,15 +1188,6 @@ namespace Foundry.WebApi.Migrations
                     b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.Account", null)
                         .WithMany()
                         .HasForeignKey("AccountId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Foundry.Modules.Workers.Domain.WorkerReport", b =>
-                {
-                    b.HasOne("Foundry.Modules.Workers.Domain.WorkerRun", null)
-                        .WithMany()
-                        .HasForeignKey("WorkerRunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

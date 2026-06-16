@@ -64,7 +64,6 @@ public sealed class InProgressIssue : Issue
     public ContinuableFailedIssue MarkContinuableFailed(
         Guid workerRunId,
         string branchName,
-        string latestProgress,
         string failureReason,
         DateTimeOffset failedAt)
     {
@@ -72,7 +71,6 @@ public sealed class InProgressIssue : Issue
             this,
             workerRunId,
             branchName,
-            latestProgress,
             failureReason,
             failedAt);
         AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));

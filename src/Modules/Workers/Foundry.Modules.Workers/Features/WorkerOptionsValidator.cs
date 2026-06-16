@@ -38,15 +38,6 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
             failures.Add("Workers:Image must not use the ':latest' tag. Pin to a specific version tag or digest for reproducible builds.");
         }
 
-        if (string.IsNullOrWhiteSpace(options.ReportsPath))
-        {
-            failures.Add("Workers:ReportsPath must be non-empty.");
-        }
-        else if (ContainsPathTraversal(options.ReportsPath))
-        {
-            failures.Add("Workers:ReportsPath must not contain path traversal segments (..).");
-        }
-
         ValidateMountDictionary(options.Mounts, "Workers:Mounts", failures);
         ValidateMountDictionary(options.WritableMounts, "Workers:WritableMounts", failures);
 

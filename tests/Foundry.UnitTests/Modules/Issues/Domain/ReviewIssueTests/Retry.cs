@@ -65,7 +65,7 @@ public sealed class Retry
     }
 
     [Fact]
-    public void WhenRetried_ContinuationQueuedIssueHasSharedPropertiesAndContinuationContext()
+    public void WhenRetried_ContinuationQueuedIssueHasSharedPropertiesAndBranchName()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -81,7 +81,6 @@ public sealed class Retry
             () => queued.Title.ShouldBe(review.Title),
             () => queued.Body.ShouldBe(review.Body),
             () => queued.DetectedAt.ShouldBe(review.DetectedAt),
-            () => queued.BranchName.ShouldBe(review.BranchName),
-            () => queued.LatestProgress.ShouldBe("PR was opened and reviewed"));
+            () => queued.BranchName.ShouldBe(review.BranchName));
     }
 }

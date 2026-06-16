@@ -1,5 +1,4 @@
-using System.Text.Json;
-
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
@@ -13,23 +12,19 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
-    IOptions<WorkerOptions> optionsAccessor,
-    ILogger<WorkerDispatchService> logger) : BackgroundService
+    ILogger<WorkerDispatchService> logger,
+    TimeSpan? prRetryDelay = null) : BackgroundService
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan DefaultPrRetryDelay = TimeSpan.FromSeconds(10);
 
-    private static readonly JsonSerializerOptions ReportJsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
+    private readonly TimeSpan _prRetryDelay = prRetryDelay ?? DefaultPrRetryDelay;
 
-    private readonly WorkerOptions _options = optionsAccessor.Value;
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
 
@@ -53,10 +48,10 @@ internal sealed class WorkerDispatchService(
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
         IDomainEventDispatcher domainEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
-        IWorkerLogBroadcaster workerLogBroadcaster =
-            scope.ServiceProvider.GetRequiredService<IWorkerLogBroadcaster>();
         IGlobalSettingsQueries settingsQueries =
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
+        IPostExitProviderQueries postExitProviderQueries =
+            scope.ServiceProvider.GetRequiredService<IPostExitProviderQueries>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
@@ -70,7 +65,7 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
-                workerLogBroadcaster,
+                postExitProviderQueries,
                 timeoutMinutes,
                 activeRuns,
                 cancellationToken);
@@ -82,7 +77,7 @@ internal sealed class WorkerDispatchService(
             orchestrator,
             integrationEventDispatcher,
             domainEventDispatcher,
-            workerLogBroadcaster,
+            postExitProviderQueries,
             timeoutMinutes,
             activeRuns,
             cancellationToken);
@@ -110,7 +105,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
-        IWorkerLogBroadcaster workerLogBroadcaster,
+        IPostExitProviderQueries postExitProviderQueries,
         int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
@@ -125,9 +120,6 @@ internal sealed class WorkerDispatchService(
 
             if (status is null)
             {
-                string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
-                await IngestReportsAsync(dbContext, activeRun, reportsDir, workerLogBroadcaster, cancellationToken);
-
                 FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 runsToRemove.Add(activeRun);
@@ -138,8 +130,7 @@ internal sealed class WorkerDispatchService(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Orphaned after restart",
-                        BranchName: activeRun.BranchName?.Value,
-                        LatestProgress: activeRun.LatestProgress)],
+                        BranchName: activeRun.BranchName.Value)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -157,7 +148,7 @@ internal sealed class WorkerDispatchService(
                     orchestrator,
                     integrationEventDispatcher,
                     domainEventDispatcher,
-                    workerLogBroadcaster,
+                    postExitProviderQueries,
                     timeoutMinutes,
                     activeRun,
                     cancellationToken,
@@ -177,7 +168,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
-        IWorkerLogBroadcaster workerLogBroadcaster,
+        IPostExitProviderQueries postExitProviderQueries,
         int timeoutMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
@@ -189,7 +180,7 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
-                workerLogBroadcaster,
+                postExitProviderQueries,
                 timeoutMinutes,
                 activeRun,
                 cancellationToken);
@@ -201,20 +192,12 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
-        IWorkerLogBroadcaster workerLogBroadcaster,
+        IPostExitProviderQueries postExitProviderQueries,
         int timeoutMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
     {
-        string reportsDir = Path.Combine(_options.ReportsPath, activeRun.Id.Value.ToString());
-        (BranchName? branchName, PullRequestUrl? prUrl) = await IngestReportsAsync(
-            dbContext,
-            activeRun,
-            reportsDir,
-            workerLogBroadcaster,
-            cancellationToken);
-
         WorkerStatus? status = knownStatus ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
 
         if (status is null)
@@ -228,8 +211,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     "Container not found",
-                    BranchName: activeRun.BranchName?.Value,
-                    LatestProgress: activeRun.LatestProgress)],
+                    BranchName: activeRun.BranchName.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -264,8 +246,7 @@ internal sealed class WorkerDispatchService(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Timed out",
-                        BranchName: activeRun.BranchName?.Value,
-                        LatestProgress: activeRun.LatestProgress)],
+                        BranchName: activeRun.BranchName.Value)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -280,11 +261,106 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        BranchName? effectiveBranchName = branchName ?? activeRun.BranchName;
+        await ProcessExitedRunAsync(
+            dbContext,
+            orchestrator,
+            integrationEventDispatcher,
+            domainEventDispatcher,
+            postExitProviderQueries,
+            activeRun,
+            status,
+            cancellationToken);
+    }
 
-        if (status.ExitCode == 0)
+    private async Task ProcessExitedRunAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        IPostExitProviderQueries postExitProviderQueries,
+        ActiveRun activeRun,
+        WorkerStatus status,
+        CancellationToken cancellationToken)
+    {
+        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
+            activeRun.MonitoredRepositoryId,
+            activeRun.BranchName.Value,
+            cancellationToken);
+
+        if (commitsResult is Result<bool>.Failure commitsFailure)
         {
-            CompletedRun completed = activeRun.Complete(0, effectiveBranchName, prUrl);
+            logger.LogWarning(
+                "Failed to check branch commits for run {RunId}: {Error}",
+                activeRun.Id,
+                commitsFailure.Error);
+            return;
+        }
+
+        bool hasCommits = commitsResult is Result<bool>.Success { Value: true };
+
+        if (status.ExitCode == 0 && hasCommits)
+        {
+            await ProcessSuccessWithCommitsAsync(
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                domainEventDispatcher,
+                postExitProviderQueries,
+                activeRun,
+                cancellationToken);
+        }
+        else if (status.ExitCode == 0 && !hasCommits)
+        {
+            await ProcessSuccessWithoutCommitsAsync(
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                domainEventDispatcher,
+                activeRun,
+                cancellationToken);
+        }
+        else
+        {
+            int exitCode = status.ExitCode ?? -1;
+            string? containerOutput = await TryGetLogsAsync(
+                orchestrator,
+                activeRun.ContainerId.Value,
+                activeRun.Id.Value,
+                cancellationToken);
+
+            await ProcessNonZeroExitAsync(
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                domainEventDispatcher,
+                activeRun,
+                exitCode,
+                hasCommits,
+                containerOutput,
+                cancellationToken);
+        }
+    }
+
+    private async Task ProcessSuccessWithCommitsAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        IPostExitProviderQueries postExitProviderQueries,
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        string? prUrl = await TryGetPullRequestUrlAsync(
+            postExitProviderQueries,
+            activeRun,
+            cancellationToken);
+
+        if (prUrl is not null)
+        {
+            CompletedRun completed = activeRun.Complete(
+                0,
+                activeRun.BranchName,
+                PullRequestUrl.From(prUrl));
             await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -292,31 +368,21 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunCompletedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    effectiveBranchName?.Value,
-                    prUrl?.Value)],
+                    activeRun.BranchName.Value,
+                    prUrl)],
                 activeRun.Id.Value,
                 cancellationToken);
 
             logger.LogInformation(
-                "Worker run {WorkerRunId} completed successfully (branch: {BranchName}, PR: {PrUrl}).",
+                "Worker run {WorkerRunId} completed with PR {PullRequestUrl} (branch: {BranchName}).",
                 activeRun.Id,
-                effectiveBranchName?.Value ?? "(none)",
-                prUrl?.Value ?? "(none)");
-
-            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+                prUrl,
+                activeRun.BranchName.Value);
         }
         else
         {
-            int exitCode = status.ExitCode ?? -1;
-            string exitReason = $"Non-zero exit code: {exitCode}";
-
-            string? containerOutput = await TryGetLogsAsync(
-                orchestrator,
-                activeRun.ContainerId.Value,
-                activeRun.Id.Value,
-                cancellationToken);
-
-            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode), containerOutput);
+            // Commits pushed but no PR found after retries — treat as continuable failure
+            FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("No pull request found after retries"));
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -324,20 +390,115 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    exitReason,
-                    BranchName: activeRun.BranchName?.Value,
-                    LatestProgress: activeRun.LatestProgress)],
+                    "No pull request found after retries",
+                    BranchName: activeRun.BranchName.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
 
             logger.LogWarning(
-                "Worker run {WorkerRunId} exited with code {ExitCode}.",
+                "Worker run {WorkerRunId} exited with 0 but no PR found after retries (branch: {BranchName}).",
                 activeRun.Id,
-                exitCode);
-
-            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+                activeRun.BranchName.Value);
         }
+
+        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
     }
+
+    private async Task ProcessSuccessWithoutCommitsAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        // Exit code 0 with no commits — unchanged
+        CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null);
+        await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
+
+        await TryDispatchAsync(
+            integrationEventDispatcher,
+            [new WorkerRunCompletedEvent(
+                activeRun.Id.Value,
+                activeRun.IssueId.Value,
+                activeRun.BranchName.Value,
+                null)],
+            activeRun.Id.Value,
+            cancellationToken);
+
+        logger.LogInformation(
+            "Worker run {WorkerRunId} completed with no commits (branch: {BranchName}).",
+            activeRun.Id,
+            activeRun.BranchName.Value);
+
+        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+    }
+
+    private async Task ProcessNonZeroExitAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        ActiveRun activeRun,
+        int exitCode,
+        bool hasCommits,
+        string? containerOutput,
+        CancellationToken cancellationToken)
+    {
+        string exitReason = $"Non-zero exit code: {exitCode}";
+
+        // Null branch name when no commits → FailedIssue; non-null → ContinuableFailedIssue
+        string? branchNameForEvent = hasCommits ? activeRun.BranchName.Value : null;
+
+        FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode), containerOutput);
+        await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
+
+        await TryDispatchAsync(
+            integrationEventDispatcher,
+            [new WorkerRunFailedEvent(
+                activeRun.Id.Value,
+                activeRun.IssueId.Value,
+                exitReason,
+                BranchName: branchNameForEvent)],
+            activeRun.Id.Value,
+            cancellationToken);
+
+        logger.LogWarning(
+            "Worker run {WorkerRunId} exited with code {ExitCode} (commits: {HasCommits}).",
+            activeRun.Id,
+            exitCode,
+            hasCommits);
+
+        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+    }
+
+    private async Task<string?> TryGetPullRequestUrlAsync(
+        IPostExitProviderQueries postExitProviderQueries,
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        for (int attempt = 0; attempt < PrRetryAttempts; attempt++)
+        {
+            if (attempt > 0)
+            {
+                await Task.Delay(_prRetryDelay, cancellationToken);
+            }
+
+            Result<string> prResult = await postExitProviderQueries.GetPullRequestByBranchAsync(
+                activeRun.MonitoredRepositoryId,
+                activeRun.BranchName.Value,
+                cancellationToken);
+
+            if (prResult is Result<string>.Success { Value: { Length: > 0 } prUrl })
+            {
+                return prUrl;
+            }
+        }
+
+        return null;
+    }
+
+    private const int PrRetryAttempts = 3;
 
     private async Task RemoveUnknownContainersAsync(
         DbContext dbContext,
@@ -486,176 +647,6 @@ internal sealed class WorkerDispatchService(
         }
     }
 
-    private async Task<(BranchName? BranchName, PullRequestUrl? PrUrl)> IngestReportsAsync(
-        DbContext dbContext,
-        ActiveRun activeRun,
-        string reportsDir,
-        IWorkerLogBroadcaster workerLogBroadcaster,
-        CancellationToken cancellationToken)
-    {
-        if (!Directory.Exists(reportsDir))
-        {
-            return (null, null);
-        }
-
-        List<int> ingestedList = await dbContext.Set<WorkerReport>()
-            .Where(r => r.WorkerRunId == activeRun.Id)
-            .Select(r => r.SequenceNumber)
-            .ToListAsync(cancellationToken);
-
-        HashSet<int> ingestedSequenceNumbers = ingestedList.ToHashSet();
-
-        BranchName? branchName = null;
-        PullRequestUrl? prUrl = null;
-
-        IEnumerable<string> reportFiles = Directory
-            .EnumerateFiles(reportsDir, "report-*.json")
-            .OrderBy(f => f);
-
-        List<WorkerReport> newReports = [];
-
-        foreach (string filePath in reportFiles)
-        {
-            int? sequenceNumber = ParseSequenceNumber(filePath);
-
-            if (sequenceNumber is null || ingestedSequenceNumbers.Contains(sequenceNumber.Value))
-            {
-                continue;
-            }
-
-            (WorkerReportPayload? payload, string? content) = TryParseReport(filePath);
-
-            if (payload is null || content is null)
-            {
-                continue;
-            }
-
-            WorkerReport report = WorkerReport.Create(
-                activeRun.Id,
-                sequenceNumber.Value,
-                payload.Type,
-                content);
-
-            dbContext.Set<WorkerReport>().Add(report);
-            newReports.Add(report);
-
-            if (payload.Summary is not null)
-            {
-                string summary = payload.Summary.Length > MaxProgressLength
-                    ? payload.Summary[..MaxProgressLength]
-                    : payload.Summary;
-                activeRun.UpdateProgress(summary);
-            }
-
-            if (payload.BranchName is not null)
-            {
-                activeRun.SetBranchName(BranchName.From(payload.BranchName));
-            }
-
-            if (payload.Type == "final")
-            {
-                branchName = payload.BranchName is not null
-                    ? BranchName.From(payload.BranchName)
-                    : null;
-                prUrl = payload.PrUrl is not null
-                    ? PullRequestUrl.From(payload.PrUrl)
-                    : null;
-            }
-        }
-
-        if (dbContext.ChangeTracker.HasChanges())
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        foreach (WorkerReport report in newReports)
-        {
-            WorkerReportSummary summary = new(
-                report.Id.Value,
-                report.WorkerRunId.Value,
-                report.SequenceNumber,
-                report.ReportType,
-                report.Content,
-                report.IngestedAt);
-
-            try
-            {
-                await workerLogBroadcaster.PushAsync(activeRun.IssueId.Value, summary, cancellationToken);
-            }
-#pragma warning disable CA1031 // Broadcast is best-effort; a SignalR failure must not prevent the persisted report from being visible on the next tick or crash the BackgroundService.
-            catch (Exception ex)
-#pragma warning restore CA1031
-            {
-                logger.LogWarning(
-                    ex,
-                    "Failed to broadcast report {SequenceNumber} for WorkerRun {WorkerRunId} to SignalR.",
-                    report.SequenceNumber,
-                    report.WorkerRunId);
-            }
-        }
-
-        return (branchName, prUrl);
-    }
-
-    private const string ReportFilePrefix = "report-";
-
-    private static int? ParseSequenceNumber(string filePath)
-    {
-        string fileName = Path.GetFileNameWithoutExtension(filePath);
-
-        if (fileName.Length <= ReportFilePrefix.Length
-            || !fileName.StartsWith(ReportFilePrefix, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        // File name format: report-{sequenceNumber}
-        ReadOnlySpan<char> suffix = fileName.AsSpan(ReportFilePrefix.Length);
-
-        if (int.TryParse(suffix, out int number))
-        {
-            return number;
-        }
-
-        return null;
-    }
-
     private const int LogTailLines = 500;
     private const int MaxContainerOutputLength = 65_536;
-    private const int MaxProgressLength = 2000;
-    private const long MaxReportFileSizeBytes = 1_048_576;
-
-    private (WorkerReportPayload? Payload, string? Content) TryParseReport(string filePath)
-    {
-        try
-        {
-            if (new FileInfo(filePath).Length > MaxReportFileSizeBytes)
-            {
-                logger.LogWarning(
-                    "Report file {FilePath} exceeds the 1 MB size limit; skipping.",
-                    filePath);
-                return (null, null);
-            }
-
-            string content = File.ReadAllText(filePath);
-            WorkerReportPayload? payload = JsonSerializer.Deserialize<WorkerReportPayload>(content, ReportJsonOptions);
-            return (payload, content);
-        }
-        catch (IOException ex)
-        {
-            logger.LogDebug(
-                ex,
-                "Could not read report file {FilePath}; will retry next tick.",
-                filePath);
-            return (null, null);
-        }
-        catch (JsonException ex)
-        {
-            logger.LogDebug(
-                ex,
-                "Could not parse report file {FilePath}; will retry next tick.",
-                filePath);
-            return (null, null);
-        }
-    }
 }

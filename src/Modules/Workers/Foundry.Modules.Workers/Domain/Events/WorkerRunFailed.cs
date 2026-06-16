@@ -7,5 +7,4 @@ internal sealed record WorkerRunFailed(
     WorkerRunId WorkerRunId,
     IssueId IssueId,
     string ReasonDescription,
-    string? BranchName,
-    string? LatestProgress) : IDomainEvent;
+    string? BranchName) : IDomainEvent;

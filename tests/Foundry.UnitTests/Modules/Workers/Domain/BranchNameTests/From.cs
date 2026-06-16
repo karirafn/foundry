@@ -1,4 +1,4 @@
-using Foundry.Modules.Workers.Domain;
+using Foundry.Shared;
 
 using Shouldly;
 

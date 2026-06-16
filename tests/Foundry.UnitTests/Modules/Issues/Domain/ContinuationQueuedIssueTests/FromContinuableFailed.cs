@@ -32,13 +32,12 @@ public sealed class FromContinuableFailed
         return inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
             "foundry/1/add-feature",
-            "Implemented the feature",
             "Container exited with code 1",
             DateTimeOffset.UtcNow);
     }
 
     [Fact]
-    public void WhenCreatedFromContinuableFailed_CopiesSharedPropertiesAndBranchNameAndLatestProgress()
+    public void WhenCreatedFromContinuableFailed_CopiesSharedPropertiesAndBranchName()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -56,7 +55,6 @@ public sealed class FromContinuableFailed
             () => queued.Body.ShouldBe(failed.Body),
             () => queued.Author.ShouldBe(failed.Author),
             () => queued.DetectedAt.ShouldBe(failed.DetectedAt),
-            () => queued.BranchName.ShouldBe(failed.BranchName),
-            () => queued.LatestProgress.ShouldBe(failed.LatestProgress));
+            () => queued.BranchName.ShouldBe(failed.BranchName));
     }
 }

@@ -150,6 +150,8 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
+            revisionQueued.BranchName,
+            revisionQueued.MonitoredRepositoryId,
             revision);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -178,9 +180,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
         await db.TransitionAsync(continuationQueued, inProgress, domainEventDispatcher, cancellationToken);
 
-        ContinuationContext continuation = new(
-            continuationQueued.BranchName,
-            continuationQueued.LatestProgress);
+        ContinuationContext continuation = new(continuationQueued.BranchName);
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,
@@ -191,6 +191,8 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
+            continuationQueued.BranchName,
+            continuationQueued.MonitoredRepositoryId,
             Continuation: continuation);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -219,6 +221,8 @@ internal sealed class WorkerCapacityAvailableHandler(
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await db.TransitionAsync(queued, inProgress, domainEventDispatcher, cancellationToken);
 
+        string branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title).Value;
+
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,
             workerRunId,
@@ -227,7 +231,9 @@ internal sealed class WorkerCapacityAvailableHandler(
             inProgress.Body,
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
-            dispatchInfo.AccountToken);
+            dispatchInfo.AccountToken,
+            branchName,
+            queued.MonitoredRepositoryId);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

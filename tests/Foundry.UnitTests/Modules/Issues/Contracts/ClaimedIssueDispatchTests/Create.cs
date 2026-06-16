@@ -14,6 +14,7 @@ public sealed class Create
     {
         // Arrange
         IssueId issueId = IssueId.New();
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
         // Act
         ClaimedIssueDispatch dispatch = new(
@@ -24,13 +25,17 @@ public sealed class Create
             Body: "Bug details",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
-            AccountToken: "ghp_test_token");
+            AccountToken: "ghp_test_token",
+            BranchName: "feat/42",
+            MonitoredRepositoryId: repositoryId);
 
         // Assert
         dispatch.ShouldSatisfyAllConditions(
             () => dispatch.IssueId.ShouldBe(issueId),
             () => dispatch.IssueNumber.ShouldBe(42),
             () => dispatch.RepositorySlug.ShouldBe("org/repo"),
+            () => dispatch.BranchName.ShouldBe("feat/42"),
+            () => dispatch.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => dispatch.Revision.ShouldBeNull());
     }
 
@@ -39,6 +44,7 @@ public sealed class Create
     {
         // Arrange
         IssueId issueId = IssueId.New();
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionContext revision = new(
             BranchName: "foundry/42",
             PullRequestUrl: "https://github.com/org/repo/pull/7",
@@ -54,6 +60,8 @@ public sealed class Create
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
             AccountToken: "ghp_test_token",
+            BranchName: "foundry/42",
+            MonitoredRepositoryId: repositoryId,
             Revision: revision);
 
         // Assert

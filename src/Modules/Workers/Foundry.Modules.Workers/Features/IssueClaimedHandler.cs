@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
@@ -18,6 +19,7 @@ internal sealed class IssueClaimedHandler(
     IDomainEventDispatcher domainEventDispatcher,
     IOptions<WorkerOptions> optionsAccessor,
     IGlobalSettingsQueries settingsQueries,
+    IPostExitProviderQueries postExitProviderQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     private readonly WorkerOptions _options = optionsAccessor.Value;
@@ -29,6 +31,24 @@ internal sealed class IssueClaimedHandler(
         StartingRun startingRun = StartingRun.Begin(claimed.IssueId, WorkerRunId.From(claimed.WorkerRunId));
         dbContext.Set<WorkerRun>().Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        Result<bool> branchResult = await postExitProviderQueries.CreateBranchAsync(
+            claimed.MonitoredRepositoryId,
+            claimed.BranchName,
+            cancellationToken);
+
+        if (branchResult is Result<bool>.Failure branchFailure)
+        {
+            FailedRun branchFailedRun = startingRun.Fail(new FailureReason.ContainerError(branchFailure.Error.Message));
+            await dbContext.TransitionAsync(startingRun, branchFailedRun, domainEventDispatcher, cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: branch pre-creation failed: {Error}",
+                startingRun.Id,
+                claimed.IssueNumber,
+                branchFailure.Error.Message);
+            return;
+        }
 
         Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, cancellationToken);
 
@@ -55,7 +75,8 @@ internal sealed class IssueClaimedHandler(
 
         if (startResult is Result<ContainerId>.Success success)
         {
-            ActiveRun activeRun = startingRun.Activate(success.Value);
+            BranchName branchName = BranchName.From(claimed.BranchName);
+            ActiveRun activeRun = startingRun.Activate(success.Value, branchName, claimed.MonitoredRepositoryId);
             await dbContext.TransitionAsync(startingRun, activeRun, domainEventDispatcher, cancellationToken);
 
             logger.LogDebug(
@@ -96,11 +117,8 @@ internal sealed class IssueClaimedHandler(
             claimed.Body,
             _options,
             claimed.Revision,
-            claimed.Continuation);
-
-        string reportsHostPath = Path.Combine(_options.ReportsPath, startingRun.Id.Value.ToString());
-
-        Directory.CreateDirectory(reportsHostPath);
+            claimed.Continuation,
+            claimed.BranchName);
 
         string workerPrompt = _options.WorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
@@ -118,22 +136,14 @@ internal sealed class IssueClaimedHandler(
             ["GIT_PAT"] = gitPat,
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
+            ["BRANCH_NAME"] = claimed.BranchName,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),
             [authVar.Value.Key] = authVar.Value.Value,
         };
 
-        if (claimed.Revision is not null)
-        {
-            envVars["BRANCH_NAME"] = claimed.Revision.BranchName;
-        }
-        else if (claimed.Continuation is not null)
-        {
-            envVars["BRANCH_NAME"] = claimed.Continuation.BranchName;
-        }
-
-        Result<List<BindMount>> mountsResult = BuildBindMounts(reportsHostPath);
+        Result<List<BindMount>> mountsResult = BuildBindMounts();
 
         if (mountsResult is not Result<List<BindMount>>.Success mountsSuccess)
         {
@@ -155,9 +165,9 @@ internal sealed class IssueClaimedHandler(
             ["/entrypoint.sh"]));
     }
 
-    private Result<List<BindMount>> BuildBindMounts(string reportsHostPath)
+    private Result<List<BindMount>> BuildBindMounts()
     {
-        List<BindMount> mounts = [new BindMount(Path.GetFullPath(reportsHostPath), "/reports/")];
+        List<BindMount> mounts = [];
 
         Result<List<BindMount>> readOnlyResult = ResolveBindMounts(_options.Mounts, readOnly: true);
         if (readOnlyResult is not Result<List<BindMount>>.Success readOnlySuccess)

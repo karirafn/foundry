@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Shared;
 
 public readonly partial record struct BranchName(string Value)
 {
