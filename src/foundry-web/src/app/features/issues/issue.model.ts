@@ -40,7 +40,6 @@ export interface IssueStateDetails {
   completedAt: string | null;
   blockedBy: number[] | null;
   violations: EligibilityViolation[] | null;
-  latestProgress: string | null;
 }
 
 export interface IssueDetail extends IssueSummary {
