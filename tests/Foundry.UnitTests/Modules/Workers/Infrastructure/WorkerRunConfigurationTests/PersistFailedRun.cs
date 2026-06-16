@@ -1,5 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -113,8 +115,10 @@ public sealed class PersistFailedRun : IAsyncDisposable
         // Arrange
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun active = starting.Activate(ContainerId.From("container-with-branch"));
-        active.SetBranchName(BranchName.From("feat/reported-branch"));
+        ActiveRun active = starting.Activate(
+            ContainerId.From("container-with-branch"),
+            BranchName.From("feat/reported-branch"),
+            MonitoredRepositoryId.New());
         FailedRun run = active.Fail(new FailureReason.NonZeroExit(1));
 
         _dbContext.Set<WorkerRun>().Add(run);
@@ -129,28 +133,5 @@ public sealed class PersistFailedRun : IAsyncDisposable
         // Assert
         FailedRun reloaded = result.ShouldBeOfType<FailedRun>();
         reloaded.BranchName.ShouldBe(BranchName.From("feat/reported-branch"));
-    }
-
-    [Fact]
-    public async Task WhenFailedRunFromActiveWithNullBranchName_HasNullBranchName()
-    {
-        // Arrange
-        IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun active = starting.Activate(ContainerId.From("container-no-branch"));
-        FailedRun run = active.Fail(new FailureReason.TimedOut());
-
-        _dbContext.Set<WorkerRun>().Add(run);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Act
-        WorkerRun? result = await _dbContext
-            .Set<WorkerRun>()
-            .FindAsync([run.Id], TestContext.Current.CancellationToken);
-
-        // Assert
-        FailedRun reloaded = result.ShouldBeOfType<FailedRun>();
-        reloaded.BranchName.ShouldBeNull();
     }
 }

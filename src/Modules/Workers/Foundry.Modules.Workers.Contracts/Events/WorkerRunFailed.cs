@@ -6,5 +6,4 @@ public sealed record WorkerRunFailed(
     Guid WorkerRunId,
     Guid IssueId,
     string ReasonDescription,
-    string? BranchName = null,
-    string? LatestProgress = null) : IIntegrationEvent;
+    string? BranchName = null) : IIntegrationEvent;

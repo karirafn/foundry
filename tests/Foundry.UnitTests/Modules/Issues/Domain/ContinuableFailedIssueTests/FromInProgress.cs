@@ -44,7 +44,6 @@ public sealed class FromInProgress
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             workerRunId,
             "foundry/1/add-feature",
-            "Made some progress",
             "Container exited with code 1",
             DateTimeOffset.UtcNow);
 
@@ -61,14 +60,13 @@ public sealed class FromInProgress
     }
 
     [Fact]
-    public void WhenCreatedFromInProgress_SetsWorkerRunId_BranchName_LatestProgress_FailureReason_FailedAt()
+    public void WhenCreatedFromInProgress_SetsWorkerRunId_BranchName_FailureReason_FailedAt()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = CreateInProgressIssue(repositoryId);
         Guid workerRunId = Guid.NewGuid();
         string branchName = "foundry/1/add-feature";
-        string latestProgress = "Implemented the feature";
         string failureReason = "Container exited with code 1";
         DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 9, 10, 0, 0, TimeSpan.Zero);
 
@@ -76,7 +74,6 @@ public sealed class FromInProgress
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             workerRunId,
             branchName,
-            latestProgress,
             failureReason,
             failedAt);
 
@@ -84,7 +81,6 @@ public sealed class FromInProgress
         failed.ShouldSatisfyAllConditions(
             () => failed.WorkerRunId.ShouldBe(workerRunId),
             () => failed.BranchName.ShouldBe(branchName),
-            () => failed.LatestProgress.ShouldBe(latestProgress),
             () => failed.FailureReason.ShouldBe(failureReason),
             () => failed.FailedAt.ShouldBe(failedAt));
     }
@@ -100,7 +96,6 @@ public sealed class FromInProgress
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
             "foundry/1/add-feature",
-            "Made some progress",
             "Container exited with code 1",
             DateTimeOffset.UtcNow);
 

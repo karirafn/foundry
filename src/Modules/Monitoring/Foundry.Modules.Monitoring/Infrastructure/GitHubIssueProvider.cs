@@ -50,11 +50,7 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         RepositorySlug slug,
         CancellationToken cancellationToken)
     {
-        Result<string> defaultBranchResult = await httpClient.GetDefaultBranchAsync(
-            apiBaseUrl,
-            slug,
-            token,
-            cancellationToken);
+        Result<string> defaultBranchResult = await GetDefaultBranchAsync(slug, cancellationToken);
 
         if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
         {
@@ -83,5 +79,64 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
             rules.RejectDirectPushes,
             rules.RejectForcePushes,
             rules.RejectDeletion));
+    }
+
+    public async Task<Result<bool>> CreateBranchAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        Result<string> defaultBranchResult = await GetDefaultBranchAsync(slug, cancellationToken);
+
+        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
+        {
+            Error error = ((Result<string>.Failure)defaultBranchResult).Error;
+            return Result<bool>.Fail(error);
+        }
+
+        return await httpClient.CreateBranchAsync(
+            apiBaseUrl,
+            slug,
+            defaultBranchSuccess.Value,
+            branchName,
+            token,
+            cancellationToken);
+    }
+
+    public async Task<Result<bool>> HasBranchCommitsAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        Result<string> defaultBranchResult = await GetDefaultBranchAsync(slug, cancellationToken);
+
+        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
+        {
+            Error error = ((Result<string>.Failure)defaultBranchResult).Error;
+            return Result<bool>.Fail(error);
+        }
+
+        return await httpClient.HasBranchCommitsAsync(
+            apiBaseUrl,
+            slug,
+            defaultBranchSuccess.Value,
+            branchName,
+            token,
+            cancellationToken);
+    }
+
+    public Task<Result<string>> GetPullRequestByBranchAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetPullRequestByBranchAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
+    }
+
+    private Task<Result<string>> GetDefaultBranchAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetDefaultBranchAsync(apiBaseUrl, slug, token, cancellationToken);
     }
 }

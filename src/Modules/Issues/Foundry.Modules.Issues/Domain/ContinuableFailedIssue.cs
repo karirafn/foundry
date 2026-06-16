@@ -17,8 +17,6 @@ public sealed class ContinuableFailedIssue : Issue
 
     public string BranchName { get; private set; } = string.Empty;
 
-    public string LatestProgress { get; private set; } = string.Empty;
-
     public string PullRequestUrl { get; private set; } = string.Empty;
 
     public string FailureReason { get; private set; } = string.Empty;
@@ -29,7 +27,6 @@ public sealed class ContinuableFailedIssue : Issue
         InProgressIssue source,
         Guid workerRunId,
         string branchName,
-        string latestProgress,
         string failureReason,
         DateTimeOffset failedAt)
     {
@@ -45,7 +42,6 @@ public sealed class ContinuableFailedIssue : Issue
             source.DetectedAt);
         failed.WorkerRunId = workerRunId;
         failed.BranchName = branchName;
-        failed.LatestProgress = latestProgress;
         failed.FailureReason = failureReason;
         failed.FailedAt = failedAt;
         return failed;
@@ -68,7 +64,6 @@ public sealed class ContinuableFailedIssue : Issue
             source.DetectedAt);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
-        failed.LatestProgress = "PR was opened and reviewed";
         failed.PullRequestUrl = source.PullRequestUrl;
         failed.FailureReason = failureReason;
         failed.FailedAt = failedAt;

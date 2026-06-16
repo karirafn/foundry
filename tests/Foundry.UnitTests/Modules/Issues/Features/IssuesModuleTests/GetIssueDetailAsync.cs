@@ -283,7 +283,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             workerRunId,
             branchName: "feat/issue-1",
-            latestProgress: "Tests passing, PR not yet created",
             failureReason: "Container timeout",
             failedAt: failedAt);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
@@ -303,8 +302,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
             () => stateDetails.FailureReason.ShouldBe("Container timeout"),
             () => stateDetails.FailedAt.ShouldNotBeNull()
-                .ShouldBe(failedAt, tolerance: TimeSpan.FromSeconds(1)),
-            () => stateDetails.LatestProgress.ShouldBe("Tests passing, PR not yet created"));
+                .ShouldBe(failedAt, tolerance: TimeSpan.FromSeconds(1)));
     }
 
     [Fact]
@@ -322,7 +320,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             workerRunId,
             branchName: "feat/issue-1",
-            latestProgress: "Initial implementation done",
             failureReason: "Container timeout",
             failedAt: DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
@@ -340,9 +337,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.State.ShouldBe("continuation_queued");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
-        stateDetails.ShouldSatisfyAllConditions(
-            () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
-            () => stateDetails.LatestProgress.ShouldBe("Initial implementation done"));
+        stateDetails.BranchName.ShouldBe("feat/issue-1");
     }
 
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries

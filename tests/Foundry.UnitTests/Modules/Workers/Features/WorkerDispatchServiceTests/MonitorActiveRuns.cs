@@ -20,7 +20,6 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         WorkerOptions options = workerOptions ?? new WorkerOptions
         {
             Image = "test-image:latest",
-            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
         };
 
         // Delegates to base.BuildService — accesses inherited instance state.

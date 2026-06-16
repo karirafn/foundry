@@ -37,7 +37,7 @@ public sealed class FromReview
     }
 
     [Fact]
-    public void WhenCreatedFromReview_CopiesBranchNameAndSetsDefaultLatestProgress()
+    public void WhenCreatedFromReview_CopiesBranchName()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -49,7 +49,6 @@ public sealed class FromReview
         // Assert
         queued.ShouldSatisfyAllConditions(
             () => queued.Id.ShouldBe(review.Id),
-            () => queued.BranchName.ShouldBe(review.BranchName),
-            () => queued.LatestProgress.ShouldBe("PR was opened and reviewed"));
+            () => queued.BranchName.ShouldBe(review.BranchName));
     }
 }

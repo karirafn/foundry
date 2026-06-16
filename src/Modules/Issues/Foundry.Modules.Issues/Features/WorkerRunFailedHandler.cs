@@ -26,14 +26,9 @@ internal sealed class WorkerRunFailedHandler(
         {
             if (@event.BranchName is not null)
             {
-                const int MaxLatestProgressLength = 2000;
-                string latestProgress = (@event.LatestProgress ?? string.Empty).Length > MaxLatestProgressLength
-                    ? (@event.LatestProgress ?? string.Empty)[..MaxLatestProgressLength]
-                    : @event.LatestProgress ?? string.Empty;
                 ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
                     @event.WorkerRunId,
                     @event.BranchName,
-                    latestProgress,
                     @event.ReasonDescription,
                     failedAt);
                 await db.TransitionAsync(inProgress, continuableFailed, domainEventDispatcher, cancellationToken);
