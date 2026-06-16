@@ -10,10 +10,10 @@ namespace Foundry.UnitTests.Modules.Workers.Domain.ActiveRunTests;
 
 public sealed class Fail
 {
-    private static ActiveRun CreateActiveRun(IssueId? issueId = null)
+    private static ActiveRun CreateActiveRun(IssueId? issueId = null, BranchName? branchName = null)
     {
         StartingRun starting = StartingRun.Begin(issueId ?? IssueId.New(), WorkerRunId.New());
-        return starting.Activate(ContainerId.From("container-123"));
+        return starting.Activate(ContainerId.From("container-123"), branchName ?? BranchName.From("feat/1-default"));
     }
 
     [Fact]
@@ -82,7 +82,8 @@ public sealed class Fail
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        ActiveRun active = CreateActiveRun(issueId);
+        BranchName branchName = BranchName.From("feat/102-some-work");
+        ActiveRun active = CreateActiveRun(issueId, branchName);
         FailureReason reason = new FailureReason.TimedOut();
 
         // Act
@@ -94,24 +95,7 @@ public sealed class Fail
             () => domainEvent.WorkerRunId.ShouldBe(active.Id),
             () => domainEvent.IssueId.ShouldBe(issueId),
             () => domainEvent.ReasonDescription.ShouldBe(reason.ToString()),
-            () => domainEvent.BranchName.ShouldBeNull());
-    }
-
-    [Fact]
-    public void WhenActiveRunHasBranchName_DomainEventIncludesBranchName()
-    {
-        // Arrange
-        IssueId issueId = IssueId.New();
-        ActiveRun active = CreateActiveRun(issueId);
-        active.SetBranchName(BranchName.From("feat/102-some-work"));
-        FailureReason reason = new FailureReason.TimedOut();
-
-        // Act
-        active.Fail(reason);
-
-        // Assert
-        WorkerRunFailed domainEvent = active.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunFailed>();
-        domainEvent.BranchName.ShouldBe("feat/102-some-work");
+            () => domainEvent.BranchName.ShouldBe("feat/102-some-work"));
     }
 
 }

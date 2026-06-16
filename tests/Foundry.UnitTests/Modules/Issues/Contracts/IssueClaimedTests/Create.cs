@@ -22,7 +22,8 @@ public sealed class Create
             Body: "Bug details",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
-            AccountToken: "ghp_test_token");
+            AccountToken: "ghp_test_token",
+            BranchName: "feat/42");
 
         // Act
         IssueClaimed @event = new(dispatch);

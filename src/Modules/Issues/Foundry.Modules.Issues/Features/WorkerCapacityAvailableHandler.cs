@@ -150,6 +150,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
+            revisionQueued.BranchName,
             revision);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -189,6 +190,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
+            continuationQueued.BranchName,
             Continuation: continuation);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -217,6 +219,8 @@ internal sealed class WorkerCapacityAvailableHandler(
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await db.TransitionAsync(queued, inProgress, domainEventDispatcher, cancellationToken);
 
+        string branchName = $"{queued.IssueKind.BranchPrefix}/{queued.IssueNumber}";
+
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,
             workerRunId,
@@ -225,7 +229,8 @@ internal sealed class WorkerCapacityAvailableHandler(
             inProgress.Body,
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
-            dispatchInfo.AccountToken);
+            dispatchInfo.AccountToken,
+            branchName);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

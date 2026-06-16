@@ -45,12 +45,14 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         return new FoundryDbContext(options);
     }
 
-    internal ActiveRun SeedActiveRun(string containerId = "container-123")
+    internal ActiveRun SeedActiveRun(
+        string containerId = "container-123",
+        string branchName = "feat/1-default")
     {
         using FoundryDbContext db = CreateDbContext();
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun activeRun = starting.Activate(ContainerId.From(containerId));
+        ActiveRun activeRun = starting.Activate(ContainerId.From(containerId), BranchName.From(branchName));
         db.Set<WorkerRun>().Add(activeRun);
         db.SaveChanges();
         return activeRun;

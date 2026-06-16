@@ -72,6 +72,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string body = "Test body",
         string repositorySlug = "owner/repo",
         string? accountToken = "ghp_test_token",
+        string branchName = "feat/42-test-issue",
         RevisionContext? revision = null,
         ContinuationContext? continuation = null)
     {
@@ -84,6 +85,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositorySlug,
             new Uri($"https://github.com/{repositorySlug}.git"),
             accountToken,
+            branchName,
             revision,
             continuation);
         return new IssueClaimed(dispatch);
@@ -469,7 +471,7 @@ public sealed class HandleAsync : IAsyncDisposable
             "feat/42-fix",
             "https://github.com/owner/repo/pull/10",
             [new ReviewComment("Please add tests.")]);
-        IssueClaimed @event = BuildEvent(revision: revision);
+        IssueClaimed @event = BuildEvent(branchName: "feat/42-fix", revision: revision);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -482,12 +484,12 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNoRevisionContext_NoBranchNameEnvVar()
+    public async Task WhenNoRevisionOrContinuationContext_BranchNameEnvVarIsStillSet()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c5");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        IssueClaimed @event = BuildEvent(revision: null);
+        IssueClaimed @event = BuildEvent(revision: null, continuation: null, branchName: "feat/42-my-issue");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -495,7 +497,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME");
+        spec.EnvironmentVariables.ShouldContainKey("BRANCH_NAME");
+        spec.EnvironmentVariables["BRANCH_NAME"].ShouldBe("feat/42-my-issue");
     }
 
     [Fact]
@@ -589,7 +592,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
         ContinuationContext continuation = new("feat/103-my-feature");
-        IssueClaimed @event = BuildEvent(continuation: continuation);
+        IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", continuation: continuation);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -608,7 +611,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation-prompt");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
         ContinuationContext continuation = new("feat/103-my-feature");
-        IssueClaimed @event = BuildEvent(continuation: continuation);
+        IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", continuation: continuation);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);

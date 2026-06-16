@@ -12,7 +12,7 @@ public sealed class FromActive
     private static ActiveRun CreateActiveRun(IssueId? issueId = null)
     {
         StartingRun starting = StartingRun.Begin(issueId ?? IssueId.New(), WorkerRunId.New());
-        return starting.Activate(ContainerId.From("container-123"));
+        return starting.Activate(ContainerId.From("container-123"), BranchName.From("feat/1-default"));
     }
 
     [Fact]

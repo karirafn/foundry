@@ -17,7 +17,7 @@ public sealed class Activate
         StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
 
         // Act
-        ActiveRun active = starting.Activate(ContainerId.From("container-123"));
+        ActiveRun active = starting.Activate(ContainerId.From("container-123"), BranchName.From("feat/1-my-feature"));
 
         // Assert
         active.Id.ShouldBe(starting.Id);
@@ -31,7 +31,7 @@ public sealed class Activate
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
 
         // Act
-        ActiveRun active = starting.Activate(ContainerId.From("container-123"));
+        ActiveRun active = starting.Activate(ContainerId.From("container-123"), BranchName.From("feat/1-my-feature"));
 
         // Assert
         active.ShouldSatisfyAllConditions(
@@ -46,10 +46,23 @@ public sealed class Activate
         StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
 
         // Act
-        ActiveRun active = starting.Activate(ContainerId.From("container-abc"));
+        ActiveRun active = starting.Activate(ContainerId.From("container-abc"), BranchName.From("feat/1-my-feature"));
 
         // Assert
         active.ContainerId.ShouldBe(ContainerId.From("container-abc"));
+    }
+
+    [Fact]
+    public void WhenCalled_SetsBranchName()
+    {
+        // Arrange
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
+
+        // Act
+        ActiveRun active = starting.Activate(ContainerId.From("container-123"), BranchName.From("feat/42-new-feature"));
+
+        // Assert
+        active.BranchName.ShouldBe(BranchName.From("feat/42-new-feature"));
     }
 
     [Fact]
@@ -60,7 +73,7 @@ public sealed class Activate
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        ActiveRun active = starting.Activate(ContainerId.From("container-123"));
+        ActiveRun active = starting.Activate(ContainerId.From("container-123"), BranchName.From("feat/1-my-feature"));
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;
@@ -75,7 +88,7 @@ public sealed class Activate
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
 
         // Act
-        starting.Activate(ContainerId.From("container-123"));
+        starting.Activate(ContainerId.From("container-123"), BranchName.From("feat/1-my-feature"));
 
         // Assert
         WorkerRunStarted domainEvent = starting.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunStarted>();

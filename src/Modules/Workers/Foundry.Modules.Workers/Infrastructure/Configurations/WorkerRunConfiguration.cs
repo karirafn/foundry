@@ -101,15 +101,11 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         builder.Property(r => r.StartedAt)
             .HasColumnName("started_at");
 
-        builder.Property(r => r.LatestProgress)
-            .HasMaxLength(int.MaxValue)
-            .IsUnicode(true)
-            .HasColumnName("latest_progress");
-
         builder.Property(r => r.BranchName)
             .HasConversion(WorkerRunValueConverters.BranchNameConverter)
             .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
+            .IsRequired()
             .HasColumnName("branch_name");
     }
 }

@@ -108,7 +108,7 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         using FoundryDbContext db = CreateDbContext();
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun activeRun = starting.Activate(ContainerId.From("completed-container"));
+        ActiveRun activeRun = starting.Activate(ContainerId.From("completed-container"), BranchName.From("feat/1-default"));
         CompletedRun completedRun = activeRun.Complete(exitCode: 0, branchName: null, pullRequestUrl: null);
         db.Set<WorkerRun>().Add(completedRun);
         db.SaveChanges();

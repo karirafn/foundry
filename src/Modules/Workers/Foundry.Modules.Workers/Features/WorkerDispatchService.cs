@@ -121,7 +121,7 @@ internal sealed class WorkerDispatchService(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Orphaned after restart",
-                        BranchName: activeRun.BranchName?.Value)],
+                        BranchName: activeRun.BranchName.Value)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -198,7 +198,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     "Container not found",
-                    BranchName: activeRun.BranchName?.Value)],
+                    BranchName: activeRun.BranchName.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -233,7 +233,7 @@ internal sealed class WorkerDispatchService(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Timed out",
-                        BranchName: activeRun.BranchName?.Value)],
+                        BranchName: activeRun.BranchName.Value)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -258,7 +258,7 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunCompletedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    activeRun.BranchName?.Value,
+                    activeRun.BranchName.Value,
                     null)],
                 activeRun.Id.Value,
                 cancellationToken);
@@ -266,7 +266,7 @@ internal sealed class WorkerDispatchService(
             logger.LogInformation(
                 "Worker run {WorkerRunId} completed successfully (branch: {BranchName}).",
                 activeRun.Id,
-                activeRun.BranchName?.Value ?? "(none)");
+                activeRun.BranchName.Value);
 
             await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
         }
@@ -290,7 +290,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     exitReason,
-                    BranchName: activeRun.BranchName?.Value)],
+                    BranchName: activeRun.BranchName.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
 

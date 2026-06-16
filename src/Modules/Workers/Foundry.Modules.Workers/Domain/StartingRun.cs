@@ -20,9 +20,9 @@ public sealed class StartingRun : WorkerRun
         return new StartingRun(workerRunId, issueId, DateTimeOffset.UtcNow);
     }
 
-    public ActiveRun Activate(ContainerId containerId)
+    public ActiveRun Activate(ContainerId containerId, BranchName branchName)
     {
-        ActiveRun active = ActiveRun.FromStarting(this, containerId);
+        ActiveRun active = ActiveRun.FromStarting(this, containerId, branchName);
         AddDomainEvent(new WorkerRunStarted(Id, IssueId));
         return active;
     }

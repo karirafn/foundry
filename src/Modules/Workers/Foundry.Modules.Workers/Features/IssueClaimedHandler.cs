@@ -55,7 +55,8 @@ internal sealed class IssueClaimedHandler(
 
         if (startResult is Result<ContainerId>.Success success)
         {
-            ActiveRun activeRun = startingRun.Activate(success.Value);
+            BranchName branchName = BranchName.From(claimed.BranchName);
+            ActiveRun activeRun = startingRun.Activate(success.Value, branchName);
             await dbContext.TransitionAsync(startingRun, activeRun, domainEventDispatcher, cancellationToken);
 
             logger.LogDebug(
@@ -114,20 +115,12 @@ internal sealed class IssueClaimedHandler(
             ["GIT_PAT"] = gitPat,
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
+            ["BRANCH_NAME"] = claimed.BranchName,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),
             [authVar.Value.Key] = authVar.Value.Value,
         };
-
-        if (claimed.Revision is not null)
-        {
-            envVars["BRANCH_NAME"] = claimed.Revision.BranchName;
-        }
-        else if (claimed.Continuation is not null)
-        {
-            envVars["BRANCH_NAME"] = claimed.Continuation.BranchName;
-        }
 
         Result<List<BindMount>> mountsResult = BuildBindMounts();
 

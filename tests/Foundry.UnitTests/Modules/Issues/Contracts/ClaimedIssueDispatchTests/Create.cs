@@ -24,13 +24,15 @@ public sealed class Create
             Body: "Bug details",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
-            AccountToken: "ghp_test_token");
+            AccountToken: "ghp_test_token",
+            BranchName: "feat/42");
 
         // Assert
         dispatch.ShouldSatisfyAllConditions(
             () => dispatch.IssueId.ShouldBe(issueId),
             () => dispatch.IssueNumber.ShouldBe(42),
             () => dispatch.RepositorySlug.ShouldBe("org/repo"),
+            () => dispatch.BranchName.ShouldBe("feat/42"),
             () => dispatch.Revision.ShouldBeNull());
     }
 
@@ -54,6 +56,7 @@ public sealed class Create
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
             AccountToken: "ghp_test_token",
+            BranchName: "foundry/42",
             Revision: revision);
 
         // Assert
