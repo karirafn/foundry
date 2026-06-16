@@ -111,16 +111,37 @@ internal sealed class IssueClaimedHandler(
 
         string gitPat = claimed.AccountToken;
 
+        (string? dbSystemPromptTemplate, string? dbWorkerPromptTemplate) =
+            await settingsQueries.GetPromptTemplatesAsync(cancellationToken);
+
+        string effectiveSystemPromptTemplate = dbSystemPromptTemplate ?? _options.SystemPromptTemplate;
+        string effectiveWorkerPromptTemplate = dbWorkerPromptTemplate ?? _options.WorkerPromptTemplate;
+
+        WorkerOptions effectiveOptions = new()
+        {
+            Image = _options.Image,
+            Mounts = _options.Mounts,
+            WritableMounts = _options.WritableMounts,
+            Settings = _options.Settings,
+            ImageBuild = _options.ImageBuild,
+            BranchNamingInstruction = _options.BranchNamingInstruction,
+            SystemPromptTemplate = effectiveSystemPromptTemplate,
+            WorkerPromptTemplate = effectiveWorkerPromptTemplate,
+            MemoryLimitMb = _options.MemoryLimitMb,
+            CpuLimit = _options.CpuLimit,
+            PidsLimit = _options.PidsLimit,
+        };
+
         string systemPrompt = SystemPromptBuilder.Build(
             claimed.IssueNumber,
             claimed.Title,
             claimed.Body,
-            _options,
+            effectiveOptions,
             claimed.Revision,
             claimed.Continuation,
             claimed.BranchName);
 
-        string workerPrompt = _options.WorkerPromptTemplate
+        string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
         (string Key, string Value)? authVar = await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);

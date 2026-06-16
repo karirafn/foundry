@@ -55,4 +55,14 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return settings?.TimeoutMinutes ?? GlobalSettings.DefaultTimeoutMinutes;
     }
 
+    public async Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+        CancellationToken cancellationToken)
+    {
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return (settings?.SystemPromptTemplate, settings?.WorkerPromptTemplate);
+    }
+
 }

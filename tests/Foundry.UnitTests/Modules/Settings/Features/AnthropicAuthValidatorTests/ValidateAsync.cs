@@ -328,4 +328,8 @@ internal sealed class FakeGlobalSettingsQueries : IGlobalSettingsQueries
 
     public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken) =>
         Task.FromResult(TimeoutMinutes);
+
+    public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+        CancellationToken cancellationToken) =>
+        Task.FromResult<(string?, string?)>((null, null));
 }
