@@ -33,4 +33,19 @@ public interface IIssueProvider
     Task<Result<BranchProtection>> GetBranchProtectionAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken);
+
+    Task<Result<bool>> CreateBranchAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken);
+
+    Task<Result<bool>> HasBranchCommitsAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken);
+
+    Task<Result<string>> GetPullRequestByBranchAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken);
 }

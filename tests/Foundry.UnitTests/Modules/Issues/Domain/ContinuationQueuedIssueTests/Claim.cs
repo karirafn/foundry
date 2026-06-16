@@ -33,7 +33,6 @@ public sealed class Claim
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
             "foundry/1/add-feature",
-            "Implemented the feature",
             "Container exited with code 1",
             DateTimeOffset.UtcNow);
         return failed.Retry();

@@ -1,7 +1,9 @@
 using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +91,10 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         id => id.Value,
         value => ContainerId.From(value));
 
+    private static readonly ValueConverter<MonitoredRepositoryId, Guid> MonitoredRepositoryIdConverter = new(
+        id => id.Value,
+        value => MonitoredRepositoryId.From(value));
+
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
         builder.Property(r => r.ContainerId)
@@ -101,16 +107,16 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         builder.Property(r => r.StartedAt)
             .HasColumnName("started_at");
 
-        builder.Property(r => r.LatestProgress)
-            .HasMaxLength(int.MaxValue)
-            .IsUnicode(true)
-            .HasColumnName("latest_progress");
-
         builder.Property(r => r.BranchName)
             .HasConversion(WorkerRunValueConverters.BranchNameConverter)
             .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
+            .IsRequired()
             .HasColumnName("branch_name");
+
+        builder.Property(r => r.MonitoredRepositoryId)
+            .HasConversion(MonitoredRepositoryIdConverter)
+            .HasColumnName("monitored_repository_id");
     }
 }
 

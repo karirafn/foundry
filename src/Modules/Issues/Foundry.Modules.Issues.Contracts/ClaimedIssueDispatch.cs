@@ -1,3 +1,5 @@
+using Foundry.Modules.Monitoring.Contracts;
+
 namespace Foundry.Modules.Issues.Contracts;
 
 public sealed record ClaimedIssueDispatch(
@@ -9,5 +11,7 @@ public sealed record ClaimedIssueDispatch(
     string RepositorySlug,
     Uri CloneUrl,
     string? AccountToken,
+    string BranchName,
+    MonitoredRepositoryId MonitoredRepositoryId,
     RevisionContext? Revision = null,
     ContinuationContext? Continuation = null);

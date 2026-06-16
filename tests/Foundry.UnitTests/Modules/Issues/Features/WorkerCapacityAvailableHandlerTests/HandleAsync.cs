@@ -366,8 +366,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private ContinuationQueuedIssue SeedContinuationQueuedIssue(
         MonitoredRepositoryId repositoryId,
-        string branchName = "feat/103-fix",
-        string latestProgress = "Step 1 complete")
+        string branchName = "feat/103-fix")
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -383,7 +382,6 @@ public sealed class HandleAsync : IAsyncDisposable
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
             branchName,
-            latestProgress,
             "Non-zero exit code: 1",
             DateTimeOffset.UtcNow);
         ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
@@ -420,11 +418,46 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenQueuedIssueIsClaimed_BranchNameIncludesTitleSlug()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 42,
+            title: "Add Health Check",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        _dbContext.Set<Issue>().Add(queued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.BranchName.ShouldBe("feat/42-add-health-check");
+    }
+
+    [Fact]
     public async Task WhenContinuationQueuedIssueExists_ClaimsContinuationQueued()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedContinuationQueuedIssue(repositoryId, branchName: "feat/103-fix", latestProgress: "Step 1 complete");
+        SeedContinuationQueuedIssue(repositoryId, branchName: "feat/103-fix");
 
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerCapacityAvailableHandler sut = BuildHandler(
@@ -447,9 +480,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
         claimed.Dispatch.Continuation.ShouldNotBeNull()
-            .ShouldSatisfyAllConditions(
-                c => c.BranchName.ShouldBe("feat/103-fix"),
-                c => c.LatestProgress.ShouldBe("Step 1 complete"));
+            .BranchName.ShouldBe("feat/103-fix");
     }
 
     [Fact]

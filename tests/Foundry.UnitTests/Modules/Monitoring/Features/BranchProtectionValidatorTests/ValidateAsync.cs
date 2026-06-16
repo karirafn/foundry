@@ -289,5 +289,29 @@ public sealed class ValidateAsync : IAsyncDisposable
         {
             return Task.FromResult(branchProtectionResult);
         }
+
+        public Task<Result<bool>> CreateBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Ok(true));
+        }
+
+        public Task<Result<bool>> HasBranchCommitsAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Ok(false));
+        }
+
+        public Task<Result<string>> GetPullRequestByBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<string>.Ok(string.Empty));
+        }
     }
 }

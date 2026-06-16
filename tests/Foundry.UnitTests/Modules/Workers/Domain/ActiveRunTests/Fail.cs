@@ -1,6 +1,8 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.Events;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -10,10 +12,10 @@ namespace Foundry.UnitTests.Modules.Workers.Domain.ActiveRunTests;
 
 public sealed class Fail
 {
-    private static ActiveRun CreateActiveRun(IssueId? issueId = null)
+    private static ActiveRun CreateActiveRun(IssueId? issueId = null, BranchName? branchName = null)
     {
         StartingRun starting = StartingRun.Begin(issueId ?? IssueId.New(), WorkerRunId.New());
-        return starting.Activate(ContainerId.From("container-123"));
+        return starting.Activate(ContainerId.From("container-123"), branchName ?? BranchName.From("feat/1-default"), MonitoredRepositoryId.New());
     }
 
     [Fact]
@@ -82,7 +84,8 @@ public sealed class Fail
     {
         // Arrange
         IssueId issueId = IssueId.New();
-        ActiveRun active = CreateActiveRun(issueId);
+        BranchName branchName = BranchName.From("feat/102-some-work");
+        ActiveRun active = CreateActiveRun(issueId, branchName);
         FailureReason reason = new FailureReason.TimedOut();
 
         // Act
@@ -94,28 +97,7 @@ public sealed class Fail
             () => domainEvent.WorkerRunId.ShouldBe(active.Id),
             () => domainEvent.IssueId.ShouldBe(issueId),
             () => domainEvent.ReasonDescription.ShouldBe(reason.ToString()),
-            () => domainEvent.BranchName.ShouldBeNull(),
-            () => domainEvent.LatestProgress.ShouldBeNull());
-    }
-
-    [Fact]
-    public void WhenActiveRunHasBranchNameAndProgress_DomainEventIncludesThoseValues()
-    {
-        // Arrange
-        IssueId issueId = IssueId.New();
-        ActiveRun active = CreateActiveRun(issueId);
-        active.SetBranchName(BranchName.From("feat/102-some-work"));
-        active.UpdateProgress("Half done");
-        FailureReason reason = new FailureReason.TimedOut();
-
-        // Act
-        active.Fail(reason);
-
-        // Assert
-        WorkerRunFailed domainEvent = active.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunFailed>();
-        domainEvent.ShouldSatisfyAllConditions(
-            () => domainEvent.BranchName.ShouldBe("feat/102-some-work"),
-            () => domainEvent.LatestProgress.ShouldBe("Half done"));
+            () => domainEvent.BranchName.ShouldBe("feat/102-some-work"));
     }
 
 }

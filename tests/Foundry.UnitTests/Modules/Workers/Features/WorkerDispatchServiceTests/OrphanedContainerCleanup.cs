@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
@@ -43,7 +44,6 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         WorkerOptions options = new()
         {
             Image = "test-image:latest",
-            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
         };
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: 9999);
         OrphanedContainerCleanupStub orchestrator = new(containers: containers, status: runningStatus);
@@ -109,7 +109,7 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         using FoundryDbContext db = CreateDbContext();
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun activeRun = starting.Activate(ContainerId.From("completed-container"));
+        ActiveRun activeRun = starting.Activate(ContainerId.From("completed-container"), BranchName.From("feat/1-default"), MonitoredRepositoryId.New());
         CompletedRun completedRun = activeRun.Complete(exitCode: 0, branchName: null, pullRequestUrl: null);
         db.Set<WorkerRun>().Add(completedRun);
         db.SaveChanges();
