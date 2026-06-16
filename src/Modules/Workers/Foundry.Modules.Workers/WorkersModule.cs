@@ -36,8 +36,6 @@ public static class WorkersModule
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageBuildService>();
 
-        services.AddQueryHandler<GetReports.Query, GetReportsResponse, GetReports.Handler>();
-
         return services;
     }
 

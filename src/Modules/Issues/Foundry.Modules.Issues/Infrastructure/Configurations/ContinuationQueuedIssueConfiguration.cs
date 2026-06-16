@@ -13,10 +13,5 @@ public sealed class ContinuationQueuedIssueConfiguration : IEntityTypeConfigurat
             .HasMaxLength(IssueColumnLimits.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
-
-        builder.Property(i => i.LatestProgress)
-            .HasMaxLength(IssueColumnLimits.LatestProgressMaxLength)
-            .HasColumnType("TEXT")
-            .HasColumnName("latest_progress");
     }
 }

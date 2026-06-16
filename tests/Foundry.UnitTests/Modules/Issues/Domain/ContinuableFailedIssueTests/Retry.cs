@@ -33,13 +33,12 @@ public sealed class Retry
         return inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
             "foundry/1/add-feature",
-            "Implemented the feature",
             "Container exited with code 1",
             DateTimeOffset.UtcNow);
     }
 
     [Fact]
-    public void WhenRetried_ReturnsContinuationQueuedIssueWithBranchNameAndLatestProgress()
+    public void WhenRetried_ReturnsContinuationQueuedIssueWithBranchName()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -51,8 +50,7 @@ public sealed class Retry
         // Assert
         queued.ShouldSatisfyAllConditions(
             () => queued.Id.ShouldBe(failed.Id),
-            () => queued.BranchName.ShouldBe(failed.BranchName),
-            () => queued.LatestProgress.ShouldBe(failed.LatestProgress));
+            () => queued.BranchName.ShouldBe(failed.BranchName));
     }
 
     [Fact]

@@ -27,6 +27,7 @@ public static class MonitoringModule
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();
         services.AddScoped<IBranchProtectionValidator, BranchProtectionValidator>();
+        services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<AccountSummary>, GetAccounts.Handler>();

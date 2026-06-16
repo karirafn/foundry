@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
@@ -48,12 +49,12 @@ public sealed class HandleAsync : IAsyncDisposable
     private IssueClaimedHandler BuildHandler(
         IWorkerOrchestrator? orchestrator = null,
         WorkerOptions? workerOptions = null,
-        IGlobalSettingsQueries? settingsQueries = null)
+        IGlobalSettingsQueries? settingsQueries = null,
+        IPostExitProviderQueries? postExitProviderQueries = null)
     {
         WorkerOptions options = workerOptions ?? new WorkerOptions
         {
             Image = "test-image:latest",
-            ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
         };
 
         return new IssueClaimedHandler(
@@ -62,6 +63,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             Options.Create(options),
             settingsQueries ?? new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")),
+            postExitProviderQueries ?? new StubPostExitProviderQueries(branchCreationSucceeds: true),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -73,6 +75,8 @@ public sealed class HandleAsync : IAsyncDisposable
         string body = "Test body",
         string repositorySlug = "owner/repo",
         string? accountToken = "ghp_test_token",
+        string branchName = "feat/42-test-issue",
+        MonitoredRepositoryId? monitoredRepositoryId = null,
         RevisionContext? revision = null,
         ContinuationContext? continuation = null)
     {
@@ -85,6 +89,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositorySlug,
             new Uri($"https://github.com/{repositorySlug}.git"),
             accountToken,
+            branchName,
+            monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             revision,
             continuation);
         return new IssueClaimed(dispatch);
@@ -215,7 +221,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOrchestratorSucceeds_ContainerSpecHasCorrectBindMounts()
+    public async Task WhenNoCustomMountsConfigured_BindMountsIsEmpty()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c2");
@@ -228,7 +234,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/");
+        spec.BindMounts.ShouldBeEmpty();
     }
 
     [Fact]
@@ -246,7 +252,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 workerOptions: new WorkerOptions
                 {
                     Image = "test-image:latest",
-                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -267,21 +272,20 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenMountsConfigured_ReportsMountIsAlwaysPresentAndReadWrite()
+    public async Task WhenMountsConfigured_BindMountsContainsOnlyConfiguredMounts()
     {
         // Arrange
-        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-reports-test-{Guid.NewGuid()}");
+        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-mount-only-test-{Guid.NewGuid()}");
         Directory.CreateDirectory(hostDir);
 
         try
         {
-            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-reports-rw");
+            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-only");
             IssueClaimedHandler sut = BuildHandler(
                 orchestrator: orchestrator,
                 workerOptions: new WorkerOptions
                 {
                     Image = "test-image:latest",
-                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -293,7 +297,8 @@ public sealed class HandleAsync : IAsyncDisposable
             // Assert
             WorkerContainerSpec? spec = orchestrator.LastSpec;
             spec.ShouldNotBeNull();
-            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/reports/" && !m.ReadOnly);
+            spec.BindMounts.Count.ShouldBe(1);
+            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/container/config" && m.ReadOnly);
         }
         finally
         {
@@ -310,7 +315,6 @@ public sealed class HandleAsync : IAsyncDisposable
             workerOptions: new WorkerOptions
             {
                 Image = "test-image:latest",
-                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 Mounts = new Dictionary<string, string> { ["/container/config"] = nonExistentPath },
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -336,7 +340,6 @@ public sealed class HandleAsync : IAsyncDisposable
             workerOptions: new WorkerOptions
             {
                 Image = "test-image:latest",
-                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = nonExistentPath },
             });
@@ -368,7 +371,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 workerOptions: new WorkerOptions
                 {
                     Image = "test-image:latest",
-                    ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                     Mounts = new Dictionary<string, string>(),
                     WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = hostDir },
                 });
@@ -389,7 +391,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNoMountsConfigured_BindMountsContainsOnlyReportsMount()
+    public async Task WhenNoMountsConfigured_BindMountsIsEmpty()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-empty");
@@ -398,7 +400,6 @@ public sealed class HandleAsync : IAsyncDisposable
             workerOptions: new WorkerOptions
             {
                 Image = "test-image:latest",
-                ReportsPath = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}"),
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -410,9 +411,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.Count.ShouldBe(1);
-        spec.BindMounts[0].ContainerPath.ShouldBe("/reports/");
-        spec.BindMounts[0].ReadOnly.ShouldBeFalse();
+        spec.BindMounts.ShouldBeEmpty();
     }
 
     [Fact]
@@ -477,7 +476,7 @@ public sealed class HandleAsync : IAsyncDisposable
             "feat/42-fix",
             "https://github.com/owner/repo/pull/10",
             [new ReviewComment("Please add tests.")]);
-        IssueClaimed @event = BuildEvent(revision: revision);
+        IssueClaimed @event = BuildEvent(branchName: "feat/42-fix", revision: revision);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -490,12 +489,12 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNoRevisionContext_NoBranchNameEnvVar()
+    public async Task WhenNoRevisionOrContinuationContext_BranchNameEnvVarIsStillSet()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c5");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        IssueClaimed @event = BuildEvent(revision: null);
+        IssueClaimed @event = BuildEvent(revision: null, continuation: null, branchName: "feat/42-my-issue");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -503,7 +502,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME");
+        spec.EnvironmentVariables.ShouldContainKey("BRANCH_NAME");
+        spec.EnvironmentVariables["BRANCH_NAME"].ShouldBe("feat/42-my-issue");
     }
 
     [Fact]
@@ -596,8 +596,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        ContinuationContext continuation = new("feat/103-my-feature", "Steps 1-3 complete.");
-        IssueClaimed @event = BuildEvent(continuation: continuation);
+        ContinuationContext continuation = new("feat/103-my-feature");
+        IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", continuation: continuation);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -610,13 +610,48 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBranchCreationFails_CreatesFailedRunWithBranchCreationError()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler(
+            postExitProviderQueries: new StubPostExitProviderQueries(branchCreationSucceeds: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+    }
+
+    [Fact]
+    public async Task WhenBranchCreationFails_DoesNotStartContainer()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-start");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            postExitProviderQueries: new StubPostExitProviderQueries(branchCreationSucceeds: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenContinuationContext_PassesContinuationToSystemPromptBuilder()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation-prompt");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        ContinuationContext continuation = new("feat/103-my-feature", "Steps 1-3 complete, tests pass.");
-        IssueClaimed @event = BuildEvent(continuation: continuation);
+        ContinuationContext continuation = new("feat/103-my-feature");
+        IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", continuation: continuation);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -625,7 +660,33 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("resuming work");
-        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Steps 1-3 complete, tests pass.");
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("feat/103-my-feature");
+    }
+
+    private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
+    {
+        public Task<Result<bool>> CreateBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            Result<bool> result = branchCreationSucceeds
+                ? Result<bool>.Ok(true)
+                : Result<bool>.Fail(new Error("Provider.BranchCreationFailed", "Branch creation failed"));
+            return Task.FromResult(result);
+        }
+
+        public Task<Result<bool>> HasBranchCommitsAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(false));
+
+        public Task<Result<string>> GetPullRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok(string.Empty));
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

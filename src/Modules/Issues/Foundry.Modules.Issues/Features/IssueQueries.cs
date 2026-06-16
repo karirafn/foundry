@@ -354,8 +354,7 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailedAt: continuableFailed.FailedAt,
                 CompletedAt: null,
                 BlockedBy: null,
-                Violations: null,
-                LatestProgress: continuableFailed.LatestProgress.Length > 0 ? continuableFailed.LatestProgress : null),
+                Violations: null),
 
             ContinuationQueuedIssue continuationQueued => new IssueStateDetails(
                 WorkerRunId: null,
@@ -366,8 +365,7 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                Violations: null,
-                LatestProgress: continuationQueued.LatestProgress.Length > 0 ? continuationQueued.LatestProgress : null),
+                Violations: null),
 
             _ => null
         };

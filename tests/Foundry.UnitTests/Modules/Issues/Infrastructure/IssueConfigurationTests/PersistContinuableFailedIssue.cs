@@ -73,7 +73,6 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             workerRunId,
             "feat/issue-71",
-            "Implemented the feature, tests failing",
             "Tests timed out",
             failedAt);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
@@ -89,7 +88,6 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.WorkerRunId.ShouldBe(workerRunId),
             () => reloaded.BranchName.ShouldBe("feat/issue-71"),
-            () => reloaded.LatestProgress.ShouldBe("Implemented the feature, tests failing"),
             () => reloaded.PullRequestUrl.ShouldBe(string.Empty),
             () => reloaded.FailureReason.ShouldBe("Tests timed out"),
             () => reloaded.FailedAt.ShouldBe(failedAt),

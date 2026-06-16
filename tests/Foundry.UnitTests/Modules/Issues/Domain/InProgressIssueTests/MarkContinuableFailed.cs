@@ -44,7 +44,6 @@ public sealed class MarkContinuableFailed
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             workerRunId,
             "foundry/1/add-feature",
-            "Implemented the feature",
             "Container exited with code 1",
             DateTimeOffset.UtcNow);
 
@@ -64,7 +63,6 @@ public sealed class MarkContinuableFailed
         inProgress.MarkContinuableFailed(
             workerRunId,
             "foundry/1/add-feature",
-            "Implemented the feature",
             "Container exited with code 1",
             DateTimeOffset.UtcNow);
 
@@ -83,7 +81,6 @@ public sealed class MarkContinuableFailed
         InProgressIssue inProgress = CreateInProgressIssue(repositoryId);
         Guid workerRunId = Guid.NewGuid();
         string branchName = "foundry/1/add-feature";
-        string latestProgress = "Implemented the feature";
         string failureReason = "Container exited with code 1";
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
@@ -91,7 +88,6 @@ public sealed class MarkContinuableFailed
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             workerRunId,
             branchName,
-            latestProgress,
             failureReason,
             failedAt);
 
@@ -99,7 +95,6 @@ public sealed class MarkContinuableFailed
         failed.ShouldSatisfyAllConditions(
             () => failed.WorkerRunId.ShouldBe(workerRunId),
             () => failed.BranchName.ShouldBe(branchName),
-            () => failed.LatestProgress.ShouldBe(latestProgress),
             () => failed.FailureReason.ShouldBe(failureReason),
             () => failed.FailedAt.ShouldBe(failedAt),
             () => failed.PullRequestUrl.ShouldBe(string.Empty),

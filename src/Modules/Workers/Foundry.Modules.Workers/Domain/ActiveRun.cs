@@ -1,5 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.Events;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Domain;
 
@@ -15,10 +17,14 @@ public sealed class ActiveRun : WorkerRun
         IssueId issueId,
         DateTimeOffset createdAt,
         ContainerId containerId,
+        BranchName branchName,
+        MonitoredRepositoryId monitoredRepositoryId,
         DateTimeOffset startedAt)
         : base(id, issueId, createdAt)
     {
         ContainerId = containerId;
+        BranchName = branchName;
+        MonitoredRepositoryId = monitoredRepositoryId;
         StartedAt = startedAt;
     }
 
@@ -26,31 +32,24 @@ public sealed class ActiveRun : WorkerRun
 
     public DateTimeOffset StartedAt { get; private set; }
 
-    public string? LatestProgress { get; private set; }
+    public BranchName BranchName { get; private set; }
 
-    public BranchName? BranchName { get; private set; }
+    public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
 
-    internal static ActiveRun FromStarting(StartingRun starting, ContainerId containerId)
+    internal static ActiveRun FromStarting(
+        StartingRun starting,
+        ContainerId containerId,
+        BranchName branchName,
+        MonitoredRepositoryId monitoredRepositoryId)
     {
         return new ActiveRun(
             starting.Id,
             starting.IssueId,
             starting.CreatedAt,
             containerId,
+            branchName,
+            monitoredRepositoryId,
             DateTimeOffset.UtcNow);
-    }
-
-    public void UpdateProgress(string progress)
-    {
-        LatestProgress = progress;
-    }
-
-    public void SetBranchName(BranchName branchName)
-    {
-        if (BranchName is null)
-        {
-            BranchName = branchName;
-        }
     }
 
     public CompletedRun Complete(int exitCode, BranchName? branchName, PullRequestUrl? pullRequestUrl)
@@ -63,7 +62,7 @@ public sealed class ActiveRun : WorkerRun
     public FailedRun Fail(FailureReason reason, string? containerOutput = null)
     {
         FailedRun failed = FailedRun.FromActive(this, reason, containerOutput);
-        AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.ToString(), BranchName?.Value, LatestProgress));
+        AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.ToString(), BranchName.Value));
         return failed;
     }
 }

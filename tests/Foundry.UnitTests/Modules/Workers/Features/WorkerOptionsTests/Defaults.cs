@@ -21,7 +21,6 @@ public sealed class Defaults
             () => options.Mounts.ShouldBeEmpty(),
             () => options.WritableMounts.ShouldBeEmpty(),
             () => options.BranchNamingInstruction.ShouldBe("Use conventional branch naming"),
-            () => options.ReportsPath.ShouldBe("./data/reports"),
             () => options.SystemPromptTemplate.ShouldNotBeNullOrWhiteSpace(),
             () => options.WorkerPromptTemplate.ShouldNotBeNullOrWhiteSpace(),
             () => options.WorkerPromptTemplate.ShouldContain("{issueNumber}"),

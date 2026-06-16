@@ -16,10 +16,14 @@ internal sealed class SequentialFakeHandler : DelegatingHandler
         _responses = new Queue<(HttpStatusCode, string)>(responses);
     }
 
+    public List<HttpRequestMessage> Requests { get; } = [];
+
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        Requests.Add(request);
+
         (HttpStatusCode statusCode, string body) = _responses.Dequeue();
 
         HttpResponseMessage response = new(statusCode)

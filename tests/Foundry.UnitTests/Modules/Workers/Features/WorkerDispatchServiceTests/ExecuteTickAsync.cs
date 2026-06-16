@@ -23,7 +23,6 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         WorkerOptions workerOptions = new()
         {
             Image = "test-image:latest",
-            ReportsPath = "/tmp/reports",
         };
 
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: maxConcurrent, timeoutMinutes: 120);
@@ -74,7 +73,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         {
             IssueId issueId = IssueId.New();
             StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-            ActiveRun activeRun = starting.Activate(ContainerId.From("container-existing"));
+            ActiveRun activeRun = starting.Activate(ContainerId.From("container-existing"), BranchName.From("feat/1-default"), MonitoredRepositoryId.New());
             db.Set<WorkerRun>().Add(activeRun);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -113,7 +112,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         {
             IssueId issueId = IssueId.New();
             StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-            ActiveRun activeRun = starting.Activate(ContainerId.From("container-existing"));
+            ActiveRun activeRun = starting.Activate(ContainerId.From("container-existing"), BranchName.From("feat/1-default"), MonitoredRepositoryId.New());
             db.Set<WorkerRun>().Add(activeRun);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

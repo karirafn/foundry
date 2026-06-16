@@ -250,6 +250,30 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
                 return Task.FromResult(
                     Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
             }
+
+            public Task<Result<bool>> CreateBranchAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(Result<bool>.Ok(true));
+            }
+
+            public Task<Result<bool>> HasBranchCommitsAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(Result<bool>.Ok(false));
+            }
+
+            public Task<Result<string>> GetPullRequestByBranchAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(Result<string>.Ok(string.Empty));
+            }
         }
     }
 

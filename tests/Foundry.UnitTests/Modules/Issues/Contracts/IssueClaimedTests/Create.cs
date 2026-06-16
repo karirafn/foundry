@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
 using Shouldly;
@@ -14,6 +15,7 @@ public sealed class Create
     {
         // Arrange
         IssueId issueId = IssueId.New();
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ClaimedIssueDispatch dispatch = new(
             issueId,
             WorkerRunId: Guid.NewGuid(),
@@ -22,7 +24,9 @@ public sealed class Create
             Body: "Bug details",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
-            AccountToken: "ghp_test_token");
+            AccountToken: "ghp_test_token",
+            BranchName: "feat/42",
+            MonitoredRepositoryId: repositoryId);
 
         // Act
         IssueClaimed @event = new(dispatch);

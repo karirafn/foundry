@@ -73,7 +73,6 @@ public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             workerRunId,
             "feat/issue-72",
-            "Partial implementation completed",
             "Container OOM",
             failedAt);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
@@ -91,7 +90,6 @@ public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
         ContinuationQueuedIssue reloaded = result.ShouldBeOfType<ContinuationQueuedIssue>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.BranchName.ShouldBe("feat/issue-72"),
-            () => reloaded.LatestProgress.ShouldBe("Partial implementation completed"),
             () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }

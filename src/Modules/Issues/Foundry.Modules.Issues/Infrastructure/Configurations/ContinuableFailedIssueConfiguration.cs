@@ -24,11 +24,6 @@ public sealed class ContinuableFailedIssueConfiguration : IEntityTypeConfigurati
             .IsUnicode(false)
             .HasColumnName("pull_request_url");
 
-        builder.Property(i => i.LatestProgress)
-            .HasMaxLength(IssueColumnLimits.LatestProgressMaxLength)
-            .HasColumnType("TEXT")
-            .HasColumnName("latest_progress");
-
         builder.Property(i => i.FailureReason)
             .HasMaxLength(FailureReasonMaxLength)
             .IsUnicode(false)

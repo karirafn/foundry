@@ -1,5 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -41,7 +43,7 @@ public sealed class PersistCompletedRun : IAsyncDisposable
         // Arrange
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun active = starting.Activate(ContainerId.From("container-completed"));
+        ActiveRun active = starting.Activate(ContainerId.From("container-completed"), BranchName.From("feat/my-feature"), MonitoredRepositoryId.New());
         CompletedRun run = active.Complete(
             exitCode: 0,
             branchName: BranchName.From("feat/my-feature"),
@@ -73,7 +75,7 @@ public sealed class PersistCompletedRun : IAsyncDisposable
         // Arrange
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun active = starting.Activate(ContainerId.From("container-no-branch"));
+        ActiveRun active = starting.Activate(ContainerId.From("container-no-branch"), BranchName.From("feat/1-default"), MonitoredRepositoryId.New());
         CompletedRun run = active.Complete(exitCode: 1, branchName: null, pullRequestUrl: null);
 
         _dbContext.Set<WorkerRun>().Add(run);

@@ -29,7 +29,7 @@ public sealed class Create
     }
 
     [Fact]
-    public void WhenCreatedWithOptionalFields_SetsThoseFields()
+    public void WhenCreatedWithBranchName_SetsBranchName()
     {
         // Arrange
         Guid workerRunId = Guid.NewGuid();
@@ -41,17 +41,14 @@ public sealed class Create
             workerRunId,
             issueId,
             reasonDescription,
-            BranchName: "feat/102-in-progress",
-            LatestProgress: "Half done");
+            BranchName: "feat/102-in-progress");
 
         // Assert
-        @event.ShouldSatisfyAllConditions(
-            () => @event.BranchName.ShouldBe("feat/102-in-progress"),
-            () => @event.LatestProgress.ShouldBe("Half done"));
+        @event.BranchName.ShouldBe("feat/102-in-progress");
     }
 
     [Fact]
-    public void WhenCreatedWithoutOptionalFields_OptionalFieldsAreNull()
+    public void WhenCreatedWithoutBranchName_BranchNameIsNull()
     {
         // Arrange
         Guid workerRunId = Guid.NewGuid();
@@ -61,8 +58,6 @@ public sealed class Create
         WorkerRunFailed @event = new(workerRunId, issueId, "reason");
 
         // Assert
-        @event.ShouldSatisfyAllConditions(
-            () => @event.BranchName.ShouldBeNull(),
-            () => @event.LatestProgress.ShouldBeNull());
+        @event.BranchName.ShouldBeNull();
     }
 }
