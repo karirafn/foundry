@@ -589,7 +589,9 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
-        string relativePath = $"repos/{owner}/{repo}/compare/{defaultBranch}...{branchName}";
+        string encodedDefault = Uri.EscapeDataString(defaultBranch);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"repos/{owner}/{repo}/compare/{encodedDefault}...{encodedBranch}";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);

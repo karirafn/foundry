@@ -135,6 +135,32 @@ public sealed class HasBranchCommitsAsync
         // Assert
         HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
         request.RequestUri.ShouldNotBeNull();
-        request.RequestUri.AbsolutePath.ShouldBe("/repos/owner/repo/compare/main...feat/my-branch");
+        request.RequestUri.AbsolutePath.ShouldBe("/repos/owner/repo/compare/main...feat%2Fmy-branch");
+    }
+
+    [Fact]
+    public async Task WhenBranchNameContainsQueryStringCharacters_EncodesThemInUrl()
+    {
+        // Arrange
+        string json = """{ "ahead_by": 1, "behind_by": 0 }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        await sut.HasBranchCommitsAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/branch?inject=true",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
+        request.RequestUri.ShouldNotBeNull();
+        string requestUrl = request.RequestUri.ToString();
+        requestUrl.ShouldNotContain("?inject=true");
+        requestUrl.ShouldContain("%3F");
     }
 }
