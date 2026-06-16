@@ -105,6 +105,9 @@ describe('app routes', () => {
     // Arrange
     const settingsRoute = routes.find((r) => r.path === 'settings');
 
+    // Act
+    // (no action — inspecting static route configuration)
+
     // Assert
     expect(settingsRoute?.canActivate).toBeDefined();
     expect(settingsRoute?.canActivate).toContain(setupGuard);

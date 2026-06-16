@@ -93,8 +93,11 @@ public sealed class UpdatePromptTemplates
     [Fact]
     public void WhenCreated_SystemPromptTemplateIsNull()
     {
-        // Arrange & Act
+        // Arrange
         GlobalSettings settings = GlobalSettings.Create();
+
+        // Act
+        // (no action — testing initial state)
 
         // Assert
         settings.SystemPromptTemplate.ShouldBeNull();
@@ -103,8 +106,11 @@ public sealed class UpdatePromptTemplates
     [Fact]
     public void WhenCreated_WorkerPromptTemplateIsNull()
     {
-        // Arrange & Act
+        // Arrange
         GlobalSettings settings = GlobalSettings.Create();
+
+        // Act
+        // (no action — testing initial state)
 
         // Assert
         settings.WorkerPromptTemplate.ShouldBeNull();

@@ -29,6 +29,18 @@ internal static class UpdatePromptTemplates
                 return SettingsErrors.InvalidPromptTemplate;
             }
 
+            if (command.SystemPromptTemplate is not null
+                && command.SystemPromptTemplate.Length > GlobalSettings.MaxPromptTemplateLength)
+            {
+                return SettingsErrors.InvalidPromptTemplateTooLong;
+            }
+
+            if (command.WorkerPromptTemplate is not null
+                && command.WorkerPromptTemplate.Length > GlobalSettings.MaxPromptTemplateLength)
+            {
+                return SettingsErrors.InvalidPromptTemplateTooLong;
+            }
+
             return Result.Ok();
         }
     }

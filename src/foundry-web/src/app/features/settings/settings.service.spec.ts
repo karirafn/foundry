@@ -65,7 +65,10 @@ describe('SettingsService', () => {
 
   // Cycle 2: loadSettings populates authSettings signal
   it('should populate authSettings after loadSettings succeeds', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.loadSettings();
     const req = httpMock.expectOne('/api/settings');
     req.flush({
@@ -87,7 +90,10 @@ describe('SettingsService', () => {
 
   // Cycle 3: loadSettings sets loading true during request
   it('should set loading to true while loadSettings is in flight', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.loadSettings();
 
     // Assert — before flush
@@ -122,7 +128,10 @@ describe('SettingsService', () => {
 
   // Cycle 4: loadSettings sets loadError on failure
   it('should set loadError when loadSettings fails', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.loadSettings();
     httpMock.expectOne('/api/settings').flush('Server Error', {
       status: 500,
@@ -135,7 +144,10 @@ describe('SettingsService', () => {
   });
 
   it('should set loadError to a fixed user-facing string when loadSettings fails', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.loadSettings();
     httpMock.expectOne('/api/settings').flush('Server Error', {
       status: 500,
@@ -148,7 +160,10 @@ describe('SettingsService', () => {
 
   // Cycle 5: loadSettings maps OAuth mode
   it('should map OAuth authMode to oauth mode string', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.loadSettings();
     httpMock.expectOne('/api/settings').flush({
       authMode: 'OAuth',
@@ -169,7 +184,10 @@ describe('SettingsService', () => {
 
   // Cycle 6: updateAuthMode calls PUT /api/settings/auth
   it('should PUT to /api/settings/auth when updateAuthMode is called', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.updateAuthMode('api_key', 'my-api-key');
     const req = httpMock.expectOne('/api/settings/auth');
 
@@ -188,7 +206,10 @@ describe('SettingsService', () => {
   });
 
   it('should set saving to true while updateAuthMode is in flight', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.updateAuthMode('api_key', 'my-api-key');
 
     // Assert — before flush
@@ -251,7 +272,10 @@ describe('SettingsService', () => {
 
   // Cycle 7: updateAuthMode without apiKey (oauth mode)
   it('should PUT without apiKey when updateAuthMode is called with oauth mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.updateAuthMode('oauth');
     const req = httpMock.expectOne('/api/settings/auth');
 
@@ -270,7 +294,10 @@ describe('SettingsService', () => {
 
   // Cycle 8: scanOAuthCredentials calls GET /api/settings/oauth/scan and applies result
   it('should GET /api/settings/oauth/scan when scanOAuthCredentials is called', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.scanOAuthCredentials();
     const req = httpMock.expectOne('/api/settings/oauth/scan');
 
@@ -294,7 +321,10 @@ describe('SettingsService', () => {
   });
 
   it('should set switching to true while scanOAuthCredentials is in flight', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.scanOAuthCredentials();
 
     // Assert — before flush
@@ -317,7 +347,10 @@ describe('SettingsService', () => {
   });
 
   it('should PUT to /api/settings/auth with oauth mode after scan succeeds', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.scanOAuthCredentials();
     httpMock.expectOne('/api/settings/oauth/scan').flush({
       accessTokenPresent: true,
@@ -342,7 +375,10 @@ describe('SettingsService', () => {
   });
 
   it('should update authSettings and set saveSuccess after scanOAuthCredentials succeeds', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.scanOAuthCredentials();
     httpMock.expectOne('/api/settings/oauth/scan').flush({
       accessTokenPresent: true,
@@ -442,7 +478,10 @@ describe('SettingsService', () => {
 
   // Cycle 10: loadSettings populates workerLimits signal
   it('should populate workerLimits from loadSettings response', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.loadSettings();
     httpMock.expectOne('/api/settings').flush({
       authMode: 'ApiKey',
@@ -474,7 +513,10 @@ describe('SettingsService', () => {
 
   // Cycle 11: updateWorkerLimits sends PUT and updates signal on success
   it('should PUT to /api/settings/limits when updateWorkerLimits is called', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.updateWorkerLimits(3, 120);
     const req = httpMock.expectOne('/api/settings/limits');
 
@@ -493,7 +535,10 @@ describe('SettingsService', () => {
   });
 
   it('should set savingLimits to true while updateWorkerLimits is in flight', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.updateWorkerLimits(3, 120);
 
     // Assert — before flush
@@ -672,7 +717,10 @@ describe('SettingsService', () => {
   });
 
   it('should populate systemPromptTemplate from loadSettings response', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.loadSettings();
     httpMock.expectOne('/api/settings').flush({
       authMode: 'ApiKey',
@@ -692,7 +740,10 @@ describe('SettingsService', () => {
   });
 
   it('should populate workerPromptTemplate from loadSettings response', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.loadSettings();
     httpMock.expectOne('/api/settings').flush({
       authMode: 'ApiKey',
@@ -713,7 +764,10 @@ describe('SettingsService', () => {
 
   // Cycle 15: updatePromptTemplates calls PUT /api/settings/prompts
   it('should PUT to /api/settings/prompts when updatePromptTemplates is called', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
     const req = httpMock.expectOne('/api/settings/prompts');
 
@@ -734,7 +788,10 @@ describe('SettingsService', () => {
   });
 
   it('should set savingPrompts to true while updatePromptTemplates is in flight', () => {
-    // Arrange / Act
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
     service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: null });
 
     // Assert — before flush
