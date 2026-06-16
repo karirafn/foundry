@@ -287,6 +287,15 @@ internal sealed class WorkerDispatchService(
             activeRun.BranchName.Value,
             cancellationToken);
 
+        if (commitsResult is Result<bool>.Failure commitsFailure)
+        {
+            logger.LogWarning(
+                "Failed to check branch commits for run {RunId}: {Error}",
+                activeRun.Id,
+                commitsFailure.Error);
+            return;
+        }
+
         bool hasCommits = commitsResult is Result<bool>.Success { Value: true };
 
         if (status.ExitCode == 0 && hasCommits)
@@ -373,7 +382,7 @@ internal sealed class WorkerDispatchService(
         else
         {
             // Commits pushed but no PR found after retries — treat as continuable failure
-            FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(0));
+            FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("No pull request found after retries"));
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(

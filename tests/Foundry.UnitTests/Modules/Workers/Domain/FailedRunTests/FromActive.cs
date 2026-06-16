@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 
 using Shouldly;
@@ -12,7 +13,7 @@ public sealed class FromActive
     private static ActiveRun CreateActiveRun(IssueId? issueId = null)
     {
         StartingRun starting = StartingRun.Begin(issueId ?? IssueId.New(), WorkerRunId.New());
-        return starting.Activate(ContainerId.From("container-123"), BranchName.From("feat/1-default"));
+        return starting.Activate(ContainerId.From("container-123"), BranchName.From("feat/1-default"), MonitoredRepositoryId.New());
     }
 
     [Fact]

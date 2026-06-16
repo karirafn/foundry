@@ -24,7 +24,7 @@ public sealed class StartingRun : WorkerRun
     public ActiveRun Activate(
         ContainerId containerId,
         BranchName branchName,
-        MonitoredRepositoryId monitoredRepositoryId = default)
+        MonitoredRepositoryId monitoredRepositoryId)
     {
         ActiveRun active = ActiveRun.FromStarting(this, containerId, branchName, monitoredRepositoryId);
         AddDomainEvent(new WorkerRunStarted(Id, IssueId));

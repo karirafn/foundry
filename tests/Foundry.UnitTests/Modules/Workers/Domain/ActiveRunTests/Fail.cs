@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.Events;
 
@@ -13,7 +14,7 @@ public sealed class Fail
     private static ActiveRun CreateActiveRun(IssueId? issueId = null, BranchName? branchName = null)
     {
         StartingRun starting = StartingRun.Begin(issueId ?? IssueId.New(), WorkerRunId.New());
-        return starting.Activate(ContainerId.From("container-123"), branchName ?? BranchName.From("feat/1-default"));
+        return starting.Activate(ContainerId.From("container-123"), branchName ?? BranchName.From("feat/1-default"), MonitoredRepositoryId.New());
     }
 
     [Fact]

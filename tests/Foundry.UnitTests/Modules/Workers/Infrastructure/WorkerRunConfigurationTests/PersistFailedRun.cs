@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.WebApi.Persistence;
 
@@ -115,7 +116,8 @@ public sealed class PersistFailedRun : IAsyncDisposable
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         ActiveRun active = starting.Activate(
             ContainerId.From("container-with-branch"),
-            BranchName.From("feat/reported-branch"));
+            BranchName.From("feat/reported-branch"),
+            MonitoredRepositoryId.New());
         FailedRun run = active.Fail(new FailureReason.NonZeroExit(1));
 
         _dbContext.Set<WorkerRun>().Add(run);

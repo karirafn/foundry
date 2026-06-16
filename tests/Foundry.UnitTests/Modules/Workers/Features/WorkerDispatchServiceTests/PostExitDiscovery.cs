@@ -224,6 +224,45 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         failedEvent.BranchName.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task WhenHasBranchCommitsReturnsFailure_RunRemainsActive()
+    {
+        // Arrange
+        SeedActiveRun("container-commits-check-failure");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
+        IPostExitProviderQueries queries = new FailingCommitsCheckQueries();
+        WorkerDispatchService sut = BuildService(queries, exitedStatus);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<ActiveRun>();
+    }
+
+    private sealed class FailingCommitsCheckQueries : IPostExitProviderQueries
+    {
+        public Task<Result<bool>> HasBranchCommitsAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Fail(new Error("Provider.Unavailable", "Git provider returned an error")));
+
+        public Task<Result<bool>> CreateBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<string>> GetPullRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok(string.Empty));
+    }
+
     private sealed class MonitoringStubWorkerOrchestrator(WorkerStatus exitedStatus) : IWorkerOrchestrator
     {
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
