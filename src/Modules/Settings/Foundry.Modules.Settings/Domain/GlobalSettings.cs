@@ -31,6 +31,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public int TimeoutMinutes { get; private set; }
 
+    public string? SystemPromptTemplate { get; private set; }
+
+    public string? WorkerPromptTemplate { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -44,6 +48,13 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public void SetAuthMode(AuthMode mode)
     {
         AuthMode = mode;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void UpdatePromptTemplates(string? systemPromptTemplate, string? workerPromptTemplate)
+    {
+        SystemPromptTemplate = systemPromptTemplate;
+        WorkerPromptTemplate = workerPromptTemplate;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
