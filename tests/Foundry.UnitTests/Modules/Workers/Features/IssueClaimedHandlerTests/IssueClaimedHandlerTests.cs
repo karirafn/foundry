@@ -596,7 +596,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        ContinuationContext continuation = new("feat/103-my-feature", "Steps 1-3 complete.");
+        ContinuationContext continuation = new("feat/103-my-feature");
         IssueClaimed @event = BuildEvent(continuation: continuation);
 
         // Act
@@ -615,7 +615,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation-prompt");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        ContinuationContext continuation = new("feat/103-my-feature", "Steps 1-3 complete, tests pass.");
+        ContinuationContext continuation = new("feat/103-my-feature");
         IssueClaimed @event = BuildEvent(continuation: continuation);
 
         // Act
@@ -625,7 +625,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("resuming work");
-        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Steps 1-3 complete, tests pass.");
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("feat/103-my-feature");
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

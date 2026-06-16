@@ -138,8 +138,7 @@ internal sealed class WorkerDispatchService(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Orphaned after restart",
-                        BranchName: activeRun.BranchName?.Value,
-                        LatestProgress: activeRun.LatestProgress)],
+                        BranchName: activeRun.BranchName?.Value)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -228,8 +227,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     "Container not found",
-                    BranchName: activeRun.BranchName?.Value,
-                    LatestProgress: activeRun.LatestProgress)],
+                    BranchName: activeRun.BranchName?.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -264,8 +262,7 @@ internal sealed class WorkerDispatchService(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Timed out",
-                        BranchName: activeRun.BranchName?.Value,
-                        LatestProgress: activeRun.LatestProgress)],
+                        BranchName: activeRun.BranchName?.Value)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -325,8 +322,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     exitReason,
-                    BranchName: activeRun.BranchName?.Value,
-                    LatestProgress: activeRun.LatestProgress)],
+                    BranchName: activeRun.BranchName?.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
 

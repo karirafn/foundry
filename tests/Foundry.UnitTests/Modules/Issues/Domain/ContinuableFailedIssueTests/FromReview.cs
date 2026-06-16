@@ -59,20 +59,6 @@ public sealed class FromReview
     }
 
     [Fact]
-    public void WhenCreatedFromReview_SetsDefaultLatestProgress()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ReviewIssue review = CreateReviewIssue(repositoryId);
-
-        // Act
-        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", DateTimeOffset.UtcNow);
-
-        // Assert
-        failed.LatestProgress.ShouldBe("PR was opened and reviewed");
-    }
-
-    [Fact]
     public void WhenCreatedFromReview_CopiesBranchNameAndPullRequestUrlFromReview()
     {
         // Arrange

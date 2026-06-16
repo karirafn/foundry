@@ -30,7 +30,7 @@ public sealed class StartingRun : WorkerRun
     public FailedRun Fail(FailureReason reason)
     {
         FailedRun failed = FailedRun.FromStarting(this, reason);
-        AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.ToString(), BranchName: null, LatestProgress: null));
+        AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.ToString(), BranchName: null));
         return failed;
     }
 }

@@ -94,18 +94,16 @@ public sealed class Fail
             () => domainEvent.WorkerRunId.ShouldBe(active.Id),
             () => domainEvent.IssueId.ShouldBe(issueId),
             () => domainEvent.ReasonDescription.ShouldBe(reason.ToString()),
-            () => domainEvent.BranchName.ShouldBeNull(),
-            () => domainEvent.LatestProgress.ShouldBeNull());
+            () => domainEvent.BranchName.ShouldBeNull());
     }
 
     [Fact]
-    public void WhenActiveRunHasBranchNameAndProgress_DomainEventIncludesThoseValues()
+    public void WhenActiveRunHasBranchName_DomainEventIncludesBranchName()
     {
         // Arrange
         IssueId issueId = IssueId.New();
         ActiveRun active = CreateActiveRun(issueId);
         active.SetBranchName(BranchName.From("feat/102-some-work"));
-        active.UpdateProgress("Half done");
         FailureReason reason = new FailureReason.TimedOut();
 
         // Act
@@ -113,9 +111,7 @@ public sealed class Fail
 
         // Assert
         WorkerRunFailed domainEvent = active.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunFailed>();
-        domainEvent.ShouldSatisfyAllConditions(
-            () => domainEvent.BranchName.ShouldBe("feat/102-some-work"),
-            () => domainEvent.LatestProgress.ShouldBe("Half done"));
+        domainEvent.BranchName.ShouldBe("feat/102-some-work");
     }
 
 }

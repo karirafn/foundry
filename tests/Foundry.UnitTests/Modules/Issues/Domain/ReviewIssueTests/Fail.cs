@@ -81,8 +81,7 @@ public sealed class Fail
             () => failed.FailedAt.ShouldBe(failedAt),
             () => failed.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => failed.BranchName.ShouldBe(review.BranchName),
-            () => failed.PullRequestUrl.ShouldBe(review.PullRequestUrl),
-            () => failed.LatestProgress.ShouldBe("PR was opened and reviewed"));
+            () => failed.PullRequestUrl.ShouldBe(review.PullRequestUrl));
     }
 
     [Fact]

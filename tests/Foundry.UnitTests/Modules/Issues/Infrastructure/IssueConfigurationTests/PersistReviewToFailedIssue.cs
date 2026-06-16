@@ -91,7 +91,6 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
             () => reloaded.FailedAt.ShouldBe(failedAt),
             () => reloaded.BranchName.ShouldBe("feat/issue-55"),
             () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/7"),
-            () => reloaded.LatestProgress.ShouldBe("PR was opened and reviewed"),
             () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
             () => reloaded.Url.Value.ShouldBe(ValidUrl.Value),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));

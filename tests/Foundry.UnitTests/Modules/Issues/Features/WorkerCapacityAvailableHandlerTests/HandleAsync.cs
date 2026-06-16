@@ -366,8 +366,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private ContinuationQueuedIssue SeedContinuationQueuedIssue(
         MonitoredRepositoryId repositoryId,
-        string branchName = "feat/103-fix",
-        string latestProgress = "Step 1 complete")
+        string branchName = "feat/103-fix")
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -383,7 +382,6 @@ public sealed class HandleAsync : IAsyncDisposable
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
             branchName,
-            latestProgress,
             "Non-zero exit code: 1",
             DateTimeOffset.UtcNow);
         ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
@@ -424,7 +422,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedContinuationQueuedIssue(repositoryId, branchName: "feat/103-fix", latestProgress: "Step 1 complete");
+        SeedContinuationQueuedIssue(repositoryId, branchName: "feat/103-fix");
 
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerCapacityAvailableHandler sut = BuildHandler(
@@ -447,9 +445,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
         claimed.Dispatch.Continuation.ShouldNotBeNull()
-            .ShouldSatisfyAllConditions(
-                c => c.BranchName.ShouldBe("feat/103-fix"),
-                c => c.LatestProgress.ShouldBe("Step 1 complete"));
+            .BranchName.ShouldBe("feat/103-fix");
     }
 
     [Fact]
