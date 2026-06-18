@@ -64,4 +64,27 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
         return (settings?.SystemPromptTemplate, settings?.WorkerPromptTemplate);
     }
+
+    public async Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
+    {
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return settings is null
+            ? new DispatchPauseState(null, false, true)
+            : new DispatchPauseState(
+                settings.UsageLimitResetsAt,
+                settings.IsDispatchPaused,
+                settings.AutoResumeOnUsageReset);
+    }
+
+    public async Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
+    {
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return settings?.DefaultCooldownMinutes ?? GlobalSettings.DefaultCooldownMinutesValue;
+    }
 }

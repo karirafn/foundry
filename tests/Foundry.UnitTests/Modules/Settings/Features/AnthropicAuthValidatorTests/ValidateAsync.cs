@@ -332,4 +332,10 @@ internal sealed class FakeGlobalSettingsQueries : IGlobalSettingsQueries
     public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
         CancellationToken cancellationToken) =>
         Task.FromResult<(string?, string?)>((null, null));
+
+    public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new DispatchPauseState(null, false, true));
+
+    public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(60);
 }
