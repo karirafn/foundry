@@ -13,6 +13,16 @@ import { DispatchService } from '../../../../core/services/dispatch.service';
         [disabled]="dispatchService.pausing() || dispatchService.resuming()"
         (click)="toggle()"
       >
+        @if (isPaused()) {
+          <svg class="dispatch-controls__icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        } @else {
+          <svg class="dispatch-controls__icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <rect x="6" y="4" width="4" height="16"></rect>
+            <rect x="14" y="4" width="4" height="16"></rect>
+          </svg>
+        }
         {{ buttonLabel() }}
       </button>
 
