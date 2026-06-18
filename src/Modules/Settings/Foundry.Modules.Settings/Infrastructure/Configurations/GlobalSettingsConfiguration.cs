@@ -55,6 +55,18 @@ internal sealed class GlobalSettingsConfiguration(
             .HasMaxLength(GlobalSettings.MaxPromptTemplateLength)
             .HasColumnName("worker_prompt_template");
 
+        builder.Property(s => s.UsageLimitResetsAt)
+            .HasColumnName("usage_limit_resets_at");
+
+        builder.Property(s => s.IsDispatchPaused)
+            .HasColumnName("is_dispatch_paused");
+
+        builder.Property(s => s.AutoResumeOnUsageReset)
+            .HasColumnName("auto_resume_on_usage_reset");
+
+        builder.Property(s => s.DefaultCooldownMinutes)
+            .HasColumnName("default_cooldown_minutes");
+
         builder.Property(s => s.CreatedAt)
             .HasColumnName("created_at");
 

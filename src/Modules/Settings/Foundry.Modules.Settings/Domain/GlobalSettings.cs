@@ -11,8 +11,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int DefaultMaxConcurrent = 1;
     internal const int DefaultTimeoutMinutes = 120;
     internal const int MaxPromptTemplateLength = 32768;
+    internal const int MinDefaultCooldownMinutes = 1;
+    internal const int MaxDefaultCooldownMinutes = 1440;
+    internal const int DefaultCooldownMinutesValue = 60;
 
-    // Private parameterless constructor for EF Core materialization.
     private GlobalSettings() : base(GlobalSettingsId.Default)
     {
     }
@@ -22,6 +24,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         AuthMode = new AuthMode.ApiKey(string.Empty);
         MaxConcurrent = DefaultMaxConcurrent;
         TimeoutMinutes = DefaultTimeoutMinutes;
+        AutoResumeOnUsageReset = true;
+        DefaultCooldownMinutes = DefaultCooldownMinutesValue;
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
@@ -36,6 +40,14 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public string? WorkerPromptTemplate { get; private set; }
 
+    public DateTimeOffset? UsageLimitResetsAt { get; private set; }
+
+    public bool IsDispatchPaused { get; private set; }
+
+    public bool AutoResumeOnUsageReset { get; private set; }
+
+    public int DefaultCooldownMinutes { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -44,6 +56,46 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         return new GlobalSettings(GlobalSettingsId.Default, now);
+    }
+
+    public void PauseDispatch()
+    {
+        IsDispatchPaused = true;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void ResumeDispatch()
+    {
+        IsDispatchPaused = false;
+        UsageLimitResetsAt = null;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void SetUsageLimitResetsAt(DateTimeOffset resetsAt)
+    {
+        if (resetsAt <= DateTimeOffset.UtcNow)
+        {
+            return;
+        }
+
+        UsageLimitResetsAt = UsageLimitResetsAt.HasValue && UsageLimitResetsAt.Value > resetsAt
+            ? UsageLimitResetsAt
+            : resetsAt;
+
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Result UpdateDispatchSettings(bool autoResume, int defaultCooldownMinutes)
+    {
+        if (defaultCooldownMinutes < MinDefaultCooldownMinutes || defaultCooldownMinutes > MaxDefaultCooldownMinutes)
+        {
+            return SettingsErrors.InvalidDefaultCooldown(defaultCooldownMinutes);
+        }
+
+        AutoResumeOnUsageReset = autoResume;
+        DefaultCooldownMinutes = defaultCooldownMinutes;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
     }
 
     public void SetAuthMode(AuthMode mode)
