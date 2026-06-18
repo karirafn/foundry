@@ -6,6 +6,8 @@ using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
+using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.DispatchResumed;
+
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
 using WorkerRunFailedEvent = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
 
@@ -89,6 +91,19 @@ internal sealed class WorkerDispatchService(
             defaultCooldownMinutes,
             activeRuns,
             cancellationToken);
+
+        DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
+
+        bool autoResumed = await TryAutoResumeAsync(dbContext, integrationEventDispatcher, pauseState, cancellationToken);
+
+        if (!autoResumed && (pauseState.IsDispatchPaused || pauseState.UsageLimitResetsAt.HasValue))
+        {
+            logger.LogDebug(
+                "Dispatch skipped: dispatch is paused (IsDispatchPaused={IsDispatchPaused}, UsageLimitResetsAt={UsageLimitResetsAt}).",
+                pauseState.IsDispatchPaused,
+                pauseState.UsageLimitResetsAt);
+            return;
+        }
 
         int activeCount = activeRuns.Count;
         int maxConcurrent = await settingsQueries.GetMaxConcurrentAsync(cancellationToken);
@@ -624,6 +639,44 @@ internal sealed class WorkerDispatchService(
             usageLimited.ResetsAt);
 
         return (new FailureReason.UsageLimited(usageLimited.ResetsAt), false);
+    }
+
+    /// <summary>
+    /// When the usage-limit reset time has passed and auto-resume is enabled, calls
+    /// <see cref="GlobalSettings.ResumeDispatch"/>, persists, and publishes
+    /// <see cref="DispatchResumedEvent"/>. Returns <c>true</c> when a resume was performed.
+    /// </summary>
+    private async Task<bool> TryAutoResumeAsync(
+        DbContext dbContext,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        DispatchPauseState pauseState,
+        CancellationToken cancellationToken)
+    {
+        if (!pauseState.UsageLimitResetsAt.HasValue ||
+            pauseState.UsageLimitResetsAt.Value > DateTimeOffset.UtcNow ||
+            !pauseState.AutoResumeOnUsageReset)
+        {
+            return false;
+        }
+
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is null)
+        {
+            return false;
+        }
+
+        settings.ResumeDispatch();
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await integrationEventDispatcher.DispatchAsync([new DispatchResumedEvent()], cancellationToken);
+
+        logger.LogInformation(
+            "Usage limit reset time has passed; dispatch auto-resumed (was paused until {ResetsAt}).",
+            pauseState.UsageLimitResetsAt.Value);
+
+        return true;
     }
 
     private async Task<string?> TryGetPullRequestUrlAsync(
