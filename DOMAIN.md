@@ -46,7 +46,7 @@ Multiple accounts can exist per provider. A Monitored Repository references a sp
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, prompt templates) and authentication mode (API key or OAuth).
+Includes worker settings (max concurrent, timeout, prompt templates), authentication mode (API key or OAuth), and usage limit controls (`AutoResumeOnUsageReset`, `DefaultCooldownMinutes`, `UsageLimitResetsAt`, `IsDispatchPaused`).
 DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.
 Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`.
 
@@ -256,4 +256,30 @@ The wizard reuses the same form components as the settings page.
 ## FailureReason
 
 A value object on FailedRun that classifies how the run failed.
-Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.).
+Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.), `UsageLimited(resetsAt)` (worker hit an Anthropic API usage limit — session, weekly, or Opus quota).
+
+## Usage Limit
+
+A state where the Anthropic API quota (session, weekly, or Opus limit) is exhausted.
+Detected by parsing the worker container's JSON output (`--output-format json`): `ResultMessage.terminal_reason` is `"blocking_limit"` or `"rapid_refill_breaker"`.
+The reset time is extracted from the human-readable result text (e.g. `"You've hit your session limit · resets 3:45pm"`); when parsing fails, a configurable `DefaultCooldownMinutes` fallback is used.
+Triggers a global dispatch pause via `GlobalSettings.UsageLimitResetsAt`.
+The triggering issue transitions to `FailedIssue` / `ContinuableFailedIssue` with `FailureReason.UsageLimited(resetsAt)`.
+If the parsed reset time is already in the past, the triggering issue is re-queued immediately instead of entering a failed state.
+Distinct from API rate limits (HTTP 429), which Claude Code retries internally with exponential backoff.
+
+## Dispatch Pause
+
+A global operational state where the dispatch loop skips issuing new work.
+Two independent triggers: `UsageLimitResetsAt` (automatic, from usage limit detection) and `IsDispatchPaused` (manual, from operator "Pause All" action).
+Dispatch is paused when either is active.
+Auto-resume clears `UsageLimitResetsAt` and retries all `FailureReason.UsageLimited` issues when `AutoResumeOnUsageReset` is enabled.
+Manual "Resume All" clears both flags and retries usage-limited issues.
+Already-running workers are unaffected — only queued issues are held.
+
+## Container Output Parser
+
+An infrastructure service (`IContainerOutputParser`) that classifies a worker container's JSON output.
+Takes raw JSON from `--output-format json` and returns a discriminated result: `NormalExit`, `UsageLimited(DateTimeOffset ResetsAt)`, or `UnparsableOutput`.
+Parses `ResultMessage.terminal_reason` for limit detection and extracts the reset time from the result text via best-effort regex.
+Domain types remain JSON-unaware — all parsing is in infrastructure.
