@@ -16,11 +16,11 @@ internal sealed class DispatchResumedHandler(
     public async Task HandleAsync(DispatchResumed @event, CancellationToken cancellationToken)
     {
         List<FailedIssue> failedIssues = await db.Set<FailedIssue>()
-            .Where(i => i.FailureReason.StartsWith(WorkerRunFailed.UsageLimitedReason))
+            .Where(i => EF.Functions.Like(i.FailureReason, WorkerRunFailed.UsageLimitedReason + "%"))
             .ToListAsync(cancellationToken);
 
         List<ContinuableFailedIssue> continuableFailedIssues = await db.Set<ContinuableFailedIssue>()
-            .Where(i => i.FailureReason.StartsWith(WorkerRunFailed.UsageLimitedReason))
+            .Where(i => EF.Functions.Like(i.FailureReason, WorkerRunFailed.UsageLimitedReason + "%"))
             .ToListAsync(cancellationToken);
 
         foreach (FailedIssue failed in failedIssues)
