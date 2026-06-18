@@ -6,6 +6,9 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed partial class ContainerOutputParser : IContainerOutputParser
 {
+    private const int MaxLogLength = 65_536;    // 64 KB
+    private const int MaxJsonLineLength = 4_096; // 4 KB
+
     private static readonly HashSet<string> UsageLimitReasons = new(StringComparer.Ordinal)
     {
         "blocking_limit",
@@ -19,7 +22,17 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             return new ContainerOutputParseResult.ParseFailure(log ?? string.Empty);
         }
 
+        if (log.Length > MaxLogLength)
+        {
+            log = log[^MaxLogLength..];
+        }
+
         string? lastJsonLine = ExtractLastJsonLine(log);
+
+        if (lastJsonLine is not null && lastJsonLine.Length > MaxJsonLineLength)
+        {
+            return new ContainerOutputParseResult.ParseFailure(log);
+        }
 
         if (lastJsonLine is null)
         {

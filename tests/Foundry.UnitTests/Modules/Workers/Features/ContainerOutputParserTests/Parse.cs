@@ -106,4 +106,33 @@ public sealed class Parse
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.ParseFailure>();
     }
+
+    [Fact]
+    public void WhenLogExceeds64KB_TruncatesAndStillParsesLastJsonLine()
+    {
+        // Arrange
+        string jsonLine = """{"type":"result","subtype":"success","is_error":false,"duration_ms":1234,"num_turns":5,"result":"All done.","session_id":"abc","terminal_reason":"stop_reason"}""";
+        string padding = new string('x', 70_000) + "\n";
+        string log = padding + jsonLine;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenJsonLineExceeds4KB_ReturnsParseFailure()
+    {
+        // Arrange
+        string oversizedValue = new string('x', 4_100);
+        string jsonLine = $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"{{{oversizedValue}}}"}""";
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(jsonLine, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.ParseFailure>();
+    }
 }
