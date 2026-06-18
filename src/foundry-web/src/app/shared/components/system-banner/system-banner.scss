@@ -44,6 +44,11 @@
   flex: 1;
 }
 
+.system-banner__countdown {
+  color: var(--fd-text-warning);
+  font-size: 0.875rem;
+}
+
 .system-banner__action-btn {
   flex-shrink: 0;
   background: transparent;

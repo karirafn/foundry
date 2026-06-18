@@ -31,13 +31,14 @@
   aria-label="Dispatch status"
   [hidden]="!isDispatchBannerVisible()"
 >
-  <div class="system-banner__bar system-banner__bar--dispatch" role="alert">
+  <div class="system-banner__bar system-banner__bar--dispatch">
+    <span class="system-banner__message" role="alert">
+      {{ countdownText() !== null ? 'Usage limit active' : 'Dispatch is paused' }}
+    </span>
     @if (countdownText() !== null) {
-      <span class="system-banner__message">
-        Usage limit active &mdash; resets in {{ countdownText() }}
+      <span class="system-banner__countdown">
+        &mdash; resets in {{ countdownText() }}
       </span>
-    } @else {
-      <span class="system-banner__message">Dispatch is paused</span>
     }
     <button
       type="button"

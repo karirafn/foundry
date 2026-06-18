@@ -8,8 +8,6 @@
   flex-direction: column;
   gap: var(--fd-spacing-lg);
 
-  --fd-text-warning: #d29922;
-
   &__section {
     background: var(--fd-bg-card);
     border: 1px solid var(--fd-border-default);
