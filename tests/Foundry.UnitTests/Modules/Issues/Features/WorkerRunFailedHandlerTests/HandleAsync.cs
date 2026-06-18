@@ -249,4 +249,78 @@ public sealed class HandleAsync : IAsyncDisposable
             () => continuableFailed.BranchName.ShouldBe("feat/123-fix"),
             () => continuableFailed.FailureReason.ShouldBe("Non-zero exit code: 1"));
     }
+
+    [Fact]
+    public async Task WhenIsUsageLimitedRequeue_AndNoBranchName_TransitionsToQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Usage limit reached",
+            IsUsageLimitedRequeue: true);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenIsUsageLimitedRequeue_AndBranchName_TransitionsToContinuationQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Usage limit reached",
+            BranchName: "feat/123-wip",
+            IsUsageLimitedRequeue: true);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ContinuationQueuedIssue continuationQueued = issue.ShouldBeOfType<ContinuationQueuedIssue>();
+        continuationQueued.BranchName.ShouldBe("feat/123-wip");
+    }
+
+    [Fact]
+    public async Task WhenIsUsageLimitedRequeue_AndNoBranchName_DispatchesIssueQueuedEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Usage limit reached",
+            IsUsageLimitedRequeue: true);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueQueued>()
+            .ShouldHaveSingleItem();
+    }
 }
