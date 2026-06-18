@@ -1,10 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { vi } from 'vitest';
 import { SystemBannerComponent } from './system-banner';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { SystemNotification } from '../../../core/models/system-notification.model';
+import { DispatchService } from '../../../core/services/dispatch.service';
+import { SettingsService } from '../../../features/settings/settings.service';
 
-function createMockService(notifications: SystemNotification[]) {
+function createMockSignalRService(notifications: SystemNotification[]) {
   const notificationsSignal = signal(notifications);
   return {
     notifications: notificationsSignal.asReadonly(),
@@ -12,26 +15,62 @@ function createMockService(notifications: SystemNotification[]) {
   };
 }
 
-function setup(notifications: SystemNotification[] = []) {
-  const mockService = createMockService(notifications);
+interface DispatchServiceOverrides {
+  isDispatchPaused?: boolean;
+  usageLimitResetsAt?: string | null;
+  resuming?: boolean;
+}
+
+function createMockDispatchService(overrides: DispatchServiceOverrides = {}) {
+  const isPausedSignal = signal(overrides.isDispatchPaused ?? false);
+  const usageLimitSignal = signal(overrides.usageLimitResetsAt ?? null);
+  const resumingSignal = signal(overrides.resuming ?? false);
+  const resumeDispatch = vi.fn();
+
+  return {
+    isDispatchPaused: isPausedSignal.asReadonly(),
+    usageLimitResetsAt: usageLimitSignal.asReadonly(),
+    resuming: resumingSignal.asReadonly(),
+    resumeDispatch,
+    _isPausedSignal: isPausedSignal,
+    _usageLimitSignal: usageLimitSignal,
+    _resumingSignal: resumingSignal,
+  };
+}
+
+function createMockSettingsService() {
+  return { loadSettings: vi.fn() };
+}
+
+interface SetupOptions {
+  notifications?: SystemNotification[];
+  dispatch?: DispatchServiceOverrides;
+}
+
+function setup(options: SetupOptions = {}) {
+  const mockSignalR = createMockSignalRService(options.notifications ?? []);
+  const mockDispatch = createMockDispatchService(options.dispatch ?? {});
+  const mockSettings = createMockSettingsService();
 
   TestBed.configureTestingModule({
     imports: [SystemBannerComponent],
     providers: [
-      { provide: SystemSignalRService, useValue: mockService },
+      { provide: SystemSignalRService, useValue: mockSignalR },
+      { provide: DispatchService, useValue: mockDispatch },
+      { provide: SettingsService, useValue: mockSettings },
     ],
   });
 
   const fixture = TestBed.createComponent(SystemBannerComponent);
   fixture.detectChanges();
-  return { fixture, mockService };
+  return { fixture, mockSignalR, mockDispatch, mockSettings };
 }
 
 describe('SystemBannerComponent', () => {
   // Cycle 1: no notifications renders nothing
   it('should render nothing when there are no active notifications', () => {
     // Arrange / Act
-    const { fixture } = setup([]);
+    const { fixture } = setup({ notifications: [] });
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -40,9 +79,11 @@ describe('SystemBannerComponent', () => {
 
   // Cycle 2: one notification renders one bar with message text
   it('should render one bar with the notification message when one notification is active', () => {
-    // Arrange / Act
+    // Arrange
     const notification: SystemNotification = { category: 'auth', isActive: true, message: 'Claude auth is invalid' };
-    const { fixture } = setup([notification]);
+
+    // Act
+    const { fixture } = setup({ notifications: [notification] });
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -53,12 +94,14 @@ describe('SystemBannerComponent', () => {
 
   // Cycle 3: multiple notifications render multiple bars
   it('should render multiple bars when multiple notifications are active', () => {
-    // Arrange / Act
+    // Arrange
     const notifications: SystemNotification[] = [
       { category: 'auth', isActive: true, message: 'Auth invalid' },
       { category: 'license', isActive: true, message: 'License expired' },
     ];
-    const { fixture } = setup(notifications);
+
+    // Act
+    const { fixture } = setup({ notifications });
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -68,9 +111,11 @@ describe('SystemBannerComponent', () => {
 
   // Cycle 4: each bar has role="alert"
   it('should have role="alert" on each notification bar', () => {
-    // Arrange / Act
+    // Arrange
     const notification: SystemNotification = { category: 'auth', isActive: true, message: 'Auth invalid' };
-    const { fixture } = setup([notification]);
+
+    // Act
+    const { fixture } = setup({ notifications: [notification] });
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -80,14 +125,154 @@ describe('SystemBannerComponent', () => {
 
   // Cycle 5: wrapper has role="region" and aria-label
   it('should have role="region" with aria-label "System notifications" on the wrapper', () => {
-    // Arrange / Act
+    // Arrange
     const notification: SystemNotification = { category: 'auth', isActive: true, message: 'Auth invalid' };
-    const { fixture } = setup([notification]);
+
+    // Act
+    const { fixture } = setup({ notifications: [notification] });
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const wrapper = el.querySelector('.system-banner') as HTMLElement;
     expect(wrapper?.getAttribute('role')).toBe('region');
     expect(wrapper?.getAttribute('aria-label')).toBe('System notifications');
+  });
+
+  describe('dispatch banner', () => {
+    // Cycle 6: dispatch banner visible when isDispatchPaused is true
+    it('should show dispatch banner when dispatch is paused', () => {
+      // Arrange / Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.system-banner__bar--dispatch')).not.toBeNull();
+    });
+
+    // Cycle 7: dispatch banner hidden when not paused and no usage limit
+    it('should hide dispatch banner when dispatch is not paused and there is no usage limit', () => {
+      // Arrange / Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: null } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.system-banner__bar--dispatch')).toBeNull();
+    });
+
+    // Cycle 8: dispatch banner visible when usage limit is active (even if not explicitly paused)
+    it('should show dispatch banner when usage limit is active', () => {
+      // Arrange
+      const futureDate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: futureDate } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.system-banner__bar--dispatch')).not.toBeNull();
+    });
+
+    // Cycle 9: shows "Dispatch is paused" when paused without usage limit
+    it('should show "Dispatch is paused" message when paused without a usage limit', () => {
+      // Arrange / Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: null } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar?.textContent).toContain('Dispatch is paused');
+    });
+
+    // Cycle 10: shows countdown when usage limit is active (hours format)
+    it('should show countdown in "Xh Ym" format when more than one hour remains', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() + (2 * 60 * 60 + 34 * 60) * 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar?.textContent).toContain('2h 34m');
+    });
+
+    // Cycle 11: countdown in "Xm Ys" format when between 1 and 60 minutes remain
+    it('should show countdown in "Xm Ys" format when between one minute and one hour remains', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() + (12 * 60 + 5) * 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar?.textContent).toContain('12m 5s');
+    });
+
+    // Cycle 12: countdown in "Xs" format when less than one minute remains
+    it('should show countdown in "Xs" format when less than one minute remains', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() + 45 * 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar?.textContent).toContain('45s');
+    });
+
+    // Cycle 13: countdown shows "momentarily" when time has elapsed
+    it('should show "momentarily" when the reset time has passed', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() - 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar?.textContent).toContain('momentarily');
+    });
+
+    // Cycle 14: "Resume All" button calls resumeDispatch
+    it('should call resumeDispatch when "Resume All" button is clicked', () => {
+      // Arrange
+      const { fixture, mockDispatch } = setup({ dispatch: { isDispatchPaused: true } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Act
+      const button = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
+      button.click();
+
+      // Assert
+      expect(mockDispatch.resumeDispatch).toHaveBeenCalledTimes(1);
+    });
+
+    // Cycle 15: button disabled while resuming
+    it('should disable the "Resume All" button while resuming', () => {
+      // Arrange / Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true, resuming: true } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const button = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+    });
+
+    // Cycle 16: button shows "Resuming..." text while resuming
+    it('should show "Resuming..." text on the button while resuming', () => {
+      // Arrange / Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true, resuming: true } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const button = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
+      expect(button.textContent?.trim()).toBe('Resuming...');
+    });
   });
 });

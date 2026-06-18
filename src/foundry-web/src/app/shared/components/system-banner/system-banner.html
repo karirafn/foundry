@@ -1,4 +1,4 @@
-@if (activeNotifications().length > 0) {
+@if (activeNotifications().length > 0 || isDispatchBannerVisible()) {
   <div class="system-banner" role="region" aria-label="System notifications" tabindex="0">
     @for (notification of activeNotifications(); track notification.category) {
       <div class="system-banner__bar" role="alert">
@@ -20,6 +20,26 @@
           <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
         <span class="system-banner__message">{{ notification.message }}</span>
+      </div>
+    }
+
+    @if (isDispatchBannerVisible()) {
+      <div class="system-banner__bar system-banner__bar--dispatch" role="alert">
+        @if (countdownText() !== null) {
+          <span class="system-banner__message" aria-live="polite">
+            Usage limit active &mdash; resets in {{ countdownText() }}
+          </span>
+        } @else {
+          <span class="system-banner__message">Dispatch is paused</span>
+        }
+        <button
+          type="button"
+          class="system-banner__action-btn"
+          [disabled]="isResuming()"
+          (click)="resumeDispatch()"
+        >
+          {{ isResuming() ? 'Resuming...' : 'Resume All' }}
+        </button>
       </div>
     }
   </div>
