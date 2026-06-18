@@ -111,16 +111,23 @@ internal sealed class IssueClaimedHandler(
 
         string gitPat = claimed.AccountToken;
 
+        (string? dbSystemPromptTemplate, string? dbWorkerPromptTemplate) =
+            await settingsQueries.GetPromptTemplatesAsync(cancellationToken);
+
+        string effectiveSystemPromptTemplate = dbSystemPromptTemplate ?? _options.SystemPromptTemplate;
+        string effectiveWorkerPromptTemplate = dbWorkerPromptTemplate ?? _options.WorkerPromptTemplate;
+
         string systemPrompt = SystemPromptBuilder.Build(
             claimed.IssueNumber,
             claimed.Title,
             claimed.Body,
             _options,
+            effectiveSystemPromptTemplate,
             claimed.Revision,
             claimed.Continuation,
             claimed.BranchName);
 
-        string workerPrompt = _options.WorkerPromptTemplate
+        string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
         (string Key, string Value)? authVar = await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);

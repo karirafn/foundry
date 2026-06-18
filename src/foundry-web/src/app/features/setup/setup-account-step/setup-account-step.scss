@@ -1,0 +1,249 @@
+// Local text variants for status colors — lighter shades for AA contrast on dark backgrounds
+$text-success: #3fb950;
+$text-warning: #d29922;
+
+@mixin focus-ring {
+  outline: 2px solid var(--fd-text-link);
+  outline-offset: 2px;
+}
+
+.setup-account-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  &__title {
+    color: var(--fd-text-primary);
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__description {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-md);
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__field-label {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  &__input {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 0.875rem;
+    min-height: 40px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    width: 100%;
+
+    &::placeholder {
+      color: var(--fd-text-tertiary);
+    }
+
+    &:focus {
+      border-color: var(--fd-text-link);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__provider-badge {
+    background: var(--fd-bg-card);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 2px var(--fd-spacing-xs);
+    text-transform: uppercase;
+  }
+
+  &__token-wrapper {
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+
+    .setup-account-step__input {
+      flex: 1;
+      width: auto;
+    }
+  }
+
+  &__toggle-visibility-btn {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    flex-shrink: 0;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+    padding: var(--fd-spacing-xs);
+    width: 44px;
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      color: var(--fd-text-primary);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__validate-btn {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    white-space: nowrap;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    &:not(:disabled):hover {
+      background: var(--fd-bg-card-hover);
+      border-color: var(--fd-text-secondary);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__validation-result {
+    align-items: center;
+    display: flex;
+    font-size: 0.875rem;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__validation-dot {
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    height: 8px;
+    width: 8px;
+
+    &--valid {
+      background: $text-success;
+    }
+
+    &--warning {
+      background: $text-warning;
+    }
+
+    &--error {
+      background: var(--fd-text-error);
+    }
+  }
+
+  &__validation-message {
+    &--valid {
+      color: $text-success;
+    }
+
+    &--warning {
+      color: $text-warning;
+    }
+
+    &--error {
+      color: var(--fd-text-error);
+    }
+  }
+
+  &__save-error {
+    color: var(--fd-text-error);
+    font-size: 0.875rem;
+    min-height: 1.25rem;
+  }
+
+  &__actions {
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-md);
+    justify-content: space-between;
+    margin-top: var(--fd-spacing-sm);
+  }
+
+  &__back-btn {
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      color: var(--fd-text-primary);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__create-btn {
+    background: var(--fd-text-link);
+    border: none;
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-bg-page);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-xl);
+    transition: opacity 0.15s ease;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    &:not(:disabled):hover {
+      opacity: 0.85;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}

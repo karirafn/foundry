@@ -10,6 +10,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MaxTimeoutMinutes = 1440;
     internal const int DefaultMaxConcurrent = 1;
     internal const int DefaultTimeoutMinutes = 120;
+    internal const int MaxPromptTemplateLength = 32768;
 
     // Private parameterless constructor for EF Core materialization.
     private GlobalSettings() : base(GlobalSettingsId.Default)
@@ -31,6 +32,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public int TimeoutMinutes { get; private set; }
 
+    public string? SystemPromptTemplate { get; private set; }
+
+    public string? WorkerPromptTemplate { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -45,6 +50,34 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         AuthMode = mode;
         UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Result UpdatePromptTemplates(string? systemPromptTemplate, string? workerPromptTemplate)
+    {
+        if (systemPromptTemplate is not null && systemPromptTemplate.Length == 0)
+        {
+            return SettingsErrors.InvalidPromptTemplate;
+        }
+
+        if (workerPromptTemplate is not null && workerPromptTemplate.Length == 0)
+        {
+            return SettingsErrors.InvalidPromptTemplate;
+        }
+
+        if (systemPromptTemplate is not null && systemPromptTemplate.Length > MaxPromptTemplateLength)
+        {
+            return SettingsErrors.InvalidPromptTemplateTooLong;
+        }
+
+        if (workerPromptTemplate is not null && workerPromptTemplate.Length > MaxPromptTemplateLength)
+        {
+            return SettingsErrors.InvalidPromptTemplateTooLong;
+        }
+
+        SystemPromptTemplate = systemPromptTemplate;
+        WorkerPromptTemplate = workerPromptTemplate;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
     }
 
     public Result UpdateLimits(int maxConcurrent, int timeoutMinutes)

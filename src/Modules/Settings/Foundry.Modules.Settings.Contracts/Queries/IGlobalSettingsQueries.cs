@@ -9,4 +9,7 @@ public interface IGlobalSettingsQueries
     Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken);
 
     Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken);
+
+    Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+        CancellationToken cancellationToken);
 }

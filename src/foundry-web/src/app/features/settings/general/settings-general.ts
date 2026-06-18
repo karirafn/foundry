@@ -13,7 +13,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
-import { AuthMode } from '../settings.model';
+import { AuthMode, UpdatePromptTemplatesRequest } from '../settings.model';
 
 const MAX_CONCURRENT_MIN = 1;
 const MAX_CONCURRENT_MAX = 20;
@@ -101,17 +101,9 @@ const TIMEOUT_MINUTES_MAX = 1440;
               }
             </div>
 
-            <div id="api-key-error" class="general-settings__save-error" role="alert">
-              @if (settingsService.saveError()) {
-                {{ settingsService.saveError() }}
-              }
-            </div>
+            <div id="api-key-error" class="general-settings__save-error" role="alert">{{ settingsService.saveError() ?? '' }}</div>
 
-            <div class="general-settings__save-success" role="status">
-              @if (settingsService.saveSuccess()) {
-                Settings saved successfully
-              }
-            </div>
+            <div class="general-settings__save-success" role="status">{{ settingsService.saveSuccess() ? 'Settings saved successfully' : '' }}</div>
 
             <button
               class="general-settings__save-btn"
@@ -166,17 +158,9 @@ const TIMEOUT_MINUTES_MAX = 1440;
               </div>
             }
 
-            <div class="general-settings__switch-error" role="alert">
-              @if (settingsService.switchError()) {
-                {{ settingsService.switchError() }}
-              }
-            </div>
+            <div class="general-settings__switch-error" role="alert">{{ settingsService.switchError() ?? '' }}</div>
 
-            <div class="general-settings__save-success" role="status">
-              @if (settingsService.saveSuccess()) {
-                OAuth credentials applied successfully
-              }
-            </div>
+            <div class="general-settings__save-success" role="status">{{ settingsService.saveSuccess() ? 'OAuth credentials applied successfully' : '' }}</div>
 
             <button
               class="general-settings__scan-btn"
@@ -228,17 +212,9 @@ const TIMEOUT_MINUTES_MAX = 1440;
             </div>
           </div>
 
-          <div id="limits-error" role="alert" class="general-settings__save-error">
-            @if (settingsService.saveLimitsError()) {
-              {{ settingsService.saveLimitsError() }}
-            }
-          </div>
+          <div id="limits-error" role="alert" class="general-settings__save-error">{{ settingsService.saveLimitsError() ?? '' }}</div>
 
-          <div role="status" class="general-settings__save-success">
-            @if (settingsService.saveLimitsSuccess()) {
-              Worker limits saved successfully
-            }
-          </div>
+          <div role="status" class="general-settings__save-success">{{ settingsService.saveLimitsSuccess() ? 'Worker limits saved successfully' : '' }}</div>
 
           <button
             class="general-settings__save-btn"
@@ -246,6 +222,50 @@ const TIMEOUT_MINUTES_MAX = 1440;
             [disabled]="settingsService.savingLimits() || !isLimitsFormValid()"
             (click)="saveLimits()"
           >{{ settingsService.savingLimits() ? 'Saving...' : 'Save' }}</button>
+        </div>
+      </section>
+
+      <section class="general-settings__section">
+        <h2 class="general-settings__section-title">Worker Prompts</h2>
+        <p class="general-settings__section-description">
+          Customize the system and worker prompts sent to Claude Code containers. Use &#123;issueNumber&#125;, &#123;issueContent&#125;, and &#123;branchNamingInstruction&#125; as template variables.
+        </p>
+
+        <div class="general-settings__prompts-form">
+          <div class="general-settings__field">
+            <label class="general-settings__field-label" for="systemPromptTemplate">System Prompt Template</label>
+            <textarea
+              class="general-settings__textarea"
+              id="systemPromptTemplate"
+              rows="6"
+              [ngModel]="_systemPromptValue()"
+              (ngModelChange)="_systemPromptValue.set($event)"
+              aria-describedby="prompts-error"
+            ></textarea>
+          </div>
+
+          <div class="general-settings__field">
+            <label class="general-settings__field-label" for="workerPromptTemplate">Worker Prompt Template</label>
+            <textarea
+              class="general-settings__textarea"
+              id="workerPromptTemplate"
+              rows="4"
+              [ngModel]="_workerPromptValue()"
+              (ngModelChange)="_workerPromptValue.set($event)"
+              aria-describedby="prompts-error"
+            ></textarea>
+          </div>
+
+          <div id="prompts-error" role="alert" class="general-settings__save-error">{{ settingsService.savePromptsError() ?? '' }}</div>
+
+          <div role="status" class="general-settings__save-success">{{ settingsService.savePromptsSuccess() ? 'Prompt templates saved successfully' : '' }}</div>
+
+          <button
+            class="general-settings__save-btn"
+            type="button"
+            [disabled]="settingsService.savingPrompts()"
+            (click)="savePrompts()"
+          >{{ settingsService.savingPrompts() ? 'Saving...' : 'Save' }}</button>
         </div>
       </section>
     </div>
@@ -272,6 +292,10 @@ export class SettingsGeneralComponent {
   protected readonly _timeoutMinutesValue: WritableSignal<number> = signal(TIMEOUT_MINUTES_MIN);
   private _limitsInitialized = false;
 
+  protected readonly _systemPromptValue: WritableSignal<string> = signal('');
+  protected readonly _workerPromptValue: WritableSignal<string> = signal('');
+  private _promptsInitialized = false;
+
   constructor() {
     effect(() => {
       const settings = this.settingsService.authSettings();
@@ -287,6 +311,15 @@ export class SettingsGeneralComponent {
         this._limitsInitialized = true;
         this._maxConcurrentValue.set(limits.maxConcurrent);
         this._timeoutMinutesValue.set(limits.timeoutMinutes);
+      }
+    });
+
+    effect(() => {
+      const limits = this.settingsService.workerLimits();
+      if (limits !== null && !this._promptsInitialized) {
+        this._promptsInitialized = true;
+        this._systemPromptValue.set(this.settingsService.systemPromptTemplate() ?? '');
+        this._workerPromptValue.set(this.settingsService.workerPromptTemplate() ?? '');
       }
     });
   }
@@ -319,5 +352,13 @@ export class SettingsGeneralComponent {
 
   saveLimits(): void {
     this.settingsService.updateWorkerLimits(this._maxConcurrentValue(), this._timeoutMinutesValue());
+  }
+
+  savePrompts(): void {
+    const request: UpdatePromptTemplatesRequest = {
+      systemPromptTemplate: this._systemPromptValue() || null,
+      workerPromptTemplate: this._workerPromptValue() || null,
+    };
+    this.settingsService.updatePromptTemplates(request);
   }
 }

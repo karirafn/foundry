@@ -1,21 +1,20 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { AuthMode, AuthSettings, OAuthCredentialInfo, OAuthScanResponse, WorkerLimits } from './settings.model';
+import {
+  AuthMode,
+  AuthSettings,
+  GlobalSettingsResponse,
+  OAuthCredentialInfo,
+  OAuthScanResponse,
+  UpdatePromptTemplatesRequest,
+  WorkerLimits,
+} from './settings.model';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
 const SWITCH_OAUTH_ERROR = 'Failed to switch to OAuth mode';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
-
-interface GlobalSettingsResponse {
-  authMode: string;
-  maxConcurrent: number;
-  timeoutMinutes: number;
-  accessTokenPresent: boolean;
-  refreshTokenPresent: boolean;
-  expiresAt: string | null;
-  subscriptionType: string | null;
-}
+const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -48,15 +47,33 @@ export class SettingsService {
   private readonly _saveLimitsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveLimitsError: Signal<string | null> = this._saveLimitsErrorSignal.asReadonly();
 
+  private readonly _systemPromptTemplateSignal: WritableSignal<string | null> = signal(null);
+  readonly systemPromptTemplate: Signal<string | null> = this._systemPromptTemplateSignal.asReadonly();
+
+  private readonly _workerPromptTemplateSignal: WritableSignal<string | null> = signal(null);
+  readonly workerPromptTemplate: Signal<string | null> = this._workerPromptTemplateSignal.asReadonly();
+
+  private readonly _savingPromptsSignal: WritableSignal<boolean> = signal(false);
+  readonly savingPrompts: Signal<boolean> = this._savingPromptsSignal.asReadonly();
+
+  private readonly _savePromptsSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly savePromptsSuccess: Signal<boolean> = this._savePromptsSuccessSignal.asReadonly();
+
+  private readonly _savePromptsErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly savePromptsError: Signal<string | null> = this._savePromptsErrorSignal.asReadonly();
+
   loadSettings(): void {
     this._loadErrorSignal.set(null);
     this._saveErrorSignal.set(null);
     this._switchErrorSignal.set(null);
     this._saveLimitsErrorSignal.set(null);
+    this._savePromptsErrorSignal.set(null);
     this.saveSuccess.set(false);
     this._saveLimitsSuccessSignal.set(false);
+    this._savePromptsSuccessSignal.set(false);
     this.saving.set(false);
     this._savingLimitsSignal.set(false);
+    this._savingPromptsSignal.set(false);
     this.switching.set(false);
     this.loading.set(true);
 
@@ -64,6 +81,8 @@ export class SettingsService {
       next: (response) => {
         this.authSettings.set(this._mapToAuthSettings(response));
         this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
+        this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
+        this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -111,6 +130,26 @@ export class SettingsService {
         console.error(err);
         this._saveLimitsErrorSignal.set(SAVE_LIMITS_ERROR);
         this._savingLimitsSignal.set(false);
+      },
+    });
+  }
+
+  updatePromptTemplates(request: UpdatePromptTemplatesRequest): void {
+    this._savePromptsErrorSignal.set(null);
+    this._savePromptsSuccessSignal.set(false);
+    this._savingPromptsSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/prompts', request).subscribe({
+      next: (response) => {
+        this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
+        this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
+        this._savingPromptsSignal.set(false);
+        this._savePromptsSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._savePromptsErrorSignal.set(SAVE_PROMPTS_ERROR);
+        this._savingPromptsSignal.set(false);
       },
     });
   }

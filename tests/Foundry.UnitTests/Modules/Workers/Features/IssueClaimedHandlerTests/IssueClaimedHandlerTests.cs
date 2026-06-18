@@ -663,6 +663,75 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("feat/103-my-feature");
     }
 
+    [Fact]
+    public async Task WhenDbHasSystemPromptTemplate_UsesDbTemplateInSystemPromptEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-system-template");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(
+                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
+                systemPromptTemplate: "Custom system prompt for issue #{issueNumber}. {issueContent}",
+                workerPromptTemplate: null));
+        IssueClaimed @event = BuildEvent(issueNumber: 99);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Custom system prompt for issue #99.");
+    }
+
+    [Fact]
+    public async Task WhenDbHasWorkerPromptTemplate_UsesDbTemplateInWorkerPromptEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-worker-template");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(
+                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
+                systemPromptTemplate: null,
+                workerPromptTemplate: "Custom worker prompt for #{issueNumber}."));
+        IssueClaimed @event = BuildEvent(issueNumber: 55);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["WORKER_PROMPT"].ShouldBe("Custom worker prompt for #55.");
+    }
+
+    [Fact]
+    public async Task WhenDbTemplatesAreNull_FallsBackToWorkerOptionsDefaults()
+    {
+        // Arrange
+        string defaultWorkerPromptTemplate =
+            "Implement GitHub issue #{issueNumber}. Create a feature branch, make the changes, commit, and push to the remote. Do not create a pull request unless explicitly instructed.";
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-fallback");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(
+                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
+                systemPromptTemplate: null,
+                workerPromptTemplate: null));
+        IssueClaimed @event = BuildEvent(issueNumber: 7);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["WORKER_PROMPT"].ShouldBe(
+            defaultWorkerPromptTemplate.Replace("{issueNumber}", "7", StringComparison.Ordinal));
+    }
+
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
     {
         public Task<Result<bool>> CreateBranchAsync(
@@ -741,7 +810,10 @@ public sealed class HandleAsync : IAsyncDisposable
             => Task.CompletedTask;
     }
 
-    private sealed class StubGlobalSettingsQueries((string Key, string Value)? authVar) : IGlobalSettingsQueries
+    private sealed class StubGlobalSettingsQueries(
+        (string Key, string Value)? authVar,
+        string? systemPromptTemplate = null,
+        string? workerPromptTemplate = null) : IGlobalSettingsQueries
     {
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
@@ -754,5 +826,9 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
             => Task.FromResult(120);
+
+        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult((systemPromptTemplate, workerPromptTemplate));
     }
 }
