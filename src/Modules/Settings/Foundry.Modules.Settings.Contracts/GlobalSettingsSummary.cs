@@ -9,4 +9,8 @@ public sealed record GlobalSettingsSummary(
     DateTimeOffset? ExpiresAt,
     string? SubscriptionType,
     string? SystemPromptTemplate,
-    string? WorkerPromptTemplate);
+    string? WorkerPromptTemplate,
+    DateTimeOffset? UsageLimitResetsAt,
+    bool IsDispatchPaused,
+    bool AutoResumeOnUsageReset,
+    int DefaultCooldownMinutes);

@@ -50,7 +50,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null),
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60),
             AuthEnvVar = ("ANTHROPIC_API_KEY", string.Empty),
         };
         AnthropicAuthValidator sut = BuildSut(queries: queries);
@@ -71,7 +71,7 @@ public sealed class ValidateAsync
         DateTimeOffset expiredAt = DateTimeOffset.UtcNow.AddMinutes(-1);
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, expiredAt, "pro", null, null),
+            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, expiredAt, "pro", null, null, null, false, true, 60),
         };
         AnthropicAuthValidator sut = BuildSut(queries: queries);
 
@@ -91,7 +91,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, null, "pro", null, null),
+            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, null, "pro", null, null, null, false, true, 60),
         };
         AnthropicAuthValidator sut = BuildSut(queries: queries);
 
@@ -112,7 +112,7 @@ public sealed class ValidateAsync
         DateTimeOffset futureExpiry = DateTimeOffset.UtcNow.AddDays(30);
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, futureExpiry, "pro", null, null),
+            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, futureExpiry, "pro", null, null, null, false, true, 60),
         };
         AnthropicAuthValidator sut = BuildSut(queries: queries);
 
@@ -132,7 +132,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null),
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60),
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-valid-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.OK);
@@ -154,7 +154,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null),
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60),
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-bad-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.Unauthorized);
@@ -175,7 +175,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null),
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60),
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-forbidden-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.Forbidden);
@@ -196,7 +196,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null),
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60),
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.InternalServerError);
@@ -217,7 +217,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null),
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60),
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.TooManyRequests);
@@ -238,7 +238,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null),
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60),
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(throwNetworkError: true);
@@ -259,7 +259,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null),
+            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60),
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(throwTimeoutError: true);

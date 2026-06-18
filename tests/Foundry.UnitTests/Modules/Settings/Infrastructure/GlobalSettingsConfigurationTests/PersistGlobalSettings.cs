@@ -91,6 +91,34 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDispatchPauseSettingsPersisted_CanBeReloadedWithAllProperties()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        DateTimeOffset resetsAt = new DateTimeOffset(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
+        settings.SetUsageLimitResetsAt(resetsAt);
+        settings.PauseDispatch();
+        settings.UpdateDispatchSettings(autoResume: false, defaultCooldownMinutes: 90);
+
+        _dbContext.Set<GlobalSettings>().Add(settings);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        GlobalSettings? result = await _dbContext
+            .Set<GlobalSettings>()
+            .FindAsync([settings.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        GlobalSettings reloaded = result.ShouldNotBeNull();
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.UsageLimitResetsAt.ShouldBe(resetsAt),
+            () => reloaded.IsDispatchPaused.ShouldBeTrue(),
+            () => reloaded.AutoResumeOnUsageReset.ShouldBeFalse(),
+            () => reloaded.DefaultCooldownMinutes.ShouldBe(90));
+    }
+
+    [Fact]
     public async Task WhenApiKeySettingsPersisted_AuthModeColumnIsEncrypted()
     {
         // Arrange

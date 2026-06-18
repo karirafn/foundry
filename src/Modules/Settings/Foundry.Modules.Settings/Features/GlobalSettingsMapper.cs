@@ -25,6 +25,10 @@ internal static class GlobalSettingsMapper
             oauth?.ExpiresAt,
             oauth?.SubscriptionType,
             settings.SystemPromptTemplate,
-            settings.WorkerPromptTemplate);
+            settings.WorkerPromptTemplate,
+            settings.UsageLimitResetsAt,
+            settings.IsDispatchPaused,
+            settings.AutoResumeOnUsageReset,
+            settings.DefaultCooldownMinutes);
     }
 }
