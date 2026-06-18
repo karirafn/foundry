@@ -16,14 +16,14 @@ namespace Foundry.WebApi.Migrations
                 table: "global_settings",
                 type: "INTEGER",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<int>(
                 name: "default_cooldown_minutes",
                 table: "global_settings",
                 type: "INTEGER",
                 nullable: false,
-                defaultValue: 0);
+                defaultValue: 60);
 
             migrationBuilder.AddColumn<bool>(
                 name: "is_dispatch_paused",
