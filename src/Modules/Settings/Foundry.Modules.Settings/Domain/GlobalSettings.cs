@@ -14,6 +14,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MinDefaultCooldownMinutes = 1;
     internal const int MaxDefaultCooldownMinutes = 1440;
     internal const int DefaultCooldownMinutesValue = 60;
+    internal const int MaxUsageLimitResetDays = 7;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
     {
@@ -78,9 +79,12 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
             return;
         }
 
-        UsageLimitResetsAt = UsageLimitResetsAt.HasValue && UsageLimitResetsAt.Value > resetsAt
+        DateTimeOffset maxResetTime = DateTimeOffset.UtcNow.AddDays(MaxUsageLimitResetDays);
+        DateTimeOffset clampedResetsAt = resetsAt > maxResetTime ? maxResetTime : resetsAt;
+
+        UsageLimitResetsAt = UsageLimitResetsAt.HasValue && UsageLimitResetsAt.Value > clampedResetsAt
             ? UsageLimitResetsAt
-            : resetsAt;
+            : clampedResetsAt;
 
         UpdatedAt = DateTimeOffset.UtcNow;
     }

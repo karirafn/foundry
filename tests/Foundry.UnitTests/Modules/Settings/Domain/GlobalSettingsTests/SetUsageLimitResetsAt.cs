@@ -95,4 +95,36 @@ public sealed class SetUsageLimitResetsAt
         // Assert
         settings.UsageLimitResetsAt.ShouldBe(later);
     }
+
+    [Fact]
+    public void WhenResetsAtExceedsSevenDays_ClampsToSevenDays()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        DateTimeOffset farFuture = DateTimeOffset.UtcNow.AddDays(30);
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        // Act
+        settings.SetUsageLimitResetsAt(farFuture);
+
+        // Assert
+        DateTimeOffset maxAllowed = before.AddDays(7);
+        settings.UsageLimitResetsAt.ShouldNotBeNull();
+        settings.UsageLimitResetsAt!.Value.ShouldBeLessThanOrEqualTo(maxAllowed.AddSeconds(1));
+        settings.UsageLimitResetsAt!.Value.ShouldBeGreaterThanOrEqualTo(before.AddDays(7).AddSeconds(-1));
+    }
+
+    [Fact]
+    public void WhenResetsAtIsWithinSevenDays_AcceptsAsIs()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        DateTimeOffset withinLimit = DateTimeOffset.UtcNow.AddDays(3);
+
+        // Act
+        settings.SetUsageLimitResetsAt(withinLimit);
+
+        // Assert
+        settings.UsageLimitResetsAt.ShouldBe(withinLimit);
+    }
 }

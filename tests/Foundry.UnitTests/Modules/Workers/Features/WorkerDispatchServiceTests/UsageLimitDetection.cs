@@ -88,7 +88,8 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
         settings.UsageLimitResetsAt.ShouldNotBeNull();
-        settings.UsageLimitResetsAt!.Value.Year.ShouldBe(2099);
+        settings.UsageLimitResetsAt!.Value.ShouldBeGreaterThan(DateTimeOffset.UtcNow);
+        settings.UsageLimitResetsAt!.Value.ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow.AddDays(7).AddSeconds(1));
     }
 
     [Fact]
@@ -164,10 +165,8 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedGlobalSettings();
         SeedActiveRun("container-extends-pause");
 
-        string earlierOutput =
-            """
-            {"terminal_reason":"blocking_limit","result":"resets at 2099-06-01T00:00:00Z"}
-            """;
+        DateTimeOffset earlierReset = DateTimeOffset.UtcNow.AddDays(2);
+        string earlierOutput = $$$"""{"terminal_reason":"blocking_limit","result":"resets at {{{earlierReset:O}}}"}""";
 
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         WorkerDispatchService sut1 = BuildServiceWithParser(earlierOutput, exitedStatus);
@@ -176,23 +175,21 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         // Seed a second run — second tick: reconciliation already ran, monitoring sees the new run
         SeedActiveRun("container-later-reset");
 
-        string laterOutput =
-            """
-            {"terminal_reason":"blocking_limit","result":"resets at 2099-12-31T00:00:00Z"}
-            """;
+        DateTimeOffset laterReset = DateTimeOffset.UtcNow.AddDays(5);
+        string laterOutput = $$$"""{"terminal_reason":"blocking_limit","result":"resets at {{{laterReset:O}}}"}""";
 
         WorkerDispatchService sut2 = BuildServiceWithParser(laterOutput, exitedStatus);
 
         // Act
         await sut2.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — UsageLimitResetsAt extended to December
+        // Assert — UsageLimitResetsAt extended to the later of the two reset times
         await using FoundryDbContext assertDb = CreateDbContext();
         GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
         settings.UsageLimitResetsAt.ShouldNotBeNull();
-        settings.UsageLimitResetsAt!.Value.Month.ShouldBe(12);
+        settings.UsageLimitResetsAt!.Value.ShouldBeGreaterThanOrEqualTo(laterReset.AddSeconds(-1));
     }
 
     private sealed class ExitedWorkerOrchestrator(WorkerStatus exitedStatus, string? logs) : IWorkerOrchestrator

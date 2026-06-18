@@ -95,7 +95,9 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        DateTimeOffset resetsAt = new DateTimeOffset(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
+        DateTimeOffset resetsAt = new DateTimeOffset(
+            DateTimeOffset.UtcNow.AddDays(3).Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond,
+            TimeSpan.Zero);
         settings.SetUsageLimitResetsAt(resetsAt);
         settings.PauseDispatch();
         settings.UpdateDispatchSettings(autoResume: false, defaultCooldownMinutes: 90);
