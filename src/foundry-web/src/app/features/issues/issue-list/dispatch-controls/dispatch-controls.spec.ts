@@ -52,154 +52,103 @@ function setup(overrides: DispatchServiceOverrides = {}) {
   return { fixture, mockDispatch };
 }
 
+function getToggleBtn(fixture: { nativeElement: HTMLElement }): HTMLButtonElement {
+  return fixture.nativeElement.querySelector('.dispatch-controls__toggle-btn') as HTMLButtonElement;
+}
+
 describe('DispatchControlsComponent', () => {
-  // Cycle 1: "Pause All" button always visible
-  it('should render the "Pause All" button', () => {
+  it('should show "Pause All" when dispatch is active', () => {
     // Arrange / Act
     const { fixture } = setup();
-    const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const btn = el.querySelector('.dispatch-controls__pause-btn');
-    expect(btn).not.toBeNull();
-    expect(btn?.textContent?.trim()).toBe('Pause All');
+    const btn = getToggleBtn(fixture);
+    expect(btn.textContent?.trim()).toBe('Pause All');
   });
 
-  // Cycle 2: "Resume All" button hidden when not paused and no usage limit
-  it('should not render the "Resume All" button when dispatch is not paused and there is no usage limit', () => {
-    // Arrange / Act
-    const { fixture } = setup({ isDispatchPaused: false, usageLimitResetsAt: null });
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.dispatch-controls__resume-btn');
-    expect(btn).toBeNull();
-  });
-
-  // Cycle 3: "Resume All" button visible when isDispatchPaused is true
-  it('should render the "Resume All" button when dispatch is paused', () => {
+  it('should show "Resume All" when dispatch is paused', () => {
     // Arrange / Act
     const { fixture } = setup({ isDispatchPaused: true });
-    const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const btn = el.querySelector('.dispatch-controls__resume-btn');
-    expect(btn).not.toBeNull();
-    expect(btn?.textContent?.trim()).toBe('Resume All');
+    const btn = getToggleBtn(fixture);
+    expect(btn.textContent?.trim()).toBe('Resume All');
   });
 
-  // Cycle 4: "Resume All" visible when usageLimitResetsAt is set
-  it('should render the "Resume All" button when usageLimitResetsAt is set even if not paused', () => {
-    // Arrange / Act
-    const futureDate = new Date(Date.now() + 60_000).toISOString();
-    const { fixture } = setup({ isDispatchPaused: false, usageLimitResetsAt: futureDate });
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.dispatch-controls__resume-btn');
-    expect(btn).not.toBeNull();
-  });
-
-  // Cycle 5: clicking "Pause All" calls pauseDispatch
-  it('should call pauseDispatch when "Pause All" is clicked', () => {
-    // Arrange
-    const { fixture, mockDispatch } = setup();
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act
-    const btn = el.querySelector('.dispatch-controls__pause-btn') as HTMLButtonElement;
-    btn.click();
-
-    // Assert
-    expect(mockDispatch.pauseDispatch).toHaveBeenCalledTimes(1);
-  });
-
-  // Cycle 6: clicking "Resume All" calls resumeDispatch
-  it('should call resumeDispatch when "Resume All" is clicked', () => {
-    // Arrange
-    const { fixture, mockDispatch } = setup({ isDispatchPaused: true });
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act
-    const btn = el.querySelector('.dispatch-controls__resume-btn') as HTMLButtonElement;
-    btn.click();
-
-    // Assert
-    expect(mockDispatch.resumeDispatch).toHaveBeenCalledTimes(1);
-  });
-
-  // Cycle 7: "Pause All" disabled while pausing
-  it('should disable "Pause All" and show "Pausing..." while pausing', () => {
-    // Arrange / Act
-    const { fixture } = setup({ pausing: true });
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.dispatch-controls__pause-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-    expect(btn.textContent?.trim()).toBe('Pausing...');
-  });
-
-  // Cycle 7b: "Pause All" disabled when dispatch is already paused
-  it('should disable "Pause All" when dispatch is already paused', () => {
-    // Arrange / Act
-    const { fixture } = setup({ isDispatchPaused: true });
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.dispatch-controls__pause-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-  });
-
-  // Cycle 7c: "Pause All" disabled when usage limit is active
-  it('should disable "Pause All" when usage limit is active', () => {
+  it('should show "Resume All" when usage limit is active', () => {
     // Arrange
     const futureDate = new Date(Date.now() + 60_000).toISOString();
 
     // Act
     const { fixture } = setup({ usageLimitResetsAt: futureDate });
-    const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const btn = el.querySelector('.dispatch-controls__pause-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    const btn = getToggleBtn(fixture);
+    expect(btn.textContent?.trim()).toBe('Resume All');
   });
 
-  // Cycle 8: "Resume All" disabled while resuming
-  it('should disable "Resume All" and show "Resuming..." while resuming', () => {
-    // Arrange / Act
-    const { fixture } = setup({ isDispatchPaused: true, resuming: true });
-    const el = fixture.nativeElement as HTMLElement;
+  it('should call pauseDispatch when clicked in active state', () => {
+    // Arrange
+    const { fixture, mockDispatch } = setup();
+
+    // Act
+    getToggleBtn(fixture).click();
 
     // Assert
-    const btn = el.querySelector('.dispatch-controls__resume-btn') as HTMLButtonElement;
+    expect(mockDispatch.pauseDispatch).toHaveBeenCalledTimes(1);
+    expect(mockDispatch.resumeDispatch).not.toHaveBeenCalled();
+  });
+
+  it('should call resumeDispatch when clicked in paused state', () => {
+    // Arrange
+    const { fixture, mockDispatch } = setup({ isDispatchPaused: true });
+
+    // Act
+    getToggleBtn(fixture).click();
+
+    // Assert
+    expect(mockDispatch.resumeDispatch).toHaveBeenCalledTimes(1);
+    expect(mockDispatch.pauseDispatch).not.toHaveBeenCalled();
+  });
+
+  it('should show "Pausing..." and disable while pausing', () => {
+    // Arrange / Act
+    const { fixture } = setup({ pausing: true });
+
+    // Assert
+    const btn = getToggleBtn(fixture);
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent?.trim()).toBe('Pausing...');
+  });
+
+  it('should show "Resuming..." and disable while resuming', () => {
+    // Arrange / Act
+    const { fixture } = setup({ isDispatchPaused: true, resuming: true });
+
+    // Assert
+    const btn = getToggleBtn(fixture);
     expect(btn.disabled).toBe(true);
     expect(btn.textContent?.trim()).toBe('Resuming...');
   });
 
-  // Cycle 9: error message displayed when pauseResumeError is set
-  it('should display the error message when pauseResumeError is set', () => {
+  it('should apply resume modifier class when paused', () => {
     // Arrange / Act
-    const { fixture } = setup({ pauseResumeError: 'Failed to pause dispatch' });
-    const el = fixture.nativeElement as HTMLElement;
+    const { fixture } = setup({ isDispatchPaused: true });
 
     // Assert
-    const errorSpan = el.querySelector('.dispatch-controls__error');
-    expect(errorSpan).not.toBeNull();
-    expect(errorSpan?.textContent?.trim()).toBe('Failed to pause dispatch');
+    const btn = getToggleBtn(fixture);
+    expect(btn.classList.contains('dispatch-controls__toggle-btn--resume')).toBe(true);
   });
 
-  it('should not display an error span when pauseResumeError is null', () => {
+  it('should not apply resume modifier class when active', () => {
     // Arrange / Act
-    const { fixture } = setup({ pauseResumeError: null });
-    const el = fixture.nativeElement as HTMLElement;
+    const { fixture } = setup();
 
     // Assert
-    const errorSpan = el.querySelector('.dispatch-controls__error');
-    expect(errorSpan).toBeNull();
+    const btn = getToggleBtn(fixture);
+    expect(btn.classList.contains('dispatch-controls__toggle-btn--resume')).toBe(false);
   });
 
-  // Status span
   it('should show "Dispatch paused — usage limit" status when usage limit is active', () => {
     // Arrange
     const futureDate = new Date(Date.now() + 60_000).toISOString();
@@ -213,7 +162,7 @@ describe('DispatchControlsComponent', () => {
     expect(status?.textContent?.trim()).toBe('Dispatch paused — usage limit');
   });
 
-  it('should show "Dispatch paused" status when manually paused without usage limit', () => {
+  it('should show "Dispatch paused" status when manually paused', () => {
     // Arrange / Act
     const { fixture } = setup({ isDispatchPaused: true, usageLimitResetsAt: null });
     const el = fixture.nativeElement as HTMLElement;
@@ -225,7 +174,7 @@ describe('DispatchControlsComponent', () => {
 
   it('should show empty status text when dispatch is active', () => {
     // Arrange / Act
-    const { fixture } = setup({ isDispatchPaused: false, usageLimitResetsAt: null });
+    const { fixture } = setup();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -233,7 +182,25 @@ describe('DispatchControlsComponent', () => {
     expect(status?.textContent?.trim()).toBe('');
   });
 
-  // Accessibility
+  it('should display error message when pauseResumeError is set', () => {
+    // Arrange / Act
+    const { fixture } = setup({ pauseResumeError: 'Failed to pause dispatch' });
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const errorSpan = el.querySelector('.dispatch-controls__error');
+    expect(errorSpan?.textContent?.trim()).toBe('Failed to pause dispatch');
+  });
+
+  it('should not display error span when pauseResumeError is null', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.dispatch-controls__error')).toBeNull();
+  });
+
   it('should have role="group" and aria-label on the wrapper', () => {
     // Arrange / Act
     const { fixture } = setup();
@@ -243,16 +210,6 @@ describe('DispatchControlsComponent', () => {
     const wrapper = el.querySelector('.dispatch-controls') as HTMLElement;
     expect(wrapper?.getAttribute('role')).toBe('group');
     expect(wrapper?.getAttribute('aria-label')).toBe('Dispatch controls');
-  });
-
-  it('should have type="button" on the "Pause All" button', () => {
-    // Arrange / Act
-    const { fixture } = setup();
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.dispatch-controls__pause-btn') as HTMLButtonElement;
-    expect(btn?.type).toBe('button');
   });
 
   it('should have role="alert" on the error span', () => {

@@ -6,13 +6,19 @@
   margin-bottom: var(--fd-spacing-md);
 }
 
-%btn-base {
+.dispatch-controls__toggle-btn {
   background: transparent;
+  border: 1px solid var(--fd-border-default);
   border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
   cursor: pointer;
   font-size: 0.875rem;
   min-height: 44px;
   padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+  &:hover:not(:disabled) {
+    background: var(--fd-bg-card-hover);
+  }
 
   &:focus-visible {
     outline: 2px solid var(--fd-text-link);
@@ -23,26 +29,11 @@
     cursor: not-allowed;
     opacity: 0.5;
   }
-}
 
-.dispatch-controls__pause-btn {
-  @extend %btn-base;
-  border: 1px solid var(--fd-border-default);
-  color: var(--fd-text-primary);
-
-  &:hover:not(:disabled) {
-    background: var(--fd-bg-card-hover);
-  }
-}
-
-.dispatch-controls__resume-btn {
-  @extend %btn-base;
-  border: 1px solid var(--fd-text-link);
-  color: var(--fd-text-link);
-  font-weight: 500;
-
-  &:hover:not(:disabled) {
-    background: var(--fd-bg-card-hover);
+  &--resume {
+    border-color: var(--fd-text-link);
+    color: var(--fd-text-link);
+    font-weight: 500;
   }
 }
 
