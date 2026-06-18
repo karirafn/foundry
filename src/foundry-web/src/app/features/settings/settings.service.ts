@@ -9,16 +9,19 @@ import {
   UpdatePromptTemplatesRequest,
   WorkerLimits,
 } from './settings.model';
+import { DispatchService } from '../../core/services/dispatch.service';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
 const SWITCH_OAUTH_ERROR = 'Failed to switch to OAuth mode';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
+const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
   private readonly _http = inject(HttpClient);
+  private readonly _dispatchService = inject(DispatchService);
 
   readonly authSettings: WritableSignal<AuthSettings | null> = signal(null);
   readonly loading: WritableSignal<boolean> = signal(false);
@@ -62,18 +65,30 @@ export class SettingsService {
   private readonly _savePromptsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly savePromptsError: Signal<string | null> = this._savePromptsErrorSignal.asReadonly();
 
+  private readonly _savingDispatchSignal: WritableSignal<boolean> = signal(false);
+  readonly savingDispatch: Signal<boolean> = this._savingDispatchSignal.asReadonly();
+
+  private readonly _saveDispatchSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveDispatchSuccess: Signal<boolean> = this._saveDispatchSuccessSignal.asReadonly();
+
+  private readonly _saveDispatchErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveDispatchError: Signal<string | null> = this._saveDispatchErrorSignal.asReadonly();
+
   loadSettings(): void {
     this._loadErrorSignal.set(null);
     this._saveErrorSignal.set(null);
     this._switchErrorSignal.set(null);
     this._saveLimitsErrorSignal.set(null);
     this._savePromptsErrorSignal.set(null);
+    this._saveDispatchErrorSignal.set(null);
     this.saveSuccess.set(false);
     this._saveLimitsSuccessSignal.set(false);
     this._savePromptsSuccessSignal.set(false);
+    this._saveDispatchSuccessSignal.set(false);
     this.saving.set(false);
     this._savingLimitsSignal.set(false);
     this._savingPromptsSignal.set(false);
+    this._savingDispatchSignal.set(false);
     this.switching.set(false);
     this.loading.set(true);
 
@@ -83,6 +98,7 @@ export class SettingsService {
         this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
         this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
         this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
+        this._dispatchService.updateFromSettings(response);
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -150,6 +166,25 @@ export class SettingsService {
         console.error(err);
         this._savePromptsErrorSignal.set(SAVE_PROMPTS_ERROR);
         this._savingPromptsSignal.set(false);
+      },
+    });
+  }
+
+  updateDispatchSettings(autoResumeOnUsageReset: boolean, defaultCooldownMinutes: number): void {
+    this._saveDispatchErrorSignal.set(null);
+    this._saveDispatchSuccessSignal.set(false);
+    this._savingDispatchSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/dispatch', { autoResumeOnUsageReset, defaultCooldownMinutes }).subscribe({
+      next: (response) => {
+        this._dispatchService.updateFromSettings(response);
+        this._savingDispatchSignal.set(false);
+        this._saveDispatchSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveDispatchErrorSignal.set(SAVE_DISPATCH_ERROR);
+        this._savingDispatchSignal.set(false);
       },
     });
   }

@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { WritableSignal } from '@angular/core';
 import { SettingsService } from './settings.service';
 import { AuthSettings } from './settings.model';
+import { DispatchService } from '../../core/services/dispatch.service';
 
 const mockAuthSettings: AuthSettings = {
   mode: 'api_key',
@@ -27,23 +28,46 @@ function setupService() {
   TestBed.configureTestingModule({
     providers: [
       SettingsService,
+      DispatchService,
       provideHttpClient(),
       provideHttpClientTesting(),
     ],
   });
   return {
     service: TestBed.inject(SettingsService),
+    dispatchService: TestBed.inject(DispatchService),
     httpMock: TestBed.inject(HttpTestingController),
+  };
+}
+
+function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    authMode: 'ApiKey',
+    maxConcurrent: 3,
+    timeoutMinutes: 60,
+    accessTokenPresent: false,
+    refreshTokenPresent: false,
+    expiresAt: null,
+    subscriptionType: null,
+    systemPromptTemplate: null,
+    workerPromptTemplate: null,
+    usageLimitResetsAt: null,
+    isDispatchPaused: false,
+    autoResumeOnUsageReset: true,
+    defaultCooldownMinutes: 60,
+    ...overrides,
   };
 }
 
 describe('SettingsService', () => {
   let service: SettingsService;
+  let dispatchService: DispatchService;
   let httpMock: HttpTestingController;
 
   beforeEach(() => {
     const setup = setupService();
     service = setup.service;
+    dispatchService = setup.dispatchService;
     httpMock = setup.httpMock;
   });
 
@@ -923,5 +947,134 @@ describe('SettingsService', () => {
       systemPromptTemplate: null,
       workerPromptTemplate: null,
     });
+  });
+
+  // Dispatch integration: loadSettings calls dispatchService.updateFromSettings
+  it('should update dispatchService state after loadSettings succeeds', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+      isDispatchPaused: true,
+      usageLimitResetsAt: '2026-07-01T12:00:00Z',
+    }));
+
+    // Assert
+    expect(dispatchService.isDispatchPaused()).toBe(true);
+    expect(dispatchService.usageLimitResetsAt()).toBe('2026-07-01T12:00:00Z');
+  });
+
+  // Dispatch settings signals: initial state
+  it('should start with false savingDispatch, false saveDispatchSuccess, and null saveDispatchError', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    // (no action — testing initial state)
+
+    // Assert
+    expect(service.savingDispatch()).toBe(false);
+    expect(service.saveDispatchSuccess()).toBe(false);
+    expect(service.saveDispatchError()).toBeNull();
+  });
+
+  // updateDispatchSettings: sends PUT to /api/settings/dispatch
+  it('should PUT to /api/settings/dispatch when updateDispatchSettings is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.updateDispatchSettings(true, 90);
+    const req = httpMock.expectOne('/api/settings/dispatch');
+
+    // Assert
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true, defaultCooldownMinutes: 90 });
+    req.flush(buildSettingsResponse({ autoResumeOnUsageReset: true, defaultCooldownMinutes: 90 }));
+  });
+
+  it('should set savingDispatch to true while updateDispatchSettings is in flight', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.updateDispatchSettings(false, 30);
+
+    // Assert — before flush
+    expect(service.savingDispatch()).toBe(true);
+    httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse());
+  });
+
+  it('should set saveDispatchSuccess to true and savingDispatch false after updateDispatchSettings succeeds', () => {
+    // Arrange
+    service.updateDispatchSettings(true, 60);
+    httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse({
+      autoResumeOnUsageReset: true,
+      defaultCooldownMinutes: 60,
+      isDispatchPaused: false,
+    }));
+
+    // Assert
+    expect(service.savingDispatch()).toBe(false);
+    expect(service.saveDispatchSuccess()).toBe(true);
+    expect(service.saveDispatchError()).toBeNull();
+  });
+
+  it('should update dispatchService state after updateDispatchSettings succeeds', () => {
+    // Arrange
+    service.updateDispatchSettings(true, 60);
+    httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse({
+      isDispatchPaused: true,
+      usageLimitResetsAt: '2026-08-01T00:00:00Z',
+    }));
+
+    // Assert
+    expect(dispatchService.isDispatchPaused()).toBe(true);
+    expect(dispatchService.usageLimitResetsAt()).toBe('2026-08-01T00:00:00Z');
+  });
+
+  it('should set saveDispatchError when updateDispatchSettings fails', () => {
+    // Arrange
+    service.updateDispatchSettings(true, 60);
+    httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Assert
+    expect(service.saveDispatchError()).not.toBeNull();
+    expect(service.savingDispatch()).toBe(false);
+    expect(service.saveDispatchSuccess()).toBe(false);
+  });
+
+  it('should set saveDispatchError to a fixed user-facing string when updateDispatchSettings fails', () => {
+    // Arrange
+    service.updateDispatchSettings(true, 60);
+    httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    // Assert
+    expect(service.saveDispatchError()).toBe('Failed to save dispatch settings');
+  });
+
+  it('should reset dispatch signals in loadSettings', () => {
+    // Arrange — put signals into dirty state
+    service.updateDispatchSettings(true, 60);
+    httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse());
+    expect(service.saveDispatchSuccess()).toBe(true);
+
+    // Act
+    service.loadSettings();
+
+    // Assert — cleared before the response arrives
+    expect(service.saveDispatchSuccess()).toBe(false);
+    expect(service.savingDispatch()).toBe(false);
+    expect(service.saveDispatchError()).toBeNull();
+
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 });
