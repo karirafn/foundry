@@ -23,6 +23,9 @@ export class SettingsService {
   private readonly _http = inject(HttpClient);
   private readonly _dispatchService = inject(DispatchService);
 
+  private readonly _settingsSignal: WritableSignal<GlobalSettingsResponse | null> = signal(null);
+  readonly settings: Signal<GlobalSettingsResponse | null> = this._settingsSignal.asReadonly();
+
   readonly authSettings: WritableSignal<AuthSettings | null> = signal(null);
   readonly loading: WritableSignal<boolean> = signal(false);
   readonly saving: WritableSignal<boolean> = signal(false);
@@ -94,6 +97,7 @@ export class SettingsService {
 
     this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
       next: (response) => {
+        this._settingsSignal.set(response);
         this.authSettings.set(this._mapToAuthSettings(response));
         this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
         this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
@@ -177,6 +181,7 @@ export class SettingsService {
 
     this._http.put<GlobalSettingsResponse>('/api/settings/dispatch', { autoResumeOnUsageReset, defaultCooldownMinutes }).subscribe({
       next: (response) => {
+        this._settingsSignal.set(response);
         this._dispatchService.updateFromSettings(response);
         this._savingDispatchSignal.set(false);
         this._saveDispatchSuccessSignal.set(true);

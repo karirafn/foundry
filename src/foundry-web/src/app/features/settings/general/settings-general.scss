@@ -8,7 +8,6 @@
   flex-direction: column;
   gap: var(--fd-spacing-lg);
 
-  --fd-text-success: #3fb950;
   --fd-text-warning: #d29922;
 
   &__section {
@@ -325,6 +324,27 @@
 
     &:focus-visible {
       @include focus-ring;
+    }
+  }
+
+  &__dispatch-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-md);
+  }
+
+  &__checkbox-label {
+    align-items: center;
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.875rem;
+    gap: var(--fd-spacing-sm);
+
+    input[type='checkbox'] {
+      accent-color: var(--fd-text-link);
+      height: 16px;
+      width: 16px;
     }
   }
 }

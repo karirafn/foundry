@@ -14,6 +14,10 @@ const API_KEY_RESPONSE = {
   refreshTokenPresent: false,
   expiresAt: null,
   subscriptionType: null,
+  usageLimitResetsAt: null,
+  isDispatchPaused: false,
+  autoResumeOnUsageReset: true,
+  defaultCooldownMinutes: 60,
 };
 
 const OAUTH_RESPONSE = {
@@ -24,6 +28,10 @@ const OAUTH_RESPONSE = {
   refreshTokenPresent: true,
   expiresAt: '2027-01-01T00:00:00Z',
   subscriptionType: 'pro',
+  usageLimitResetsAt: null,
+  isDispatchPaused: false,
+  autoResumeOnUsageReset: true,
+  defaultCooldownMinutes: 60,
 };
 
 function setup() {
@@ -579,5 +587,165 @@ describe('SettingsGeneralComponent', () => {
     // Assert
     expect(systemNgModel.model).toBe('System prompt text');
     expect(workerNgModel.model).toBe('Worker prompt text');
+  });
+
+  it('should render the "Dispatch Settings" section title', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const headings = Array.from(el.querySelectorAll('h2'));
+    const dispatchHeading = headings.find(h => h.textContent?.trim() === 'Dispatch Settings');
+
+    // Assert
+    expect(dispatchHeading).toBeTruthy();
+  });
+
+  it('should initialize checkbox from settings autoResumeOnUsageReset value', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, autoResumeOnUsageReset: false });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const checkbox = el.querySelector('#autoResume') as HTMLInputElement;
+
+    // Assert
+    expect(checkbox).toBeTruthy();
+    const ngModel = fixture.debugElement.query(By.css('#autoResume')).injector.get(NgModel);
+    expect(ngModel.model).toBe(false);
+  });
+
+  it('should initialize cooldown number input from settings defaultCooldownMinutes value', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, defaultCooldownMinutes: 120 });
+    fixture.detectChanges();
+
+    // Act
+    const ngModel = fixture.debugElement.query(By.css('#defaultCooldown')).injector.get(NgModel);
+
+    // Assert
+    expect(ngModel.model).toBe(120);
+  });
+
+  it('should call updateDispatchSettings with current values when Save is clicked', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, autoResumeOnUsageReset: true, defaultCooldownMinutes: 90 });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const dispatchForm = el.querySelector('.general-settings__dispatch-form') as HTMLElement;
+    const saveBtn = dispatchForm.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    const req = httpMock.expectOne('/api/settings/dispatch');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true, defaultCooldownMinutes: 90 });
+    req.flush(API_KEY_RESPONSE);
+  });
+
+  it('should disable Save button when cooldown is out of range', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const component = fixture.componentInstance as unknown as { _cooldownValue: { set: (v: number) => void } };
+    component._cooldownValue.set(0);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const dispatchForm = el.querySelector('.general-settings__dispatch-form') as HTMLElement;
+    const saveBtn = dispatchForm.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true);
+  });
+
+  it('should disable Save button while dispatch settings are saving', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const service = TestBed.inject(SettingsService);
+    service.updateDispatchSettings(true, 60);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const dispatchForm = el.querySelector('.general-settings__dispatch-form') as HTMLElement;
+    const saveBtn = dispatchForm.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true);
+    expect(saveBtn.textContent?.trim()).toBe('Saving...');
+
+    httpMock.expectOne('/api/settings/dispatch').flush(API_KEY_RESPONSE);
+  });
+
+  it('should show "Dispatch settings saved successfully" after a successful save', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const service = TestBed.inject(SettingsService);
+    service.updateDispatchSettings(true, 60);
+    httpMock.expectOne('/api/settings/dispatch').flush(API_KEY_RESPONSE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const successEls = Array.from(el.querySelectorAll('[role="status"]'));
+    const dispatchSuccess = successEls.find(e => e.textContent?.includes('Dispatch settings saved successfully'));
+    expect(dispatchSuccess).toBeTruthy();
+  });
+
+  it('should show error message when dispatch save fails', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const service = TestBed.inject(SettingsService);
+    service.updateDispatchSettings(true, 60);
+    httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const errorEl = el.querySelector('#dispatch-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
+    expect(errorEl?.textContent).toContain('Failed to save dispatch settings');
   });
 });
