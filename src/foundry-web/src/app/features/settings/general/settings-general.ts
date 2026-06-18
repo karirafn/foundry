@@ -300,11 +300,13 @@ const COOLDOWN_MINUTES_MAX = 1440;
               [min]="COOLDOWN_MINUTES_MIN"
               [max]="COOLDOWN_MINUTES_MAX"
               step="1"
+              [attr.disabled]="!_autoResumeValue() || null"
               [ngModel]="_cooldownValue()"
               (ngModelChange)="_cooldownValue.set($event)"
-              aria-describedby="cooldown-hint dispatch-error"
+              aria-describedby="cooldown-hint cooldown-auto-resume-hint dispatch-error"
             />
             <span id="cooldown-hint" class="general-settings__field-hint">1–1,440 minutes</span>
+            <span id="cooldown-auto-resume-hint" class="general-settings__field-hint">Used when auto-resume is enabled.</span>
           </div>
 
           <div id="dispatch-error" role="alert" class="general-settings__save-error">{{ settingsService.saveDispatchError() ?? '' }}</div>

@@ -67,14 +67,15 @@ function setup(options: SetupOptions = {}) {
 }
 
 describe('SystemBannerComponent', () => {
-  // Cycle 1: no notifications renders nothing
-  it('should render nothing when there are no active notifications', () => {
+  // Cycle 1: no notifications and no dispatch renders no notification banner
+  it('should render no notification banner when there are no active notifications', () => {
     // Arrange / Act
-    const { fixture } = setup({ notifications: [] });
+    const { fixture } = setup({ notifications: [], dispatch: { isDispatchPaused: false, usageLimitResetsAt: null } });
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
-    expect(el.querySelector('.system-banner')).toBeNull();
+    // Assert — the notifications wrapper is absent; only the dispatch wrapper (always in DOM) remains
+    const notificationBars = el.querySelectorAll('.system-banner__bar:not(.system-banner__bar--dispatch)');
+    expect(notificationBars.length).toBe(0);
   });
 
   // Cycle 2: one notification renders one bar with message text
@@ -86,8 +87,8 @@ describe('SystemBannerComponent', () => {
     const { fixture } = setup({ notifications: [notification] });
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
-    const bars = el.querySelectorAll('.system-banner__bar');
+    // Assert — exclude the always-rendered dispatch bar
+    const bars = el.querySelectorAll('.system-banner__bar:not(.system-banner__bar--dispatch)');
     expect(bars.length).toBe(1);
     expect(bars[0].textContent?.trim()).toContain('Claude auth is invalid');
   });
@@ -104,8 +105,8 @@ describe('SystemBannerComponent', () => {
     const { fixture } = setup({ notifications });
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
-    const bars = el.querySelectorAll('.system-banner__bar');
+    // Assert — exclude the always-rendered dispatch bar
+    const bars = el.querySelectorAll('.system-banner__bar:not(.system-banner__bar--dispatch)');
     expect(bars.length).toBe(2);
   });
 
@@ -119,12 +120,12 @@ describe('SystemBannerComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const bar = el.querySelector('.system-banner__bar') as HTMLElement;
+    const bar = el.querySelector('.system-banner__bar:not(.system-banner__bar--dispatch)') as HTMLElement;
     expect(bar?.getAttribute('role')).toBe('alert');
   });
 
-  // Cycle 5: wrapper has role="region" and aria-label
-  it('should have role="region" with aria-label "System notifications" on the wrapper', () => {
+  // Cycle 5: notification wrapper has role="region" and aria-label "System notifications"
+  it('should have role="region" with aria-label "System notifications" on the notification wrapper', () => {
     // Arrange
     const notification: SystemNotification = { category: 'auth', isActive: true, message: 'Auth invalid' };
 
@@ -133,9 +134,8 @@ describe('SystemBannerComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const wrapper = el.querySelector('.system-banner') as HTMLElement;
+    const wrapper = el.querySelector('[aria-label="System notifications"]') as HTMLElement;
     expect(wrapper?.getAttribute('role')).toBe('region');
-    expect(wrapper?.getAttribute('aria-label')).toBe('System notifications');
   });
 
   describe('dispatch banner', () => {
@@ -145,7 +145,9 @@ describe('SystemBannerComponent', () => {
       const { fixture } = setup({ dispatch: { isDispatchPaused: true } });
       const el = fixture.nativeElement as HTMLElement;
 
-      // Assert
+      // Assert — the dispatch region is visible (not hidden)
+      const dispatchRegion = el.querySelector('[aria-label="Dispatch status"]') as HTMLElement;
+      expect(dispatchRegion?.hidden).toBe(false);
       expect(el.querySelector('.system-banner__bar--dispatch')).not.toBeNull();
     });
 
@@ -155,8 +157,9 @@ describe('SystemBannerComponent', () => {
       const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: null } });
       const el = fixture.nativeElement as HTMLElement;
 
-      // Assert
-      expect(el.querySelector('.system-banner__bar--dispatch')).toBeNull();
+      // Assert — the dispatch region is in the DOM but has [hidden]
+      const dispatchRegion = el.querySelector('[aria-label="Dispatch status"]') as HTMLElement;
+      expect(dispatchRegion?.hidden).toBe(true);
     });
 
     // Cycle 8: dispatch banner visible when usage limit is active (even if not explicitly paused)
@@ -168,8 +171,9 @@ describe('SystemBannerComponent', () => {
       const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: futureDate } });
       const el = fixture.nativeElement as HTMLElement;
 
-      // Assert
-      expect(el.querySelector('.system-banner__bar--dispatch')).not.toBeNull();
+      // Assert — the dispatch region is visible (not hidden)
+      const dispatchRegion = el.querySelector('[aria-label="Dispatch status"]') as HTMLElement;
+      expect(dispatchRegion?.hidden).toBe(false);
     });
 
     // Cycle 9: shows "Dispatch is paused" when paused without usage limit

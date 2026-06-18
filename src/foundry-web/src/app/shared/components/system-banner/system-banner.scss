@@ -9,6 +9,10 @@
   max-height: 30vh;
   overflow-y: auto;
 
+  &[hidden] {
+    display: none;
+  }
+
   &:focus-visible {
     outline: 2px solid var(--fd-text-link);
     outline-offset: -2px;
@@ -49,7 +53,7 @@
   cursor: pointer;
   font-size: 0.8125rem;
   font-weight: 500;
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 var(--fd-spacing-md);
   transition: background-color 150ms ease;
 

@@ -724,6 +724,38 @@ describe('SettingsGeneralComponent', () => {
     expect(dispatchSuccess).toBeTruthy();
   });
 
+  it('should disable the cooldown input when auto-resume is off', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, autoResumeOnUsageReset: false });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const cooldownInput = el.querySelector('#defaultCooldown') as HTMLInputElement;
+
+    // Assert
+    expect(cooldownInput.disabled).toBe(true);
+  });
+
+  it('should enable the cooldown input when auto-resume is on', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, autoResumeOnUsageReset: true });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const cooldownInput = el.querySelector('#defaultCooldown') as HTMLInputElement;
+
+    // Assert
+    expect(cooldownInput.disabled).toBe(false);
+  });
+
   it('should show error message when dispatch save fails', () => {
     // Arrange
     const { httpMock } = setup();

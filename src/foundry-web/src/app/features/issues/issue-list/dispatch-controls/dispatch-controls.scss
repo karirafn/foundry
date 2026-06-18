@@ -11,7 +11,7 @@
   border-radius: var(--fd-radius-sm);
   cursor: pointer;
   font-size: 0.875rem;
-  min-height: 36px;
+  min-height: 44px;
   padding: var(--fd-spacing-xs) var(--fd-spacing-md);
 
   &:focus-visible {
@@ -44,6 +44,11 @@
   &:hover:not(:disabled) {
     background: var(--fd-bg-card-hover);
   }
+}
+
+.dispatch-controls__status {
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
 }
 
 .dispatch-controls__error {
