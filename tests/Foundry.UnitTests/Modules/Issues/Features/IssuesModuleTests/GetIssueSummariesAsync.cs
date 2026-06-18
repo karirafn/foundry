@@ -4,6 +4,8 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -154,6 +156,104 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         result.Count.ShouldBe(2);
         result[0].IssueNumber.ShouldBe(2);
         result[1].IssueNumber.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenDetectedIssueExists_FailureClassificationIsNull()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        _slugQueries.AddSlug(repositoryId, "owner/repo");
+        await CreateAndPersistDetectedIssueAsync(repositoryId, issueNumber: 1, DateTimeOffset.UtcNow);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await _sut.GetIssueSummariesAsync(
+            repositoryId: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldHaveSingleItem();
+        summary.FailureClassification.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenUsageLimitedFailedIssueExists_FailureClassificationIsUsageLimited()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        _slugQueries.AddSlug(repositoryId, "owner/repo");
+
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId, issueNumber: 1, DateTimeOffset.UtcNow);
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Usage limit reached", DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await _sut.GetIssueSummariesAsync(
+            repositoryId: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldHaveSingleItem();
+        summary.FailureClassification.ShouldBe("usage_limited");
+    }
+
+    [Fact]
+    public async Task WhenUsageLimitedContinuableFailedIssueExists_FailureClassificationIsUsageLimited()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        _slugQueries.AddSlug(repositoryId, "owner/repo");
+
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId, issueNumber: 1, DateTimeOffset.UtcNow);
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        Guid workerRunId = Guid.NewGuid();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
+            workerRunId,
+            branchName: "feat/issue-1",
+            failureReason: "Usage limit reached",
+            failedAt: DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await _sut.GetIssueSummariesAsync(
+            repositoryId: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldHaveSingleItem();
+        summary.FailureClassification.ShouldBe("usage_limited");
+    }
+
+    [Fact]
+    public async Task WhenNonUsageLimitedFailedIssueExists_FailureClassificationIsNull()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        _slugQueries.AddSlug(repositoryId, "owner/repo");
+
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId, issueNumber: 1, DateTimeOffset.UtcNow);
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await _sut.GetIssueSummariesAsync(
+            repositoryId: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldHaveSingleItem();
+        summary.FailureClassification.ShouldBeNull();
     }
 
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries

@@ -3,9 +3,11 @@ import {
   ChangeDetectionStrategy,
   ElementRef,
   Injector,
+  Signal,
   ViewChild,
   WritableSignal,
   afterNextRender,
+  computed,
   inject,
   runInInjectionContext,
   signal,
@@ -19,6 +21,8 @@ const MAX_CONCURRENT_MIN = 1;
 const MAX_CONCURRENT_MAX = 20;
 const TIMEOUT_MINUTES_MIN = 1;
 const TIMEOUT_MINUTES_MAX = 1440;
+const COOLDOWN_MINUTES_MIN = 1;
+const COOLDOWN_MINUTES_MAX = 1440;
 
 @Component({
   selector: 'fd-settings-general',
@@ -268,6 +272,55 @@ const TIMEOUT_MINUTES_MAX = 1440;
           >{{ settingsService.savingPrompts() ? 'Saving...' : 'Save' }}</button>
         </div>
       </section>
+
+      <section class="general-settings__section">
+        <h2 class="general-settings__section-title">Dispatch Settings</h2>
+        <p class="general-settings__section-description">
+          Configure automatic pause and resume behavior for worker dispatch.
+        </p>
+
+        <div class="general-settings__dispatch-form">
+          <label class="general-settings__checkbox-label" for="autoResume">
+            <input
+              type="checkbox"
+              id="autoResume"
+              [ngModel]="_autoResumeValue()"
+              (ngModelChange)="_autoResumeValue.set($event)"
+              [attr.aria-describedby]="settingsService.saveDispatchError() ? 'dispatch-error' : null"
+            />
+            Auto-resume when usage limit resets
+          </label>
+
+          <div class="general-settings__field">
+            <label class="general-settings__field-label" for="defaultCooldown">Default Cooldown (minutes)</label>
+            <input
+              class="general-settings__number-input"
+              type="number"
+              id="defaultCooldown"
+              [min]="COOLDOWN_MINUTES_MIN"
+              [max]="COOLDOWN_MINUTES_MAX"
+              step="1"
+              [attr.disabled]="!_autoResumeValue() || null"
+              [ngModel]="_cooldownValue()"
+              (ngModelChange)="_cooldownValue.set($event)"
+              aria-describedby="cooldown-hint cooldown-auto-resume-hint dispatch-error"
+            />
+            <span id="cooldown-hint" class="general-settings__field-hint">1–1,440 minutes</span>
+            <span id="cooldown-auto-resume-hint" class="general-settings__field-hint">Used when auto-resume is enabled.</span>
+          </div>
+
+          <div id="dispatch-error" role="alert" class="general-settings__save-error">{{ settingsService.saveDispatchError() ?? '' }}</div>
+
+          <div role="status" class="general-settings__save-success">{{ settingsService.saveDispatchSuccess() ? 'Dispatch settings saved successfully' : '' }}</div>
+
+          <button
+            class="general-settings__save-btn"
+            type="button"
+            [disabled]="settingsService.savingDispatch() || !isDispatchFormValid()"
+            (click)="saveDispatch()"
+          >{{ settingsService.savingDispatch() ? 'Saving...' : 'Save' }}</button>
+        </div>
+      </section>
     </div>
   `,
   styleUrl: './settings-general.scss',
@@ -282,6 +335,8 @@ export class SettingsGeneralComponent {
   protected readonly MAX_CONCURRENT_MAX = MAX_CONCURRENT_MAX;
   protected readonly TIMEOUT_MINUTES_MIN = TIMEOUT_MINUTES_MIN;
   protected readonly TIMEOUT_MINUTES_MAX = TIMEOUT_MINUTES_MAX;
+  protected readonly COOLDOWN_MINUTES_MIN = COOLDOWN_MINUTES_MIN;
+  protected readonly COOLDOWN_MINUTES_MAX = COOLDOWN_MINUTES_MAX;
 
   protected readonly _selectedMode: WritableSignal<AuthMode> = signal('api_key');
   protected readonly _showApiKey: WritableSignal<boolean> = signal(false);
@@ -295,6 +350,14 @@ export class SettingsGeneralComponent {
   protected readonly _systemPromptValue: WritableSignal<string> = signal('');
   protected readonly _workerPromptValue: WritableSignal<string> = signal('');
   private _promptsInitialized = false;
+
+  protected readonly _autoResumeValue: WritableSignal<boolean> = signal(true);
+  protected readonly _cooldownValue: WritableSignal<number> = signal(60);
+  private _dispatchInitialized = false;
+
+  protected readonly isDispatchFormValid: Signal<boolean> = computed(
+    () => this._cooldownValue() >= COOLDOWN_MINUTES_MIN && this._cooldownValue() <= COOLDOWN_MINUTES_MAX
+  );
 
   constructor() {
     effect(() => {
@@ -320,6 +383,15 @@ export class SettingsGeneralComponent {
         this._promptsInitialized = true;
         this._systemPromptValue.set(this.settingsService.systemPromptTemplate() ?? '');
         this._workerPromptValue.set(this.settingsService.workerPromptTemplate() ?? '');
+      }
+    });
+
+    effect(() => {
+      const settings = this.settingsService.settings();
+      if (settings !== null && !this._dispatchInitialized) {
+        this._dispatchInitialized = true;
+        this._autoResumeValue.set(settings.autoResumeOnUsageReset);
+        this._cooldownValue.set(settings.defaultCooldownMinutes);
       }
     });
   }
@@ -360,5 +432,9 @@ export class SettingsGeneralComponent {
       workerPromptTemplate: this._workerPromptValue() || null,
     };
     this.settingsService.updatePromptTemplates(request);
+  }
+
+  saveDispatch(): void {
+    this.settingsService.updateDispatchSettings(this._autoResumeValue(), this._cooldownValue());
   }
 }

@@ -5,6 +5,8 @@ import { IssueCardComponent } from '../issue-card/issue-card';
 import { IssueDetailComponent } from '../issue-detail/issue-detail';
 import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state';
+import { DispatchControlsComponent } from './dispatch-controls/dispatch-controls';
+import { SettingsService } from '../../../features/settings/settings.service';
 
 @Component({
   selector: 'fd-issue-list',
@@ -14,6 +16,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
     IssueDetailComponent,
     ConnectionIndicatorComponent,
     EmptyStateComponent,
+    DispatchControlsComponent,
   ],
   template: `
     <div class="issue-list">
@@ -21,6 +24,8 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
         <h1 class="issue-list__heading">Tracked Issues</h1>
         <fd-connection-indicator [status]="signalR.connectionStatus()" />
       </header>
+
+      <fd-dispatch-controls />
 
       @if (issueService.loadError()) {
         <div class="issue-list__error" role="alert">
@@ -74,8 +79,10 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 export class IssueListComponent implements OnInit {
   protected readonly issueService = inject(IssueService);
   protected readonly signalR = inject(IssueSignalRService);
+  private readonly _settingsService = inject(SettingsService);
 
   ngOnInit(): void {
     this.issueService.loadIssues();
+    this._settingsService.loadSettings();
   }
 }

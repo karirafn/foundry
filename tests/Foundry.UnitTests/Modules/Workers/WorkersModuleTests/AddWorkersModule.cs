@@ -139,4 +139,20 @@ public sealed class AddWorkersModule
         IImageOperations imageOperations = provider.GetRequiredService<IImageOperations>();
         imageOperations.ShouldNotBeNull();
     }
+
+    [Fact]
+    public void WhenCalled_RegistersIContainerOutputParserAsSingleton()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IContainerOutputParser parser = provider.GetRequiredService<IContainerOutputParser>();
+        parser.ShouldBeOfType<ContainerOutputParser>();
+    }
 }

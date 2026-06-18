@@ -313,6 +313,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
         handler.ShouldBeOfType<IssueStateChangedAdapter<IssueRevisionInProgress>>();
     }
 
+    [Fact]
+    public void WhenServicesRegistered_DispatchResumedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<DispatchResumed> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<DispatchResumed>>();
+        handler.ShouldBeOfType<DispatchResumedHandler>();
+    }
+
     private sealed class NullIssueBroadcaster : IIssueBroadcaster
     {
         public Task BroadcastAsync(IssueSummary summary, CancellationToken cancellationToken)

@@ -19,7 +19,8 @@ public sealed class BroadcastAsync
             State: "detected",
             RepositorySlug: "owner/repo",
             DetectedAt: DateTimeOffset.UtcNow,
-            Url: "https://github.com/owner/repo/issues/42");
+            Url: "https://github.com/owner/repo/issues/42",
+            FailureClassification: null);
 
         StubIssueBroadcaster sut = new();
 

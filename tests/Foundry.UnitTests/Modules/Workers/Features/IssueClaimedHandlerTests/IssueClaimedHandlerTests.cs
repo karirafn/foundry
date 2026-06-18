@@ -830,5 +830,11 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
             CancellationToken cancellationToken)
             => Task.FromResult((systemPromptTemplate, workerPromptTemplate));
+
+        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new DispatchPauseState(null, false, true));
+
+        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(60);
     }
 }

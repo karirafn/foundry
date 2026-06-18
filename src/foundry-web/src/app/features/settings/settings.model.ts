@@ -41,9 +41,18 @@ export interface GlobalSettingsResponse {
   subscriptionType: string | null;
   systemPromptTemplate: string | null;
   workerPromptTemplate: string | null;
+  usageLimitResetsAt: string | null;
+  isDispatchPaused: boolean;
+  autoResumeOnUsageReset: boolean;
+  defaultCooldownMinutes: number;
 }
 
 export interface UpdatePromptTemplatesRequest {
   systemPromptTemplate: string | null;
   workerPromptTemplate: string | null;
+}
+
+export interface DispatchSettings {
+  autoResumeOnUsageReset: boolean;
+  defaultCooldownMinutes: number;
 }

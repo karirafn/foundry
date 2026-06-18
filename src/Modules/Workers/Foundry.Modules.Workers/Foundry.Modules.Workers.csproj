@@ -13,7 +13,7 @@
     <ProjectReference Include="..\Foundry.Modules.Workers.Contracts\Foundry.Modules.Workers.Contracts.csproj" />
     <ProjectReference Include="..\..\Issues\Foundry.Modules.Issues.Contracts\Foundry.Modules.Issues.Contracts.csproj" />
     <ProjectReference Include="..\..\Monitoring\Foundry.Modules.Monitoring.Contracts\Foundry.Modules.Monitoring.Contracts.csproj" />
-    <ProjectReference Include="..\..\Settings\Foundry.Modules.Settings.Contracts\Foundry.Modules.Settings.Contracts.csproj" />
+    <ProjectReference Include="..\..\Settings\Foundry.Modules.Settings\Foundry.Modules.Settings.csproj" />
     <ProjectReference Include="..\..\..\Foundry.Shared.Infrastructure\Foundry.Shared.Infrastructure.csproj" />
   </ItemGroup>
 

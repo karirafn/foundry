@@ -224,15 +224,28 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("auth_mode");
 
+                    b.Property<bool>("AutoResumeOnUsageReset")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("auto_resume_on_usage_reset");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
+
+                    b.Property<int>("DefaultCooldownMinutes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_cooldown_minutes");
+
+                    b.Property<bool>("IsDispatchPaused")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_dispatch_paused");
 
                     b.Property<int>("MaxConcurrent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_concurrent");
 
                     b.Property<string>("SystemPromptTemplate")
+                        .HasMaxLength(32768)
                         .HasColumnType("TEXT")
                         .HasColumnName("system_prompt_template");
 
@@ -244,7 +257,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("updated_at");
 
+                    b.Property<DateTimeOffset?>("UsageLimitResetsAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("usage_limit_resets_at");
+
                     b.Property<string>("WorkerPromptTemplate")
+                        .HasMaxLength(32768)
                         .HasColumnType("TEXT")
                         .HasColumnName("worker_prompt_template");
 

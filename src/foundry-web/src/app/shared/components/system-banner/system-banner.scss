@@ -9,6 +9,10 @@
   max-height: 30vh;
   overflow-y: auto;
 
+  &[hidden] {
+    display: none;
+  }
+
   &:focus-visible {
     outline: 2px solid var(--fd-text-link);
     outline-offset: -2px;
@@ -27,6 +31,10 @@
   line-height: 1.4;
 }
 
+.system-banner__bar--dispatch {
+  justify-content: space-between;
+}
+
 .system-banner__icon {
   flex-shrink: 0;
   color: var(--fd-text-warning);
@@ -34,4 +42,37 @@
 
 .system-banner__message {
   flex: 1;
+}
+
+.system-banner__countdown {
+  color: var(--fd-text-warning);
+  font-size: 0.875rem;
+}
+
+.system-banner__action-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--fd-border-warning);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-warning);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  min-height: 44px;
+  padding: 0 var(--fd-spacing-md);
+  transition: background-color 150ms ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(210, 153, 34, 0.1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-warning);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }

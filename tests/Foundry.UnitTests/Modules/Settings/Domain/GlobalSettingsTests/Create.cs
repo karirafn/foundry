@@ -72,4 +72,44 @@ public sealed class Create
         // Assert
         settings.UpdatedAt.ShouldBe(settings.CreatedAt);
     }
+
+    [Fact]
+    public void WhenCreated_UsageLimitResetsAtIsNull()
+    {
+        // Arrange & Act
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Assert
+        settings.UsageLimitResetsAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenCreated_IsDispatchPausedIsFalse()
+    {
+        // Arrange & Act
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Assert
+        settings.IsDispatchPaused.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenCreated_AutoResumeOnUsageResetIsTrue()
+    {
+        // Arrange & Act
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Assert
+        settings.AutoResumeOnUsageReset.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenCreated_DefaultCooldownMinutesIs60()
+    {
+        // Arrange & Act
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Assert
+        settings.DefaultCooldownMinutes.ShouldBe(60);
+    }
 }

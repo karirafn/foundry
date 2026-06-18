@@ -20,6 +20,9 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
     public async Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(
         CancellationToken cancellationToken)
     {
+        // Full entity load is required here: AuthMode uses a ValueConverter that
+        // applies decrypt + JSON deserialization, which cannot be expressed as a
+        // SQL projection. EF Core cannot translate the converter into a SELECT.
         GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
@@ -39,29 +42,55 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
     public async Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+        int? value = await dbContext.Set<GlobalSettings>()
             .AsNoTracking()
+            .Select(s => (int?)s.MaxConcurrent)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return settings?.MaxConcurrent ?? GlobalSettings.DefaultMaxConcurrent;
+        return value ?? GlobalSettings.DefaultMaxConcurrent;
     }
 
     public async Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+        int? value = await dbContext.Set<GlobalSettings>()
             .AsNoTracking()
+            .Select(s => (int?)s.TimeoutMinutes)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return settings?.TimeoutMinutes ?? GlobalSettings.DefaultTimeoutMinutes;
+        return value ?? GlobalSettings.DefaultTimeoutMinutes;
     }
 
     public async Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
         CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+        (string? SystemPromptTemplate, string? WorkerPromptTemplate) result =
+            await dbContext.Set<GlobalSettings>()
+                .AsNoTracking()
+                .Select(s => ValueTuple.Create(s.SystemPromptTemplate, s.WorkerPromptTemplate))
+                .FirstOrDefaultAsync(cancellationToken);
+
+        return result;
+    }
+
+    public async Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
+    {
+        return await dbContext.Set<GlobalSettings>()
             .AsNoTracking()
+            .Select(s => new DispatchPauseState(
+                s.UsageLimitResetsAt,
+                s.IsDispatchPaused,
+                s.AutoResumeOnUsageReset))
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? new DispatchPauseState(null, false, true);
+    }
+
+    public async Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
+    {
+        int? value = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .Select(s => (int?)s.DefaultCooldownMinutes)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return (settings?.SystemPromptTemplate, settings?.WorkerPromptTemplate);
+        return value is > 0 ? value.Value : GlobalSettings.DefaultCooldownMinutesValue;
     }
 }

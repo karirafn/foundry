@@ -6,6 +6,7 @@ import { IssueListComponent } from './issue-list';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { IssueSummary } from '../issue.model';
+import { GlobalSettingsResponse } from '../../../features/settings/settings.model';
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -21,6 +22,22 @@ const mockSummary: IssueSummary = {
   repositorySlug: 'owner/repo',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
+};
+
+const mockSettingsResponse: GlobalSettingsResponse = {
+  authMode: 'ApiKey',
+  maxConcurrent: 3,
+  timeoutMinutes: 30,
+  accessTokenPresent: false,
+  refreshTokenPresent: false,
+  expiresAt: null,
+  subscriptionType: null,
+  systemPromptTemplate: null,
+  workerPromptTemplate: null,
+  usageLimitResetsAt: null,
+  isDispatchPaused: false,
+  autoResumeOnUsageReset: true,
+  defaultCooldownMinutes: 60,
 };
 
 function setupComponent() {
@@ -39,6 +56,11 @@ function setupComponent() {
   return { fixture, httpMock };
 }
 
+function flushInit(httpMock: HttpTestingController, issues: IssueSummary[] = []) {
+  httpMock.expectOne('/api/issues').flush(issues);
+  httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+}
+
 describe('IssueListComponent', () => {
   afterEach(() => {
     TestBed.inject(HttpTestingController).verify();
@@ -49,7 +71,7 @@ describe('IssueListComponent', () => {
     // Arrange / Act
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([]);
+    flushInit(httpMock);
 
     // Assert
     expect(fixture.componentInstance).toBeTruthy();
@@ -61,7 +83,7 @@ describe('IssueListComponent', () => {
 
     // Act
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([]);
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -79,8 +101,8 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     // Assert — the HTTP call proves loadIssues was called
-    const req = httpMock.expectOne('/api/issues');
-    req.flush([]);
+    httpMock.expectOne('/api/issues').flush([]);
+    httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
   });
 
   // Cycle 3: renders fd-issue-card for each issue
@@ -88,7 +110,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    flushInit(httpMock, [mockSummary]);
 
     // Act
     fixture.detectChanges();
@@ -104,7 +126,7 @@ describe('IssueListComponent', () => {
     const second: IssueSummary = { ...mockSummary, id: 'def456', issueNumber: 43, title: 'Fix bug' };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary, second]);
+    flushInit(httpMock, [mockSummary, second]);
 
     // Act
     fixture.detectChanges();
@@ -120,7 +142,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([]);
+    flushInit(httpMock);
 
     // Act
     fixture.detectChanges();
@@ -135,7 +157,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    flushInit(httpMock, [mockSummary]);
 
     // Act
     fixture.detectChanges();
@@ -150,7 +172,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
 
-    // Act — detect changes but do NOT flush the HTTP response
+    // Act — detect changes but do NOT flush the HTTP responses
     fixture.detectChanges();
 
     // Assert — empty state must not appear while still loading
@@ -159,7 +181,7 @@ describe('IssueListComponent', () => {
     expect(emptyState).toBeFalsy();
 
     // Cleanup
-    httpMock.expectOne('/api/issues').flush([]);
+    flushInit(httpMock);
   });
 
   it('should not render fd-empty-state when loadIssues results in an HTTP error', () => {
@@ -167,11 +189,12 @@ describe('IssueListComponent', () => {
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
 
-    // Act — simulate a server error
+    // Act — simulate a server error on issues, settings succeeds
     httpMock.expectOne('/api/issues').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
+    httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     fixture.detectChanges();
 
     // Assert — error state, not empty state
@@ -185,7 +208,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    flushInit(httpMock, [mockSummary]);
     fixture.detectChanges();
 
     // Assert — wrapper is always present in the DOM so aria-controls is always valid
@@ -198,7 +221,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    flushInit(httpMock, [mockSummary]);
     fixture.detectChanges();
 
     // Assert — wrapper is present before any expansion
@@ -211,7 +234,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    flushInit(httpMock, [mockSummary]);
     fixture.detectChanges();
 
     // Assert — wrapper is hidden when not expanded
@@ -224,7 +247,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    flushInit(httpMock, [mockSummary]);
     fixture.detectChanges();
 
     // Act - expand the card
@@ -266,6 +289,7 @@ describe('IssueListComponent', () => {
       status: 500,
       statusText: 'Internal Server Error',
     });
+    httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     fixture.detectChanges();
 
     // Assert
@@ -285,6 +309,7 @@ describe('IssueListComponent', () => {
       status: 500,
       statusText: 'Internal Server Error',
     });
+    httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     fixture.detectChanges();
 
     // Assert
@@ -301,6 +326,7 @@ describe('IssueListComponent', () => {
       status: 500,
       statusText: 'Internal Server Error',
     });
+    httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     fixture.detectChanges();
 
     // Act
@@ -318,7 +344,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    flushInit(httpMock, [mockSummary]);
     fixture.detectChanges();
 
     // Assert
@@ -334,7 +360,7 @@ describe('IssueListComponent', () => {
 
     // Act
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([]);
+    flushInit(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -350,7 +376,7 @@ describe('IssueListComponent', () => {
     const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'non-live', state: 'completed', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([liveIssue, nonLiveIssue]);
+    flushInit(httpMock, [liveIssue, nonLiveIssue]);
 
     // Act
     fixture.detectChanges();
@@ -368,7 +394,7 @@ describe('IssueListComponent', () => {
     const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'completed', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([nonLiveIssue, continuationQueued]);
+    flushInit(httpMock, [nonLiveIssue, continuationQueued]);
 
     // Act
     fixture.detectChanges();
@@ -385,7 +411,7 @@ describe('IssueListComponent', () => {
     const live2: IssueSummary = { ...mockSummary, id: 'live-2', state: 'revision_in_progress', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([live1, live2]);
+    flushInit(httpMock, [live1, live2]);
 
     // Act
     fixture.detectChanges();
@@ -402,7 +428,7 @@ describe('IssueListComponent', () => {
     const non2: IssueSummary = { ...mockSummary, id: 'non-2', state: 'failed', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([non1, non2]);
+    flushInit(httpMock, [non1, non2]);
 
     // Act
     fixture.detectChanges();
@@ -417,7 +443,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([]);
+    flushInit(httpMock);
 
     // Act
     fixture.detectChanges();
@@ -435,7 +461,7 @@ describe('IssueListComponent', () => {
     const completedIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'completed', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([liveIssue, completedIssue]);
+    flushInit(httpMock, [liveIssue, completedIssue]);
 
     // Act
     fixture.detectChanges();
@@ -452,7 +478,7 @@ describe('IssueListComponent', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    flushInit(httpMock, [mockSummary]);
     fixture.detectChanges();
 
     // Act - click the card to toggle expand
@@ -483,5 +509,21 @@ describe('IssueListComponent', () => {
     // Assert
     const detail = el.querySelector('fd-issue-detail');
     expect(detail).toBeTruthy();
+  });
+
+  // Cycle 9: fd-dispatch-controls renders below the header
+  it('should render fd-dispatch-controls below the header', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const controls = el.querySelector('fd-dispatch-controls');
+    expect(controls).toBeTruthy();
   });
 });

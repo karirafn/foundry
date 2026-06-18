@@ -24,3 +24,29 @@
     }
   </div>
 }
+
+<div
+  class="system-banner system-banner--dispatch-only"
+  role="region"
+  aria-label="Dispatch status"
+  [hidden]="!isDispatchBannerVisible()"
+>
+  <div class="system-banner__bar system-banner__bar--dispatch">
+    <span class="system-banner__message" role="alert">
+      {{ countdownText() !== null ? 'Usage limit active' : 'Dispatch is paused' }}
+    </span>
+    @if (countdownText() !== null) {
+      <span class="system-banner__countdown">
+        &mdash; resets in {{ countdownText() }}
+      </span>
+    }
+    <button
+      type="button"
+      class="system-banner__action-btn"
+      [disabled]="isResuming()"
+      (click)="resumeDispatch()"
+    >
+      {{ isResuming() ? 'Resuming...' : 'Resume All' }}
+    </button>
+  </div>
+</div>

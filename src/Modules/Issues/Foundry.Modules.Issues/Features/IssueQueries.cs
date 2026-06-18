@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -79,40 +80,33 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             query = query.Where(i => i.MonitoredRepositoryId == repositoryId);
         }
 
-        List<IssueProjection> projections = await query
+        List<Issue> issues = await query
             .OrderByDescending(i => i.DetectedAt)
-            .Select(i => new IssueProjection(
-                i.Id,
-                i.IssueNumber,
-                i.Title,
-                EF.Property<string>(i, "state"),
-                i.MonitoredRepositoryId,
-                i.DetectedAt,
-                i.Url))
             .ToListAsync(cancellationToken);
 
-        if (projections.Count == 0)
+        if (issues.Count == 0)
         {
             return [];
         }
 
-        HashSet<MonitoredRepositoryId> repositoryIds = projections
-            .Select(p => p.MonitoredRepositoryId)
+        HashSet<MonitoredRepositoryId> repositoryIds = issues
+            .Select(i => i.MonitoredRepositoryId)
             .ToHashSet();
 
         IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
             repositoryIds,
             cancellationToken);
 
-        return projections
-            .Select(p => new IssueSummary(
-                Id: p.Id.Value,
-                IssueNumber: p.IssueNumber,
-                Title: p.Title,
-                State: p.State,
-                RepositorySlug: slugs.TryGetValue(p.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
-                DetectedAt: p.DetectedAt,
-                Url: p.Url.Value.ToString()))
+        return issues
+            .Select(i => new IssueSummary(
+                Id: i.Id.Value,
+                IssueNumber: i.IssueNumber,
+                Title: i.Title,
+                State: GetStateDiscriminator(i),
+                RepositorySlug: slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
+                DetectedAt: i.DetectedAt,
+                Url: i.Url.Value.ToString(),
+                FailureClassification: ClassifyFailure(i)))
             .ToList();
     }
 
@@ -120,41 +114,52 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
         IssueId issueId,
         CancellationToken cancellationToken)
     {
-        IssueProjection? projection = await db.Set<Issue>()
+        Issue? issue = await db.Set<Issue>()
             .AsNoTracking()
-            .Where(i => i.Id == issueId)
-            .Select(i => new IssueProjection(
-                i.Id,
-                i.IssueNumber,
-                i.Title,
-                EF.Property<string>(i, "state"),
-                i.MonitoredRepositoryId,
-                i.DetectedAt,
-                i.Url))
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
 
-        if (projection is null)
+        if (issue is null)
         {
             return null;
         }
 
-        HashSet<MonitoredRepositoryId> repoIds = [projection.MonitoredRepositoryId];
+        HashSet<MonitoredRepositoryId> repoIds = [issue.MonitoredRepositoryId];
         IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
             repoIds,
             cancellationToken);
 
-        string repositorySlug = slugs.TryGetValue(projection.MonitoredRepositoryId, out string? slug)
+        string repositorySlug = slugs.TryGetValue(issue.MonitoredRepositoryId, out string? slug)
             ? slug
             : string.Empty;
 
         return new IssueSummary(
-            Id: projection.Id.Value,
-            IssueNumber: projection.IssueNumber,
-            Title: projection.Title,
-            State: projection.State,
+            Id: issue.Id.Value,
+            IssueNumber: issue.IssueNumber,
+            Title: issue.Title,
+            State: GetStateDiscriminator(issue),
             RepositorySlug: repositorySlug,
-            DetectedAt: projection.DetectedAt,
-            Url: projection.Url.Value.ToString());
+            DetectedAt: issue.DetectedAt,
+            Url: issue.Url.Value.ToString(),
+            FailureClassification: ClassifyFailure(issue));
+    }
+
+    private static string? ClassifyFailure(Issue issue)
+    {
+        string? failureReason = issue switch
+        {
+            FailedIssue failed => failed.FailureReason,
+            ContinuableFailedIssue continuableFailed => continuableFailed.FailureReason,
+            _ => null,
+        };
+
+        if (failureReason is null)
+        {
+            return null;
+        }
+
+        return failureReason.StartsWith(WorkerRunFailed.UsageLimitedReason, StringComparison.OrdinalIgnoreCase)
+            ? "usage_limited"
+            : null;
     }
 
     public async Task<Result<IssueDetail>> GetIssueDetailAsync(
@@ -369,15 +374,6 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
 
             _ => null
         };
-
-    private sealed record IssueProjection(
-        IssueId Id,
-        int IssueNumber,
-        string Title,
-        string State,
-        MonitoredRepositoryId MonitoredRepositoryId,
-        DateTimeOffset DetectedAt,
-        ProviderUrl Url);
 
     public async Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
         MonitoredRepositoryId repositoryId,

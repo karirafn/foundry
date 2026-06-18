@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Foundry.Shared.Infrastructure\Foundry.Shared.Infrastructure.csproj" />
     <ProjectReference Include="..\Foundry.Modules.Settings.Contracts\Foundry.Modules.Settings.Contracts.csproj" />
+    <ProjectReference Include="..\..\Workers\Foundry.Modules.Workers.Contracts\Foundry.Modules.Workers.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
