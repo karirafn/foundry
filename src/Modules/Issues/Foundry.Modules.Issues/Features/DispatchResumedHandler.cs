@@ -13,16 +13,14 @@ internal sealed class DispatchResumedHandler(
     IDomainEventDispatcher domainEventDispatcher,
     ILogger<DispatchResumedHandler> logger) : IIntegrationEventHandler<DispatchResumed>
 {
-    private const string UsageLimitedReasonPrefix = "Usage limit reached";
-
     public async Task HandleAsync(DispatchResumed @event, CancellationToken cancellationToken)
     {
         List<FailedIssue> failedIssues = await db.Set<FailedIssue>()
-            .Where(i => i.FailureReason == UsageLimitedReasonPrefix)
+            .Where(i => i.FailureReason.StartsWith(WorkerRunFailed.UsageLimitedReason))
             .ToListAsync(cancellationToken);
 
         List<ContinuableFailedIssue> continuableFailedIssues = await db.Set<ContinuableFailedIssue>()
-            .Where(i => i.FailureReason == UsageLimitedReasonPrefix)
+            .Where(i => i.FailureReason.StartsWith(WorkerRunFailed.UsageLimitedReason))
             .ToListAsync(cancellationToken);
 
         foreach (FailedIssue failed in failedIssues)

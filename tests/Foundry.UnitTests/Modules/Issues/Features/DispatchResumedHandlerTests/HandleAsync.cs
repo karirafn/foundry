@@ -109,7 +109,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedFailedIssue(repositoryId, "Usage limit reached");
+        SeedFailedIssue(repositoryId, WorkerRunFailed.UsageLimitedReason);
 
         DispatchResumed @event = new();
 
@@ -130,7 +130,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedContinuableFailedIssue(repositoryId, "Usage limit reached");
+        SeedContinuableFailedIssue(repositoryId, WorkerRunFailed.UsageLimitedReason);
 
         DispatchResumed @event = new();
 
@@ -207,8 +207,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repositoryId1 = MonitoredRepositoryId.New();
         MonitoredRepositoryId repositoryId2 = MonitoredRepositoryId.New();
-        SeedFailedIssue(repositoryId1, "Usage limit reached", issueNumber: 1);
-        SeedFailedIssue(repositoryId2, "Usage limit reached", issueNumber: 2);
+        SeedFailedIssue(repositoryId1, WorkerRunFailed.UsageLimitedReason, issueNumber: 1);
+        SeedFailedIssue(repositoryId2, WorkerRunFailed.UsageLimitedReason, issueNumber: 2);
 
         DispatchResumed @event = new();
 
@@ -228,7 +228,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId usageLimitedRepo = MonitoredRepositoryId.New();
         MonitoredRepositoryId nonUsageLimitedRepo = MonitoredRepositoryId.New();
-        SeedFailedIssue(usageLimitedRepo, "Usage limit reached", issueNumber: 1);
+        SeedFailedIssue(usageLimitedRepo, WorkerRunFailed.UsageLimitedReason, issueNumber: 1);
         SeedFailedIssue(nonUsageLimitedRepo, "Non-zero exit code: 1", issueNumber: 2);
 
         DispatchResumed @event = new();

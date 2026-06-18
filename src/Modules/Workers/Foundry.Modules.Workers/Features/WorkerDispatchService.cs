@@ -502,7 +502,7 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    "Usage limit reached",
+                    WorkerRunFailedEvent.UsageLimitedReason,
                     BranchName: null,
                     IsUsageLimitedRequeue: isUsageLimitedRequeue)],
                 activeRun.Id.Value,
@@ -565,7 +565,7 @@ internal sealed class WorkerDispatchService(
         string? branchNameForEvent = hasCommits ? activeRun.BranchName.Value : null;
 
         string exitReason = failureReason is FailureReason.UsageLimited
-            ? "Usage limit reached"
+            ? WorkerRunFailedEvent.UsageLimitedReason
             : $"Non-zero exit code: {exitCode}";
 
         FailedRun failedRun = activeRun.Fail(failureReason, containerOutput);

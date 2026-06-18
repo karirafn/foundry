@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,6 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
 {
     private const string DetectedState = "detected";
     private const string IneligibleState = "ineligible";
-    private const string UsageLimitedReasonPrefix = "Usage limit reached";
 
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -157,7 +157,7 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             return null;
         }
 
-        return failureReason.StartsWith(UsageLimitedReasonPrefix, StringComparison.OrdinalIgnoreCase)
+        return failureReason.StartsWith(WorkerRunFailed.UsageLimitedReason, StringComparison.OrdinalIgnoreCase)
             ? "usage_limited"
             : null;
     }
