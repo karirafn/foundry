@@ -72,12 +72,12 @@ internal static class UpdateDispatchSettings
                     Command command = new(body.AutoResumeOnUsageReset, body.DefaultCooldownMinutes);
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, BadRequest<string>>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
                         error => error.Code switch
                         {
                             SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.BadRequest(error.Message),
+                            _ => TypedResults.Problem(error.Message, statusCode: StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("UpdateDispatchSettings")
