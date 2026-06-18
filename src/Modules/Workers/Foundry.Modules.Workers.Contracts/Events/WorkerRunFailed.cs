@@ -6,4 +6,5 @@ public sealed record WorkerRunFailed(
     Guid WorkerRunId,
     Guid IssueId,
     string ReasonDescription,
-    string? BranchName = null) : IIntegrationEvent;
+    string? BranchName = null,
+    bool IsUsageLimitedRequeue = false) : IIntegrationEvent;

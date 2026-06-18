@@ -69,7 +69,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IGlobalSettingsQueries? settingsQueries = null,
-        IPostExitProviderQueries? postExitProviderQueries = null)
+        IPostExitProviderQueries? postExitProviderQueries = null,
+        IContainerOutputParser? containerOutputParser = null)
     {
         SqliteConnection connection = _connection;
 
@@ -90,6 +91,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
         services.AddScoped<IPostExitProviderQueries>(
             _ => postExitProviderQueries ?? new StubPostExitProviderQueries(hasCommits: false, prUrl: null));
+        services.AddSingleton<IContainerOutputParser>(
+            _ => containerOutputParser ?? new NullContainerOutputParser());
 
         ServiceProvider sp = services.BuildServiceProvider();
 
@@ -146,6 +149,12 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             _captured.AddRange(events);
             return Task.CompletedTask;
         }
+    }
+
+    internal sealed class NullContainerOutputParser : IContainerOutputParser
+    {
+        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+            => new ContainerOutputParseResult.NormalExit();
     }
 
     protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)

@@ -60,4 +60,36 @@ public sealed class Create
         // Assert
         @event.BranchName.ShouldBeNull();
     }
+
+    [Fact]
+    public void WhenCreatedWithoutIsUsageLimitedRequeue_DefaultsToFalse()
+    {
+        // Arrange
+        Guid workerRunId = Guid.NewGuid();
+        Guid issueId = Guid.NewGuid();
+
+        // Act
+        WorkerRunFailed @event = new(workerRunId, issueId, "reason");
+
+        // Assert
+        @event.IsUsageLimitedRequeue.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenCreatedWithIsUsageLimitedRequeue_SetsFlag()
+    {
+        // Arrange
+        Guid workerRunId = Guid.NewGuid();
+        Guid issueId = Guid.NewGuid();
+
+        // Act
+        WorkerRunFailed @event = new(
+            workerRunId,
+            issueId,
+            "Usage limit reached",
+            IsUsageLimitedRequeue: true);
+
+        // Assert
+        @event.IsUsageLimitedRequeue.ShouldBeTrue();
+    }
 }

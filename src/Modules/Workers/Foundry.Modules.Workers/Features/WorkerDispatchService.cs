@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
@@ -52,11 +53,14 @@ internal sealed class WorkerDispatchService(
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         IPostExitProviderQueries postExitProviderQueries =
             scope.ServiceProvider.GetRequiredService<IPostExitProviderQueries>();
+        IContainerOutputParser containerOutputParser =
+            scope.ServiceProvider.GetRequiredService<IContainerOutputParser>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
+        int defaultCooldownMinutes = await settingsQueries.GetDefaultCooldownMinutesAsync(cancellationToken);
 
         if (!_reconciled)
         {
@@ -66,7 +70,9 @@ internal sealed class WorkerDispatchService(
                 integrationEventDispatcher,
                 domainEventDispatcher,
                 postExitProviderQueries,
+                containerOutputParser,
                 timeoutMinutes,
+                defaultCooldownMinutes,
                 activeRuns,
                 cancellationToken);
             _reconciled = true;
@@ -78,7 +84,9 @@ internal sealed class WorkerDispatchService(
             integrationEventDispatcher,
             domainEventDispatcher,
             postExitProviderQueries,
+            containerOutputParser,
             timeoutMinutes,
+            defaultCooldownMinutes,
             activeRuns,
             cancellationToken);
 
@@ -106,7 +114,9 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IPostExitProviderQueries postExitProviderQueries,
+        IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
+        int defaultCooldownMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -149,7 +159,9 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     domainEventDispatcher,
                     postExitProviderQueries,
+                    containerOutputParser,
                     timeoutMinutes,
+                    defaultCooldownMinutes,
                     activeRun,
                     cancellationToken,
                     knownStatus: status);
@@ -169,7 +181,9 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IPostExitProviderQueries postExitProviderQueries,
+        IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
+        int defaultCooldownMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -181,7 +195,9 @@ internal sealed class WorkerDispatchService(
                 integrationEventDispatcher,
                 domainEventDispatcher,
                 postExitProviderQueries,
+                containerOutputParser,
                 timeoutMinutes,
+                defaultCooldownMinutes,
                 activeRun,
                 cancellationToken);
         }
@@ -193,7 +209,9 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IPostExitProviderQueries postExitProviderQueries,
+        IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
+        int defaultCooldownMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
@@ -267,6 +285,8 @@ internal sealed class WorkerDispatchService(
             integrationEventDispatcher,
             domainEventDispatcher,
             postExitProviderQueries,
+            containerOutputParser,
+            defaultCooldownMinutes,
             activeRun,
             status,
             cancellationToken);
@@ -278,6 +298,8 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IPostExitProviderQueries postExitProviderQueries,
+        IContainerOutputParser containerOutputParser,
+        int defaultCooldownMinutes,
         ActiveRun activeRun,
         WorkerStatus status,
         CancellationToken cancellationToken)
@@ -306,6 +328,8 @@ internal sealed class WorkerDispatchService(
                 integrationEventDispatcher,
                 domainEventDispatcher,
                 postExitProviderQueries,
+                containerOutputParser,
+                defaultCooldownMinutes,
                 activeRun,
                 cancellationToken);
         }
@@ -316,6 +340,8 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
+                containerOutputParser,
+                defaultCooldownMinutes,
                 activeRun,
                 cancellationToken);
         }
@@ -333,6 +359,8 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
+                containerOutputParser,
+                defaultCooldownMinutes,
                 activeRun,
                 exitCode,
                 hasCommits,
@@ -347,6 +375,8 @@ internal sealed class WorkerDispatchService(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
         IPostExitProviderQueries postExitProviderQueries,
+        IContainerOutputParser containerOutputParser,
+        int defaultCooldownMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken)
     {
@@ -381,8 +411,24 @@ internal sealed class WorkerDispatchService(
         }
         else
         {
-            // Commits pushed but no PR found after retries — treat as continuable failure
-            FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("No pull request found after retries"));
+            // Commits pushed but no PR found after retries — check for usage limit in container output
+            string? containerOutput = await TryGetLogsAsync(
+                orchestrator,
+                activeRun.ContainerId.Value,
+                activeRun.Id.Value,
+                cancellationToken);
+
+            ContainerOutputParseResult parseResult = containerOutputParser.Parse(
+                containerOutput,
+                defaultCooldownMinutes);
+
+            (FailureReason failureReason, bool isUsageLimitedRequeue) = await ResolveFailureReasonAsync(
+                dbContext,
+                parseResult,
+                new FailureReason.ContainerError("No pull request found after retries"),
+                cancellationToken);
+
+            FailedRun failedRun = activeRun.Fail(failureReason, containerOutput);
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -391,7 +437,8 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     "No pull request found after retries",
-                    BranchName: activeRun.BranchName.Value)],
+                    BranchName: activeRun.BranchName.Value,
+                    IsUsageLimitedRequeue: isUsageLimitedRequeue)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -409,27 +456,69 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        IContainerOutputParser containerOutputParser,
+        int defaultCooldownMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken)
     {
-        // Exit code 0 with no commits — unchanged
-        CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null);
-        await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
-
-        await TryDispatchAsync(
-            integrationEventDispatcher,
-            [new WorkerRunCompletedEvent(
-                activeRun.Id.Value,
-                activeRun.IssueId.Value,
-                activeRun.BranchName.Value,
-                null)],
+        string? containerOutput = await TryGetLogsAsync(
+            orchestrator,
+            activeRun.ContainerId.Value,
             activeRun.Id.Value,
             cancellationToken);
 
-        logger.LogInformation(
-            "Worker run {WorkerRunId} completed with no commits (branch: {BranchName}).",
-            activeRun.Id,
-            activeRun.BranchName.Value);
+        ContainerOutputParseResult parseResult = containerOutputParser.Parse(
+            containerOutput,
+            defaultCooldownMinutes);
+
+        if (parseResult is ContainerOutputParseResult.UsageLimited)
+        {
+            (FailureReason failureReason, bool isUsageLimitedRequeue) = await ResolveFailureReasonAsync(
+                dbContext,
+                parseResult,
+                new FailureReason.ContainerError("No commits and usage limited"),
+                cancellationToken);
+
+            FailedRun failedRun = activeRun.Fail(failureReason);
+            await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
+
+            await TryDispatchAsync(
+                integrationEventDispatcher,
+                [new WorkerRunFailedEvent(
+                    activeRun.Id.Value,
+                    activeRun.IssueId.Value,
+                    "Usage limit reached",
+                    BranchName: null,
+                    IsUsageLimitedRequeue: isUsageLimitedRequeue)],
+                activeRun.Id.Value,
+                cancellationToken);
+
+            logger.LogInformation(
+                "Worker run {WorkerRunId} completed with no commits (usage limited, branch: {BranchName}).",
+                activeRun.Id,
+                activeRun.BranchName.Value);
+        }
+        else
+        {
+            // Exit code 0 with no commits — unchanged
+            CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null);
+            await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
+
+            await TryDispatchAsync(
+                integrationEventDispatcher,
+                [new WorkerRunCompletedEvent(
+                    activeRun.Id.Value,
+                    activeRun.IssueId.Value,
+                    activeRun.BranchName.Value,
+                    null)],
+                activeRun.Id.Value,
+                cancellationToken);
+
+            logger.LogInformation(
+                "Worker run {WorkerRunId} completed with no commits (branch: {BranchName}).",
+                activeRun.Id,
+                activeRun.BranchName.Value);
+        }
 
         await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
     }
@@ -439,18 +528,32 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        IContainerOutputParser containerOutputParser,
+        int defaultCooldownMinutes,
         ActiveRun activeRun,
         int exitCode,
         bool hasCommits,
         string? containerOutput,
         CancellationToken cancellationToken)
     {
-        string exitReason = $"Non-zero exit code: {exitCode}";
+        ContainerOutputParseResult parseResult = containerOutputParser.Parse(
+            containerOutput,
+            defaultCooldownMinutes);
+
+        (FailureReason failureReason, bool isUsageLimitedRequeue) = await ResolveFailureReasonAsync(
+            dbContext,
+            parseResult,
+            new FailureReason.NonZeroExit(exitCode),
+            cancellationToken);
 
         // Null branch name when no commits → FailedIssue; non-null → ContinuableFailedIssue
         string? branchNameForEvent = hasCommits ? activeRun.BranchName.Value : null;
 
-        FailedRun failedRun = activeRun.Fail(new FailureReason.NonZeroExit(exitCode), containerOutput);
+        string exitReason = failureReason is FailureReason.UsageLimited
+            ? "Usage limit reached"
+            : $"Non-zero exit code: {exitCode}";
+
+        FailedRun failedRun = activeRun.Fail(failureReason, containerOutput);
         await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
         await TryDispatchAsync(
@@ -459,17 +562,68 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id.Value,
                 activeRun.IssueId.Value,
                 exitReason,
-                BranchName: branchNameForEvent)],
+                BranchName: branchNameForEvent,
+                IsUsageLimitedRequeue: isUsageLimitedRequeue)],
             activeRun.Id.Value,
             cancellationToken);
 
-        logger.LogWarning(
-            "Worker run {WorkerRunId} exited with code {ExitCode} (commits: {HasCommits}).",
-            activeRun.Id,
-            exitCode,
-            hasCommits);
+        if (failureReason is FailureReason.UsageLimited usageLimitedReason)
+        {
+            logger.LogWarning(
+                "Worker run {WorkerRunId} exited with code {ExitCode} due to usage limit; resets at {ResetsAt}.",
+                activeRun.Id,
+                exitCode,
+                usageLimitedReason.ResetsAt);
+        }
+        else
+        {
+            logger.LogWarning(
+                "Worker run {WorkerRunId} exited with code {ExitCode} (commits: {HasCommits}).",
+                activeRun.Id,
+                exitCode,
+                hasCommits);
+        }
 
         await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves the failure reason from a container output parse result.
+    /// If the parse result indicates a usage limit with a future reset time, sets the global pause
+    /// and returns <see cref="FailureReason.UsageLimited"/>. If the reset time is in the past,
+    /// returns the fallback reason with <c>isUsageLimitedRequeue = true</c>.
+    /// </summary>
+    private async Task<(FailureReason FailureReason, bool IsUsageLimitedRequeue)> ResolveFailureReasonAsync(
+        DbContext dbContext,
+        ContainerOutputParseResult parseResult,
+        FailureReason fallbackReason,
+        CancellationToken cancellationToken)
+    {
+        if (parseResult is not ContainerOutputParseResult.UsageLimited usageLimited)
+        {
+            return (fallbackReason, false);
+        }
+
+        if (usageLimited.ResetsAt <= DateTimeOffset.UtcNow)
+        {
+            return (fallbackReason, true);
+        }
+
+        // Future reset time — set global pause
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is not null)
+        {
+            settings.SetUsageLimitResetsAt(usageLimited.ResetsAt);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        logger.LogWarning(
+            "Usage limit detected; dispatch paused until {ResetsAt}.",
+            usageLimited.ResetsAt);
+
+        return (new FailureReason.UsageLimited(usageLimited.ResetsAt), false);
     }
 
     private async Task<string?> TryGetPullRequestUrlAsync(
