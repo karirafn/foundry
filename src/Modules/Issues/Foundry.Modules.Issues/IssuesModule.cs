@@ -29,6 +29,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
+        services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
 
         services.AddScoped<IssueStateChangedHandler>();
         AddIssueStateChangedHandler<IssueQueued>(services);
