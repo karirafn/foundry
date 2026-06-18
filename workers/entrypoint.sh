@@ -43,4 +43,5 @@ fi
 claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \
     --dangerously-skip-permissions \
+    --output-format json \
     --max-turns 200
