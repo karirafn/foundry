@@ -290,4 +290,22 @@ describe('IssueCardComponent', () => {
     // Assert
     expect(defaultPrevented).toBe(true);
   });
+
+  // Cycle 8: usage-limited badge
+  it('should display "USAGE LIMITED" badge when issue has usage_limited failure classification', () => {
+    // Arrange
+    const usageLimitedIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'failed',
+      failureClassification: 'usage_limited',
+    };
+
+    // Act
+    const fixture = createComponent(usageLimitedIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('fd-state-badge span');
+    expect(badge?.textContent?.trim()).toBe('USAGE LIMITED');
+  });
 });

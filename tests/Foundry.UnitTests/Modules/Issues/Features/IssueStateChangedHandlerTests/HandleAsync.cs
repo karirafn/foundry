@@ -35,7 +35,8 @@ public sealed class HandleAsync
             State: "queued",
             RepositorySlug: "owner/repo",
             DetectedAt: DateTimeOffset.UtcNow,
-            Url: "https://github.com/owner/repo/issues/1");
+            Url: "https://github.com/owner/repo/issues/1",
+            FailureClassification: null);
         _issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());
@@ -59,7 +60,8 @@ public sealed class HandleAsync
             State: "queued",
             RepositorySlug: "owner/repo",
             DetectedAt: DateTimeOffset.UtcNow,
-            Url: "https://github.com/owner/repo/issues/1");
+            Url: "https://github.com/owner/repo/issues/1",
+            FailureClassification: null);
         _issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());

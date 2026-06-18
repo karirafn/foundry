@@ -56,7 +56,7 @@ function timeAgo(dateString: string): string {
         <span class="issue-card__separator" aria-hidden="true">·</span>
         <span class="issue-card__slug">{{ issue().repositorySlug }}</span>
         <div class="issue-card__badge">
-          <fd-state-badge [state]="issue().state" />
+          <fd-state-badge [state]="issue().state" [failureClassification]="issue().failureClassification" />
         </div>
       </div>
 

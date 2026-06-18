@@ -2,12 +2,15 @@ import { TestBed } from '@angular/core/testing';
 import { StateBadgeComponent } from './state-badge';
 import { IssueState } from '../../../features/issues/issue.model';
 
-function createComponent(state: IssueState) {
+function createComponent(state: IssueState, failureClassification?: string) {
   TestBed.configureTestingModule({
     imports: [StateBadgeComponent],
   });
   const fixture = TestBed.createComponent(StateBadgeComponent);
   fixture.componentRef.setInput('state', state);
+  if (failureClassification !== undefined) {
+    fixture.componentRef.setInput('failureClassification', failureClassification);
+  }
   fixture.detectChanges();
   return fixture;
 }
@@ -262,5 +265,60 @@ describe('StateBadgeComponent', () => {
 
     // Assert
     expect(el.querySelector('span')?.classList.contains('badge--continuation-queued')).toBe(true);
+  });
+
+  // Cycle 8: usage_limited failure classification
+  it('should display "USAGE LIMITED" when failureClassification is usage_limited and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'usage_limited');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('USAGE LIMITED');
+  });
+
+  it('should apply badge--usage-limited CSS class when failureClassification is usage_limited and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'usage_limited');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.classList.contains('badge--usage-limited')).toBe(true);
+  });
+
+  it('should display "USAGE LIMITED" when failureClassification is usage_limited and state is continuable_failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuable_failed', 'usage_limited');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('USAGE LIMITED');
+  });
+
+  it('should apply badge--usage-limited CSS class when failureClassification is usage_limited and state is continuable_failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuable_failed', 'usage_limited');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.classList.contains('badge--usage-limited')).toBe(true);
+  });
+
+  it('should display "FAILED" when failureClassification is not usage_limited and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'non_zero_exit');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('FAILED');
+  });
+
+  it('should set aria-label "State: usage limited" when failureClassification is usage_limited and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'usage_limited');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: usage limited');
   });
 });

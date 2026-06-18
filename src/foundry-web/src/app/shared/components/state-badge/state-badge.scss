@@ -68,4 +68,8 @@
   &--ineligible {
     background-color: var(--fd-state-ineligible);
   }
+
+  &--usage-limited {
+    background-color: var(--fd-state-usage-limited);
+  }
 }

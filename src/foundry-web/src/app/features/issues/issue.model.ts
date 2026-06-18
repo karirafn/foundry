@@ -23,6 +23,7 @@ export interface IssueSummary {
   repositorySlug: string;
   detectedAt: string;
   url: string;
+  failureClassification?: string;
 }
 
 export interface EligibilityViolation {

@@ -1,5 +1,8 @@
-import { Component, input, InputSignal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, InputSignal } from '@angular/core';
 import { IssueState } from '../../../features/issues/issue.model';
+
+const USAGE_LIMITED = 'usage_limited';
+const FAILED_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['failed', 'continuable_failed']);
 
 const STATE_LABELS: Record<IssueState, string> = {
   detected: 'DETECTED',
@@ -57,7 +60,7 @@ const STATE_CSS_CLASSES: Record<IssueState, string> = {
 
 @Component({
   selector: 'fd-state-badge',
-  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <span
       class="badge"
@@ -70,16 +73,25 @@ const STATE_CSS_CLASSES: Record<IssueState, string> = {
 })
 export class StateBadgeComponent {
   readonly state: InputSignal<IssueState> = input.required<IssueState>();
+  readonly failureClassification: InputSignal<string | undefined> = input<string | undefined>(undefined);
+
+  private isUsageLimited(): boolean {
+    return this.failureClassification() === USAGE_LIMITED && FAILED_STATES.has(this.state());
+  }
 
   label(): string {
-    return STATE_LABELS[this.state()];
+    return this.isUsageLimited() ? 'USAGE LIMITED' : STATE_LABELS[this.state()];
   }
 
   ariaLabel(): string {
-    return `State: ${STATE_ARIA_LABELS[this.state()]}`;
+    return this.isUsageLimited()
+      ? 'State: usage limited'
+      : `State: ${STATE_ARIA_LABELS[this.state()]}`;
   }
 
   badgeClass(): string {
-    return `badge ${STATE_CSS_CLASSES[this.state()]}`;
+    return this.isUsageLimited()
+      ? 'badge badge--usage-limited'
+      : `badge ${STATE_CSS_CLASSES[this.state()]}`;
   }
 }
