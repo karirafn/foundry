@@ -223,6 +223,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         Uri apiBaseUrl,
         RepositorySlug slug,
         string pullRequestUrl,
+        DateTimeOffset since,
         string token,
         CancellationToken cancellationToken)
     {
@@ -269,6 +270,11 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
             GitLabNoteDto firstNote = discussion.Notes[0];
             if (!firstNote.Resolvable || firstNote.Resolved)
+            {
+                continue;
+            }
+
+            if (firstNote.UpdatedAt <= since)
             {
                 continue;
             }
@@ -581,6 +587,20 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
     private static Error ErrorFromNonSuccess(HttpResponseMessage response)
     {
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            return GitLabErrors.RateLimitExhausted;
+        }
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            if (response.Headers.TryGetValues("RateLimit-Remaining", out IEnumerable<string>? remaining) &&
+                remaining.FirstOrDefault() == "0")
+            {
+                return GitLabErrors.RateLimitExhausted;
+            }
+        }
+
         int statusCode = (int)response.StatusCode;
         return GitLabErrors.UnexpectedStatusCode(statusCode);
     }
@@ -611,6 +631,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         string Body,
         bool Resolvable,
         bool Resolved,
+        DateTimeOffset UpdatedAt,
         GitLabNotePositionDto? Position);
 
     private sealed record GitLabNotePositionDto(string? NewPath);
@@ -637,6 +658,10 @@ internal static class GitLabErrors
     public static readonly Error InvalidBaseUrl = new(
         "GitLab.InvalidBaseUrl",
         "The base URL must use the https scheme.");
+
+    public static readonly Error RateLimitExhausted = new(
+        "GitLab.RateLimitExhausted",
+        "GitLab API rate limit exhausted. Wait before retrying.");
 
     public static readonly Error InvalidMergeRequestUrl = new(
         "GitLab.InvalidMergeRequestUrl",

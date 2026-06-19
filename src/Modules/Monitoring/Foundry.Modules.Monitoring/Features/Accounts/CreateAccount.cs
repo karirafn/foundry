@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
@@ -10,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts;
 
-internal static class CreateAccount
+internal static partial class CreateAccount
 {
     private const string GitHubProviderType = "github";
     private const string GitLabProviderType = "gitlab";
@@ -21,12 +23,16 @@ internal static class CreateAccount
         string BaseUrl,
         string Token) : ICommand<AccountSummary>;
 
-    internal sealed class Validator : ICommandValidator<Command>
+    internal sealed partial class Validator : ICommandValidator<Command>
     {
         internal const string InvalidProviderTypeCode = "CreateAccount.InvalidProviderType";
         internal const string NameEmptyCode = "CreateAccount.NameEmpty";
         internal const string BaseUrlInvalidCode = "CreateAccount.BaseUrlInvalid";
         internal const string TokenEmptyCode = "CreateAccount.TokenEmpty";
+        internal const string TokenInvalidCharsCode = "CreateAccount.TokenInvalidChars";
+
+        [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
+        private static partial Regex ValidTokenCharactersRegex();
 
         public Result Validate(Command command)
         {
@@ -44,6 +50,13 @@ internal static class CreateAccount
             if (string.IsNullOrWhiteSpace(command.Token))
             {
                 return new Error(TokenEmptyCode, "Token must not be empty.");
+            }
+
+            if (!ValidTokenCharactersRegex().IsMatch(command.Token))
+            {
+                return new Error(
+                    TokenInvalidCharsCode,
+                    "Token contains invalid characters. Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
             }
 
             bool isKnownProvider =
