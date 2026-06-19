@@ -18,29 +18,42 @@ public sealed class GetPullRequestReviewFeedbackAsync
 {
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
     private const string ValidMrUrl = "https://gitlab.com/group/project/-/merge_requests/1";
+    private static readonly DateTimeOffset EpochSince = DateTimeOffset.MinValue;
+    private static readonly DateTimeOffset RecentSince = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     private static RepositorySlug ValidSlug =>
         ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/project")).Value;
+
+    private static string BuildNoteJson(
+        string body = "Fix this issue",
+        bool resolvable = true,
+        bool resolved = false,
+        string? newPath = null,
+        string updatedAt = "2026-06-01T00:00:00Z")
+    {
+        string position = newPath is null
+            ? "null"
+            : $$"""{ "new_path": "{{newPath}}" }""";
+
+        return $$"""
+            {
+              "body": "{{body}}",
+              "resolvable": {{resolvable.ToString().ToLowerInvariant()}},
+              "resolved": {{resolved.ToString().ToLowerInvariant()}},
+              "updated_at": "{{updatedAt}}",
+              "position": {{position}}
+            }
+            """;
+    }
+
+    private static string BuildDiscussionJson(string noteJson) =>
+        $$"""[{"notes":[{{noteJson}}]}]""";
 
     [Fact]
     public async Task WhenMrHasUnresolvedDiscussions_ReturnsComments()
     {
         // Arrange
-        string json = """
-            [
-              {
-                "notes": [
-                  {
-                    "body": "Fix this issue",
-                    "resolvable": true,
-                    "resolved": false,
-                    "position": { "new_path": "src/Foo.cs" }
-                  }
-                ]
-              }
-            ]
-            """;
-
+        string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this issue", newPath: "src/Foo.cs"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
         GitLabHttpClient sut = new(httpClient);
@@ -49,8 +62,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
-            pullRequestUrl: ValidMrUrl,
-            token: "glpat_token",
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert
@@ -67,21 +81,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenDiscussionIsResolved_SkipsIt()
     {
         // Arrange
-        string json = """
-            [
-              {
-                "notes": [
-                  {
-                    "body": "Already fixed",
-                    "resolvable": true,
-                    "resolved": true,
-                    "position": null
-                  }
-                ]
-              }
-            ]
-            """;
-
+        string json = BuildDiscussionJson(BuildNoteJson(resolved: true));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
         GitLabHttpClient sut = new(httpClient);
@@ -90,8 +90,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
-            pullRequestUrl: ValidMrUrl,
-            token: "glpat_token",
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert
@@ -104,21 +105,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenDiscussionIsNotResolvable_SkipsIt()
     {
         // Arrange
-        string json = """
-            [
-              {
-                "notes": [
-                  {
-                    "body": "General comment",
-                    "resolvable": false,
-                    "resolved": false,
-                    "position": null
-                  }
-                ]
-              }
-            ]
-            """;
-
+        string json = BuildDiscussionJson(BuildNoteJson(resolvable: false));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
         GitLabHttpClient sut = new(httpClient);
@@ -127,14 +114,88 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
-            pullRequestUrl: ValidMrUrl,
-            token: "glpat_token",
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
         Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
         success.Value.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenNoteUpdatedAtIsBeforeSince_SkipsIt()
+    {
+        // Arrange
+        string json = BuildDiscussionJson(BuildNoteJson(updatedAt: "2025-12-31T23:59:59Z"));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            RecentSince,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenNoteUpdatedAtIsEqualToSince_SkipsIt()
+    {
+        // Arrange — updated_at exactly at the since boundary is excluded (not strictly after)
+        string json = BuildDiscussionJson(BuildNoteJson(updatedAt: "2026-01-01T00:00:00Z"));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            RecentSince,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenNoteUpdatedAtIsAfterSince_IncludesIt()
+    {
+        // Arrange
+        string json = BuildDiscussionJson(BuildNoteJson(body: "New comment", updatedAt: "2026-01-02T00:00:00Z"));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            RecentSince,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments.Count.ShouldBe(1);
+        success.Value.Comments[0].Body.ShouldBe("New comment");
     }
 
     [Fact]
@@ -147,7 +208,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             if (i > 0) { jsonBuilder.Append(','); }
             jsonBuilder.Append(
                 System.Globalization.CultureInfo.InvariantCulture,
-                $"{{\"notes\":[{{\"body\":\"Comment {i}\",\"resolvable\":true,\"resolved\":false,\"position\":null}}]}}");
+                $$"""{"notes":[{"body":"Comment {{i}}","resolvable":true,"resolved":false,"updated_at":"2026-06-01T00:00:00Z","position":null}]}""");
         }
         jsonBuilder.Append(']');
 
@@ -159,8 +220,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
-            pullRequestUrl: ValidMrUrl,
-            token: "glpat_token",
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert
@@ -174,21 +236,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     {
         // Arrange
         string longBody = new('x', 4100);
-        string json = $$"""
-            [
-              {
-                "notes": [
-                  {
-                    "body": "{{longBody}}",
-                    "resolvable": true,
-                    "resolved": false,
-                    "position": null
-                  }
-                ]
-              }
-            ]
-            """;
-
+        string json = BuildDiscussionJson(BuildNoteJson(body: longBody));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
         GitLabHttpClient sut = new(httpClient);
@@ -197,8 +245,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
-            pullRequestUrl: ValidMrUrl,
-            token: "glpat_token",
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert
@@ -213,21 +262,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenPositionIsNull_FilePathIsNull()
     {
         // Arrange
-        string json = """
-            [
-              {
-                "notes": [
-                  {
-                    "body": "Comment without path",
-                    "resolvable": true,
-                    "resolved": false,
-                    "position": null
-                  }
-                ]
-              }
-            ]
-            """;
-
+        string json = BuildDiscussionJson(BuildNoteJson(body: "Comment without path"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
         GitLabHttpClient sut = new(httpClient);
@@ -236,8 +271,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
-            pullRequestUrl: ValidMrUrl,
-            token: "glpat_token",
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert
@@ -250,21 +286,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenFilePathContainsPathTraversal_SetsFilePathToNull()
     {
         // Arrange
-        string json = """
-            [
-              {
-                "notes": [
-                  {
-                    "body": "Fix this",
-                    "resolvable": true,
-                    "resolved": false,
-                    "position": { "new_path": "../../../etc/passwd" }
-                  }
-                ]
-              }
-            ]
-            """;
-
+        string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: "../../../etc/passwd"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
         GitLabHttpClient sut = new(httpClient);
@@ -273,8 +295,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
-            pullRequestUrl: ValidMrUrl,
-            token: "glpat_token",
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert
@@ -295,8 +318,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
-            pullRequestUrl: "https://gitlab.com/group/project/-/issues/1",
-            token: "glpat_token",
+            "https://gitlab.com/group/project/-/issues/1",
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert
@@ -318,8 +342,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
             invalidBaseUrl,
             ValidSlug,
-            pullRequestUrl: ValidMrUrl,
-            token: "glpat_token",
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
             CancellationToken.None);
 
         // Assert

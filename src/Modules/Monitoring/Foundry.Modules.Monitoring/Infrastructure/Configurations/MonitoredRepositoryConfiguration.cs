@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
-public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<MonitoredRepository>
+internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<MonitoredRepository>
 {
     private const int SlugMaxLength = 500;
     private const int HostMaxLength = 253;

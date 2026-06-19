@@ -43,7 +43,8 @@ internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string to
         DateTimeOffset since,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetPullRequestReviewFeedbackAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+        return httpClient.GetPullRequestReviewFeedbackAsync(
+            apiBaseUrl, slug, pullRequestUrl, since, token, cancellationToken);
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(
