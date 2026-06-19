@@ -137,26 +137,32 @@ describe('AccountFormComponent', () => {
     expect(input.value).toBe('https://github.com');
   });
 
-  // Cycle 10: provider selector shows in add mode as fieldset with GitHub/GitLab
-  it('should show provider selector in add mode', () => {
+  // Cycle 10: provider selector component is shown in add mode
+  it('should show fd-provider-selector in add mode', () => {
     // Arrange / Act
     const { el } = setup({ account: null });
 
     // Assert
-    const fieldset = el.querySelector('.account-form__provider-selector');
-    expect(fieldset).toBeTruthy();
-    const options = el.querySelectorAll('.account-form__provider-option');
-    expect(options.length).toBe(2);
+    const selector = el.querySelector('fd-provider-selector');
+    expect(selector).toBeTruthy();
+    const radios = el.querySelectorAll('input[type="radio"]');
+    expect(radios.length).toBe(2);
   });
 
-  // Cycle 11: GitLab option is disabled in add mode
-  it('should disable GitLab option in add mode', () => {
-    // Arrange / Act
-    const { el } = setup({ account: null });
+  // Cycle 11: changing provider to GitLab updates the base URL
+  it('should update base URL to https://gitlab.com when GitLab is selected', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null });
+
+    // Act
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
 
     // Assert
-    const gitlabOption = el.querySelector('.account-form__provider-option--disabled');
-    expect(gitlabOption).toBeTruthy();
+    const baseUrlInput = el.querySelector('#account-base-url') as HTMLInputElement;
+    expect(baseUrlInput.value).toBe('https://gitlab.com');
   });
 
   // Cycle 12: edit mode shows provider badge, not selector
@@ -168,7 +174,7 @@ describe('AccountFormComponent', () => {
     const badge = el.querySelector('.account-form__provider-badge');
     expect(badge).toBeTruthy();
     expect(badge?.textContent?.trim()).toContain('GitHub');
-    const selector = el.querySelector('.account-form__provider-selector');
+    const selector = el.querySelector('fd-provider-selector');
     expect(selector).toBeNull();
   });
 
@@ -420,6 +426,39 @@ describe('AccountFormComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       token: 'ghp_newtoken',
+    });
+  });
+
+  // Cycle 30b: save emits CreateAccountRequest with GitLab provider when GitLab is selected
+  it('should emit CreateAccountRequest with GitLab providerType when GitLab is selected', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ account: null });
+    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
+    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
+
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+
+    const nameInput = el.querySelector('#account-name') as HTMLInputElement;
+    nameInput.value = 'my-gitlab';
+    nameInput.dispatchEvent(new Event('input'));
+    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    expect(emitted).toEqual({
+      name: 'my-gitlab',
+      providerType: 'GitLab',
+      baseUrl: 'https://gitlab.com',
+      token: 'glpat_token',
     });
   });
 

@@ -583,6 +583,49 @@ describe('IssueDetailComponent', () => {
     expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
   });
 
+  // MR/PR terminology: GitHub URL shows "Pull request" and "View PR"
+  it('should show "Pull request" field key and "View PR" link text for GitHub PR URL', () => {
+    // Arrange
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
+
+    // Assert
+    const fields = el.querySelectorAll('.issue-detail__field');
+    const prField = Array.from(fields).find((f) =>
+      f.querySelector('.issue-detail__field-key')?.textContent?.trim().toLowerCase().includes('request'),
+    );
+    expect(prField?.querySelector('.issue-detail__field-key')?.textContent?.trim()).toBe('Pull request');
+    const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
+    expect(link?.textContent?.trim()).toBe('View PR');
+  });
+
+  // MR/PR terminology: GitLab URL shows "Merge request" and "View MR"
+  it('should show "Merge request" field key and "View MR" link text for GitLab MR URL', () => {
+    // Arrange
+    const gitlabDetail: IssueDetail = {
+      ...mockDetail,
+      stateDetails: {
+        ...mockStateDetails,
+        pullRequestUrl: 'https://gitlab.com/owner/repo/-/merge_requests/99',
+      },
+    };
+
+    // Act
+    const fixture = createComponent(gitlabDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const fields = el.querySelectorAll('.issue-detail__field');
+    const prField = Array.from(fields).find((f) =>
+      f.querySelector('.issue-detail__field-key')?.textContent?.trim().toLowerCase().includes('request'),
+    );
+    expect(prField?.querySelector('.issue-detail__field-key')?.textContent?.trim()).toBe('Merge request');
+    const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
+    expect(link?.textContent?.trim()).toBe('View MR');
+  });
+
   // B2 guard: null stateDetails must not throw
   it('should render content region without error when stateDetails is null (detected/queued states)', () => {
     // Arrange — detected state returns null stateDetails from the API

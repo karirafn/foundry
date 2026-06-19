@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
 import { AccountSummary } from '../account.model';
+import { providerLabel } from '../provider.util';
 
 @Component({
   selector: 'fd-account-list',
@@ -95,13 +96,5 @@ export class AccountListComponent {
   readonly delete: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
 
-  providerLabel(providerType: string): string {
-    if (providerType === 'GitHub') {
-      return 'GH';
-    }
-    if (providerType === 'GitLab') {
-      return 'GL';
-    }
-    return providerType.slice(0, 2).toUpperCase();
-  }
+  readonly providerLabel = providerLabel;
 }
