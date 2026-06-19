@@ -54,7 +54,7 @@ public sealed class PollAsync : IAsyncDisposable
         _dbContext.Set<Account>().Add(account);
         _dbContext.SaveChanges();
 
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, account.Id, null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repository);
         _dbContext.SaveChanges();
         return repository;

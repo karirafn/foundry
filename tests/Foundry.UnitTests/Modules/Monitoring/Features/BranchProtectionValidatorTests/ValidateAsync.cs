@@ -55,7 +55,7 @@ public sealed class ValidateAsync : IAsyncDisposable
         Result<RepositorySlug> slugResult = RepositorySlug.Create(slug);
         RepositorySlug repositorySlug = ((Result<RepositorySlug>.Success)slugResult).Value;
 
-        MonitoredRepository repo = MonitoredRepository.Create(repositorySlug, account.Id, null);
+        MonitoredRepository repo = MonitoredRepository.Create(repositorySlug, account.Id, "github.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

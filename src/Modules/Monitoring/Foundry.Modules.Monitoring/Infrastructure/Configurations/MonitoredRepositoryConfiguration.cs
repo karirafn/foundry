@@ -11,6 +11,7 @@ namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<MonitoredRepository>
 {
     private const int SlugMaxLength = 500;
+    private const int HostMaxLength = 253;
 
     public void Configure(EntityTypeBuilder<MonitoredRepository> builder)
     {
@@ -31,6 +32,12 @@ public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<
             .IsRequired()
             .HasColumnName("slug");
 
+        builder.Property(r => r.Host)
+            .HasMaxLength(HostMaxLength)
+            .IsUnicode(false)
+            .IsRequired()
+            .HasColumnName("host");
+
         builder.Property(r => r.AccountId)
             .HasConversion(new StronglyTypedIdValueConverter<AccountId>())
             .HasColumnName("account_id");
@@ -44,9 +51,9 @@ public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<
         builder.Property(r => r.LastPolledAt)
             .HasColumnName("last_polled_at");
 
-        builder.HasIndex(r => r.Slug)
+        builder.HasIndex(r => new { r.Host, r.Slug })
             .IsUnique()
-            .HasDatabaseName("ix_monitored_repositories_slug");
+            .HasDatabaseName("ix_monitored_repositories_host_slug");
 
         builder.HasIndex(r => r.AccountId)
             .HasDatabaseName("ix_monitored_repositories_account_id");

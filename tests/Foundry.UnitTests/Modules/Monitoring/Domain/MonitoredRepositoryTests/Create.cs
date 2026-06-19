@@ -22,12 +22,13 @@ public sealed class Create
         TimeSpan pollInterval = TimeSpan.FromMinutes(5);
 
         // Act
-        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, pollInterval);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, "github.com", pollInterval);
 
         // Assert
         repository.ShouldSatisfyAllConditions(
             () => repository.Slug.ShouldBe(slug),
             () => repository.AccountId.ShouldBe(accountId),
+            () => repository.Host.ShouldBe("github.com"),
             () => repository.PollInterval.ShouldBe(pollInterval),
             () => repository.IsActive.ShouldBeTrue(),
             () => repository.LastPolledAt.ShouldBeNull());
@@ -41,7 +42,7 @@ public sealed class Create
         AccountId accountId = AccountId.New();
 
         // Act
-        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, null);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, "github.com", null);
 
         // Assert
         repository.PollInterval.ShouldBeNull();
@@ -55,8 +56,8 @@ public sealed class Create
         AccountId accountId = AccountId.New();
 
         // Act
-        MonitoredRepository a = MonitoredRepository.Create(slug, accountId, null);
-        MonitoredRepository b = MonitoredRepository.Create(slug, accountId, null);
+        MonitoredRepository a = MonitoredRepository.Create(slug, accountId, "github.com", null);
+        MonitoredRepository b = MonitoredRepository.Create(slug, accountId, "github.com", null);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);
