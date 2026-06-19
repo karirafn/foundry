@@ -10,6 +10,7 @@ import { DatePipe } from '@angular/common';
 import { IssueDetail } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { IssueService } from '../issue.service';
+import { providerTerminology } from '../../settings/accounts/provider.util';
 
 @Component({
   selector: 'fd-issue-detail',
@@ -64,14 +65,14 @@ import { IssueService } from '../issue.service';
 
             @if (s.pullRequestUrl | safeHref; as safePrUrl) {
               <div class="issue-detail__field">
-                <span class="issue-detail__field-key">Pull Request</span>
+                <span class="issue-detail__field-key">{{ _prTerminology(s.pullRequestUrl).pullRequest }}</span>
                 <a
                   class="issue-detail__pr-link issue-detail__field-value"
                   [href]="safePrUrl"
                   target="_blank"
                   rel="noopener noreferrer"
                   [attr.aria-label]="'Open pull request for issue #' + d.issueNumber"
-                >View PR</a>
+                >View {{ _prTerminology(s.pullRequestUrl).prAbbrev }}</a>
               </div>
             }
 
@@ -167,5 +168,10 @@ export class IssueDetailComponent {
 
   retryEligibility(id: string): void {
     this._issueService.retryEligibility(id);
+  }
+
+  _prTerminology(pullRequestUrl: string | null): { pullRequest: string; prAbbrev: string } {
+    const providerType = pullRequestUrl?.includes('gitlab') ? 'GitLab' : 'GitHub';
+    return providerTerminology(providerType);
   }
 }

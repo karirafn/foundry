@@ -115,6 +115,45 @@ describe('SetupAccountStepComponent', () => {
     req.flush(CREATED_ACCOUNT);
   });
 
+  // Cycle 4b: selecting GitLab sends correct providerType and baseUrl
+  it('should send GitLab providerType and baseUrl when GitLab provider is selected', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+
+    const nameInput = el.querySelector('input[id="account-name"]') as HTMLInputElement;
+    nameInput.value = 'My GitLab';
+    nameInput.dispatchEvent(new Event('input'));
+
+    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    tokenInput.value = 'glpat_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert
+    const req = httpMock.expectOne('/api/accounts');
+    expect(req.request.body).toEqual({
+      name: 'My GitLab',
+      providerType: 'GitLab',
+      baseUrl: 'https://gitlab.com',
+      token: 'glpat_token',
+    });
+
+    // Cleanup
+    req.flush({ ...CREATED_ACCOUNT, providerType: 'GitLab' });
+  });
+
   // Cycle 5: emits complete with account ID on successful create
   it('should emit the complete event with the account ID after a successful create', () => {
     // Arrange

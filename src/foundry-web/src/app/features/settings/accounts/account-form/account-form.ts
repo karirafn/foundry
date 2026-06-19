@@ -17,14 +17,18 @@ import {
 import {
   AccountSummary,
   CreateAccountRequest,
+  ProviderType,
   TokenValidationResult,
   UpdateAccountRequest,
 } from '../account.model';
+import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
 
-const DEFAULT_BASE_URL = 'https://github.com';
+const GITHUB_BASE_URL = 'https://github.com';
 
 @Component({
   selector: 'fd-account-form',
+  standalone: true,
+  imports: [ProviderSelectorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="account-form">
@@ -59,17 +63,14 @@ const DEFAULT_BASE_URL = 'https://github.com';
           <span class="account-form__provider-badge">{{ account()!.providerType }}</span>
         </div>
       } @else {
-        <fieldset class="account-form__provider-selector">
-          <legend class="sr-only">Provider type</legend>
-          <label class="account-form__provider-option">
-            <input type="radio" name="providerType" value="GitHub" checked />
-            GitHub
-          </label>
-          <label class="account-form__provider-option account-form__provider-option--disabled" aria-disabled="true">
-            <input type="radio" name="providerType" value="GitLab" disabled />
-            GitLab (coming soon)
-          </label>
-        </fieldset>
+        <div class="account-form__field">
+          <span class="account-form__field-label">Provider</span>
+          <fd-provider-selector
+            [provider]="_provider()"
+            (providerChange)="_provider.set($event)"
+            (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
+          />
+        </div>
       }
 
       <div class="account-form__field">
@@ -79,7 +80,7 @@ const DEFAULT_BASE_URL = 'https://github.com';
           type="text"
           id="account-base-url"
           [value]="_baseUrl()"
-          (input)="_baseUrl.set($any($event.target).value)"
+          (input)="onBaseUrlInput($any($event.target).value)"
           autocomplete="off"
         />
       </div>
@@ -198,7 +199,9 @@ export class AccountFormComponent implements OnInit {
   protected readonly _isEditMode: Signal<boolean> = computed(() => this.account() !== null);
 
   protected readonly _name: WritableSignal<string> = signal('');
-  protected readonly _baseUrl: WritableSignal<string> = signal(DEFAULT_BASE_URL);
+  protected readonly _provider: WritableSignal<ProviderType> = signal('GitHub');
+  protected readonly _baseUrl: WritableSignal<string> = signal(GITHUB_BASE_URL);
+  protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
 
@@ -236,6 +239,17 @@ export class AccountFormComponent implements OnInit {
     }
   }
 
+  onBaseUrlInput(value: string): void {
+    this._baseUrl.set(value);
+    this._baseUrlManuallyEdited.set(true);
+  }
+
+  onDefaultBaseUrlChange(defaultUrl: string): void {
+    if (!this._baseUrlManuallyEdited()) {
+      this._baseUrl.set(defaultUrl);
+    }
+  }
+
   onSave(): void {
     const acc = this.account();
     if (acc !== null) {
@@ -249,7 +263,7 @@ export class AccountFormComponent implements OnInit {
     } else {
       const request: CreateAccountRequest = {
         name: this._name(),
-        providerType: 'GitHub',
+        providerType: this._provider(),
         baseUrl: this._baseUrl(),
         token: this._token(),
       };

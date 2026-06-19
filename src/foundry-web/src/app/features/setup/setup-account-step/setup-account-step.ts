@@ -11,19 +11,21 @@ import {
   signal,
 } from '@angular/core';
 import { AccountService } from '../../settings/accounts/account.service';
-import { TokenValidationResult } from '../../settings/accounts/account.model';
+import { ProviderType } from '../../settings/accounts/account.model';
+import { ProviderSelectorComponent } from '../../settings/accounts/provider-selector/provider-selector';
 
-const DEFAULT_BASE_URL = 'https://github.com';
-const PROVIDER_TYPE = 'GitHub';
+const GITHUB_BASE_URL = 'https://github.com';
 
 @Component({
   selector: 'fd-setup-account-step',
+  standalone: true,
+  imports: [ProviderSelectorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="setup-account-step">
       <h2 class="setup-account-step__title">Add a Provider Account</h2>
       <p class="setup-account-step__description">
-        Connect a GitHub account so Foundry can monitor repositories for issues.
+        Connect an account to get started.
       </p>
 
       <div class="setup-account-step__form">
@@ -42,7 +44,11 @@ const PROVIDER_TYPE = 'GitHub';
 
         <div class="setup-account-step__field">
           <span class="setup-account-step__field-label">Provider</span>
-          <span class="setup-account-step__provider-badge">GitHub</span>
+          <fd-provider-selector
+            [provider]="_provider()"
+            (providerChange)="_provider.set($event)"
+            (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
+          />
         </div>
 
         <div class="setup-account-step__field">
@@ -53,7 +59,7 @@ const PROVIDER_TYPE = 'GitHub';
             id="account-base-url"
             autocomplete="off"
             [value]="_baseUrl()"
-            (input)="_baseUrl.set($any($event.target).value)"
+            (input)="onBaseUrlInput($any($event.target).value)"
           />
         </div>
 
@@ -149,7 +155,9 @@ export class SetupAccountStepComponent {
   readonly back: OutputEmitterRef<void> = output<void>();
 
   protected readonly _name: WritableSignal<string> = signal('');
-  protected readonly _baseUrl: WritableSignal<string> = signal(DEFAULT_BASE_URL);
+  protected readonly _provider: WritableSignal<ProviderType> = signal('GitHub');
+  protected readonly _baseUrl: WritableSignal<string> = signal(GITHUB_BASE_URL);
+  protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
 
@@ -213,11 +221,22 @@ export class SetupAccountStepComponent {
     });
   }
 
+  onBaseUrlInput(value: string): void {
+    this._baseUrl.set(value);
+    this._baseUrlManuallyEdited.set(true);
+  }
+
+  onDefaultBaseUrlChange(defaultUrl: string): void {
+    if (!this._baseUrlManuallyEdited()) {
+      this._baseUrl.set(defaultUrl);
+    }
+  }
+
   onCreate(): void {
     this._hasSaved.set(true);
     this._accountService.createAccount({
       name: this._name(),
-      providerType: PROVIDER_TYPE,
+      providerType: this._provider(),
       baseUrl: this._baseUrl(),
       token: this._token(),
     });
