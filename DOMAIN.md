@@ -64,7 +64,7 @@ State transitions are methods on each variant that return the next variant type,
 ## Issue Kind
 
 A value object on the base `Issue` type classifying the nature of the work — `Feature`, `Bug`, `Refactor`, `Documentation`, etc.
-Extracted during issue detection by the provider adapter: GitHub maps flat labels (`feature`, `bug`), GitLab maps scoped labels (`type::feature`, `type::bug`).
+Extracted during issue detection by a provider-agnostic classifier: each label is normalized by stripping any `scope::` prefix, then the suffix is matched against the kind names — so flat (`feature`) and scoped (`type::feature`) labels both classify on either provider.
 Falls back to `Feature` when no recognized label is present.
 Used by `BranchName.Generate()` to derive the branch prefix (`feat/`, `fix/`, `refactor/`, `docs/`).
 
@@ -72,7 +72,7 @@ Used by `BranchName.Generate()` to derive the branch prefix (`feat/`, `fix/`, `r
 
 A repository configured for Foundry to poll.
 References an Account (for credentials) and specifies an optional per-repo poll interval.
-Uniquely identified by its Repository Slug globally — the same repo cannot be monitored through multiple accounts (prevents duplicate issue detection).
+Uniquely identified by the pair (Host, Repository Slug) — the same repo on the same host cannot be monitored through multiple accounts (prevents duplicate issue detection), while the same path on different hosts (e.g. github.com vs gitlab.com, or self-hosted instances) refers to distinct repositories. The Host is denormalized from the account's base URL at creation.
 Tracks `LastPolledAt` for per-repo poll timing.
 
 ## Issue Dependency
@@ -81,6 +81,7 @@ A directed "blocked by" relationship between two issues within the same reposito
 Stored as a collection of blocking issue numbers on the Issue aggregate — the blocking issue may or may not be tracked by Foundry.
 Both GitHub (REST API v2026-03-10) and GitLab (Issue Links API, Premium+) expose dependencies via structured APIs.
 Foundry fetches dependencies during the detection poll cycle and reconciles them on each subsequent poll.
+When the provider does not expose dependency links (e.g. GitLab Free tier), the provider degrades gracefully — it treats the issue as having no dependencies and logs once, rather than failing the poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
 
 ## Ineligible Issue
@@ -197,7 +198,7 @@ Lives in Issues contracts — produced by the monitoring provider, consumed by t
 
 A provider-agnostic result from `IIssueProvider.GetReviewFeedbackAsync()`.
 Carries an `IReadOnlyList<ReviewComment>`.
-Each provider implementation decides what constitutes actionable feedback — GitHub uses `CHANGES_REQUESTED` reviews; GitLab (future) will use unresolved threads or unapproved state.
+Each provider implementation decides what constitutes actionable feedback — GitHub uses `CHANGES_REQUESTED` reviews; GitLab uses unresolved discussion threads (tier-independent, unlike the Premium-only "Request changes" reviewer state).
 
 ## Revision Context
 
@@ -219,8 +220,8 @@ Carries raw data (number, title, body, author username, URL, labels) that the do
 
 ## Repository Slug
 
-The `owner/name` pair that uniquely identifies a repository within a provider.
-Value object — always appears as a pair, never just owner or just name.
+The full namespace path that identifies a repository within a provider — two or more `/`-separated segments (`owner/name` on GitHub, `group/subgroup/project` for nested GitLab groups).
+Value object — `Name` is the last segment, `Owner` is everything before it (a multi-segment namespace path for GitLab). The provider adapter renders it as needed: GitHub as `owner/name` path segments, GitLab as a URL-encoded full path.
 
 ## WorkerRun
 
