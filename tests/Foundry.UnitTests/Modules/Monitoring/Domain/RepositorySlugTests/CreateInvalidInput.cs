@@ -16,7 +16,7 @@ public sealed class CreateInvalidInput
     [InlineData("no-slash")]
     [InlineData("/no-owner")]
     [InlineData("no-name/")]
-    [InlineData("owner/name/extra")]
+    [InlineData("owner//empty-middle")]
     [InlineData("owner%2Frepo/name")]
     [InlineData("owner?labels=evil/name")]
     [InlineData("owner/name&state=open")]

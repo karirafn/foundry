@@ -14,7 +14,7 @@ public sealed class Update
         ((Result<RepositorySlug>.Success)RepositorySlug.Create("octocat/hello-world")).Value;
 
     private static MonitoredRepository CreateRepository(TimeSpan? pollInterval = null) =>
-        MonitoredRepository.Create(ValidSlug, AccountId.New(), pollInterval);
+        MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", pollInterval);
 
     [Fact]
     public void WhenPollIntervalAndActiveStatusProvided_UpdatesBothProperties()
@@ -38,7 +38,7 @@ public sealed class Update
         // Arrange
         RepositorySlug slug = ValidSlug;
         AccountId accountId = AccountId.New();
-        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, null);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, "github.com", null);
 
         // Act
         repository.Update(TimeSpan.FromMinutes(15), isActive: true);
