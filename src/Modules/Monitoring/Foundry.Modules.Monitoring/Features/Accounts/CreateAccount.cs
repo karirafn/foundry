@@ -13,6 +13,7 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 internal static class CreateAccount
 {
     private const string GitHubProviderType = "github";
+    private const string GitLabProviderType = "gitlab";
 
     internal sealed record Command(
         string Name,
@@ -45,9 +46,15 @@ internal static class CreateAccount
                 return new Error(TokenEmptyCode, "Token must not be empty.");
             }
 
-            if (!string.Equals(command.ProviderType, GitHubProviderType, StringComparison.OrdinalIgnoreCase))
+            bool isKnownProvider =
+                string.Equals(command.ProviderType, GitHubProviderType, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(command.ProviderType, GitLabProviderType, StringComparison.OrdinalIgnoreCase);
+
+            if (!isKnownProvider)
             {
-                return new Error(InvalidProviderTypeCode, $"Provider type '{command.ProviderType}' is not supported. Only 'github' is supported.");
+                return new Error(
+                    InvalidProviderTypeCode,
+                    $"Provider type '{command.ProviderType}' is not supported. Only 'github' and 'gitlab' are supported.");
             }
 
             return Result.Ok();
@@ -73,9 +80,14 @@ internal static class CreateAccount
             }
 
             Uri baseUrl = new(command.BaseUrl);
-            Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
 
-            ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl);
+            bool isGitLab = string.Equals(command.ProviderType, GitLabProviderType, StringComparison.OrdinalIgnoreCase);
+
+            Uri apiBaseUrl = isGitLab
+                ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
+                : GitHubAccount.DeriveApiBaseUrl(baseUrl);
+
+            ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl, command.ProviderType);
             Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
                 tokenQuery,
                 cancellationToken);
@@ -92,14 +104,18 @@ internal static class CreateAccount
                 return Result<AccountSummary>.Fail(AccountErrors.InvalidToken);
             }
 
-            GitHubAccount account = GitHubAccount.Create(command.Name, command.Token, baseUrl);
+            Account account = isGitLab
+                ? GitLabAccount.Create(command.Name, command.Token, baseUrl)
+                : GitHubAccount.Create(command.Name, command.Token, baseUrl);
+
             dbContext.Set<Account>().Add(account);
             await dbContext.SaveChangesAsync(cancellationToken);
 
+            string providerType = isGitLab ? GitLabProviderType : GitHubProviderType;
             AccountSummary summary = new(
                 account.Id.Value,
                 account.Name,
-                GitHubProviderType,
+                providerType,
                 account.BaseUrl.ToString(),
                 account.Token is not null);
 

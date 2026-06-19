@@ -13,6 +13,7 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 internal static class UpdateAccount
 {
     private const string GitHubProviderType = "github";
+    private const string GitLabProviderType = "gitlab";
 
     internal sealed record Command(
         AccountId Id,
@@ -72,8 +73,15 @@ internal static class UpdateAccount
 
             if (command.Token is not null)
             {
-                Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
-                ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl);
+                string providerTypeForValidation = account is GitLabAccount
+                    ? GitLabProviderType
+                    : GitHubProviderType;
+
+                Uri apiBaseUrl = account is GitLabAccount
+                    ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
+                    : GitHubAccount.DeriveApiBaseUrl(baseUrl);
+
+                ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl, providerTypeForValidation);
                 Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
                     tokenQuery,
                     cancellationToken);
@@ -90,17 +98,23 @@ internal static class UpdateAccount
                 }
             }
 
-            if (account is GitHubAccount gitHubAccount)
+            switch (account)
             {
-                gitHubAccount.Update(command.Name, command.Token, baseUrl);
+                case GitHubAccount gitHubAccount:
+                    gitHubAccount.Update(command.Name, command.Token, baseUrl);
+                    break;
+                case GitLabAccount gitLabAccount:
+                    gitLabAccount.Update(command.Name, command.Token, baseUrl);
+                    break;
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
+            string providerType = account is GitLabAccount ? GitLabProviderType : GitHubProviderType;
             AccountSummary summary = new(
                 account.Id.Value,
                 account.Name,
-                GitHubProviderType,
+                providerType,
                 account.BaseUrl.ToString(),
                 account.Token is not null);
 
