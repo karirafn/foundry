@@ -3,13 +3,16 @@ using Foundry.Modules.Monitoring.Features;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
 
-internal sealed class IssueProviderFactory(GitHubHttpClient gitHubHttpClient) : IIssueProviderFactory
+internal sealed class IssueProviderFactory(
+    GitHubHttpClient gitHubHttpClient,
+    GitLabHttpClient gitLabHttpClient) : IIssueProviderFactory
 {
     public IIssueProvider CreateProvider(Account account, string token)
     {
         return account switch
         {
             GitHubAccount gitHub => new GitHubIssueProvider(gitHubHttpClient, token, gitHub.ApiBaseUrl),
+            GitLabAccount gitLab => new GitLabIssueProvider(gitLabHttpClient, token, gitLab.ApiBaseUrl),
             _ => throw new NotSupportedException(
                 $"No issue provider is registered for account type '{account.GetType().Name}'."),
         };
