@@ -124,7 +124,7 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     public async Task WhenProviderTypeIsUnsupported_ReturnsBadRequest()
     {
         // Arrange
-        object body = new { name = "My Account", providerType = "gitlab", baseUrl = "https://gitlab.com", token = "glpat_test" };
+        object body = new { name = "My Account", providerType = "bitbucket", baseUrl = "https://bitbucket.org", token = "abc_test" };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(

@@ -1,0 +1,126 @@
+using System.Net;
+using System.Net.Http.Json;
+
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Shared;
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+
+public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
+{
+    private readonly FoundryWebAppFactory _factory;
+    private readonly HttpClient _client;
+
+    public WhenGitLabAccountIsValid()
+    {
+        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: []);
+        _factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(validResponse)));
+        });
+        _client = _factory.CreateClient();
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task ReturnsCreatedWithAccountSummary()
+    {
+        // Arrange
+        object body = new
+        {
+            name = "My GitLab",
+            providerType = "gitlab",
+            baseUrl = "https://gitlab.com",
+            token = "glpat_test_token",
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        AccountSummary? account = await response.Content
+            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        account.ShouldNotBeNull();
+        account.ShouldSatisfyAllConditions(
+            () => account.Name.ShouldBe("My GitLab"),
+            () => account.ProviderType.ShouldBe("gitlab"),
+            () => account.BaseUrl.ShouldBe("https://gitlab.com/"),
+            () => account.HasToken.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task WhenProviderTypeIsMixedCase_ReturnsCreated()
+    {
+        // Arrange
+        object body = new
+        {
+            name = "My GitLab Mixed",
+            providerType = "GitLab",
+            baseUrl = "https://gitlab.com",
+            token = "glpat_test_token",
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task WhenSelfHosted_ReturnsCreatedWithCorrectBaseUrl()
+    {
+        // Arrange
+        object body = new
+        {
+            name = "My Self-Hosted GitLab",
+            providerType = "gitlab",
+            baseUrl = "https://gitlab.example.com",
+            token = "glpat_test_token",
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        AccountSummary? account = await response.Content
+            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        account.ShouldNotBeNull();
+        account.BaseUrl.ShouldBe("https://gitlab.example.com/");
+    }
+
+    private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)
+        : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
+    {
+        public Task<Result<ValidateToken.Response>> HandleAsync(
+            ValidateToken.Query query,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(result);
+    }
+}

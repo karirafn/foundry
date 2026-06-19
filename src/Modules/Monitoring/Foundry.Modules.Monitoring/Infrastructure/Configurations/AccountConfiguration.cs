@@ -54,6 +54,7 @@ internal sealed class AccountConfiguration(
 
         builder.HasDiscriminator<string>("type")
             .HasValue<GitHubAccount>("github")
+            .HasValue<GitLabAccount>("gitlab")
             .IsComplete(true);
 
         builder.Property<string>("type")
