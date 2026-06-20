@@ -392,9 +392,14 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             IReadOnlySet<MonitoredRepositoryId> repositoryIds,
             CancellationToken cancellationToken)
         {
-            Dictionary<MonitoredRepositoryId, string> result = repositoryIds
-                .Where(id => _slugs.ContainsKey(id))
-                .ToDictionary(id => id, id => _slugs[id]);
+            Dictionary<MonitoredRepositoryId, string> result = [];
+            foreach (MonitoredRepositoryId id in repositoryIds)
+            {
+                if (_slugs.TryGetValue(id, out string? slug))
+                {
+                    result[id] = slug;
+                }
+            }
 
             return Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(result);
         }
