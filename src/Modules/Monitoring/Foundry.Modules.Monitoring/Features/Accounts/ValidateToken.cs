@@ -23,12 +23,10 @@ internal static class ValidateToken
         GitLabHttpClient gitLabHttpClient)
         : IQueryHandler<Query, Response>
     {
-        private const string GitLabProviderType = "gitlab";
-
         public async Task<Result<Response>> HandleAsync(Query query, CancellationToken cancellationToken)
         {
             Result<TokenValidationResult> result = string.Equals(
-                    query.ProviderType, GitLabProviderType, StringComparison.OrdinalIgnoreCase)
+                    query.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase)
                 ? await gitLabHttpClient.ValidateTokenAsync(query.ApiBaseUrl, query.Token, cancellationToken)
                 : await gitHubHttpClient.ValidateTokenAsync(query.ApiBaseUrl, query.Token, cancellationToken);
 
@@ -58,7 +56,13 @@ internal static class ValidateToken
                         return (Results<Ok<Response>, BadRequest<string>>)TypedResults.BadRequest("Invalid base URL.");
                     }
 
-                    Uri apiBaseUrl = string.Equals(body.ProviderType, "gitlab", StringComparison.OrdinalIgnoreCase)
+                    if (!ProviderTypes.IsKnown(body.ProviderType))
+                    {
+                        return TypedResults.BadRequest(
+                            $"Provider type '{body.ProviderType}' is not supported. Only 'github' and 'gitlab' are supported.");
+                    }
+
+                    Uri apiBaseUrl = string.Equals(body.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase)
                         ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
                         : GitHubAccount.DeriveApiBaseUrl(baseUrl);
 

@@ -14,9 +14,6 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static partial class CreateAccount
 {
-    private const string GitHubProviderType = "github";
-    private const string GitLabProviderType = "gitlab";
-
     internal sealed record Command(
         string Name,
         string ProviderType,
@@ -59,9 +56,7 @@ internal static partial class CreateAccount
                     "Token contains invalid characters. Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
             }
 
-            bool isKnownProvider =
-                string.Equals(command.ProviderType, GitHubProviderType, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(command.ProviderType, GitLabProviderType, StringComparison.OrdinalIgnoreCase);
+            bool isKnownProvider = ProviderTypes.IsKnown(command.ProviderType);
 
             if (!isKnownProvider)
             {
@@ -94,7 +89,7 @@ internal static partial class CreateAccount
 
             Uri baseUrl = new(command.BaseUrl);
 
-            bool isGitLab = string.Equals(command.ProviderType, GitLabProviderType, StringComparison.OrdinalIgnoreCase);
+            bool isGitLab = string.Equals(command.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase);
 
             Uri apiBaseUrl = isGitLab
                 ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
@@ -124,7 +119,7 @@ internal static partial class CreateAccount
             dbContext.Set<Account>().Add(account);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            string providerType = isGitLab ? GitLabProviderType : GitHubProviderType;
+            string providerType = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
             AccountSummary summary = new(
                 account.Id.Value,
                 account.Name,

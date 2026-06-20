@@ -15,9 +15,6 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static partial class UpdateAccount
 {
-    private const string GitHubProviderType = "github";
-    private const string GitLabProviderType = "gitlab";
-
     internal sealed record Command(
         AccountId Id,
         string Name,
@@ -88,8 +85,8 @@ internal static partial class UpdateAccount
             if (command.Token is not null)
             {
                 string providerTypeForValidation = account is GitLabAccount
-                    ? GitLabProviderType
-                    : GitHubProviderType;
+                    ? ProviderTypes.GitLab
+                    : ProviderTypes.GitHub;
 
                 Uri apiBaseUrl = account is GitLabAccount
                     ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
@@ -127,7 +124,7 @@ internal static partial class UpdateAccount
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            string providerType = account is GitLabAccount ? GitLabProviderType : GitHubProviderType;
+            string providerType = account is GitLabAccount ? ProviderTypes.GitLab : ProviderTypes.GitHub;
             AccountSummary summary = new(
                 account.Id.Value,
                 account.Name,
