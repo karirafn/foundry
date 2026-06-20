@@ -56,7 +56,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             return new ContainerOutputParseResult.ParseFailure(log);
         }
 
-        string? terminalReason = node["terminal_reason"]?.GetValue<string>();
+        string? terminalReason = ReadString(node["terminal_reason"]);
         int? apiErrorStatus = ReadApiErrorStatus(node);
 
         if (!IsUsageLimit(apiErrorStatus, terminalReason))
@@ -64,7 +64,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             return new ContainerOutputParseResult.NormalExit();
         }
 
-        DateTimeOffset resetsAt = ParseResetTime(node["result"]?.GetValue<string>(), defaultCooldownMinutes);
+        DateTimeOffset resetsAt = ParseResetTime(ReadString(node["result"]), defaultCooldownMinutes);
 
         return new ContainerOutputParseResult.UsageLimited(resetsAt);
     }
@@ -73,6 +73,13 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     {
         return apiErrorStatus == 429
             || (terminalReason is not null && UsageLimitReasons.Contains(terminalReason));
+    }
+
+    private static string? ReadString(JsonNode? node)
+    {
+        return node is not null && node.GetValueKind() == JsonValueKind.String
+            ? node.GetValue<string>()
+            : null;
     }
 
     private static int? ReadApiErrorStatus(JsonNode node)
