@@ -41,70 +41,70 @@ internal sealed class WorkerCapacityAvailableHandler(
             new SystemNotification(ClaudeAuthCategory, false, ""),
             cancellationToken);
 
+        // Resolve eligible repository IDs once across all tiers to avoid blocking dispatch
+        // when the oldest candidate belongs to an ineligible repository.
+        HashSet<MonitoredRepositoryId> eligibleRepoIds = await ResolveEligibleRepositoryIdsAsync(cancellationToken);
+
         // Claim priority: revision queued first (addressing review feedback takes precedence),
         // then continuation queued (resuming interrupted work), then fresh queued issues.
+        // Each tier skips ineligible repositories by filtering at the database level.
         RevisionQueuedIssue? revisionQueued = await db.Set<RevisionQueuedIssue>()
+            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (revisionQueued is not null)
         {
-            bool eligible = await IsRepositoryEligibleAsync([revisionQueued.MonitoredRepositoryId], cancellationToken);
-            if (!eligible)
-            {
-                return;
-            }
-
             await ClaimRevisionQueuedAsync(revisionQueued, @event.WorkerRunId, cancellationToken);
             return;
         }
 
         ContinuationQueuedIssue? continuationQueued = await db.Set<ContinuationQueuedIssue>()
+            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (continuationQueued is not null)
         {
-            bool eligible = await IsRepositoryEligibleAsync([continuationQueued.MonitoredRepositoryId], cancellationToken);
-            if (!eligible)
-            {
-                return;
-            }
-
             await ClaimContinuationQueuedAsync(continuationQueued, @event.WorkerRunId, cancellationToken);
             return;
         }
 
         QueuedIssue? queued = await db.Set<QueuedIssue>()
+            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (queued is null)
+        if (queued is not null)
         {
-            return;
+            await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
         }
-
-        bool queuedEligible = await IsRepositoryEligibleAsync([queued.MonitoredRepositoryId], cancellationToken);
-        if (!queuedEligible)
-        {
-            return;
-        }
-
-        await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
     }
 
-    private async Task<bool> IsRepositoryEligibleAsync(
-        IReadOnlyCollection<MonitoredRepositoryId> repositoryIds,
+    private async Task<HashSet<MonitoredRepositoryId>> ResolveEligibleRepositoryIdsAsync(
         CancellationToken cancellationToken)
     {
-        IReadOnlyCollection<Guid> rawIds = repositoryIds
+        List<MonitoredRepositoryId> candidateRepoIds = await db.Set<Issue>()
+            .Where(i => i is RevisionQueuedIssue || i is ContinuationQueuedIssue || i is QueuedIssue)
+            .Select(i => i.MonitoredRepositoryId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (candidateRepoIds.Count == 0)
+        {
+            return [];
+        }
+
+        List<Guid> rawIds = candidateRepoIds
             .Select(id => id.Value)
             .ToList();
 
-        IReadOnlySet<Guid> eligibleIds = await repositoryEligibilityQuery
+        IReadOnlySet<Guid> eligibleRawIds = await repositoryEligibilityQuery
             .GetEligibleRepositoryIdsAsync(rawIds, cancellationToken);
 
-        return rawIds.All(eligibleIds.Contains);
+        return candidateRepoIds
+            .Where(id => eligibleRawIds.Contains(id.Value))
+            .ToHashSet();
     }
 
     private async Task ClaimRevisionQueuedAsync(
