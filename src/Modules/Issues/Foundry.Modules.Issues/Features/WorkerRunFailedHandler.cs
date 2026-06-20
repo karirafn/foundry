@@ -32,12 +32,6 @@ internal sealed class WorkerRunFailedHandler(
                     @event.ReasonDescription,
                     failedAt);
                 await db.TransitionAsync(inProgress, continuableFailed, domainEventDispatcher, cancellationToken);
-
-                if (@event.IsUsageLimitedRequeue)
-                {
-                    ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
-                    await db.TransitionAsync(continuableFailed, continuationQueued, domainEventDispatcher, cancellationToken);
-                }
             }
             else
             {
@@ -46,12 +40,6 @@ internal sealed class WorkerRunFailedHandler(
                     @event.ReasonDescription,
                     failedAt);
                 await db.TransitionAsync(inProgress, failed, domainEventDispatcher, cancellationToken);
-
-                if (@event.IsUsageLimitedRequeue)
-                {
-                    QueuedIssue queued = failed.Retry();
-                    await db.TransitionAsync(failed, queued, domainEventDispatcher, cancellationToken);
-                }
             }
             return;
         }

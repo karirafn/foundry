@@ -452,8 +452,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     "No pull request found after retries",
-                    BranchName: activeRun.BranchName.Value,
-                    IsUsageLimitedRequeue: false)],
+                    BranchName: activeRun.BranchName.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -502,9 +501,7 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    WorkerRunFailedEvent.UsageLimitedReason,
-                    BranchName: null,
-                    IsUsageLimitedRequeue: false)],
+                    WorkerRunFailedEvent.UsageLimitedReason)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -577,8 +574,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id.Value,
                 activeRun.IssueId.Value,
                 exitReason,
-                BranchName: branchNameForEvent,
-                IsUsageLimitedRequeue: false)],
+                BranchName: branchNameForEvent)],
             activeRun.Id.Value,
             cancellationToken);
 
