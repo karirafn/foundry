@@ -1,8 +1,13 @@
+using System.Text.Json.Serialization;
+
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Domain.ValueObjects;
 
+[JsonDerivedType(typeof(Eligible), typeDiscriminator: "eligible")]
+[JsonDerivedType(typeof(Ineligible), typeDiscriminator: "ineligible")]
+[JsonDerivedType(typeof(Unreachable), typeDiscriminator: "unreachable")]
 public abstract record RepositoryEligibility
 {
     private RepositoryEligibility() { }
