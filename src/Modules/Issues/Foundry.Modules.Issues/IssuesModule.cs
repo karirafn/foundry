@@ -2,7 +2,6 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -17,9 +16,7 @@ public static class IssuesModule
     public static IServiceCollection AddIssuesModule(this IServiceCollection services)
     {
         services.AddScoped<IIssueQueries, IssueQueries>();
-        services.AddScoped<RetryEligibility.Handler>();
 
-        services.AddIntegrationEventHandler<IssueEligibilityChecked, IssueEligibilityCheckedHandler>();
         services.AddIntegrationEventHandler<IssueDetected, CreateIssueHandler>();
         services.AddIntegrationEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();
         services.AddIntegrationEventHandler<IssueDependenciesDetected, ProcessIssueDependenciesHandler>();
@@ -34,7 +31,6 @@ public static class IssuesModule
         services.AddScoped<IssueStateChangedHandler>();
         AddIssueStateChangedHandler<IssueQueued>(services);
         AddIssueStateChangedHandler<IssueBlocked>(services);
-        AddIssueStateChangedHandler<IssueIneligible>(services);
         AddIssueStateChangedHandler<IssueCompleted>(services);
         AddIssueStateChangedHandler<IssueFailed>(services);
         AddIssueStateChangedHandler<IssueInReview>(services);

@@ -142,27 +142,6 @@ public sealed class HandleAsync : IAsyncDisposable
         issue.ShouldBeOfType<QueuedIssue>();
     }
 
-    // Ineligible repo: queued issue is NOT transitioned to ineligible state
-    [Fact]
-    public async Task WhenRepositoryIsIneligible_DoesNotTransitionIssueToIneligibleState()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedQueuedIssue(repositoryId);
-
-        WorkerCapacityAvailableHandler sut = BuildHandler(
-            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
-
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dbContext.ChangeTracker.Clear();
-        _dbContext.Set<Issue>().OfType<IneligibleIssue>().ShouldBeEmpty();
-    }
-
     // Unreachable repo (no eligibility record): queued issue is skipped
     [Fact]
     public async Task WhenRepositoryEligibilityIsUnknown_DoesNotClaimQueuedIssue()

@@ -194,18 +194,6 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
-    public void WhenServicesRegistered_IssueIneligibleHandlerResolvable()
-    {
-        // Arrange & Act
-        using IServiceScope scope = _serviceProvider.CreateScope();
-
-        // Assert
-        IDomainEventHandler<IssueIneligible> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueIneligible>>();
-        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueIneligible>>();
-    }
-
-    [Fact]
     public void WhenServicesRegistered_IssueCompletedHandlerResolvable()
     {
         // Arrange & Act

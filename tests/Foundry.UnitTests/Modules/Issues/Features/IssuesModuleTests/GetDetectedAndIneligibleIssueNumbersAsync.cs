@@ -95,47 +95,6 @@ public sealed class GetDetectedAndIneligibleIssueNumbersAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIneligibleIssueExists_ReturnsItsNumber()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = CreateDetectedIssue(repositoryId, issueNumber: 11);
-        IReadOnlyList<EligibilityViolation> violations = [EligibilityViolation.AllowDirectPushes()];
-        IneligibleIssue ineligible = IneligibleIssue.FromDetected(detected, violations);
-        _dbContext.Set<Issue>().Add(ineligible);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        // Act
-        IReadOnlyList<int> result = await _sut.GetDetectedAndIneligibleIssueNumbersAsync(
-            repositoryId,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBe([11], ignoreOrder: true);
-    }
-
-    [Fact]
-    public async Task WhenBothDetectedAndIneligibleIssuesExist_ReturnsBothNumbers()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = CreateDetectedIssue(repositoryId, issueNumber: 3);
-        DetectedIssue detectedForIneligible = CreateDetectedIssue(repositoryId, issueNumber: 5);
-        IReadOnlyList<EligibilityViolation> violations = [EligibilityViolation.AllowDirectPushes()];
-        IneligibleIssue ineligible = IneligibleIssue.FromDetected(detectedForIneligible, violations);
-        _dbContext.Set<Issue>().AddRange(detected, ineligible);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        // Act
-        IReadOnlyList<int> result = await _sut.GetDetectedAndIneligibleIssueNumbersAsync(
-            repositoryId,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBe([3, 5], ignoreOrder: true);
-    }
-
-    [Fact]
     public async Task WhenQueuedIssueExists_DoesNotReturnItsNumber()
     {
         // Arrange
