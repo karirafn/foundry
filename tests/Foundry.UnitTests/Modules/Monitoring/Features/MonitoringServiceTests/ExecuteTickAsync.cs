@@ -86,6 +86,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         services.AddScoped<IIssueQueries, StubIssueQueries>();
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
+        services.AddScoped<IRepositoryEligibilityEvaluator, NullRepositoryEligibilityEvaluator>();
         services.AddScoped<IIssueProviderFactory>(_ => providerFactory);
         services.AddScoped<RepositoryPoller>();
         return services.BuildServiceProvider();
@@ -345,6 +346,17 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class NullRepositoryEligibilityEvaluator : IRepositoryEligibilityEvaluator
+    {
+        public Task EvaluateAndStoreAsync(
+            MonitoredRepository repo,
+            IIssueProvider provider,
+            CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
         }
