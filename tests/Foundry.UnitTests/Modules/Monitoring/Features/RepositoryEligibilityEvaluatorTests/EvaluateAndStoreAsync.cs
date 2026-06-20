@@ -4,6 +4,8 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using Shouldly;
 
 using Xunit;
@@ -18,6 +20,9 @@ public sealed class EvaluateAndStoreAsync
         return MonitoredRepository.Create(slug, AccountId.New(), pollInterval: null);
     }
 
+    private static RepositoryEligibilityEvaluator CreateSut() =>
+        new(NullLogger<RepositoryEligibilityEvaluator>.Instance);
+
     [Fact]
     public async Task WhenProviderReturnsFullProtection_SetsEligibilityToEligible()
     {
@@ -25,7 +30,7 @@ public sealed class EvaluateAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         StubIssueProvider provider = new(Result<BranchProtection>.Ok(protection));
-        RepositoryEligibilityEvaluator sut = new();
+        RepositoryEligibilityEvaluator sut = CreateSut();
 
         // Act
         await sut.EvaluateAndStoreAsync(repo, provider, CancellationToken.None);
@@ -41,7 +46,7 @@ public sealed class EvaluateAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
         StubIssueProvider provider = new(Result<BranchProtection>.Ok(protection));
-        RepositoryEligibilityEvaluator sut = new();
+        RepositoryEligibilityEvaluator sut = CreateSut();
 
         // Act
         await sut.EvaluateAndStoreAsync(repo, provider, CancellationToken.None);
@@ -58,7 +63,22 @@ public sealed class EvaluateAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         StubIssueProvider provider = new(
             Result<BranchProtection>.Fail(new Error("Provider.Error", "Unreachable")));
-        RepositoryEligibilityEvaluator sut = new();
+        RepositoryEligibilityEvaluator sut = CreateSut();
+
+        // Act
+        await sut.EvaluateAndStoreAsync(repo, provider, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+    }
+
+    [Fact]
+    public async Task WhenProviderThrows_SetsEligibilityToUnreachable()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        ThrowingIssueProvider provider = new();
+        RepositoryEligibilityEvaluator sut = CreateSut();
 
         // Act
         await sut.EvaluateAndStoreAsync(repo, provider, CancellationToken.None);
@@ -103,6 +123,62 @@ public sealed class EvaluateAndStoreAsync
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => Task.FromResult(branchProtectionResult);
+
+        public Task<Result<bool>> CreateBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<bool>> HasBranchCommitsAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(false));
+
+        public Task<Result<string>> GetPullRequestByBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok(string.Empty));
+    }
+
+    private sealed class ThrowingIssueProvider : IIssueProvider
+    {
+        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+
+        public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
+
+        public Task<Result<bool>> IsIssueClosedAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(false));
+
+        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+
+        public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            DateTimeOffset since,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+
+        public Task<Result<BranchProtection>> GetBranchProtectionAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+            => throw new HttpRequestException("Connection refused");
 
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,

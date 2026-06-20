@@ -95,7 +95,7 @@ public sealed class GetEligibilityAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRepositoryHasNoEligibilitySet_ReturnsNull()
+    public async Task WhenRepositoryHasNoEligibilitySet_ReturnsUnreachable()
     {
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Org 4");
@@ -105,7 +105,10 @@ public sealed class GetEligibilityAsync : IAsyncDisposable
         RepositoryEligibilityInfo? result = await QueryEligibilityAsync(repositoryId);
 
         // Assert
-        result.ShouldBeNull();
+        RepositoryEligibilityInfo info = result.ShouldNotBeNull();
+        info.ShouldSatisfyAllConditions(
+            () => info.Status.ShouldBe("unreachable"),
+            () => info.Violations.ShouldBeEmpty());
     }
 
     private async Task<RepositoryEligibilityInfo?> QueryEligibilityAsync(Guid repositoryId)

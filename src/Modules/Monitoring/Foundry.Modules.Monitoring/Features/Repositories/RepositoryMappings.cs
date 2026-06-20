@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
@@ -19,6 +21,6 @@ internal static class RepositoryMappings
                     .Select(v => new EligibilityViolationInfo(v.Rule, v.Description))
                     .ToList()),
             RepositoryEligibility.Unreachable => new RepositoryEligibilityInfo("unreachable", []),
-            _ => null,
+            _ => throw new UnreachableException(),
         };
 }

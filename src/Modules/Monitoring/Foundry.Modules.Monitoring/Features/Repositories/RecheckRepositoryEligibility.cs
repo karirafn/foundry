@@ -78,19 +78,20 @@ internal static class RecheckRepositoryEligibility
                     Command command = new(accountId, id);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<RepositorySummary>, NotFound<string>>>(
+                    return result.Match<Results<Ok<RepositorySummary>, NotFound<string>, ProblemHttpResult>>(
                         repository => TypedResults.Ok(repository),
                         error => error.Code switch
                         {
                             RepositoryErrors.NotFoundCode => TypedResults.NotFound(error.Message),
                             RepositoryErrors.AccountNotFoundCode => TypedResults.NotFound(error.Message),
-                            _ => TypedResults.NotFound(error.Message),
+                            _ => TypedResults.Problem(error.Message),
                         });
                 })
                 .WithName("RecheckRepositoryEligibility")
                 .WithSummary("Re-evaluates branch protection eligibility for a monitored repository")
                 .Produces<RepositorySummary>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }
 }

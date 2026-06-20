@@ -189,6 +189,7 @@ namespace Foundry.WebApi.Migrations
                         .HasMaxLength(20)
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
+                        .HasDefaultValue("unreachable")
                         .HasColumnName("eligibility_status");
 
                     b.Property<bool>("IsActive")

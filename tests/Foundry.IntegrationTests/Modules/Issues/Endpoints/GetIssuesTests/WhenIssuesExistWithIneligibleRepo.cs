@@ -126,9 +126,9 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRepoHasNoEligibilityEvaluated_SummaryHasNullStatus()
+    public async Task WhenRepoHasNoEligibilityEvaluated_SummaryHasUnreachableStatus()
     {
-        // Arrange — repo seeded without setting eligibility
+        // Arrange — repo seeded without setting eligibility; DB default is 'unreachable'
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
@@ -153,7 +153,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
             .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
         summaries.ShouldNotBeNull();
         IssueSummary summary = summaries.ShouldHaveSingleItem();
-        summary.RepositoryEligibilityStatus.ShouldBeNull();
+        summary.RepositoryEligibilityStatus.ShouldBe("unreachable");
     }
 
     [Fact]

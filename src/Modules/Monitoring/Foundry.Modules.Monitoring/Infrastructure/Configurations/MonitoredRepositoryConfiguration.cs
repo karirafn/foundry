@@ -72,6 +72,7 @@ public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<
         builder.Property(r => r.EligibilityStatus)
             .HasMaxLength(EligibilityStatusMaxLength)
             .IsUnicode(false)
+            .HasDefaultValue("unreachable")
             .HasColumnName("eligibility_status");
 
         builder.HasIndex(r => r.EligibilityStatus)

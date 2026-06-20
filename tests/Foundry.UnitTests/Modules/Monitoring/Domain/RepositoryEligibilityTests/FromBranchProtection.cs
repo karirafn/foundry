@@ -1,6 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
-using Foundry.Shared;
 
 using Shouldly;
 
@@ -10,50 +9,93 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.RepositoryEligibilityTests
 
 public sealed class FromBranchProtection
 {
-    private static BranchProtection CleanProtection => new("main", true, true, true);
-
     [Fact]
-    public void WhenResultIsSuccessAndNoViolations_ReturnsEligible()
+    public void WhenAllProtectionsEnabled_EligibleIsExpected()
     {
         // Arrange
-        Result<BranchProtection> result = Result<BranchProtection>.Ok(CleanProtection);
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
 
         // Act
-        RepositoryEligibility eligibility = RepositoryEligibility.FromBranchProtection(result);
+        List<EligibilityViolation> violations = CollectViolations(protection);
 
         // Assert
-        eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
+        violations.ShouldBeEmpty();
     }
 
     [Fact]
-    public void WhenResultIsSuccessWithViolations_ReturnsIneligibleWithCorrectViolations()
+    public void WhenDirectPushesAllowed_ViolationIsReported()
+    {
+        // Arrange
+        BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
+
+        // Act
+        List<EligibilityViolation> violations = CollectViolations(protection);
+
+        // Assert
+        violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDirectPushesRule);
+    }
+
+    [Fact]
+    public void WhenForcePushesAllowed_ViolationIsReported()
+    {
+        // Arrange
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: false, RejectDeletion: true);
+
+        // Act
+        List<EligibilityViolation> violations = CollectViolations(protection);
+
+        // Assert
+        violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowForcePushesRule);
+    }
+
+    [Fact]
+    public void WhenDeletionAllowed_ViolationIsReported()
+    {
+        // Arrange
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: false);
+
+        // Act
+        List<EligibilityViolation> violations = CollectViolations(protection);
+
+        // Assert
+        violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDeletionRule);
+    }
+
+    [Fact]
+    public void WhenMultipleViolations_AllViolationsReported()
     {
         // Arrange
         BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: false, RejectDeletion: true);
-        Result<BranchProtection> result = Result<BranchProtection>.Ok(protection);
 
         // Act
-        RepositoryEligibility eligibility = RepositoryEligibility.FromBranchProtection(result);
+        List<EligibilityViolation> violations = CollectViolations(protection);
 
         // Assert
-        RepositoryEligibility.Ineligible ineligible = eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
-        ineligible.Violations.ShouldSatisfyAllConditions(
-            () => ineligible.Violations.Count.ShouldBe(2),
-            () => ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDirectPushesRule),
-            () => ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowForcePushesRule));
+        violations.ShouldSatisfyAllConditions(
+            () => violations.Count.ShouldBe(2),
+            () => violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDirectPushesRule),
+            () => violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowForcePushesRule));
     }
 
-    [Fact]
-    public void WhenResultIsFailure_ReturnsUnreachable()
+    private static List<EligibilityViolation> CollectViolations(BranchProtection protection)
     {
-        // Arrange
-        Result<BranchProtection> result = Result<BranchProtection>.Fail(
-            new Error("Provider.Unreachable", "Branch protection could not be fetched."));
+        List<EligibilityViolation> violations = [];
 
-        // Act
-        RepositoryEligibility eligibility = RepositoryEligibility.FromBranchProtection(result);
+        if (!protection.RejectDirectPushes)
+        {
+            violations.Add(EligibilityViolation.AllowDirectPushes());
+        }
 
-        // Assert
-        eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+        if (!protection.RejectForcePushes)
+        {
+            violations.Add(EligibilityViolation.AllowForcePushes());
+        }
+
+        if (!protection.RejectDeletion)
+        {
+            violations.Add(EligibilityViolation.AllowDeletion());
+        }
+
+        return violations;
     }
 }

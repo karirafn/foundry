@@ -59,6 +59,7 @@ internal static class CreateRepository
             AccountId accountId = AccountId.From(command.AccountId);
 
             Account? account = await dbContext.Set<Account>()
+                .AsNoTracking()
                 .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
 
             if (account is null)
