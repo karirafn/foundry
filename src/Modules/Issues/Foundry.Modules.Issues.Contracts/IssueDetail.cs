@@ -6,6 +6,7 @@ public sealed record IssueDetail(
     string Title,
     string State,
     string RepositorySlug,
+    string ProviderType,
     DateTimeOffset DetectedAt,
     string Url,
     string Author,

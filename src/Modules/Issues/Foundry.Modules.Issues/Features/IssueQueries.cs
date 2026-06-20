@@ -186,6 +186,10 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             ? slug
             : string.Empty;
 
+        string? providerType = await slugQueries.GetProviderTypeAsync(
+            issue.MonitoredRepositoryId,
+            cancellationToken);
+
         string state = GetStateDiscriminator(issue);
 
         IssueStateDetails? stateDetails = BuildStateDetails(issue);
@@ -196,6 +200,7 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             Title: issue.Title,
             State: state,
             RepositorySlug: repositorySlug,
+            ProviderType: providerType ?? string.Empty,
             DetectedAt: issue.DetectedAt,
             Url: issue.Url.Value.ToString(),
             Author: issue.Author.Value,

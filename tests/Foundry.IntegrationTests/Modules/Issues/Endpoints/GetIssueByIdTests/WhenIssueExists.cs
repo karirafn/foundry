@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
@@ -43,7 +44,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task<DetectedIssue> SeedDetectedIssueAsync()
+    private async Task<DetectedIssue> SeedDetectedIssueAsync(MonitoredRepositoryId? repositoryId = null)
     {
         // No POST endpoint exists for issues — they are created via integration events.
         // Seed directly through DbContext.
@@ -51,7 +52,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         DetectedIssue issue = DetectedIssue.Detect(
-            RepositoryId,
+            repositoryId ?? RepositoryId,
             issueNumber: 7,
             title: "A detected issue",
             body: "Issue body text",
@@ -90,5 +91,70 @@ public sealed class WhenIssueExists : IAsyncDisposable
             () => detail.Author.ShouldBe("octocat"),
             () => detail.Labels.ShouldBe(["bug"]),
             () => detail.StateDetails.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenIssueLinkedToGitHubRepository_ReturnsGitHubProviderType()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
+        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId);
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
+        DetectedIssue issue = await SeedDetectedIssueAsync(repoId);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/issues/{issue.Id.Value}", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
+            TestContext.Current.CancellationToken);
+        detail.ShouldNotBeNull();
+        detail.ProviderType.ShouldBe("GitHub");
+    }
+
+    [Fact]
+    public async Task WhenIssueLinkedToGitLabRepository_ReturnsGitLabProviderType()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory);
+        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/gitlab-repo");
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
+        ProviderUrl gitlabUrl =
+            ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7")).Value;
+
+        // No POST endpoint exists for issues — seed directly via DbContext.
+        using (IServiceScope scope = _factory.Services.CreateScope())
+        {
+            DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+            IssueAuthor author = ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+
+            DetectedIssue issue = DetectedIssue.Detect(
+                repoId,
+                issueNumber: 7,
+                title: "A GitLab issue",
+                body: "Issue body",
+                author: author,
+                url: gitlabUrl,
+                labels: [],
+                detectedAt: DateTimeOffset.UtcNow);
+
+            dbContext.Set<Issue>().Add(issue);
+            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            // Act
+            HttpResponseMessage response = await _client.GetAsync(
+                new Uri($"/api/issues/{issue.Id.Value}", UriKind.Relative),
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
+                TestContext.Current.CancellationToken);
+            detail.ShouldNotBeNull();
+            detail.ProviderType.ShouldBe("GitLab");
+        }
     }
 }
