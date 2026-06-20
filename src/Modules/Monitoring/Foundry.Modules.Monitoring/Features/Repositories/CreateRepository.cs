@@ -47,7 +47,10 @@ internal static class CreateRepository
         }
     }
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, RepositorySummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        IIssueProviderFactory providerFactory,
+        IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
@@ -56,7 +59,6 @@ internal static class CreateRepository
             AccountId accountId = AccountId.From(command.AccountId);
 
             Account? account = await dbContext.Set<Account>()
-                .AsNoTracking()
                 .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
 
             if (account is null)
@@ -97,6 +99,13 @@ internal static class CreateRepository
                 return Result<RepositorySummary>.Fail(RepositoryErrors.DuplicateSlug(command.Slug));
             }
 
+            if (!string.IsNullOrEmpty(account.Token))
+            {
+                IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
+                await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
             RepositorySummary summary = new(
                 repository.Id.Value,
                 repository.Slug.ToString(),
@@ -104,7 +113,8 @@ internal static class CreateRepository
                 account.Name,
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
-                repository.LastPolledAt);
+                repository.LastPolledAt,
+                RepositoryMappings.ToEligibilityInfo(repository.Eligibility));
 
             return Result<RepositorySummary>.Ok(summary);
         }

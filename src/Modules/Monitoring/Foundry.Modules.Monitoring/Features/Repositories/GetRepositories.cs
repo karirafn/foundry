@@ -41,6 +41,7 @@ internal static class GetRepositories
                         r.PollInterval,
                         r.IsActive,
                         r.LastPolledAt,
+                        r.Eligibility,
                     })
                 .ToListAsync(cancellationToken);
 
@@ -52,7 +53,8 @@ internal static class GetRepositories
                     r.AccountName,
                     RepositoryMappings.ToSeconds(r.PollInterval),
                     r.IsActive,
-                    r.LastPolledAt))
+                    r.LastPolledAt,
+                    RepositoryMappings.ToEligibilityInfo(r.Eligibility)))
                 .ToList();
 
             return Result<IReadOnlyList<RepositorySummary>>.Ok(repositories);

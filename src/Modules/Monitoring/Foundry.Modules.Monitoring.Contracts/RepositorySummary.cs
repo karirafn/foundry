@@ -7,4 +7,5 @@ public sealed record RepositorySummary(
     string AccountName,
     int? PollIntervalSeconds,
     bool IsActive,
-    DateTimeOffset? LastPolledAt);
+    DateTimeOffset? LastPolledAt,
+    RepositoryEligibilityInfo? Eligibility);

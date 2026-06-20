@@ -16,6 +16,7 @@ internal static class RepositoryEndpoints
         CreateRepository.Endpoint.Map(group);
         UpdateRepository.Endpoint.Map(group);
         DeleteRepository.Endpoint.Map(group);
+        RecheckRepositoryEligibility.Endpoint.Map(group);
 
         return routes;
     }

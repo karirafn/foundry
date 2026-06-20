@@ -43,6 +43,7 @@ public static class MonitoringModule
         services.AddCommandHandler<CreateRepository.Command, RepositorySummary, CreateRepository.Handler, CreateRepository.Validator>();
         services.AddCommandHandler<UpdateRepository.Command, RepositorySummary, UpdateRepository.Handler, UpdateRepository.Validator>();
         services.AddCommandHandler<DeleteRepository.Command, bool, DeleteRepository.Handler>();
+        services.AddCommandHandler<RecheckRepositoryEligibility.Command, RepositorySummary, RecheckRepositoryEligibility.Handler>();
 
         services.AddHostedService<MonitoringService>();
 
