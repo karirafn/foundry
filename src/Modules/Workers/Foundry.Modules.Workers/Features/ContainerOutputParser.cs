@@ -56,8 +56,9 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         }
 
         string? terminalReason = node["terminal_reason"]?.GetValue<string>();
+        int? apiErrorStatus = ReadApiErrorStatus(node);
 
-        if (terminalReason is null || !UsageLimitReasons.Contains(terminalReason))
+        if (!IsUsageLimit(apiErrorStatus, terminalReason))
         {
             return new ContainerOutputParseResult.NormalExit();
         }
@@ -65,6 +66,33 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         DateTimeOffset resetsAt = ParseResetTime(node["result"]?.GetValue<string>(), defaultCooldownMinutes);
 
         return new ContainerOutputParseResult.UsageLimited(resetsAt);
+    }
+
+    private static bool IsUsageLimit(int? apiErrorStatus, string? terminalReason)
+    {
+        return apiErrorStatus == 429
+            || (terminalReason is not null && UsageLimitReasons.Contains(terminalReason));
+    }
+
+    private static int? ReadApiErrorStatus(JsonNode node)
+    {
+        JsonNode? statusNode = node["api_error_status"];
+
+        if (statusNode is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return statusNode.GetValue<int>();
+        }
+        catch (InvalidOperationException)
+        {
+            // api_error_status may be a string — try parsing it
+            string? raw = statusNode.GetValue<string>();
+            return int.TryParse(raw, out int parsed) ? parsed : null;
+        }
     }
 
     private static string? ExtractLastJsonLine(string log)
@@ -99,24 +127,60 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     {
         if (resultText is not null)
         {
-            Match match = ResetTimePattern().Match(resultText);
+            Match isoMatch = Iso8601ResetTimePattern().Match(resultText);
 
-            if (match.Success && DateTimeOffset.TryParse(
-                match.Value,
+            if (isoMatch.Success && DateTimeOffset.TryParse(
+                isoMatch.Value,
                 null,
                 System.Globalization.DateTimeStyles.RoundtripKind,
                 out DateTimeOffset parsed))
             {
                 return parsed;
             }
+
+            Match wallClockMatch = WallClockResetTimePattern().Match(resultText);
+
+            if (wallClockMatch.Success)
+            {
+                DateTimeOffset? wallClockTime = ParseWallClockTime(wallClockMatch.Groups["time"].Value);
+
+                if (wallClockTime is not null)
+                {
+                    return wallClockTime.Value;
+                }
+            }
         }
 
         return DateTimeOffset.UtcNow.AddMinutes(defaultCooldownMinutes);
+    }
+
+    private static DateTimeOffset? ParseWallClockTime(string timeText)
+    {
+        if (!TimeOnly.TryParse(timeText, out TimeOnly timeOfDay))
+        {
+            return null;
+        }
+
+        DateTimeOffset today = DateTimeOffset.UtcNow.Date;
+        DateTimeOffset candidate = today.Add(timeOfDay.ToTimeSpan());
+
+        if (candidate <= DateTimeOffset.UtcNow)
+        {
+            candidate = candidate.AddDays(1);
+        }
+
+        return candidate;
     }
 
     [GeneratedRegex(
         @"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
-    private static partial Regex ResetTimePattern();
+    private static partial Regex Iso8601ResetTimePattern();
+
+    [GeneratedRegex(
+        @"[^\w]*resets\s+(?<time>\d{1,2}:\d{2}\s*[ap]m)(?:\s*\(UTC\))?",
+        RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex WallClockResetTimePattern();
 }
