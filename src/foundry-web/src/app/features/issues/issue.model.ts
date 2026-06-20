@@ -44,6 +44,7 @@ export interface IssueStateDetails {
 }
 
 export interface IssueDetail extends IssueSummary {
+  providerType: string;
   author: string;
   labels: string[];
   stateDetails: IssueStateDetails | null;

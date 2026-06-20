@@ -64,15 +64,16 @@ import { providerTerminology } from '../../settings/accounts/provider.util';
             }
 
             @if (s.pullRequestUrl | safeHref; as safePrUrl) {
+              @let terms = _prTerminology(d.providerType);
               <div class="issue-detail__field">
-                <span class="issue-detail__field-key">{{ _prTerminology(s.pullRequestUrl).pullRequest }}</span>
+                <span class="issue-detail__field-key">{{ terms.pullRequest }}</span>
                 <a
                   class="issue-detail__pr-link issue-detail__field-value"
                   [href]="safePrUrl"
                   target="_blank"
                   rel="noopener noreferrer"
-                  [attr.aria-label]="'Open pull request for issue #' + d.issueNumber"
-                >View {{ _prTerminology(s.pullRequestUrl).prAbbrev }}</a>
+                  [attr.aria-label]="'Open ' + terms.pullRequest.toLowerCase() + ' for issue #' + d.issueNumber"
+                >View {{ terms.prAbbrev }}</a>
               </div>
             }
 
@@ -170,8 +171,7 @@ export class IssueDetailComponent {
     this._issueService.retryEligibility(id);
   }
 
-  _prTerminology(pullRequestUrl: string | null): { pullRequest: string; prAbbrev: string } {
-    const providerType = pullRequestUrl?.includes('gitlab') ? 'GitLab' : 'GitHub';
+  _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {
     return providerTerminology(providerType);
   }
 }

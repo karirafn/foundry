@@ -208,6 +208,7 @@ describe('IssueService', () => {
     // Arrange
     const detail: IssueDetail = {
       ...mockSummary,
+      providerType: 'GitHub',
       author: 'dev',
       labels: ['bug'],
       stateDetails: {
@@ -329,6 +330,7 @@ describe('IssueService', () => {
     const detailB: IssueDetail = {
       ...mockSummary,
       id: 'def456',
+      providerType: 'GitHub',
       author: 'dev',
       labels: [],
       stateDetails: {
