@@ -44,7 +44,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
-        services.AddScoped<IBranchProtectionValidator, NullBranchProtectionValidator>();
+        services.AddScoped<IRepositoryEligibilityQuery, NullRepositoryEligibilityQuery>();
         services.AddScoped<IIssueBroadcaster, NullIssueBroadcaster>();
         services.AddScoped<IAuthValidator, NullAuthValidator>();
         services.AddScoped<ISystemNotificationBroadcaster, NullSystemNotificationBroadcaster>();
@@ -345,14 +345,17 @@ public sealed class AddIssuesModule : IAsyncDisposable
             => Task.FromResult<RepositoryDispatchInfo?>(null);
     }
 
-    private sealed class NullBranchProtectionValidator : IBranchProtectionValidator
+    private sealed class NullRepositoryEligibilityQuery : IRepositoryEligibilityQuery
     {
-        public Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
-            MonitoredRepositoryId repositoryId,
+        public Task<RepositoryEligibilityInfo?> GetEligibilityAsync(
+            Guid repositoryId,
             CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
-                    Array.Empty<EligibilityViolationInfo>()));
+            => Task.FromResult<RepositoryEligibilityInfo?>(null);
+
+        public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
     }
 
     private sealed class NullAuthValidator : IAuthValidator

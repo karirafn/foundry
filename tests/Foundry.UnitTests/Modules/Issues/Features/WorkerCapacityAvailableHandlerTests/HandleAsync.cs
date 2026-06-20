@@ -54,7 +54,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     private WorkerCapacityAvailableHandler BuildHandler(
-        IBranchProtectionValidator? branchProtectionValidator = null,
+        IRepositoryEligibilityQuery? repositoryEligibilityQuery = null,
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IAuthValidator? authValidator = null,
@@ -67,7 +67,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT")),
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
-            branchProtectionValidator ?? new StubBranchProtectionValidator(violations: []),
+            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             _domainEventDispatcher,
             authValidator ?? new StubAuthValidator(AuthValidationResult.Valid()),
             systemNotificationBroadcaster ?? new NullSystemNotificationBroadcaster(),
@@ -92,16 +92,16 @@ public sealed class HandleAsync : IAsyncDisposable
         return queued;
     }
 
-    // Sub-task (d): validation passes → claiming proceeds as before
+    // Eligible repo: queued issue is claimed normally
     [Fact]
-    public async Task WhenBranchProtectionPasses_TransitionsQueuedIssueToInProgress()
+    public async Task WhenRepositoryIsEligible_TransitionsQueuedIssueToInProgress()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedQueuedIssue(repositoryId);
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            branchProtectionValidator: new StubBranchProtectionValidator(violations: []));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: [repositoryId.Value]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -117,22 +117,16 @@ public sealed class HandleAsync : IAsyncDisposable
         issue.ShouldBeOfType<InProgressIssue>();
     }
 
-    // Sub-task (b): validation returns violations → QueuedIssue → IneligibleIssue
+    // Ineligible repo: queued issue is skipped (not claimed)
     [Fact]
-    public async Task WhenBranchProtectionReturnsViolations_TransitionsQueuedIssueToIneligible()
+    public async Task WhenRepositoryIsIneligible_DoesNotClaimQueuedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedQueuedIssue(repositoryId);
 
-        IReadOnlyList<EligibilityViolationInfo> violations =
-        [
-            new EligibilityViolationInfo(
-                "branch-protection:allow-direct-pushes",
-                "Direct pushes allowed.")
-        ];
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            branchProtectionValidator: new StubBranchProtectionValidator(violations: violations));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -145,51 +139,19 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<IneligibleIssue>();
+        issue.ShouldBeOfType<QueuedIssue>();
     }
 
+    // Ineligible repo: queued issue is NOT transitioned to ineligible state
     [Fact]
-    public async Task WhenBranchProtectionReturnsViolations_DispatchesIssueIneligibleEvent()
+    public async Task WhenRepositoryIsIneligible_DoesNotTransitionIssueToIneligibleState()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedQueuedIssue(repositoryId);
 
-        IReadOnlyList<EligibilityViolationInfo> violations =
-        [
-            new EligibilityViolationInfo(
-                "branch-protection:allow-direct-pushes",
-                "Direct pushes allowed.")
-        ];
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            branchProtectionValidator: new StubBranchProtectionValidator(violations: violations));
-
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _domainEventDispatcher.DispatchedEvents
-            .OfType<IssueIneligible>()
-            .ShouldHaveSingleItem();
-    }
-
-    [Fact]
-    public async Task WhenBranchProtectionReturnsViolations_PersistsViolations()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedQueuedIssue(repositoryId);
-
-        IReadOnlyList<EligibilityViolationInfo> violations =
-        [
-            new EligibilityViolationInfo(
-                "branch-protection:allow-direct-pushes",
-                "Direct pushes allowed.")
-        ];
-        WorkerCapacityAvailableHandler sut = BuildHandler(
-            branchProtectionValidator: new StubBranchProtectionValidator(violations: violations));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -198,25 +160,20 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _dbContext.ChangeTracker.Clear();
-        IneligibleIssue ineligible = _dbContext.Set<Issue>()
-            .OfType<IneligibleIssue>()
-            .ShouldHaveSingleItem();
-        ineligible.Violations.ShouldHaveSingleItem()
-            .ShouldSatisfyAllConditions(
-                v => v.Rule.ShouldBe("branch-protection:allow-direct-pushes"),
-                v => v.Description.ShouldBe("Direct pushes allowed."));
+        _dbContext.Set<Issue>().OfType<IneligibleIssue>().ShouldBeEmpty();
     }
 
-    // Sub-task (c): validation fails (unreachable) → IneligibleIssue
+    // Unreachable repo (no eligibility record): queued issue is skipped
     [Fact]
-    public async Task WhenBranchProtectionIsUnreachable_TransitionsQueuedIssueToIneligible()
+    public async Task WhenRepositoryEligibilityIsUnknown_DoesNotClaimQueuedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedQueuedIssue(repositoryId);
 
+        // No eligible IDs — simulates repo with no eligibility record
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            branchProtectionValidator: new FailingBranchProtectionValidator());
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -229,39 +186,22 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<IneligibleIssue>();
+        issue.ShouldBeOfType<QueuedIssue>();
     }
 
+    // Mixed: eligible and ineligible repos — only eligible one is claimed
     [Fact]
-    public async Task WhenBranchProtectionIsUnreachable_DispatchesIssueIneligibleEvent()
+    public async Task WhenMixedEligibility_OnlyClaimsIssueFromEligibleRepository()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedQueuedIssue(repositoryId);
+        MonitoredRepositoryId eligibleRepoId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId ineligibleRepoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(eligibleRepoId, issueNumber: 1);
+        SeedQueuedIssue(ineligibleRepoId, issueNumber: 2);
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            branchProtectionValidator: new FailingBranchProtectionValidator());
-
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _domainEventDispatcher.DispatchedEvents
-            .OfType<IssueIneligible>()
-            .ShouldHaveSingleItem();
-    }
-
-    [Fact]
-    public async Task WhenBranchProtectionIsUnreachable_PersistsUnreachableViolation()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedQueuedIssue(repositoryId);
-
-        WorkerCapacityAvailableHandler sut = BuildHandler(
-            branchProtectionValidator: new FailingBranchProtectionValidator());
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleIds: [eligibleRepoId.Value]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -270,13 +210,165 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _dbContext.ChangeTracker.Clear();
-        IneligibleIssue ineligible = _dbContext.Set<Issue>()
-            .OfType<IneligibleIssue>()
-            .ShouldHaveSingleItem();
-        ineligible.Violations.ShouldHaveSingleItem()
-            .Rule.ShouldBe("branch-protection:unreachable");
+        Issue? eligibleIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == eligibleRepoId,
+                TestContext.Current.CancellationToken);
+        Issue? ineligibleIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == ineligibleRepoId,
+                TestContext.Current.CancellationToken);
+        eligibleIssue.ShouldBeOfType<InProgressIssue>();
+        ineligibleIssue.ShouldBeOfType<QueuedIssue>();
     }
 
+    // Claim-priority ordering: revision queued takes precedence over continuation and fresh queued
+    [Fact]
+    public async Task WhenRevisionQueuedAndQueuedBothExist_PrioritizesRevisionQueued()
+    {
+        // Arrange
+        MonitoredRepositoryId revisionRepositoryId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId queuedRepositoryId = MonitoredRepositoryId.New();
+        SeedRevisionQueuedIssue(revisionRepositoryId);
+        SeedQueuedIssue(queuedRepositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery());
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? revisionIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == revisionRepositoryId,
+                TestContext.Current.CancellationToken);
+        Issue? queuedIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == queuedRepositoryId,
+                TestContext.Current.CancellationToken);
+        revisionIssue.ShouldBeOfType<RevisionInProgressIssue>();
+        queuedIssue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    // Claim-priority ordering: continuation queued takes precedence over fresh queued
+    [Fact]
+    public async Task WhenContinuationQueuedAndQueuedBothExist_PrioritizesContinuationQueued()
+    {
+        // Arrange
+        MonitoredRepositoryId continuationRepositoryId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId queuedRepositoryId = MonitoredRepositoryId.New();
+        SeedContinuationQueuedIssue(continuationRepositoryId);
+        SeedQueuedIssue(queuedRepositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery());
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? continuationIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == continuationRepositoryId,
+                TestContext.Current.CancellationToken);
+        Issue? queuedIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == queuedRepositoryId,
+                TestContext.Current.CancellationToken);
+        continuationIssue.ShouldBeOfType<InProgressIssue>();
+        queuedIssue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    // Claim-priority ordering: revision queued takes precedence over continuation queued
+    [Fact]
+    public async Task WhenRevisionQueuedAndContinuationQueuedBothExist_PrioritizesRevisionQueued()
+    {
+        // Arrange
+        MonitoredRepositoryId revisionRepositoryId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId continuationRepositoryId = MonitoredRepositoryId.New();
+        SeedRevisionQueuedIssue(revisionRepositoryId);
+        SeedContinuationQueuedIssue(continuationRepositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery());
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? revisionIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == revisionRepositoryId,
+                TestContext.Current.CancellationToken);
+        Issue? continuationIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == continuationRepositoryId,
+                TestContext.Current.CancellationToken);
+        revisionIssue.ShouldBeOfType<RevisionInProgressIssue>();
+        continuationIssue.ShouldBeOfType<ContinuationQueuedIssue>();
+    }
+
+    // Ineligible revision queued: skipped (not claimed)
+    [Fact]
+    public async Task WhenRevisionQueuedRepositoryIsIneligible_SkipsRevisionQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedRevisionQueuedIssue(repositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<RevisionQueuedIssue>();
+    }
+
+    // Ineligible continuation queued: skipped (not claimed)
+    [Fact]
+    public async Task WhenContinuationQueuedRepositoryIsIneligible_SkipsContinuationQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedContinuationQueuedIssue(repositoryId);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<ContinuationQueuedIssue>();
+    }
+
+    // Auth invalid: no issues claimed regardless of eligibility
     [Fact]
     public async Task WhenAuthIsInvalid_DoesNotClaimAnyIssue()
     {
@@ -345,78 +437,6 @@ public sealed class HandleAsync : IAsyncDisposable
             () => notification.Message.ShouldBe(""));
     }
 
-    private sealed class StubBranchProtectionValidator(
-        IReadOnlyList<EligibilityViolationInfo> violations) : IBranchProtectionValidator
-    {
-        public Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(violations));
-    }
-
-    private sealed class FailingBranchProtectionValidator : IBranchProtectionValidator
-    {
-        public Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<IReadOnlyList<EligibilityViolationInfo>>.Fail(
-                    new Error("BranchProtection.Unreachable", "Branch protection check failed")));
-    }
-
-    private ContinuationQueuedIssue SeedContinuationQueuedIssue(
-        MonitoredRepositoryId repositoryId,
-        string branchName = "feat/103-fix")
-    {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 10,
-            title: "Issue 10",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
-            branchName,
-            "Non-zero exit code: 1",
-            DateTimeOffset.UtcNow);
-        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
-        _dbContext.Set<Issue>().Add(continuationQueued);
-        _dbContext.SaveChanges();
-        _dbContext.ChangeTracker.Clear();
-        return continuationQueued;
-    }
-
-    private RevisionQueuedIssue SeedRevisionQueuedIssue(MonitoredRepositoryId repositoryId)
-    {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 20,
-            title: "Issue 20",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-20",
-            "https://github.com/owner/repo/pull/20",
-            DateTimeOffset.UtcNow);
-        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
-        _dbContext.Set<Issue>().Add(revisionQueued);
-        _dbContext.SaveChanges();
-        _dbContext.ChangeTracker.Clear();
-        return revisionQueued;
-    }
-
     [Fact]
     public async Task WhenQueuedIssueIsClaimed_BranchNameIncludesTitleSlug()
     {
@@ -483,62 +503,95 @@ public sealed class HandleAsync : IAsyncDisposable
             .BranchName.ShouldBe("feat/103-fix");
     }
 
-    [Fact]
-    public async Task WhenBothContinuationQueuedAndQueuedIssueExist_ClaimsContinuationQueuedFirst()
+    private ContinuationQueuedIssue SeedContinuationQueuedIssue(
+        MonitoredRepositoryId repositoryId,
+        string branchName = "feat/103-fix")
     {
-        // Arrange
-        MonitoredRepositoryId continuationRepositoryId = MonitoredRepositoryId.New();
-        MonitoredRepositoryId queuedRepositoryId = MonitoredRepositoryId.New();
-        SeedContinuationQueuedIssue(continuationRepositoryId);
-        SeedQueuedIssue(queuedRepositoryId);
-
-        WorkerCapacityAvailableHandler sut = BuildHandler();
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 10,
+            title: "Issue 10",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
+            Guid.NewGuid(),
+            branchName,
+            "Non-zero exit code: 1",
+            DateTimeOffset.UtcNow);
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        _dbContext.Set<Issue>().Add(continuationQueued);
+        _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
-        Issue? continuationIssue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == continuationRepositoryId,
-                TestContext.Current.CancellationToken);
-        Issue? queuedIssue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == queuedRepositoryId,
-                TestContext.Current.CancellationToken);
-        continuationIssue.ShouldBeOfType<InProgressIssue>();
-        queuedIssue.ShouldBeOfType<QueuedIssue>();
+        return continuationQueued;
     }
 
-    [Fact]
-    public async Task WhenRevisionQueuedAndContinuationQueuedBothExist_PrioritizesRevisionQueued()
+    private RevisionQueuedIssue SeedRevisionQueuedIssue(MonitoredRepositoryId repositoryId)
     {
-        // Arrange
-        MonitoredRepositoryId revisionRepositoryId = MonitoredRepositoryId.New();
-        MonitoredRepositoryId continuationRepositoryId = MonitoredRepositoryId.New();
-        SeedRevisionQueuedIssue(revisionRepositoryId);
-        SeedContinuationQueuedIssue(continuationRepositoryId);
-
-        WorkerCapacityAvailableHandler sut = BuildHandler();
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 20,
+            title: "Issue 20",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ReviewIssue review = inProgress.MarkInReview(
+            Guid.NewGuid(),
+            "feat/issue-20",
+            "https://github.com/owner/repo/pull/20",
+            DateTimeOffset.UtcNow);
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
+        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+        _dbContext.Set<Issue>().Add(revisionQueued);
+        _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
-        Issue? revisionIssue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == revisionRepositoryId,
-                TestContext.Current.CancellationToken);
-        Issue? continuationIssue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == continuationRepositoryId,
-                TestContext.Current.CancellationToken);
-        revisionIssue.ShouldBeOfType<RevisionInProgressIssue>();
-        continuationIssue.ShouldBeOfType<ContinuationQueuedIssue>();
+        return revisionQueued;
+    }
+
+    /// <summary>
+    /// Stub that returns exactly the provided eligible IDs.
+    /// </summary>
+    private sealed class StubRepositoryEligibilityQuery(IReadOnlyCollection<Guid> eligibleIds)
+        : IRepositoryEligibilityQuery
+    {
+        public Task<RepositoryEligibilityInfo?> GetEligibilityAsync(
+            Guid repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<RepositoryEligibilityInfo?>(null);
+
+        public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+        {
+            HashSet<Guid> eligible = repositoryIds
+                .Where(eligibleIds.Contains)
+                .ToHashSet();
+            return Task.FromResult<IReadOnlySet<Guid>>(eligible);
+        }
+    }
+
+    /// <summary>
+    /// Stub that marks every queried repository as eligible.
+    /// </summary>
+    private sealed class AllEligibleRepositoryEligibilityQuery : IRepositoryEligibilityQuery
+    {
+        public Task<RepositoryEligibilityInfo?> GetEligibilityAsync(
+            Guid repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<RepositoryEligibilityInfo?>(null);
+
+        public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<Guid>>(repositoryIds.ToHashSet());
     }
 
     private sealed class StubRepositoryDispatchQueries(RepositoryDispatchInfo? info) : IRepositoryDispatchQueries

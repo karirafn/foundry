@@ -17,7 +17,7 @@ internal sealed class WorkerCapacityAvailableHandler(
     DbContext db,
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IIntegrationEventDispatcher integrationEventDispatcher,
-    IBranchProtectionValidator branchProtectionValidator,
+    IRepositoryEligibilityQuery repositoryEligibilityQuery,
     IDomainEventDispatcher domainEventDispatcher,
     IAuthValidator authValidator,
     ISystemNotificationBroadcaster systemNotificationBroadcaster,
@@ -49,6 +49,12 @@ internal sealed class WorkerCapacityAvailableHandler(
 
         if (revisionQueued is not null)
         {
+            bool eligible = await IsRepositoryEligibleAsync([revisionQueued.MonitoredRepositoryId], cancellationToken);
+            if (!eligible)
+            {
+                return;
+            }
+
             await ClaimRevisionQueuedAsync(revisionQueued, @event.WorkerRunId, cancellationToken);
             return;
         }
@@ -59,6 +65,12 @@ internal sealed class WorkerCapacityAvailableHandler(
 
         if (continuationQueued is not null)
         {
+            bool eligible = await IsRepositoryEligibleAsync([continuationQueued.MonitoredRepositoryId], cancellationToken);
+            if (!eligible)
+            {
+                return;
+            }
+
             await ClaimContinuationQueuedAsync(continuationQueued, @event.WorkerRunId, cancellationToken);
             return;
         }
@@ -72,8 +84,8 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        bool eligible = await ValidateAndMarkIneligibleIfNotAsync(queued, cancellationToken);
-        if (!eligible)
+        bool queuedEligible = await IsRepositoryEligibleAsync([queued.MonitoredRepositoryId], cancellationToken);
+        if (!queuedEligible)
         {
             return;
         }
@@ -81,38 +93,18 @@ internal sealed class WorkerCapacityAvailableHandler(
         await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
     }
 
-    private async Task<bool> ValidateAndMarkIneligibleIfNotAsync(
-        QueuedIssue queued,
+    private async Task<bool> IsRepositoryEligibleAsync(
+        IReadOnlyCollection<MonitoredRepositoryId> repositoryIds,
         CancellationToken cancellationToken)
     {
-        Result<IReadOnlyList<EligibilityViolationInfo>> validationResult =
-            await branchProtectionValidator.ValidateAsync(queued.MonitoredRepositoryId, cancellationToken);
+        IReadOnlyCollection<Guid> rawIds = repositoryIds
+            .Select(id => id.Value)
+            .ToList();
 
-        List<EligibilityViolation> violations = validationResult switch
-        {
-            Result<IReadOnlyList<EligibilityViolationInfo>>.Success success when success.Value.Count > 0 =>
-                success.Value
-                    .Select(v => EligibilityViolation.From(v.Rule, v.Description))
-                    .ToList(),
-            Result<IReadOnlyList<EligibilityViolationInfo>>.Failure =>
-                [EligibilityViolation.Unreachable()],
-            _ => [],
-        };
+        IReadOnlySet<Guid> eligibleIds = await repositoryEligibilityQuery
+            .GetEligibleRepositoryIdsAsync(rawIds, cancellationToken);
 
-        if (violations.Count == 0)
-        {
-            return true;
-        }
-
-        IneligibleIssue ineligible = queued.MarkIneligible(violations);
-        await db.TransitionAsync(queued, ineligible, domainEventDispatcher, cancellationToken);
-
-        logger.LogWarning(
-            "Issue #{IssueNumber} in repository {RepositoryId} failed branch protection check; marked ineligible.",
-            queued.IssueNumber,
-            queued.MonitoredRepositoryId);
-
-        return false;
+        return rawIds.All(eligibleIds.Contains);
     }
 
     private async Task ClaimRevisionQueuedAsync(
