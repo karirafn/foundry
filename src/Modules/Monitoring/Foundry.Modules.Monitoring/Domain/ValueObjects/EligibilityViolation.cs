@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Foundry.Modules.Monitoring.Contracts;
 
 namespace Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -12,7 +14,11 @@ public sealed record EligibilityViolation
     public string Rule { get; }
     public string Description { get; }
 
-    private EligibilityViolation(string rule, string description)
+    // Internal to allow JSON deserialization by the EF value converter.
+    // External consumers must use the factory methods (AllowDirectPushes, AllowForcePushes, etc.)
+    // to ensure the Rule and Description are always consistent.
+    [JsonConstructor]
+    internal EligibilityViolation(string rule, string description)
     {
         Rule = rule;
         Description = description;
