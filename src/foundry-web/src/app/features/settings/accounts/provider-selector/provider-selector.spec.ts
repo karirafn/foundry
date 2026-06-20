@@ -22,7 +22,10 @@ describe('ProviderSelectorComponent', () => {
 
   // Cycle 1: component renders a radio group
   it('should render a radiogroup with GitHub and GitLab options', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -34,7 +37,10 @@ describe('ProviderSelectorComponent', () => {
 
   // Cycle 2: GitHub radio is checked when provider is GitHub
   it('should check GitHub radio when provider is GitHub', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ provider: 'GitHub' });
 
     // Assert
@@ -45,7 +51,10 @@ describe('ProviderSelectorComponent', () => {
 
   // Cycle 3: GitLab radio is checked when provider is GitLab
   it('should check GitLab radio when provider is GitLab', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ provider: 'GitLab' });
 
     // Assert
@@ -103,7 +112,10 @@ describe('ProviderSelectorComponent', () => {
 
   // Cycle 6: disabled mode disables all radio buttons
   it('should disable all radio buttons when disabled is true', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ disabled: true });
 
     // Assert
@@ -113,7 +125,10 @@ describe('ProviderSelectorComponent', () => {
 
   // Cycle 7: radiogroup has aria-label
   it('should have aria-label on the radiogroup', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert

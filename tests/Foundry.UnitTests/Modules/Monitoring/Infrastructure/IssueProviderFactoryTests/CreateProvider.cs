@@ -57,7 +57,10 @@ public sealed class CreateProvider
         IIssueProviderFactory sut = BuildSut();
         UnknownAccount account = new();
 
-        // Act & Assert
-        Should.Throw<NotSupportedException>(() => sut.CreateProvider(account, "token"));
+        // Act
+        Action act = () => sut.CreateProvider(account, "token");
+
+        // Assert
+        Should.Throw<NotSupportedException>(act);
     }
 }

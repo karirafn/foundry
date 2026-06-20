@@ -38,7 +38,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 1: add mode renders heading "Add Account"
   it('should render "Add Account" heading in add mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: null });
 
     // Assert
@@ -48,7 +51,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 2: edit mode renders heading "Edit Account"
   it('should render "Edit Account" heading in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
@@ -58,7 +64,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 3: cancel link is rendered
   it('should render a cancel link', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -84,7 +93,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 5: name field is rendered with label and input
   it('should render the name field with label and input', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -97,7 +109,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 6: in edit mode name field pre-filled from account
   it('should pre-fill name from account in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
@@ -107,7 +122,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 7: base URL field rendered with label
   it('should render the base URL field with label and input', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -119,7 +137,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 8: base URL defaults to https://github.com in add mode
   it('should default base URL to https://github.com in add mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: null });
 
     // Assert
@@ -129,7 +150,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 9: base URL pre-filled from account in edit mode
   it('should pre-fill base URL from account in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
@@ -139,7 +163,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 10: provider selector component is shown in add mode
   it('should show fd-provider-selector in add mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: null });
 
     // Assert
@@ -167,7 +194,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 12: edit mode shows provider badge, not selector
   it('should show provider badge in edit mode, not the selector', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
@@ -180,7 +210,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 13: token field rendered with label
   it('should render the token field with label and password input', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -193,7 +226,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 14: edit mode token hint is shown
   it('should show "Leave empty to keep current token" hint in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
@@ -219,7 +255,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 16: validate token button rendered
   it('should render the validate token button', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -250,7 +289,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 18: validate button is disabled when token is empty
   it('should disable validate button when token is empty', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -260,7 +302,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 19: validating state - button shows "Validating..."
   it('should show "Validating..." and disable validate button when validating', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ validating: true });
 
     // Assert
@@ -271,7 +316,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 20: validation result - valid
   it('should show valid validation result with green dot', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({
       validationResult: { isValid: true, isAuthFailure: false, missingScopes: [] },
     });
@@ -287,7 +335,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 21: validation result - auth failure
   it('should show auth failure validation result with error dot', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({
       validationResult: { isValid: false, isAuthFailure: true, missingScopes: [] },
     });
@@ -301,7 +352,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 22: validation result - missing scopes
   it('should show missing scopes validation result with warning dot', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({
       validationResult: { isValid: false, isAuthFailure: false, missingScopes: ['repo', 'workflow'] },
     });
@@ -317,7 +371,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 23: no validation result content shown when null
   it('should not show validation result content when validationResult is null', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ validationResult: null });
 
     // Assert — wrapper is always present (aria-live must persist), content is empty
@@ -329,7 +386,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 24: server error is shown
   it('should show save error when saveError is set', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ saveError: 'Something went wrong' });
 
     // Assert
@@ -341,7 +401,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 25: no error content shown when saveError null
   it('should not show save error content when saveError is null', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ saveError: null });
 
     // Assert — wrapper always present, but inner content is empty
@@ -351,7 +414,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 26: save button is rendered
   it('should render the save button', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup();
 
     // Assert
@@ -362,7 +428,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 27: save button disabled when name empty in add mode
   it('should disable save button when name is empty', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: null });
 
     // Assert
@@ -517,7 +586,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 34: validationError is shown when set
   it('should show validation error when validationError is set', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ validationError: 'Token validation failed' });
 
     // Assert
@@ -529,7 +601,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 35: no validationError content shown when null
   it('should not show validation error content when validationError is null', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ validationError: null });
 
     // Assert — wrapper always present, content is empty
@@ -539,7 +614,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 36: name input has required attribute
   it('should have required attribute on name input', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: null });
 
     // Assert
@@ -549,7 +627,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 37: token input has required attribute in add mode
   it('should have required attribute on token input in add mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: null });
 
     // Assert
@@ -559,7 +640,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 38: token input does not have required attribute in edit mode
   it('should not have required attribute on token input in edit mode', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
@@ -569,7 +653,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 39: live-region divs render unconditionally so screen readers announce changes
   it('should render validation-error div even when validationError is null', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ validationError: null });
 
     // Assert
@@ -579,7 +666,10 @@ describe('AccountFormComponent', () => {
   });
 
   it('should render save-error div even when saveError is null', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ saveError: null });
 
     // Assert
@@ -590,7 +680,10 @@ describe('AccountFormComponent', () => {
 
   // Cycle 40: fd-provider-selector is labelled via aria-labelledby
   it('should associate the Provider label with fd-provider-selector via aria-labelledby', () => {
-    // Arrange / Act
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
     const { el } = setup({ account: null });
 
     // Assert
