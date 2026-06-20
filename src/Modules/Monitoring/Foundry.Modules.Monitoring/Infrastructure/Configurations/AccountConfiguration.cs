@@ -53,8 +53,8 @@ internal sealed class AccountConfiguration(
             .HasColumnName("base_url");
 
         builder.HasDiscriminator<string>("type")
-            .HasValue<GitHubAccount>("github")
-            .HasValue<GitLabAccount>("gitlab")
+            .HasValue<GitHubAccount>(AccountDiscriminators.GitHub)
+            .HasValue<GitLabAccount>(AccountDiscriminators.GitLab)
             .IsComplete(true);
 
         builder.Property<string>("type")

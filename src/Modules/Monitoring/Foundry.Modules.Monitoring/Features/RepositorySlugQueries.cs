@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -8,7 +9,6 @@ namespace Foundry.Modules.Monitoring.Features;
 
 internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueries
 {
-    private const string GitHubDiscriminator = "github";
     private const string GitHubProviderType = "GitHub";
     private const string GitLabProviderType = "GitLab";
 
@@ -44,6 +44,6 @@ internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueri
 
         return discriminator is null
             ? null
-            : discriminator == GitHubDiscriminator ? GitHubProviderType : GitLabProviderType;
+            : discriminator == AccountDiscriminators.GitHub ? GitHubProviderType : GitLabProviderType;
     }
 }
