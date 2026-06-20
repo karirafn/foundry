@@ -678,8 +678,8 @@ describe('AccountFormComponent', () => {
     expect(errorEl?.getAttribute('role')).toBe('alert');
   });
 
-  // Cycle 40: fd-provider-selector is labelled via aria-labelledby
-  it('should associate the Provider label with fd-provider-selector via aria-labelledby', () => {
+  // Cycle 40: inner radiogroup inside fd-provider-selector is labelled via aria-labelledby
+  it('should associate the Provider label with the inner radiogroup via aria-labelledby', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
@@ -689,7 +689,7 @@ describe('AccountFormComponent', () => {
     // Assert
     const labelSpan = el.querySelector('#account-form-provider-label');
     expect(labelSpan).toBeTruthy();
-    const selector = el.querySelector('fd-provider-selector');
-    expect(selector?.getAttribute('aria-labelledby')).toBe('account-form-provider-label');
+    const radiogroup = el.querySelector('[role="radiogroup"]');
+    expect(radiogroup?.getAttribute('aria-labelledby')).toBe('account-form-provider-label');
   });
 });

@@ -69,7 +69,7 @@ const GITHUB_BASE_URL = 'https://github.com';
             [provider]="_provider()"
             (providerChange)="_provider.set($event)"
             (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
-            [attr.aria-labelledby]="'account-form-provider-label'"
+            [ariaLabelledBy]="'account-form-provider-label'"
           />
         </div>
       }

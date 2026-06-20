@@ -48,7 +48,7 @@ const GITHUB_BASE_URL = 'https://github.com';
             [provider]="_provider()"
             (providerChange)="_provider.set($event)"
             (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
-            [attr.aria-labelledby]="'setup-provider-label'"
+            [ariaLabelledBy]="'setup-provider-label'"
           />
         </div>
 
@@ -75,7 +75,7 @@ const GITHUB_BASE_URL = 'https://github.com';
               [value]="_token()"
               (input)="_token.set($any($event.target).value)"
               required
-              aria-describedby="account-token-validation account-save-error"
+              aria-describedby="setup-token-validation setup-save-error"
             />
             <button
               class="setup-account-step__toggle-visibility-btn"
@@ -107,7 +107,7 @@ const GITHUB_BASE_URL = 'https://github.com';
         </div>
 
         <div
-          id="account-token-validation"
+          id="setup-token-validation"
           class="setup-account-step__validation-result"
           role="status"
           aria-live="polite"
@@ -125,7 +125,7 @@ const GITHUB_BASE_URL = 'https://github.com';
         </div>
 
         <div
-          id="account-save-error"
+          id="setup-save-error"
           class="setup-account-step__save-error"
           role="alert"
         >{{ _accountService.saveError() ?? '' }}</div>

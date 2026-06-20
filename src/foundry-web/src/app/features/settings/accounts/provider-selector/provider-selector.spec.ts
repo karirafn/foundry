@@ -5,10 +5,14 @@ import { ProviderType } from '../account.model';
 function setup(overrides: {
   provider?: ProviderType;
   disabled?: boolean;
+  ariaLabelledBy?: string;
 } = {}) {
   const fixture = TestBed.createComponent(ProviderSelectorComponent);
   fixture.componentRef.setInput('provider', overrides.provider ?? 'GitHub');
   fixture.componentRef.setInput('disabled', overrides.disabled ?? false);
+  if (overrides.ariaLabelledBy !== undefined) {
+    fixture.componentRef.setInput('ariaLabelledBy', overrides.ariaLabelledBy);
+  }
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
@@ -123,8 +127,8 @@ describe('ProviderSelectorComponent', () => {
     radios.forEach((r) => expect(r.disabled).toBe(true));
   });
 
-  // Cycle 7: radiogroup has aria-label
-  it('should have aria-label on the radiogroup', () => {
+  // Cycle 7: radiogroup has aria-label as fallback when no ariaLabelledBy provided
+  it('should have aria-label on the radiogroup when no ariaLabelledBy is provided', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
@@ -134,5 +138,55 @@ describe('ProviderSelectorComponent', () => {
     // Assert
     const group = el.querySelector('[role="radiogroup"]');
     expect(group?.getAttribute('aria-label')).toBeTruthy();
+  });
+
+  // Cycle 8: ariaLabelledBy input propagates to inner radiogroup
+  it('should set aria-labelledby on the radiogroup when ariaLabelledBy is provided', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ ariaLabelledBy: 'account-form-provider-label' });
+
+    // Assert
+    const group = el.querySelector('[role="radiogroup"]');
+    expect(group?.getAttribute('aria-labelledby')).toBe('account-form-provider-label');
+  });
+
+  it('should remove aria-label from radiogroup when ariaLabelledBy is provided', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ ariaLabelledBy: 'account-form-provider-label' });
+
+    // Assert
+    const group = el.querySelector('[role="radiogroup"]');
+    expect(group?.getAttribute('aria-label')).toBeNull();
+  });
+
+  // Cycle 9: each component instance has a unique radio name
+  it('should use a unique name attribute per component instance', () => {
+    // Arrange
+    const fixture1 = TestBed.createComponent(ProviderSelectorComponent);
+    fixture1.componentRef.setInput('provider', 'GitHub');
+    fixture1.componentRef.setInput('disabled', false);
+    fixture1.detectChanges();
+
+    const fixture2 = TestBed.createComponent(ProviderSelectorComponent);
+    fixture2.componentRef.setInput('provider', 'GitHub');
+    fixture2.componentRef.setInput('disabled', false);
+    fixture2.detectChanges();
+
+    // Act
+    const radios1 = fixture1.nativeElement.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const radios2 = fixture2.nativeElement.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const name1 = radios1[0].name;
+    const name2 = radios2[0].name;
+
+    // Assert
+    expect(name1).toBeTruthy();
+    expect(name2).toBeTruthy();
+    expect(name1).not.toBe(name2);
   });
 });

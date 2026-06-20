@@ -363,8 +363,8 @@ describe('SetupAccountStepComponent', () => {
     req.flush({ isValid: true, isAuthFailure: false, missingScopes: [] });
   });
 
-  // Cycle 12: fd-provider-selector is labelled via aria-labelledby
-  it('should associate the Provider label with fd-provider-selector via aria-labelledby', () => {
+  // Cycle 12: inner radiogroup inside fd-provider-selector is labelled via aria-labelledby
+  it('should associate the Provider label with the inner radiogroup via aria-labelledby', () => {
     // Arrange
     const { fixture } = setup();
 
@@ -375,7 +375,34 @@ describe('SetupAccountStepComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const labelSpan = el.querySelector('#setup-provider-label');
     expect(labelSpan).toBeTruthy();
-    const selector = el.querySelector('fd-provider-selector');
-    expect(selector?.getAttribute('aria-labelledby')).toBe('setup-provider-label');
+    const radiogroup = el.querySelector('[role="radiogroup"]');
+    expect(radiogroup?.getAttribute('aria-labelledby')).toBe('setup-provider-label');
+  });
+
+  // Cycle 13: setup-token-validation and setup-save-error ids are present (no collision with account-form)
+  it('should have setup-token-validation and setup-save-error element ids', () => {
+    // Arrange
+    const { fixture } = setup();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#setup-token-validation')).toBeTruthy();
+    expect(el.querySelector('#setup-save-error')).toBeTruthy();
+  });
+
+  it('should reference setup-token-validation and setup-save-error in token input aria-describedby', () => {
+    // Arrange
+    const { fixture } = setup();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]');
+    expect(tokenInput?.getAttribute('aria-describedby')).toBe('setup-token-validation setup-save-error');
   });
 });

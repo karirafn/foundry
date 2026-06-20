@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
 import { AccountSummary } from '../account.model';
-import { providerLabel } from '../provider.util';
+import { providerDisplayName, providerLabel } from '../provider.util';
 
 @Component({
   selector: 'fd-account-list',
@@ -51,7 +51,7 @@ import { providerLabel } from '../provider.util';
           <li class="account-list__item" role="listitem">
             <span
               class="account-list__provider-badge"
-              [attr.aria-label]="account.providerType"
+              [attr.aria-label]="providerDisplayName(account.providerType)"
             >{{ providerLabel(account.providerType) }}</span>
             <div class="account-list__info">
               <span class="account-list__name">{{ account.name }}</span>
@@ -98,4 +98,5 @@ export class AccountListComponent {
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   readonly providerLabel = providerLabel;
+  readonly providerDisplayName = providerDisplayName;
 }

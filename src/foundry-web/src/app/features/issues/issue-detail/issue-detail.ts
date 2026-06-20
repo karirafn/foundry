@@ -171,7 +171,7 @@ export class IssueDetailComponent {
     this._issueService.retryEligibility(id);
   }
 
-  _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {
+  protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {
     return providerTerminology(providerType);
   }
 }
