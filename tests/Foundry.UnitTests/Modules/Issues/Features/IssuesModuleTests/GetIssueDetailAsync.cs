@@ -139,7 +139,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     public async Task WhenProviderTypeIsKnown_ReturnsProviderTypeInDetail()
     {
         // Arrange
-        _slugQueries.AddProviderType(RepositoryId, "GitHub");
+        _slugQueries.AddProviderType(RepositoryId, "github");
         DetectedIssue issue = await SaveDetectedIssueAsync();
 
         // Act
@@ -149,7 +149,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         // Assert
         IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
-        detail.ProviderType.ShouldBe("GitHub");
+        detail.ProviderType.ShouldBe("github");
     }
 
     [Fact]

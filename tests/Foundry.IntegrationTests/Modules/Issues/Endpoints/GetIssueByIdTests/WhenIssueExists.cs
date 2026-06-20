@@ -94,7 +94,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIssueLinkedToGitHubRepository_ReturnsGitHubProviderType()
+    public async Task WhenIssueLinkedToGitHubRepository_ReturnsGithubProviderType()
     {
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
@@ -116,7 +116,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIssueLinkedToGitLabRepository_ReturnsGitLabProviderType()
+    public async Task WhenIssueLinkedToGitLabRepository_ReturnsGitlabProviderType()
     {
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory);
