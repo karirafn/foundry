@@ -18,7 +18,7 @@ export interface RepositorySummary {
   pollIntervalSeconds: number | null;
   isActive: boolean;
   lastPolledAt: string | null;
-  eligibility: RepositoryEligibility;
+  eligibility: RepositoryEligibility | null;
 }
 
 export interface AvailableRepository {

@@ -413,7 +413,7 @@ describe('IssueCardComponent', () => {
     expect(marker).toBeTruthy();
   });
 
-  it('should have accessible role="status" on warning marker', () => {
+  it('should apply the ineligible modifier class to the warning marker', () => {
     // Arrange
     const queuedIneligibleIssue: IssueSummary = {
       ...mockIssue,
@@ -427,7 +427,8 @@ describe('IssueCardComponent', () => {
 
     // Assert
     const marker = el.querySelector('.issue-card__repo-warning') as HTMLElement;
-    expect(marker?.getAttribute('role')).toBe('status');
+    expect(marker?.classList.contains('issue-card__repo-warning--ineligible')).toBe(true);
+    expect(marker?.getAttribute('role')).toBeNull();
   });
 
   // Cycle 8: usage-limited badge

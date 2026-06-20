@@ -74,14 +74,16 @@ import { RepositoryService } from '../repository.service';
             <span class="repository-list__last-polled">
               {{ lastPolledLabel(repo.lastPolledAt) }}
             </span>
-            <fd-repository-eligibility
-              class="repository-list__eligibility"
-              [status]="repo.eligibility.status"
-              [violations]="repo.eligibility.violations"
-              [recheckPending]="_recheckingId() === repo.id"
-            />
+            @if (repo.eligibility) {
+              <fd-repository-eligibility
+                class="repository-list__eligibility"
+                [status]="repo.eligibility.status"
+                [violations]="repo.eligibility.violations"
+                [recheckPending]="_recheckingId() === repo.id"
+              />
+            }
             <div class="repository-list__actions">
-              @if (repo.eligibility.status !== 'eligible') {
+              @if (repo.eligibility && repo.eligibility.status !== 'eligible') {
                 <button
                   class="repository-list__recheck-btn"
                   type="button"

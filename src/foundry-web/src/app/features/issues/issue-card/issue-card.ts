@@ -1,9 +1,15 @@
-import { Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
+import { Component, InputSignal, OutputEmitterRef, computed, input, output } from '@angular/core';
+import { NgClass } from '@angular/common';
 import { IssueSummary } from '../issue.model';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 
 const QUEUED_STATES = new Set<string>(['queued', 'detected']);
+
+const WARNING_CLASSES: Record<string, string> = {
+  ineligible: 'issue-card__repo-warning--ineligible',
+  unreachable: 'issue-card__repo-warning--unreachable',
+};
 
 function timeAgo(dateString: string): string {
   const now = Date.now();
@@ -42,7 +48,7 @@ function timeAgo(dateString: string): string {
 @Component({
   selector: 'fd-issue-card',
   standalone: true,
-  imports: [StateBadgeComponent, SafeHrefPipe],
+  imports: [StateBadgeComponent, SafeHrefPipe, NgClass],
   template: `
     <button
       type="button"
@@ -62,9 +68,7 @@ function timeAgo(dateString: string): string {
           @if (repoWarningLabel()) {
             <span
               class="issue-card__repo-warning"
-              [class]="'issue-card__repo-warning issue-card__repo-warning--' + issue().repositoryEligibilityStatus"
-              role="status"
-              [attr.aria-label]="'Repository warning: ' + repoWarningLabel()"
+              [ngClass]="_warningClass()"
             >
               <svg
                 class="issue-card__repo-warning-icon"
@@ -132,6 +136,11 @@ export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly toggle: OutputEmitterRef<void> = output<void>();
+
+  readonly _warningClass = computed(() => {
+    const status = this.issue().repositoryEligibilityStatus;
+    return status ? (WARNING_CLASSES[status] ?? '') : '';
+  });
 
   repoWarningLabel(): string | null {
     const issue = this.issue();

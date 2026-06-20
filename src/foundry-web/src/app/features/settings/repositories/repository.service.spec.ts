@@ -655,6 +655,6 @@ describe('RepositoryService', () => {
     // Assert
     const repos = service.repositories();
     expect(repos.length).toBe(1);
-    expect(repos[0].eligibility.status).toBe('eligible');
+    expect(repos[0].eligibility?.status).toBe('eligible');
   });
 });

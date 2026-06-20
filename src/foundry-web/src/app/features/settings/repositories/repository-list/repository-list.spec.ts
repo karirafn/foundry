@@ -38,6 +38,17 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }] },
 };
 
+const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
+  id: '00000000-0000-0000-0000-000000000005',
+  slug: 'my-org/unpolled-repo',
+  accountId: '00000000-0000-0000-0000-000000000010',
+  accountName: 'my-github',
+  pollIntervalSeconds: 300,
+  isActive: true,
+  lastPolledAt: null,
+  eligibility: null,
+};
+
 const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   id: '00000000-0000-0000-0000-000000000004',
   slug: 'my-org/offline-repo',
@@ -439,6 +450,20 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
+    expect(recheckBtn).toBeFalsy();
+  });
+
+  // Cycle 25: null eligibility — no crash, no eligibility component or re-check button
+  it('should not render eligibility component when eligibility is null', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_NULL_ELIGIBILITY] });
+
+    // Assert
+    const eligibilityComponent = el.querySelector('fd-repository-eligibility');
+    expect(eligibilityComponent).toBeFalsy();
     const recheckBtn = el.querySelector('.repository-list__recheck-btn');
     expect(recheckBtn).toBeFalsy();
   });

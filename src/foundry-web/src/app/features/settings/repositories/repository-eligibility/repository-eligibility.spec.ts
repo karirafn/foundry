@@ -155,4 +155,27 @@ describe('RepositoryEligibilityComponent', () => {
     const liveRegion = el.querySelector('[aria-live="polite"]');
     expect(liveRegion?.textContent?.trim()).toBe('Eligible');
   });
+
+  // Cycle 5: recheckPending announces pending state via aria-live
+  it('should display "Re-checking..." in aria-live region when recheckPending is true', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'ineligible', recheckPending: true });
+
+    // Assert
+    const liveRegion = el.querySelector('[aria-live="polite"]');
+    expect(liveRegion?.textContent?.trim()).toBe('Re-checking...');
+  });
+
+  it('should display "Re-checking..." as the status label when recheckPending is true', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', recheckPending: true });
+
+    // Assert
+    const label = el.querySelector('.repository-eligibility__label');
+    expect(label?.textContent?.trim()).toBe('Re-checking...');
+  });
 });

@@ -33,6 +33,9 @@ export class RepositoryEligibilityComponent {
   readonly recheckPending: InputSignal<boolean> = input<boolean>(false);
 
   _statusLabel(): string {
+    if (this.recheckPending()) {
+      return 'Re-checking...';
+    }
     switch (this.status()) {
       case 'eligible':
         return 'Eligible';
