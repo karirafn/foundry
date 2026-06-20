@@ -44,7 +44,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
         ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
 
     [Fact]
-    public async Task WhenRepositoryLinkedToGitHubAccount_ReturnsGitHub()
+    public async Task WhenRepositoryLinkedToGitHubAccount_ReturnsGithub()
     {
         // Arrange
         GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
@@ -58,11 +58,11 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
         string? result = await _sut.GetProviderTypeAsync(repo.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBe("GitHub");
+        result.ShouldBe("github");
     }
 
     [Fact]
-    public async Task WhenRepositoryLinkedToGitLabAccount_ReturnsGitLab()
+    public async Task WhenRepositoryLinkedToGitLabAccount_ReturnsGitlab()
     {
         // Arrange
         GitLabAccount account = GitLabAccount.Create("my-org", "TOKEN", new Uri("https://gitlab.com"));
@@ -76,7 +76,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
         string? result = await _sut.GetProviderTypeAsync(repo.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBe("GitLab");
+        result.ShouldBe("gitlab");
     }
 
     [Fact]

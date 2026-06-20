@@ -112,7 +112,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
         IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
             TestContext.Current.CancellationToken);
         detail.ShouldNotBeNull();
-        detail.ProviderType.ShouldBe("GitHub");
+        detail.ProviderType.ShouldBe("github");
     }
 
     [Fact]
@@ -157,6 +157,6 @@ public sealed class WhenIssueExists : IAsyncDisposable
         IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
             TestContext.Current.CancellationToken);
         detail.ShouldNotBeNull();
-        detail.ProviderType.ShouldBe("GitLab");
+        detail.ProviderType.ShouldBe("gitlab");
     }
 }

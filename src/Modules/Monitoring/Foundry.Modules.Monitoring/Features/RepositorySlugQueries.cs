@@ -1,7 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -9,9 +8,6 @@ namespace Foundry.Modules.Monitoring.Features;
 
 internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueries
 {
-    private const string GitHubProviderType = "GitHub";
-    private const string GitLabProviderType = "GitLab";
-
     public async Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
         IReadOnlySet<MonitoredRepositoryId> repositoryIds,
         CancellationToken cancellationToken)
@@ -42,8 +38,6 @@ internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueri
                 (r, a) => EF.Property<string>(a, "type"))
             .FirstOrDefaultAsync(cancellationToken);
 
-        return discriminator is null
-            ? null
-            : discriminator == AccountDiscriminators.GitHub ? GitHubProviderType : GitLabProviderType;
+        return discriminator;
     }
 }
