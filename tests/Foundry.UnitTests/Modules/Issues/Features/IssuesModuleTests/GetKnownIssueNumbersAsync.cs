@@ -32,7 +32,7 @@ public sealed class GetKnownIssueNumbersAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new IssueQueries(_dbContext, new NullRepositorySlugQueries());
+        _sut = new IssueQueries(_dbContext, new NullRepositorySlugQueries(), new NullRepositoryEligibilityQuery());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

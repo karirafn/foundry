@@ -368,6 +368,11 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             IReadOnlyCollection<Guid> repositoryIds,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<Guid>>(repositoryIds.ToHashSet());
+
+        public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
     }
 
     private sealed class StubAuthValidator(AuthValidationResult result) : IAuthValidator

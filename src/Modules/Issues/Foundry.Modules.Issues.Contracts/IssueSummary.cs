@@ -8,4 +8,5 @@ public sealed record IssueSummary(
     string RepositorySlug,
     DateTimeOffset DetectedAt,
     string Url,
-    string? FailureClassification);
+    string? FailureClassification,
+    string? RepositoryEligibilityStatus);

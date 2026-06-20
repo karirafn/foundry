@@ -52,6 +52,29 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
         return eligibleIds;
     }
 
+    public async Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
+        IReadOnlyCollection<Guid> repositoryIds,
+        CancellationToken cancellationToken)
+    {
+        if (repositoryIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        HashSet<MonitoredRepositoryId> typedIds = repositoryIds
+            .Select(MonitoredRepositoryId.From)
+            .ToHashSet();
+
+        Dictionary<Guid, string> statuses = await db.Set<MonitoredRepository>()
+            .AsNoTracking()
+            .Where(r => typedIds.Contains(r.Id))
+            .Where(r => r.EligibilityStatus != null)
+            .Select(r => new { Id = r.Id.Value, Status = r.EligibilityStatus! })
+            .ToDictionaryAsync(r => r.Id, r => r.Status, cancellationToken);
+
+        return statuses;
+    }
+
     private static RepositoryEligibilityInfo MapToInfo(MonitoredRepository repo)
     {
         IReadOnlyList<EligibilityViolationInfo> violations = repo.Eligibility switch

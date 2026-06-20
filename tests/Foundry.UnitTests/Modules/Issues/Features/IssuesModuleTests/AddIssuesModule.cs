@@ -344,6 +344,11 @@ public sealed class AddIssuesModule : IAsyncDisposable
             IReadOnlyCollection<Guid> repositoryIds,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
+
+        public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
     }
 
     private sealed class NullAuthValidator : IAuthValidator

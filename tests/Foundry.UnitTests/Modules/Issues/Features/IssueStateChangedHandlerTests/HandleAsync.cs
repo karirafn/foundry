@@ -36,7 +36,8 @@ public sealed class HandleAsync
             RepositorySlug: "owner/repo",
             DetectedAt: DateTimeOffset.UtcNow,
             Url: "https://github.com/owner/repo/issues/1",
-            FailureClassification: null);
+            FailureClassification: null,
+            RepositoryEligibilityStatus: null);
         _issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());
@@ -61,7 +62,8 @@ public sealed class HandleAsync
             RepositorySlug: "owner/repo",
             DetectedAt: DateTimeOffset.UtcNow,
             Url: "https://github.com/owner/repo/issues/1",
-            FailureClassification: null);
+            FailureClassification: null,
+            RepositoryEligibilityStatus: null);
         _issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());
@@ -140,10 +142,5 @@ public sealed class HandleAsync
 
         public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
             => Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
-
-        public Task<IReadOnlyList<int>> GetDetectedAndIneligibleIssueNumbersAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<int>>([]);
     }
 }

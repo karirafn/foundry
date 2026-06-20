@@ -9,9 +9,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Issues.Features;
 
-internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQueries) : IIssueQueries
+internal sealed class IssueQueries(
+    DbContext db,
+    IRepositorySlugQueries slugQueries,
+    IRepositoryEligibilityQuery eligibilityQuery) : IIssueQueries
 {
-    private const string DetectedState = "detected";
 
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -41,18 +43,6 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             .ToDictionaryAsync(x => x.IssueNumber, x => x.Snapshot, cancellationToken);
 
         return snapshots;
-    }
-
-    public async Task<IReadOnlyList<int>> GetDetectedAndIneligibleIssueNumbersAsync(
-        MonitoredRepositoryId repositoryId,
-        CancellationToken cancellationToken)
-    {
-        return await db.Set<Issue>()
-            .AsNoTracking()
-            .Where(i => i.MonitoredRepositoryId == repositoryId)
-            .Where(i => EF.Property<string>(i, "state") == DetectedState)
-            .Select(i => i.IssueNumber)
-            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
@@ -95,6 +85,14 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             repositoryIds,
             cancellationToken);
 
+        HashSet<Guid> repositoryGuids = repositoryIds
+            .Select(id => id.Value)
+            .ToHashSet();
+
+        IReadOnlyDictionary<Guid, string> eligibilityStatuses = await eligibilityQuery.GetEligibilityStatusesAsync(
+            repositoryGuids,
+            cancellationToken);
+
         return issues
             .Select(i => new IssueSummary(
                 Id: i.Id.Value,
@@ -104,7 +102,10 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
                 RepositorySlug: slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
                 DetectedAt: i.DetectedAt,
                 Url: i.Url.Value.ToString(),
-                FailureClassification: ClassifyFailure(i)))
+                FailureClassification: ClassifyFailure(i),
+                RepositoryEligibilityStatus: eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status)
+                    ? status
+                    : null))
             .ToList();
     }
 
@@ -130,6 +131,15 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             ? slug
             : string.Empty;
 
+        HashSet<Guid> repoGuids = [issue.MonitoredRepositoryId.Value];
+        IReadOnlyDictionary<Guid, string> eligibilityStatuses = await eligibilityQuery.GetEligibilityStatusesAsync(
+            repoGuids,
+            cancellationToken);
+
+        string? eligibilityStatus = eligibilityStatuses.TryGetValue(issue.MonitoredRepositoryId.Value, out string? repoStatus)
+            ? repoStatus
+            : null;
+
         return new IssueSummary(
             Id: issue.Id.Value,
             IssueNumber: issue.IssueNumber,
@@ -138,7 +148,8 @@ internal sealed class IssueQueries(DbContext db, IRepositorySlugQueries slugQuer
             RepositorySlug: repositorySlug,
             DetectedAt: issue.DetectedAt,
             Url: issue.Url.Value.ToString(),
-            FailureClassification: ClassifyFailure(issue));
+            FailureClassification: ClassifyFailure(issue),
+            RepositoryEligibilityStatus: eligibilityStatus);
     }
 
     private static string? ClassifyFailure(Issue issue)

@@ -1112,7 +1112,6 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
         private readonly IReadOnlySet<int>? _knownNumbersSecondCall;
         private readonly IReadOnlyList<ReviewIssueInfo> _reviewIssues;
-        private readonly IReadOnlyList<int> _detectedAndIneligibleNumbers;
         private int _getKnownNumbersCallCount;
 
         public StubIssueQueries()
@@ -1129,14 +1128,12 @@ public sealed class PollAsync : IAsyncDisposable
             IReadOnlySet<int> knownNumbers,
             IReadOnlyDictionary<int, IssueSnapshot> snapshots,
             IReadOnlySet<int>? knownNumbersSecondCall,
-            IReadOnlyList<ReviewIssueInfo>? reviewIssues = null,
-            IReadOnlyList<int>? detectedAndIneligibleNumbers = null)
+            IReadOnlyList<ReviewIssueInfo>? reviewIssues = null)
         {
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
             _knownNumbersSecondCall = knownNumbersSecondCall;
             _reviewIssues = reviewIssues ?? [];
-            _detectedAndIneligibleNumbers = detectedAndIneligibleNumbers ?? [];
         }
 
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
@@ -1170,13 +1167,6 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(_reviewIssues);
-        }
-
-        public Task<IReadOnlyList<int>> GetDetectedAndIneligibleIssueNumbersAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult(_detectedAndIneligibleNumbers);
         }
 
         public Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(

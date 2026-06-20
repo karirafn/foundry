@@ -555,6 +555,11 @@ public sealed class HandleAsync : IAsyncDisposable
                 .ToHashSet();
             return Task.FromResult<IReadOnlySet<Guid>>(eligible);
         }
+
+        public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
     }
 
     /// <summary>
@@ -571,6 +576,11 @@ public sealed class HandleAsync : IAsyncDisposable
             IReadOnlyCollection<Guid> repositoryIds,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<Guid>>(repositoryIds.ToHashSet());
+
+        public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
     }
 
     private sealed class StubRepositoryDispatchQueries(RepositoryDispatchInfo? info) : IRepositoryDispatchQueries
