@@ -34,7 +34,7 @@ Each provider has its own API client, label format (flat on GitHub, scoped on Gi
 A provider-agnostic set of preconditions Foundry requires on a repository's default branch before processing issues.
 Three invariants: rejects direct pushes (all changes via merge/pull request), rejects force pushes (history cannot be rewritten), rejects deletion.
 Each provider adapter maps these invariants to provider-specific API checks (GitHub branch protection rules, GitLab protected branches).
-Validated at issue detection time and re-validated at claim time.
+Validated per repository on each poll cycle and at repository creation, with the result stored on the Monitored Repository as its Repository Eligibility. Dispatch is gated on the repository's eligibility; individual issues are not re-validated.
 
 ## Account
 
@@ -53,12 +53,12 @@ Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remai
 ## Monitor
 
 The background process that polls configured repositories for issues labeled `foundry`.
-Runs on a fixed tick interval (30s default) and checks each repo's eligibility based on its configured poll interval and `LastPolledAt` timestamp.
+Runs on a fixed tick interval (30s default) and checks whether each repo is due for polling based on its configured poll interval and `LastPolledAt` timestamp.
 
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `IneligibleIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ## Issue Kind
@@ -74,6 +74,22 @@ A repository configured for Foundry to poll.
 References an Account (for credentials) and specifies an optional per-repo poll interval.
 Uniquely identified by the pair (Host, Repository Slug) — the same repo on the same host cannot be monitored through multiple accounts (prevents duplicate issue detection), while the same path on different hosts (e.g. github.com vs gitlab.com, or self-hosted instances) refers to distinct repositories. The Host is denormalized from the account's base URL at creation.
 Tracks `LastPolledAt` for per-repo poll timing.
+Carries a Repository Eligibility status, re-evaluated on each poll cycle.
+
+## Repository Eligibility
+
+Whether a Monitored Repository meets Foundry's processing preconditions (Branch Protection).
+Modeled as a value object with three variants: `Eligible`, `Ineligible` (carries a non-empty collection of `EligibilityViolation` values), and `Unreachable` (the provider API could not be reached to perform the check — transient, retried each poll).
+Stored on the Monitored Repository, evaluated synchronously at repository creation and re-evaluated on every poll cycle; a manual "re-check" action forces immediate re-evaluation.
+Only `Eligible` repositories have their queued issues dispatched — ineligibility gates dispatch only; detection, dependency reconciliation, and review polling continue regardless. Already-running workers are unaffected.
+Issue-level ineligibility is derived from the repository for display, never stored per issue.
+
+## Eligibility Violation
+
+A value object describing a specific, user-actionable Branch Protection precondition failure on a repository.
+Carries `Rule` (a well-known string constant, e.g. `"branch-protection:allow-direct-pushes"`) and `Description` (human-readable explanation for dashboard display).
+Stored as a non-empty collection on the `Ineligible` variant of Repository Eligibility, surfaced on the repository card in settings.
+Provider-unreachable is modeled as the separate `Unreachable` eligibility variant rather than a violation, keeping the violation list strictly actionable.
 
 ## Issue Dependency
 
@@ -83,22 +99,6 @@ Both GitHub (REST API v2026-03-10) and GitLab (Issue Links API, Premium+) expose
 Foundry fetches dependencies during the detection poll cycle and reconciles them on each subsequent poll.
 When the provider does not expose dependency links (e.g. GitLab Free tier), the provider degrades gracefully — it treats the issue as having no dependencies and logs once, rather than failing the poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
-
-## Ineligible Issue
-
-A lifecycle state for an issue whose repository does not meet Foundry's processing preconditions.
-Carries a collection of `EligibilityViolation` values describing which preconditions failed.
-Created from `DetectedIssue` when branch protection validation fails or the provider API is unreachable.
-Also created from `QueuedIssue` when re-validation at claim time fails.
-Auto re-evaluated on each monitor poll cycle; when all violations are resolved, transitions directly to `BlockedIssue` or `QueuedIssue` (blocker check runs inline).
-Manual retry also supported.
-Transitions: re-evaluation passes → `BlockedIssue` (has blockers) or `QueuedIssue` (no blockers).
-
-## Eligibility Violation
-
-A value object describing a specific precondition failure on a repository.
-Carries `Rule` (a well-known string constant identifying the check, e.g. `"branch-protection:no-direct-push"`, `"branch-protection:unreachable"`) and `Description` (human-readable explanation for dashboard display).
-Stored as a collection on `IneligibleIssue`.
 
 ## Blocked Issue
 
