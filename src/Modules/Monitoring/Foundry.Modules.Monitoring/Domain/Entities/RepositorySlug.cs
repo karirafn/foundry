@@ -41,6 +41,11 @@ public sealed partial record RepositorySlug
             {
                 return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
             }
+
+            if (part is "." or "..")
+            {
+                return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
+            }
         }
 
         return new RepositorySlug(owner, name);
@@ -50,11 +55,4 @@ public sealed partial record RepositorySlug
 
     [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
     private static partial Regex AllowedSegmentCharacters();
-}
-
-public static class RepositorySlugErrors
-{
-    public static readonly Error InvalidFormat = new(
-        "RepositorySlug.InvalidFormat",
-        "Repository slug must be in the format 'owner/name' with non-empty segments.");
 }

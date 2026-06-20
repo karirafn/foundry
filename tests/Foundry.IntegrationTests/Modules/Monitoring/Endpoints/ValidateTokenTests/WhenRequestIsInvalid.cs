@@ -39,4 +39,20 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task WhenBaseUrlIsNotHttps_ReturnsBadRequest()
+    {
+        // Arrange
+        object body = new { token = "ghp_token", baseUrl = "http://github.com" };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts/validate-token", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
 }

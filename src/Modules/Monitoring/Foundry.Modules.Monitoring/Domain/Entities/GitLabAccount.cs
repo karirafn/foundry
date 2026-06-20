@@ -20,7 +20,7 @@ public sealed class GitLabAccount : Account
 
     public static GitLabAccount Create(string name, string? token, Uri baseUrl)
     {
-        if (baseUrl.Scheme != Uri.UriSchemeHttps)
+        if (baseUrl.Scheme is not "https")
         {
             throw new ArgumentException("Base URL must use the HTTPS scheme.", nameof(baseUrl));
         }
@@ -35,7 +35,7 @@ public sealed class GitLabAccount : Account
 
     public void Update(string name, string? token, Uri baseUrl)
     {
-        if (baseUrl.Scheme != Uri.UriSchemeHttps)
+        if (baseUrl.Scheme is not "https")
         {
             throw new ArgumentException("Base URL must use the HTTPS scheme.", nameof(baseUrl));
         }

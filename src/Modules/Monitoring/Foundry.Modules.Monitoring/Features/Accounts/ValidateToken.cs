@@ -4,6 +4,7 @@ using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts;
@@ -51,9 +52,10 @@ internal static class ValidateToken
                     IQueryHandler<Query, Response> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    if (!Uri.TryCreate(body.BaseUrl, UriKind.Absolute, out Uri? baseUrl))
+                    if (!Uri.TryCreate(body.BaseUrl, UriKind.Absolute, out Uri? baseUrl) ||
+                        baseUrl.Scheme is not "https")
                     {
-                        return Results.BadRequest("Invalid base URL.") as IResult;
+                        return (Results<Ok<Response>, BadRequest<string>>)TypedResults.BadRequest("Invalid base URL.");
                     }
 
                     Uri apiBaseUrl = string.Equals(body.ProviderType, "gitlab", StringComparison.OrdinalIgnoreCase)
@@ -64,7 +66,7 @@ internal static class ValidateToken
                         new Query(body.Token, apiBaseUrl, body.ProviderType),
                         cancellationToken);
 
-                    return result.Match<IResult>(
+                    return result.Match<Results<Ok<Response>, BadRequest<string>>>(
                         response => TypedResults.Ok(response),
                         error => TypedResults.BadRequest(error.Message));
                 })

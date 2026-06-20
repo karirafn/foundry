@@ -21,6 +21,10 @@ public sealed class CreateInvalidInput
     [InlineData("owner?labels=evil/name")]
     [InlineData("owner/name&state=open")]
     [InlineData("owner!/name")]
+    [InlineData("./target")]
+    [InlineData("../target")]
+    [InlineData("owner/./name")]
+    [InlineData("owner/../name")]
     public void WhenSlugIsInvalid_ReturnsFailure(string? input)
     {
         // Arrange

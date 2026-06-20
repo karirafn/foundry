@@ -85,19 +85,14 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         List<GitLabIssueDto>? dtos = JsonSerializer.Deserialize<List<GitLabIssueDto>>(body, JsonOptions);
 
         IReadOnlyList<ProviderIssue> issues = (dtos ?? [])
-            .Select(dto =>
-            {
-                IReadOnlyList<string> labels = dto.Labels
-                    .ToList();
-                return new ProviderIssue(
-                    Number: dto.Iid,
-                    Title: dto.Title,
-                    Body: dto.Description ?? string.Empty,
-                    Author: dto.Author.Username,
-                    Url: dto.WebUrl,
-                    Labels: labels,
-                    IssueKindLabel: LabelClassifier.ClassifyKind(labels));
-            })
+            .Select(dto => new ProviderIssue(
+                Number: dto.Iid,
+                Title: dto.Title,
+                Body: dto.Description ?? string.Empty,
+                Author: dto.Author.Username,
+                Url: dto.WebUrl,
+                Labels: dto.Labels,
+                IssueKindLabel: LabelClassifier.ClassifyKind(dto.Labels)))
             .ToList();
 
         return Result<IReadOnlyList<ProviderIssue>>.Ok(issues);

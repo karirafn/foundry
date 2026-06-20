@@ -26,7 +26,7 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
         builder.Property(r => r.Slug)
             .HasConversion(
                 slug => slug.ToString(),
-                value => ((Result<RepositorySlug>.Success)RepositorySlug.Create(value)).Value)
+                value => ParseSlug(value))
             .HasMaxLength(SlugMaxLength)
             .IsUnicode(false)
             .IsRequired()
@@ -62,5 +62,16 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
             .WithMany()
             .HasForeignKey(r => r.AccountId)
             .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static RepositorySlug ParseSlug(string value)
+    {
+        if (RepositorySlug.Create(value) is Result<RepositorySlug>.Success success)
+        {
+            return success.Value;
+        }
+
+        throw new InvalidOperationException(
+            $"Persisted slug '{value}' could not be parsed as a RepositorySlug.");
     }
 }
