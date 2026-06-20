@@ -126,6 +126,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
             ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7")).Value;
 
         // No POST endpoint exists for issues — seed directly via DbContext.
+        IssueId issueId;
         using (IServiceScope scope = _factory.Services.CreateScope())
         {
             DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -143,18 +144,19 @@ public sealed class WhenIssueExists : IAsyncDisposable
 
             dbContext.Set<Issue>().Add(issue);
             await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-            // Act
-            HttpResponseMessage response = await _client.GetAsync(
-                new Uri($"/api/issues/{issue.Id.Value}", UriKind.Relative),
-                TestContext.Current.CancellationToken);
-
-            // Assert
-            response.StatusCode.ShouldBe(HttpStatusCode.OK);
-            IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
-                TestContext.Current.CancellationToken);
-            detail.ShouldNotBeNull();
-            detail.ProviderType.ShouldBe("GitLab");
+            issueId = issue.Id;
         }
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/issues/{issueId.Value}", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
+            TestContext.Current.CancellationToken);
+        detail.ShouldNotBeNull();
+        detail.ProviderType.ShouldBe("GitLab");
     }
 }
