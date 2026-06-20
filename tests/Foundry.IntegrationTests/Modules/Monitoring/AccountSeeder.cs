@@ -25,4 +25,21 @@ internal static class AccountSeeder
 
         return account.Id.Value;
     }
+
+    // Seeds a GitLabAccount directly via DbContext when the POST endpoint cannot be used.
+    internal static async Task<Guid> SeedGitLabAccountAsync(
+        FoundryWebAppFactory factory,
+        string name = "My GitLab",
+        string? token = "glpat-test_token",
+        string baseUrl = "https://gitlab.com")
+    {
+        using IServiceScope scope = factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        GitLabAccount account = GitLabAccount.Create(name, token, new Uri(baseUrl));
+        dbContext.Set<Account>().Add(account);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        return account.Id.Value;
+    }
 }

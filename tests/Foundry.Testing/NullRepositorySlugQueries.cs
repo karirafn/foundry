@@ -10,4 +10,9 @@ public sealed class NullRepositorySlugQueries : IRepositorySlugQueries
         CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(
             new Dictionary<MonitoredRepositoryId, string>());
+
+    public Task<string?> GetProviderTypeAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+        => Task.FromResult<string?>(null);
 }

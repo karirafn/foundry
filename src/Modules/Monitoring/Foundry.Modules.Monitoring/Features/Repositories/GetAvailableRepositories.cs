@@ -15,7 +15,10 @@ internal static class GetAvailableRepositories
 {
     internal sealed record Query(Guid AccountId) : IQuery<IReadOnlyList<AvailableRepository>>;
 
-    internal sealed class Handler(DbContext dbContext, GitHubHttpClient gitHubHttpClient)
+    internal sealed class Handler(
+        DbContext dbContext,
+        GitHubHttpClient gitHubHttpClient,
+        GitLabHttpClient gitLabHttpClient)
         : IQueryHandler<Query, IReadOnlyList<AvailableRepository>>
     {
         public async Task<Result<IReadOnlyList<AvailableRepository>>> HandleAsync(
@@ -40,10 +43,17 @@ internal static class GetAvailableRepositories
                     RepositoryErrors.AccountHasNoToken(accountId));
             }
 
-            return await gitHubHttpClient.ListRepositoriesAsync(
-                account.ApiBaseUrl,
-                account.Token,
-                cancellationToken);
+            return account switch
+            {
+                GitLabAccount => await gitLabHttpClient.ListRepositoriesAsync(
+                    account.ApiBaseUrl,
+                    account.Token,
+                    cancellationToken),
+                _ => await gitHubHttpClient.ListRepositoriesAsync(
+                    account.ApiBaseUrl,
+                    account.Token,
+                    cancellationToken),
+            };
         }
     }
 

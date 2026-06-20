@@ -18,7 +18,8 @@ public sealed class CreateProvider
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         HttpClient httpClient = new(handler);
         GitHubHttpClient gitHubHttpClient = new(httpClient);
-        return new IssueProviderFactory(gitHubHttpClient);
+        GitLabHttpClient gitLabHttpClient = new(httpClient);
+        return new IssueProviderFactory(gitHubHttpClient, gitLabHttpClient);
     }
 
     [Fact]
@@ -36,13 +37,30 @@ public sealed class CreateProvider
     }
 
     [Fact]
+    public void WhenAccountIsGitLabAccount_ReturnsIssueProvider()
+    {
+        // Arrange
+        IIssueProviderFactory sut = BuildSut();
+        GitLabAccount account = GitLabAccount.Create("my-gitlab", "glpat_token", new Uri("https://gitlab.com"));
+
+        // Act
+        IIssueProvider provider = sut.CreateProvider(account, "glpat_token123");
+
+        // Assert
+        provider.ShouldNotBeNull();
+    }
+
+    [Fact]
     public void WhenAccountTypeIsUnknown_ThrowsNotSupportedException()
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
         UnknownAccount account = new();
 
-        // Act & Assert
-        Should.Throw<NotSupportedException>(() => sut.CreateProvider(account, "token"));
+        // Act
+        Action act = () => sut.CreateProvider(account, "token");
+
+        // Assert
+        Should.Throw<NotSupportedException>(act);
     }
 }

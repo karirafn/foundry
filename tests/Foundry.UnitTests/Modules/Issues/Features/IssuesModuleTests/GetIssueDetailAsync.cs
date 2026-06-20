@@ -136,6 +136,39 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenProviderTypeIsKnown_ReturnsProviderTypeInDetail()
+    {
+        // Arrange
+        _slugQueries.AddProviderType(RepositoryId, "github");
+        DetectedIssue issue = await SaveDetectedIssueAsync();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            issue.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.ProviderType.ShouldBe("github");
+    }
+
+    [Fact]
+    public async Task WhenProviderTypeIsUnknown_ReturnsEmptyProviderType()
+    {
+        // Arrange — no provider type registered in stub
+        DetectedIssue issue = await SaveDetectedIssueAsync();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            issue.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.ProviderType.ShouldBe(string.Empty);
+    }
+
+    [Fact]
     public async Task WhenBlockedIssueExists_ReturnsStateDetailsWithBlockedBy()
     {
         // Arrange
@@ -343,21 +376,40 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries
     {
         private readonly Dictionary<MonitoredRepositoryId, string> _slugs = [];
+        private readonly Dictionary<MonitoredRepositoryId, string> _providerTypes = [];
 
         public void AddSlug(MonitoredRepositoryId repositoryId, string slug)
         {
             _slugs[repositoryId] = slug;
         }
 
+        public void AddProviderType(MonitoredRepositoryId repositoryId, string providerType)
+        {
+            _providerTypes[repositoryId] = providerType;
+        }
+
         public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
             IReadOnlySet<MonitoredRepositoryId> repositoryIds,
             CancellationToken cancellationToken)
         {
-            Dictionary<MonitoredRepositoryId, string> result = repositoryIds
-                .Where(id => _slugs.ContainsKey(id))
-                .ToDictionary(id => id, id => _slugs[id]);
+            Dictionary<MonitoredRepositoryId, string> result = [];
+            foreach (MonitoredRepositoryId id in repositoryIds)
+            {
+                if (_slugs.TryGetValue(id, out string? slug))
+                {
+                    result[id] = slug;
+                }
+            }
 
             return Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(result);
+        }
+
+        public Task<string?> GetProviderTypeAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            _providerTypes.TryGetValue(repositoryId, out string? providerType);
+            return Task.FromResult(providerType);
         }
     }
 }

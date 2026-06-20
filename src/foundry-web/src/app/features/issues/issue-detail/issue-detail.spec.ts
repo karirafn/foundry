@@ -29,6 +29,7 @@ const mockDetail: IssueDetail = {
   title: 'Enable dark mode',
   state: 'completed',
   repositorySlug: 'owner/repo',
+  providerType: 'GitHub',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
   author: 'dev',
@@ -162,8 +163,8 @@ describe('IssueDetailComponent', () => {
     expect(link?.getAttribute('target')).toBe('_blank');
   });
 
-  it('should set aria-label on PR link to include issue number', () => {
-    // Arrange
+  it('should set aria-label on PR link to include issue number and provider-correct term', () => {
+    // Arrange — GitHub provider uses "pull request"
     const fixture = createComponent(mockDetail);
     const el = fixture.nativeElement as HTMLElement;
 
@@ -581,6 +582,93 @@ describe('IssueDetailComponent', () => {
     const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
     expect(link).toBeTruthy();
     expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
+  });
+
+  // MR/PR terminology: GitHub providerType shows "Pull request" and "View PR"
+  it('should show "Pull request" field key and "View PR" link text for GitHub providerType', () => {
+    // Arrange — mockDetail has providerType: 'GitHub'
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — component renders on creation
+
+    // Assert
+    const fields = el.querySelectorAll('.issue-detail__field');
+    const prField = Array.from(fields).find((f) =>
+      f.querySelector('.issue-detail__field-key')?.textContent?.trim().toLowerCase().includes('request'),
+    );
+    expect(prField?.querySelector('.issue-detail__field-key')?.textContent?.trim()).toBe('Pull request');
+    const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
+    expect(link?.textContent?.trim()).toBe('View PR');
+  });
+
+  // MR/PR terminology: GitLab providerType shows "Merge request" and "View MR"
+  it('should show "Merge request" field key and "View MR" link text for GitLab providerType', () => {
+    // Arrange
+    const gitlabDetail: IssueDetail = {
+      ...mockDetail,
+      providerType: 'GitLab',
+      stateDetails: {
+        ...mockStateDetails,
+        pullRequestUrl: 'https://git.acme.com/owner/repo/-/merge_requests/99',
+      },
+    };
+
+    // Act
+    const fixture = createComponent(gitlabDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const fields = el.querySelectorAll('.issue-detail__field');
+    const prField = Array.from(fields).find((f) =>
+      f.querySelector('.issue-detail__field-key')?.textContent?.trim().toLowerCase().includes('request'),
+    );
+    expect(prField?.querySelector('.issue-detail__field-key')?.textContent?.trim()).toBe('Merge request');
+    const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
+    expect(link?.textContent?.trim()).toBe('View MR');
+  });
+
+  // Aria-label: GitLab providerType uses "merge request" in aria-label
+  it('should set aria-label on MR link to use "merge request" for GitLab providerType', () => {
+    // Arrange
+    const gitlabDetail: IssueDetail = {
+      ...mockDetail,
+      providerType: 'GitLab',
+      stateDetails: {
+        ...mockStateDetails,
+        pullRequestUrl: 'https://git.acme.com/owner/repo/-/merge_requests/99',
+      },
+    };
+
+    // Act
+    const fixture = createComponent(gitlabDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
+    expect(link?.getAttribute('aria-label')).toBe('Open merge request for issue #42');
+  });
+
+  // Aria-label: self-hosted GitLab (non-gitlab.com domain) correctly uses "merge request"
+  it('should use "merge request" terminology for self-hosted GitLab with custom domain', () => {
+    // Arrange — custom domain that would not match URL sniffing for "gitlab"
+    const selfHostedGitLabDetail: IssueDetail = {
+      ...mockDetail,
+      providerType: 'GitLab',
+      stateDetails: {
+        ...mockStateDetails,
+        pullRequestUrl: 'https://git.acme.com/owner/repo/-/merge_requests/99',
+      },
+    };
+
+    // Act
+    const fixture = createComponent(selfHostedGitLabDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__pr-link') as HTMLAnchorElement;
+    expect(link?.textContent?.trim()).toBe('View MR');
+    expect(link?.getAttribute('aria-label')).toBe('Open merge request for issue #42');
   });
 
   // B2 guard: null stateDetails must not throw
