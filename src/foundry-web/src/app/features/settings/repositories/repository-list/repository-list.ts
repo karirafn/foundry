@@ -1,9 +1,12 @@
-import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, inject, input, output, signal } from '@angular/core';
 import { RepositorySummary } from '../repository.model';
+import { RepositoryEligibilityComponent } from '../repository-eligibility/repository-eligibility';
+import { RepositoryService } from '../repository.service';
 
 @Component({
   selector: 'fd-repository-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RepositoryEligibilityComponent],
   template: `
     @if (error()) {
       <div class="repository-list__error" role="alert">
@@ -71,7 +74,22 @@ import { RepositorySummary } from '../repository.model';
             <span class="repository-list__last-polled">
               {{ lastPolledLabel(repo.lastPolledAt) }}
             </span>
+            <fd-repository-eligibility
+              class="repository-list__eligibility"
+              [status]="repo.eligibility.status"
+              [violations]="repo.eligibility.violations"
+              [recheckPending]="_recheckingId() === repo.id"
+            />
             <div class="repository-list__actions">
+              @if (repo.eligibility.status !== 'eligible') {
+                <button
+                  class="repository-list__recheck-btn"
+                  type="button"
+                  [disabled]="_recheckingId() === repo.id"
+                  [attr.aria-label]="'Re-check eligibility for ' + repo.slug"
+                  (click)="onRecheck(repo)"
+                >{{ _recheckingId() === repo.id ? 'Re-checking...' : 'Re-check' }}</button>
+              }
               <button
                 class="repository-list__edit-btn"
                 type="button"
@@ -93,6 +111,8 @@ import { RepositorySummary } from '../repository.model';
   styleUrl: './repository-list.scss',
 })
 export class RepositoryListComponent {
+  private readonly _repositoryService = inject(RepositoryService);
+
   readonly repositories: InputSignal<RepositorySummary[]> = input<RepositorySummary[]>([]);
   readonly loading: InputSignal<boolean> = input<boolean>(false);
   readonly error: InputSignal<string | null> = input<string | null>(null);
@@ -101,6 +121,19 @@ export class RepositoryListComponent {
   readonly edit: OutputEmitterRef<RepositorySummary> = output<RepositorySummary>();
   readonly delete: OutputEmitterRef<RepositorySummary> = output<RepositorySummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
+
+  protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
+
+  onRecheck(repo: RepositorySummary): void {
+    if (this._recheckingId() !== null) {
+      return;
+    }
+    this._recheckingId.set(repo.id);
+    this._repositoryService.recheckEligibility(repo.accountId, repo.id).subscribe({
+      next: () => { this._recheckingId.set(null); },
+      error: () => { this._recheckingId.set(null); },
+    });
+  }
 
   accountBadge(accountName: string): string {
     return accountName.slice(0, 2).toUpperCase();

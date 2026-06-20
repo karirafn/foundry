@@ -220,6 +220,36 @@
     gap: var(--fd-spacing-sm);
   }
 
+  &__eligibility {
+    min-width: 0;
+  }
+
+  &__recheck-btn {
+    background: transparent;
+    border: 1px solid var(--fd-text-ineligible);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-ineligible);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    min-height: 32px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+    white-space: nowrap;
+
+    &:hover:not([disabled]) {
+      background: rgba(210, 153, 34, 0.1);
+    }
+
+    &[disabled] {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-ineligible);
+      outline-offset: 2px;
+    }
+  }
+
   &__edit-btn,
   &__delete-btn {
     background: transparent;

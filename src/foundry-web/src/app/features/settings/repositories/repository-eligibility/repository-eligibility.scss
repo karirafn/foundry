@@ -1,0 +1,62 @@
+.repository-eligibility {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+
+  &__status {
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__indicator {
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    height: 8px;
+    width: 8px;
+
+    &--eligible {
+      background: var(--fd-state-completed);
+    }
+
+    &--ineligible {
+      background: var(--fd-text-ineligible);
+    }
+
+    &--unreachable {
+      background: var(--fd-text-secondary);
+    }
+  }
+
+  &__label {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  &__status:has(.repository-eligibility__indicator--eligible) &__label {
+    color: var(--fd-text-completed);
+  }
+
+  &__status:has(.repository-eligibility__indicator--ineligible) &__label {
+    color: var(--fd-text-ineligible);
+  }
+
+  &__violations {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 var(--fd-spacing-md);
+  }
+
+  &__violation {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    padding-block: 1px;
+
+    &::before {
+      content: '· ';
+    }
+  }
+}

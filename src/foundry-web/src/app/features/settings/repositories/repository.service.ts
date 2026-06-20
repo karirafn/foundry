@@ -146,6 +146,20 @@ export class RepositoryService {
     );
   }
 
+  recheckEligibility(accountId: string, id: string): Observable<RepositorySummary> {
+    return this._http.post<RepositorySummary>(`${this._repositoriesUrl(accountId)}/${id}/recheck`, {}).pipe(
+      tap((updated) => {
+        this._repositoriesSignal.update(repositories =>
+          repositories.map(r => r.id === updated.id ? updated : r)
+        );
+      }),
+      catchError((err: HttpErrorResponse) => {
+        console.error(err);
+        throw err;
+      }),
+    );
+  }
+
   deleteRepository(accountId: string, id: string): Observable<void> {
     this._deleteErrorSignal.set(null);
     this._deletingSignal.set(true);

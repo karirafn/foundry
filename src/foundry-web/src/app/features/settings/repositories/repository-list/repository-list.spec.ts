@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { RepositoryListComponent } from './repository-list';
 import { RepositorySummary } from '../repository.model';
+import { RepositoryService } from '../repository.service';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 
 const MOCK_REPO: RepositorySummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -10,6 +13,7 @@ const MOCK_REPO: RepositorySummary = {
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
+  eligibility: { status: 'eligible', violations: [] },
 };
 
 const MOCK_REPO_2: RepositorySummary = {
@@ -20,6 +24,29 @@ const MOCK_REPO_2: RepositorySummary = {
   pollIntervalSeconds: null,
   isActive: false,
   lastPolledAt: null,
+  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }] },
+};
+
+const MOCK_REPO_INELIGIBLE: RepositorySummary = {
+  id: '00000000-0000-0000-0000-000000000003',
+  slug: 'my-org/restricted-repo',
+  accountId: '00000000-0000-0000-0000-000000000010',
+  accountName: 'my-github',
+  pollIntervalSeconds: 300,
+  isActive: true,
+  lastPolledAt: '2026-06-14T12:00:00Z',
+  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }] },
+};
+
+const MOCK_REPO_UNREACHABLE: RepositorySummary = {
+  id: '00000000-0000-0000-0000-000000000004',
+  slug: 'my-org/offline-repo',
+  accountId: '00000000-0000-0000-0000-000000000010',
+  accountName: 'my-github',
+  pollIntervalSeconds: 300,
+  isActive: true,
+  lastPolledAt: '2026-06-14T12:00:00Z',
+  eligibility: { status: 'unreachable', violations: [] },
 };
 
 function setup(overrides: {
@@ -32,14 +59,29 @@ function setup(overrides: {
   fixture.componentRef.setInput('loading', overrides.loading ?? false);
   fixture.componentRef.setInput('error', overrides.error ?? null);
   fixture.detectChanges();
-  return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
+  return {
+    fixture,
+    component: fixture.componentInstance,
+    el: fixture.nativeElement as HTMLElement,
+    httpMock: TestBed.inject(HttpTestingController),
+    repositoryService: TestBed.inject(RepositoryService),
+  };
 }
 
 describe('RepositoryListComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [RepositoryListComponent],
+      providers: [
+        RepositoryService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
     }).compileComponents();
+  });
+
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   // Cycle 1: empty state renders when no repositories
@@ -314,5 +356,90 @@ describe('RepositoryListComponent', () => {
 
     // Assert
     expect(emitted).toBe(true);
+  });
+
+  // Cycle 19: eligibility component rendered for each repository
+  it('should render fd-repository-eligibility for each repository item', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const eligibilityComponents = el.querySelectorAll('fd-repository-eligibility');
+    expect(eligibilityComponents.length).toBe(2);
+  });
+
+  // Cycle 20: re-check button calls recheckEligibility service method
+  it('should call recheckEligibility when Re-check button is clicked', () => {
+    // Arrange
+    const { el, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Act
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
+    recheckBtn.click();
+
+    // Assert — service POST is issued with correct URL
+    const req = httpMock.expectOne(
+      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
+    );
+    expect(req.request.method).toBe('POST');
+    req.flush(MOCK_REPO_INELIGIBLE);
+  });
+
+  // Cycle 21: re-check button shows loading state while pending
+  it('should show "Re-checking..." on Re-check button while request is in flight', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Act
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
+    recheckBtn.click();
+    fixture.detectChanges();
+
+    // Assert — button text changes while in flight
+    const updatedBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
+    expect(updatedBtn?.textContent?.trim()).toBe('Re-checking...');
+
+    // Cleanup
+    httpMock.expectOne(
+      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
+    ).flush(MOCK_REPO_INELIGIBLE);
+  });
+
+  // Cycle 22: re-check button shown for ineligible repositories
+  it('should render Re-check button for ineligible repositories', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
+    expect(recheckBtn).toBeTruthy();
+  });
+
+  // Cycle 23: re-check button shown for unreachable repositories
+  it('should render Re-check button for unreachable repositories', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_UNREACHABLE] });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
+    expect(recheckBtn).toBeTruthy();
+  });
+
+  // Cycle 24: eligible repos do not show re-check button
+  it('should not render Re-check button for eligible repositories', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
+    expect(recheckBtn).toBeFalsy();
   });
 });
