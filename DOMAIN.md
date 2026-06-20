@@ -262,12 +262,10 @@ Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedO
 ## Usage Limit
 
 A state where the Anthropic API quota (session, weekly, or Opus limit) is exhausted.
-Detected by parsing the worker container's JSON output (`--output-format json`): `ResultMessage.terminal_reason` is `"blocking_limit"` or `"rapid_refill_breaker"`.
-The reset time is extracted from the human-readable result text (e.g. `"You've hit your session limit · resets 3:45pm"`); when parsing fails, a configurable `DefaultCooldownMinutes` fallback is used.
-Triggers a global dispatch pause via `GlobalSettings.UsageLimitResetsAt`.
+Detected by parsing the worker container's JSON output (`--output-format json`): the primary signal is `ResultMessage.api_error_status == 429`; the `terminal_reason` allowlist (`"blocking_limit"`, `"rapid_refill_breaker"`) is retained as a secondary signal for older output shapes. Note that a 429 can arrive with `subtype: "success"` and `terminal_reason: "completed"`, so neither field is reliable on its own.
+The reset time is extracted from the human-readable result text (e.g. `"You've hit your limit · resets 12:10am (UTC)"`): a 12-hour wall-clock time resolves to its next future UTC occurrence, ISO-8601 timestamps are also accepted, and when neither parses a configurable `DefaultCooldownMinutes` fallback is used. The fallback only ever extends an existing pause, never shortens it.
+A detected usage limit always triggers a global dispatch pause via `GlobalSettings.UsageLimitResetsAt` — there is no immediate-requeue path.
 The triggering issue transitions to `FailedIssue` / `ContinuableFailedIssue` with `FailureReason.UsageLimited(resetsAt)`.
-If the parsed reset time is already in the past, the triggering issue is re-queued immediately instead of entering a failed state.
-Distinct from API rate limits (HTTP 429), which Claude Code retries internally with exponential backoff.
 
 ## Dispatch Pause
 
@@ -282,5 +280,5 @@ Already-running workers are unaffected — only queued issues are held.
 
 An infrastructure service (`IContainerOutputParser`) that classifies a worker container's JSON output.
 Takes raw JSON from `--output-format json` and returns a discriminated result: `NormalExit`, `UsageLimited(DateTimeOffset ResetsAt)`, or `UnparsableOutput`.
-Parses `ResultMessage.terminal_reason` for limit detection and extracts the reset time from the result text via best-effort regex.
+Inspects `ResultMessage.api_error_status` (429) as the primary limit signal, with the `terminal_reason` allowlist as a secondary signal, and extracts the reset time from the result text via best-effort regex (wall-clock or ISO-8601).
 Domain types remain JSON-unaware — all parsing is in infrastructure.
