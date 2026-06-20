@@ -41,7 +41,7 @@ internal static partial class UpdateAccount
             }
 
             if (!Uri.TryCreate(command.BaseUrl, UriKind.Absolute, out Uri? baseUri) ||
-                baseUri.Scheme != Uri.UriSchemeHttps)
+                baseUri.Scheme is not "https")
             {
                 return new Error(BaseUrlInvalidCode, "Base URL must be a valid HTTPS URL.");
             }
