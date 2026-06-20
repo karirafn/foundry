@@ -22,11 +22,12 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         {"terminal_reason":"blocking_limit","result":"resets at 2099-01-01T00:00:00Z"}
         """;
 
-    // Usage-limited output that produces a past reset time
-    private const string UsageLimitedPastResetOutput =
+    // Usage-limited output with a 429 status only — no terminal_reason, no reset time.
+    // The parser uses defaultCooldownMinutes to set a future reset time.
+    private const string UsageLimited429OnlyOutput =
         """
         Some prior output
-        {"terminal_reason":"blocking_limit","result":"resets at 2000-01-01T00:00:00Z"}
+        {"api_error_status":429}
         """;
 
     private WorkerDispatchService BuildServiceWithParser(
@@ -116,46 +117,22 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithUsageLimitedOutputAndPastResetTime_DoesNotSetUsageLimitResetsAt()
+    public async Task WhenContainerExitsWithUsageLimitedOutput_AlwaysTransitionsToFailedRunWithUsageLimitedReason()
     {
         // Arrange
         SeedGlobalSettings();
-        SeedActiveRun("container-usage-limited-past");
+        SeedActiveRun("container-usage-limited-429-only");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(UsageLimitedPastResetOutput, exitedStatus);
+        WorkerDispatchService sut = BuildServiceWithParser(UsageLimited429OnlyOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
-            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        settings.ShouldNotBeNull();
-        settings.UsageLimitResetsAt.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task WhenContainerExitsWithUsageLimitedOutputAndPastResetTime_DispatchesFailedEventWithIsUsageLimitedRequeue()
-    {
-        // Arrange
-        SeedGlobalSettings();
-        SeedActiveRun("container-usage-limited-requeue");
-        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
-            UsageLimitedPastResetOutput,
-            exitedStatus,
-            integrationEventDispatcher: dispatcher);
-
-        // Act
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerRunFailed failedEvent = dispatcher.Captured
-            .OfType<WorkerRunFailed>()
-            .ShouldHaveSingleItem();
-        failedEvent.IsUsageLimitedRequeue.ShouldBeTrue();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.UsageLimited>();
     }
 
     [Fact]

@@ -437,7 +437,7 @@ internal sealed class WorkerDispatchService(
                 containerOutput,
                 defaultCooldownMinutes);
 
-            (FailureReason failureReason, bool isUsageLimitedRequeue) = await ResolveFailureReasonAsync(
+            FailureReason failureReason = await ResolveFailureReasonAsync(
                 dbContext,
                 parseResult,
                 new FailureReason.ContainerError("No pull request found after retries"),
@@ -453,7 +453,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.IssueId.Value,
                     "No pull request found after retries",
                     BranchName: activeRun.BranchName.Value,
-                    IsUsageLimitedRequeue: isUsageLimitedRequeue)],
+                    IsUsageLimitedRequeue: false)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -488,7 +488,7 @@ internal sealed class WorkerDispatchService(
 
         if (parseResult is ContainerOutputParseResult.UsageLimited)
         {
-            (FailureReason failureReason, bool isUsageLimitedRequeue) = await ResolveFailureReasonAsync(
+            FailureReason failureReason = await ResolveFailureReasonAsync(
                 dbContext,
                 parseResult,
                 new FailureReason.ContainerError("No commits and usage limited"),
@@ -504,7 +504,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.IssueId.Value,
                     WorkerRunFailedEvent.UsageLimitedReason,
                     BranchName: null,
-                    IsUsageLimitedRequeue: isUsageLimitedRequeue)],
+                    IsUsageLimitedRequeue: false)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -555,7 +555,7 @@ internal sealed class WorkerDispatchService(
             containerOutput,
             defaultCooldownMinutes);
 
-        (FailureReason failureReason, bool isUsageLimitedRequeue) = await ResolveFailureReasonAsync(
+        FailureReason failureReason = await ResolveFailureReasonAsync(
             dbContext,
             parseResult,
             new FailureReason.NonZeroExit(exitCode),
@@ -578,7 +578,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.IssueId.Value,
                 exitReason,
                 BranchName: branchNameForEvent,
-                IsUsageLimitedRequeue: isUsageLimitedRequeue)],
+                IsUsageLimitedRequeue: false)],
             activeRun.Id.Value,
             cancellationToken);
 
@@ -604,11 +604,12 @@ internal sealed class WorkerDispatchService(
 
     /// <summary>
     /// Resolves the failure reason from a container output parse result.
-    /// If the parse result indicates a usage limit with a future reset time, sets the global pause
-    /// and returns <see cref="FailureReason.UsageLimited"/>. If the reset time is in the past,
-    /// returns the fallback reason with <c>isUsageLimitedRequeue = true</c>.
+    /// If the parse result indicates a usage limit, sets <see cref="GlobalSettings.UsageLimitResetsAt"/>
+    /// (extend-only; past times are ignored by <see cref="GlobalSettings.SetUsageLimitResetsAt"/>)
+    /// and returns <see cref="FailureReason.UsageLimited"/>.
+    /// Otherwise returns the <paramref name="fallbackReason"/>.
     /// </summary>
-    private async Task<(FailureReason FailureReason, bool IsUsageLimitedRequeue)> ResolveFailureReasonAsync(
+    private async Task<FailureReason> ResolveFailureReasonAsync(
         DbContext dbContext,
         ContainerOutputParseResult parseResult,
         FailureReason fallbackReason,
@@ -616,15 +617,9 @@ internal sealed class WorkerDispatchService(
     {
         if (parseResult is not ContainerOutputParseResult.UsageLimited usageLimited)
         {
-            return (fallbackReason, false);
+            return fallbackReason;
         }
 
-        if (usageLimited.ResetsAt <= DateTimeOffset.UtcNow)
-        {
-            return (fallbackReason, true);
-        }
-
-        // Future reset time — set global pause
         GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -638,7 +633,7 @@ internal sealed class WorkerDispatchService(
             "Usage limit detected; dispatch paused until {ResetsAt}.",
             usageLimited.ResetsAt);
 
-        return (new FailureReason.UsageLimited(usageLimited.ResetsAt), false);
+        return new FailureReason.UsageLimited(usageLimited.ResetsAt);
     }
 
     /// <summary>
