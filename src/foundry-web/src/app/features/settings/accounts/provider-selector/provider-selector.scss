@@ -15,9 +15,8 @@
     }
 
     &:has(input:disabled) {
-      color: var(--fd-text-tertiary);
+      color: var(--fd-text-secondary);
       cursor: not-allowed;
-      opacity: 0.6;
     }
   }
 

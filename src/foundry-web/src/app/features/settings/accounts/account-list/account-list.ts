@@ -49,9 +49,10 @@ import { providerLabel } from '../provider.util';
       <ul class="account-list__list" role="list">
         @for (account of accounts(); track account.id) {
           <li class="account-list__item" role="listitem">
-            <span class="account-list__provider-badge">
-              {{ providerLabel(account.providerType) }}
-            </span>
+            <span
+              class="account-list__provider-badge"
+              [attr.aria-label]="account.providerType"
+            >{{ providerLabel(account.providerType) }}</span>
             <div class="account-list__info">
               <span class="account-list__name">{{ account.name }}</span>
               <span class="account-list__url">{{ account.baseUrl }}</span>

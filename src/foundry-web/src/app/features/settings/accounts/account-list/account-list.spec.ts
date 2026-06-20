@@ -104,6 +104,25 @@ describe('AccountListComponent', () => {
     expect(badge?.textContent?.trim()).toBe('GL');
   });
 
+  // Cycle 5a: provider badge has aria-label with full provider name for screen readers
+  it('should have aria-label="GitHub" on the provider badge for GitHub accounts', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+    // Assert
+    const badge = el.querySelector('.account-list__provider-badge');
+    expect(badge?.getAttribute('aria-label')).toBe('GitHub');
+  });
+
+  it('should have aria-label="GitLab" on the provider badge for GitLab accounts', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
+
+    // Assert
+    const badge = el.querySelector('.account-list__provider-badge');
+    expect(badge?.getAttribute('aria-label')).toBe('GitLab');
+  });
+
   // Cycle 6: token status indicator
   it('should show "Configured" token status for accounts with a token', () => {
     // Arrange / Act

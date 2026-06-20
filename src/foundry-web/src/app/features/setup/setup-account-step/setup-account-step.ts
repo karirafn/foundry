@@ -30,11 +30,11 @@ const GITHUB_BASE_URL = 'https://github.com';
 
       <div class="setup-account-step__form">
         <div class="setup-account-step__field">
-          <label class="setup-account-step__field-label" for="account-name">Account Name</label>
+          <label class="setup-account-step__field-label" for="setup-name">Account Name</label>
           <input
             class="setup-account-step__input"
             type="text"
-            id="account-name"
+            id="setup-name"
             autocomplete="off"
             [value]="_name()"
             (input)="_name.set($any($event.target).value)"
@@ -43,20 +43,21 @@ const GITHUB_BASE_URL = 'https://github.com';
         </div>
 
         <div class="setup-account-step__field">
-          <span class="setup-account-step__field-label">Provider</span>
+          <span id="setup-provider-label" class="setup-account-step__field-label">Provider</span>
           <fd-provider-selector
             [provider]="_provider()"
             (providerChange)="_provider.set($event)"
             (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
+            [attr.aria-labelledby]="'setup-provider-label'"
           />
         </div>
 
         <div class="setup-account-step__field">
-          <label class="setup-account-step__field-label" for="account-base-url">Base URL</label>
+          <label class="setup-account-step__field-label" for="setup-base-url">Base URL</label>
           <input
             class="setup-account-step__input"
             type="text"
-            id="account-base-url"
+            id="setup-base-url"
             autocomplete="off"
             [value]="_baseUrl()"
             (input)="onBaseUrlInput($any($event.target).value)"
@@ -64,12 +65,12 @@ const GITHUB_BASE_URL = 'https://github.com';
         </div>
 
         <div class="setup-account-step__field">
-          <label class="setup-account-step__field-label" for="account-token">Token</label>
+          <label class="setup-account-step__field-label" for="setup-token">Token</label>
           <div class="setup-account-step__token-wrapper">
             <input
               class="setup-account-step__input"
               [type]="_showToken() ? 'text' : 'password'"
-              id="account-token"
+              id="setup-token"
               autocomplete="off"
               [value]="_token()"
               (input)="_token.set($any($event.target).value)"

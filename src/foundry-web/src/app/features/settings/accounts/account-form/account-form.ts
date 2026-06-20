@@ -45,11 +45,11 @@ const GITHUB_BASE_URL = 'https://github.com';
       </h2>
 
       <div class="account-form__field">
-        <label class="account-form__field-label" for="account-name">Account Name</label>
+        <label class="account-form__field-label" for="account-form-name">Account Name</label>
         <input
           class="account-form__input"
           type="text"
-          id="account-name"
+          id="account-form-name"
           [value]="_name()"
           (input)="_name.set($any($event.target).value)"
           autocomplete="off"
@@ -64,21 +64,22 @@ const GITHUB_BASE_URL = 'https://github.com';
         </div>
       } @else {
         <div class="account-form__field">
-          <span class="account-form__field-label">Provider</span>
+          <span id="account-form-provider-label" class="account-form__field-label">Provider</span>
           <fd-provider-selector
             [provider]="_provider()"
             (providerChange)="_provider.set($event)"
             (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
+            [attr.aria-labelledby]="'account-form-provider-label'"
           />
         </div>
       }
 
       <div class="account-form__field">
-        <label class="account-form__field-label" for="account-base-url">Base URL</label>
+        <label class="account-form__field-label" for="account-form-base-url">Base URL</label>
         <input
           class="account-form__input"
           type="text"
-          id="account-base-url"
+          id="account-form-base-url"
           [value]="_baseUrl()"
           (input)="onBaseUrlInput($any($event.target).value)"
           autocomplete="off"
@@ -86,18 +87,18 @@ const GITHUB_BASE_URL = 'https://github.com';
       </div>
 
       <div class="account-form__field">
-        <label class="account-form__field-label" for="account-token">Token</label>
+        <label class="account-form__field-label" for="account-form-token">Token</label>
         <div class="account-form__token-wrapper">
           <input
             class="account-form__input"
             [type]="_showToken() ? 'text' : 'password'"
-            id="account-token"
+            id="account-form-token"
             [value]="_token()"
             (input)="_token.set($any($event.target).value)"
             autocomplete="off"
             [required]="!_isEditMode()"
             [attr.aria-required]="!_isEditMode() || null"
-            aria-describedby="account-token-hint account-token-validation account-token-error"
+            aria-describedby="account-form-token-hint account-token-validation account-token-error"
           />
           <button
             class="account-form__toggle-visibility-btn"
@@ -127,7 +128,7 @@ const GITHUB_BASE_URL = 'https://github.com';
         </div>
 
         @if (_isEditMode()) {
-          <span id="account-token-hint" class="account-form__field-hint">
+          <span id="account-form-token-hint" class="account-form__field-hint">
             Leave empty to keep current token
           </span>
         }
@@ -156,21 +157,13 @@ const GITHUB_BASE_URL = 'https://github.com';
       <div
         class="account-form__validation-error"
         role="alert"
-      >
-        @if (validationError()) {
-          {{ validationError() }}
-        }
-      </div>
+      >{{ validationError() ?? '' }}</div>
 
       <div
         id="account-token-error"
         class="account-form__save-error"
         role="alert"
-      >
-        @if (saveError()) {
-          {{ saveError() }}
-        }
-      </div>
+      >{{ saveError() ?? '' }}</div>
 
       <button
         class="account-form__save-btn"

@@ -37,8 +37,8 @@ describe('SetupAccountStepComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('input[id="account-name"]')).toBeTruthy();
-    expect(el.querySelector('input[id="account-token"]')).toBeTruthy();
+    expect(el.querySelector('input[id="setup-name"]')).toBeTruthy();
+    expect(el.querySelector('input[id="setup-token"]')).toBeTruthy();
     expect(el.querySelector('button.setup-account-step__create-btn')).toBeTruthy();
     expect(el.querySelector('button.setup-account-step__back-btn')).toBeTruthy();
   });
@@ -65,11 +65,11 @@ describe('SetupAccountStepComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Act
-    const nameInput = el.querySelector('input[id="account-name"]') as HTMLInputElement;
+    const nameInput = el.querySelector('input[id="setup-name"]') as HTMLInputElement;
     nameInput.value = 'My GitHub';
     nameInput.dispatchEvent(new Event('input'));
 
-    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
 
@@ -87,11 +87,11 @@ describe('SetupAccountStepComponent', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    const nameInput = el.querySelector('input[id="account-name"]') as HTMLInputElement;
+    const nameInput = el.querySelector('input[id="setup-name"]') as HTMLInputElement;
     nameInput.value = 'My GitHub';
     nameInput.dispatchEvent(new Event('input'));
 
-    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -127,11 +127,11 @@ describe('SetupAccountStepComponent', () => {
     gitlabRadio.click();
     fixture.detectChanges();
 
-    const nameInput = el.querySelector('input[id="account-name"]') as HTMLInputElement;
+    const nameInput = el.querySelector('input[id="setup-name"]') as HTMLInputElement;
     nameInput.value = 'My GitLab';
     nameInput.dispatchEvent(new Event('input'));
 
-    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
     tokenInput.value = 'glpat_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -164,11 +164,11 @@ describe('SetupAccountStepComponent', () => {
     component.complete.subscribe((id: string) => (emittedId = id));
 
     const el = fixture.nativeElement as HTMLElement;
-    const nameInput = el.querySelector('input[id="account-name"]') as HTMLInputElement;
+    const nameInput = el.querySelector('input[id="setup-name"]') as HTMLInputElement;
     nameInput.value = 'My GitHub';
     nameInput.dispatchEvent(new Event('input'));
 
-    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -211,11 +211,11 @@ describe('SetupAccountStepComponent', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    const nameInput = el.querySelector('input[id="account-name"]') as HTMLInputElement;
+    const nameInput = el.querySelector('input[id="setup-name"]') as HTMLInputElement;
     nameInput.value = 'My GitHub';
     nameInput.dispatchEvent(new Event('input'));
 
-    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -246,11 +246,11 @@ describe('SetupAccountStepComponent', () => {
     component.complete.subscribe(() => (emitted = true));
 
     const el = fixture.nativeElement as HTMLElement;
-    const nameInput = el.querySelector('input[id="account-name"]') as HTMLInputElement;
+    const nameInput = el.querySelector('input[id="setup-name"]') as HTMLInputElement;
     nameInput.value = 'My GitHub';
     nameInput.dispatchEvent(new Event('input'));
 
-    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -297,7 +297,7 @@ describe('SetupAccountStepComponent', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -341,7 +341,7 @@ describe('SetupAccountStepComponent', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    const tokenInput = el.querySelector('input[id="account-token"]') as HTMLInputElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -361,5 +361,21 @@ describe('SetupAccountStepComponent', () => {
 
     // Cleanup
     req.flush({ isValid: true, isAuthFailure: false, missingScopes: [] });
+  });
+
+  // Cycle 12: fd-provider-selector is labelled via aria-labelledby
+  it('should associate the Provider label with fd-provider-selector via aria-labelledby', () => {
+    // Arrange
+    const { fixture } = setup();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const labelSpan = el.querySelector('#setup-provider-label');
+    expect(labelSpan).toBeTruthy();
+    const selector = el.querySelector('fd-provider-selector');
+    expect(selector?.getAttribute('aria-labelledby')).toBe('setup-provider-label');
   });
 });

@@ -88,9 +88,9 @@ describe('AccountFormComponent', () => {
     const { el } = setup();
 
     // Assert
-    const label = el.querySelector('label[for="account-name"]');
+    const label = el.querySelector('label[for="account-form-name"]');
     expect(label).toBeTruthy();
-    const input = el.querySelector('#account-name') as HTMLInputElement;
+    const input = el.querySelector('#account-form-name') as HTMLInputElement;
     expect(input).toBeTruthy();
     expect(input.type).toBe('text');
   });
@@ -101,7 +101,7 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
-    const input = el.querySelector('#account-name') as HTMLInputElement;
+    const input = el.querySelector('#account-form-name') as HTMLInputElement;
     expect(input.value).toBe('my-github');
   });
 
@@ -111,9 +111,9 @@ describe('AccountFormComponent', () => {
     const { el } = setup();
 
     // Assert
-    const label = el.querySelector('label[for="account-base-url"]');
+    const label = el.querySelector('label[for="account-form-base-url"]');
     expect(label).toBeTruthy();
-    const input = el.querySelector('#account-base-url') as HTMLInputElement;
+    const input = el.querySelector('#account-form-base-url') as HTMLInputElement;
     expect(input).toBeTruthy();
   });
 
@@ -123,7 +123,7 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ account: null });
 
     // Assert
-    const input = el.querySelector('#account-base-url') as HTMLInputElement;
+    const input = el.querySelector('#account-form-base-url') as HTMLInputElement;
     expect(input.value).toBe('https://github.com');
   });
 
@@ -133,7 +133,7 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
-    const input = el.querySelector('#account-base-url') as HTMLInputElement;
+    const input = el.querySelector('#account-form-base-url') as HTMLInputElement;
     expect(input.value).toBe('https://github.com');
   });
 
@@ -161,7 +161,7 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const baseUrlInput = el.querySelector('#account-base-url') as HTMLInputElement;
+    const baseUrlInput = el.querySelector('#account-form-base-url') as HTMLInputElement;
     expect(baseUrlInput.value).toBe('https://gitlab.com');
   });
 
@@ -184,9 +184,9 @@ describe('AccountFormComponent', () => {
     const { el } = setup();
 
     // Assert
-    const label = el.querySelector('label[for="account-token"]');
+    const label = el.querySelector('label[for="account-form-token"]');
     expect(label).toBeTruthy();
-    const input = el.querySelector('#account-token') as HTMLInputElement;
+    const input = el.querySelector('#account-form-token') as HTMLInputElement;
     expect(input).toBeTruthy();
     expect(input.type).toBe('password');
   });
@@ -205,7 +205,7 @@ describe('AccountFormComponent', () => {
   it('should toggle token input between password and text on visibility button click', () => {
     // Arrange
     const { el, fixture } = setup();
-    const input = el.querySelector('#account-token') as HTMLInputElement;
+    const input = el.querySelector('#account-form-token') as HTMLInputElement;
     expect(input.type).toBe('password');
 
     // Act
@@ -235,7 +235,7 @@ describe('AccountFormComponent', () => {
     let emitted: { token: string; baseUrl: string } | undefined;
     component.validateToken.subscribe((v: { token: string; baseUrl: string }) => { emitted = v; });
 
-    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_test_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -374,7 +374,7 @@ describe('AccountFormComponent', () => {
   it('should disable save button when token is empty in add mode', () => {
     // Arrange
     const { el, fixture } = setup({ account: null });
-    const nameInput = el.querySelector('#account-name') as HTMLInputElement;
+    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
     nameInput.value = 'my-account';
     nameInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -388,10 +388,10 @@ describe('AccountFormComponent', () => {
   it('should disable save button when saving is true', () => {
     // Arrange
     const { el, fixture } = setup({ account: null, saving: true });
-    const nameInput = el.querySelector('#account-name') as HTMLInputElement;
+    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
     nameInput.value = 'my-account';
     nameInput.dispatchEvent(new Event('input'));
-    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -408,10 +408,10 @@ describe('AccountFormComponent', () => {
     let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
     component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
 
-    const nameInput = el.querySelector('#account-name') as HTMLInputElement;
+    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
     nameInput.value = 'new-account';
     nameInput.dispatchEvent(new Event('input'));
-    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_newtoken';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -441,10 +441,10 @@ describe('AccountFormComponent', () => {
     gitlabRadio.click();
     fixture.detectChanges();
 
-    const nameInput = el.querySelector('#account-name') as HTMLInputElement;
+    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
     nameInput.value = 'my-gitlab';
     nameInput.dispatchEvent(new Event('input'));
-    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'glpat_token';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -469,7 +469,7 @@ describe('AccountFormComponent', () => {
     let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
     component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
 
-    const nameInput = el.querySelector('#account-name') as HTMLInputElement;
+    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
     nameInput.value = 'renamed-account';
     nameInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -492,7 +492,7 @@ describe('AccountFormComponent', () => {
     let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
     component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
 
-    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_newtoken';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -543,7 +543,7 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ account: null });
 
     // Assert
-    const nameInput = el.querySelector('#account-name') as HTMLInputElement;
+    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
     expect(nameInput.required).toBe(true);
   });
 
@@ -553,7 +553,7 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ account: null });
 
     // Assert
-    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     expect(tokenInput.required).toBe(true);
   });
 
@@ -563,7 +563,40 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
-    const tokenInput = el.querySelector('#account-token') as HTMLInputElement;
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     expect(tokenInput.required).toBe(false);
+  });
+
+  // Cycle 39: live-region divs render unconditionally so screen readers announce changes
+  it('should render validation-error div even when validationError is null', () => {
+    // Arrange / Act
+    const { el } = setup({ validationError: null });
+
+    // Assert
+    const errorEl = el.querySelector('.account-form__validation-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
+  });
+
+  it('should render save-error div even when saveError is null', () => {
+    // Arrange / Act
+    const { el } = setup({ saveError: null });
+
+    // Assert
+    const errorEl = el.querySelector('.account-form__save-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
+  });
+
+  // Cycle 40: fd-provider-selector is labelled via aria-labelledby
+  it('should associate the Provider label with fd-provider-selector via aria-labelledby', () => {
+    // Arrange / Act
+    const { el } = setup({ account: null });
+
+    // Assert
+    const labelSpan = el.querySelector('#account-form-provider-label');
+    expect(labelSpan).toBeTruthy();
+    const selector = el.querySelector('fd-provider-selector');
+    expect(selector?.getAttribute('aria-labelledby')).toBe('account-form-provider-label');
   });
 });
