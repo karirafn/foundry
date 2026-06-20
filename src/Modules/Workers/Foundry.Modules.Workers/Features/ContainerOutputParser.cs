@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -83,16 +84,12 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             return null;
         }
 
-        try
+        return statusNode.GetValueKind() switch
         {
-            return statusNode.GetValue<int>();
-        }
-        catch (InvalidOperationException)
-        {
-            // api_error_status may be a string — try parsing it
-            string? raw = statusNode.GetValue<string>();
-            return int.TryParse(raw, out int parsed) ? parsed : null;
-        }
+            JsonValueKind.Number => statusNode.GetValue<int>(),
+            JsonValueKind.String when int.TryParse(statusNode.GetValue<string>(), out int parsed) => parsed,
+            _ => null,
+        };
     }
 
     private static string? ExtractLastJsonLine(string log)
@@ -132,7 +129,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             if (isoMatch.Success && DateTimeOffset.TryParse(
                 isoMatch.Value,
                 null,
-                System.Globalization.DateTimeStyles.RoundtripKind,
+                DateTimeStyles.RoundtripKind,
                 out DateTimeOffset parsed))
             {
                 return parsed;
@@ -156,7 +153,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
 
     private static DateTimeOffset? ParseWallClockTime(string timeText)
     {
-        if (!TimeOnly.TryParse(timeText, out TimeOnly timeOfDay))
+        if (!TimeOnly.TryParse(timeText, CultureInfo.InvariantCulture, out TimeOnly timeOfDay))
         {
             return null;
         }
@@ -179,7 +176,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     private static partial Regex Iso8601ResetTimePattern();
 
     [GeneratedRegex(
-        @"[^\w]*resets\s+(?<time>\d{1,2}:\d{2}\s*[ap]m)(?:\s*\(UTC\))?",
+        @"(?<!\w)resets\s+(?<time>\d{1,2}:\d{2}\s*[ap]m)(?:\s*\(UTC\))?",
         RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex WallClockResetTimePattern();

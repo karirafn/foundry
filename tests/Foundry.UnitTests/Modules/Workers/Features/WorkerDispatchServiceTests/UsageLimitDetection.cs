@@ -117,7 +117,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithUsageLimitedOutput_AlwaysTransitionsToFailedRunWithUsageLimitedReason()
+    public async Task WhenContainerExitsWithUsageLimitedOutputVia429Status_TransitionsToFailedRunWithUsageLimitedReason()
     {
         // Arrange
         SeedGlobalSettings();
@@ -133,6 +133,26 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         failedRun.Reason.ShouldBeOfType<FailureReason.UsageLimited>();
+    }
+
+    [Fact]
+    public async Task WhenContainerExitsWithUsageLimitedOutput_AlwaysSetsUsageLimitResetsAt()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        SeedActiveRun("container-usage-limited-429-sets-resets-at");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        WorkerDispatchService sut = BuildServiceWithParser(UsageLimited429OnlyOutput, exitedStatus);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
+            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        settings.ShouldNotBeNull();
+        settings.UsageLimitResetsAt.ShouldNotBeNull();
     }
 
     [Fact]
