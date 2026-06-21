@@ -60,5 +60,4 @@ public sealed class Create
         // Assert
         @event.BranchName.ShouldBeNull();
     }
-
 }

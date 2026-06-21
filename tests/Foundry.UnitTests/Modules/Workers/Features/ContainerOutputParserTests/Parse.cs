@@ -245,4 +245,58 @@ public sealed class Parse
         DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
         limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
     }
+
+    [Fact]
+    public void WhenWallClockResetTimeWithUtcAnnotation_ResetOffsetIsExplicitlyUtc()
+    {
+        // Arrange
+        // "resets 11:59pm (UTC)" — the (UTC) annotation must produce offset Zero, not local offset
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. resets 11:59pm (UTC)","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+        limited.ResetsAt.Hour.ShouldBe(23);
+        limited.ResetsAt.Minute.ShouldBe(59);
+    }
+
+    [Fact]
+    public void WhenApiErrorStatusIsOutOfInt32Range_IsNotClassifiedAsUsageLimit()
+    {
+        // Arrange
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":1,"result":"Done.","session_id":"abc","terminal_reason":"completed","api_error_status":99999999999}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenWallClockResetTimeHasNoUtcAnnotation_FallsBackToDefaultCooldown()
+    {
+        // Arrange
+        // "resets 11:59pm" without (UTC) must NOT be parsed as wall-clock UTC time
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. resets 11:59pm","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
+        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
+        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
+    }
 }

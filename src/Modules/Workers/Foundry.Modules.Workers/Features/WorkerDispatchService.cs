@@ -619,15 +619,20 @@ internal sealed class WorkerDispatchService(
         GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (settings is not null)
+        if (settings is null)
+        {
+            logger.LogWarning(
+                "Usage limit detected but could not persist reset time — no GlobalSettings row exists.");
+        }
+        else
         {
             settings.SetUsageLimitResetsAt(usageLimited.ResetsAt);
             await dbContext.SaveChangesAsync(cancellationToken);
-        }
 
-        logger.LogWarning(
-            "Usage limit detected; dispatch paused until {ResetsAt}.",
-            usageLimited.ResetsAt);
+            logger.LogWarning(
+                "Usage limit detected; dispatch paused until {ResetsAt}.",
+                usageLimited.ResetsAt);
+        }
 
         return new FailureReason.UsageLimited(usageLimited.ResetsAt);
     }

@@ -156,6 +156,27 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenContainerExitsWithUsageLimitedOutputAndNoGlobalSettingsRow_StillReturnsUsageLimitedReason()
+    {
+        // Arrange — deliberately NO SeedGlobalSettings() call
+        SeedActiveRun("container-no-settings-row");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        WorkerDispatchService sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — the run must still be marked failed with UsageLimited; no GlobalSettings row must exist
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.UsageLimited>();
+        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
+            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        settings.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenSecondContainerExitsWithLaterResetTime_ExtendsThePause()
     {
         // Arrange

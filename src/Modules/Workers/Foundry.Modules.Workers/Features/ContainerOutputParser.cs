@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -10,11 +11,11 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     private const int MaxLogLength = 65_536;    // 64 KB
     private const int MaxJsonLineLength = 4_096; // 4 KB
 
-    private static readonly HashSet<string> UsageLimitReasons = new(StringComparer.Ordinal)
+    private static readonly FrozenSet<string> UsageLimitReasons = new HashSet<string>(StringComparer.Ordinal)
     {
         "blocking_limit",
         "rapid_refill_breaker",
-    };
+    }.ToFrozenSet(StringComparer.Ordinal);
 
     public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
     {
@@ -91,12 +92,25 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             return null;
         }
 
-        return statusNode.GetValueKind() switch
+        if (statusNode.GetValueKind() == JsonValueKind.Number)
         {
-            JsonValueKind.Number => statusNode.GetValue<int>(),
-            JsonValueKind.String when int.TryParse(statusNode.GetValue<string>(), out int parsed) => parsed,
-            _ => null,
-        };
+            long asLong = statusNode.GetValue<long>();
+
+            if (asLong < int.MinValue || asLong > int.MaxValue)
+            {
+                return null;
+            }
+
+            return (int)asLong;
+        }
+
+        if (statusNode.GetValueKind() == JsonValueKind.String
+            && int.TryParse(statusNode.GetValue<string>(), out int parsed))
+        {
+            return parsed;
+        }
+
+        return null;
     }
 
     private static string? ExtractLastJsonLine(string log)
@@ -165,7 +179,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             return null;
         }
 
-        DateTimeOffset today = DateTimeOffset.UtcNow.Date;
+        DateTimeOffset today = new(DateTimeOffset.UtcNow.Date, TimeSpan.Zero);
         DateTimeOffset candidate = today.Add(timeOfDay.ToTimeSpan());
 
         if (candidate <= DateTimeOffset.UtcNow)
@@ -183,7 +197,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     private static partial Regex Iso8601ResetTimePattern();
 
     [GeneratedRegex(
-        @"(?<!\w)resets\s+(?<time>\d{1,2}:\d{2}\s*[ap]m)(?:\s*\(UTC\))?",
+        @"(?<!\w)resets\s+(?<time>\d{1,2}:\d{2}\s*[ap]m)\s*\(UTC\)",
         RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex WallClockResetTimePattern();
