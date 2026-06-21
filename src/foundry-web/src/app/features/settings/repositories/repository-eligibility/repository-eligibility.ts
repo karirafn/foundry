@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, InputSignal, input } from '@angular/core';
-import { EligibilityStatus, EligibilityViolation } from '../repository.model';
+import { EligibilityStatus } from '../repository.model';
 
 @Component({
   selector: 'fd-repository-eligibility',
@@ -14,14 +14,6 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
         <span class="repository-eligibility__label">{{ _statusLabel() }}</span>
       </div>
 
-      @if (status() === 'ineligible' && violations().length > 0) {
-        <ul class="repository-eligibility__violations" aria-label="Eligibility violations">
-          @for (violation of violations(); track violation.rule) {
-            <li class="repository-eligibility__violation">{{ violation.description }}</li>
-          }
-        </ul>
-      }
-
       <span class="sr-only" [attr.aria-live]="recheckPending() ? 'polite' : 'off'">{{ _statusLabel() }}</span>
     </div>
   `,
@@ -29,7 +21,6 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
 })
 export class RepositoryEligibilityComponent {
   readonly status: InputSignal<EligibilityStatus> = input.required<EligibilityStatus>();
-  readonly violations: InputSignal<EligibilityViolation[]> = input<EligibilityViolation[]>([]);
   readonly recheckPending: InputSignal<boolean> = input<boolean>(false);
 
   _statusLabel(): string {

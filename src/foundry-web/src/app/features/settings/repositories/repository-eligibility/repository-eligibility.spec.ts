@@ -14,7 +14,6 @@ function setup(overrides: {
 } = {}) {
   const fixture = TestBed.createComponent(RepositoryEligibilityComponent);
   fixture.componentRef.setInput('status', overrides.status ?? 'eligible');
-  fixture.componentRef.setInput('violations', overrides.violations ?? []);
   fixture.componentRef.setInput('recheckPending', overrides.recheckPending ?? false);
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
@@ -51,12 +50,12 @@ describe('RepositoryEligibilityComponent', () => {
     expect(label?.textContent?.trim()).toBe('Eligible');
   });
 
-  // Cycle 2: ineligible status renders amber indicator with violations
+  // Cycle 2: ineligible status renders amber indicator
   it('should render the ineligible status with amber indicator class', () => {
     // Arrange
 
     // Act
-    const { el } = setup({ status: 'ineligible', violations: VIOLATIONS });
+    const { el } = setup({ status: 'ineligible' });
 
     // Assert
     const indicator = el.querySelector('.repository-eligibility__indicator');
@@ -67,33 +66,20 @@ describe('RepositoryEligibilityComponent', () => {
     // Arrange
 
     // Act
-    const { el } = setup({ status: 'ineligible', violations: VIOLATIONS });
+    const { el } = setup({ status: 'ineligible' });
 
     // Assert
     const label = el.querySelector('.repository-eligibility__label');
     expect(label?.textContent?.trim()).toContain('Ineligible');
   });
 
-  it('should render violations list when status is ineligible and violations are present', () => {
+  it('should not render violations list in the chip component', () => {
     // Arrange
 
     // Act
     const { el } = setup({ status: 'ineligible', violations: VIOLATIONS });
 
-    // Assert
-    const violationItems = el.querySelectorAll('.repository-eligibility__violation');
-    expect(violationItems.length).toBe(2);
-    expect(violationItems[0].textContent).toContain('Allow direct pushes is enabled');
-    expect(violationItems[1].textContent).toContain('No pull request reviews are required');
-  });
-
-  it('should not render violations list when status is eligible', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'eligible' });
-
-    // Assert
+    // Assert — violations are now in the details panel, not the chip
     const violationsList = el.querySelector('.repository-eligibility__violations');
     expect(violationsList).toBeFalsy();
   });

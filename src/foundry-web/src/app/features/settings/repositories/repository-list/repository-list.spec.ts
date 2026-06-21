@@ -369,7 +369,7 @@ describe('RepositoryListComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  // Cycle 19: eligibility component rendered for each repository
+  // Cycle 19: eligibility chip rendered for each repository
   it('should render fd-repository-eligibility for each repository item', () => {
     // Arrange
 
@@ -381,178 +381,7 @@ describe('RepositoryListComponent', () => {
     expect(eligibilityComponents.length).toBe(2);
   });
 
-  // Cycle 20: re-check button calls recheckEligibility service method
-  it('should call recheckEligibility when Re-check button is clicked', () => {
-    // Arrange
-    const { el, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
-
-    // Act
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
-    recheckBtn.click();
-
-    // Assert — service POST is issued with correct URL
-    const req = httpMock.expectOne(
-      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
-    );
-    expect(req.request.method).toBe('POST');
-    req.flush(MOCK_REPO_INELIGIBLE);
-  });
-
-  // Cycle 21: re-check button shows loading state while pending
-  it('should show "Re-checking..." on Re-check button while request is in flight', () => {
-    // Arrange
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
-
-    // Act
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
-    recheckBtn.click();
-    fixture.detectChanges();
-
-    // Assert — button text changes while in flight
-    const updatedBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
-    expect(updatedBtn?.textContent?.trim()).toBe('Re-checking...');
-
-    // Cleanup
-    httpMock.expectOne(
-      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
-    ).flush(MOCK_REPO_INELIGIBLE);
-  });
-
-  // Cycle 22: re-check button shown for ineligible repositories
-  it('should render Re-check button for ineligible repositories', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
-
-    // Assert
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
-    expect(recheckBtn).toBeTruthy();
-  });
-
-  // Cycle 23: re-check button shown for unreachable repositories
-  it('should render Re-check button for unreachable repositories', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_UNREACHABLE] });
-
-    // Assert
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
-    expect(recheckBtn).toBeTruthy();
-  });
-
-  // Cycle 24: eligible repos do not show re-check button
-  it('should not render Re-check button for eligible repositories', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
-    expect(recheckBtn).toBeFalsy();
-  });
-
-  // Cycle 26: recheck error feedback — alert element is always present in the DOM
-  it('should always render the recheck error element in the DOM for ineligible repos', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
-
-    // Assert — element is always present (live region must exist before content changes)
-    const errorEl = el.querySelector('.repository-list__recheck-error');
-    expect(errorEl).toBeTruthy();
-    expect(errorEl?.getAttribute('role')).toBe('alert');
-  });
-
-  it('should display an inline error message when recheck fails', () => {
-    // Arrange
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
-    recheckBtn.click();
-
-    // Act — simulate server error
-    httpMock.expectOne(
-      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
-    ).error(new ErrorEvent('server error'));
-    fixture.detectChanges();
-
-    // Assert — error text is present and element is not hidden from AT
-    const errorEl = el.querySelector('.repository-list__recheck-error');
-    expect(errorEl?.textContent?.trim()).toBe('Re-check failed. Please try again.');
-    expect(errorEl?.getAttribute('aria-hidden')).toBe('false');
-  });
-
-  it('should clear recheck error on next recheck attempt', () => {
-    // Arrange
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
-    recheckBtn.click();
-    httpMock.expectOne(
-      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
-    ).error(new ErrorEvent('server error'));
-    fixture.detectChanges();
-
-    // Act — click again
-    const updatedBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
-    updatedBtn.click();
-    fixture.detectChanges();
-
-    // Assert — error text cleared and element hidden from AT when new attempt starts
-    const errorEl = el.querySelector('.repository-list__recheck-error');
-    expect(errorEl?.textContent?.trim()).toBe('');
-    expect(errorEl?.getAttribute('aria-hidden')).toBe('true');
-
-    // Cleanup
-    httpMock.expectOne(
-      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
-    ).flush(MOCK_REPO_INELIGIBLE);
-  });
-
-  it('should not display recheck error on successful recheck', () => {
-    // Arrange
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
-    recheckBtn.click();
-
-    // Act — success
-    httpMock.expectOne(
-      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
-    ).flush(MOCK_REPO_INELIGIBLE);
-    fixture.detectChanges();
-
-    // Assert — element present but text empty and hidden from AT
-    const errorEl = el.querySelector('.repository-list__recheck-error');
-    expect(errorEl?.textContent?.trim()).toBe('');
-    expect(errorEl?.getAttribute('aria-hidden')).toBe('true');
-  });
-
-  // Cycle 27: recheck button color — unreachable repos use secondary color class
-  it('should apply unreachable color class to recheck button for unreachable repos', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_UNREACHABLE] });
-
-    // Assert
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
-    expect(recheckBtn?.classList.contains('repository-list__recheck-btn--unreachable')).toBe(true);
-  });
-
-  it('should not apply unreachable color class to recheck button for ineligible repos', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
-
-    // Assert
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
-    expect(recheckBtn?.classList.contains('repository-list__recheck-btn--unreachable')).toBe(false);
-  });
-
-  // Cycle 25: null eligibility — no crash, no eligibility component or re-check button
+  // Cycle 25: null eligibility — no crash, no eligibility component
   it('should not render eligibility component when eligibility is null', () => {
     // Arrange
 
@@ -562,7 +391,179 @@ describe('RepositoryListComponent', () => {
     // Assert
     const eligibilityComponent = el.querySelector('fd-repository-eligibility');
     expect(eligibilityComponent).toBeFalsy();
-    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
-    expect(recheckBtn).toBeFalsy();
+  });
+
+  // Cycle 28: disclosure toggle shown for ineligible repos
+  it('should render a disclosure toggle button for ineligible repos', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const toggle = el.querySelector('.repository-list__toggle-btn');
+    expect(toggle).toBeTruthy();
+  });
+
+  // Cycle 29: disclosure toggle shown for unreachable repos
+  it('should render a disclosure toggle button for unreachable repos', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_UNREACHABLE] });
+
+    // Assert
+    const toggle = el.querySelector('.repository-list__toggle-btn');
+    expect(toggle).toBeTruthy();
+  });
+
+  // Cycle 30: eligible repos do not show disclosure toggle
+  it('should not render a disclosure toggle button for eligible repos', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const toggle = el.querySelector('.repository-list__toggle-btn');
+    expect(toggle).toBeFalsy();
+  });
+
+  // Cycle 31: disclosure toggle has aria-expanded=false initially
+  it('should have aria-expanded="false" on the disclosure toggle initially', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const toggle = el.querySelector('.repository-list__toggle-btn');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  // Cycle 32: clicking the toggle opens the details panel
+  it('should set aria-expanded="true" on the toggle after clicking it', () => {
+    // Arrange
+    const { el, fixture } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Act
+    const toggle = el.querySelector('.repository-list__toggle-btn') as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    // Assert
+    const updatedToggle = el.querySelector('.repository-list__toggle-btn');
+    expect(updatedToggle?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  // Cycle 33: clicking the toggle again closes the details panel (single-open)
+  it('should collapse the panel when the same toggle is clicked again', () => {
+    // Arrange
+    const { el, fixture } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+    const toggle = el.querySelector('.repository-list__toggle-btn') as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    // Act
+    toggle.click();
+    fixture.detectChanges();
+
+    // Assert
+    const updatedToggle = el.querySelector('.repository-list__toggle-btn');
+    expect(updatedToggle?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  // Cycle 34: details panel is present in DOM (always rendered with [hidden])
+  it('should render the details panel element in the DOM for non-eligible repos', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const detailsPanel = el.querySelector('fd-repository-eligibility-details');
+    expect(detailsPanel).toBeTruthy();
+  });
+
+  // Cycle 35: details panel is hidden by default
+  it('should hide the details panel by default', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const detailsPanel = el.querySelector('fd-repository-eligibility-details');
+    expect(detailsPanel?.hasAttribute('hidden')).toBe(true);
+  });
+
+  // Cycle 36: details panel becomes visible after toggling
+  it('should show the details panel after clicking the toggle', () => {
+    // Arrange
+    const { el, fixture } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Act
+    const toggle = el.querySelector('.repository-list__toggle-btn') as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    // Assert
+    const detailsPanel = el.querySelector('fd-repository-eligibility-details');
+    expect(detailsPanel?.hasAttribute('hidden')).toBe(false);
+  });
+
+  // Cycle 37: toggle button aria-controls points to the details panel id
+  it('should have aria-controls pointing to the details panel id', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const toggle = el.querySelector('.repository-list__toggle-btn');
+    const controls = toggle?.getAttribute('aria-controls');
+    expect(controls).toBe(`eligibility-detail-${MOCK_REPO_INELIGIBLE.id}`);
+    const panel = el.querySelector(`#eligibility-detail-${MOCK_REPO_INELIGIBLE.id}`);
+    expect(panel).toBeTruthy();
+  });
+
+  // Cycle 38: single-open — opening a second repo closes the first
+  it('should close the first panel when a second is opened (single-open)', () => {
+    // Arrange
+    const { el, fixture } = setup({ repositories: [MOCK_REPO_INELIGIBLE, MOCK_REPO_UNREACHABLE] });
+    const toggles = el.querySelectorAll('.repository-list__toggle-btn') as NodeListOf<HTMLButtonElement>;
+
+    // Act — open first
+    toggles[0].click();
+    fixture.detectChanges();
+    // Act — open second
+    toggles[1].click();
+    fixture.detectChanges();
+
+    // Assert — first panel is now hidden, second is visible
+    const panels = el.querySelectorAll('fd-repository-eligibility-details');
+    expect(panels[0]?.hasAttribute('hidden')).toBe(true);
+    expect(panels[1]?.hasAttribute('hidden')).toBe(false);
+  });
+
+  // Cycle 20: re-check button in details panel calls recheckEligibility service method
+  it('should call recheckEligibility when Re-check is clicked in the details panel', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+    // Expand the panel first
+    const toggle = el.querySelector('.repository-list__toggle-btn') as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    // Act — click recheck inside details panel
+    const recheckBtn = el.querySelector('fd-repository-eligibility-details .repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    recheckBtn.click();
+
+    // Assert — service POST is issued with correct URL
+    const req = httpMock.expectOne(
+      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
+    );
+    expect(req.request.method).toBe('POST');
+    req.flush(MOCK_REPO_INELIGIBLE);
   });
 });

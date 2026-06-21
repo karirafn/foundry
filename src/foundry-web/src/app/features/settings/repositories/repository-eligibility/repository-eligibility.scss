@@ -43,20 +43,5 @@
     color: var(--fd-text-ineligible);
   }
 
-  &__violations {
-    list-style: none;
-    margin: 0;
-    padding: 0 0 0 var(--fd-spacing-md);
-  }
 
-  &__violation {
-    color: var(--fd-text-secondary);
-    font-size: 0.75rem;
-    line-height: 1.4;
-    padding-block: 1px;
-
-    &::before {
-      content: '· ';
-    }
-  }
 }

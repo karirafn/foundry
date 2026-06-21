@@ -126,7 +126,12 @@
     border: 1px solid var(--fd-border-muted);
     border-radius: var(--fd-radius-sm);
     display: flex;
+    flex-direction: column;
+  }
+
+  &__row {
     align-items: center;
+    display: flex;
     gap: var(--fd-spacing-md);
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
   }
@@ -150,7 +155,7 @@
     flex-direction: column;
     flex: 1 1 12rem;
     gap: 2px;
-    min-width: 8rem;
+    min-width: 0;
   }
 
   &__slug {
@@ -215,62 +220,51 @@
     white-space: nowrap;
   }
 
-  &__actions {
+  &__eligibility-group {
+    align-items: center;
     display: flex;
-    gap: var(--fd-spacing-sm);
+    gap: var(--fd-spacing-xs);
   }
 
   &__eligibility {
-    flex: 1 1 0;
-    min-width: 0;
+    flex-shrink: 0;
   }
 
-  &__recheck-btn {
+  &__toggle-btn {
+    align-items: center;
     background: transparent;
-    border: 1px solid var(--fd-text-ineligible);
+    border: none;
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-ineligible);
+    color: var(--fd-text-secondary);
     cursor: pointer;
-    font-size: 0.8125rem;
-    min-height: 44px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
-    white-space: nowrap;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 28px;
+    min-width: 28px;
+    padding: var(--fd-spacing-xs);
 
-    &--unreachable {
-      border-color: var(--fd-text-secondary);
-      color: var(--fd-text-secondary);
-
-      &:hover:not([disabled]) {
-        background: var(--fd-bg-card-hover);
-      }
-
-      &:focus-visible {
-        outline-color: var(--fd-text-secondary);
-      }
-    }
-
-    &:hover:not([disabled]) {
-      background: rgba(210, 153, 34, 0.1);
-    }
-
-    &[disabled] {
-      cursor: not-allowed;
-      opacity: 0.6;
+    &:hover {
+      background: var(--fd-bg-card-hover);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-ineligible);
+      outline: 2px solid var(--fd-text-link);
       outline-offset: 2px;
     }
   }
 
-  &__recheck-error {
-    color: var(--fd-text-error);
-    font-size: 0.8125rem;
+  &__toggle-chevron {
+    transition: transform 0.15s ease;
 
-    &[aria-hidden='true'] {
-      display: none;
+    &--expanded {
+      transform: rotate(180deg);
     }
+  }
+
+  &__actions {
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    margin-inline-start: auto;
   }
 
   &__edit-btn,
@@ -309,5 +303,21 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .repository-list {
+    &__row {
+      flex-wrap: wrap;
+    }
+
+    &__info {
+      flex-basis: calc(100% - 3rem);
+    }
+
+    &__eligibility-group {
+      flex-wrap: nowrap;
+    }
   }
 }
