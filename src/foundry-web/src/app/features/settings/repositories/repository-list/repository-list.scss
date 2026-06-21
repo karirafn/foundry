@@ -148,9 +148,9 @@
   &__info {
     display: flex;
     flex-direction: column;
-    flex: 1;
+    flex: 1 1 12rem;
     gap: 2px;
-    min-width: 0;
+    min-width: 8rem;
   }
 
   &__slug {
@@ -221,6 +221,7 @@
   }
 
   &__eligibility {
+    flex: 1 1 0;
     min-width: 0;
   }
 
