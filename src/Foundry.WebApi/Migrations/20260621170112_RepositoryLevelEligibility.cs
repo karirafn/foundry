@@ -10,7 +10,19 @@ namespace Foundry.WebApi.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Add eligibility JSON column and queryable discriminator to monitored_repositories.
+            // Convert IneligibleIssue rows to DetectedIssue so the state machine is
+            // consistent after eligibility moves to the repository level.
+            migrationBuilder.Sql("UPDATE issues SET state = 'detected', eligibility_violations = NULL WHERE state = 'ineligible'");
+
+            // Drop the per-issue ineligible check constraint, then the column.
+            migrationBuilder.DropCheckConstraint(
+                name: "ck_issues_ineligible_violations",
+                table: "issues");
+
+            migrationBuilder.DropColumn(
+                name: "eligibility_violations",
+                table: "issues");
+
             migrationBuilder.AddColumn<string>(
                 name: "eligibility",
                 table: "monitored_repositories",
@@ -34,19 +46,6 @@ namespace Foundry.WebApi.Migrations
                 name: "ix_monitored_repositories_eligibility_status",
                 table: "monitored_repositories",
                 column: "eligibility_status");
-
-            // Convert IneligibleIssue rows to DetectedIssue so the state machine is
-            // consistent after eligibility moves to the repository level.
-            migrationBuilder.Sql("UPDATE issues SET state = 'detected', eligibility_violations = NULL WHERE state = 'ineligible'");
-
-            // Drop the per-issue ineligible check constraint, then the column.
-            migrationBuilder.DropCheckConstraint(
-                name: "ck_issues_ineligible_violations",
-                table: "issues");
-
-            migrationBuilder.DropColumn(
-                name: "eligibility_violations",
-                table: "issues");
         }
 
         /// <inheritdoc />
@@ -55,17 +54,6 @@ namespace Foundry.WebApi.Migrations
             // Re-add the eligibility_violations column and its check constraint.
             // Note: data cannot be restored — any previously-ineligible issues remain
             // as 'detected' after reverting this migration.
-            migrationBuilder.AddColumn<string>(
-                name: "eligibility_violations",
-                table: "issues",
-                type: "TEXT",
-                nullable: true);
-
-            migrationBuilder.AddCheckConstraint(
-                name: "ck_issues_ineligible_violations",
-                table: "issues",
-                sql: "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
-
             migrationBuilder.DropIndex(
                 name: "ix_monitored_repositories_eligibility_status",
                 table: "monitored_repositories");
@@ -77,6 +65,17 @@ namespace Foundry.WebApi.Migrations
             migrationBuilder.DropColumn(
                 name: "eligibility_status",
                 table: "monitored_repositories");
+
+            migrationBuilder.AddColumn<string>(
+                name: "eligibility_violations",
+                table: "issues",
+                type: "TEXT",
+                nullable: true);
+
+            migrationBuilder.AddCheckConstraint(
+                name: "ck_issues_ineligible_violations",
+                table: "issues",
+                sql: "state <> 'ineligible' OR eligibility_violations IS NOT NULL");
         }
     }
 }
