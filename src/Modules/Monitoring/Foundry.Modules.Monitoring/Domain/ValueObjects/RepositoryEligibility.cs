@@ -17,7 +17,12 @@ public abstract record RepositoryEligibility
     {
         public IReadOnlyList<EligibilityViolation> Violations { get; }
 
-        public Ineligible(IReadOnlyList<EligibilityViolation> violations)
+        // Internal to allow JSON deserialization by the EF value converter (System.Text.Json
+        // polymorphic deserialization requires a reachable constructor to instantiate the type).
+        // External callers must use new Ineligible([...]) — the invariant (non-empty violations)
+        // is enforced here at construction time.
+        [JsonConstructor]
+        internal Ineligible(IReadOnlyList<EligibilityViolation> violations)
         {
             if (violations.Count == 0)
             {

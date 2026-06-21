@@ -50,6 +50,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             Host = host,
             PollInterval = pollInterval,
             IsActive = true,
+            Eligibility = new RepositoryEligibility.Unreachable(),
+            EligibilityStatus = UnreachableStatus,
         };
     }
 

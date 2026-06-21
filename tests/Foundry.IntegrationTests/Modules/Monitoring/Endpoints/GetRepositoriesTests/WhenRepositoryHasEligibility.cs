@@ -92,10 +92,12 @@ public sealed class WhenRepositoryHasEligibility : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRepositoryHasNoEligibilitySet_SummaryEligibilityIsNull()
+    public async Task WhenRepositoryHasNoExplicitEligibility_SummaryEligibilityIsUnreachable()
     {
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Org C");
+
+        // Seed without overriding eligibility — MonitoredRepository.Create initializes to Unreachable.
         await SeedRepositoryWithEligibilityAsync(accountId, "owner/no-eligibility-repo", eligibility: null);
 
         // Act
@@ -108,7 +110,8 @@ public sealed class WhenRepositoryHasEligibility : IAsyncDisposable
         IReadOnlyList<RepositorySummary>? repositories = await response.Content
             .ReadFromJsonAsync<IReadOnlyList<RepositorySummary>>(TestContext.Current.CancellationToken);
         RepositorySummary repo = repositories.ShouldNotBeNull().ShouldHaveSingleItem();
-        repo.Eligibility.ShouldBeNull();
+        repo.Eligibility.ShouldNotBeNull();
+        repo.Eligibility.Status.ShouldBe("unreachable");
     }
 
     private async Task SeedRepositoryWithEligibilityAsync(

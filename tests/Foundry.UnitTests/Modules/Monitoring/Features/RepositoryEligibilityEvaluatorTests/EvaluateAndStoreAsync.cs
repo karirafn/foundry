@@ -40,7 +40,7 @@ public sealed class EvaluateAndStoreAsync
     }
 
     [Fact]
-    public async Task WhenProviderReturnsViolations_SetsEligibilityToIneligible()
+    public async Task WhenProviderReturnsDirectPushesViolation_SetsEligibilityToIneligible()
     {
         // Arrange
         MonitoredRepository repo = CreateRepo();
@@ -54,6 +54,40 @@ public sealed class EvaluateAndStoreAsync
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
         ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDirectPushesRule);
+    }
+
+    [Fact]
+    public async Task WhenProviderReturnsForcePushesViolation_SetsEligibilityToIneligible()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: false, RejectDeletion: true);
+        StubIssueProvider provider = new(Result<BranchProtection>.Ok(protection));
+        RepositoryEligibilityEvaluator sut = CreateSut();
+
+        // Act
+        await sut.EvaluateAndStoreAsync(repo, provider, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowForcePushesRule);
+    }
+
+    [Fact]
+    public async Task WhenProviderReturnsDeletionViolation_SetsEligibilityToIneligible()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: false);
+        StubIssueProvider provider = new(Result<BranchProtection>.Ok(protection));
+        RepositoryEligibilityEvaluator sut = CreateSut();
+
+        // Act
+        await sut.EvaluateAndStoreAsync(repo, provider, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDeletionRule);
     }
 
     [Fact]

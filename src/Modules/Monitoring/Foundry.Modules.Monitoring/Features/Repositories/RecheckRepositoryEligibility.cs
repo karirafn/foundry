@@ -44,12 +44,14 @@ internal static class RecheckRepositoryEligibility
                 return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(accountId));
             }
 
-            if (!string.IsNullOrEmpty(account.Token))
+            if (string.IsNullOrEmpty(account.Token))
             {
-                IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
-                await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
-                await dbContext.SaveChangesAsync(cancellationToken);
+                return Result<RepositorySummary>.Fail(RepositoryErrors.NoToken(accountId));
             }
+
+            IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
+            await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             RepositorySummary summary = new(
                 repository.Id.Value,
@@ -78,19 +80,21 @@ internal static class RecheckRepositoryEligibility
                     Command command = new(accountId, id);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<RepositorySummary>, NotFound<string>, ProblemHttpResult>>(
+                    return result.Match<Results<Ok<RepositorySummary>, NotFound<string>, UnprocessableEntity<string>, ProblemHttpResult>>(
                         repository => TypedResults.Ok(repository),
                         error => error.Code switch
                         {
                             RepositoryErrors.NotFoundCode => TypedResults.NotFound(error.Message),
                             RepositoryErrors.AccountNotFoundCode => TypedResults.NotFound(error.Message),
+                            RepositoryErrors.NoTokenCode => TypedResults.UnprocessableEntity(error.Message),
                             _ => TypedResults.Problem(error.Message),
                         });
                 })
                 .WithName("RecheckRepositoryEligibility")
                 .WithSummary("Re-evaluates branch protection eligibility for a monitored repository")
-                .Produces<RepositorySummary>()
+                .Produces<RepositorySummary>(StatusCodes.Status200OK)
                 .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
                 .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }

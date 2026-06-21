@@ -18,10 +18,12 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
     private const int HostMaxLength = 253;
     private const int EligibilityStatusMaxLength = 20;
 
+    private static readonly JsonSerializerOptions EligibilitySerializerOptions = new();
+
     private static RepositoryEligibility DeserializeEligibility(string json)
     {
-        return JsonSerializer.Deserialize<RepositoryEligibility>(json, (JsonSerializerOptions?)null)
-            ?? throw new InvalidOperationException($"Failed to deserialize RepositoryEligibility from JSON: {json}");
+        return JsonSerializer.Deserialize<RepositoryEligibility>(json, EligibilitySerializerOptions)
+            ?? throw new InvalidOperationException("Failed to deserialize eligibility column of MonitoredRepository.");
     }
 
     public void Configure(EntityTypeBuilder<MonitoredRepository> builder)
@@ -65,7 +67,7 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
         ValueConverter<RepositoryEligibility?, string?> eligibilityConverter = new(
             eligibility => eligibility == null
                 ? null
-                : JsonSerializer.Serialize(eligibility, (JsonSerializerOptions?)null),
+                : JsonSerializer.Serialize(eligibility, EligibilitySerializerOptions),
             json => json == null
                 ? null
                 : DeserializeEligibility(json));

@@ -25,7 +25,7 @@ internal static class GetRepositories
 
             // Project into an anonymous type first to avoid EF limitations with
             // strongly-typed IDs and nullable TimeSpan arithmetic in the SELECT clause.
-            var rows = await dbContext.Set<MonitoredRepository>()
+            var repositorySummaryRows = await dbContext.Set<MonitoredRepository>()
                 .AsNoTracking()
                 .Where(r => r.AccountId == accountId)
                 .Join(
@@ -45,7 +45,7 @@ internal static class GetRepositories
                     })
                 .ToListAsync(cancellationToken);
 
-            List<RepositorySummary> repositories = rows
+            List<RepositorySummary> repositories = repositorySummaryRows
                 .Select(r => new RepositorySummary(
                     r.Id.Value,
                     r.Slug,

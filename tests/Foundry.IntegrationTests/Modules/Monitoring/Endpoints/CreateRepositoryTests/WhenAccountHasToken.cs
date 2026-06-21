@@ -116,7 +116,7 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAccountHasNoToken_EligibilityIsNull()
+    public async Task WhenAccountHasNoToken_EligibilityIsUnreachable()
     {
         // Arrange
         FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
@@ -142,11 +142,13 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
                 TestContext.Current.CancellationToken);
 
             // Assert
+            // No token — eligibility evaluator is skipped; Create() initializes to Unreachable.
             response.StatusCode.ShouldBe(HttpStatusCode.Created);
             RepositorySummary? repository = await response.Content
                 .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
             repository.ShouldNotBeNull();
-            repository.Eligibility.ShouldBeNull();
+            repository.Eligibility.ShouldNotBeNull();
+            repository.Eligibility.Status.ShouldBe("unreachable");
         }
     }
 
