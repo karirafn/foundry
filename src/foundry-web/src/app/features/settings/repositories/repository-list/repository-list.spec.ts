@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { RepositoryListComponent } from './repository-list';
 import { RepositorySummary } from '../repository.model';
 import { RepositoryService } from '../repository.service';
+import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 
@@ -10,6 +11,7 @@ const MOCK_REPO: RepositorySummary = {
   slug: 'my-org/my-repo',
   accountId: '00000000-0000-0000-0000-000000000010',
   accountName: 'my-github',
+  providerType: 'github',
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
@@ -21,6 +23,7 @@ const MOCK_REPO_2: RepositorySummary = {
   slug: 'work-org/backend',
   accountId: '00000000-0000-0000-0000-000000000011',
   accountName: 'work-gitlab',
+  providerType: 'gitlab',
   pollIntervalSeconds: null,
   isActive: false,
   lastPolledAt: null,
@@ -32,6 +35,7 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   slug: 'my-org/restricted-repo',
   accountId: '00000000-0000-0000-0000-000000000010',
   accountName: 'my-github',
+  providerType: 'github',
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
@@ -43,6 +47,7 @@ const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
   slug: 'my-org/unpolled-repo',
   accountId: '00000000-0000-0000-0000-000000000010',
   accountName: 'my-github',
+  providerType: 'github',
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: null,
@@ -54,6 +59,7 @@ const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   slug: 'my-org/offline-repo',
   accountId: '00000000-0000-0000-0000-000000000010',
   accountName: 'my-github',
+  providerType: 'github',
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
@@ -176,8 +182,32 @@ describe('RepositoryListComponent', () => {
     expect(items.length).toBe(1);
   });
 
-  // Cycle 6: account badge abbreviation (2-letter)
-  it('should render a 2-letter account badge for each repository', () => {
+  // Cycle 6: provider icon renders for each repository
+  it('should render fd-provider-icon with the correct providerType for a github repository', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const icon = el.querySelector('fd-provider-icon');
+    expect(icon).toBeTruthy();
+    expect(icon?.getAttribute('aria-label')).toBe('GitHub');
+  });
+
+  it('should render fd-provider-icon with the correct providerType for a gitlab repository', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_2] });
+
+    // Assert
+    const icon = el.querySelector('fd-provider-icon');
+    expect(icon).toBeTruthy();
+    expect(icon?.getAttribute('aria-label')).toBe('GitLab');
+  });
+
+  it('should not render the old account-badge element', () => {
     // Arrange
 
     // Act
@@ -185,8 +215,7 @@ describe('RepositoryListComponent', () => {
 
     // Assert
     const badge = el.querySelector('.repository-list__account-badge');
-    expect(badge?.textContent?.trim()).toBe('MY');
-    expect(badge?.getAttribute('aria-hidden')).toBe('true');
+    expect(badge).toBeFalsy();
   });
 
   // Cycle 7: slug and account name shown

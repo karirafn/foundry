@@ -136,18 +136,9 @@
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
   }
 
-  &__account-badge {
-    background: var(--fd-bg-card);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
+  &__provider {
     color: var(--fd-text-secondary);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    min-width: 36px;
-    padding: 2px var(--fd-spacing-xs);
-    text-align: center;
-    text-transform: uppercase;
+    flex-shrink: 0;
   }
 
   &__info {

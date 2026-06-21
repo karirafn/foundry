@@ -3,11 +3,12 @@ import { RepositorySummary } from '../repository.model';
 import { RepositoryEligibilityComponent } from '../repository-eligibility/repository-eligibility';
 import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility-details/repository-eligibility-details';
 import { RepositoryService } from '../repository.service';
+import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 
 @Component({
   selector: 'fd-repository-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RepositoryEligibilityComponent, RepositoryEligibilityDetailsComponent],
+  imports: [RepositoryEligibilityComponent, RepositoryEligibilityDetailsComponent, ProviderIconComponent],
   template: `
     @if (error()) {
       <div class="repository-list__error" role="alert">
@@ -54,9 +55,10 @@ import { RepositoryService } from '../repository.service';
         @for (repo of repositories(); track repo.id) {
           <li class="repository-list__item" role="listitem">
             <div class="repository-list__row">
-              <span class="repository-list__account-badge" aria-hidden="true">
-                {{ accountBadge(repo.accountName) }}
-              </span>
+              <fd-provider-icon
+                [providerType]="repo.providerType"
+                class="repository-list__provider"
+              />
               <div class="repository-list__info">
                 <span class="repository-list__slug">{{ repo.slug }}</span>
                 <span class="repository-list__account-name">{{ repo.accountName }}</span>
@@ -196,10 +198,6 @@ export class RepositoryListComponent {
         this._recheckError.set({ id: repo.id, message: 'Re-check failed. Please try again.' });
       },
     });
-  }
-
-  accountBadge(accountName: string): string {
-    return accountName.slice(0, 2).toUpperCase();
   }
 
   pollIntervalLabel(pollIntervalSeconds: number | null): string {

@@ -72,20 +72,6 @@
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
   }
 
-  &__provider-badge {
-    background: var(--fd-bg-card);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-secondary);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    min-width: 36px;
-    padding: 2px var(--fd-spacing-xs);
-    text-align: center;
-    text-transform: uppercase;
-  }
-
   &__info {
     display: flex;
     flex-direction: column;
