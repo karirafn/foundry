@@ -1,5 +1,8 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
@@ -80,6 +83,12 @@ internal static class UpdateRepository
                 repository.Slug.ToString(),
                 repository.AccountId.Value,
                 account.Name,
+                account switch
+                {
+                    GitHubAccount => ProviderTypes.GitHub,
+                    GitLabAccount => ProviderTypes.GitLab,
+                    _ => throw new UnreachableException(),
+                },
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
                 repository.LastPolledAt,

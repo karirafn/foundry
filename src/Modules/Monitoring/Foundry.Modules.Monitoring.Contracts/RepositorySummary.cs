@@ -5,6 +5,7 @@ public sealed record RepositorySummary(
     string Slug,
     Guid AccountId,
     string AccountName,
+    string ProviderType,
     int? PollIntervalSeconds,
     bool IsActive,
     DateTimeOffset? LastPolledAt,
