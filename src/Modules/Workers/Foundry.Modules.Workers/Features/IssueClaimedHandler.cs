@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Globalization;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
@@ -149,6 +151,17 @@ internal sealed class IssueClaimedHandler(
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),
             [authVar.Value.Key] = authVar.Value.Value,
         };
+
+        switch (claimed.Provider)
+        {
+            case WorkerProvider.GitHub:
+                envVars["GH_TOKEN"] = gitPat;
+                break;
+            case WorkerProvider.GitLab:
+                break;
+            default:
+                throw new UnreachableException($"Unhandled WorkerProvider variant: {claimed.Provider.GetType().Name}");
+        }
 
         Result<List<BindMount>> mountsResult = BuildBindMounts();
 

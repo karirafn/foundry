@@ -710,6 +710,44 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenGitHubProvider_ContainerSpecHasGhTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gh-token");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(
+            accountToken: "ghp_test_token",
+            provider: new WorkerProvider.GitHub());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["GH_TOKEN"].ShouldBe("ghp_test_token");
+    }
+
+    [Fact]
+    public async Task WhenGitLabProvider_ContainerSpecHasNoGhTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gl-no-gh-token");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(
+            accountToken: "glpat_test_token",
+            provider: new WorkerProvider.GitLab());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldNotContainKey("GH_TOKEN");
+    }
+
+    [Fact]
     public async Task WhenDbTemplatesAreNull_FallsBackToWorkerOptionsDefaults()
     {
         // Arrange
