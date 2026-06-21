@@ -27,7 +27,8 @@ public sealed class Create
             CloneUrl: new Uri("https://github.com/org/repo.git"),
             AccountToken: "ghp_test_token",
             BranchName: "feat/42",
-            MonitoredRepositoryId: repositoryId);
+            MonitoredRepositoryId: repositoryId,
+            Provider: new WorkerProvider.GitHub());
 
         // Assert
         dispatch.ShouldSatisfyAllConditions(
@@ -62,6 +63,7 @@ public sealed class Create
             AccountToken: "ghp_test_token",
             BranchName: "foundry/42",
             MonitoredRepositoryId: repositoryId,
+            Provider: new WorkerProvider.GitHub(),
             Revision: revision);
 
         // Assert

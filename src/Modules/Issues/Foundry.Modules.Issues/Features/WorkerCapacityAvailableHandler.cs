@@ -144,6 +144,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.AccountToken,
             revisionQueued.BranchName,
             revisionQueued.MonitoredRepositoryId,
+            WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType),
             revision);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -185,6 +186,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.AccountToken,
             continuationQueued.BranchName,
             continuationQueued.MonitoredRepositoryId,
+            WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType),
             Continuation: continuation);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -225,7 +227,8 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
             branchName,
-            queued.MonitoredRepositoryId);
+            queued.MonitoredRepositoryId,
+            WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType));
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

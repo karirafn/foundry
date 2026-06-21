@@ -13,5 +13,6 @@ public sealed record ClaimedIssueDispatch(
     string? AccountToken,
     string BranchName,
     MonitoredRepositoryId MonitoredRepositoryId,
+    WorkerProvider Provider,
     RevisionContext? Revision = null,
     ContinuationContext? Continuation = null);

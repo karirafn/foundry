@@ -609,6 +609,142 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenQueuedIssueIsClaimed_DispatchProviderMatchesDiscriminator()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 10,
+            title: "Issue 10",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        _dbContext.Set<Issue>().Add(queued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryDispatchQueries: new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
+                "owner/repo",
+                new Uri("https://github.com/owner/repo.git"),
+                "GITHUB_PAT",
+                "github")),
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.Provider.ShouldBeOfType<WorkerProvider.GitHub>();
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueIsClaimed_WithGitLabDiscriminator_DispatchProviderIsGitLab()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 11,
+            title: "Issue 11",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        _dbContext.Set<Issue>().Add(queued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryDispatchQueries: new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
+                "owner/repo",
+                new Uri("https://gitlab.com/owner/repo.git"),
+                "GITLAB_PAT",
+                "gitlab")),
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.Provider.ShouldBeOfType<WorkerProvider.GitLab>();
+    }
+
+    [Fact]
+    public async Task WhenRevisionQueuedIssueIsClaimed_DispatchProviderMatchesDiscriminator()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedRevisionQueuedIssue(repositoryId);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryDispatchQueries: new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
+                "owner/repo",
+                new Uri("https://github.com/owner/repo.git"),
+                "GITHUB_PAT",
+                "github")),
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.Provider.ShouldBeOfType<WorkerProvider.GitHub>();
+    }
+
+    [Fact]
+    public async Task WhenContinuationQueuedIssueIsClaimed_DispatchProviderMatchesDiscriminator()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedContinuationQueuedIssue(repositoryId);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryDispatchQueries: new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
+                "owner/repo",
+                new Uri("https://github.com/owner/repo.git"),
+                "GITHUB_PAT",
+                "github")),
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.Provider.ShouldBeOfType<WorkerProvider.GitHub>();
+    }
+
+    [Fact]
     public async Task WhenQueuedIssueIsClaimed_BranchNameIncludesTitleSlug()
     {
         // Arrange

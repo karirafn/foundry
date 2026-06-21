@@ -78,7 +78,8 @@ public sealed class HandleAsync : IAsyncDisposable
         string branchName = "feat/42-test-issue",
         MonitoredRepositoryId? monitoredRepositoryId = null,
         RevisionContext? revision = null,
-        ContinuationContext? continuation = null)
+        ContinuationContext? continuation = null,
+        WorkerProvider? provider = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -91,6 +92,7 @@ public sealed class HandleAsync : IAsyncDisposable
             accountToken,
             branchName,
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
+            provider ?? new WorkerProvider.GitHub(),
             revision,
             continuation);
         return new IssueClaimed(dispatch);
