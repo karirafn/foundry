@@ -21,7 +21,8 @@ internal sealed class RepositoryDispatchQueries(DbContext db) : IRepositoryDispa
                 (r, a) => new RepositoryDispatchInfo(
                     r.Slug.ToString(),
                     new Uri(a.BaseUrl, $"{r.Slug}.git"),
-                    a.Token))
+                    a.Token,
+                    EF.Property<string>(a, "type")))
             .FirstOrDefaultAsync(cancellationToken);
     }
 }

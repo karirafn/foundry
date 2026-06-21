@@ -65,7 +65,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryDispatchQueries ?? new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
-                "GITHUB_PAT")),
+                "GITHUB_PAT",
+                "github")),
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             _domainEventDispatcher,
