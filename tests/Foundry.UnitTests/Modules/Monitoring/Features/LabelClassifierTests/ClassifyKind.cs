@@ -111,4 +111,82 @@ public sealed class ClassifyKind
         // Assert
         result.ShouldBe("feature");
     }
+
+    [Fact]
+    public void WhenScopedLabelTypeBug_ReturnsBug()
+    {
+        // Arrange
+        string[] labels = ["type::bug"];
+
+        // Act
+        string result = LabelClassifier.ClassifyKind(labels);
+
+        // Assert
+        result.ShouldBe("bug");
+    }
+
+    [Fact]
+    public void WhenScopedLabelTypeFeature_ReturnsFeature()
+    {
+        // Arrange
+        string[] labels = ["type::feature"];
+
+        // Act
+        string result = LabelClassifier.ClassifyKind(labels);
+
+        // Assert
+        result.ShouldBe("feature");
+    }
+
+    [Fact]
+    public void WhenScopedLabelTypeRefactor_ReturnsRefactor()
+    {
+        // Arrange
+        string[] labels = ["type::refactor"];
+
+        // Act
+        string result = LabelClassifier.ClassifyKind(labels);
+
+        // Assert
+        result.ShouldBe("refactor");
+    }
+
+    [Fact]
+    public void WhenScopedLabelTypeDocumentation_ReturnsDocumentation()
+    {
+        // Arrange
+        string[] labels = ["type::documentation"];
+
+        // Act
+        string result = LabelClassifier.ClassifyKind(labels);
+
+        // Assert
+        result.ShouldBe("documentation");
+    }
+
+    [Fact]
+    public void WhenScopedLabelCaseInsensitive_ReturnsCorrectKind()
+    {
+        // Arrange
+        string[] labels = ["type::BUG"];
+
+        // Act
+        string result = LabelClassifier.ClassifyKind(labels);
+
+        // Assert
+        result.ShouldBe("bug");
+    }
+
+    [Fact]
+    public void WhenScopedBugAndFlatFeature_PrioritizesBug()
+    {
+        // Arrange
+        string[] labels = ["feature", "type::bug"];
+
+        // Act
+        string result = LabelClassifier.ClassifyKind(labels);
+
+        // Assert
+        result.ShouldBe("bug");
+    }
 }

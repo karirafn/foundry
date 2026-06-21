@@ -70,7 +70,7 @@ public sealed class WhenEligibilityIsEligible : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         RepositorySlug slug = ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/eligible-repo")).Value;
-        MonitoredRepository repository = MonitoredRepository.Create(slug, AccountId.From(accountId), pollInterval: null);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, AccountId.From(accountId), "github.com", pollInterval: null);
         repository.SetEligibility(eligibility);
 
         dbContext.Set<MonitoredRepository>().Add(repository);

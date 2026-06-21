@@ -15,7 +15,7 @@ public sealed class SetEligibility
         ((Result<RepositorySlug>.Success)RepositorySlug.Create("octocat/hello-world")).Value;
 
     private static MonitoredRepository CreateRepository() =>
-        MonitoredRepository.Create(ValidSlug, AccountId.New(), null);
+        MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", null);
 
     [Fact]
     public void WhenEligibleSet_EligibilityStatusIsEligible()

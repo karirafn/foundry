@@ -23,4 +23,21 @@ internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueri
             .Select(r => new { r.Id, Slug = r.Slug.ToString() })
             .ToDictionaryAsync(r => r.Id, r => r.Slug, cancellationToken);
     }
+
+    public async Task<string?> GetProviderTypeAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        string? discriminator = await db.Set<MonitoredRepository>()
+            .AsNoTracking()
+            .Where(r => r.Id == repositoryId)
+            .Join(
+                db.Set<Account>().AsNoTracking(),
+                r => r.AccountId,
+                a => a.Id,
+                (r, a) => EF.Property<string>(a, "type"))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return discriminator;
+    }
 }

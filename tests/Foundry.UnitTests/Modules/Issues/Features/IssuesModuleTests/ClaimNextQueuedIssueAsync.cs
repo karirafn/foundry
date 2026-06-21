@@ -82,6 +82,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
             account.Id,
+            "github.com",
             pollInterval: null);
 
         _dbContext.Set<GitHubAccount>().Add(account);

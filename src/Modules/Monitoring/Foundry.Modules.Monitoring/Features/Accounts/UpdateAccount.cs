@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Text.RegularExpressions;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
@@ -10,20 +13,22 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts;
 
-internal static class UpdateAccount
+internal static partial class UpdateAccount
 {
-    private const string GitHubProviderType = "github";
-
     internal sealed record Command(
         AccountId Id,
         string Name,
         string BaseUrl,
         string? Token) : ICommand<AccountSummary>;
 
-    internal sealed class Validator : ICommandValidator<Command>
+    internal sealed partial class Validator : ICommandValidator<Command>
     {
         internal const string NameEmptyCode = "UpdateAccount.NameEmpty";
         internal const string BaseUrlInvalidCode = "UpdateAccount.BaseUrlInvalid";
+        internal const string TokenInvalidCharsCode = "UpdateAccount.TokenInvalidChars";
+
+        [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
+        private static partial Regex ValidTokenCharactersRegex();
 
         public Result Validate(Command command)
         {
@@ -33,9 +38,16 @@ internal static class UpdateAccount
             }
 
             if (!Uri.TryCreate(command.BaseUrl, UriKind.Absolute, out Uri? baseUri) ||
-                baseUri.Scheme != Uri.UriSchemeHttps)
+                baseUri.Scheme is not "https")
             {
                 return new Error(BaseUrlInvalidCode, "Base URL must be a valid HTTPS URL.");
+            }
+
+            if (command.Token is not null && !ValidTokenCharactersRegex().IsMatch(command.Token))
+            {
+                return new Error(
+                    TokenInvalidCharsCode,
+                    "Token contains invalid characters. Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
             }
 
             return Result.Ok();
@@ -72,8 +84,15 @@ internal static class UpdateAccount
 
             if (command.Token is not null)
             {
-                Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
-                ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl);
+                string providerTypeForValidation = account is GitLabAccount
+                    ? ProviderTypes.GitLab
+                    : ProviderTypes.GitHub;
+
+                Uri apiBaseUrl = account is GitLabAccount
+                    ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
+                    : GitHubAccount.DeriveApiBaseUrl(baseUrl);
+
+                ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl, providerTypeForValidation);
                 Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
                     tokenQuery,
                     cancellationToken);
@@ -90,17 +109,26 @@ internal static class UpdateAccount
                 }
             }
 
-            if (account is GitHubAccount gitHubAccount)
+            switch (account)
             {
-                gitHubAccount.Update(command.Name, command.Token, baseUrl);
+                case GitHubAccount gitHubAccount:
+                    gitHubAccount.Update(command.Name, command.Token, baseUrl);
+                    break;
+                case GitLabAccount gitLabAccount:
+                    gitLabAccount.Update(command.Name, command.Token, baseUrl);
+                    break;
+                default:
+                    throw new UnreachableException(
+                        $"No Update handler for account type '{account.GetType().Name}'.");
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
+            string providerType = account is GitLabAccount ? ProviderTypes.GitLab : ProviderTypes.GitHub;
             AccountSummary summary = new(
                 account.Id.Value,
                 account.Name,
-                GitHubProviderType,
+                providerType,
                 account.BaseUrl.ToString(),
                 account.Token is not null);
 

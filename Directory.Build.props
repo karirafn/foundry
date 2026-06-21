@@ -7,6 +7,8 @@
     <AnalysisMode>all</AnalysisMode>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <!-- Audit only direct dependencies: transitive advisories can't be fixed here until upstream bumps the pin. -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 

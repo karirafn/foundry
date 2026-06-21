@@ -1,0 +1,80 @@
+using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Shared;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.UnitTests.Modules.Monitoring.Features.CreateAccountValidatorTests;
+
+public sealed class Validate
+{
+    private static CreateAccount.Command ValidCommand =>
+        new("My Account", "github", "https://github.com", "ghp_valid_token");
+
+    [Fact]
+    public void WhenTokenContainsInvalidCharacters_ReturnsTokenInvalidCharsError()
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+        CreateAccount.Command command = ValidCommand with { Token = "token with spaces" };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(CreateAccount.Validator.TokenInvalidCharsCode);
+    }
+
+    [Fact]
+    public void WhenTokenContainsAtSign_ReturnsTokenInvalidCharsError()
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+        CreateAccount.Command command = ValidCommand with { Token = "glpat-abc@def" };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(CreateAccount.Validator.TokenInvalidCharsCode);
+    }
+
+    [Fact]
+    public void WhenTokenContainsNewline_ReturnsTokenInvalidCharsError()
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+        CreateAccount.Command command = ValidCommand with { Token = "token\ninjection" };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(CreateAccount.Validator.TokenInvalidCharsCode);
+    }
+
+    [Theory]
+    [InlineData("ghp_validtoken123")]
+    [InlineData("glpat-valid_token.123")]
+    [InlineData("abc-def_ghi.jkl")]
+    [InlineData("UPPER_LOWER-mixed.123")]
+    public void WhenTokenContainsOnlyAllowedCharacters_ReturnsSuccess(string token)
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+        CreateAccount.Command command = ValidCommand with { Token = token };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+}

@@ -22,11 +22,12 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         {"terminal_reason":"blocking_limit","result":"resets at 2099-01-01T00:00:00Z"}
         """;
 
-    // Usage-limited output that produces a past reset time
-    private const string UsageLimitedPastResetOutput =
+    // Usage-limited output with a 429 status only — no terminal_reason, no reset time.
+    // The parser uses defaultCooldownMinutes to set a future reset time.
+    private const string UsageLimited429OnlyOutput =
         """
         Some prior output
-        {"terminal_reason":"blocking_limit","result":"resets at 2000-01-01T00:00:00Z"}
+        {"api_error_status":429}
         """;
 
     private WorkerDispatchService BuildServiceWithParser(
@@ -116,13 +117,32 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithUsageLimitedOutputAndPastResetTime_DoesNotSetUsageLimitResetsAt()
+    public async Task WhenContainerExitsWithUsageLimitedOutputVia429Status_TransitionsToFailedRunWithUsageLimitedReason()
     {
         // Arrange
         SeedGlobalSettings();
-        SeedActiveRun("container-usage-limited-past");
+        SeedActiveRun("container-usage-limited-429-only");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(UsageLimitedPastResetOutput, exitedStatus);
+        WorkerDispatchService sut = BuildServiceWithParser(UsageLimited429OnlyOutput, exitedStatus);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.UsageLimited>();
+    }
+
+    [Fact]
+    public async Task WhenContainerExitsWithUsageLimitedOutput_AlwaysSetsUsageLimitResetsAt()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        SeedActiveRun("container-usage-limited-429-sets-resets-at");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        WorkerDispatchService sut = BuildServiceWithParser(UsageLimited429OnlyOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -132,30 +152,28 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
-        settings.UsageLimitResetsAt.ShouldBeNull();
+        settings.UsageLimitResetsAt.ShouldNotBeNull();
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithUsageLimitedOutputAndPastResetTime_DispatchesFailedEventWithIsUsageLimitedRequeue()
+    public async Task WhenContainerExitsWithUsageLimitedOutputAndNoGlobalSettingsRow_StillReturnsUsageLimitedReason()
     {
-        // Arrange
-        SeedGlobalSettings();
-        SeedActiveRun("container-usage-limited-requeue");
+        // Arrange — deliberately NO SeedGlobalSettings() call
+        SeedActiveRun("container-no-settings-row");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
-            UsageLimitedPastResetOutput,
-            exitedStatus,
-            integrationEventDispatcher: dispatcher);
+        WorkerDispatchService sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert
-        WorkerRunFailed failedEvent = dispatcher.Captured
-            .OfType<WorkerRunFailed>()
-            .ShouldHaveSingleItem();
-        failedEvent.IsUsageLimitedRequeue.ShouldBeTrue();
+        // Assert — the run must still be marked failed with UsageLimited; no GlobalSettings row must exist
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.UsageLimited>();
+        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
+            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        settings.ShouldBeNull();
     }
 
     [Fact]

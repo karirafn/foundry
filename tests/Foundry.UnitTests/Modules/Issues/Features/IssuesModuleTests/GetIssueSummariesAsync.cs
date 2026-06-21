@@ -275,5 +275,10 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
 
             return Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(result);
         }
+
+        public Task<string?> GetProviderTypeAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
     }
 }

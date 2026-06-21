@@ -12,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
-public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<MonitoredRepository>
+internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<MonitoredRepository>
 {
     private const int SlugMaxLength = 500;
+    private const int HostMaxLength = 253;
     private const int EligibilityStatusMaxLength = 20;
 
     private static RepositoryEligibility DeserializeEligibility(string json)
@@ -36,11 +37,17 @@ public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<
         builder.Property(r => r.Slug)
             .HasConversion(
                 slug => slug.ToString(),
-                value => ((Result<RepositorySlug>.Success)RepositorySlug.Create(value)).Value)
+                value => ParseSlug(value))
             .HasMaxLength(SlugMaxLength)
             .IsUnicode(false)
             .IsRequired()
             .HasColumnName("slug");
+
+        builder.Property(r => r.Host)
+            .HasMaxLength(HostMaxLength)
+            .IsUnicode(false)
+            .IsRequired()
+            .HasColumnName("host");
 
         builder.Property(r => r.AccountId)
             .HasConversion(new StronglyTypedIdValueConverter<AccountId>())
@@ -78,9 +85,9 @@ public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<
         builder.HasIndex(r => r.EligibilityStatus)
             .HasDatabaseName("ix_monitored_repositories_eligibility_status");
 
-        builder.HasIndex(r => r.Slug)
+        builder.HasIndex(r => new { r.Host, r.Slug })
             .IsUnique()
-            .HasDatabaseName("ix_monitored_repositories_slug");
+            .HasDatabaseName("ix_monitored_repositories_host_slug");
 
         builder.HasIndex(r => r.AccountId)
             .HasDatabaseName("ix_monitored_repositories_account_id");
@@ -89,5 +96,16 @@ public sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<
             .WithMany()
             .HasForeignKey(r => r.AccountId)
             .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static RepositorySlug ParseSlug(string value)
+    {
+        if (RepositorySlug.Create(value) is Result<RepositorySlug>.Success success)
+        {
+            return success.Value;
+        }
+
+        throw new InvalidOperationException(
+            $"Persisted slug '{value}' could not be parsed as a RepositorySlug.");
     }
 }

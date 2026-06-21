@@ -100,7 +100,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         db.Set<Account>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug(slug), account.Id, null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug(slug), account.Id, "github.com", null);
         db.Set<MonitoredRepository>().Add(repo);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 

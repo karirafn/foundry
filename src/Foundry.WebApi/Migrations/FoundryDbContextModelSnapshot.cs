@@ -186,11 +186,19 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnName("eligibility");
 
                     b.Property<string>("EligibilityStatus")
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasDefaultValue("unreachable")
                         .HasColumnName("eligibility_status");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("host");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER")
@@ -219,9 +227,9 @@ namespace Foundry.WebApi.Migrations
                     b.HasIndex("EligibilityStatus")
                         .HasDatabaseName("ix_monitored_repositories_eligibility_status");
 
-                    b.HasIndex("Slug")
+                    b.HasIndex("Host", "Slug")
                         .IsUnique()
-                        .HasDatabaseName("ix_monitored_repositories_slug");
+                        .HasDatabaseName("ix_monitored_repositories_host_slug");
 
                     b.ToTable("monitored_repositories", (string)null);
                 });
@@ -998,6 +1006,13 @@ namespace Foundry.WebApi.Migrations
                     b.HasBaseType("Foundry.Modules.Monitoring.Domain.Entities.Account");
 
                     b.HasDiscriminator().HasValue("github");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.GitLabAccount", b =>
+                {
+                    b.HasBaseType("Foundry.Modules.Monitoring.Domain.Entities.Account");
+
+                    b.HasDiscriminator().HasValue("gitlab");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Workers.Domain.ActiveRun", b =>

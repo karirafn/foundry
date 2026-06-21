@@ -124,6 +124,7 @@ public sealed class WhenRepositoryHasEligibility : IAsyncDisposable
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
             AccountId.From(accountId),
+            "github.com",
             pollInterval: null);
 
         if (eligibility is not null)

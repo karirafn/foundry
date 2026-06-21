@@ -22,6 +22,7 @@ public static class MonitoringModule
         services.Configure<MonitoringOptions>(configuration.GetSection("Monitoring"));
 
         services.AddHttpClient<GitHubHttpClient>();
+        services.AddHttpClient<GitLabHttpClient>();
 
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();

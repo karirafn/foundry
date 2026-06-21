@@ -52,7 +52,7 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
         dbContext.Set<Account>().Add(account);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, account.Id, null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", null);
         repo.SetEligibility(new RepositoryEligibility.Eligible());
         dbContext.Set<MonitoredRepository>().Add(repo);
 

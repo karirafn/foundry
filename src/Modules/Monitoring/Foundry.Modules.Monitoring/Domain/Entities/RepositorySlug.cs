@@ -10,6 +10,8 @@ public sealed partial record RepositorySlug
 
     public string Name { get; }
 
+    public string FullPath => $"{Owner}/{Name}";
+
     private RepositorySlug(string owner, string name)
     {
         Owner = owner;
@@ -25,22 +27,25 @@ public sealed partial record RepositorySlug
 
         string[] parts = slug.Split('/');
 
-        if (parts.Length != 2)
+        if (parts.Length < 2)
         {
             return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
         }
 
-        string owner = parts[0];
-        string name = parts[1];
+        string name = parts[^1];
+        string owner = string.Join('/', parts[..^1]);
 
-        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(name))
+        foreach (string part in parts)
         {
-            return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
-        }
+            if (string.IsNullOrWhiteSpace(part) || !AllowedSegmentCharacters().IsMatch(part))
+            {
+                return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
+            }
 
-        if (!AllowedSegmentCharacters().IsMatch(owner) || !AllowedSegmentCharacters().IsMatch(name))
-        {
-            return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
+            if (part is "." or "..")
+            {
+                return Result<RepositorySlug>.Fail(RepositorySlugErrors.InvalidFormat);
+            }
         }
 
         return new RepositorySlug(owner, name);
@@ -50,11 +55,4 @@ public sealed partial record RepositorySlug
 
     [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
     private static partial Regex AllowedSegmentCharacters();
-}
-
-public static class RepositorySlugErrors
-{
-    public static readonly Error InvalidFormat = new(
-        "RepositorySlug.InvalidFormat",
-        "Repository slug must be in the format 'owner/name' with non-empty segments.");
 }

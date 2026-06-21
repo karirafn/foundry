@@ -18,6 +18,22 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   hasToken: false,
 };
 
+const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
+  id: '00000000-0000-0000-0000-000000000003',
+  name: 'api-github',
+  providerType: 'github',
+  baseUrl: 'https://github.com',
+  hasToken: true,
+};
+
+const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
+  id: '00000000-0000-0000-0000-000000000004',
+  name: 'api-gitlab',
+  providerType: 'gitlab',
+  baseUrl: 'https://gitlab.com',
+  hasToken: true,
+};
+
 function setup(overrides: {
   accounts?: AccountSummary[];
   loading?: boolean;
@@ -102,6 +118,25 @@ describe('AccountListComponent', () => {
     // Assert
     const badge = el.querySelector('.account-list__provider-badge');
     expect(badge?.textContent?.trim()).toBe('GL');
+  });
+
+  // Cycle 5a: provider badge has aria-label with full provider name for screen readers
+  it('should have aria-label="GitHub" on the provider badge for GitHub accounts', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+    // Assert
+    const badge = el.querySelector('.account-list__provider-badge');
+    expect(badge?.getAttribute('aria-label')).toBe('GitHub');
+  });
+
+  it('should have aria-label="GitLab" on the provider badge for GitLab accounts', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
+
+    // Assert
+    const badge = el.querySelector('.account-list__provider-badge');
+    expect(badge?.getAttribute('aria-label')).toBe('GitLab');
   });
 
   // Cycle 6: token status indicator
@@ -228,5 +263,42 @@ describe('AccountListComponent', () => {
 
     // Assert
     expect(emitted).toBe(true);
+  });
+
+  // Cycle 14: lowercase providerType from API renders correct badge and aria-label
+  it('should render GH badge for lowercase github providerType', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITHUB] });
+
+    // Assert
+    const badge = el.querySelector('.account-list__provider-badge');
+    expect(badge?.textContent?.trim()).toBe('GH');
+  });
+
+  it('should render GL badge for lowercase gitlab providerType', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITLAB] });
+
+    // Assert
+    const badge = el.querySelector('.account-list__provider-badge');
+    expect(badge?.textContent?.trim()).toBe('GL');
+  });
+
+  it('should have aria-label="GitHub" on badge for lowercase github providerType', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITHUB] });
+
+    // Assert
+    const badge = el.querySelector('.account-list__provider-badge');
+    expect(badge?.getAttribute('aria-label')).toBe('GitHub');
+  });
+
+  it('should have aria-label="GitLab" on badge for lowercase gitlab providerType', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITLAB] });
+
+    // Assert
+    const badge = el.querySelector('.account-list__provider-badge');
+    expect(badge?.getAttribute('aria-label')).toBe('GitLab');
   });
 });

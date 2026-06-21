@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
@@ -10,22 +12,24 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts;
 
-internal static class CreateAccount
+internal static partial class CreateAccount
 {
-    private const string GitHubProviderType = "github";
-
     internal sealed record Command(
         string Name,
         string ProviderType,
         string BaseUrl,
         string Token) : ICommand<AccountSummary>;
 
-    internal sealed class Validator : ICommandValidator<Command>
+    internal sealed partial class Validator : ICommandValidator<Command>
     {
         internal const string InvalidProviderTypeCode = "CreateAccount.InvalidProviderType";
         internal const string NameEmptyCode = "CreateAccount.NameEmpty";
         internal const string BaseUrlInvalidCode = "CreateAccount.BaseUrlInvalid";
         internal const string TokenEmptyCode = "CreateAccount.TokenEmpty";
+        internal const string TokenInvalidCharsCode = "CreateAccount.TokenInvalidChars";
+
+        [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
+        private static partial Regex ValidTokenCharactersRegex();
 
         public Result Validate(Command command)
         {
@@ -35,7 +39,7 @@ internal static class CreateAccount
             }
 
             if (!Uri.TryCreate(command.BaseUrl, UriKind.Absolute, out Uri? baseUri) ||
-                baseUri.Scheme != Uri.UriSchemeHttps)
+                baseUri.Scheme is not "https")
             {
                 return new Error(BaseUrlInvalidCode, "Base URL must be a valid HTTPS URL.");
             }
@@ -45,9 +49,20 @@ internal static class CreateAccount
                 return new Error(TokenEmptyCode, "Token must not be empty.");
             }
 
-            if (!string.Equals(command.ProviderType, GitHubProviderType, StringComparison.OrdinalIgnoreCase))
+            if (!ValidTokenCharactersRegex().IsMatch(command.Token))
             {
-                return new Error(InvalidProviderTypeCode, $"Provider type '{command.ProviderType}' is not supported. Only 'github' is supported.");
+                return new Error(
+                    TokenInvalidCharsCode,
+                    "Token contains invalid characters. Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
+            }
+
+            bool isKnownProvider = ProviderTypes.IsKnown(command.ProviderType);
+
+            if (!isKnownProvider)
+            {
+                return new Error(
+                    InvalidProviderTypeCode,
+                    $"Provider type '{command.ProviderType}' is not supported. Only 'github' and 'gitlab' are supported.");
             }
 
             return Result.Ok();
@@ -73,9 +88,14 @@ internal static class CreateAccount
             }
 
             Uri baseUrl = new(command.BaseUrl);
-            Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
 
-            ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl);
+            bool isGitLab = string.Equals(command.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase);
+
+            Uri apiBaseUrl = isGitLab
+                ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
+                : GitHubAccount.DeriveApiBaseUrl(baseUrl);
+
+            ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl, command.ProviderType);
             Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
                 tokenQuery,
                 cancellationToken);
@@ -92,14 +112,18 @@ internal static class CreateAccount
                 return Result<AccountSummary>.Fail(AccountErrors.InvalidToken);
             }
 
-            GitHubAccount account = GitHubAccount.Create(command.Name, command.Token, baseUrl);
+            Account account = isGitLab
+                ? GitLabAccount.Create(command.Name, command.Token, baseUrl)
+                : GitHubAccount.Create(command.Name, command.Token, baseUrl);
+
             dbContext.Set<Account>().Add(account);
             await dbContext.SaveChangesAsync(cancellationToken);
 
+            string providerType = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
             AccountSummary summary = new(
                 account.Id.Value,
                 account.Name,
-                GitHubProviderType,
+                providerType,
                 account.BaseUrl.ToString(),
                 account.Token is not null);
 

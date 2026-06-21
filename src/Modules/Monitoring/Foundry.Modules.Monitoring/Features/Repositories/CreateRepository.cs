@@ -87,6 +87,7 @@ internal static class CreateRepository
             MonitoredRepository repository = MonitoredRepository.Create(
                 repositorySlug,
                 accountId,
+                account.BaseUrl.Host,
                 pollInterval);
 
             dbContext.Set<MonitoredRepository>().Add(repository);
