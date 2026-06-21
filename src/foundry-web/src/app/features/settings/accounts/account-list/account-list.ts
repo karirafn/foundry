@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
 import { AccountSummary } from '../account.model';
-import { providerDisplayName, providerLabel } from '../provider.util';
+import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 
 @Component({
   selector: 'fd-account-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ProviderIconComponent],
   template: `
     @if (error()) {
       <div class="account-list__error" role="alert">
@@ -49,10 +50,7 @@ import { providerDisplayName, providerLabel } from '../provider.util';
       <ul class="account-list__list" role="list">
         @for (account of accounts(); track account.id) {
           <li class="account-list__item" role="listitem">
-            <span
-              class="account-list__provider-badge"
-              [attr.aria-label]="providerDisplayName(account.providerType)"
-            >{{ providerLabel(account.providerType) }}</span>
+            <fd-provider-icon [providerType]="account.providerType" />
             <div class="account-list__info">
               <span class="account-list__name">{{ account.name }}</span>
               <span class="account-list__url">{{ account.baseUrl }}</span>
@@ -96,7 +94,4 @@ export class AccountListComponent {
   readonly edit: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly delete: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
-
-  readonly providerLabel = providerLabel;
-  readonly providerDisplayName = providerDisplayName;
 }

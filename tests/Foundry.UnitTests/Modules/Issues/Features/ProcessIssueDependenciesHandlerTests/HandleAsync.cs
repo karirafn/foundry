@@ -44,7 +44,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dispatcher = new CapturingDomainEventDispatcher();
         _sut = new ProcessIssueDependenciesHandler(
             _dbContext,
-            new IssueQueries(_dbContext, new NullRepositorySlugQueries()),
+            new IssueQueries(_dbContext, new NullRepositorySlugQueries(), new NullRepositoryEligibilityQuery()),
             _dispatcher,
             NullLogger<ProcessIssueDependenciesHandler>.Instance);
     }

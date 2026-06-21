@@ -101,42 +101,34 @@ describe('AccountListComponent', () => {
     expect(url?.textContent?.trim()).toBe('https://github.com');
   });
 
-  // Cycle 5: provider badge abbreviation
-  it('should render GH badge for GitHub accounts', () => {
+  // Cycle 5: provider icon renders with correct accessible label
+  it('should render fd-provider-icon with aria-label="GitHub" for GitHub accounts', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+    // Assert
+    const icon = el.querySelector('fd-provider-icon');
+    expect(icon).toBeTruthy();
+    expect(icon?.getAttribute('aria-label')).toBe('GitHub');
+  });
+
+  it('should render fd-provider-icon with aria-label="GitLab" for GitLab accounts', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
+
+    // Assert
+    const icon = el.querySelector('fd-provider-icon');
+    expect(icon).toBeTruthy();
+    expect(icon?.getAttribute('aria-label')).toBe('GitLab');
+  });
+
+  it('should not render the old provider-badge element', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT] });
 
     // Assert
     const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge?.textContent?.trim()).toBe('GH');
-  });
-
-  it('should render GL badge for GitLab accounts', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
-
-    // Assert
-    const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge?.textContent?.trim()).toBe('GL');
-  });
-
-  // Cycle 5a: provider badge has aria-label with full provider name for screen readers
-  it('should have aria-label="GitHub" on the provider badge for GitHub accounts', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge?.getAttribute('aria-label')).toBe('GitHub');
-  });
-
-  it('should have aria-label="GitLab" on the provider badge for GitLab accounts', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
-
-    // Assert
-    const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge?.getAttribute('aria-label')).toBe('GitLab');
+    expect(badge).toBeFalsy();
   });
 
   // Cycle 6: token status indicator
@@ -265,40 +257,22 @@ describe('AccountListComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  // Cycle 14: lowercase providerType from API renders correct badge and aria-label
-  it('should render GH badge for lowercase github providerType', () => {
+  // Cycle 14: lowercase providerType from API renders correct icon and aria-label
+  it('should render fd-provider-icon with aria-label="GitHub" for lowercase github providerType', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITHUB] });
 
     // Assert
-    const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge?.textContent?.trim()).toBe('GH');
+    const icon = el.querySelector('fd-provider-icon');
+    expect(icon?.getAttribute('aria-label')).toBe('GitHub');
   });
 
-  it('should render GL badge for lowercase gitlab providerType', () => {
+  it('should render fd-provider-icon with aria-label="GitLab" for lowercase gitlab providerType', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITLAB] });
 
     // Assert
-    const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge?.textContent?.trim()).toBe('GL');
-  });
-
-  it('should have aria-label="GitHub" on badge for lowercase github providerType', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITHUB] });
-
-    // Assert
-    const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge?.getAttribute('aria-label')).toBe('GitHub');
-  });
-
-  it('should have aria-label="GitLab" on badge for lowercase gitlab providerType', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITLAB] });
-
-    // Assert
-    const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge?.getAttribute('aria-label')).toBe('GitLab');
+    const icon = el.querySelector('fd-provider-icon');
+    expect(icon?.getAttribute('aria-label')).toBe('GitLab');
   });
 });

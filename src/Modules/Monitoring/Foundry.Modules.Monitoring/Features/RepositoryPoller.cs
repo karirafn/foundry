@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 
@@ -12,7 +11,8 @@ internal sealed class RepositoryPoller(
     IIssueQueries issueQueries,
     DbContext dbContext,
     IDomainEventDispatcher domainEventDispatcher,
-    IIntegrationEventDispatcher integrationEventDispatcher)
+    IIntegrationEventDispatcher integrationEventDispatcher,
+    IRepositoryEligibilityEvaluator eligibilityEvaluator)
 {
     public async Task<Result> PollAsync(
         MonitoredRepository repository,
@@ -20,6 +20,9 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // Pass 0: evaluate repository-level eligibility unconditionally every poll cycle.
+        await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
+
         IReadOnlySet<int> knownNumbers = await issueQueries.GetKnownIssueNumbersAsync(
             repository.Id,
             cancellationToken);
@@ -66,12 +69,6 @@ internal sealed class RepositoryPoller(
 
         // Pass 4: check provider-side status of all review issues.
         await DetectReviewStatusChangesAsync(repository, provider, cancellationToken);
-
-        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
-        repository.ClearIntegrationEvents();
-
-        // Pass 5: check eligibility for all detected and ineligible issues.
-        await CheckEligibilityAsync(repository, provider, cancellationToken);
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();
@@ -238,72 +235,6 @@ internal sealed class RepositoryPoller(
                     feedbackSuccess.Value.Comments));
             }
         }
-    }
-
-    private async Task CheckEligibilityAsync(
-        MonitoredRepository repository,
-        IIssueProvider provider,
-        CancellationToken cancellationToken)
-    {
-        IReadOnlyList<int> issueNumbers = await issueQueries.GetDetectedAndIneligibleIssueNumbersAsync(
-            repository.Id,
-            cancellationToken);
-
-        if (issueNumbers.Count == 0)
-        {
-            return;
-        }
-
-        Result<BranchProtection> protectionResult = await provider.GetBranchProtectionAsync(
-            repository.Slug,
-            cancellationToken);
-
-        IReadOnlyList<EligibilityViolationInfo> violations = BuildViolations(protectionResult);
-
-        foreach (int issueNumber in issueNumbers)
-        {
-            repository.RecordIntegrationEvent(new IssueEligibilityChecked(
-                repository.Id,
-                issueNumber,
-                violations));
-        }
-    }
-
-    private static List<EligibilityViolationInfo> BuildViolations(
-        Result<BranchProtection> protectionResult)
-    {
-        if (protectionResult is not Result<BranchProtection>.Success success)
-        {
-            return [new EligibilityViolationInfo(
-                EligibilityViolationInfo.UnreachableRule,
-                EligibilityViolationInfo.UnreachableDescription)];
-        }
-
-        BranchProtection protection = success.Value;
-        List<EligibilityViolationInfo> violations = [];
-
-        if (!protection.RejectDirectPushes)
-        {
-            violations.Add(new EligibilityViolationInfo(
-                EligibilityViolationInfo.AllowDirectPushesRule,
-                "The repository allows direct pushes to the protected branch, which could allow bypassing the worker's pull request workflow."));
-        }
-
-        if (!protection.RejectForcePushes)
-        {
-            violations.Add(new EligibilityViolationInfo(
-                EligibilityViolationInfo.AllowForcePushesRule,
-                "The repository allows force pushes to the protected branch, which could allow overwriting the worker's commits."));
-        }
-
-        if (!protection.RejectDeletion)
-        {
-            violations.Add(new EligibilityViolationInfo(
-                EligibilityViolationInfo.AllowDeletionRule,
-                "The repository allows deletion of the protected branch, which could result in loss of the worker's work."));
-        }
-
-        return violations;
     }
 
     private static bool HasDetailsChanged(IssueSnapshot snapshot, ProviderIssue issue)

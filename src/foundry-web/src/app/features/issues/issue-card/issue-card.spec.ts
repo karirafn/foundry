@@ -120,14 +120,14 @@ describe('IssueCardComponent', () => {
     expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
   });
 
-  it('should have aria-label on the external link', () => {
+  it('should have a provider-neutral aria-label on the external link', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const link = el.querySelector('.issue-card__link') as HTMLAnchorElement;
-    expect(link?.getAttribute('aria-label')).toBe('Open issue #42 on GitHub');
+    expect(link?.getAttribute('aria-label')).toBe('View issue #42 on owner/repo');
   });
 
   // Cycle 5: toggle output on click
@@ -218,14 +218,60 @@ describe('IssueCardComponent', () => {
     expect(card?.getAttribute('aria-controls')).toBe('detail-abc123');
   });
 
-  it('should set aria-label with issue number and title', () => {
+  it('should set aria-label with issue number, title, and state', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const card = el.querySelector('.issue-card') as HTMLElement;
-    expect(card?.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard');
+    expect(card?.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard. State: in progress');
+  });
+
+  it('should include repo warning in aria-label when issue is queued and repo is ineligible', () => {
+    // Arrange
+    const queuedIneligibleIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act
+    const fixture = createComponent(queuedIneligibleIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.getAttribute('aria-label')).toContain('Repo ineligible');
+  });
+
+  it('should include repo warning in aria-label when issue is queued and repo is unreachable', () => {
+    // Arrange
+    const queuedUnreachableIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'unreachable',
+    };
+
+    // Act
+    const fixture = createComponent(queuedUnreachableIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.getAttribute('aria-label')).toContain('Repo unreachable');
+  });
+
+  it('should not include repo warning in aria-label when issue has no warning', () => {
+    // Arrange / Act
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('Repo ineligible');
+    expect(label).not.toContain('Repo unreachable');
   });
 
   // Cycle 7: keyboard interaction
@@ -289,6 +335,146 @@ describe('IssueCardComponent', () => {
 
     // Assert
     expect(defaultPrevented).toBe(true);
+  });
+
+  // Cycle 9: repository eligibility warning marker
+  it('should show warning marker when issue is queued and repo is ineligible', () => {
+    // Arrange
+    const queuedIneligibleIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act
+    const fixture = createComponent(queuedIneligibleIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const marker = el.querySelector('.issue-card__repo-warning');
+    expect(marker).toBeTruthy();
+  });
+
+  it('should show "Repo ineligible" text for ineligible status', () => {
+    // Arrange
+    const queuedIneligibleIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act
+    const fixture = createComponent(queuedIneligibleIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const marker = el.querySelector('.issue-card__repo-warning');
+    expect(marker?.textContent?.trim()).toBe('Repo ineligible');
+  });
+
+  it('should show warning marker when issue is queued and repo is unreachable', () => {
+    // Arrange
+    const queuedUnreachableIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'unreachable',
+    };
+
+    // Act
+    const fixture = createComponent(queuedUnreachableIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const marker = el.querySelector('.issue-card__repo-warning');
+    expect(marker).toBeTruthy();
+  });
+
+  it('should show "Repo unreachable" text for unreachable status', () => {
+    // Arrange
+    const queuedUnreachableIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'unreachable',
+    };
+
+    // Act
+    const fixture = createComponent(queuedUnreachableIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const marker = el.querySelector('.issue-card__repo-warning');
+    expect(marker?.textContent?.trim()).toBe('Repo unreachable');
+  });
+
+  it('should not show warning marker when issue is queued and repo is eligible', () => {
+    // Arrange
+    const queuedEligibleIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'eligible',
+    };
+
+    // Act
+    const fixture = createComponent(queuedEligibleIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const marker = el.querySelector('.issue-card__repo-warning');
+    expect(marker).toBeFalsy();
+  });
+
+  it('should not show warning marker when issue is in_progress even if repo is ineligible', () => {
+    // Arrange — warning only applies to queued/pending states
+    const inProgressIneligibleIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'in_progress',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act
+    const fixture = createComponent(inProgressIneligibleIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const marker = el.querySelector('.issue-card__repo-warning');
+    expect(marker).toBeFalsy();
+  });
+
+  it('should still render the lifecycle badge when warning marker is shown', () => {
+    // Arrange — warning is additive, not a replacement
+    const queuedIneligibleIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act
+    const fixture = createComponent(queuedIneligibleIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('fd-state-badge');
+    const marker = el.querySelector('.issue-card__repo-warning');
+    expect(badge).toBeTruthy();
+    expect(marker).toBeTruthy();
+  });
+
+  it('should apply the ineligible modifier class to the warning marker', () => {
+    // Arrange
+    const queuedIneligibleIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act
+    const fixture = createComponent(queuedIneligibleIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const marker = el.querySelector('.issue-card__repo-warning') as HTMLElement;
+    expect(marker?.classList.contains('issue-card__repo-warning--ineligible')).toBe(true);
+    expect(marker?.getAttribute('role')).toBeNull();
   });
 
   // Cycle 8: usage-limited badge

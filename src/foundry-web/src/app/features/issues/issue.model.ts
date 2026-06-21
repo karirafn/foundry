@@ -24,6 +24,7 @@ export interface IssueSummary {
   detectedAt: string;
   url: string;
   failureClassification?: string;
+  repositoryEligibilityStatus?: string | null;
 }
 
 export interface EligibilityViolation {

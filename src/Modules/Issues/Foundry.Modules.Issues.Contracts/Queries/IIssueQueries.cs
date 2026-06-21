@@ -22,10 +22,6 @@ public interface IIssueQueries
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<int>> GetDetectedAndIneligibleIssueNumbersAsync(
-        MonitoredRepositoryId repositoryId,
-        CancellationToken cancellationToken);
-
     Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken);

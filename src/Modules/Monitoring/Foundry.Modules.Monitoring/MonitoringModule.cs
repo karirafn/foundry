@@ -27,7 +27,8 @@ public static class MonitoringModule
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();
-        services.AddScoped<IBranchProtectionValidator, BranchProtectionValidator>();
+        services.AddScoped<IRepositoryEligibilityQuery, RepositoryEligibilityQuery>();
+        services.AddScoped<IRepositoryEligibilityEvaluator, RepositoryEligibilityEvaluator>();
         services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
 
@@ -42,6 +43,7 @@ public static class MonitoringModule
         services.AddCommandHandler<CreateRepository.Command, RepositorySummary, CreateRepository.Handler, CreateRepository.Validator>();
         services.AddCommandHandler<UpdateRepository.Command, RepositorySummary, UpdateRepository.Handler, UpdateRepository.Validator>();
         services.AddCommandHandler<DeleteRepository.Command, bool, DeleteRepository.Handler>();
+        services.AddCommandHandler<RecheckRepositoryEligibility.Command, RepositorySummary, RecheckRepositoryEligibility.Handler>();
 
         services.AddHostedService<MonitoringService>();
 

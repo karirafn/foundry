@@ -1,0 +1,14 @@
+:host {
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}

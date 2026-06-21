@@ -1,4 +1,6 @@
 .repository-list {
+  --repo-meta-columns: minmax(8rem, 1.5fr) 6rem 7rem 7rem;
+
   &__empty {
     display: flex;
     flex-direction: column;
@@ -126,41 +128,44 @@
     border: 1px solid var(--fd-border-muted);
     border-radius: var(--fd-radius-sm);
     display: flex;
+    flex-direction: column;
+  }
+
+  &__slug-row {
     align-items: center;
-    gap: var(--fd-spacing-md);
+    display: flex;
+    gap: var(--fd-spacing-sm);
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
   }
 
-  &__account-badge {
-    background: var(--fd-bg-card);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-secondary);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    min-width: 36px;
-    padding: 2px var(--fd-spacing-xs);
-    text-align: center;
-    text-transform: uppercase;
+  &__slug-row-end {
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    margin-inline-start: auto;
   }
 
-  &__info {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    gap: 2px;
-    min-width: 0;
+  &__meta-row {
+    align-items: center;
+    display: grid;
+    gap: var(--fd-spacing-md);
+    grid-template-columns: var(--repo-meta-columns);
+    padding: 0 var(--fd-spacing-md) var(--fd-spacing-sm);
+    padding-inline-start: calc(20px + var(--fd-spacing-sm) + var(--fd-spacing-md));
+  }
+
+  &__provider {
+    color: var(--fd-text-secondary);
+    flex-shrink: 0;
   }
 
   &__slug {
     color: var(--fd-text-primary);
     font-family: var(--fd-font-mono);
-    font-size: 0.875rem;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   &__account-name {
@@ -215,6 +220,47 @@
     white-space: nowrap;
   }
 
+  &__eligibility-group {
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__eligibility {
+    flex-shrink: 0;
+  }
+
+  &__toggle-btn {
+    align-items: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 28px;
+    min-width: 28px;
+    padding: var(--fd-spacing-xs);
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
+
+  &__toggle-chevron {
+    transition: transform 0.15s ease;
+
+    &--expanded {
+      transform: rotate(180deg);
+    }
+  }
+
   &__actions {
     display: flex;
     gap: var(--fd-spacing-sm);
@@ -256,5 +302,23 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .repository-list {
+    &__slug-row {
+      flex-wrap: wrap;
+    }
+
+    &__meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      padding-inline-start: var(--fd-spacing-md);
+    }
+
+    &__eligibility-group {
+      flex-wrap: nowrap;
+    }
   }
 }

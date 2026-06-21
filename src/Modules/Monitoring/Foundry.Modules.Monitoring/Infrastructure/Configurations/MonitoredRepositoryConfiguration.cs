@@ -1,10 +1,14 @@
+using System.Text.Json;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
@@ -12,6 +16,15 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
 {
     private const int SlugMaxLength = 500;
     private const int HostMaxLength = 253;
+    private const int EligibilityStatusMaxLength = 20;
+
+    private static readonly JsonSerializerOptions EligibilitySerializerOptions = new();
+
+    private static RepositoryEligibility DeserializeEligibility(string json)
+    {
+        return JsonSerializer.Deserialize<RepositoryEligibility>(json, EligibilitySerializerOptions)
+            ?? throw new InvalidOperationException("Failed to deserialize eligibility column of MonitoredRepository.");
+    }
 
     public void Configure(EntityTypeBuilder<MonitoredRepository> builder)
     {
@@ -50,6 +63,29 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
 
         builder.Property(r => r.LastPolledAt)
             .HasColumnName("last_polled_at");
+
+        ValueConverter<RepositoryEligibility?, string?> eligibilityConverter = new(
+            eligibility => eligibility == null
+                ? null
+                : JsonSerializer.Serialize(eligibility, EligibilitySerializerOptions),
+            json => json == null
+                ? null
+                : DeserializeEligibility(json));
+
+        builder.Property(r => r.Eligibility)
+            .HasConversion(eligibilityConverter)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("eligibility");
+
+        builder.Property(r => r.EligibilityStatus)
+            .HasMaxLength(EligibilityStatusMaxLength)
+            .IsUnicode(false)
+            .HasDefaultValue("unreachable")
+            .HasColumnName("eligibility_status");
+
+        builder.HasIndex(r => r.EligibilityStatus)
+            .HasDatabaseName("ix_monitored_repositories_eligibility_status");
 
         builder.HasIndex(r => new { r.Host, r.Slug })
             .IsUnique()

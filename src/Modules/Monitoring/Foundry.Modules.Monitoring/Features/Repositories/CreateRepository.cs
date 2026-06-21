@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
@@ -47,7 +48,10 @@ internal static class CreateRepository
         }
     }
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, RepositorySummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        IIssueProviderFactory providerFactory,
+        IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
@@ -98,14 +102,28 @@ internal static class CreateRepository
                 return Result<RepositorySummary>.Fail(RepositoryErrors.DuplicateSlug(command.Slug));
             }
 
+            if (!string.IsNullOrEmpty(account.Token))
+            {
+                IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
+                await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
             RepositorySummary summary = new(
                 repository.Id.Value,
                 repository.Slug.ToString(),
                 repository.AccountId.Value,
                 account.Name,
+                account switch
+                {
+                    GitHubAccount => ProviderTypes.GitHub,
+                    GitLabAccount => ProviderTypes.GitLab,
+                    _ => throw new UnreachableException(),
+                },
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
-                repository.LastPolledAt);
+                repository.LastPolledAt,
+                RepositoryMappings.ToEligibilityInfo(repository.Eligibility));
 
             return Result<RepositorySummary>.Ok(summary);
         }

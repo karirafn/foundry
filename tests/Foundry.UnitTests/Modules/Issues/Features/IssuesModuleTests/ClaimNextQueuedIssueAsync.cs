@@ -48,7 +48,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             _dbContext,
             repositoryDispatchQueries,
             _dispatcher,
-            new PassingBranchProtectionValidator(),
+            new AllEligibleRepositoryEligibilityQuery(),
             new NullDomainEventDispatcher(),
             new StubAuthValidator(AuthValidationResult.Valid()),
             new NullSystemNotificationBroadcaster(),
@@ -358,14 +358,22 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         }
     }
 
-    private sealed class PassingBranchProtectionValidator : IBranchProtectionValidator
+    private sealed class AllEligibleRepositoryEligibilityQuery : IRepositoryEligibilityQuery
     {
-        public Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
-            MonitoredRepositoryId repositoryId,
+        public Task<RepositoryEligibilityInfo?> GetEligibilityAsync(
+            Guid repositoryId,
             CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
-                    Array.Empty<EligibilityViolationInfo>()));
+            => Task.FromResult<RepositoryEligibilityInfo?>(null);
+
+        public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<Guid>>(repositoryIds.ToHashSet());
+
+        public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
     }
 
     private sealed class StubAuthValidator(AuthValidationResult result) : IAuthValidator

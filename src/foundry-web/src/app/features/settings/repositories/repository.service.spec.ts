@@ -13,9 +13,11 @@ const MOCK_REPOSITORY: RepositorySummary = {
   slug: 'my-org/my-repo',
   accountId: ACCOUNT_ID,
   accountName: 'My GitHub',
+  providerType: 'github',
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
+  eligibility: { status: 'eligible', violations: [] },
 };
 
 const MOCK_REPOSITORY_2: RepositorySummary = {
@@ -23,9 +25,11 @@ const MOCK_REPOSITORY_2: RepositorySummary = {
   slug: 'my-org/another-repo',
   accountId: ACCOUNT_ID,
   accountName: 'My GitHub',
+  providerType: 'github',
   pollIntervalSeconds: null,
   isActive: false,
   lastPolledAt: null,
+  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }] },
 };
 
 const MOCK_AVAILABLE: AvailableRepository = {
@@ -624,5 +628,35 @@ describe('RepositoryService', () => {
     // Assert
     expect(service.repositories()).toEqual([]);
     expect(service.loading()).toBe(false);
+  });
+
+  // Cycle 8: recheckEligibility calls POST to recheck endpoint
+  it('should POST to /api/accounts/{accountId}/repositories/{id}/recheck when recheckEligibility is called', () => {
+    // Arrange
+
+    // Act
+    service.recheckEligibility(ACCOUNT_ID, REPO_ID).subscribe();
+    const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}/recheck`);
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    req.flush(MOCK_REPOSITORY);
+  });
+
+  it('should update the repository in repositories signal after recheckEligibility succeeds', () => {
+    // Arrange
+    service.loadRepositories(ACCOUNT_ID);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY_2]);
+
+    const recheckedRepo: RepositorySummary = { ...MOCK_REPOSITORY_2, eligibility: { status: 'eligible', violations: [] } };
+
+    // Act
+    service.recheckEligibility(ACCOUNT_ID, REPO_ID_2).subscribe();
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID_2}/recheck`).flush(recheckedRepo);
+
+    // Assert
+    const repos = service.repositories();
+    expect(repos.length).toBe(1);
+    expect(repos[0].eligibility?.status).toBe('eligible');
   });
 });

@@ -24,9 +24,11 @@ const MOCK_REPOSITORY: RepositorySummary = {
   slug: 'my-org/my-repo',
   accountId: '00000000-0000-0000-0000-000000000001',
   accountName: 'My GitHub',
+  providerType: 'github',
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
+  eligibility: { status: 'eligible', violations: [] },
 };
 
 const MOCK_AVAILABLE: AvailableRepository[] = [

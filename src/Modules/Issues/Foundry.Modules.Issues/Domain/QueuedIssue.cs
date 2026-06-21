@@ -43,21 +43,6 @@ public sealed class QueuedIssue : Issue
         return queued;
     }
 
-    internal static QueuedIssue FromIneligible(IneligibleIssue ineligible)
-    {
-        QueuedIssue queued = new(ineligible.Id);
-        queued.SetSharedProperties(
-            ineligible.MonitoredRepositoryId,
-            ineligible.IssueNumber,
-            ineligible.Title,
-            ineligible.Body,
-            ineligible.Author,
-            ineligible.Url,
-            ineligible.Labels,
-            ineligible.DetectedAt);
-        return queued;
-    }
-
     internal static QueuedIssue FromRetry(Issue source)
     {
         QueuedIssue queued = new(source.Id);
@@ -92,10 +77,4 @@ public sealed class QueuedIssue : Issue
         return inProgress;
     }
 
-    public IneligibleIssue MarkIneligible(IReadOnlyList<EligibilityViolation> violations)
-    {
-        IneligibleIssue ineligible = IneligibleIssue.FromQueued(this, violations);
-        AddDomainEvent(new Events.IssueIneligible(Id, MonitoredRepositoryId));
-        return ineligible;
-    }
 }

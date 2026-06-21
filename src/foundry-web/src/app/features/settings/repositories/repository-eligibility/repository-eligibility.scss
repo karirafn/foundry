@@ -1,0 +1,47 @@
+.repository-eligibility {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+
+  &__status {
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__indicator {
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    height: 8px;
+    width: 8px;
+
+    &--eligible {
+      background: var(--fd-state-completed);
+    }
+
+    &--ineligible {
+      background: var(--fd-text-ineligible);
+    }
+
+    &--unreachable {
+      background: var(--fd-text-secondary);
+    }
+  }
+
+  &__label {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  &__status:has(.repository-eligibility__indicator--eligible) &__label {
+    color: var(--fd-text-completed);
+  }
+
+  &__status:has(.repository-eligibility__indicator--ineligible) &__label {
+    color: var(--fd-text-ineligible);
+  }
+
+
+}

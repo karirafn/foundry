@@ -50,6 +50,39 @@
   }
 
   &__badge {
+    align-items: center;
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__repo-warning {
+    align-items: center;
+    border: 1px solid var(--fd-border-default);
+    border-radius: 9999px;
+    color: var(--fd-text-secondary);
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 600;
+    gap: 3px;
+    letter-spacing: 0.03em;
+    padding: 2px 6px;
+    white-space: nowrap;
+
+    &--ineligible {
+      background: var(--fd-bg-warning-subtle);
+      border-color: var(--fd-border-warning);
+      color: var(--fd-text-warning);
+    }
+
+    &--unreachable {
+      background: transparent;
+      border-color: var(--fd-border-default);
+      color: var(--fd-text-secondary);
+    }
+  }
+
+  &__repo-warning-icon {
     flex-shrink: 0;
   }
 

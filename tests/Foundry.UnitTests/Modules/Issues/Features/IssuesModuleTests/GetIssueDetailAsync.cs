@@ -48,7 +48,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
         _slugQueries = new StubRepositorySlugQueries();
         _slugQueries.AddSlug(RepositoryId, RepositorySlug);
-        _sut = new IssueQueries(_dbContext, _slugQueries);
+        _sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

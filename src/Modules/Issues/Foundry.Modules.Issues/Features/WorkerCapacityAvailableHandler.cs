@@ -17,7 +17,7 @@ internal sealed class WorkerCapacityAvailableHandler(
     DbContext db,
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IIntegrationEventDispatcher integrationEventDispatcher,
-    IBranchProtectionValidator branchProtectionValidator,
+    IRepositoryEligibilityQuery repositoryEligibilityQuery,
     IDomainEventDispatcher domainEventDispatcher,
     IAuthValidator authValidator,
     ISystemNotificationBroadcaster systemNotificationBroadcaster,
@@ -41,9 +41,15 @@ internal sealed class WorkerCapacityAvailableHandler(
             new SystemNotification(ClaudeAuthCategory, false, ""),
             cancellationToken);
 
+        // Resolve eligible repository IDs once across all tiers to avoid blocking dispatch
+        // when the oldest candidate belongs to an ineligible repository.
+        HashSet<MonitoredRepositoryId> eligibleRepoIds = await ResolveEligibleRepositoryIdsAsync(cancellationToken);
+
         // Claim priority: revision queued first (addressing review feedback takes precedence),
         // then continuation queued (resuming interrupted work), then fresh queued issues.
+        // Each tier skips ineligible repositories by filtering at the database level.
         RevisionQueuedIssue? revisionQueued = await db.Set<RevisionQueuedIssue>()
+            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -54,6 +60,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         ContinuationQueuedIssue? continuationQueued = await db.Set<ContinuationQueuedIssue>()
+            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -64,55 +71,40 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         QueuedIssue? queued = await db.Set<QueuedIssue>()
+            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
             .OrderBy(i => i.DetectedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (queued is null)
+        if (queued is not null)
         {
-            return;
+            await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
         }
-
-        bool eligible = await ValidateAndMarkIneligibleIfNotAsync(queued, cancellationToken);
-        if (!eligible)
-        {
-            return;
-        }
-
-        await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
     }
 
-    private async Task<bool> ValidateAndMarkIneligibleIfNotAsync(
-        QueuedIssue queued,
+    private async Task<HashSet<MonitoredRepositoryId>> ResolveEligibleRepositoryIdsAsync(
         CancellationToken cancellationToken)
     {
-        Result<IReadOnlyList<EligibilityViolationInfo>> validationResult =
-            await branchProtectionValidator.ValidateAsync(queued.MonitoredRepositoryId, cancellationToken);
+        List<MonitoredRepositoryId> candidateRepoIds = await db.Set<Issue>()
+            .Where(i => i is RevisionQueuedIssue || i is ContinuationQueuedIssue || i is QueuedIssue)
+            .Select(i => i.MonitoredRepositoryId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
 
-        List<EligibilityViolation> violations = validationResult switch
+        if (candidateRepoIds.Count == 0)
         {
-            Result<IReadOnlyList<EligibilityViolationInfo>>.Success success when success.Value.Count > 0 =>
-                success.Value
-                    .Select(v => EligibilityViolation.From(v.Rule, v.Description))
-                    .ToList(),
-            Result<IReadOnlyList<EligibilityViolationInfo>>.Failure =>
-                [EligibilityViolation.Unreachable()],
-            _ => [],
-        };
-
-        if (violations.Count == 0)
-        {
-            return true;
+            return [];
         }
 
-        IneligibleIssue ineligible = queued.MarkIneligible(violations);
-        await db.TransitionAsync(queued, ineligible, domainEventDispatcher, cancellationToken);
+        List<Guid> rawIds = candidateRepoIds
+            .Select(id => id.Value)
+            .ToList();
 
-        logger.LogWarning(
-            "Issue #{IssueNumber} in repository {RepositoryId} failed branch protection check; marked ineligible.",
-            queued.IssueNumber,
-            queued.MonitoredRepositoryId);
+        IReadOnlySet<Guid> eligibleRawIds = await repositoryEligibilityQuery
+            .GetEligibleRepositoryIdsAsync(rawIds, cancellationToken);
 
-        return false;
+        return candidateRepoIds
+            .Where(id => eligibleRawIds.Contains(id.Value))
+            .ToHashSet();
     }
 
     private async Task ClaimRevisionQueuedAsync(

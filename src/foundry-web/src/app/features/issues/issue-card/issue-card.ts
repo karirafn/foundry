@@ -1,7 +1,33 @@
-import { Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
-import { IssueSummary } from '../issue.model';
+import { Component, InputSignal, OutputEmitterRef, computed, input, output } from '@angular/core';
+import { NgClass } from '@angular/common';
+import { IssueSummary, IssueState } from '../issue.model';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
+
+const QUEUED_STATES = new Set<string>(['queued', 'detected']);
+
+const WARNING_CLASSES: Record<string, string> = {
+  ineligible: 'issue-card__repo-warning--ineligible',
+  unreachable: 'issue-card__repo-warning--unreachable',
+};
+
+const STATE_ARIA_LABELS: Record<IssueState, string> = {
+  detected: 'detected',
+  queued: 'queued',
+  blocked: 'blocked',
+  in_progress: 'in progress',
+  review: 'review',
+  unchanged: 'unchanged',
+  failed: 'failed',
+  continuable_failed: 'continuable failed',
+  continuation_queued: 'continuation queued',
+  completed: 'completed',
+  dismissed: 'dismissed',
+  revision_queued: 'revision queued',
+  revision_in_progress: 'revision in progress',
+  revision_failed: 'revision failed',
+  ineligible: 'not eligible for dispatch',
+};
 
 function timeAgo(dateString: string): string {
   const now = Date.now();
@@ -40,14 +66,14 @@ function timeAgo(dateString: string): string {
 @Component({
   selector: 'fd-issue-card',
   standalone: true,
-  imports: [StateBadgeComponent, SafeHrefPipe],
+  imports: [StateBadgeComponent, SafeHrefPipe, NgClass],
   template: `
     <button
       type="button"
       class="issue-card"
       [attr.aria-expanded]="expanded().toString()"
       [attr.aria-controls]="'detail-' + issue().id"
-      [attr.aria-label]="'Issue #' + issue().issueNumber + ': ' + issue().title"
+      [attr.aria-label]="issueAriaLabel()"
       (click)="onCardClick()"
       (keydown)="onKeydown($event)"
     >
@@ -57,6 +83,31 @@ function timeAgo(dateString: string): string {
         <span class="issue-card__slug">{{ issue().repositorySlug }}</span>
         <div class="issue-card__badge">
           <fd-state-badge [state]="issue().state" [failureClassification]="issue().failureClassification" />
+          @if (repoWarningLabel()) {
+            <span
+              class="issue-card__repo-warning"
+              [ngClass]="_warningClass()"
+            >
+              <svg
+                class="issue-card__repo-warning-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              {{ repoWarningLabel() }}
+            </span>
+          }
         </div>
       </div>
 
@@ -73,7 +124,7 @@ function timeAgo(dateString: string): string {
             [href]="safeUrl"
             target="_blank"
             rel="noopener noreferrer"
-            [attr.aria-label]="'Open issue #' + issue().issueNumber + ' on GitHub'"
+            [attr.aria-label]="'View issue #' + issue().issueNumber + ' on ' + issue().repositorySlug"
             (click)="onLinkClick($event)"
           >
             <svg
@@ -103,6 +154,34 @@ export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly toggle: OutputEmitterRef<void> = output<void>();
+
+  readonly _warningClass = computed(() => {
+    const status = this.issue().repositoryEligibilityStatus;
+    return status ? (WARNING_CLASSES[status] ?? '') : '';
+  });
+
+  issueAriaLabel(): string {
+    const issue = this.issue();
+    const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
+    const base = `Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
+    const warning = this.repoWarningLabel();
+    return warning ? `${base}. ${warning}` : base;
+  }
+
+  repoWarningLabel(): string | null {
+    const issue = this.issue();
+    if (!QUEUED_STATES.has(issue.state)) {
+      return null;
+    }
+    const status = issue.repositoryEligibilityStatus;
+    if (status === 'ineligible') {
+      return 'Repo ineligible';
+    }
+    if (status === 'unreachable') {
+      return 'Repo unreachable';
+    }
+    return null;
+  }
 
   timestamp(): string {
     return timeAgo(this.issue().detectedAt);

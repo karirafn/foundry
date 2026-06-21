@@ -44,7 +44,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
-        services.AddScoped<IBranchProtectionValidator, NullBranchProtectionValidator>();
+        services.AddScoped<IRepositoryEligibilityQuery, NullRepositoryEligibilityQuery>();
         services.AddScoped<IIssueBroadcaster, NullIssueBroadcaster>();
         services.AddScoped<IAuthValidator, NullAuthValidator>();
         services.AddScoped<ISystemNotificationBroadcaster, NullSystemNotificationBroadcaster>();
@@ -194,18 +194,6 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
-    public void WhenServicesRegistered_IssueIneligibleHandlerResolvable()
-    {
-        // Arrange & Act
-        using IServiceScope scope = _serviceProvider.CreateScope();
-
-        // Assert
-        IDomainEventHandler<IssueIneligible> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueIneligible>>();
-        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueIneligible>>();
-    }
-
-    [Fact]
     public void WhenServicesRegistered_IssueCompletedHandlerResolvable()
     {
         // Arrange & Act
@@ -345,14 +333,22 @@ public sealed class AddIssuesModule : IAsyncDisposable
             => Task.FromResult<RepositoryDispatchInfo?>(null);
     }
 
-    private sealed class NullBranchProtectionValidator : IBranchProtectionValidator
+    private sealed class NullRepositoryEligibilityQuery : IRepositoryEligibilityQuery
     {
-        public Task<Result<IReadOnlyList<EligibilityViolationInfo>>> ValidateAsync(
-            MonitoredRepositoryId repositoryId,
+        public Task<RepositoryEligibilityInfo?> GetEligibilityAsync(
+            Guid repositoryId,
             CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<IReadOnlyList<EligibilityViolationInfo>>.Ok(
-                    Array.Empty<EligibilityViolationInfo>()));
+            => Task.FromResult<RepositoryEligibilityInfo?>(null);
+
+        public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
+
+        public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
     }
 
     private sealed class NullAuthValidator : IAuthValidator

@@ -1,10 +1,17 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Domain.Entities;
 
 public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 {
+    private const string EligibleStatus = "eligible";
+    private const string IneligibleStatus = "ineligible";
+    private const string UnreachableStatus = "unreachable";
+
     // Private parameterless constructor for EF Core materialization.
     private MonitoredRepository() : base(MonitoredRepositoryId.New())
     {
@@ -26,6 +33,10 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public DateTimeOffset? LastPolledAt { get; private set; }
 
+    public RepositoryEligibility? Eligibility { get; private set; }
+
+    public string? EligibilityStatus { get; private set; }
+
     public static MonitoredRepository Create(
         RepositorySlug slug,
         AccountId accountId,
@@ -39,6 +50,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             Host = host,
             PollInterval = pollInterval,
             IsActive = true,
+            Eligibility = new RepositoryEligibility.Unreachable(),
+            EligibilityStatus = UnreachableStatus,
         };
     }
 
@@ -62,6 +75,18 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     public void MarkPolled(DateTimeOffset polledAt)
     {
         LastPolledAt = polledAt;
+    }
+
+    public void SetEligibility(RepositoryEligibility eligibility)
+    {
+        Eligibility = eligibility;
+        EligibilityStatus = eligibility switch
+        {
+            RepositoryEligibility.Eligible => EligibleStatus,
+            RepositoryEligibility.Ineligible => IneligibleStatus,
+            RepositoryEligibility.Unreachable => UnreachableStatus,
+            _ => throw new UnreachableException($"Unhandled eligibility variant: {eligibility.GetType().Name}"),
+        };
     }
 
     public void RecordIntegrationEvent(IIntegrationEvent integrationEvent)

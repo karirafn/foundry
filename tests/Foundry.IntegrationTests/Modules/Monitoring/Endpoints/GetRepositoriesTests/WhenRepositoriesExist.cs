@@ -78,7 +78,28 @@ public sealed class WhenRepositoriesExist : IAsyncDisposable
             () => repository.Slug.ShouldBe("acme/awesome-repo"),
             () => repository.AccountId.ShouldBe(accountId),
             () => repository.AccountName.ShouldBe("My GitHub"),
+            () => repository.ProviderType.ShouldBe("github"),
             () => repository.PollIntervalSeconds.ShouldBe(300),
             () => repository.IsActive.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task ProjectsProviderTypeForGitLabAccount()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory, name: "My GitLab");
+        await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "group/repo");
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        IReadOnlyList<RepositorySummary>? repositories = await response.Content
+            .ReadFromJsonAsync<IReadOnlyList<RepositorySummary>>(TestContext.Current.CancellationToken);
+        RepositorySummary repository = repositories.ShouldNotBeNull().ShouldHaveSingleItem();
+        repository.ProviderType.ShouldBe("gitlab");
     }
 }

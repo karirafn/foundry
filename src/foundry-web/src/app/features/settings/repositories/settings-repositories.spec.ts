@@ -28,9 +28,11 @@ const REPO_1: RepositorySummary = {
   slug: 'my-org/my-repo',
   accountId: ACCOUNT_1.id,
   accountName: ACCOUNT_1.name,
+  providerType: 'github',
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
+  eligibility: { status: 'eligible', violations: [] },
 };
 
 const REPO_2: RepositorySummary = {
@@ -38,9 +40,11 @@ const REPO_2: RepositorySummary = {
   slug: 'my-org/another-repo',
   accountId: ACCOUNT_2.id,
   accountName: ACCOUNT_2.name,
+  providerType: 'gitlab',
   pollIntervalSeconds: null,
   isActive: false,
   lastPolledAt: null,
+  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }] },
 };
 
 function setup() {
