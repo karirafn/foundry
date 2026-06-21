@@ -79,7 +79,8 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId? monitoredRepositoryId = null,
         RevisionContext? revision = null,
         ContinuationContext? continuation = null,
-        WorkerProvider? provider = null)
+        WorkerProvider? provider = null,
+        string? cloneUrl = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -88,7 +89,7 @@ public sealed class HandleAsync : IAsyncDisposable
             title,
             body,
             repositorySlug,
-            new Uri($"https://github.com/{repositorySlug}.git"),
+            new Uri(cloneUrl ?? $"https://github.com/{repositorySlug}.git"),
             accountToken,
             branchName,
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
@@ -736,7 +737,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent(
             accountToken: "glpat_test_token",
-            provider: new WorkerProvider.GitLab());
+            provider: new WorkerProvider.GitLab(),
+            cloneUrl: "https://gitlab.com/owner/repo.git");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -745,6 +747,45 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables.ShouldNotContainKey("GH_TOKEN");
+    }
+
+    [Fact]
+    public async Task WhenGitLabProvider_ContainerSpecHasGitLabTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gl-token");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(
+            accountToken: "glpat_test_token",
+            provider: new WorkerProvider.GitLab(),
+            cloneUrl: "https://gitlab.com/owner/repo.git");
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["GITLAB_TOKEN"].ShouldBe("glpat_test_token");
+    }
+
+    [Fact]
+    public async Task WhenGitHubProvider_ContainerSpecHasNoGitLabTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gh-no-gl-token");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(
+            accountToken: "ghp_test_token",
+            provider: new WorkerProvider.GitHub());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldNotContainKey("GITLAB_TOKEN");
     }
 
     [Fact]

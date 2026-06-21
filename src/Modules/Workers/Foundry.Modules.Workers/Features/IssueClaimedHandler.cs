@@ -158,6 +158,7 @@ internal sealed class IssueClaimedHandler(
                 envVars["GH_TOKEN"] = gitPat;
                 break;
             case WorkerProvider.GitLab:
+                envVars["GITLAB_TOKEN"] = gitPat;
                 break;
             default:
                 throw new UnreachableException($"Unhandled WorkerProvider variant: {claimed.Provider.GetType().Name}");

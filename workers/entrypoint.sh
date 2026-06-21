@@ -37,12 +37,33 @@ if [[ -n "${GH_TOKEN:-}" ]]; then
     GH_HOST="${GH_HOST%%/*}"
     if [[ -z "$GH_HOST" ]]; then
         echo "WARNING: could not derive hostname from CLONE_URL; skipping gh auth setup-git" >&2
+    elif [[ "$GH_HOST" == *@* ]]; then
+        echo "ERROR: derived hostname contains '@' — CLONE_URL may embed credentials in the URL. Aborting gh auth setup-git." >&2
+        exit 1
     elif command -v gh > /dev/null 2>&1; then
         gh auth setup-git --hostname "$GH_HOST" --force
     else
         echo "WARNING: GH_TOKEN is set but the gh CLI is not present in this image." >&2
         echo "  git push and gh pr create will not authenticate." >&2
         echo "  Rebuild the worker image with INSTALL_GH=true: docker build --build-arg INSTALL_GH=true -t foundry-worker:local workers/" >&2
+    fi
+fi
+
+if [[ -n "${GITLAB_TOKEN:-}" ]]; then
+    GL_HOST="${CLONE_URL#https://}"
+    GL_HOST="${GL_HOST%%/*}"
+    if [[ -z "$GL_HOST" ]]; then
+        echo "WARNING: could not derive hostname from CLONE_URL; skipping glab credential helper setup" >&2
+    elif [[ "$GL_HOST" == *@* ]]; then
+        echo "ERROR: derived hostname contains '@' — CLONE_URL may embed credentials in the URL. Aborting glab credential helper setup." >&2
+        exit 1
+    elif command -v glab > /dev/null 2>&1; then
+        export GITLAB_HOST="https://${GL_HOST}"
+        git config credential."https://${GL_HOST}".helper "!glab auth git-credential"
+    else
+        echo "WARNING: GITLAB_TOKEN is set but the glab CLI is not present in this image." >&2
+        echo "  git push and glab mr create will not authenticate." >&2
+        echo "  Rebuild the worker image with INSTALL_GLAB=true: docker build --build-arg INSTALL_GLAB=true -t foundry-worker:local workers/" >&2
     fi
 fi
 
