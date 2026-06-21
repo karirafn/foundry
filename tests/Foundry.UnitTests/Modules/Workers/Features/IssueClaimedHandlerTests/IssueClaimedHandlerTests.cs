@@ -78,7 +78,8 @@ public sealed class HandleAsync : IAsyncDisposable
         string branchName = "feat/42-test-issue",
         MonitoredRepositoryId? monitoredRepositoryId = null,
         RevisionContext? revision = null,
-        ContinuationContext? continuation = null)
+        ContinuationContext? continuation = null,
+        WorkerProvider? provider = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -91,6 +92,7 @@ public sealed class HandleAsync : IAsyncDisposable
             accountToken,
             branchName,
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
+            provider ?? new WorkerProvider.GitHub(),
             revision,
             continuation);
         return new IssueClaimed(dispatch);
@@ -705,6 +707,44 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["WORKER_PROMPT"].ShouldBe("Custom worker prompt for #55.");
+    }
+
+    [Fact]
+    public async Task WhenGitHubProvider_ContainerSpecHasGhTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gh-token");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(
+            accountToken: "ghp_test_token",
+            provider: new WorkerProvider.GitHub());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["GH_TOKEN"].ShouldBe("ghp_test_token");
+    }
+
+    [Fact]
+    public async Task WhenGitLabProvider_ContainerSpecHasNoGhTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gl-no-gh-token");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent(
+            accountToken: "glpat_test_token",
+            provider: new WorkerProvider.GitLab());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldNotContainKey("GH_TOKEN");
     }
 
     [Fact]

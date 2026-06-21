@@ -32,6 +32,20 @@ git -C /workspace remote set-url origin "$CLONE_URL"
 
 cd /workspace
 
+if [[ -n "${GH_TOKEN:-}" ]]; then
+    GH_HOST="${CLONE_URL#https://}"
+    GH_HOST="${GH_HOST%%/*}"
+    if [[ -z "$GH_HOST" ]]; then
+        echo "WARNING: could not derive hostname from CLONE_URL; skipping gh auth setup-git" >&2
+    elif command -v gh > /dev/null 2>&1; then
+        gh auth setup-git --hostname "$GH_HOST" --force
+    else
+        echo "WARNING: GH_TOKEN is set but the gh CLI is not present in this image." >&2
+        echo "  git push and gh pr create will not authenticate." >&2
+        echo "  Rebuild the worker image with INSTALL_GH=true: docker build --build-arg INSTALL_GH=true -t foundry-worker:local workers/" >&2
+    fi
+fi
+
 if [[ -n "${BRANCH_NAME:-}" ]]; then
     if [[ ! "$BRANCH_NAME" =~ ^[a-zA-Z0-9_/.-]+$ ]]; then
         echo "ERROR: BRANCH_NAME contains invalid characters: $BRANCH_NAME" >&2

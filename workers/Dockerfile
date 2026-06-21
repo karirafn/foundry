@@ -60,6 +60,26 @@ RUN if [ "$INSTALL_GLAB" = "true" ]; then \
         rm -rf "${GLAB_TMPDIR}" /var/lib/apt/lists/*; \
     fi
 
+# Conditional gh (GitHub CLI) install — the keyring is fetched over HTTPS from cli.github.com
+# (trust anchored to GitHub TLS); apt then cryptographically verifies every gh package against it
+# via signed-by, so each installed package is GPG-verified. The keyring itself is intentionally
+# not hash-pinned because GitHub rotates it periodically — pinning would break builds on rotation.
+# The keyring is already in dearmored format and written directly (no gpg --dearmor step needed),
+# matching https://github.com/cli/cli/blob/trunk/docs/install_linux.md#debian-ubuntu-linux-raspberry-pi-os-apt.
+ARG INSTALL_GH=false
+RUN if [ "$INSTALL_GH" = "true" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends curl && \
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+        chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            > /etc/apt/sources.list.d/github-cli.list && \
+        apt-get update && \
+        apt-get install -y --no-install-recommends gh && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 555 /entrypoint.sh
 
