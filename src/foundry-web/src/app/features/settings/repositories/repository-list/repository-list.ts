@@ -92,9 +92,11 @@ import { RepositoryService } from '../repository.service';
                   [attr.aria-label]="'Re-check eligibility for ' + repo.slug"
                   (click)="onRecheck(repo)"
                 >{{ _recheckingId() === repo.id ? 'Re-checking...' : 'Re-check' }}</button>
-                @if (_recheckError()?.id === repo.id) {
-                  <span class="repository-list__recheck-error" role="alert">{{ _recheckError()!.message }}</span>
-                }
+                <span
+                  class="repository-list__recheck-error"
+                  role="alert"
+                  [attr.aria-hidden]="_recheckError()?.id !== repo.id"
+                >{{ _recheckError()?.id === repo.id ? _recheckError()!.message : '' }}</span>
               }
               <button
                 class="repository-list__edit-btn"

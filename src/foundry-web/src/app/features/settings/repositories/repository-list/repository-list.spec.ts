@@ -454,7 +454,19 @@ describe('RepositoryListComponent', () => {
     expect(recheckBtn).toBeFalsy();
   });
 
-  // Cycle 26: recheck error feedback — inline message shown on server error
+  // Cycle 26: recheck error feedback — alert element is always present in the DOM
+  it('should always render the recheck error element in the DOM for ineligible repos', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert — element is always present (live region must exist before content changes)
+    const errorEl = el.querySelector('.repository-list__recheck-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
+  });
+
   it('should display an inline error message when recheck fails', () => {
     // Arrange
     const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
@@ -467,10 +479,10 @@ describe('RepositoryListComponent', () => {
     ).error(new ErrorEvent('server error'));
     fixture.detectChanges();
 
-    // Assert
-    const errorMsg = el.querySelector('.repository-list__recheck-error');
-    expect(errorMsg).toBeTruthy();
-    expect(errorMsg?.getAttribute('role')).toBe('alert');
+    // Assert — error text is present and element is not hidden from AT
+    const errorEl = el.querySelector('.repository-list__recheck-error');
+    expect(errorEl?.textContent?.trim()).toBe('Re-check failed. Please try again.');
+    expect(errorEl?.getAttribute('aria-hidden')).toBe('false');
   });
 
   it('should clear recheck error on next recheck attempt', () => {
@@ -488,9 +500,10 @@ describe('RepositoryListComponent', () => {
     updatedBtn.click();
     fixture.detectChanges();
 
-    // Assert — error cleared immediately when new attempt starts
-    const errorMsg = el.querySelector('.repository-list__recheck-error');
-    expect(errorMsg).toBeFalsy();
+    // Assert — error text cleared and element hidden from AT when new attempt starts
+    const errorEl = el.querySelector('.repository-list__recheck-error');
+    expect(errorEl?.textContent?.trim()).toBe('');
+    expect(errorEl?.getAttribute('aria-hidden')).toBe('true');
 
     // Cleanup
     httpMock.expectOne(
@@ -510,9 +523,10 @@ describe('RepositoryListComponent', () => {
     ).flush(MOCK_REPO_INELIGIBLE);
     fixture.detectChanges();
 
-    // Assert
-    const errorMsg = el.querySelector('.repository-list__recheck-error');
-    expect(errorMsg).toBeFalsy();
+    // Assert — element present but text empty and hidden from AT
+    const errorEl = el.querySelector('.repository-list__recheck-error');
+    expect(errorEl?.textContent?.trim()).toBe('');
+    expect(errorEl?.getAttribute('aria-hidden')).toBe('true');
   });
 
   // Cycle 27: recheck button color — unreachable repos use secondary color class

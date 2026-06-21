@@ -264,8 +264,12 @@
   }
 
   &__recheck-error {
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
     font-size: 0.8125rem;
+
+    &[aria-hidden='true'] {
+      display: none;
+    }
   }
 
   &__edit-btn,
