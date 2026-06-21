@@ -46,6 +46,21 @@ if [[ -n "${GH_TOKEN:-}" ]]; then
     fi
 fi
 
+if [[ -n "${GITLAB_TOKEN:-}" ]]; then
+    GL_HOST="${CLONE_URL#https://}"
+    GL_HOST="${GL_HOST%%/*}"
+    if [[ -z "$GL_HOST" ]]; then
+        echo "WARNING: could not derive hostname from CLONE_URL; skipping glab credential helper setup" >&2
+    elif command -v glab > /dev/null 2>&1; then
+        export GITLAB_HOST="https://${GL_HOST}"
+        git config credential."https://${GL_HOST}".helper "!glab auth git-credential"
+    else
+        echo "WARNING: GITLAB_TOKEN is set but the glab CLI is not present in this image." >&2
+        echo "  git push and glab mr create will not authenticate." >&2
+        echo "  Rebuild the worker image with INSTALL_GLAB=true: docker build --build-arg INSTALL_GLAB=true -t foundry-worker:local workers/" >&2
+    fi
+fi
+
 if [[ -n "${BRANCH_NAME:-}" ]]; then
     if [[ ! "$BRANCH_NAME" =~ ^[a-zA-Z0-9_/.-]+$ ]]; then
         echo "ERROR: BRANCH_NAME contains invalid characters: $BRANCH_NAME" >&2
