@@ -28,10 +28,10 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly CapturingDomainEventDispatcher _domainEventDispatcher;
 
     private static IssueAuthor ValidAuthor =>
-        ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+        IssueAuthor.Create("octocat").ShouldBeOfType<Result<IssueAuthor>.Success>().Value;
 
     private static ProviderUrl ValidUrl =>
-        ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
+        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ShouldBeOfType<Result<ProviderUrl>.Success>().Value;
 
     public HandleAsync()
     {

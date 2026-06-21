@@ -25,11 +25,3 @@ public abstract record WorkerProvider
 
     public sealed record GitLab : WorkerProvider;
 }
-
-public static class WorkerProviderErrors
-{
-    private const string UnknownDiscriminatorCode = "WorkerProvider.UnknownDiscriminator";
-
-    public static Error UnknownDiscriminator(string discriminator) =>
-        new(UnknownDiscriminatorCode, $"Unknown provider discriminator: '{discriminator}'.");
-}

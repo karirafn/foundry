@@ -125,9 +125,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        Result<WorkerProvider> providerResult = WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType);
-
-        if (providerResult.IsFailure)
+        if (WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType) is not Result<WorkerProvider>.Success providerSuccess)
         {
             logger.LogWarning(
                 "Unknown provider discriminator '{Discriminator}' for repository {RepositoryId}; revision issue #{IssueNumber} not claimed.",
@@ -156,7 +154,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.AccountToken,
             revisionQueued.BranchName,
             revisionQueued.MonitoredRepositoryId,
-            ((Result<WorkerProvider>.Success)providerResult).Value,
+            providerSuccess.Value,
             revision);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -182,9 +180,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        Result<WorkerProvider> providerResult = WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType);
-
-        if (providerResult.IsFailure)
+        if (WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType) is not Result<WorkerProvider>.Success providerSuccess)
         {
             logger.LogWarning(
                 "Unknown provider discriminator '{Discriminator}' for repository {RepositoryId}; continuation issue #{IssueNumber} not claimed.",
@@ -210,7 +206,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.AccountToken,
             continuationQueued.BranchName,
             continuationQueued.MonitoredRepositoryId,
-            ((Result<WorkerProvider>.Success)providerResult).Value,
+            providerSuccess.Value,
             Continuation: continuation);
 
         await integrationEventDispatcher.DispatchAsync(
@@ -236,9 +232,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        Result<WorkerProvider> providerResult = WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType);
-
-        if (providerResult.IsFailure)
+        if (WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType) is not Result<WorkerProvider>.Success providerSuccess)
         {
             logger.LogWarning(
                 "Unknown provider discriminator '{Discriminator}' for repository {RepositoryId}; issue #{IssueNumber} not claimed.",
@@ -264,7 +258,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.AccountToken,
             branchName,
             queued.MonitoredRepositoryId,
-            ((Result<WorkerProvider>.Success)providerResult).Value);
+            providerSuccess.Value);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

@@ -19,8 +19,8 @@ public sealed class FromDiscriminator
         Result<WorkerProvider> result = WorkerProvider.FromDiscriminator(discriminator);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        ((Result<WorkerProvider>.Success)result).Value.ShouldBeOfType<WorkerProvider.GitHub>();
+        Result<WorkerProvider>.Success success = result.ShouldBeOfType<Result<WorkerProvider>.Success>();
+        success.Value.ShouldBeOfType<WorkerProvider.GitHub>();
     }
 
     [Fact]
@@ -33,8 +33,8 @@ public sealed class FromDiscriminator
         Result<WorkerProvider> result = WorkerProvider.FromDiscriminator(discriminator);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        ((Result<WorkerProvider>.Success)result).Value.ShouldBeOfType<WorkerProvider.GitLab>();
+        Result<WorkerProvider>.Success success = result.ShouldBeOfType<Result<WorkerProvider>.Success>();
+        success.Value.ShouldBeOfType<WorkerProvider.GitLab>();
     }
 
     [Fact]
@@ -47,8 +47,7 @@ public sealed class FromDiscriminator
         Result<WorkerProvider> result = WorkerProvider.FromDiscriminator(discriminator);
 
         // Assert
-        result.IsFailure.ShouldBeTrue();
-        ((Result<WorkerProvider>.Failure)result).Error.ShouldBe(
-            WorkerProviderErrors.UnknownDiscriminator(discriminator));
+        Result<WorkerProvider>.Failure failure = result.ShouldBeOfType<Result<WorkerProvider>.Failure>();
+        failure.Error.ShouldBe(WorkerProviderErrors.UnknownDiscriminator(discriminator));
     }
 }
