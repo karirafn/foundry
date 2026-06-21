@@ -54,15 +54,69 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
       <ul class="repository-list__list" role="list">
         @for (repo of repositories(); track repo.id) {
           <li class="repository-list__item" role="listitem">
-            <div class="repository-list__row">
+            <div class="repository-list__slug-row">
               <fd-provider-icon
                 [providerType]="repo.providerType"
                 class="repository-list__provider"
               />
-              <div class="repository-list__info">
-                <span class="repository-list__slug">{{ repo.slug }}</span>
-                <span class="repository-list__account-name">{{ repo.accountName }}</span>
+              <span class="repository-list__slug">{{ repo.slug }}</span>
+              <div class="repository-list__slug-row-end">
+                @if (repo.eligibility) {
+                  <div class="repository-list__eligibility-group">
+                    <fd-repository-eligibility
+                      class="repository-list__eligibility"
+                      [status]="repo.eligibility.status"
+                      [recheckPending]="_recheckingId() === repo.id"
+                    />
+                    @if (repo.eligibility.status !== 'eligible') {
+                      <button
+                        class="repository-list__toggle-btn"
+                        type="button"
+                        [attr.aria-expanded]="_expandedId() === repo.id ? 'true' : 'false'"
+                        [attr.aria-controls]="'eligibility-detail-' + repo.id"
+                        [attr.aria-label]="'Branch protection details for ' + repo.slug"
+                        (click)="toggleExpand(repo.id)"
+                        (keydown.enter)="onToggleKeydown($event, repo.id)"
+                        (keydown.space)="onToggleKeydown($event, repo.id)"
+                      >
+                        <svg
+                          class="repository-list__toggle-chevron"
+                          [class.repository-list__toggle-chevron--expanded]="_expandedId() === repo.id"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    }
+                  </div>
+                }
+                <div class="repository-list__actions">
+                  <button
+                    class="repository-list__edit-btn"
+                    type="button"
+                    [attr.aria-label]="'Edit repository ' + repo.slug"
+                    (click)="edit.emit(repo)"
+                  >Edit</button>
+                  <button
+                    class="repository-list__delete-btn"
+                    type="button"
+                    [attr.aria-label]="'Delete repository ' + repo.slug"
+                    (click)="delete.emit(repo)"
+                  >Delete</button>
+                </div>
               </div>
+            </div>
+            <div class="repository-list__meta-row">
+              <span class="repository-list__account-name" [title]="repo.accountName">{{ repo.accountName }}</span>
               <span class="repository-list__poll-interval">
                 {{ pollIntervalLabel(repo.pollIntervalSeconds) }}
               </span>
@@ -78,58 +132,6 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
               <span class="repository-list__last-polled">
                 {{ lastPolledLabel(repo.lastPolledAt) }}
               </span>
-              @if (repo.eligibility) {
-                <div class="repository-list__eligibility-group">
-                  <fd-repository-eligibility
-                    class="repository-list__eligibility"
-                    [status]="repo.eligibility.status"
-                    [recheckPending]="_recheckingId() === repo.id"
-                  />
-                  @if (repo.eligibility.status !== 'eligible') {
-                    <button
-                      class="repository-list__toggle-btn"
-                      type="button"
-                      [attr.aria-expanded]="_expandedId() === repo.id ? 'true' : 'false'"
-                      [attr.aria-controls]="'eligibility-detail-' + repo.id"
-                      [attr.aria-label]="'Branch protection details for ' + repo.slug"
-                      (click)="toggleExpand(repo.id)"
-                      (keydown.enter)="onToggleKeydown($event, repo.id)"
-                      (keydown.space)="onToggleKeydown($event, repo.id)"
-                    >
-                      <svg
-                        class="repository-list__toggle-chevron"
-                        [class.repository-list__toggle-chevron--expanded]="_expandedId() === repo.id"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  }
-                </div>
-              }
-              <div class="repository-list__actions">
-                <button
-                  class="repository-list__edit-btn"
-                  type="button"
-                  [attr.aria-label]="'Edit repository ' + repo.slug"
-                  (click)="edit.emit(repo)"
-                >Edit</button>
-                <button
-                  class="repository-list__delete-btn"
-                  type="button"
-                  [attr.aria-label]="'Delete repository ' + repo.slug"
-                  (click)="delete.emit(repo)"
-                >Delete</button>
-              </div>
             </div>
             @if (repo.eligibility && repo.eligibility.status !== 'eligible') {
               <fd-repository-eligibility-details

@@ -1,4 +1,6 @@
 .repository-list {
+  --repo-meta-columns: minmax(8rem, 1.5fr) 6rem 7rem 7rem;
+
   &__empty {
     display: flex;
     flex-direction: column;
@@ -129,11 +131,27 @@
     flex-direction: column;
   }
 
-  &__row {
+  &__slug-row {
     align-items: center;
     display: flex;
-    gap: var(--fd-spacing-md);
+    gap: var(--fd-spacing-sm);
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
+  &__slug-row-end {
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    margin-inline-start: auto;
+  }
+
+  &__meta-row {
+    align-items: center;
+    display: grid;
+    gap: var(--fd-spacing-md);
+    grid-template-columns: var(--repo-meta-columns);
+    padding: 0 var(--fd-spacing-md) var(--fd-spacing-sm);
+    padding-inline-start: calc(20px + var(--fd-spacing-sm) + var(--fd-spacing-md));
   }
 
   &__provider {
@@ -141,22 +159,13 @@
     flex-shrink: 0;
   }
 
-  &__info {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 12rem;
-    gap: 2px;
-    min-width: 0;
-  }
-
   &__slug {
     color: var(--fd-text-primary);
     font-family: var(--fd-font-mono);
-    font-size: 0.875rem;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   &__account-name {
@@ -255,7 +264,6 @@
   &__actions {
     display: flex;
     gap: var(--fd-spacing-sm);
-    margin-inline-start: auto;
   }
 
   &__edit-btn,
@@ -299,12 +307,14 @@
 
 @media (max-width: 640px) {
   .repository-list {
-    &__row {
+    &__slug-row {
       flex-wrap: wrap;
     }
 
-    &__info {
-      flex-basis: calc(100% - 3rem);
+    &__meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      padding-inline-start: var(--fd-spacing-md);
     }
 
     &__eligibility-group {
