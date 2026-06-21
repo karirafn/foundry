@@ -35,21 +35,17 @@ RUN if [ "$INSTALL_ANGULAR" = "true" ]; then \
         npm install -g @angular/cli@21; \
     fi
 
-# Conditional glab (GitLab CLI) install — downloads the pre-built binary tarball from the official release
-# SHA256 checksum sourced from https://gitlab.com/gitlab-org/cli/-/releases/v1.52.0
+# Conditional glab (GitLab CLI) install — uses apt GPG signing key for authenticity verification
 ARG INSTALL_GLAB=false
 RUN if [ "$INSTALL_GLAB" = "true" ]; then \
         apt-get update && \
-        apt-get install -y --no-install-recommends curl && \
-        GLAB_VERSION="1.52.0" && \
-        GLAB_SHA256="b65bf65766e498cb725b80f0a93fcfc7ae615f69ca03118991be7ecc11d6567e" && \
-        curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_amd64.tar.gz" \
-            -o /tmp/glab.tar.gz && \
-        echo "${GLAB_SHA256}  /tmp/glab.tar.gz" | sha256sum -c - && \
-        tar -xzf /tmp/glab.tar.gz -C /tmp && \
-        mv /tmp/bin/glab /usr/local/bin/glab && \
-        chmod 755 /usr/local/bin/glab && \
-        rm -rf /tmp/glab.tar.gz /tmp/bin && \
+        apt-get install -y --no-install-recommends curl gnupg && \
+        curl -fsSL https://packages.gitlab.com/gitlab/gitlab-cli/gpgkey \
+            | gpg --dearmor -o /usr/share/keyrings/gitlab-cli-archive-keyring.gpg && \
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/gitlab-cli-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-cli/debian/ bookworm main" \
+            > /etc/apt/sources.list.d/gitlab-cli.list && \
+        apt-get update && \
+        apt-get install -y --no-install-recommends glab && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
