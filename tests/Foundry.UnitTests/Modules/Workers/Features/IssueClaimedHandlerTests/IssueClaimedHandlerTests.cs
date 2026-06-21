@@ -79,7 +79,8 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId? monitoredRepositoryId = null,
         RevisionContext? revision = null,
         ContinuationContext? continuation = null,
-        WorkerProvider? provider = null)
+        WorkerProvider? provider = null,
+        string? cloneUrl = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -88,7 +89,7 @@ public sealed class HandleAsync : IAsyncDisposable
             title,
             body,
             repositorySlug,
-            new Uri($"https://github.com/{repositorySlug}.git"),
+            new Uri(cloneUrl ?? $"https://github.com/{repositorySlug}.git"),
             accountToken,
             branchName,
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
@@ -736,7 +737,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent(
             accountToken: "glpat_test_token",
-            provider: new WorkerProvider.GitLab());
+            provider: new WorkerProvider.GitLab(),
+            cloneUrl: "https://gitlab.com/owner/repo.git");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -755,7 +757,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent(
             accountToken: "glpat_test_token",
-            provider: new WorkerProvider.GitLab());
+            provider: new WorkerProvider.GitLab(),
+            cloneUrl: "https://gitlab.com/owner/repo.git");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
