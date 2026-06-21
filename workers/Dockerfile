@@ -60,10 +60,12 @@ RUN if [ "$INSTALL_GLAB" = "true" ]; then \
         rm -rf "${GLAB_TMPDIR}" /var/lib/apt/lists/*; \
     fi
 
-# Conditional gh (GitHub CLI) install — uses the official cli.github.com apt repository with a
-# GPG-signed keyring for authenticity verification. The keyring is already in dearmored format
-# and is written directly (no gpg --dearmor step needed), matching the install pattern at
-# https://github.com/cli/cli/blob/trunk/docs/install_linux.md#debian-ubuntu-linux-raspberry-pi-os-apt.
+# Conditional gh (GitHub CLI) install — the keyring is fetched over HTTPS from cli.github.com
+# (trust anchored to GitHub TLS); apt then cryptographically verifies every gh package against it
+# via signed-by, so each installed package is GPG-verified. The keyring itself is intentionally
+# not hash-pinned because GitHub rotates it periodically — pinning would break builds on rotation.
+# The keyring is already in dearmored format and written directly (no gpg --dearmor step needed),
+# matching https://github.com/cli/cli/blob/trunk/docs/install_linux.md#debian-ubuntu-linux-raspberry-pi-os-apt.
 ARG INSTALL_GH=false
 RUN if [ "$INSTALL_GH" = "true" ]; then \
         apt-get update && \

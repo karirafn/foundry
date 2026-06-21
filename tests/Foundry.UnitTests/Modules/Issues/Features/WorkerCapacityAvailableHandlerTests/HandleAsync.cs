@@ -745,6 +745,62 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenRevisionQueuedIssueIsClaimed_WithGitLabDiscriminator_DispatchProviderIsGitLab()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedRevisionQueuedIssue(repositoryId);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryDispatchQueries: new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
+                "owner/repo",
+                new Uri("https://gitlab.com/owner/repo.git"),
+                "GITLAB_PAT",
+                "gitlab")),
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.Provider.ShouldBeOfType<WorkerProvider.GitLab>();
+    }
+
+    [Fact]
+    public async Task WhenContinuationQueuedIssueIsClaimed_WithGitLabDiscriminator_DispatchProviderIsGitLab()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedContinuationQueuedIssue(repositoryId);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryDispatchQueries: new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
+                "owner/repo",
+                new Uri("https://gitlab.com/owner/repo.git"),
+                "GITLAB_PAT",
+                "gitlab")),
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = capturingDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.Provider.ShouldBeOfType<WorkerProvider.GitLab>();
+    }
+
+    [Fact]
     public async Task WhenQueuedIssueIsClaimed_BranchNameIncludesTitleSlug()
     {
         // Arrange

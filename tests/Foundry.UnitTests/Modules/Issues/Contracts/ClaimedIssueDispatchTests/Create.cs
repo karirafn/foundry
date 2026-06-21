@@ -37,6 +37,7 @@ public sealed class Create
             () => dispatch.RepositorySlug.ShouldBe("org/repo"),
             () => dispatch.BranchName.ShouldBe("feat/42"),
             () => dispatch.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => dispatch.Provider.ShouldBeOfType<WorkerProvider.GitHub>(),
             () => dispatch.Revision.ShouldBeNull());
     }
 

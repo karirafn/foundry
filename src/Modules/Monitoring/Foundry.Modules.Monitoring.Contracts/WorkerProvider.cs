@@ -1,3 +1,5 @@
+using Foundry.Shared;
+
 namespace Foundry.Modules.Monitoring.Contracts;
 
 public abstract record WorkerProvider
@@ -9,19 +11,25 @@ public abstract record WorkerProvider
     {
     }
 
-    public static WorkerProvider FromDiscriminator(string discriminator)
+    public static Result<WorkerProvider> FromDiscriminator(string discriminator)
     {
         return discriminator switch
         {
-            GitHubDiscriminator => new GitHub(),
-            GitLabDiscriminator => new GitLab(),
-            _ => throw new ArgumentException(
-                $"Unknown provider discriminator: '{discriminator}'.",
-                nameof(discriminator)),
+            GitHubDiscriminator => Result<WorkerProvider>.Ok(new GitHub()),
+            GitLabDiscriminator => Result<WorkerProvider>.Ok(new GitLab()),
+            _ => Result<WorkerProvider>.Fail(WorkerProviderErrors.UnknownDiscriminator(discriminator)),
         };
     }
 
     public sealed record GitHub : WorkerProvider;
 
     public sealed record GitLab : WorkerProvider;
+}
+
+public static class WorkerProviderErrors
+{
+    private const string UnknownDiscriminatorCode = "WorkerProvider.UnknownDiscriminator";
+
+    public static Error UnknownDiscriminator(string discriminator) =>
+        new(UnknownDiscriminatorCode, $"Unknown provider discriminator: '{discriminator}'.");
 }

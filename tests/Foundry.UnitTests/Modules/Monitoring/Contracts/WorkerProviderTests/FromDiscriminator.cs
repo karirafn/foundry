@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -9,38 +10,45 @@ namespace Foundry.UnitTests.Modules.Monitoring.Contracts.WorkerProviderTests;
 public sealed class FromDiscriminator
 {
     [Fact]
-    public void WhenDiscriminatorIsGithub_ReturnsGitHub()
+    public void WhenDiscriminatorIsGithub_ReturnsSuccessWithGitHub()
     {
         // Arrange
         const string discriminator = "github";
 
         // Act
-        WorkerProvider result = WorkerProvider.FromDiscriminator(discriminator);
+        Result<WorkerProvider> result = WorkerProvider.FromDiscriminator(discriminator);
 
         // Assert
-        result.ShouldBeOfType<WorkerProvider.GitHub>();
+        result.IsSuccess.ShouldBeTrue();
+        ((Result<WorkerProvider>.Success)result).Value.ShouldBeOfType<WorkerProvider.GitHub>();
     }
 
     [Fact]
-    public void WhenDiscriminatorIsGitlab_ReturnsGitLab()
+    public void WhenDiscriminatorIsGitlab_ReturnsSuccessWithGitLab()
     {
         // Arrange
         const string discriminator = "gitlab";
 
         // Act
-        WorkerProvider result = WorkerProvider.FromDiscriminator(discriminator);
+        Result<WorkerProvider> result = WorkerProvider.FromDiscriminator(discriminator);
 
         // Assert
-        result.ShouldBeOfType<WorkerProvider.GitLab>();
+        result.IsSuccess.ShouldBeTrue();
+        ((Result<WorkerProvider>.Success)result).Value.ShouldBeOfType<WorkerProvider.GitLab>();
     }
 
     [Fact]
-    public void WhenDiscriminatorIsUnknown_Throws()
+    public void WhenDiscriminatorIsUnknown_ReturnsFailure()
     {
         // Arrange
         const string discriminator = "unknown-provider";
 
-        // Act / Assert
-        Should.Throw<ArgumentException>(() => WorkerProvider.FromDiscriminator(discriminator));
+        // Act
+        Result<WorkerProvider> result = WorkerProvider.FromDiscriminator(discriminator);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        ((Result<WorkerProvider>.Failure)result).Error.ShouldBe(
+            WorkerProviderErrors.UnknownDiscriminator(discriminator));
     }
 }
