@@ -35,18 +35,25 @@ RUN if [ "$INSTALL_ANGULAR" = "true" ]; then \
         npm install -g @angular/cli@21; \
     fi
 
-# Conditional glab (GitLab CLI) install — uses apt GPG signing key for authenticity verification
+# Conditional glab (GitLab CLI) install — downloads the canonical .deb from the latest GitLab
+# release and verifies integrity against the release's published checksums.txt before installing.
+# GitLab does not publish an official apt repository for glab, so apt-repo install is not viable.
 ARG INSTALL_GLAB=false
 RUN if [ "$INSTALL_GLAB" = "true" ]; then \
         apt-get update && \
-        apt-get install -y --no-install-recommends curl gnupg && \
-        curl -fsSL https://packages.gitlab.com/gitlab/gitlab-cli/gpgkey \
-            | gpg --dearmor -o /usr/share/keyrings/gitlab-cli-archive-keyring.gpg && \
-        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/gitlab-cli-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-cli/debian/ bookworm main" \
-            > /etc/apt/sources.list.d/gitlab-cli.list && \
-        apt-get update && \
-        apt-get install -y --no-install-recommends glab && \
-        rm -rf /var/lib/apt/lists/*; \
+        apt-get install -y --no-install-recommends curl && \
+        GLAB_VERSION=$(curl -fsSL "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases/permalink/latest" \
+            | grep -o '"tag_name":"v[^"]*"' \
+            | sed 's/.*"v//;s/"//') && \
+        GLAB_TMPDIR=$(mktemp -d) && \
+        curl -fsSL -o "${GLAB_TMPDIR}/glab_${GLAB_VERSION}_linux_amd64.deb" \
+            "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_amd64.deb" && \
+        curl -fsSL -o "${GLAB_TMPDIR}/checksums.txt" \
+            "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/checksums.txt" && \
+        cd "${GLAB_TMPDIR}" && \
+        grep "linux_amd64.deb" checksums.txt | sha256sum -c - && \
+        apt-get install -y --no-install-recommends "${GLAB_TMPDIR}/glab_${GLAB_VERSION}_linux_amd64.deb" && \
+        rm -rf "${GLAB_TMPDIR}" /var/lib/apt/lists/*; \
     fi
 
 COPY entrypoint.sh /entrypoint.sh
