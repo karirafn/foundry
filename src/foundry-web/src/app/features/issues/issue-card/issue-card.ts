@@ -1,6 +1,6 @@
 import { Component, InputSignal, OutputEmitterRef, computed, input, output } from '@angular/core';
 import { NgClass } from '@angular/common';
-import { IssueSummary } from '../issue.model';
+import { IssueSummary, IssueState } from '../issue.model';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 
@@ -9,6 +9,24 @@ const QUEUED_STATES = new Set<string>(['queued', 'detected']);
 const WARNING_CLASSES: Record<string, string> = {
   ineligible: 'issue-card__repo-warning--ineligible',
   unreachable: 'issue-card__repo-warning--unreachable',
+};
+
+const STATE_ARIA_LABELS: Record<IssueState, string> = {
+  detected: 'detected',
+  queued: 'queued',
+  blocked: 'blocked',
+  in_progress: 'in progress',
+  review: 'review',
+  unchanged: 'unchanged',
+  failed: 'failed',
+  continuable_failed: 'continuable failed',
+  continuation_queued: 'continuation queued',
+  completed: 'completed',
+  dismissed: 'dismissed',
+  revision_queued: 'revision queued',
+  revision_in_progress: 'revision in progress',
+  revision_failed: 'revision failed',
+  ineligible: 'not eligible for dispatch',
 };
 
 function timeAgo(dateString: string): string {
@@ -55,7 +73,7 @@ function timeAgo(dateString: string): string {
       class="issue-card"
       [attr.aria-expanded]="expanded().toString()"
       [attr.aria-controls]="'detail-' + issue().id"
-      [attr.aria-label]="'Issue #' + issue().issueNumber + ': ' + issue().title"
+      [attr.aria-label]="issueAriaLabel()"
       (click)="onCardClick()"
       (keydown)="onKeydown($event)"
     >
@@ -106,7 +124,7 @@ function timeAgo(dateString: string): string {
             [href]="safeUrl"
             target="_blank"
             rel="noopener noreferrer"
-            [attr.aria-label]="'Open issue #' + issue().issueNumber + ' on GitHub'"
+            [attr.aria-label]="'View issue #' + issue().issueNumber + ' on ' + issue().repositorySlug"
             (click)="onLinkClick($event)"
           >
             <svg
@@ -141,6 +159,14 @@ export class IssueCardComponent {
     const status = this.issue().repositoryEligibilityStatus;
     return status ? (WARNING_CLASSES[status] ?? '') : '';
   });
+
+  issueAriaLabel(): string {
+    const issue = this.issue();
+    const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
+    const base = `Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
+    const warning = this.repoWarningLabel();
+    return warning ? `${base}. ${warning}` : base;
+  }
 
   repoWarningLabel(): string | null {
     const issue = this.issue();

@@ -86,11 +86,15 @@ import { RepositoryService } from '../repository.service';
               @if (repo.eligibility && repo.eligibility.status !== 'eligible') {
                 <button
                   class="repository-list__recheck-btn"
+                  [class.repository-list__recheck-btn--unreachable]="repo.eligibility.status === 'unreachable'"
                   type="button"
                   [disabled]="_recheckingId() === repo.id"
                   [attr.aria-label]="'Re-check eligibility for ' + repo.slug"
                   (click)="onRecheck(repo)"
                 >{{ _recheckingId() === repo.id ? 'Re-checking...' : 'Re-check' }}</button>
+                @if (_recheckError()?.id === repo.id) {
+                  <span class="repository-list__recheck-error" role="alert">{{ _recheckError()!.message }}</span>
+                }
               }
               <button
                 class="repository-list__edit-btn"
@@ -125,15 +129,20 @@ export class RepositoryListComponent {
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
+  protected readonly _recheckError: WritableSignal<{ id: string; message: string } | null> = signal(null);
 
   onRecheck(repo: RepositorySummary): void {
     if (this._recheckingId() !== null) {
       return;
     }
+    this._recheckError.set(null);
     this._recheckingId.set(repo.id);
     this._repositoryService.recheckEligibility(repo.accountId, repo.id).subscribe({
       next: () => { this._recheckingId.set(null); },
-      error: () => { this._recheckingId.set(null); },
+      error: () => {
+        this._recheckingId.set(null);
+        this._recheckError.set({ id: repo.id, message: 'Re-check failed. Please try again.' });
+      },
     });
   }
 

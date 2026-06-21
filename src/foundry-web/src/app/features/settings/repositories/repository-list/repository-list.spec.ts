@@ -454,6 +454,90 @@ describe('RepositoryListComponent', () => {
     expect(recheckBtn).toBeFalsy();
   });
 
+  // Cycle 26: recheck error feedback — inline message shown on server error
+  it('should display an inline error message when recheck fails', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
+    recheckBtn.click();
+
+    // Act — simulate server error
+    httpMock.expectOne(
+      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
+    ).error(new ErrorEvent('server error'));
+    fixture.detectChanges();
+
+    // Assert
+    const errorMsg = el.querySelector('.repository-list__recheck-error');
+    expect(errorMsg).toBeTruthy();
+    expect(errorMsg?.getAttribute('role')).toBe('alert');
+  });
+
+  it('should clear recheck error on next recheck attempt', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
+    recheckBtn.click();
+    httpMock.expectOne(
+      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
+    ).error(new ErrorEvent('server error'));
+    fixture.detectChanges();
+
+    // Act — click again
+    const updatedBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
+    updatedBtn.click();
+    fixture.detectChanges();
+
+    // Assert — error cleared immediately when new attempt starts
+    const errorMsg = el.querySelector('.repository-list__recheck-error');
+    expect(errorMsg).toBeFalsy();
+
+    // Cleanup
+    httpMock.expectOne(
+      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
+    ).flush(MOCK_REPO_INELIGIBLE);
+  });
+
+  it('should not display recheck error on successful recheck', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
+    recheckBtn.click();
+
+    // Act — success
+    httpMock.expectOne(
+      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
+    ).flush(MOCK_REPO_INELIGIBLE);
+    fixture.detectChanges();
+
+    // Assert
+    const errorMsg = el.querySelector('.repository-list__recheck-error');
+    expect(errorMsg).toBeFalsy();
+  });
+
+  // Cycle 27: recheck button color — unreachable repos use secondary color class
+  it('should apply unreachable color class to recheck button for unreachable repos', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_UNREACHABLE] });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
+    expect(recheckBtn?.classList.contains('repository-list__recheck-btn--unreachable')).toBe(true);
+  });
+
+  it('should not apply unreachable color class to recheck button for ineligible repos', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-list__recheck-btn');
+    expect(recheckBtn?.classList.contains('repository-list__recheck-btn--unreachable')).toBe(false);
+  });
+
   // Cycle 25: null eligibility — no crash, no eligibility component or re-check button
   it('should not render eligibility component when eligibility is null', () => {
     // Arrange

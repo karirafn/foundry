@@ -22,7 +22,7 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
         </ul>
       }
 
-      <span class="sr-only" aria-live="polite">{{ _statusLabel() }}</span>
+      <span class="sr-only" [attr.aria-live]="recheckPending() ? 'polite' : 'off'">{{ _statusLabel() }}</span>
     </div>
   `,
   styleUrl: './repository-eligibility.scss',

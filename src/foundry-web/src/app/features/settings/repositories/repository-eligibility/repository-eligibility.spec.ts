@@ -133,27 +133,27 @@ describe('RepositoryEligibilityComponent', () => {
   });
 
   // Cycle 4: aria-live region for re-check result
-  it('should render an aria-live region for re-check result announcements', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'eligible' });
-
-    // Assert
-    const liveRegion = el.querySelector('[aria-live]');
-    expect(liveRegion).toBeTruthy();
-    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
-  });
-
-  it('should display updated text in aria-live region when recheckPending is false and status is eligible', () => {
+  it('should have aria-live="off" on initial passive render to avoid burst announcements', () => {
     // Arrange
 
     // Act
     const { el } = setup({ status: 'eligible', recheckPending: false });
 
+    // Assert — live region exists but is silent until a recheck is in flight
+    const liveRegion = el.querySelector('.sr-only[aria-live]');
+    expect(liveRegion).toBeTruthy();
+    expect(liveRegion?.getAttribute('aria-live')).toBe('off');
+  });
+
+  it('should activate aria-live="polite" when recheckPending is true', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'ineligible', recheckPending: true });
+
     // Assert
-    const liveRegion = el.querySelector('[aria-live="polite"]');
-    expect(liveRegion?.textContent?.trim()).toBe('Eligible');
+    const liveRegion = el.querySelector('.sr-only[aria-live]');
+    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
   });
 
   // Cycle 5: recheckPending announces pending state via aria-live
@@ -164,7 +164,7 @@ describe('RepositoryEligibilityComponent', () => {
     const { el } = setup({ status: 'ineligible', recheckPending: true });
 
     // Assert
-    const liveRegion = el.querySelector('[aria-live="polite"]');
+    const liveRegion = el.querySelector('.sr-only[aria-live="polite"]');
     expect(liveRegion?.textContent?.trim()).toBe('Re-checking...');
   });
 

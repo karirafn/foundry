@@ -120,14 +120,14 @@ describe('IssueCardComponent', () => {
     expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
   });
 
-  it('should have aria-label on the external link', () => {
+  it('should have a provider-neutral aria-label on the external link', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const link = el.querySelector('.issue-card__link') as HTMLAnchorElement;
-    expect(link?.getAttribute('aria-label')).toBe('Open issue #42 on GitHub');
+    expect(link?.getAttribute('aria-label')).toBe('View issue #42 on owner/repo');
   });
 
   // Cycle 5: toggle output on click
@@ -218,14 +218,60 @@ describe('IssueCardComponent', () => {
     expect(card?.getAttribute('aria-controls')).toBe('detail-abc123');
   });
 
-  it('should set aria-label with issue number and title', () => {
+  it('should set aria-label with issue number, title, and state', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const card = el.querySelector('.issue-card') as HTMLElement;
-    expect(card?.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard');
+    expect(card?.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard. State: in progress');
+  });
+
+  it('should include repo warning in aria-label when issue is queued and repo is ineligible', () => {
+    // Arrange
+    const queuedIneligibleIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act
+    const fixture = createComponent(queuedIneligibleIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.getAttribute('aria-label')).toContain('Repo ineligible');
+  });
+
+  it('should include repo warning in aria-label when issue is queued and repo is unreachable', () => {
+    // Arrange
+    const queuedUnreachableIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'unreachable',
+    };
+
+    // Act
+    const fixture = createComponent(queuedUnreachableIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.getAttribute('aria-label')).toContain('Repo unreachable');
+  });
+
+  it('should not include repo warning in aria-label when issue has no warning', () => {
+    // Arrange / Act
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('Repo ineligible');
+    expect(label).not.toContain('Repo unreachable');
   });
 
   // Cycle 7: keyboard interaction
