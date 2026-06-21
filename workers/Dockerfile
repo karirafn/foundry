@@ -24,6 +24,8 @@ RUN if [ "$INSTALL_DOTNET" = "true" ]; then \
             > /etc/apt/sources.list.d/microsoft.list && \
         apt-get update && \
         apt-get install -y --no-install-recommends dotnet-sdk-10.0 && \
+        dotnet tool install --tool-path /usr/local/bin dotnet-ef && \
+        dotnet tool install --tool-path /usr/local/bin rq-cli && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
