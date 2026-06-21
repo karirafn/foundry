@@ -6,8 +6,7 @@ public sealed record WorkerRunFailed(
     Guid WorkerRunId,
     Guid IssueId,
     string ReasonDescription,
-    string? BranchName = null,
-    bool IsUsageLimitedRequeue = false) : IIntegrationEvent
+    string? BranchName = null) : IIntegrationEvent
 {
     public const string UsageLimitedReason = "Usage limit reached";
 }
