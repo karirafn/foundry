@@ -37,6 +37,9 @@ if [[ -n "${GH_TOKEN:-}" ]]; then
     GH_HOST="${GH_HOST%%/*}"
     if [[ -z "$GH_HOST" ]]; then
         echo "WARNING: could not derive hostname from CLONE_URL; skipping gh auth setup-git" >&2
+    elif [[ "$GH_HOST" == *@* ]]; then
+        echo "ERROR: derived hostname contains '@' — CLONE_URL may embed credentials in the URL. Aborting gh auth setup-git." >&2
+        exit 1
     elif command -v gh > /dev/null 2>&1; then
         gh auth setup-git --hostname "$GH_HOST" --force
     else
@@ -51,6 +54,9 @@ if [[ -n "${GITLAB_TOKEN:-}" ]]; then
     GL_HOST="${GL_HOST%%/*}"
     if [[ -z "$GL_HOST" ]]; then
         echo "WARNING: could not derive hostname from CLONE_URL; skipping glab credential helper setup" >&2
+    elif [[ "$GL_HOST" == *@* ]]; then
+        echo "ERROR: derived hostname contains '@' — CLONE_URL may embed credentials in the URL. Aborting glab credential helper setup." >&2
+        exit 1
     elif command -v glab > /dev/null 2>&1; then
         export GITLAB_HOST="https://${GL_HOST}"
         git config credential."https://${GL_HOST}".helper "!glab auth git-credential"
