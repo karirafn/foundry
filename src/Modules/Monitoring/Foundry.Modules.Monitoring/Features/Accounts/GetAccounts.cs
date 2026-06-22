@@ -21,17 +21,20 @@ internal static class GetAccounts
             Query query,
             CancellationToken cancellationToken)
         {
-            List<AccountSummary> accounts = await dbContext.Set<Account>()
+            List<Account> accounts = await dbContext.Set<Account>()
                 .AsNoTracking()
+                .ToListAsync(cancellationToken);
+
+            List<AccountSummary> summaries = accounts
                 .Select(a => new AccountSummary(
                     a.Id.Value,
                     a.Name,
                     EF.Property<string>(a, "type"),
-                    a.BaseUrl.ToString(),
+                    a.BaseUrl.Value.ToString(),
                     a.Token != null))
-                .ToListAsync(cancellationToken);
+                .ToList();
 
-            return Result<IReadOnlyList<AccountSummary>>.Ok(accounts);
+            return Result<IReadOnlyList<AccountSummary>>.Ok(summaries);
         }
     }
 
