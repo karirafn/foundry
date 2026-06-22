@@ -11,18 +11,28 @@ internal sealed class RepositoryDispatchQueries(DbContext db) : IRepositoryDispa
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
     {
-        return await db.Set<MonitoredRepository>()
+        var rows = await db.Set<MonitoredRepository>()
             .AsNoTracking()
             .Where(r => r.Id == repositoryId)
             .Join(
                 db.Set<Account>().AsNoTracking(),
                 r => r.AccountId,
                 a => a.Id,
-                (r, a) => new RepositoryDispatchInfo(
-                    r.Slug.ToString(),
-                    new Uri(a.BaseUrl, $"{r.Slug}.git"),
-                    a.Token,
-                    EF.Property<string>(a, "type")))
-            .FirstOrDefaultAsync(cancellationToken);
+                (r, a) => new
+                {
+                    Slug = r.Slug,
+                    BaseUrl = a.BaseUrl,
+                    Token = a.Token,
+                    ProviderType = EF.Property<string>(a, "type"),
+                })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(x => new RepositoryDispatchInfo(
+                x.Slug.ToString(),
+                new Uri(x.BaseUrl.Value, $"{x.Slug}.git"),
+                x.Token,
+                x.ProviderType))
+            .FirstOrDefault();
     }
 }

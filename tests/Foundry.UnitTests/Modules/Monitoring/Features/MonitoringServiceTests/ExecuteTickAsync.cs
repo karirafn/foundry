@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
@@ -96,7 +97,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         await using FoundryDbContext db = CreateDbContext();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", token, new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrlFactory.Create("https://github.com"));
         db.Set<Account>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 

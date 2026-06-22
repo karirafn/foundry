@@ -1,6 +1,7 @@
 using System.Net;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -27,7 +28,7 @@ public sealed class CreateProvider
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", BaseUrlFactory.Create("https://github.com"));
 
         // Act
         IIssueProvider provider = sut.CreateProvider(account, "ghp_token123");
@@ -41,7 +42,7 @@ public sealed class CreateProvider
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitLabAccount account = GitLabAccount.Create("my-gitlab", "glpat_token", new Uri("https://gitlab.com"));
+        GitLabAccount account = GitLabAccount.Create("my-gitlab", "glpat_token", BaseUrlFactory.Create("https://gitlab.com"));
 
         // Act
         IIssueProvider provider = sut.CreateProvider(account, "glpat_token123");

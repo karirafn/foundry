@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 using Shouldly;
 
@@ -12,9 +13,8 @@ public sealed class Update
     public void WhenTokenIsProvided_UpdatesAllProperties()
     {
         // Arrange
-        Uri baseUrl = new("https://gitlab.com");
-        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", baseUrl);
-        Uri newBaseUrl = new("https://gitlab.example.com");
+        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", BaseUrlFactory.Create("https://gitlab.com"));
+        BaseUrl newBaseUrl = BaseUrlFactory.Create("https://gitlab.example.com");
 
         // Act
         account.Update("new-name", "new-token", newBaseUrl);
@@ -23,36 +23,20 @@ public sealed class Update
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe("new-name"),
             () => account.Token.ShouldBe("new-token"),
-            () => account.BaseUrl.ShouldBe(newBaseUrl));
+            () => account.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.example.com")));
     }
 
     [Fact]
     public void WhenTokenIsNull_KeepsExistingToken()
     {
         // Arrange
-        Uri baseUrl = new("https://gitlab.com");
-        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", baseUrl);
-        Uri newBaseUrl = new("https://gitlab.example.com");
+        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", BaseUrlFactory.Create("https://gitlab.com"));
+        BaseUrl newBaseUrl = BaseUrlFactory.Create("https://gitlab.example.com");
 
         // Act
         account.Update("new-name", null, newBaseUrl);
 
         // Assert
         account.Token.ShouldBe("original-token");
-    }
-
-    [Fact]
-    public void WhenBaseUrlSchemeIsNotHttps_ThrowsArgumentException()
-    {
-        // Arrange
-        Uri baseUrl = new("https://gitlab.com");
-        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", baseUrl);
-        Uri invalidBaseUrl = new("http://gitlab.example.com");
-
-        // Act
-        Action act = () => account.Update("new-name", "new-token", invalidBaseUrl);
-
-        // Assert
-        Should.Throw<ArgumentException>(act);
     }
 }

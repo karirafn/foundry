@@ -2,6 +2,8 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
+using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -50,11 +52,14 @@ internal static class ValidateToken
                     IQueryHandler<Query, Response> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    if (!Uri.TryCreate(body.BaseUrl, UriKind.Absolute, out Uri? baseUrl) ||
-                        baseUrl.Scheme is not "https")
+                    Result<BaseUrlVo> baseUrlResult = BaseUrlVo.Create(body.BaseUrl);
+                    if (baseUrlResult is Result<BaseUrlVo>.Failure baseUrlFailure)
                     {
-                        return (Results<Ok<Response>, BadRequest<string>>)TypedResults.BadRequest("Invalid base URL.");
+                        return (Results<Ok<Response>, BadRequest<string>>)TypedResults.BadRequest(
+                            baseUrlFailure.Error.Message);
                     }
+
+                    BaseUrlVo parsedBaseUrl = ((Result<BaseUrlVo>.Success)baseUrlResult).Value;
 
                     if (!ProviderTypes.IsKnown(body.ProviderType))
                     {
@@ -63,8 +68,8 @@ internal static class ValidateToken
                     }
 
                     Uri apiBaseUrl = string.Equals(body.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase)
-                        ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
-                        : GitHubAccount.DeriveApiBaseUrl(baseUrl);
+                        ? GitLabAccount.DeriveApiBaseUrl(parsedBaseUrl)
+                        : GitHubAccount.DeriveApiBaseUrl(parsedBaseUrl);
 
                     Result<Response> result = await handler.HandleAsync(
                         new Query(body.Token, apiBaseUrl, body.ProviderType),

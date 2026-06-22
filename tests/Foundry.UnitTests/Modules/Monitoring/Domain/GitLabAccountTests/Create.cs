@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 using Shouldly;
 
@@ -14,7 +15,7 @@ public sealed class Create
         // Arrange
         string name = "my-gitlab-account";
         string token = "glpat_mytoken";
-        Uri baseUrl = new("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
 
         // Act
         GitLabAccount account = GitLabAccount.Create(name, token, baseUrl);
@@ -23,14 +24,14 @@ public sealed class Create
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe(name),
             () => account.Token.ShouldBe(token),
-            () => account.BaseUrl.ShouldBe(baseUrl));
+            () => account.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.com")));
     }
 
     [Fact]
     public void WhenCreated_AssignsNewId()
     {
         // Arrange
-        Uri baseUrl = new("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
 
         // Act
         GitLabAccount a = GitLabAccount.Create("account-a", "token-a", baseUrl);
@@ -41,24 +42,11 @@ public sealed class Create
     }
 
     [Fact]
-    public void WhenBaseUrlSchemeIsNotHttps_ThrowsArgumentException()
-    {
-        // Arrange
-        Uri baseUrl = new("http://gitlab.example.com");
-
-        // Act
-        Action act = () => GitLabAccount.Create("my-account", "my-token", baseUrl);
-
-        // Assert
-        Should.Throw<ArgumentException>(act);
-    }
-
-    [Fact]
     public void WhenTokenIsNull_ReturnsGitLabAccountWithNullToken()
     {
         // Arrange
         string name = "my-gitlab-account";
-        Uri baseUrl = new("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
 
         // Act
         GitLabAccount account = GitLabAccount.Create(name, null, baseUrl);

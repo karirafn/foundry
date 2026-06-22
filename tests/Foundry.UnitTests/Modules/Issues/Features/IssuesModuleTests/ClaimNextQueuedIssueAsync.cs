@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
@@ -11,6 +12,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
+using Foundry.UnitTests.Modules.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -74,7 +76,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create(
             "Test Account",
             token,
-            new Uri("https://github.com"));
+            BaseUrlFactory.Create("https://github.com"));
 
         RepositorySlug repositorySlug =
             ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;

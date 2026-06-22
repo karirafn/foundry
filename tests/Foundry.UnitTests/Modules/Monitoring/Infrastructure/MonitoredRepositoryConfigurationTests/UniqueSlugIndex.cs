@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -42,7 +43,7 @@ public sealed class UniqueSlugIndex : IAsyncDisposable
     public async Task WhenDuplicateSlugOnSameHost_ThrowsOnSave()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -65,7 +66,7 @@ public sealed class UniqueSlugIndex : IAsyncDisposable
     public async Task WhenSameSlugOnDifferentHosts_SavesSuccessfully()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

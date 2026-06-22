@@ -93,6 +93,23 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBaseUrlContainsCredentials_ReturnsBadRequest()
+    {
+        // Arrange
+        Guid id = await SeedAccountAsync();
+        object body = new { name = "My GitHub", baseUrl = "https://attacker@github.com" };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri($"/api/accounts/{id}", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task WhenBaseUrlIsNotAUrl_ReturnsBadRequest()
     {
         // Arrange

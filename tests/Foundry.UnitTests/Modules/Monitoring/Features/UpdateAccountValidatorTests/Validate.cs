@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
@@ -17,6 +18,38 @@ public sealed class Validate
 
     private static UpdateAccount.Command ValidCommandNoToken =>
         new(ValidId, "My Account", "https://github.com", null);
+
+    [Fact]
+    public void WhenBaseUrlIsNotHttps_ReturnsBaseUrlInvalidError()
+    {
+        // Arrange
+        UpdateAccount.Validator sut = new();
+        UpdateAccount.Command command = ValidCommandWithToken with { BaseUrl = "http://github.com" };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(BaseUrlErrors.Invalid.Code);
+    }
+
+    [Fact]
+    public void WhenBaseUrlContainsCredentials_ReturnsBaseUrlContainsCredentialsError()
+    {
+        // Arrange
+        UpdateAccount.Validator sut = new();
+        UpdateAccount.Command command = ValidCommandWithToken with { BaseUrl = "https://attacker@github.com" };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(BaseUrlErrors.ContainsCredentials.Code);
+    }
 
     [Fact]
     public void WhenTokenContainsInvalidCharacters_ReturnsTokenInvalidCharsError()

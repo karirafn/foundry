@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 using Shouldly;
 
@@ -15,16 +16,16 @@ public sealed class Update
         GitHubAccount account = GitHubAccount.Create(
             "original-name",
             "original-token",
-            new Uri("https://github.com"));
+            BaseUrlFactory.Create("https://github.com"));
 
         // Act
-        account.Update("updated-name", "new-token", new Uri("https://github.example.com"));
+        account.Update("updated-name", "new-token", BaseUrlFactory.Create("https://github.example.com"));
 
         // Assert
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe("updated-name"),
             () => account.Token.ShouldBe("new-token"),
-            () => account.BaseUrl.ShouldBe(new Uri("https://github.example.com")));
+            () => account.BaseUrl.Value.ShouldBe(new Uri("https://github.example.com")));
     }
 
     [Fact]
@@ -34,30 +35,14 @@ public sealed class Update
         GitHubAccount account = GitHubAccount.Create(
             "my-account",
             "existing-token",
-            new Uri("https://github.com"));
+            BaseUrlFactory.Create("https://github.com"));
 
         // Act
-        account.Update("updated-name", null, new Uri("https://github.com"));
+        account.Update("updated-name", null, BaseUrlFactory.Create("https://github.com"));
 
         // Assert
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe("updated-name"),
             () => account.Token.ShouldBe("existing-token"));
-    }
-
-    [Fact]
-    public void WhenBaseUrlSchemeIsNotHttps_ThrowsArgumentException()
-    {
-        // Arrange
-        GitHubAccount account = GitHubAccount.Create(
-            "my-account",
-            "my-token",
-            new Uri("https://github.com"));
-
-        // Act
-        Action act = () => account.Update("my-account", "my-token", new Uri("http://insecure.example.com"));
-
-        // Assert
-        Should.Throw<ArgumentException>(act);
     }
 }

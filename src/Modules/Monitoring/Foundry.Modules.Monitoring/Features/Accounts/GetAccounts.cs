@@ -21,17 +21,28 @@ internal static class GetAccounts
             Query query,
             CancellationToken cancellationToken)
         {
-            List<AccountSummary> accounts = await dbContext.Set<Account>()
+            var rows = await dbContext.Set<Account>()
                 .AsNoTracking()
-                .Select(a => new AccountSummary(
-                    a.Id.Value,
+                .Select(a => new
+                {
+                    a.Id,
                     a.Name,
-                    EF.Property<string>(a, "type"),
-                    a.BaseUrl.ToString(),
-                    a.Token != null))
+                    ProviderType = EF.Property<string>(a, "type"),
+                    a.BaseUrl,
+                    a.Token,
+                })
                 .ToListAsync(cancellationToken);
 
-            return Result<IReadOnlyList<AccountSummary>>.Ok(accounts);
+            List<AccountSummary> summaries = rows
+                .Select(r => new AccountSummary(
+                    r.Id.Value,
+                    r.Name,
+                    r.ProviderType,
+                    r.BaseUrl.Value.ToString(),
+                    r.Token != null))
+                .ToList();
+
+            return Result<IReadOnlyList<AccountSummary>>.Ok(summaries);
         }
     }
 
@@ -53,7 +64,8 @@ internal static class GetAccounts
                 })
                 .WithName("GetAccounts")
                 .WithSummary("Gets all configured accounts")
-                .Produces<IReadOnlyList<AccountSummary>>();
+                .Produces<IReadOnlyList<AccountSummary>>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

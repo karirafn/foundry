@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
@@ -11,6 +12,38 @@ public sealed class Validate
 {
     private static CreateAccount.Command ValidCommand =>
         new("My Account", "github", "https://github.com", "ghp_valid_token");
+
+    [Fact]
+    public void WhenBaseUrlIsNotHttps_ReturnsBaseUrlInvalidError()
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+        CreateAccount.Command command = ValidCommand with { BaseUrl = "http://github.com" };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(BaseUrlErrors.Invalid.Code);
+    }
+
+    [Fact]
+    public void WhenBaseUrlContainsCredentials_ReturnsBaseUrlContainsCredentialsError()
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+        CreateAccount.Command command = ValidCommand with { BaseUrl = "https://attacker@github.com" };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(BaseUrlErrors.ContainsCredentials.Code);
+    }
 
     [Fact]
     public void WhenTokenContainsInvalidCharacters_ReturnsTokenInvalidCharsError()
