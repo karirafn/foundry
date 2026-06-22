@@ -30,10 +30,10 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     private readonly StubRepositorySlugQueries _slugQueries;
 
     private static IssueAuthor ValidAuthor =>
-        ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+        IssueAuthor.Create("octocat").ValueOrThrow();
 
     private static ProviderUrl ValidUrl =>
-        ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
+        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public GetIssueDetailAsync()
     {

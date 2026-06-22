@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -11,10 +12,10 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.BlockedIssueTests;
 public sealed class FromDetected
 {
     private static IssueAuthor ValidAuthor =>
-        ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+        IssueAuthor.Create("octocat").ValueOrThrow();
 
     private static ProviderUrl ValidUrl =>
-        ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
+        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     private static DetectedIssue CreateDetectedIssue(MonitoredRepositoryId repositoryId) =>
         DetectedIssue.Detect(

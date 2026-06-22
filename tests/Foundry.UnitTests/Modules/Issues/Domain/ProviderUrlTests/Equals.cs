@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -14,8 +15,8 @@ public sealed class Equals
     {
         // Arrange
         string url = "https://github.com/owner/repo/issues/1";
-        ProviderUrl a = ((Result<ProviderUrl>.Success)ProviderUrl.Create(url)).Value;
-        ProviderUrl b = ((Result<ProviderUrl>.Success)ProviderUrl.Create(url)).Value;
+        ProviderUrl a = ProviderUrl.Create(url).ValueOrThrow();
+        ProviderUrl b = ProviderUrl.Create(url).ValueOrThrow();
 
         // Act
         bool result = a.Equals(b);
@@ -28,8 +29,8 @@ public sealed class Equals
     public void WhenDifferentUrl_ProviderUrlsAreNotEqual()
     {
         // Arrange
-        ProviderUrl a = ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
-        ProviderUrl b = ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/2")).Value;
+        ProviderUrl a = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
+        ProviderUrl b = ProviderUrl.Create("https://github.com/owner/repo/issues/2").ValueOrThrow();
 
         // Act
         bool result = a.Equals(b);
