@@ -3,7 +3,10 @@ using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
+
+using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -24,7 +27,6 @@ internal static partial class UpdateAccount
     internal sealed partial class Validator : ICommandValidator<Command>
     {
         internal const string NameEmptyCode = "UpdateAccount.NameEmpty";
-        internal const string BaseUrlInvalidCode = "UpdateAccount.BaseUrlInvalid";
         internal const string TokenInvalidCharsCode = "UpdateAccount.TokenInvalidChars";
 
         [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
@@ -37,10 +39,10 @@ internal static partial class UpdateAccount
                 return new Error(NameEmptyCode, "Account name must not be empty.");
             }
 
-            if (!Uri.TryCreate(command.BaseUrl, UriKind.Absolute, out Uri? baseUri) ||
-                baseUri.Scheme is not "https")
+            Result<BaseUrlVo> baseUrlResult = BaseUrlVo.Create(command.BaseUrl);
+            if (baseUrlResult is Result<BaseUrlVo>.Failure baseUrlFailure)
             {
-                return new Error(BaseUrlInvalidCode, "Base URL must be a valid HTTPS URL.");
+                return baseUrlFailure.Error;
             }
 
             if (command.Token is not null && !ValidTokenCharactersRegex().IsMatch(command.Token))
@@ -80,7 +82,7 @@ internal static partial class UpdateAccount
                 return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(command.Name));
             }
 
-            Uri baseUrl = new(command.BaseUrl);
+            BaseUrlVo baseUrl = ((Result<BaseUrlVo>.Success)BaseUrlVo.Create(command.BaseUrl)).Value;
 
             if (command.Token is not null)
             {
@@ -129,7 +131,7 @@ internal static partial class UpdateAccount
                 account.Id.Value,
                 account.Name,
                 providerType,
-                account.BaseUrl.ToString(),
+                account.BaseUrl.Value.ToString(),
                 account.Token is not null);
 
             return Result<AccountSummary>.Ok(summary);

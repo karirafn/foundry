@@ -2,7 +2,10 @@ using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
+
+using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -24,7 +27,6 @@ internal static partial class CreateAccount
     {
         internal const string InvalidProviderTypeCode = "CreateAccount.InvalidProviderType";
         internal const string NameEmptyCode = "CreateAccount.NameEmpty";
-        internal const string BaseUrlInvalidCode = "CreateAccount.BaseUrlInvalid";
         internal const string TokenEmptyCode = "CreateAccount.TokenEmpty";
         internal const string TokenInvalidCharsCode = "CreateAccount.TokenInvalidChars";
 
@@ -38,10 +40,10 @@ internal static partial class CreateAccount
                 return new Error(NameEmptyCode, "Account name must not be empty.");
             }
 
-            if (!Uri.TryCreate(command.BaseUrl, UriKind.Absolute, out Uri? baseUri) ||
-                baseUri.Scheme is not "https")
+            Result<BaseUrlVo> baseUrlResult = BaseUrlVo.Create(command.BaseUrl);
+            if (baseUrlResult is Result<BaseUrlVo>.Failure baseUrlFailure)
             {
-                return new Error(BaseUrlInvalidCode, "Base URL must be a valid HTTPS URL.");
+                return baseUrlFailure.Error;
             }
 
             if (string.IsNullOrWhiteSpace(command.Token))
@@ -87,7 +89,7 @@ internal static partial class CreateAccount
                 return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(command.Name));
             }
 
-            Uri baseUrl = new(command.BaseUrl);
+            BaseUrlVo baseUrl = ((Result<BaseUrlVo>.Success)BaseUrlVo.Create(command.BaseUrl)).Value;
 
             bool isGitLab = string.Equals(command.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase);
 
@@ -124,7 +126,7 @@ internal static partial class CreateAccount
                 account.Id.Value,
                 account.Name,
                 providerType,
-                account.BaseUrl.ToString(),
+                account.BaseUrl.Value.ToString(),
                 account.Token is not null);
 
             return Result<AccountSummary>.Ok(summary);
