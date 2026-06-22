@@ -39,14 +39,11 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
     private static RepositorySlug ValidSlug =>
         ((Result<RepositorySlug>.Success)RepositorySlug.Create("octocat/hello-world")).Value;
 
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     [Fact]
     public async Task WhenMonitoredRepositoryPersisted_CanBeReloadedWithCorrectSlug()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", MakeBaseUrl("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

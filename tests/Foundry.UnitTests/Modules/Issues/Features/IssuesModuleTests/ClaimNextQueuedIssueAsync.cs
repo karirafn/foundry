@@ -12,6 +12,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
+using Foundry.UnitTests.Modules.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -62,9 +63,6 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     private static IssueAuthor ValidAuthor =>
         ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
 
@@ -78,7 +76,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create(
             "Test Account",
             token,
-            MakeBaseUrl("https://github.com"));
+            BaseUrlFactory.Create("https://github.com"));
 
         RepositorySlug repositorySlug =
             ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;

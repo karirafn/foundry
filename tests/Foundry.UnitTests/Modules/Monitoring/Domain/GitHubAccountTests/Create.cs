@@ -1,6 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
 
 using Shouldly;
 
@@ -10,16 +9,13 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitHubAccountTests;
 
 public sealed class Create
 {
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     [Fact]
     public void WhenAllParametersAreValid_ReturnsGitHubAccountWithCorrectProperties()
     {
         // Arrange
         string name = "my-github-account";
         string token = "ghp_mytoken";
-        BaseUrl baseUrl = MakeBaseUrl("https://github.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
 
         // Act
         GitHubAccount account = GitHubAccount.Create(name, token, baseUrl);
@@ -35,7 +31,7 @@ public sealed class Create
     public void WhenCreated_AssignsNewId()
     {
         // Arrange
-        BaseUrl baseUrl = MakeBaseUrl("https://github.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
 
         // Act
         GitHubAccount a = GitHubAccount.Create("account-a", "token-a", baseUrl);
@@ -50,7 +46,7 @@ public sealed class Create
     {
         // Arrange
         string name = "my-github-account";
-        BaseUrl baseUrl = MakeBaseUrl("https://github.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
 
         // Act
         GitHubAccount account = GitHubAccount.Create(name, null, baseUrl);

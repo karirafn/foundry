@@ -44,14 +44,11 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
     private static RepositorySlug ValidSlug(string slug) =>
         ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
 
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     [Fact]
     public async Task WhenRepositoryLinkedToGitHubAccount_ReturnsGithub()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", MakeBaseUrl("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
         _dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), account.Id, "github.com", null);
@@ -69,7 +66,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
     public async Task WhenRepositoryLinkedToGitLabAccount_ReturnsGitlab()
     {
         // Arrange
-        GitLabAccount account = GitLabAccount.Create("my-org", "TOKEN", MakeBaseUrl("https://gitlab.com"));
+        GitLabAccount account = GitLabAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://gitlab.com"));
         _dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), account.Id, "gitlab.com", null);

@@ -44,9 +44,6 @@ public sealed class GetSlugsAsync : IAsyncDisposable
     private static RepositorySlug ValidSlug(string slug) =>
         ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
 
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     [Fact]
     public async Task WhenNoIdsProvided_ReturnsEmptyDictionary()
     {
@@ -85,7 +82,7 @@ public sealed class GetSlugsAsync : IAsyncDisposable
     public async Task WhenIdsMatchRepositories_ReturnsSlugStringsKeyedById()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", MakeBaseUrl("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
         _dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), account.Id, "github.com", null);

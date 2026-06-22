@@ -1,6 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
 
 using Shouldly;
 
@@ -10,14 +9,11 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitLabAccountTests;
 
 public sealed class DeriveApiBaseUrl
 {
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     [Fact]
     public void WhenBaseUrlIsGitLabCom_ReturnsGitLabApiV4Url()
     {
         // Arrange
-        BaseUrl baseUrl = MakeBaseUrl("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
 
         // Act
         Uri result = GitLabAccount.DeriveApiBaseUrl(baseUrl);
@@ -30,7 +26,7 @@ public sealed class DeriveApiBaseUrl
     public void WhenBaseUrlIsSelfHosted_ReturnsApiV4Url()
     {
         // Arrange
-        BaseUrl baseUrl = MakeBaseUrl("https://gitlab.example.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.example.com");
 
         // Act
         Uri result = GitLabAccount.DeriveApiBaseUrl(baseUrl);
@@ -43,7 +39,7 @@ public sealed class DeriveApiBaseUrl
     public void WhenBaseUrlHasTrailingSlash_DoesNotDoubleSlash()
     {
         // Arrange
-        BaseUrl baseUrl = MakeBaseUrl("https://gitlab.example.com/");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.example.com/");
 
         // Act
         Uri result = GitLabAccount.DeriveApiBaseUrl(baseUrl);

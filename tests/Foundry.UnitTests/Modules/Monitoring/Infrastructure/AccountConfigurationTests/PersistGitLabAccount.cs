@@ -1,6 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.AspNetCore.DataProtection;
@@ -39,14 +38,11 @@ public sealed class PersistGitLabAccount : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     [Fact]
     public async Task WhenGitLabAccountPersisted_CanBeReloadedAsGitLabAccount()
     {
         // Arrange
-        BaseUrl baseUrl = MakeBaseUrl("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
         GitLabAccount account = GitLabAccount.Create("my-org", "glpat_mytoken", baseUrl);
 
         _dbContext.Set<Account>().Add(account);
@@ -71,7 +67,7 @@ public sealed class PersistGitLabAccount : IAsyncDisposable
     public async Task WhenGitLabAccountPersistedWithNullToken_CanBeReloadedWithNullToken()
     {
         // Arrange
-        BaseUrl baseUrl = MakeBaseUrl("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
         GitLabAccount account = GitLabAccount.Create("my-org", null, baseUrl);
 
         _dbContext.Set<Account>().Add(account);

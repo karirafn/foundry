@@ -42,12 +42,9 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     private async Task<Guid> SeedGitHubAccountAsync(string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create("My GitHub", token, MakeBaseUrl("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("My GitHub", token, BaseUrlFactory.Create("https://github.com"));
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         return account.Id.Value;
@@ -55,7 +52,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private async Task<Guid> SeedGitLabAccountAsync(string? token = "glpat_test_token")
     {
-        GitLabAccount account = GitLabAccount.Create("My GitLab", token, MakeBaseUrl("https://gitlab.com"));
+        GitLabAccount account = GitLabAccount.Create("My GitLab", token, BaseUrlFactory.Create("https://gitlab.com"));
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         return account.Id.Value;

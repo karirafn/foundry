@@ -46,12 +46,9 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static BaseUrl MakeBaseUrl(string url) =>
-        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
-
     private async Task<MonitoredRepositoryId> SeedRepoAsync(string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", token, MakeBaseUrl("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrlFactory.Create("https://github.com"));
         _dbContext.Set<Account>().Add(account);
 
         Result<RepositorySlug> slugResult = RepositorySlug.Create("owner/repo");
