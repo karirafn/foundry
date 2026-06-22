@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -48,7 +49,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
     public async Task WhenRepositoryLinkedToGitHubAccount_ReturnsGithub()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), account.Id, "github.com", null);
@@ -66,7 +67,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
     public async Task WhenRepositoryLinkedToGitLabAccount_ReturnsGitlab()
     {
         // Arrange
-        GitLabAccount account = GitLabAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://gitlab.com"));
+        GitLabAccount account = GitLabAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), account.Id, "gitlab.com", null);

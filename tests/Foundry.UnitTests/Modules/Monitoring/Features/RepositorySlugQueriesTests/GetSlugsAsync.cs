@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -82,7 +83,7 @@ public sealed class GetSlugsAsync : IAsyncDisposable
     public async Task WhenIdsMatchRepositories_ReturnsSlugStringsKeyedById()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), account.Id, "github.com", null);

@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Foundry.WebApi.Persistence;
 
@@ -44,7 +45,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private async Task<Guid> SeedGitHubAccountAsync(string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create("My GitHub", token, BaseUrlFactory.Create("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("My GitHub", token, BaseUrl.Create("https://github.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         return account.Id.Value;
@@ -52,7 +53,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private async Task<Guid> SeedGitLabAccountAsync(string? token = "glpat_test_token")
     {
-        GitLabAccount account = GitLabAccount.Create("My GitLab", token, BaseUrlFactory.Create("https://gitlab.com"));
+        GitLabAccount account = GitLabAccount.Create("My GitLab", token, BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         return account.Id.Value;

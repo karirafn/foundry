@@ -12,7 +12,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
-using Foundry.UnitTests.Modules.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -76,7 +75,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create(
             "Test Account",
             token,
-            BaseUrlFactory.Create("https://github.com"));
+            BaseUrl.Create("https://github.com").ValueOrThrow());
 
         RepositorySlug repositorySlug =
             ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;

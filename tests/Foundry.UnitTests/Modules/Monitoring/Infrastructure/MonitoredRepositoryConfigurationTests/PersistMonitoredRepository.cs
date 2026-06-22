@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -43,7 +44,7 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
     public async Task WhenMonitoredRepositoryPersisted_CanBeReloadedWithCorrectSlug()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

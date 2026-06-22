@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -15,7 +16,7 @@ public sealed class Create
         // Arrange
         string name = "my-gitlab-account";
         string token = "glpat_mytoken";
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
 
         // Act
         GitLabAccount account = GitLabAccount.Create(name, token, baseUrl);
@@ -31,7 +32,7 @@ public sealed class Create
     public void WhenCreated_AssignsNewId()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
 
         // Act
         GitLabAccount a = GitLabAccount.Create("account-a", "token-a", baseUrl);
@@ -46,7 +47,7 @@ public sealed class Create
     {
         // Arrange
         string name = "my-gitlab-account";
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://gitlab.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
 
         // Act
         GitLabAccount account = GitLabAccount.Create(name, null, baseUrl);

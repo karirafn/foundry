@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -13,7 +14,7 @@ public sealed class DeriveApiBaseUrl
     public void WhenBaseUrlIsGitHubDotCom_ReturnsApiGitHubCom()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
         Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
@@ -26,7 +27,7 @@ public sealed class DeriveApiBaseUrl
     public void WhenBaseUrlIsGitHubEnterprise_ReturnsBaseUrlWithApiV3Suffix()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.example.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://github.example.com").ValueOrThrow();
 
         // Act
         Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
@@ -39,7 +40,7 @@ public sealed class DeriveApiBaseUrl
     public void WhenBaseUrlIsGitHubEnterpriseWithTrailingPath_PreservesSubPath()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://corp.example.com/github");
+        BaseUrl baseUrl = BaseUrl.Create("https://corp.example.com/github").ValueOrThrow();
 
         // Act
         Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);

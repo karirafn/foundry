@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
@@ -50,7 +49,7 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", null);
