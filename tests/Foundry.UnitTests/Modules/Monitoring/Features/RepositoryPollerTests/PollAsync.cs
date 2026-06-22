@@ -55,9 +55,12 @@ public sealed class PollAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
+    private static BaseUrl MakeBaseUrl(string url) =>
+        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
+
     private MonitoredRepository SeedRepository()
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", MakeBaseUrl("https://github.com"));
         _dbContext.Set<Account>().Add(account);
         _dbContext.SaveChanges();
 

@@ -1,4 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -8,13 +10,16 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitHubAccountTests;
 
 public sealed class Create
 {
+    private static BaseUrl MakeBaseUrl(string url) =>
+        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
+
     [Fact]
     public void WhenAllParametersAreValid_ReturnsGitHubAccountWithCorrectProperties()
     {
         // Arrange
         string name = "my-github-account";
         string token = "ghp_mytoken";
-        Uri baseUrl = new("https://github.com");
+        BaseUrl baseUrl = MakeBaseUrl("https://github.com");
 
         // Act
         GitHubAccount account = GitHubAccount.Create(name, token, baseUrl);
@@ -23,14 +28,14 @@ public sealed class Create
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe(name),
             () => account.Token.ShouldBe(token),
-            () => account.BaseUrl.ShouldBe(baseUrl));
+            () => account.BaseUrl.Value.ShouldBe(new Uri("https://github.com")));
     }
 
     [Fact]
     public void WhenCreated_AssignsNewId()
     {
         // Arrange
-        Uri baseUrl = new("https://github.com");
+        BaseUrl baseUrl = MakeBaseUrl("https://github.com");
 
         // Act
         GitHubAccount a = GitHubAccount.Create("account-a", "token-a", baseUrl);
@@ -41,24 +46,11 @@ public sealed class Create
     }
 
     [Fact]
-    public void WhenBaseUrlSchemeIsNotHttps_ThrowsArgumentException()
-    {
-        // Arrange
-        Uri baseUrl = new("http://github.example.com");
-
-        // Act
-        Action act = () => GitHubAccount.Create("my-account", "my-token", baseUrl);
-
-        // Assert
-        Should.Throw<ArgumentException>(act);
-    }
-
-    [Fact]
     public void WhenTokenIsNull_ReturnsGitHubAccountWithNullToken()
     {
         // Arrange
         string name = "my-github-account";
-        Uri baseUrl = new("https://github.com");
+        BaseUrl baseUrl = MakeBaseUrl("https://github.com");
 
         // Act
         GitHubAccount account = GitHubAccount.Create(name, null, baseUrl);

@@ -1,4 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +21,8 @@ internal static class AccountSeeder
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create(name, token, new Uri(baseUrl));
+        BaseUrl parsedBaseUrl = ((Result<BaseUrl>.Success)BaseUrl.Create(baseUrl)).Value;
+        GitHubAccount account = GitHubAccount.Create(name, token, parsedBaseUrl);
         dbContext.Set<Account>().Add(account);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
@@ -36,7 +39,8 @@ internal static class AccountSeeder
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitLabAccount account = GitLabAccount.Create(name, token, new Uri(baseUrl));
+        BaseUrl parsedBaseUrl = ((Result<BaseUrl>.Success)BaseUrl.Create(baseUrl)).Value;
+        GitLabAccount account = GitLabAccount.Create(name, token, parsedBaseUrl);
         dbContext.Set<Account>().Add(account);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 

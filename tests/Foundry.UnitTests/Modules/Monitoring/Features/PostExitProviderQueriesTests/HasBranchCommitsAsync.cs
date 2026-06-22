@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
@@ -45,9 +46,12 @@ public sealed class HasBranchCommitsAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
+    private static BaseUrl MakeBaseUrl(string url) =>
+        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
+
     private async Task<MonitoredRepositoryId> SeedRepoAsync(string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", token, new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", token, MakeBaseUrl("https://github.com"));
         _dbContext.Set<Account>().Add(account);
 
         Result<RepositorySlug> slugResult = RepositorySlug.Create("owner/repo");

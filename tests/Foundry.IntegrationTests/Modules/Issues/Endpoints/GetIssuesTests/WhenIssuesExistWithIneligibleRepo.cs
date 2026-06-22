@@ -51,7 +51,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", ((Result<BaseUrl>.Success)BaseUrl.Create("https://github.com")).Value);
         dbContext.Set<Account>().Add(account);
 
         RepositorySlug repoSlug = ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
@@ -132,7 +132,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", ((Result<BaseUrl>.Success)BaseUrl.Create("https://github.com")).Value);
         dbContext.Set<Account>().Add(account);
 
         RepositorySlug slug = ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/repo")).Value;

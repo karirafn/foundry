@@ -1,4 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -8,11 +10,14 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitHubAccountTests;
 
 public sealed class ApiBaseUrl
 {
+    private static BaseUrl MakeBaseUrl(string url) =>
+        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
+
     [Fact]
     public void WhenBaseUrlIsGitHubDotCom_ReturnsApiGitHubCom()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", MakeBaseUrl("https://github.com"));
 
         // Act
         Uri apiBaseUrl = account.ApiBaseUrl;
@@ -25,7 +30,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsGitHubEnterprise_ReturnsBaseUrlWithApiV3Suffix()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("ghe-account", "GHE_TOKEN", new Uri("https://github.example.com"));
+        GitHubAccount account = GitHubAccount.Create("ghe-account", "GHE_TOKEN", MakeBaseUrl("https://github.example.com"));
 
         // Act
         Uri apiBaseUrl = account.ApiBaseUrl;
@@ -38,7 +43,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsGitHubEnterpriseWithTrailingPath_PreservesSubPath()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("ghe-account", "GHE_TOKEN", new Uri("https://corp.example.com/github"));
+        GitHubAccount account = GitHubAccount.Create("ghe-account", "GHE_TOKEN", MakeBaseUrl("https://corp.example.com/github"));
 
         // Act
         Uri apiBaseUrl = account.ApiBaseUrl;

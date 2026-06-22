@@ -1,4 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.AspNetCore.DataProtection;
@@ -37,11 +39,14 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
+    private static BaseUrl MakeBaseUrl(string url) =>
+        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
+
     [Fact]
     public async Task WhenGitHubAccountPersisted_CanBeReloadedAsGitHubAccount()
     {
         // Arrange
-        Uri baseUrl = new("https://github.com");
+        BaseUrl baseUrl = MakeBaseUrl("https://github.com");
         GitHubAccount account = GitHubAccount.Create("my-org", "ghp_mytoken", baseUrl);
 
         _dbContext.Set<Account>().Add(account);
@@ -59,14 +64,14 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
             () => gitHub.Id.ShouldBe(account.Id),
             () => gitHub.Name.ShouldBe("my-org"),
             () => gitHub.Token.ShouldBe("ghp_mytoken"),
-            () => gitHub.BaseUrl.ShouldBe(baseUrl));
+            () => gitHub.BaseUrl.Value.ShouldBe(new Uri("https://github.com")));
     }
 
     [Fact]
     public async Task WhenGitHubAccountPersistedWithNullToken_CanBeReloadedWithNullToken()
     {
         // Arrange
-        Uri baseUrl = new("https://github.com");
+        BaseUrl baseUrl = MakeBaseUrl("https://github.com");
         GitHubAccount account = GitHubAccount.Create("my-org", null, baseUrl);
 
         _dbContext.Set<Account>().Add(account);

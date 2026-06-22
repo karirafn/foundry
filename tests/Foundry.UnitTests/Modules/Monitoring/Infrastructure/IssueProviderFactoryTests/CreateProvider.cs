@@ -1,8 +1,10 @@
 using System.Net;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Shared;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -13,6 +15,9 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.IssueProviderFacto
 
 public sealed class CreateProvider
 {
+    private static BaseUrl MakeBaseUrl(string url) =>
+        ((Result<BaseUrl>.Success)BaseUrl.Create(url)).Value;
+
     private static IIssueProviderFactory BuildSut()
     {
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
@@ -27,7 +32,7 @@ public sealed class CreateProvider
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", new Uri("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", MakeBaseUrl("https://github.com"));
 
         // Act
         IIssueProvider provider = sut.CreateProvider(account, "ghp_token123");
@@ -41,7 +46,7 @@ public sealed class CreateProvider
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitLabAccount account = GitLabAccount.Create("my-gitlab", "glpat_token", new Uri("https://gitlab.com"));
+        GitLabAccount account = GitLabAccount.Create("my-gitlab", "glpat_token", MakeBaseUrl("https://gitlab.com"));
 
         // Act
         IIssueProvider provider = sut.CreateProvider(account, "glpat_token123");
