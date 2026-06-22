@@ -1,6 +1,8 @@
 using System.Text.Json;
 
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.DataProtection;
@@ -67,12 +69,35 @@ internal sealed class GlobalSettingsConfiguration(
         builder.Property(s => s.DefaultCooldownMinutes)
             .HasColumnName("default_cooldown_minutes");
 
+        ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
+            config => SerializeWorkerImageConfiguration(config),
+            json => DeserializeWorkerImageConfiguration(json));
+
+        builder.Property(s => s.WorkerImageConfiguration)
+            .HasConversion(workerImageConfigConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("worker_image_configuration");
+
+        builder.Property(s => s.ImageBuildStatus)
+            .HasConversion<string>()
+            .HasColumnName("image_build_status");
+
+        builder.Property(s => s.LastImageBuildError)
+            .HasColumnName("last_image_build_error");
+
         builder.Property(s => s.CreatedAt)
             .HasColumnName("created_at");
 
         builder.Property(s => s.UpdatedAt)
             .HasColumnName("updated_at");
     }
+
+    private static string SerializeWorkerImageConfiguration(WorkerImageConfiguration config)
+        => JsonSerializer.Serialize(config);
+
+    private static WorkerImageConfiguration DeserializeWorkerImageConfiguration(string json)
+        => JsonSerializer.Deserialize<WorkerImageConfiguration>(json)
+            ?? WorkerImageConfiguration.Default;
 
     private static JsonSerializerOptions BuildSerializerOptions()
     {

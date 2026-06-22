@@ -1,3 +1,5 @@
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Settings.Domain;
@@ -27,6 +29,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         TimeoutMinutes = DefaultTimeoutMinutes;
         AutoResumeOnUsageReset = true;
         DefaultCooldownMinutes = DefaultCooldownMinutesValue;
+        WorkerImageConfiguration = WorkerImageConfiguration.Default;
+        ImageBuildStatus = ImageBuildStatus.Idle;
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
@@ -48,6 +52,12 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public bool AutoResumeOnUsageReset { get; private set; }
 
     public int DefaultCooldownMinutes { get; private set; }
+
+    public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
+
+    public ImageBuildStatus ImageBuildStatus { get; private set; }
+
+    public string? LastImageBuildError { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -134,6 +144,39 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         WorkerPromptTemplate = workerPromptTemplate;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
+    }
+
+    public bool UpdateWorkerImageConfiguration(WorkerImageConfiguration config)
+    {
+        if (WorkerImageConfiguration == config)
+        {
+            return false;
+        }
+
+        WorkerImageConfiguration = config;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    public void BeginImageBuild()
+    {
+        ImageBuildStatus = ImageBuildStatus.Building;
+        LastImageBuildError = null;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void CompleteImageBuild()
+    {
+        ImageBuildStatus = ImageBuildStatus.Idle;
+        LastImageBuildError = null;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void FailImageBuild(string? errorTail)
+    {
+        ImageBuildStatus = ImageBuildStatus.Failed;
+        LastImageBuildError = errorTail;
+        UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     public Result UpdateLimits(int maxConcurrent, int timeoutMinutes)
