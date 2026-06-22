@@ -138,30 +138,6 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     expect(recheckBtn?.textContent?.trim()).toBe('Re-checking...');
   });
 
-  // Cycle 9: aria-live region is present for pending announcement
-  it('should have a visually-hidden aria-live region for recheck pending', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'ineligible', recheckPending: false });
-
-    // Assert
-    const liveRegion = el.querySelector('.sr-only[aria-live]');
-    expect(liveRegion).toBeTruthy();
-    expect(liveRegion?.getAttribute('aria-live')).toBe('off');
-  });
-
-  it('should activate aria-live="polite" when recheckPending is true', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'ineligible', recheckPending: true });
-
-    // Assert
-    const liveRegion = el.querySelector('.sr-only[aria-live="polite"]');
-    expect(liveRegion?.textContent?.trim()).toBe('Re-checking...');
-  });
-
   // Cycle 10: recheckError — renders in role="alert" element
   it('should render recheck error in a role="alert" element', () => {
     // Arrange

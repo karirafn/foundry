@@ -1,15 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { RepositoryEligibilityComponent } from './repository-eligibility';
-import { EligibilityViolation } from '../repository.model';
-
-const VIOLATIONS: EligibilityViolation[] = [
-  { rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' },
-  { rule: 'NoReviewRequired', description: 'No pull request reviews are required' },
-];
 
 function setup(overrides: {
   status?: 'eligible' | 'ineligible' | 'unreachable';
-  violations?: EligibilityViolation[];
   recheckPending?: boolean;
 } = {}) {
   const fixture = TestBed.createComponent(RepositoryEligibilityComponent);
@@ -77,9 +70,9 @@ describe('RepositoryEligibilityComponent', () => {
     // Arrange
 
     // Act
-    const { el } = setup({ status: 'ineligible', violations: VIOLATIONS });
+    const { el } = setup({ status: 'ineligible' });
 
-    // Assert — violations are now in the details panel, not the chip
+    // Assert — violations are in the details panel, not the chip
     const violationsList = el.querySelector('.repository-eligibility__violations');
     expect(violationsList).toBeFalsy();
   });
@@ -116,42 +109,6 @@ describe('RepositoryEligibilityComponent', () => {
     // Assert
     const violationsList = el.querySelector('.repository-eligibility__violations');
     expect(violationsList).toBeFalsy();
-  });
-
-  // Cycle 4: aria-live region for re-check result
-  it('should have aria-live="off" on initial passive render to avoid burst announcements', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'eligible', recheckPending: false });
-
-    // Assert — live region exists but is silent until a recheck is in flight
-    const liveRegion = el.querySelector('.sr-only[aria-live]');
-    expect(liveRegion).toBeTruthy();
-    expect(liveRegion?.getAttribute('aria-live')).toBe('off');
-  });
-
-  it('should activate aria-live="polite" when recheckPending is true', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'ineligible', recheckPending: true });
-
-    // Assert
-    const liveRegion = el.querySelector('.sr-only[aria-live]');
-    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
-  });
-
-  // Cycle 5: recheckPending announces pending state via aria-live
-  it('should display "Re-checking..." in aria-live region when recheckPending is true', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'ineligible', recheckPending: true });
-
-    // Assert
-    const liveRegion = el.querySelector('.sr-only[aria-live="polite"]');
-    expect(liveRegion?.textContent?.trim()).toBe('Re-checking...');
   });
 
   it('should display "Re-checking..." as the status label when recheckPending is true', () => {

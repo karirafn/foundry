@@ -20,10 +20,6 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
         >{{ recheckPending() ? 'Re-checking...' : 'Re-check' }}</button>
       </div>
 
-      <span class="sr-only" [attr.aria-live]="recheckPending() ? 'polite' : 'off'">
-        {{ recheckPending() ? 'Re-checking...' : '' }}
-      </span>
-
       @if (status() === 'ineligible') {
         <ul class="repository-eligibility-details__violations" aria-label="Eligibility violations">
           @for (violation of violations(); track violation.rule) {
