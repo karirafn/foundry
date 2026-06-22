@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, inject, input, output, signal } from '@angular/core';
-import { RepositorySummary } from '../repository.model';
-import { eligibilityStatusLabel } from '../repository.model';
+import { RepositorySummary, eligibilityStatusLabel } from '../repository.model';
 import { RepositoryEligibilityComponent } from '../repository-eligibility/repository-eligibility';
 import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility-details/repository-eligibility-details';
 import { RepositoryService } from '../repository.service';
@@ -13,7 +12,8 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
   template: `
     <span
       class="sr-only repository-list__announcement"
-      [attr.aria-live]="_announcement() ? 'polite' : 'off'"
+      aria-live="polite"
+      aria-atomic="true"
     >{{ _announcement() }}</span>
 
     @if (error()) {
@@ -209,7 +209,7 @@ export class RepositoryListComponent {
       error: () => {
         this._recheckingId.set(null);
         this._recheckError.set({ id: repo.id, message: 'Re-check failed. Please try again.' });
-        this._announcement.set('');
+        this._announcement.set(`${repo.slug}: Re-check failed`);
       },
     });
   }

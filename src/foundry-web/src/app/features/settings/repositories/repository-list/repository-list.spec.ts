@@ -596,8 +596,8 @@ describe('RepositoryListComponent', () => {
     req.flush(MOCK_REPO_INELIGIBLE);
   });
 
-  // Cycle 40: live region is persistently present, initially empty and aria-live="off"
-  it('should render a persistent sr-only live region that starts empty and aria-live="off"', () => {
+  // Cycle 40: live region is persistently present with aria-live="polite" and aria-atomic="true", initially empty
+  it('should render a persistent sr-only live region that is always aria-live="polite" and aria-atomic="true" and starts empty', () => {
     // Arrange
 
     // Act
@@ -606,12 +606,13 @@ describe('RepositoryListComponent', () => {
     // Assert
     const liveRegion = el.querySelector('.repository-list__announcement');
     expect(liveRegion).toBeTruthy();
-    expect(liveRegion?.getAttribute('aria-live')).toBe('off');
+    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
+    expect(liveRegion?.getAttribute('aria-atomic')).toBe('true');
     expect(liveRegion?.textContent?.trim()).toBe('');
   });
 
   // Cycle 41: live region announces "Re-checking..." with slug when recheck starts
-  it('should set aria-live="polite" and announce "slug: Re-checking..." when recheck starts', () => {
+  it('should announce "slug: Re-checking..." in the polite live region when recheck starts', () => {
     // Arrange
     const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
     const toggle = el.querySelector('.repository-list__toggle-btn') as HTMLButtonElement;
@@ -623,7 +624,7 @@ describe('RepositoryListComponent', () => {
     recheckBtn.click();
     fixture.detectChanges();
 
-    // Assert — live region is polite with start message before response
+    // Assert — live region has start message before response; aria-live is always polite
     const liveRegion = el.querySelector('.repository-list__announcement');
     expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
     expect(liveRegion?.textContent?.trim()).toBe(`${MOCK_REPO_INELIGIBLE.slug}: Re-checking...`);
@@ -657,14 +658,14 @@ describe('RepositoryListComponent', () => {
     req.flush(updatedRepo);
     fixture.detectChanges();
 
-    // Assert — live region shows the result label
+    // Assert — live region shows the result label; aria-live is always polite
     const liveRegion = el.querySelector('.repository-list__announcement');
     expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
     expect(liveRegion?.textContent?.trim()).toBe(`${MOCK_REPO_INELIGIBLE.slug}: Eligible`);
   });
 
-  // Cycle 43: live region clears to empty on recheck error
-  it('should clear the live region to empty when recheck fails', () => {
+  // Cycle 43: live region announces failure when recheck errors
+  it('should announce "slug: Re-check failed" when recheck fails', () => {
     // Arrange
     const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
     const toggle = el.querySelector('.repository-list__toggle-btn') as HTMLButtonElement;
@@ -681,9 +682,9 @@ describe('RepositoryListComponent', () => {
     req.flush('Server error', { status: 500, statusText: 'Internal Server Error' });
     fixture.detectChanges();
 
-    // Assert — live region is cleared (aria-live derives to "off")
+    // Assert — live region announces failure; aria-live is always polite
     const liveRegion = el.querySelector('.repository-list__announcement');
-    expect(liveRegion?.getAttribute('aria-live')).toBe('off');
-    expect(liveRegion?.textContent?.trim()).toBe('');
+    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
+    expect(liveRegion?.textContent?.trim()).toBe(`${MOCK_REPO_INELIGIBLE.slug}: Re-check failed`);
   });
 });
