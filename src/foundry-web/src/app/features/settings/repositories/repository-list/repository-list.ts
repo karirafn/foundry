@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, inject, input, output, signal } from '@angular/core';
-import { RepositorySummary } from '../repository.model';
+import { RepositorySummary, eligibilityStatusLabel } from '../repository.model';
 import { RepositoryEligibilityComponent } from '../repository-eligibility/repository-eligibility';
 import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility-details/repository-eligibility-details';
 import { RepositoryService } from '../repository.service';
@@ -10,6 +10,12 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RepositoryEligibilityComponent, RepositoryEligibilityDetailsComponent, ProviderIconComponent],
   template: `
+    <span
+      class="sr-only repository-list__announcement"
+      aria-live="polite"
+      aria-atomic="true"
+    >{{ _announcement() }}</span>
+
     @if (error()) {
       <div class="repository-list__error" role="alert">
         <span class="repository-list__error-message">{{ error() }}</span>
@@ -167,6 +173,7 @@ export class RepositoryListComponent {
   protected readonly _expandedId: WritableSignal<string | null> = signal(null);
   protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
   protected readonly _recheckError: WritableSignal<{ id: string; message: string } | null> = signal(null);
+  protected readonly _announcement: WritableSignal<string> = signal('');
 
   toggleExpand(id: string): void {
     if (this._expandedId() === id) {
@@ -187,17 +194,22 @@ export class RepositoryListComponent {
     }
     this._recheckError.set(null);
     this._recheckingId.set(repo.id);
+    this._announcement.set(`${repo.slug}: Re-checking...`);
+
     this._repositoryService.recheckEligibility(repo.accountId, repo.id).subscribe({
-      next: () => {
+      next: (updated: RepositorySummary) => {
         const wasExpanded = this._expandedId() === repo.id;
         this._recheckingId.set(null);
         if (wasExpanded) {
           this._expandedId.set(null);
         }
+        const status = updated.eligibility?.status;
+        this._announcement.set(status ? `${repo.slug}: ${eligibilityStatusLabel(status)}` : '');
       },
       error: () => {
         this._recheckingId.set(null);
         this._recheckError.set({ id: repo.id, message: 'Re-check failed. Please try again.' });
+        this._announcement.set(`${repo.slug}: Re-check failed`);
       },
     });
   }

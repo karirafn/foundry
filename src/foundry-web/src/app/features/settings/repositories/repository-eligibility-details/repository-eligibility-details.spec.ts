@@ -138,58 +138,34 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     expect(recheckBtn?.textContent?.trim()).toBe('Re-checking...');
   });
 
-  // Cycle 9: aria-live region is present for pending announcement
-  it('should have a visually-hidden aria-live region for recheck pending', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'ineligible', recheckPending: false });
-
-    // Assert
-    const liveRegion = el.querySelector('.sr-only[aria-live]');
-    expect(liveRegion).toBeTruthy();
-    expect(liveRegion?.getAttribute('aria-live')).toBe('off');
-  });
-
-  it('should activate aria-live="polite" when recheckPending is true', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ status: 'ineligible', recheckPending: true });
-
-    // Assert
-    const liveRegion = el.querySelector('.sr-only[aria-live="polite"]');
-    expect(liveRegion?.textContent?.trim()).toBe('Re-checking...');
-  });
-
-  // Cycle 10: recheckError — renders in role="alert" element
-  it('should render recheck error in a role="alert" element', () => {
+  // Cycle 10: recheckError — visible error text rendered in the error span
+  it('should render recheck error text in the error span', () => {
     // Arrange
 
     // Act
     const { el } = setup({ status: 'ineligible', recheckError: 'Re-check failed. Please try again.' });
 
     // Assert
-    const alertEl = el.querySelector('[role="alert"]');
-    expect(alertEl).toBeTruthy();
-    expect(alertEl?.textContent?.trim()).toBe('Re-check failed. Please try again.');
+    const errorSpan = el.querySelector('.repository-eligibility-details__recheck-error');
+    expect(errorSpan).toBeTruthy();
+    expect(errorSpan?.textContent?.trim()).toBe('Re-check failed. Please try again.');
   });
 
-  // Cycle 11: no recheckError — alert element is present but empty or hidden
-  it('should always render the recheck error element in the DOM', () => {
+  // Cycle 11: no recheckError — error span is present (non-announcing, visible fallback)
+  it('should always render the recheck error span in the DOM without role="alert"', () => {
     // Arrange
 
     // Act
     const { el } = setup({ status: 'ineligible' });
 
     // Assert
-    const alertEl = el.querySelector('.repository-eligibility-details__recheck-error');
-    expect(alertEl).toBeTruthy();
-    expect(alertEl?.getAttribute('role')).toBe('alert');
+    const errorSpan = el.querySelector('.repository-eligibility-details__recheck-error');
+    expect(errorSpan).toBeTruthy();
+    expect(errorSpan?.hasAttribute('role')).toBe(false);
   });
 
-  // Cycle 12: re-check button has accessible aria-label
-  it('should have accessible aria-label on Re-check button', () => {
+  // Cycle 12: re-check button visible text is its accessible name (no redundant aria-label)
+  it('should not have a redundant aria-label on the Re-check button', () => {
     // Arrange
 
     // Act
@@ -197,8 +173,6 @@ describe('RepositoryEligibilityDetailsComponent', () => {
 
     // Assert
     const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn');
-    const label = recheckBtn?.getAttribute('aria-label');
-    expect(label).toBeTruthy();
-    expect(label).toContain('Re-check eligibility');
+    expect(recheckBtn?.hasAttribute('aria-label')).toBe(false);
   });
 });

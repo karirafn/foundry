@@ -15,14 +15,9 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
           [class.repository-eligibility-details__recheck-btn--unreachable]="status() === 'unreachable'"
           type="button"
           [disabled]="recheckPending()"
-          [attr.aria-label]="'Re-check eligibility'"
           (click)="recheck.emit()"
         >{{ recheckPending() ? 'Re-checking...' : 'Re-check' }}</button>
       </div>
-
-      <span class="sr-only" [attr.aria-live]="recheckPending() ? 'polite' : 'off'">
-        {{ recheckPending() ? 'Re-checking...' : '' }}
-      </span>
 
       @if (status() === 'ineligible') {
         <ul class="repository-eligibility-details__violations" aria-label="Eligibility violations">
@@ -41,7 +36,6 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
 
       <span
         class="repository-eligibility-details__recheck-error"
-        role="alert"
         [attr.aria-hidden]="recheckError() === null"
       >{{ recheckError() ?? '' }}</span>
     </div>
