@@ -20,7 +20,6 @@ public sealed class Create
         Result<BaseUrl> result = BaseUrl.Create(url);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
         BaseUrl baseUrl = result.ValueOrThrow();
         baseUrl.Value.ShouldBe(new Uri(url));
     }
@@ -81,7 +80,6 @@ public sealed class Create
         Result<BaseUrl> result = BaseUrl.Create(url);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
         BaseUrl baseUrl = result.ValueOrThrow();
         baseUrl.Value.ShouldBe(new Uri(url));
     }
