@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -10,7 +11,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.RepositorySlugTests;
 public sealed class Equals
 {
     private static RepositorySlug Create(string input) =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create(input)).Value;
+        RepositorySlug.Create(input).ValueOrThrow();
 
     [Fact]
     public void WhenTwoSlugsHaveSameOwnerAndName_AreEqual()

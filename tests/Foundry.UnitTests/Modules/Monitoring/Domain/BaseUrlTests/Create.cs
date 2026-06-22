@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -19,8 +20,7 @@ public sealed class Create
         Result<BaseUrl> result = BaseUrl.Create(url);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        BaseUrl baseUrl = ((Result<BaseUrl>.Success)result).Value;
+        BaseUrl baseUrl = result.ValueOrThrow();
         baseUrl.Value.ShouldBe(new Uri(url));
     }
 
@@ -80,8 +80,7 @@ public sealed class Create
         Result<BaseUrl> result = BaseUrl.Create(url);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        BaseUrl baseUrl = ((Result<BaseUrl>.Success)result).Value;
+        BaseUrl baseUrl = result.ValueOrThrow();
         baseUrl.Value.ShouldBe(new Uri(url));
     }
 

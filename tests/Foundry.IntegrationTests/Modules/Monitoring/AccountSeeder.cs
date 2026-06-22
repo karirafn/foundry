@@ -20,7 +20,7 @@ internal static class AccountSeeder
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        BaseUrl parsedBaseUrl = BaseUrlFactory.Create(baseUrl);
+        BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
         GitHubAccount account = GitHubAccount.Create(name, token, parsedBaseUrl);
         dbContext.Set<Account>().Add(account);
         await dbContext.SaveChangesAsync(CancellationToken.None);
@@ -38,7 +38,7 @@ internal static class AccountSeeder
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        BaseUrl parsedBaseUrl = BaseUrlFactory.Create(baseUrl);
+        BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
         GitLabAccount account = GitLabAccount.Create(name, token, parsedBaseUrl);
         dbContext.Set<Account>().Add(account);
         await dbContext.SaveChangesAsync(CancellationToken.None);

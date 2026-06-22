@@ -1,13 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -25,13 +23,13 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
     private readonly HttpClient _client;
 
     private static IssueAuthor ValidAuthor =>
-        ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+        IssueAuthor.Create("octocat").ValueOrThrow();
 
     private static ProviderUrl ValidUrl =>
-        ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
+        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/repo")).Value;
+        RepositorySlug.Create("owner/repo").ValueOrThrow();
 
     public WhenIssuesExistWithEligibleRepo()
     {
@@ -50,7 +48,7 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Account>().Add(account);
 
         MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", null);

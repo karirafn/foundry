@@ -12,7 +12,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
-using Foundry.UnitTests.Modules.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -64,10 +63,10 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
     }
 
     private static IssueAuthor ValidAuthor =>
-        ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+        IssueAuthor.Create("octocat").ValueOrThrow();
 
     private static ProviderUrl ValidUrl =>
-        ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
+        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     private async Task<(MonitoredRepository, GitHubAccount)> SeedRepositoryAsync(
         string slug = "owner/repo",
@@ -76,10 +75,10 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create(
             "Test Account",
             token,
-            BaseUrlFactory.Create("https://github.com"));
+            BaseUrl.Create("https://github.com").ValueOrThrow());
 
         RepositorySlug repositorySlug =
-            ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
+            RepositorySlug.Create(slug).ValueOrThrow();
 
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,

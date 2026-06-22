@@ -1,7 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -69,7 +68,7 @@ public sealed class WhenEligibilityIsUnreachable : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        RepositorySlug slug = ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/unreachable-repo")).Value;
+        RepositorySlug slug = RepositorySlug.Create("owner/unreachable-repo").ValueOrThrow();
         MonitoredRepository repository = MonitoredRepository.Create(slug, AccountId.From(accountId), "github.com", pollInterval: null);
         repository.SetEligibility(eligibility);
 

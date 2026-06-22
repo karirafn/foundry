@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -15,7 +16,7 @@ public sealed class Create
         // Arrange
         string name = "my-github-account";
         string token = "ghp_mytoken";
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
         GitHubAccount account = GitHubAccount.Create(name, token, baseUrl);
@@ -31,7 +32,7 @@ public sealed class Create
     public void WhenCreated_AssignsNewId()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
         GitHubAccount a = GitHubAccount.Create("account-a", "token-a", baseUrl);
@@ -46,7 +47,7 @@ public sealed class Create
     {
         // Arrange
         string name = "my-github-account";
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
         GitHubAccount account = GitHubAccount.Create(name, null, baseUrl);

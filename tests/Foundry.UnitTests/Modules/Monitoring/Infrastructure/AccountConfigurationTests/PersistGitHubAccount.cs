@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.AspNetCore.DataProtection;
@@ -42,7 +43,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     public async Task WhenGitHubAccountPersisted_CanBeReloadedAsGitHubAccount()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
         GitHubAccount account = GitHubAccount.Create("my-org", "ghp_mytoken", baseUrl);
 
         _dbContext.Set<Account>().Add(account);
@@ -67,7 +68,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     public async Task WhenGitHubAccountPersistedWithNullToken_CanBeReloadedWithNullToken()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrlFactory.Create("https://github.com");
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
         GitHubAccount account = GitHubAccount.Create("my-org", null, baseUrl);
 
         _dbContext.Set<Account>().Add(account);

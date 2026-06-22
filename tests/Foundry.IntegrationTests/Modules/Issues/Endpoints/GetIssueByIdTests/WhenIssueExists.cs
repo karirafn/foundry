@@ -5,7 +5,6 @@ using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -25,10 +24,10 @@ public sealed class WhenIssueExists : IAsyncDisposable
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
 
     private static IssueAuthor ValidAuthor =>
-        ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+        IssueAuthor.Create("octocat").ValueOrThrow();
 
     private static ProviderUrl ValidUrl =>
-        ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/7")).Value;
+        ProviderUrl.Create("https://github.com/owner/repo/issues/7").ValueOrThrow();
 
     public WhenIssueExists()
     {
@@ -123,14 +122,14 @@ public sealed class WhenIssueExists : IAsyncDisposable
         Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/gitlab-repo");
         MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
         ProviderUrl gitlabUrl =
-            ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7")).Value;
+            ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7").ValueOrThrow();
 
         // No POST endpoint exists for issues — seed directly via DbContext.
         IssueId issueId;
         using (IServiceScope scope = _factory.Services.CreateScope())
         {
             DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
-            IssueAuthor author = ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+            IssueAuthor author = IssueAuthor.Create("octocat").ValueOrThrow();
 
             DetectedIssue issue = DetectedIssue.Detect(
                 repoId,

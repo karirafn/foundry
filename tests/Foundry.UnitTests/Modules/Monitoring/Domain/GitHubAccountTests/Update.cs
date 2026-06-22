@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -16,10 +17,10 @@ public sealed class Update
         GitHubAccount account = GitHubAccount.Create(
             "original-name",
             "original-token",
-            BaseUrlFactory.Create("https://github.com"));
+            BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
-        account.Update("updated-name", "new-token", BaseUrlFactory.Create("https://github.example.com"));
+        account.Update("updated-name", "new-token", BaseUrl.Create("https://github.example.com").ValueOrThrow());
 
         // Assert
         account.ShouldSatisfyAllConditions(
@@ -35,10 +36,10 @@ public sealed class Update
         GitHubAccount account = GitHubAccount.Create(
             "my-account",
             "existing-token",
-            BaseUrlFactory.Create("https://github.com"));
+            BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
-        account.Update("updated-name", null, BaseUrlFactory.Create("https://github.com"));
+        account.Update("updated-name", null, BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Assert
         account.ShouldSatisfyAllConditions(

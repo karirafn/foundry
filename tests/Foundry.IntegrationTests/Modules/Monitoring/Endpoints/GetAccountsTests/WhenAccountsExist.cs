@@ -8,7 +8,6 @@ using Shouldly;
 
 using Xunit;
 
-using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -39,7 +38,7 @@ public sealed class WhenAccountsExist : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        BaseUrl parsedBaseUrl = BaseUrlFactory.Create(baseUrl);
+        BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
         GitHubAccount account = GitHubAccount.Create(name, token, parsedBaseUrl);
         dbContext.Set<Account>().Add(account);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

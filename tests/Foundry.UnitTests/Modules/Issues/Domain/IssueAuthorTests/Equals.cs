@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -13,8 +14,8 @@ public sealed class Equals
     public void WhenSameUsername_AuthorsAreEqual()
     {
         // Arrange
-        IssueAuthor a = ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
-        IssueAuthor b = ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+        IssueAuthor a = IssueAuthor.Create("octocat").ValueOrThrow();
+        IssueAuthor b = IssueAuthor.Create("octocat").ValueOrThrow();
 
         // Act
         bool result = a.Equals(b);
@@ -27,8 +28,8 @@ public sealed class Equals
     public void WhenDifferentUsername_AuthorsAreNotEqual()
     {
         // Arrange
-        IssueAuthor a = ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
-        IssueAuthor b = ((Result<IssueAuthor>.Success)IssueAuthor.Create("hubot")).Value;
+        IssueAuthor a = IssueAuthor.Create("octocat").ValueOrThrow();
+        IssueAuthor b = IssueAuthor.Create("hubot").ValueOrThrow();
 
         // Act
         bool result = a.Equals(b);

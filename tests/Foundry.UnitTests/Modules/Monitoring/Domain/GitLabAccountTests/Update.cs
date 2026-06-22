@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -13,8 +14,8 @@ public sealed class Update
     public void WhenTokenIsProvided_UpdatesAllProperties()
     {
         // Arrange
-        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", BaseUrlFactory.Create("https://gitlab.com"));
-        BaseUrl newBaseUrl = BaseUrlFactory.Create("https://gitlab.example.com");
+        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        BaseUrl newBaseUrl = BaseUrl.Create("https://gitlab.example.com").ValueOrThrow();
 
         // Act
         account.Update("new-name", "new-token", newBaseUrl);
@@ -30,8 +31,8 @@ public sealed class Update
     public void WhenTokenIsNull_KeepsExistingToken()
     {
         // Arrange
-        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", BaseUrlFactory.Create("https://gitlab.com"));
-        BaseUrl newBaseUrl = BaseUrlFactory.Create("https://gitlab.example.com");
+        GitLabAccount account = GitLabAccount.Create("original-name", "original-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        BaseUrl newBaseUrl = BaseUrl.Create("https://gitlab.example.com").ValueOrThrow();
 
         // Act
         account.Update("new-name", null, newBaseUrl);

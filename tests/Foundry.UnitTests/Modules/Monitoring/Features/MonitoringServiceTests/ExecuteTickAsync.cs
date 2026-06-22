@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -25,7 +26,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     private static readonly DateTimeOffset Now = new(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
 
     private static RepositorySlug ValidSlug(string slug) =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
+        RepositorySlug.Create(slug).ValueOrThrow();
 
     public ExecuteTickAsync()
     {
@@ -97,7 +98,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         await using FoundryDbContext db = CreateDbContext();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrlFactory.Create("https://github.com"));
+        GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
         db.Set<Account>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 

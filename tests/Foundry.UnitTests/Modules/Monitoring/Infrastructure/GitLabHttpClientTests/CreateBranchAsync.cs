@@ -3,6 +3,7 @@ using System.Net;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -16,7 +17,7 @@ public sealed class CreateBranchAsync
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/project")).Value;
+        RepositorySlug.Create("group/project").ValueOrThrow();
 
     [Fact]
     public async Task WhenBranchCreatedSuccessfully_ReturnsTrue()

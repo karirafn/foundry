@@ -2,7 +2,6 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -128,7 +127,7 @@ public sealed class GetEligibilityAsync : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        RepositorySlug repositorySlug = ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
+        RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
             AccountId.From(accountId),

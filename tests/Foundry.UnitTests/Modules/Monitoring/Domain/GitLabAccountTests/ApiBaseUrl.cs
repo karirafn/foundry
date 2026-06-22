@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -13,7 +14,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsGitLabCom_ReturnsApiV4Url()
     {
         // Arrange
-        GitLabAccount account = GitLabAccount.Create("my-account", "my-token", BaseUrlFactory.Create("https://gitlab.com"));
+        GitLabAccount account = GitLabAccount.Create("my-account", "my-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
         // Act
         Uri result = account.ApiBaseUrl;
@@ -26,7 +27,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsSelfHosted_ReturnsApiV4Url()
     {
         // Arrange
-        GitLabAccount account = GitLabAccount.Create("my-account", "my-token", BaseUrlFactory.Create("https://gitlab.example.com"));
+        GitLabAccount account = GitLabAccount.Create("my-account", "my-token", BaseUrl.Create("https://gitlab.example.com").ValueOrThrow());
 
         // Act
         Uri result = account.ApiBaseUrl;
