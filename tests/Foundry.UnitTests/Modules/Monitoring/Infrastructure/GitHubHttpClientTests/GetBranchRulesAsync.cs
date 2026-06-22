@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -17,7 +18,7 @@ public sealed class GetBranchRulesAsync
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/repo")).Value;
+        RepositorySlug.Create("owner/repo").ValueOrThrow();
 
     [Fact]
     public async Task WhenBranchHasNonFastForwardRule_RejectsForceAndDeletion()

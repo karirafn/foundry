@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -22,7 +23,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     private static readonly DateTimeOffset RecentSince = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/project")).Value;
+        RepositorySlug.Create("group/project").ValueOrThrow();
 
     private static string BuildNoteJson(
         string body = "Fix this issue",

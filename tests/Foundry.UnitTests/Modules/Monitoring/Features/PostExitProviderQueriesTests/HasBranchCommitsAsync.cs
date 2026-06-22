@@ -52,8 +52,7 @@ public sealed class HasBranchCommitsAsync : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
 
-        Result<RepositorySlug> slugResult = RepositorySlug.Create("owner/repo");
-        RepositorySlug slug = ((Result<RepositorySlug>.Success)slugResult).Value;
+        RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
 
         MonitoredRepository repo = MonitoredRepository.Create(slug, account.Id, "github.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repo);

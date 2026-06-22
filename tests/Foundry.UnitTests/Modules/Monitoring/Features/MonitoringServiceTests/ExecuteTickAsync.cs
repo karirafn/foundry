@@ -26,7 +26,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     private static readonly DateTimeOffset Now = new(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
 
     private static RepositorySlug ValidSlug(string slug) =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
+        RepositorySlug.Create(slug).ValueOrThrow();
 
     public ExecuteTickAsync()
     {

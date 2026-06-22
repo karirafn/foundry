@@ -2,6 +2,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -12,7 +13,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.MonitoredRepositoryTests;
 public sealed class SetEligibility
 {
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("octocat/hello-world")).Value;
+        RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
     private static MonitoredRepository CreateRepository() =>
         MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", null);

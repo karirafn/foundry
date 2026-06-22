@@ -27,7 +27,7 @@ public sealed class PollAsync : IAsyncDisposable
     private static readonly DateTimeOffset Now = new(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/repo")).Value;
+        RepositorySlug.Create("owner/repo").ValueOrThrow();
 
     public PollAsync()
     {

@@ -43,7 +43,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
     }
 
     private static RepositorySlug ValidSlug(string slug) =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
+        RepositorySlug.Create(slug).ValueOrThrow();
 
     [Fact]
     public async Task WhenRepositoryLinkedToGitHubAccount_ReturnsGithub()

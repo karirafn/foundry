@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -13,7 +14,7 @@ public sealed class ToStringMethod
     public void WhenCalled_ReturnsOwnerSlashName()
     {
         // Arrange
-        RepositorySlug slug = ((Result<RepositorySlug>.Success)RepositorySlug.Create("octocat/hello-world")).Value;
+        RepositorySlug slug = RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
         // Act
         string result = slug.ToString();

@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -18,7 +19,7 @@ public sealed class GetPullRequestStatusAsync
     private const string ValidMrUrl = "https://gitlab.com/group/project/-/merge_requests/1";
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/project")).Value;
+        RepositorySlug.Create("group/project").ValueOrThrow();
 
     [Fact]
     public async Task WhenMrIsMerged_ReturnsMergedAndClosedStatus()

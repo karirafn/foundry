@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -17,7 +18,7 @@ public sealed class GetIssuesAsync
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/project")).Value;
+        RepositorySlug.Create("group/project").ValueOrThrow();
 
     [Fact]
     public async Task WhenGitLabReturnsIssues_ParsesResponseCorrectly()
@@ -86,8 +87,7 @@ public sealed class GetIssuesAsync
     public async Task WhenCalled_UsesUrlEncodedProjectPath()
     {
         // Arrange
-        RepositorySlug nestedSlug =
-            ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/subgroup/project")).Value;
+        RepositorySlug nestedSlug = RepositorySlug.Create("group/subgroup/project").ValueOrThrow();
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
         GitLabHttpClient sut = new(httpClient);

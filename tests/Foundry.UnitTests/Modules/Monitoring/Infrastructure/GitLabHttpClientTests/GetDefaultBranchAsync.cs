@@ -3,6 +3,7 @@ using System.Net;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -16,7 +17,7 @@ public sealed class GetDefaultBranchAsync
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/project")).Value;
+        RepositorySlug.Create("group/project").ValueOrThrow();
 
     [Fact]
     public async Task WhenGitLabReturnsProject_ReturnsDefaultBranch()
@@ -105,8 +106,7 @@ public sealed class GetDefaultBranchAsync
     public async Task WhenCalled_EncodesNestedGroupPath()
     {
         // Arrange
-        RepositorySlug nestedSlug =
-            ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/subgroup/project")).Value;
+        RepositorySlug nestedSlug = RepositorySlug.Create("group/subgroup/project").ValueOrThrow();
         string json = """{ "id": 1, "default_branch": "develop" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);

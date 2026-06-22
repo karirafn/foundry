@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -16,7 +17,7 @@ public sealed class EvaluateAndStoreAsync
 {
     private static MonitoredRepository CreateRepo()
     {
-        RepositorySlug slug = ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/repo")).Value;
+        RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
         return MonitoredRepository.Create(slug, AccountId.New(), "github.com", pollInterval: null);
     }
 

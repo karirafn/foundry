@@ -38,7 +38,7 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
     }
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("octocat/hello-world")).Value;
+        RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
     [Fact]
     public async Task WhenMonitoredRepositoryPersisted_CanBeReloadedWithCorrectSlug()

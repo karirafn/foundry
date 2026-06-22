@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -18,7 +19,7 @@ public sealed class HasBranchCommitsAsync
     private const string ValidToken = "glpat_token";
 
     private static RepositorySlug ValidSlug =>
-        ((Result<RepositorySlug>.Success)RepositorySlug.Create("group/project")).Value;
+        RepositorySlug.Create("group/project").ValueOrThrow();
 
     private static GitLabIssueProvider BuildSut(SequentialFakeHandler handler)
     {
