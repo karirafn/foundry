@@ -6,7 +6,6 @@ using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -24,10 +23,10 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
     private readonly HttpClient _client;
 
     private static IssueAuthor ValidAuthor =>
-        ((Result<IssueAuthor>.Success)IssueAuthor.Create("octocat")).Value;
+        IssueAuthor.Create("octocat").ValueOrThrow();
 
     private static ProviderUrl ValidUrl =>
-        ((Result<ProviderUrl>.Success)ProviderUrl.Create("https://github.com/owner/repo/issues/1")).Value;
+        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public WhenIssuesExistWithIneligibleRepo()
     {
@@ -54,7 +53,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Account>().Add(account);
 
-        RepositorySlug repoSlug = ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
+        RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         MonitoredRepository repo = MonitoredRepository.Create(repoSlug, account.Id, "github.com", null);
         repo.SetEligibility(eligibility);
         dbContext.Set<MonitoredRepository>().Add(repo);
@@ -135,7 +134,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Account>().Add(account);
 
-        RepositorySlug slug = ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/repo")).Value;
+        RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
         MonitoredRepository repo = MonitoredRepository.Create(slug, account.Id, "github.com", null);
         dbContext.Set<MonitoredRepository>().Add(repo);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
