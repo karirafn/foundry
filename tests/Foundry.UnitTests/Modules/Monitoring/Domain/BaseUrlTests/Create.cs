@@ -29,9 +29,9 @@ public sealed class Create
     [InlineData("ftp://github.com")]
     [InlineData("not-a-url")]
     [InlineData("")]
-    public void WhenUrlIsNotAbsoluteHttps_ReturnsInvalidError(string url)
+    public void WhenUrlIsNotValidHttps_ReturnsInvalidError(string url)
     {
-        // Arrange / Act
+        // Act
         Result<BaseUrl> result = BaseUrl.Create(url);
 
         // Assert
@@ -56,7 +56,7 @@ public sealed class Create
     }
 
     [Fact]
-    public void WhenUrlHasEmptyUserInfo_ReturnsSuccess()
+    public void WhenUrlHasEmptyUserInfo_ReturnsContainsCredentialsError()
     {
         // Arrange
         string url = "https://@gitlab.com";
@@ -65,7 +65,9 @@ public sealed class Create
         Result<BaseUrl> result = BaseUrl.Create(url);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result<BaseUrl>.Failure)result).Error;
+        error.ShouldBe(BaseUrlErrors.ContainsCredentials);
     }
 
     [Fact]

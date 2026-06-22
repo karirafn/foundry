@@ -15,7 +15,9 @@ public sealed record BaseUrl
             return Result<BaseUrl>.Fail(BaseUrlErrors.Invalid);
         }
 
-        if (!string.IsNullOrEmpty(uri.UserInfo))
+        // uri.UserInfo is "" for https://@host — the @ is preserved in AbsoluteUri but stripped from UserInfo/Authority,
+        // so we must also check the raw URL string for an @ in the authority position.
+        if (!string.IsNullOrEmpty(uri.UserInfo) || uri.AbsoluteUri.Contains('@', StringComparison.Ordinal))
         {
             return Result<BaseUrl>.Fail(BaseUrlErrors.ContainsCredentials);
         }
