@@ -82,7 +82,10 @@ internal static partial class UpdateAccount
                 return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(command.Name));
             }
 
-            BaseUrlVo baseUrl = ((Result<BaseUrlVo>.Success)BaseUrlVo.Create(command.BaseUrl)).Value;
+            if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
+            {
+                throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
+            }
 
             if (command.Token is not null)
             {

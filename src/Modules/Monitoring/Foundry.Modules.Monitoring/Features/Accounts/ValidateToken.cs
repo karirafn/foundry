@@ -3,6 +3,8 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
+using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -51,14 +53,14 @@ internal static class ValidateToken
                     IQueryHandler<Query, Response> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Result<Domain.ValueObjects.BaseUrl> baseUrlResult = Domain.ValueObjects.BaseUrl.Create(body.BaseUrl);
-                    if (baseUrlResult is Result<Domain.ValueObjects.BaseUrl>.Failure baseUrlFailure)
+                    Result<BaseUrlVo> baseUrlResult = BaseUrlVo.Create(body.BaseUrl);
+                    if (baseUrlResult is Result<BaseUrlVo>.Failure baseUrlFailure)
                     {
                         return (Results<Ok<Response>, BadRequest<string>>)TypedResults.BadRequest(
                             baseUrlFailure.Error.Message);
                     }
 
-                    Domain.ValueObjects.BaseUrl parsedBaseUrl = ((Result<Domain.ValueObjects.BaseUrl>.Success)baseUrlResult).Value;
+                    BaseUrlVo parsedBaseUrl = ((Result<BaseUrlVo>.Success)baseUrlResult).Value;
 
                     if (!ProviderTypes.IsKnown(body.ProviderType))
                     {

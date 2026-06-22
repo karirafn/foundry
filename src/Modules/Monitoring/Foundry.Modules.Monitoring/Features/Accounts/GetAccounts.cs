@@ -64,7 +64,8 @@ internal static class GetAccounts
                 })
                 .WithName("GetAccounts")
                 .WithSummary("Gets all configured accounts")
-                .Produces<IReadOnlyList<AccountSummary>>();
+                .Produces<IReadOnlyList<AccountSummary>>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

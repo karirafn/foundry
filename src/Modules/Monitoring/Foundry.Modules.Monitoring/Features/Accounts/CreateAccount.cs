@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
@@ -89,7 +90,10 @@ internal static partial class CreateAccount
                 return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(command.Name));
             }
 
-            BaseUrlVo baseUrl = ((Result<BaseUrlVo>.Success)BaseUrlVo.Create(command.BaseUrl)).Value;
+            if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
+            {
+                throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
+            }
 
             bool isGitLab = string.Equals(command.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase);
 
