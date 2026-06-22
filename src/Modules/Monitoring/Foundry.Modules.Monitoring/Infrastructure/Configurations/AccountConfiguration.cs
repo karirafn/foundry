@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.DataProtection;
@@ -45,8 +46,8 @@ internal sealed class AccountConfiguration(
 
         builder.Property(a => a.BaseUrl)
             .HasConversion(
-                url => url.ToString(),
-                value => new Uri(value))
+                url => url.Value.ToString(),
+                value => BaseUrl.FromPersistedString(value))
             .HasMaxLength(BaseUrlMaxLength)
             .IsUnicode(false)
             .IsRequired()
