@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
@@ -51,7 +52,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", ((Result<BaseUrl>.Success)BaseUrl.Create("https://github.com")).Value);
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
         dbContext.Set<Account>().Add(account);
 
         RepositorySlug repoSlug = ((Result<RepositorySlug>.Success)RepositorySlug.Create(slug)).Value;
@@ -132,7 +133,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", ((Result<BaseUrl>.Success)BaseUrl.Create("https://github.com")).Value);
+        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrlFactory.Create("https://github.com"));
         dbContext.Set<Account>().Add(account);
 
         RepositorySlug slug = ((Result<RepositorySlug>.Success)RepositorySlug.Create("owner/repo")).Value;

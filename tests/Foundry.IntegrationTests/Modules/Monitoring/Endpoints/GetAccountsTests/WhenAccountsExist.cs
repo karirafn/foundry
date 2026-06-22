@@ -1,18 +1,18 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
-using Foundry.WebApi.Persistence;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using Shouldly;
 
 using Xunit;
+
+using Foundry.IntegrationTests.Modules.Monitoring;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.WebApi.Persistence;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.GetAccountsTests;
 
@@ -39,7 +39,7 @@ public sealed class WhenAccountsExist : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        BaseUrl parsedBaseUrl = ((Result<BaseUrl>.Success)BaseUrl.Create(baseUrl)).Value;
+        BaseUrl parsedBaseUrl = BaseUrlFactory.Create(baseUrl);
         GitHubAccount account = GitHubAccount.Create(name, token, parsedBaseUrl);
         dbContext.Set<Account>().Add(account);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
