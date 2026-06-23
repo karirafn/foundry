@@ -22,13 +22,40 @@ internal sealed class WorkerImageRebuildService(
     IHostEnvironment hostEnvironment,
     IOptions<WorkerOptions> optionsAccessor,
     ISystemNotificationBroadcaster broadcaster,
-    ILogger<WorkerImageRebuildService> logger) : BackgroundService
+    ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
 {
     internal const string ImageBuildCategory = "image-build";
     internal const string BuildingMessage = "Worker image is building...";
     private const int LogTailLines = 200;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
+
+    public async Task StartingAsync(CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is null)
+        {
+            logger.LogWarning(
+                "Startup image rebuild skipped: no GlobalSettings row exists.");
+            return;
+        }
+
+        settings.BeginImageBuild();
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        rebuildQueue.TryEnqueue();
+    }
+
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

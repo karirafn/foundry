@@ -1,6 +1,7 @@
 using Docker.DotNet;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
@@ -34,6 +35,7 @@ public static class WorkersModule
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
+        services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
 
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageBuildService>();
