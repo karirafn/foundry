@@ -18,6 +18,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
     private const int MaxReviewComments = 50;
+    private const int MaxFilePathLength = 4096; // PATH_MAX
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -563,6 +564,11 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private static string? SanitizeFilePath(string? path)
     {
         if (path is null)
+        {
+            return null;
+        }
+
+        if (path.Length > MaxFilePathLength)
         {
             return null;
         }

@@ -308,6 +308,128 @@ public sealed class GetPullRequestReviewFeedbackAsync
     }
 
     [Fact]
+    public async Task WhenFilePathStartsWithSlash_SetsFilePathToNull()
+    {
+        // Arrange
+        string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: "/etc/passwd"));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments[0].FilePath.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenFilePathContainsColon_SetsFilePathToNull()
+    {
+        // Arrange
+        string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: "C:/windows/system32"));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments[0].FilePath.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenFilePathExceedsMaxLength_SetsFilePathToNull()
+    {
+        // Arrange
+        string longPath = new('a', 4097);
+        string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: longPath));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments[0].FilePath.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenFilePathIsExactlyMaxLength_RetainsFilePath()
+    {
+        // Arrange
+        string maxPath = new('a', 4096);
+        string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: maxPath));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments[0].FilePath.ShouldBe(maxPath);
+    }
+
+    [Fact]
+    public async Task WhenFilePathIsEmpty_RetainsFilePath()
+    {
+        // Arrange
+        string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: ""));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            EpochSince,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments[0].FilePath.ShouldBe("");
+    }
+
+    [Fact]
     public async Task WhenMrUrlCannotBeParsed_ReturnsInvalidUrlError()
     {
         // Arrange
