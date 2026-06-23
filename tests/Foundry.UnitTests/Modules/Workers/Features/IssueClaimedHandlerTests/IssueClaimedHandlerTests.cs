@@ -891,10 +891,57 @@ public sealed class HandleAsync : IAsyncDisposable
             => Task.CompletedTask;
     }
 
+    [Fact]
+    public async Task WhenDockerEnabled_SecurityOptionsAndDevicesAreSet()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(
+                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
+                installsDocker: true));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"]),
+            () => spec.Devices.ShouldBe(["/dev/fuse"]));
+    }
+
+    [Fact]
+    public async Task WhenDockerDisabled_SecurityOptionsAndDevicesAreEmpty()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(
+                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
+                installsDocker: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.SecurityOptions.ShouldBeEmpty(),
+            () => spec.Devices.ShouldBeEmpty());
+    }
+
     private sealed class StubGlobalSettingsQueries(
         (string Key, string Value)? authVar,
         string? systemPromptTemplate = null,
-        string? workerPromptTemplate = null) : IGlobalSettingsQueries
+        string? workerPromptTemplate = null,
+        bool installsDocker = false) : IGlobalSettingsQueries
     {
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
@@ -922,6 +969,6 @@ public sealed class HandleAsync : IAsyncDisposable
             => Task.FromResult(ImageBuildStatus.Idle);
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-            => Task.FromResult(false);
+            => Task.FromResult(installsDocker);
     }
 }
