@@ -90,9 +90,9 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenFlagsChange_SetsImageBuildStatusToBuilding()
+    public async Task WhenFlagsChange_DoesNotSetImageBuildStatusToBuilding()
     {
-        // Arrange
+        // Arrange — status transition to Building is owned by WorkerImageRebuildService, not this handler
         WorkerImageConfiguration initial = new(
             InstallDotnet: false,
             InstallAngular: false,
@@ -119,7 +119,7 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
-        stored.ImageBuildStatus.ShouldBe(ImageBuildStatus.Building);
+        stored.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
     }
 
     [Fact]

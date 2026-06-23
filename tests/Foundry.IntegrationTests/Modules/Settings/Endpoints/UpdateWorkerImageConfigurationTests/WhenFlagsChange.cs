@@ -68,9 +68,9 @@ public sealed class WhenFlagsChange : IAsyncDisposable
     }
 
     [Fact]
-    public async Task SetsImageBuildStatusToBuilding()
+    public async Task ReturnsIdleStatusBeforeBackgroundConsumerRuns()
     {
-        // Arrange
+        // Arrange — Building status is set by WorkerImageRebuildService (background), not the handler
         await SeedDefaultSettingsAsync();
         object body = new { installDotnet = true, installAngular = false, installGlab = false, installGh = false };
 
@@ -85,6 +85,6 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         GlobalSettingsSummary? summary = await response.Content
             .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
-        summary.ImageBuildStatus.ShouldBe(ImageBuildStatus.Building);
+        summary.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
     }
 }

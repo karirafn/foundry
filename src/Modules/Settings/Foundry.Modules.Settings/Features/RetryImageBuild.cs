@@ -36,9 +36,6 @@ internal static class RetryImageBuild
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.InvalidRetryStatus);
             }
 
-            settings.BeginImageBuild();
-            await dbContext.SaveChangesAsync(cancellationToken);
-
             await integrationEventDispatcher.DispatchAsync(
                 [new WorkerImageConfigurationChanged()],
                 cancellationToken);

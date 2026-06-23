@@ -85,9 +85,9 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenStatusIsFailed_SetsImageBuildStatusToBuilding()
+    public async Task WhenStatusIsFailed_DoesNotSetImageBuildStatusToBuilding()
     {
-        // Arrange
+        // Arrange — status transition to Building is owned by WorkerImageRebuildService, not this handler
         await SeedSettingsWithStatusAsync(ImageBuildStatus.Failed);
 
         await using FoundryDbContext dbContext = CreateDbContext();
@@ -102,7 +102,7 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
-        stored.ImageBuildStatus.ShouldBe(ImageBuildStatus.Building);
+        stored.ImageBuildStatus.ShouldBe(ImageBuildStatus.Failed);
     }
 
     [Fact]

@@ -44,11 +44,6 @@ internal static class UpdateWorkerImageConfiguration
 
             bool changed = settings.UpdateWorkerImageConfiguration(config);
 
-            if (changed)
-            {
-                settings.BeginImageBuild();
-            }
-
             await dbContext.SaveChangesAsync(cancellationToken);
 
             if (changed)
@@ -85,12 +80,12 @@ internal static class UpdateWorkerImageConfiguration
 
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, BadRequest<string>>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
                         error => error.Code switch
                         {
                             SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.BadRequest(error.Message),
+                            _ => TypedResults.Problem(error.Message, statusCode: StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("UpdateWorkerImageConfiguration")

@@ -43,9 +43,9 @@ public sealed class WhenStatusIsFailed : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithBuildingStatus()
+    public async Task ReturnsOkWithFailedStatusBeforeBackgroundConsumerRuns()
     {
-        // Arrange
+        // Arrange — Building status is set by WorkerImageRebuildService (background), not the handler
         await SeedFailedSettingsAsync();
 
         // Act
@@ -59,6 +59,6 @@ public sealed class WhenStatusIsFailed : IAsyncDisposable
         GlobalSettingsSummary? summary = await response.Content
             .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
-        summary.ImageBuildStatus.ShouldBe(ImageBuildStatus.Building);
+        summary.ImageBuildStatus.ShouldBe(ImageBuildStatus.Failed);
     }
 }

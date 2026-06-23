@@ -38,7 +38,6 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
 
         services.AddHostedService<WorkerDispatchService>();
-        services.AddHostedService<WorkerImageBuildService>();
         services.AddHostedService<WorkerImageRebuildService>();
 
         return services;
