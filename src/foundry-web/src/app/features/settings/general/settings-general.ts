@@ -15,7 +15,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
-import { AuthMode, UpdatePromptTemplatesRequest } from '../settings.model';
+import { AuthMode, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../settings.model';
 
 const MAX_CONCURRENT_MIN = 1;
 const MAX_CONCURRENT_MAX = 20;
@@ -230,6 +230,109 @@ const COOLDOWN_MINUTES_MAX = 1440;
       </section>
 
       <section class="general-settings__section">
+        <h2 class="general-settings__section-title">Worker Image</h2>
+        <p class="general-settings__section-description">
+          Choose which toolchains are preinstalled in the worker container image. Saving rebuilds the image in the background; dispatch pauses until the build finishes.
+        </p>
+
+        <div class="general-settings__image-form">
+          <div class="general-settings__image-flags">
+            <div class="general-settings__image-flag">
+              <input
+                type="checkbox"
+                id="installDotnet"
+                [ngModel]="_installDotnetValue()"
+                (ngModelChange)="_installDotnetValue.set($event)"
+                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                aria-describedby="installDotnet-hint"
+              />
+              <label for="installDotnet">Install .NET SDK</label>
+              <span id="installDotnet-hint" class="general-settings__field-hint">Adds the .NET SDK to the worker image.</span>
+            </div>
+
+            <div class="general-settings__image-flag">
+              <input
+                type="checkbox"
+                id="installAngular"
+                [ngModel]="_installAngularValue()"
+                (ngModelChange)="_installAngularValue.set($event)"
+                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                aria-describedby="installAngular-hint"
+              />
+              <label for="installAngular">Install Angular CLI</label>
+              <span id="installAngular-hint" class="general-settings__field-hint">Adds the Angular CLI (ng).</span>
+            </div>
+
+            <div class="general-settings__image-flag">
+              <input
+                type="checkbox"
+                id="installGlab"
+                [ngModel]="_installGlabValue()"
+                (ngModelChange)="_installGlabValue.set($event)"
+                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                aria-describedby="installGlab-hint"
+              />
+              <label for="installGlab">Install GitLab CLI (glab)</label>
+              <span id="installGlab-hint" class="general-settings__field-hint">Adds the glab command-line tool.</span>
+            </div>
+
+            <div class="general-settings__image-flag">
+              <input
+                type="checkbox"
+                id="installGh"
+                [ngModel]="_installGhValue()"
+                (ngModelChange)="_installGhValue.set($event)"
+                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                aria-describedby="installGh-hint"
+              />
+              <label for="installGh">Install GitHub CLI (gh)</label>
+              <span id="installGh-hint" class="general-settings__field-hint">Adds the gh command-line tool.</span>
+            </div>
+          </div>
+
+          <div
+            class="general-settings__image-status"
+            [attr.role]="settingsService.imageBuildStatus() === 'Failed' ? 'alert' : 'status'"
+            [attr.aria-live]="settingsService.imageBuildStatus() === 'Building' ? 'polite' : null"
+          >
+            @if (settingsService.imageBuildStatus() === 'Building') {
+              <span class="general-settings__image-spinner" aria-hidden="true"></span>
+              Building worker image&hellip;
+            } @else if (settingsService.imageBuildStatus() === 'Failed') {
+              Worker image build failed.
+            }
+          </div>
+
+          @if (settingsService.imageBuildStatus() === 'Failed' && settingsService.imageBuildLogTail()) {
+            <pre
+              class="general-settings__image-log"
+              tabindex="0"
+              aria-label="Build log output"
+            >{{ settingsService.imageBuildLogTail() }}</pre>
+          }
+
+          <div id="image-flags-error" role="alert" class="general-settings__save-error">{{ settingsService.saveImageFlagsError() ?? '' }}</div>
+
+          <div class="general-settings__image-actions">
+            <button
+              class="general-settings__save-btn"
+              type="button"
+              [disabled]="settingsService.savingImageFlags() || settingsService.imageBuildStatus() === 'Building' || !_isImageFlagsDirty()"
+              (click)="saveImageFlags()"
+            >{{ settingsService.savingImageFlags() ? 'Saving...' : 'Save' }}</button>
+
+            @if (settingsService.imageBuildStatus() === 'Failed') {
+              <button
+                class="general-settings__retry-btn"
+                type="button"
+                (click)="retryImageBuild()"
+              >Retry</button>
+            }
+          </div>
+        </div>
+      </section>
+
+      <section class="general-settings__section">
         <h2 class="general-settings__section-title">Worker Prompts</h2>
         <p class="general-settings__section-description">
           Customize the system and worker prompts sent to Claude Code containers. Use &#123;issueNumber&#125;, &#123;issueContent&#125;, and &#123;branchNamingInstruction&#125; as template variables.
@@ -359,6 +462,25 @@ export class SettingsGeneralComponent {
     () => this._cooldownValue() >= COOLDOWN_MINUTES_MIN && this._cooldownValue() <= COOLDOWN_MINUTES_MAX
   );
 
+  protected readonly _installDotnetValue: WritableSignal<boolean> = signal(false);
+  protected readonly _installAngularValue: WritableSignal<boolean> = signal(false);
+  protected readonly _installGlabValue: WritableSignal<boolean> = signal(false);
+  protected readonly _installGhValue: WritableSignal<boolean> = signal(false);
+  private _imageInitialized = false;
+
+  protected readonly _isImageFlagsDirty: Signal<boolean> = computed(() => {
+    const saved = this.settingsService.workerImageFlags();
+    if (saved === null) {
+      return false;
+    }
+    return (
+      this._installDotnetValue() !== saved.installDotnet ||
+      this._installAngularValue() !== saved.installAngular ||
+      this._installGlabValue() !== saved.installGlab ||
+      this._installGhValue() !== saved.installGh
+    );
+  });
+
   constructor() {
     effect(() => {
       const settings = this.settingsService.authSettings();
@@ -392,6 +514,17 @@ export class SettingsGeneralComponent {
         this._dispatchInitialized = true;
         this._autoResumeValue.set(settings.autoResumeOnUsageReset);
         this._cooldownValue.set(settings.defaultCooldownMinutes);
+      }
+    });
+
+    effect(() => {
+      const flags = this.settingsService.workerImageFlags();
+      if (flags !== null && !this._imageInitialized) {
+        this._imageInitialized = true;
+        this._installDotnetValue.set(flags.installDotnet);
+        this._installAngularValue.set(flags.installAngular);
+        this._installGlabValue.set(flags.installGlab);
+        this._installGhValue.set(flags.installGh);
       }
     });
   }
@@ -436,5 +569,19 @@ export class SettingsGeneralComponent {
 
   saveDispatch(): void {
     this.settingsService.updateDispatchSettings(this._autoResumeValue(), this._cooldownValue());
+  }
+
+  saveImageFlags(): void {
+    const flags: WorkerImageFlags = {
+      installDotnet: this._installDotnetValue(),
+      installAngular: this._installAngularValue(),
+      installGlab: this._installGlabValue(),
+      installGh: this._installGhValue(),
+    };
+    this.settingsService.updateWorkerImageFlags(flags);
+  }
+
+  retryImageBuild(): void {
+    this.settingsService.retryImageBuild();
   }
 }

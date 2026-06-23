@@ -1,5 +1,14 @@
 export type AuthMode = 'api_key' | 'oauth';
 
+export type ImageBuildStatus = 'Idle' | 'Building' | 'Failed';
+
+export interface WorkerImageFlags {
+  installDotnet: boolean;
+  installAngular: boolean;
+  installGlab: boolean;
+  installGh: boolean;
+}
+
 export interface OAuthScanResponse {
   accessTokenPresent: boolean;
   refreshTokenPresent: boolean;
@@ -45,6 +54,12 @@ export interface GlobalSettingsResponse {
   isDispatchPaused: boolean;
   autoResumeOnUsageReset: boolean;
   defaultCooldownMinutes: number;
+  installDotnet: boolean;
+  installAngular: boolean;
+  installGlab: boolean;
+  installGh: boolean;
+  imageBuildStatus: ImageBuildStatus;
+  lastImageBuildError: string | null;
 }
 
 export interface UpdatePromptTemplatesRequest {

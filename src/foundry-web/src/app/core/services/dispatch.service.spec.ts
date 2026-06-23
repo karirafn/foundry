@@ -19,6 +19,12 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     isDispatchPaused: false,
     autoResumeOnUsageReset: true,
     defaultCooldownMinutes: 60,
+    installDotnet: false,
+    installAngular: false,
+    installGlab: false,
+    installGh: false,
+    imageBuildStatus: 'Idle',
+    lastImageBuildError: null,
     ...overrides,
   };
 }

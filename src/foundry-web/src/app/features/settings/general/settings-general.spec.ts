@@ -6,6 +6,15 @@ import { NgModel } from '@angular/forms';
 import { SettingsGeneralComponent } from './settings-general';
 import { SettingsService } from '../settings.service';
 
+const IMAGE_FLAGS_DEFAULTS = {
+  installDotnet: false,
+  installAngular: false,
+  installGlab: false,
+  installGh: false,
+  imageBuildStatus: 'Idle',
+  lastImageBuildError: null,
+};
+
 const API_KEY_RESPONSE = {
   authMode: 'ApiKey',
   maxConcurrent: 3,
@@ -18,6 +27,7 @@ const API_KEY_RESPONSE = {
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
   defaultCooldownMinutes: 60,
+  ...IMAGE_FLAGS_DEFAULTS,
 };
 
 const OAUTH_RESPONSE = {
@@ -32,6 +42,7 @@ const OAUTH_RESPONSE = {
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
   defaultCooldownMinutes: 60,
+  ...IMAGE_FLAGS_DEFAULTS,
 };
 
 function setup() {
@@ -779,5 +790,289 @@ describe('SettingsGeneralComponent', () => {
     expect(errorEl).toBeTruthy();
     expect(errorEl?.getAttribute('role')).toBe('alert');
     expect(errorEl?.textContent).toContain('Failed to save dispatch settings');
+  });
+
+  describe('Worker Image section', () => {
+    it('should render the "Worker Image" section title', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const headings = Array.from(el.querySelectorAll('h2'));
+      const imageHeading = headings.find(h => h.textContent?.trim() === 'Worker Image');
+
+      // Assert
+      expect(imageHeading).toBeTruthy();
+    });
+
+    it('should render four checkboxes for the image flags', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const checkboxes = imageForm?.querySelectorAll('input[type="checkbox"]');
+
+      // Assert
+      expect(checkboxes?.length).toBe(4);
+    });
+
+    it('should initialize checkboxes from loaded settings', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: true, installGlab: true });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const dotnetCheckbox = el.querySelector('#installDotnet') as HTMLInputElement;
+      const glabCheckbox = el.querySelector('#installGlab') as HTMLInputElement;
+      const angularCheckbox = el.querySelector('#installAngular') as HTMLInputElement;
+
+      // Assert
+      const dotnetModel = fixture.debugElement.query(By.css('#installDotnet')).injector.get(NgModel);
+      const glabModel = fixture.debugElement.query(By.css('#installGlab')).injector.get(NgModel);
+      const angularModel = fixture.debugElement.query(By.css('#installAngular')).injector.get(NgModel);
+      expect(dotnetModel.model).toBe(true);
+      expect(glabModel.model).toBe(true);
+      expect(angularModel.model).toBe(false);
+      expect(dotnetCheckbox).toBeTruthy();
+      expect(glabCheckbox).toBeTruthy();
+    });
+
+    it('should disable the Save button when flags are not dirty', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: false });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const saveBtn = imageForm?.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+
+      // Assert
+      expect(saveBtn.disabled).toBe(true);
+    });
+
+    it('should enable the Save button when a flag has changed', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: false });
+      fixture.detectChanges();
+
+      // Act — toggle installDotnet to make it dirty
+      const component = fixture.componentInstance as unknown as { _installDotnetValue: { set: (v: boolean) => void } };
+      component._installDotnetValue.set(true);
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const saveBtn = imageForm?.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+      expect(saveBtn.disabled).toBe(false);
+    });
+
+    it('should call updateWorkerImageFlags when Save is clicked', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+      fixture.detectChanges();
+
+      // Make dirty
+      const component = fixture.componentInstance as unknown as { _installDotnetValue: { set: (v: boolean) => void } };
+      component._installDotnetValue.set(true);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const saveBtn = imageForm?.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+      saveBtn.click();
+
+      // Assert
+      const req = httpMock.expectOne('/api/settings/worker-image');
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+      req.flush({ ...API_KEY_RESPONSE, installDotnet: true });
+    });
+
+    it('should disable checkboxes and Save while imageBuildStatus is Building', () => {
+      // Arrange
+      const { httpMock, service } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Building' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const checkboxes = Array.from(imageForm?.querySelectorAll('input[type="checkbox"]') ?? []) as HTMLInputElement[];
+      const saveBtn = imageForm?.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+
+      // Assert
+      expect(service.imageBuildStatus()).toBe('Building');
+      checkboxes.forEach(cb => expect(cb.disabled).toBe(true));
+      expect(saveBtn.disabled).toBe(true);
+    });
+
+    it('should show spinner status line with role="status" and aria-live="polite" when Building', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Building' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusLine = el.querySelector('.general-settings__image-status') as HTMLElement;
+
+      // Assert
+      expect(statusLine).toBeTruthy();
+      expect(statusLine.getAttribute('role')).toBe('status');
+      expect(statusLine.getAttribute('aria-live')).toBe('polite');
+      expect(statusLine.textContent).toContain('Building worker image');
+    });
+
+    it('should show error status with role="alert" and build log pre element when Failed', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'Step 2/5 FAILED' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusLine = el.querySelector('.general-settings__image-status') as HTMLElement;
+      const logPre = el.querySelector('.general-settings__image-log') as HTMLElement;
+
+      // Assert
+      expect(statusLine.getAttribute('role')).toBe('alert');
+      expect(statusLine.textContent).toContain('Worker image build failed');
+      expect(logPre).toBeTruthy();
+      expect(logPre.tagName).toBe('PRE');
+      expect(logPre.getAttribute('tabindex')).toBe('0');
+      expect(logPre.getAttribute('aria-label')).toBe('Build log output');
+      expect(logPre.textContent).toContain('Step 2/5 FAILED');
+    });
+
+    it('should show Retry button when imageBuildStatus is Failed', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'error' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const retryBtn = imageForm?.querySelector('.general-settings__retry-btn') as HTMLButtonElement;
+
+      // Assert
+      expect(retryBtn).toBeTruthy();
+      expect(retryBtn.textContent?.trim()).toBe('Retry');
+    });
+
+    it('should not show Retry button when imageBuildStatus is Idle', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const retryBtn = el.querySelector('.general-settings__retry-btn');
+
+      // Assert
+      expect(retryBtn).toBeFalsy();
+    });
+
+    it('should call retryImageBuild when Retry button is clicked', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const retryBtn = el.querySelector('.general-settings__retry-btn') as HTMLButtonElement;
+      retryBtn.click();
+
+      // Assert
+      const req = httpMock.expectOne('/api/settings/worker-image/retry');
+      expect(req.request.method).toBe('POST');
+      req.flush({ ...API_KEY_RESPONSE, imageBuildStatus: 'Building' });
+    });
+
+    it('should have labels with correct "for" attributes for each checkbox', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const dotnetLabel = el.querySelector('label[for="installDotnet"]');
+      const angularLabel = el.querySelector('label[for="installAngular"]');
+      const glabLabel = el.querySelector('label[for="installGlab"]');
+      const ghLabel = el.querySelector('label[for="installGh"]');
+
+      // Assert
+      expect(dotnetLabel).toBeTruthy();
+      expect(angularLabel).toBeTruthy();
+      expect(glabLabel).toBeTruthy();
+      expect(ghLabel).toBeTruthy();
+    });
+
+    it('should show error message when save image flags fails', () => {
+      // Arrange
+      const { httpMock, service } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Make dirty and attempt save
+      service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+      httpMock.expectOne('/api/settings/worker-image').flush('Error', { status: 500, statusText: 'Server Error' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const errorEl = el.querySelector('#image-flags-error');
+
+      // Assert
+      expect(errorEl).toBeTruthy();
+      expect(errorEl?.getAttribute('role')).toBe('alert');
+      expect(errorEl?.textContent).toContain('Failed to save worker image settings');
+    });
   });
 });
