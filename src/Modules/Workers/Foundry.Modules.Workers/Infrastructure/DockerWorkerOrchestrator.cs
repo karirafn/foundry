@@ -14,7 +14,7 @@ using Microsoft.Extensions.Options;
 namespace Foundry.Modules.Workers.Infrastructure;
 
 internal sealed class DockerWorkerOrchestrator(
-    DockerClient dockerClient,
+    IContainerOperations containerOperations,
     IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
 {
     private const string WorkerRunLabelKey = "foundry.worker-run-id";
@@ -51,11 +51,11 @@ internal sealed class DockerWorkerOrchestrator(
                 },
             };
 
-            CreateContainerResponse response = await dockerClient.Containers.CreateContainerAsync(
+            CreateContainerResponse response = await containerOperations.CreateContainerAsync(
                 createParams,
                 cancellationToken);
 
-            await dockerClient.Containers.StartContainerAsync(
+            await containerOperations.StartContainerAsync(
                 response.ID,
                 new ContainerStartParameters(),
                 cancellationToken);
@@ -75,12 +75,12 @@ internal sealed class DockerWorkerOrchestrator(
     {
         try
         {
-            await dockerClient.Containers.StopContainerAsync(
+            await containerOperations.StopContainerAsync(
                 containerId,
                 new ContainerStopParameters { WaitBeforeKillSeconds = 10 },
                 cancellationToken);
 
-            await dockerClient.Containers.RemoveContainerAsync(
+            await containerOperations.RemoveContainerAsync(
                 containerId,
                 new ContainerRemoveParameters { Force = true },
                 cancellationToken);
@@ -97,7 +97,7 @@ internal sealed class DockerWorkerOrchestrator(
     {
         try
         {
-            ContainerInspectResponse response = await dockerClient.Containers.InspectContainerAsync(
+            ContainerInspectResponse response = await containerOperations.InspectContainerAsync(
                 containerId,
                 cancellationToken);
 
@@ -134,7 +134,7 @@ internal sealed class DockerWorkerOrchestrator(
             },
         };
 
-        IList<ContainerListResponse> containers = await dockerClient.Containers.ListContainersAsync(
+        IList<ContainerListResponse> containers = await containerOperations.ListContainersAsync(
             parameters,
             cancellationToken);
 
@@ -170,7 +170,7 @@ internal sealed class DockerWorkerOrchestrator(
             Timestamps = false,
         };
 
-        using MultiplexedStream multiplexedStream = await dockerClient.Containers.GetContainerLogsAsync(
+        using MultiplexedStream multiplexedStream = await containerOperations.GetContainerLogsAsync(
             containerId,
             false,
             logsParams,
@@ -223,7 +223,7 @@ internal sealed class DockerWorkerOrchestrator(
                 Tail = tailLines.ToString(CultureInfo.InvariantCulture),
             };
 
-            using MultiplexedStream multiplexedStream = await dockerClient.Containers.GetContainerLogsAsync(
+            using MultiplexedStream multiplexedStream = await containerOperations.GetContainerLogsAsync(
                 containerId,
                 false,
                 logsParams,
@@ -253,7 +253,7 @@ internal sealed class DockerWorkerOrchestrator(
     {
         try
         {
-            await dockerClient.Containers.StopContainerAsync(
+            await containerOperations.StopContainerAsync(
                 containerId,
                 new ContainerStopParameters { WaitBeforeKillSeconds = 10 },
                 cancellationToken);
@@ -268,7 +268,7 @@ internal sealed class DockerWorkerOrchestrator(
     {
         try
         {
-            await dockerClient.Containers.RemoveContainerAsync(
+            await containerOperations.RemoveContainerAsync(
                 containerId,
                 new ContainerRemoveParameters { Force = true },
                 cancellationToken);

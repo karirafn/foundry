@@ -150,6 +150,22 @@ public sealed class AddWorkersModule
     }
 
     [Fact]
+    public void WhenCalled_RegistersIContainerOperations()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IContainerOperations containerOperations = provider.GetRequiredService<IContainerOperations>();
+        containerOperations.ShouldNotBeNull();
+    }
+
+    [Fact]
     public void WhenCalled_RegistersIContainerOutputParserAsSingleton()
     {
         // Arrange
