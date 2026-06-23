@@ -73,7 +73,8 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         IImageOperations imageOperations,
         CapturingNotificationBroadcaster? broadcaster = null,
         string contentRootPath = "",
-        string? contextPath = null)
+        string? contextPath = null,
+        bool imageBuildEnabled = true)
     {
         Microsoft.Data.Sqlite.SqliteConnection connection = _connection;
 
@@ -95,7 +96,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             Image = "test-image:latest",
             ImageBuild = new ImageBuildOptions
             {
-                Enabled = true,
+                Enabled = imageBuildEnabled,
                 ContextPath = contextPath ?? string.Empty,
             },
         };
@@ -349,11 +350,11 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert
+            // Assert — message format: "Failed|<errorTail>"
             broadcaster.Sent.ShouldContain(n =>
                 n.Category == WorkerImageRebuildService.ImageBuildCategory
                 && n.IsActive
-                && n.Message == dockerError);
+                && n.Message == $"Failed|{dockerError}");
         }
         finally
         {
@@ -449,6 +450,164 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         {
             Directory.Delete(contextDir, true);
         }
+    }
+
+    // Finding 1: notification protocol format tests
+
+    [Fact]
+    public async Task BuildingMessage_HasPipeSeparatedFormat()
+    {
+        // Arrange / Act
+        string message = WorkerImageRebuildService.BuildingMessage;
+
+        // Assert — Angular parser expects "Status|logTail"
+        message.ShouldStartWith("Building|");
+    }
+
+    [Fact]
+    public async Task WhenDockerReportsError_BroadcastsFailedMessageWithPipeSeparator()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            const string dockerError = "Build failed: layer error";
+            CapturingNotificationBroadcaster broadcaster = new();
+            ErrorReportingImageOperations errorImages = new(dockerError);
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                broadcaster,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — Angular parser expects "Failed|<errorTail>"
+            SystemNotification? failureNotification = broadcaster.Sent
+                .FirstOrDefault(n =>
+                    n.Category == WorkerImageRebuildService.ImageBuildCategory
+                    && n.IsActive
+                    && n.Message != WorkerImageRebuildService.BuildingMessage);
+            failureNotification.ShouldNotBeNull();
+            failureNotification.Message.ShouldStartWith("Failed|");
+            failureNotification.Message.ShouldContain(dockerError);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    // Finding 2: OperationCanceledException propagation test
+
+    [Fact]
+    public async Task WhenCancellationRequested_PropagatesOperationCanceledException()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            using CancellationTokenSource cts = new();
+            CancellingImageOperations cancellingImages = new(cts);
+            WorkerImageRebuildService sut = BuildService(
+                cancellingImages,
+                contextPath: contextDir);
+
+            // Act / Assert
+            await Should.ThrowAsync<OperationCanceledException>(
+                async () =>
+                {
+                    await cts.CancelAsync();
+                    await sut.ProcessRebuildAsync(cts.Token);
+                });
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenCancellationRequested_DoesNotPersistFailedStatus()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            using CancellationTokenSource cts = new();
+            CancellingImageOperations cancellingImages = new(cts);
+            WorkerImageRebuildService sut = BuildService(
+                cancellingImages,
+                contextPath: contextDir);
+
+            await cts.CancelAsync();
+
+            // Act — OCE is expected and suppressed here; we verify the DB state
+            try
+            {
+                await sut.ProcessRebuildAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected — cancellation propagated correctly
+            }
+
+            // Assert — status should not be Failed (it was set to Building before cancel)
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(CancellationToken.None);
+            settings.ShouldNotBeNull();
+            settings.ImageBuildStatus.ShouldNotBe(ImageBuildStatus.Failed);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    // Finding 3: Enabled flag tests
+
+    [Fact]
+    public async Task WhenImageBuildDisabled_DoesNotBuildImage()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        SpyImageOperations spyImages = new();
+        WorkerImageRebuildService sut = BuildService(spyImages, imageBuildEnabled: false);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        spyImages.BuildCalled.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenImageBuildDisabled_DoesNotSetStatusToBuilding()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        WorkerImageRebuildService sut = BuildService(new SpyImageOperations(), imageBuildEnabled: false);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        GlobalSettings? settings = await db.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        settings.ShouldNotBeNull();
+        settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
     }
 
     private static string CreateTempContextDir()
@@ -606,6 +765,40 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
                 CapturedStatusDuringBuild = settings.ImageBuildStatus;
             }
         }
+
+#pragma warning disable CS0618 // Required for interface compliance
+        public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(new MemoryStream("{}"u8.ToArray()));
+#pragma warning restore CS0618
+
+        public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
+        public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult(new ImageInspectResponse());
+        public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
+        public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task LoadImageAsync(ImageLoadParameters parameters, Stream imageStream, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Stream> SaveImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task<Stream> SaveImagesAsync(string[] names, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task PushImageAsync(string name, ImagePushParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ImagesPruneResponse> PruneImagesAsync(ImagesPruneParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new ImagesPruneResponse());
+        public Task<CommitContainerChangesResponse> CommitContainerChangesAsync(CommitContainerChangesParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new CommitContainerChangesResponse());
+        public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
+    }
+
+    private sealed class CancellingImageOperations(CancellationTokenSource cts) : IImageOperations
+    {
+        public Task BuildImageFromDockerfileAsync(
+            ImageBuildParameters parameters,
+            Stream contents,
+            IEnumerable<AuthConfig> authConfigs,
+            IDictionary<string, string> headers,
+            IProgress<JSONMessage> progress,
+            CancellationToken cancellationToken)
+            => Task.FromCanceled(cts.Token);
 
 #pragma warning disable CS0618 // Required for interface compliance
         public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)

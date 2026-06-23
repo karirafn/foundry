@@ -58,7 +58,9 @@ public sealed class StartingAsync : IAsyncDisposable
         db.SaveChanges();
     }
 
-    private WorkerImageRebuildService BuildService(SpyWorkerImageRebuildQueue? queue = null)
+    private WorkerImageRebuildService BuildService(
+        SpyWorkerImageRebuildQueue? queue = null,
+        bool imageBuildEnabled = true)
     {
         Microsoft.Data.Sqlite.SqliteConnection connection = _connection;
 
@@ -79,7 +81,7 @@ public sealed class StartingAsync : IAsyncDisposable
             Image = "test-image:latest",
             ImageBuild = new ImageBuildOptions
             {
-                Enabled = true,
+                Enabled = imageBuildEnabled,
                 ContextPath = string.Empty,
             },
         };
@@ -136,6 +138,39 @@ public sealed class StartingAsync : IAsyncDisposable
         // Act / Assert — should not throw
         await Should.NotThrowAsync(
             async () => await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task WhenImageBuildDisabled_DoesNotEnqueueRebuild()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        SpyWorkerImageRebuildQueue queue = new();
+        WorkerImageRebuildService sut = BuildService(queue, imageBuildEnabled: false);
+
+        // Act
+        await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        queue.EnqueueCalled.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenImageBuildDisabled_DoesNotSetStatusToBuilding()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        WorkerImageRebuildService sut = BuildService(imageBuildEnabled: false);
+
+        // Act
+        await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        GlobalSettings? settings = await db.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        settings.ShouldNotBeNull();
+        settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
     }
 
     private sealed class SpyWorkerImageRebuildQueue : IWorkerImageRebuildQueue

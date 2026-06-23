@@ -25,13 +25,19 @@ internal sealed class WorkerImageRebuildService(
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
 {
     internal const string ImageBuildCategory = "image-build";
-    internal const string BuildingMessage = "Worker image is building...";
+    internal const string BuildingMessage = "Building|";
     private const int LogTailLines = 200;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
+        if (!_options.ImageBuild.Enabled)
+        {
+            logger.LogInformation("Startup image rebuild skipped: ImageBuild.Enabled is false.");
+            return;
+        }
+
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
@@ -67,6 +73,12 @@ internal sealed class WorkerImageRebuildService(
 
     internal async Task ProcessRebuildAsync(CancellationToken cancellationToken)
     {
+        if (!_options.ImageBuild.Enabled)
+        {
+            logger.LogInformation("Image rebuild skipped: ImageBuild.Enabled is false.");
+            return;
+        }
+
         await broadcaster.SendAsync(
             new SystemNotification(ImageBuildCategory, true, BuildingMessage),
             cancellationToken);
@@ -129,6 +141,10 @@ internal sealed class WorkerImageRebuildService(
                 errorTail = TruncateTail(progress.LastError);
             }
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
 #pragma warning disable CA1031 // Docker build failures must be surfaced as status notifications, not exceptions, to avoid crashing the BackgroundService consumer loop.
         catch (Exception ex)
 #pragma warning restore CA1031
@@ -159,7 +175,7 @@ internal sealed class WorkerImageRebuildService(
                 errorTail);
 
             await broadcaster.SendAsync(
-                new SystemNotification(ImageBuildCategory, true, errorTail),
+                new SystemNotification(ImageBuildCategory, true, $"Failed|{errorTail}"),
                 cancellationToken);
         }
     }
