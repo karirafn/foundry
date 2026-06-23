@@ -1,0 +1,56 @@
+@if (isColdBuildBlocking()) {
+  <div class="forge-overlay">
+    <div
+      class="forge-overlay__surface"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="forge-overlay-status"
+    >
+      <div class="forge-overlay__scene" aria-hidden="true">
+        <div class="forge-overlay__ember" [class.forge-overlay__ember--failed]="imageBuildStatus() === 'Failed'"></div>
+        <div class="forge-overlay__hammer" [class.forge-overlay__hammer--failed]="imageBuildStatus() === 'Failed'">
+          <div class="forge-overlay__hammer-head"></div>
+          <div class="forge-overlay__hammer-handle"></div>
+        </div>
+        <div class="forge-overlay__sparks" [class.forge-overlay__sparks--failed]="imageBuildStatus() === 'Failed'">
+          <span class="forge-overlay__spark forge-overlay__spark--1"></span>
+          <span class="forge-overlay__spark forge-overlay__spark--2"></span>
+          <span class="forge-overlay__spark forge-overlay__spark--3"></span>
+          <span class="forge-overlay__spark forge-overlay__spark--4"></span>
+        </div>
+      </div>
+
+      <div id="forge-overlay-status" class="forge-overlay__content">
+        @switch (imageBuildStatus()) {
+          @case ('Building') {
+            <p class="forge-overlay__status-text">{{ statusTextBuilding }}</p>
+          }
+          @case ('Failed') {
+            <h2 class="forge-overlay__status-text forge-overlay__status-text--failed">{{ statusTextFailed }}</h2>
+            @if (imageBuildLogTail()) {
+              <pre class="forge-overlay__log-tail">{{ imageBuildLogTail() }}</pre>
+            }
+            <button
+              #retryButton
+              class="forge-overlay__retry-btn"
+              type="button"
+              (click)="retryImageBuild()"
+            >
+              Retry
+            </button>
+          }
+          @default {
+            <p class="forge-overlay__status-text">{{ statusTextStarting }}</p>
+          }
+        }
+      </div>
+
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        class="forge-overlay__live-region"
+      >{{ liveAnnouncement() }}</div>
+    </div>
+  </div>
+}
