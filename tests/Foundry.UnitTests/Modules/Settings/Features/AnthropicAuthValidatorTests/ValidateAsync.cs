@@ -341,4 +341,7 @@ internal sealed class FakeGlobalSettingsQueries : IGlobalSettingsQueries
 
     public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken) =>
         Task.FromResult(ImageBuildStatus.Idle);
+
+    public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(false);
 }

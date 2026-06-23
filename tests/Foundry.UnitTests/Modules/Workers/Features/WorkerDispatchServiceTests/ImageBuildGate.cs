@@ -90,6 +90,9 @@ public sealed class ImageBuildGate : WorkerDispatchServiceTestBase
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(imageBuildStatus);
+
+        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator

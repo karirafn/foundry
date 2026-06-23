@@ -112,4 +112,15 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             _ => ImageBuildStatus.Idle,
         };
     }
+
+    public async Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+    {
+        // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
+        // into a SQL column — the full entity must be loaded and the value read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return settings?.WorkerImageConfiguration.InstallDocker ?? false;
+    }
 }
