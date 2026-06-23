@@ -37,6 +37,7 @@ public static class WorkersModule
 
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageBuildService>();
+        services.AddHostedService<WorkerImageRebuildService>();
 
         return services;
     }

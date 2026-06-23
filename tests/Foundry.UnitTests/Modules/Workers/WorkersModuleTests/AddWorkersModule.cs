@@ -4,6 +4,7 @@ using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Shared;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +33,12 @@ public sealed class AddWorkersModule
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
         public string ContentRootPath { get; set; } = Path.GetTempPath();
         public string EnvironmentName { get; set; } = "Test";
+    }
+
+    private sealed class NullSystemNotificationBroadcaster : ISystemNotificationBroadcaster
+    {
+        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     [Fact]
@@ -96,6 +103,7 @@ public sealed class AddWorkersModule
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
 
         // Act
         services.AddWorkersModule(configuration);
@@ -114,6 +122,7 @@ public sealed class AddWorkersModule
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
 
         // Act
         services.AddWorkersModule(configuration);
@@ -122,6 +131,25 @@ public sealed class AddWorkersModule
         // Assert
         IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
         hostedServices.ShouldContain(s => s is WorkerImageBuildService);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersWorkerImageRebuildServiceAsHostedService()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddLogging();
+        services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
+        hostedServices.ShouldContain(s => s is WorkerImageRebuildService);
     }
 
     [Fact]
