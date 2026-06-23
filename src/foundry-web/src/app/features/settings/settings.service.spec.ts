@@ -1197,6 +1197,38 @@ describe('SettingsService', () => {
     expect(service.workerImageFlags()!.installAngular).toBe(true);
   });
 
+  it('should set saveImageFlagsSuccess to true after updateWorkerImageFlags succeeds', () => {
+    // Arrange
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({ installDotnet: true }));
+
+    // Assert
+    expect(service.saveImageFlagsSuccess()).toBe(true);
+  });
+
+  it('should keep saveImageFlagsSuccess false when updateWorkerImageFlags fails', () => {
+    // Arrange
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert
+    expect(service.saveImageFlagsSuccess()).toBe(false);
+  });
+
+  it('should reset saveImageFlagsSuccess in loadSettings', () => {
+    // Arrange — put success signal into true state
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
+    expect(service.saveImageFlagsSuccess()).toBe(true);
+
+    // Act
+    service.loadSettings();
+
+    // Assert — cleared before the response arrives
+    expect(service.saveImageFlagsSuccess()).toBe(false);
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
   it('should set saveImageFlagsError when updateWorkerImageFlags fails', () => {
     // Arrange
     service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
@@ -1244,6 +1276,34 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.imageBuildStatus()).toBe('Building');
+  });
+
+  it('should set savingImageFlags to true while retryImageBuild is in flight', () => {
+    // Arrange / Act
+    service.retryImageBuild();
+
+    // Assert — before flush
+    expect(service.savingImageFlags()).toBe(true);
+    httpMock.expectOne('/api/settings/worker-image/retry').flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+  });
+
+  it('should clear savingImageFlags after retryImageBuild succeeds', () => {
+    // Arrange
+    service.retryImageBuild();
+    httpMock.expectOne('/api/settings/worker-image/retry').flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+
+    // Assert
+    expect(service.savingImageFlags()).toBe(false);
+  });
+
+  it('should set saveImageFlagsError when retryImageBuild fails', () => {
+    // Arrange
+    service.retryImageBuild();
+    httpMock.expectOne('/api/settings/worker-image/retry').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert
+    expect(service.saveImageFlagsError()).toBe('Failed to save worker image settings');
+    expect(service.savingImageFlags()).toBe(false);
   });
 
   // setImageBuildStatus updates status and logTail signals

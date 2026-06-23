@@ -105,7 +105,7 @@ export class SystemBannerComponent {
     const logPart = message.slice(separatorIndex + 1);
     return {
       status: statusPart,
-      logTail: logPart === 'null' ? null : logPart,
+      logTail: logPart.length > 0 ? logPart : null,
     };
   }
 

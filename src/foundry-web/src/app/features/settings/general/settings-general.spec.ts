@@ -935,7 +935,7 @@ describe('SettingsGeneralComponent', () => {
       expect(saveBtn.disabled).toBe(true);
     });
 
-    it('should show spinner status line with role="status" and aria-live="polite" when Building', () => {
+    it('should show persistent role="status" region with building text when Building', () => {
       // Arrange
       const { httpMock } = setup();
       const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -945,16 +945,33 @@ describe('SettingsGeneralComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const statusLine = el.querySelector('.general-settings__image-status') as HTMLElement;
+      const statusRegions = Array.from(el.querySelectorAll('.general-settings__image-status[role="status"]')) as HTMLElement[];
 
-      // Assert
-      expect(statusLine).toBeTruthy();
-      expect(statusLine.getAttribute('role')).toBe('status');
-      expect(statusLine.getAttribute('aria-live')).toBe('polite');
-      expect(statusLine.textContent).toContain('Building worker image');
+      // Assert — persistent polite region present and contains building text
+      expect(statusRegions.length).toBe(1);
+      const politeRegion = statusRegions[0];
+      expect(politeRegion.getAttribute('aria-live')).toBe('polite');
+      expect(politeRegion.textContent).toContain('Building worker image');
     });
 
-    it('should show error status with role="alert" and build log pre element when Failed', () => {
+    it('should have a persistent role="alert" image-status region always in the DOM', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const alertRegion = el.querySelector('.general-settings__image-status[role="alert"]') as HTMLElement;
+
+      // Assert — always present, empty when not failed
+      expect(alertRegion).toBeTruthy();
+      expect(alertRegion.textContent?.trim()).toBe('');
+    });
+
+    it('should show failed text in role="alert" region and build log pre element when Failed', () => {
       // Arrange
       const { httpMock } = setup();
       const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -964,12 +981,13 @@ describe('SettingsGeneralComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const statusLine = el.querySelector('.general-settings__image-status') as HTMLElement;
+      const alertRegion = el.querySelector('.general-settings__image-status[role="alert"]') as HTMLElement;
+      const politeRegion = el.querySelector('.general-settings__image-status[role="status"]') as HTMLElement;
       const logPre = el.querySelector('.general-settings__image-log') as HTMLElement;
 
       // Assert
-      expect(statusLine.getAttribute('role')).toBe('alert');
-      expect(statusLine.textContent).toContain('Worker image build failed');
+      expect(alertRegion.textContent).toContain('Worker image build failed');
+      expect(politeRegion.textContent?.trim()).toBe('');
       expect(logPre).toBeTruthy();
       expect(logPre.tagName).toBe('PRE');
       expect(logPre.getAttribute('tabindex')).toBe('0');
@@ -1072,6 +1090,66 @@ describe('SettingsGeneralComponent', () => {
       // Assert
       expect(errorEl).toBeTruthy();
       expect(errorEl?.getAttribute('role')).toBe('alert');
+      expect(errorEl?.textContent).toContain('Failed to save worker image settings');
+    });
+
+    it('should wrap the four checkboxes in a fieldset with a sr-only legend', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const fieldset = el.querySelector('fieldset.general-settings__image-fieldset') as HTMLFieldSetElement;
+      const legend = fieldset?.querySelector('legend');
+      const checkboxesInsideFieldset = fieldset?.querySelectorAll('input[type="checkbox"]');
+
+      // Assert
+      expect(fieldset).toBeTruthy();
+      expect(legend?.classList.contains('sr-only')).toBe(true);
+      expect(legend?.textContent?.trim()).toBe('Preinstalled toolchains');
+      expect(checkboxesInsideFieldset?.length).toBe(4);
+    });
+
+    it('should show success message in role="status" region after a successful image flags save', () => {
+      // Arrange
+      const { httpMock, service } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+      httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, installDotnet: true, imageBuildStatus: 'Building' });
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const successEls = Array.from(el.querySelectorAll('[role="status"]'));
+      const imageFlagsSuccess = successEls.find(e => e.textContent?.includes('Worker image settings saved'));
+      expect(imageFlagsSuccess).toBeTruthy();
+    });
+
+    it('should route retry errors to the image-flags-error region', () => {
+      // Arrange
+      const { httpMock, service } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err' });
+      fixture.detectChanges();
+
+      // Act
+      service.retryImageBuild();
+      httpMock.expectOne('/api/settings/worker-image/retry').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const errorEl = el.querySelector('#image-flags-error');
       expect(errorEl?.textContent).toContain('Failed to save worker image settings');
     });
   });

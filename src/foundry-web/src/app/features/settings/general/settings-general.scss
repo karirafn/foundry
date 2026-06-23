@@ -148,7 +148,7 @@
 
   &__save-error,
   &__switch-error {
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
     font-size: 0.875rem;
   }
 
@@ -307,6 +307,12 @@
     &:focus-visible {
       @include focus-ring;
     }
+  }
+
+  &__image-fieldset {
+    border: none;
+    margin: 0;
+    padding: 0;
   }
 
   &__image-flags {

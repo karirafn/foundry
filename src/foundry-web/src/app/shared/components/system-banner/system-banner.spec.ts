@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
 import { SystemBannerComponent } from './system-banner';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
@@ -58,6 +59,7 @@ function setup(options: SetupOptions = {}) {
   TestBed.configureTestingModule({
     imports: [SystemBannerComponent],
     providers: [
+      provideRouter([]),
       { provide: SystemSignalRService, useValue: mockSignalR },
       { provide: DispatchService, useValue: mockDispatch },
       { provide: SettingsService, useValue: mockSettings },
@@ -329,7 +331,7 @@ describe('SystemBannerComponent', () => {
       expect(retryBtn.textContent?.trim()).toBe('Retry');
     });
 
-    it('should show "View details" link to /settings/general when image build fails', () => {
+    it('should show "View details" routerLink to /settings/general when image build fails', () => {
       // Arrange
       const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|error log' };
 
@@ -339,9 +341,25 @@ describe('SystemBannerComponent', () => {
 
       // Assert
       const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
-      const link = imageBuildBar?.querySelector('a[href="/settings/general"]') as HTMLAnchorElement;
+      const link = imageBuildBar?.querySelector('a.system-banner__details-link') as HTMLAnchorElement;
       expect(link).toBeTruthy();
       expect(link.textContent?.trim()).toBe('View details');
+      expect(link.getAttribute('href')).toBe('/settings/general');
+    });
+
+    it('should treat an empty log part after separator as null (no log tail shown)', () => {
+      // Arrange — message with separator but no log content
+      const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|' };
+
+      // Act
+      const { fixture } = setup({ notifications: [notification] });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — failed bar rendered but no log-tail span
+      const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
+      expect(imageBuildBar).toBeTruthy();
+      const logTail = imageBuildBar.querySelector('.system-banner__log-tail');
+      expect(logTail).toBeFalsy();
     });
 
     it('should not render an image-build bar when there are no image-build notifications', () => {

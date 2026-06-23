@@ -92,6 +92,9 @@ export class SettingsService {
   private readonly _savingImageFlagsSignal: WritableSignal<boolean> = signal(false);
   readonly savingImageFlags: Signal<boolean> = this._savingImageFlagsSignal.asReadonly();
 
+  private readonly _saveImageFlagsSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveImageFlagsSuccess: Signal<boolean> = this._saveImageFlagsSuccessSignal.asReadonly();
+
   private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
@@ -107,6 +110,7 @@ export class SettingsService {
     this._saveLimitsSuccessSignal.set(false);
     this._savePromptsSuccessSignal.set(false);
     this._saveDispatchSuccessSignal.set(false);
+    this._saveImageFlagsSuccessSignal.set(false);
     this.saving.set(false);
     this._savingLimitsSignal.set(false);
     this._savingPromptsSignal.set(false);
@@ -246,6 +250,7 @@ export class SettingsService {
 
   updateWorkerImageFlags(flags: WorkerImageFlags): void {
     this._saveImageFlagsErrorSignal.set(null);
+    this._saveImageFlagsSuccessSignal.set(false);
     this._savingImageFlagsSignal.set(true);
 
     this._http.put<GlobalSettingsResponse>('/api/settings/worker-image', flags).subscribe({
@@ -254,6 +259,7 @@ export class SettingsService {
         this._imageBuildStatusSignal.set(response.imageBuildStatus);
         this._imageBuildLogTailSignal.set(response.lastImageBuildError);
         this._savingImageFlagsSignal.set(false);
+        this._saveImageFlagsSuccessSignal.set(true);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
@@ -264,14 +270,20 @@ export class SettingsService {
   }
 
   retryImageBuild(): void {
+    this._saveImageFlagsErrorSignal.set(null);
+    this._savingImageFlagsSignal.set(true);
+
     this._http.post<GlobalSettingsResponse>('/api/settings/worker-image/retry', null).subscribe({
       next: (response) => {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
         this._imageBuildStatusSignal.set(response.imageBuildStatus);
         this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+        this._savingImageFlagsSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
+        this._saveImageFlagsErrorSignal.set(SAVE_IMAGE_FLAGS_ERROR);
+        this._savingImageFlagsSignal.set(false);
       },
     });
   }

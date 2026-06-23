@@ -1,5 +1,5 @@
 @if (generalNotifications().length > 0) {
-  <div class="system-banner" role="region" aria-label="System notifications" tabindex="0">
+  <div class="system-banner" role="region" aria-label="System notifications">
     @for (notification of generalNotifications(); track notification.category) {
       <div class="system-banner__bar" role="alert">
         <svg
@@ -26,7 +26,7 @@
 }
 
 @if (imageBuildNotification(); as imgBuild) {
-  <div class="system-banner" role="region" aria-label="Image build status" tabindex="0">
+  <div class="system-banner" role="region" aria-label="Image build status">
     @if (imgBuild.status === 'Building') {
       <div class="system-banner__bar system-banner__bar--image-build system-banner__bar--building" role="status" aria-live="polite">
         <svg
@@ -69,7 +69,7 @@
         @if (imgBuild.logTail) {
           <span class="system-banner__log-tail">{{ imgBuild.logTail | slice: -120 }}</span>
         }
-        <a href="/settings/general" class="system-banner__details-link">View details</a>
+        <a routerLink="/settings/general" class="system-banner__details-link">View details</a>
         <button
           type="button"
           class="system-banner__action-btn"

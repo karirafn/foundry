@@ -236,72 +236,71 @@ const COOLDOWN_MINUTES_MAX = 1440;
         </p>
 
         <div class="general-settings__image-form">
-          <div class="general-settings__image-flags">
-            <div class="general-settings__image-flag">
-              <input
-                type="checkbox"
-                id="installDotnet"
-                [ngModel]="_installDotnetValue()"
-                (ngModelChange)="_installDotnetValue.set($event)"
-                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
-                aria-describedby="installDotnet-hint"
-              />
-              <label for="installDotnet">Install .NET SDK</label>
-              <span id="installDotnet-hint" class="general-settings__field-hint">Adds the .NET SDK to the worker image.</span>
-            </div>
+          <fieldset class="general-settings__image-fieldset">
+            <legend class="sr-only">Preinstalled toolchains</legend>
 
-            <div class="general-settings__image-flag">
-              <input
-                type="checkbox"
-                id="installAngular"
-                [ngModel]="_installAngularValue()"
-                (ngModelChange)="_installAngularValue.set($event)"
-                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
-                aria-describedby="installAngular-hint"
-              />
-              <label for="installAngular">Install Angular CLI</label>
-              <span id="installAngular-hint" class="general-settings__field-hint">Adds the Angular CLI (ng).</span>
-            </div>
+            <div class="general-settings__image-flags">
+              <div class="general-settings__image-flag">
+                <input
+                  type="checkbox"
+                  id="installDotnet"
+                  [ngModel]="_installDotnetValue()"
+                  (ngModelChange)="_installDotnetValue.set($event)"
+                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                  aria-describedby="installDotnet-hint"
+                />
+                <label for="installDotnet">Install .NET SDK</label>
+                <span id="installDotnet-hint" class="general-settings__field-hint">Adds the .NET SDK to the worker image.</span>
+              </div>
 
-            <div class="general-settings__image-flag">
-              <input
-                type="checkbox"
-                id="installGlab"
-                [ngModel]="_installGlabValue()"
-                (ngModelChange)="_installGlabValue.set($event)"
-                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
-                aria-describedby="installGlab-hint"
-              />
-              <label for="installGlab">Install GitLab CLI (glab)</label>
-              <span id="installGlab-hint" class="general-settings__field-hint">Adds the glab command-line tool.</span>
-            </div>
+              <div class="general-settings__image-flag">
+                <input
+                  type="checkbox"
+                  id="installAngular"
+                  [ngModel]="_installAngularValue()"
+                  (ngModelChange)="_installAngularValue.set($event)"
+                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                  aria-describedby="installAngular-hint"
+                />
+                <label for="installAngular">Install Angular CLI</label>
+                <span id="installAngular-hint" class="general-settings__field-hint">Adds the Angular CLI (ng).</span>
+              </div>
 
-            <div class="general-settings__image-flag">
-              <input
-                type="checkbox"
-                id="installGh"
-                [ngModel]="_installGhValue()"
-                (ngModelChange)="_installGhValue.set($event)"
-                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
-                aria-describedby="installGh-hint"
-              />
-              <label for="installGh">Install GitHub CLI (gh)</label>
-              <span id="installGh-hint" class="general-settings__field-hint">Adds the gh command-line tool.</span>
-            </div>
-          </div>
+              <div class="general-settings__image-flag">
+                <input
+                  type="checkbox"
+                  id="installGlab"
+                  [ngModel]="_installGlabValue()"
+                  (ngModelChange)="_installGlabValue.set($event)"
+                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                  aria-describedby="installGlab-hint"
+                />
+                <label for="installGlab">Install GitLab CLI (glab)</label>
+                <span id="installGlab-hint" class="general-settings__field-hint">Adds the glab command-line tool.</span>
+              </div>
 
-          <div
-            class="general-settings__image-status"
-            [attr.role]="settingsService.imageBuildStatus() === 'Failed' ? 'alert' : 'status'"
-            [attr.aria-live]="settingsService.imageBuildStatus() === 'Building' ? 'polite' : null"
-          >
+              <div class="general-settings__image-flag">
+                <input
+                  type="checkbox"
+                  id="installGh"
+                  [ngModel]="_installGhValue()"
+                  (ngModelChange)="_installGhValue.set($event)"
+                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                  aria-describedby="installGh-hint"
+                />
+                <label for="installGh">Install GitHub CLI (gh)</label>
+                <span id="installGh-hint" class="general-settings__field-hint">Adds the gh command-line tool.</span>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="general-settings__image-status" role="status" aria-live="polite">
             @if (settingsService.imageBuildStatus() === 'Building') {
               <span class="general-settings__image-spinner" aria-hidden="true"></span>
-              Building worker image&hellip;
-            } @else if (settingsService.imageBuildStatus() === 'Failed') {
-              Worker image build failed.
             }
+            {{ _imageBuildingText() }}
           </div>
+          <div class="general-settings__image-status" role="alert">{{ _imageFailedText() }}</div>
 
           @if (settingsService.imageBuildStatus() === 'Failed' && settingsService.imageBuildLogTail()) {
             <pre
@@ -312,6 +311,8 @@ const COOLDOWN_MINUTES_MAX = 1440;
           }
 
           <div id="image-flags-error" role="alert" class="general-settings__save-error">{{ settingsService.saveImageFlagsError() ?? '' }}</div>
+
+          <div role="status" class="general-settings__save-success">{{ settingsService.saveImageFlagsSuccess() ? 'Worker image settings saved — building now…' : '' }}</div>
 
           <div class="general-settings__image-actions">
             <button
@@ -481,6 +482,14 @@ export class SettingsGeneralComponent {
     );
   });
 
+  protected readonly _imageBuildingText: Signal<string> = computed(() =>
+    this.settingsService.imageBuildStatus() === 'Building' ? 'Building worker image…' : ''
+  );
+
+  protected readonly _imageFailedText: Signal<string> = computed(() =>
+    this.settingsService.imageBuildStatus() === 'Failed' ? 'Worker image build failed.' : ''
+  );
+
   constructor() {
     effect(() => {
       const settings = this.settingsService.authSettings();
@@ -519,7 +528,11 @@ export class SettingsGeneralComponent {
 
     effect(() => {
       const flags = this.settingsService.workerImageFlags();
-      if (flags !== null && !this._imageInitialized) {
+      if (flags === null) {
+        this._imageInitialized = false;
+        return;
+      }
+      if (!this._imageInitialized) {
         this._imageInitialized = true;
         this._installDotnetValue.set(flags.installDotnet);
         this._installAngularValue.set(flags.installAngular);
