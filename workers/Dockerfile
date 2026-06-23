@@ -127,7 +127,13 @@ RUN if [ "$INSTALL_DOCKER" = "true" ]; then \
             docker-ce-cli \
             containerd.io \
             docker-buildx-plugin \
-            docker-compose-plugin && \
+            docker-compose-plugin \
+            docker-ce-rootless-extras \
+            uidmap \
+            slirp4netns \
+            fuse-overlayfs && \
+        grep -q "^node:" /etc/subuid || echo "node:100000:65536" >> /etc/subuid && \
+        grep -q "^node:" /etc/subgid || echo "node:100000:65536" >> /etc/subgid && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
