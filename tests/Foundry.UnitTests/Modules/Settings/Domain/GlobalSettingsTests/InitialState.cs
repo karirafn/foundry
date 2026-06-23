@@ -28,4 +28,14 @@ public sealed class InitialState
         // Assert
         settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
+
+    [Fact]
+    public void WhenCreated_LastImageBuiltAtIsNull()
+    {
+        // Act
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Assert
+        settings.LastImageBuiltAt.ShouldBeNull();
+    }
 }

@@ -50,4 +50,38 @@ public sealed class CompleteImageBuild
         // Assert
         settings.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
     }
+
+    [Fact]
+    public void WhenCalled_StampsLastImageBuiltAt()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        // Act
+        settings.CompleteImageBuild();
+
+        // Assert
+        settings.LastImageBuiltAt.ShouldNotBeNull();
+        settings.LastImageBuiltAt.Value.ShouldBeGreaterThanOrEqualTo(before);
+    }
+
+    [Fact]
+    public void WhenCalledTwice_LastImageBuiltAtUpdatesToLatest()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        settings.CompleteImageBuild();
+        DateTimeOffset firstBuildTime = settings.LastImageBuiltAt!.Value;
+
+        // Act
+        settings.BeginImageBuild();
+        settings.CompleteImageBuild();
+
+        // Assert
+        settings.LastImageBuiltAt.ShouldNotBeNull();
+        settings.LastImageBuiltAt.Value.ShouldBeGreaterThanOrEqualTo(firstBuildTime);
+    }
 }

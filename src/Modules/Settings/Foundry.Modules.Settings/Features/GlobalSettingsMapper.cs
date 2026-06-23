@@ -48,6 +48,7 @@ internal static class GlobalSettingsMapper
             settings.WorkerImageConfiguration.InstallChromium,
             settings.WorkerImageConfiguration.InstallDocker,
             status,
-            lastError);
+            lastError,
+            settings.LastImageBuiltAt is not null);
     }
 }

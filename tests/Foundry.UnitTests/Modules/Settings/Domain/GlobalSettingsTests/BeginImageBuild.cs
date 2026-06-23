@@ -48,4 +48,20 @@ public sealed class BeginImageBuild
         // Assert
         settings.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
     }
+
+    [Fact]
+    public void WhenCalledAfterSuccessfulBuild_LastImageBuiltAtIsPreserved()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        settings.CompleteImageBuild();
+        DateTimeOffset? lastBuiltAt = settings.LastImageBuiltAt;
+
+        // Act
+        settings.BeginImageBuild();
+
+        // Assert
+        settings.LastImageBuiltAt.ShouldBe(lastBuiltAt);
+    }
 }

@@ -56,6 +56,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public ImageBuildState ImageBuildState { get; private set; } = null!;
 
+    public DateTimeOffset? LastImageBuiltAt { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -164,6 +166,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public void CompleteImageBuild()
     {
         ImageBuildState = new ImageBuildState.Idle();
+        LastImageBuiltAt = DateTimeOffset.UtcNow;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

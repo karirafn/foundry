@@ -156,4 +156,49 @@ public sealed class ToSummary
             () => result.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle),
             () => result.LastImageBuildError.ShouldBeNull());
     }
+
+    [Fact]
+    public void WhenNeverBuilt_HasUsableImageIsFalse()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.HasUsableImage.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenBuildCompletedSuccessfully_HasUsableImageIsTrue()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.BeginImageBuild();
+        settings.CompleteImageBuild();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.HasUsableImage.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenBuildFailedAfterPriorSuccess_HasUsableImageRemainsTrue()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.BeginImageBuild();
+        settings.CompleteImageBuild();
+        settings.BeginImageBuild();
+        settings.FailImageBuild("new error");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.HasUsableImage.ShouldBeTrue();
+    }
 }
