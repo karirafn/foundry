@@ -245,7 +245,9 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
                 InstallDotnet: true,
                 InstallAngular: false,
                 InstallGlab: false,
-                InstallGh: false);
+                InstallGh: false,
+                InstallChromium: false,
+                InstallDocker: false);
             SeedGlobalSettings(config);
 
             SpyImageOperations spyImages = new();

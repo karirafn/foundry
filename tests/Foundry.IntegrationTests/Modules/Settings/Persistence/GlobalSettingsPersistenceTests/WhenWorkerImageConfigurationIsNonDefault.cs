@@ -33,7 +33,9 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
             InstallDotnet: true,
             InstallAngular: true,
             InstallGlab: false,
-            InstallGh: true);
+            InstallGh: true,
+            InstallChromium: false,
+            InstallDocker: false);
 
         GlobalSettingsId id = await SeedSettingsWithConfigAsync(config);
 

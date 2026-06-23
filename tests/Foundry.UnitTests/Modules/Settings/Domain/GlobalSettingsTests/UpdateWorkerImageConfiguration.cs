@@ -20,7 +20,9 @@ public sealed class UpdateWorkerImageConfiguration
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         bool changed = settings.UpdateWorkerImageConfiguration(newConfig);
@@ -55,7 +57,9 @@ public sealed class UpdateWorkerImageConfiguration
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         settings.UpdateWorkerImageConfiguration(newConfig);

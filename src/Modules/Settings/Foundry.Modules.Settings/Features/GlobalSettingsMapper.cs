@@ -45,6 +45,8 @@ internal static class GlobalSettingsMapper
             settings.WorkerImageConfiguration.InstallAngular,
             settings.WorkerImageConfiguration.InstallGlab,
             settings.WorkerImageConfiguration.InstallGh,
+            settings.WorkerImageConfiguration.InstallChromium,
+            settings.WorkerImageConfiguration.InstallDocker,
             status,
             lastError);
     }

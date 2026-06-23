@@ -18,5 +18,7 @@ public sealed record GlobalSettingsSummary(
     bool InstallAngular,
     bool InstallGlab,
     bool InstallGh,
+    bool InstallChromium,
+    bool InstallDocker,
     ImageBuildStatus ImageBuildStatus,
     string? LastImageBuildError);

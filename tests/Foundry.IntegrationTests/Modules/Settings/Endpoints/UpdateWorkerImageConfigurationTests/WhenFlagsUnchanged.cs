@@ -38,7 +38,7 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(dotnet, angular, glab, gh));
+        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(dotnet, angular, glab, gh, false, false));
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }

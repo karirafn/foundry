@@ -17,7 +17,9 @@ internal static class UpdateWorkerImageConfiguration
         bool InstallDotnet,
         bool InstallAngular,
         bool InstallGlab,
-        bool InstallGh) : ICommand<GlobalSettingsSummary>;
+        bool InstallGh,
+        bool InstallChromium,
+        bool InstallDocker) : ICommand<GlobalSettingsSummary>;
 
     internal sealed class Handler(
         DbContext dbContext,
@@ -40,7 +42,9 @@ internal static class UpdateWorkerImageConfiguration
                 command.InstallDotnet,
                 command.InstallAngular,
                 command.InstallGlab,
-                command.InstallGh);
+                command.InstallGh,
+                command.InstallChromium,
+                command.InstallDocker);
 
             bool changed = settings.UpdateWorkerImageConfiguration(config);
 
@@ -63,7 +67,9 @@ internal static class UpdateWorkerImageConfiguration
             bool InstallDotnet,
             bool InstallAngular,
             bool InstallGlab,
-            bool InstallGh);
+            bool InstallGh,
+            bool InstallChromium,
+            bool InstallDocker);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -76,7 +82,9 @@ internal static class UpdateWorkerImageConfiguration
                         body.InstallDotnet,
                         body.InstallAngular,
                         body.InstallGlab,
-                        body.InstallGh);
+                        body.InstallGh,
+                        body.InstallChromium,
+                        body.InstallDocker);
 
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 

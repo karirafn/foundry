@@ -65,7 +65,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: false,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         await SeedSettingsAsync(initial);
 
@@ -77,7 +79,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -97,7 +101,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: false,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         await SeedSettingsAsync(initial);
 
@@ -109,7 +115,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -130,7 +138,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         await SeedSettingsAsync(config);
 
@@ -142,7 +152,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -159,7 +171,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         await SeedSettingsAsync(config);
 
@@ -171,7 +185,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -192,7 +208,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: false,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         await SeedSettingsAsync(initial);
 
@@ -204,7 +222,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: true,
             InstallAngular: true,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -227,7 +247,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: false,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         await SeedSettingsAsync(initial);
 
@@ -239,7 +261,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: true,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -266,7 +290,9 @@ public sealed class HandleAsync : IAsyncLifetime
             InstallDotnet: false,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

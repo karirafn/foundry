@@ -42,7 +42,9 @@ public sealed class ToSummary
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false));
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false));
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
@@ -60,7 +62,9 @@ public sealed class ToSummary
             InstallDotnet: true,
             InstallAngular: true,
             InstallGlab: true,
-            InstallGh: true));
+            InstallGh: true,
+            InstallChromium: false,
+            InstallDocker: false));
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
