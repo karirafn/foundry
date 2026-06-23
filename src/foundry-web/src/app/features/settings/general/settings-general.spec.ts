@@ -11,6 +11,8 @@ const IMAGE_FLAGS_DEFAULTS = {
   installAngular: false,
   installGlab: false,
   installGh: false,
+  installChromium: false,
+  installDocker: false,
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
 };
@@ -810,7 +812,7 @@ describe('SettingsGeneralComponent', () => {
       expect(imageHeading).toBeTruthy();
     });
 
-    it('should render four checkboxes for the image flags', () => {
+    it('should render six checkboxes for the image flags', () => {
       // Arrange
       const { httpMock } = setup();
       const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -824,7 +826,7 @@ describe('SettingsGeneralComponent', () => {
       const checkboxes = imageForm?.querySelectorAll('input[type="checkbox"]');
 
       // Assert
-      expect(checkboxes?.length).toBe(4);
+      expect(checkboxes?.length).toBe(6);
     });
 
     it('should initialize checkboxes from loaded settings', () => {
@@ -911,7 +913,7 @@ describe('SettingsGeneralComponent', () => {
       // Assert
       const req = httpMock.expectOne('/api/settings/worker-image');
       expect(req.request.method).toBe('PUT');
-      expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+      expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
       req.flush({ ...API_KEY_RESPONSE, installDotnet: true });
     });
 
@@ -1062,12 +1064,58 @@ describe('SettingsGeneralComponent', () => {
       const angularLabel = el.querySelector('label[for="installAngular"]');
       const glabLabel = el.querySelector('label[for="installGlab"]');
       const ghLabel = el.querySelector('label[for="installGh"]');
+      const chromiumLabel = el.querySelector('label[for="installChromium"]');
+      const dockerLabel = el.querySelector('label[for="installDocker"]');
 
       // Assert
       expect(dotnetLabel).toBeTruthy();
       expect(angularLabel).toBeTruthy();
       expect(glabLabel).toBeTruthy();
       expect(ghLabel).toBeTruthy();
+      expect(chromiumLabel).toBeTruthy();
+      expect(dockerLabel).toBeTruthy();
+    });
+
+    it('should initialize installChromium and installDocker checkboxes from loaded settings', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, installChromium: true, installDocker: true });
+      fixture.detectChanges();
+
+      // Act
+      const chromiumModel = fixture.debugElement.query(By.css('#installChromium')).injector.get(NgModel);
+      const dockerModel = fixture.debugElement.query(By.css('#installDocker')).injector.get(NgModel);
+
+      // Assert
+      expect(chromiumModel.model).toBe(true);
+      expect(dockerModel.model).toBe(true);
+    });
+
+    it('should include installChromium and installDocker in the save payload', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, installChromium: false, installDocker: false });
+      fixture.detectChanges();
+
+      // Make dirty by toggling installChromium
+      const component = fixture.componentInstance as unknown as { _installChromiumValue: { set: (v: boolean) => void } };
+      component._installChromiumValue.set(true);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const saveBtn = imageForm?.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+      saveBtn.click();
+
+      // Assert
+      const req = httpMock.expectOne('/api/settings/worker-image');
+      expect(req.request.body).toEqual({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: true, installDocker: false });
+      req.flush({ ...API_KEY_RESPONSE, installChromium: true });
     });
 
     it('should show error message when save image flags fails', () => {
@@ -1079,7 +1127,7 @@ describe('SettingsGeneralComponent', () => {
       fixture.detectChanges();
 
       // Make dirty and attempt save
-      service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+      service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
       httpMock.expectOne('/api/settings/worker-image').flush('Error', { status: 500, statusText: 'Server Error' });
       fixture.detectChanges();
 
@@ -1111,7 +1159,7 @@ describe('SettingsGeneralComponent', () => {
       expect(fieldset).toBeTruthy();
       expect(legend?.classList.contains('sr-only')).toBe(true);
       expect(legend?.textContent?.trim()).toBe('Preinstalled toolchains');
-      expect(checkboxesInsideFieldset?.length).toBe(4);
+      expect(checkboxesInsideFieldset?.length).toBe(6);
     });
 
     it('should show success message in role="status" region after a successful image flags save', () => {
@@ -1123,7 +1171,7 @@ describe('SettingsGeneralComponent', () => {
       fixture.detectChanges();
 
       // Act
-      service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+      service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
       httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, installDotnet: true, imageBuildStatus: 'Building' });
       fixture.detectChanges();
 

@@ -59,6 +59,8 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     installAngular: false,
     installGlab: false,
     installGh: false,
+    installChromium: false,
+    installDocker: false,
     imageBuildStatus: 'Idle',
     lastImageBuildError: null,
     ...overrides,
@@ -1124,6 +1126,23 @@ describe('SettingsService', () => {
     expect(flags!.installGh).toBe(false);
   });
 
+  it('should populate installChromium and installDocker from loadSettings response', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+      installChromium: true,
+      installDocker: true,
+    }));
+
+    // Assert
+    const flags = service.workerImageFlags();
+    expect(flags!.installChromium).toBe(true);
+    expect(flags!.installDocker).toBe(true);
+  });
+
   // loadSettings sets imageBuildStatus from response
   it('should populate imageBuildStatus from loadSettings response', () => {
     // Arrange
@@ -1159,12 +1178,12 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: true, installGh: false });
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: true, installGh: false, installChromium: false, installDocker: false });
     const req = httpMock.expectOne('/api/settings/worker-image');
 
     // Assert
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installGlab: true, installGh: false });
+    expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installGlab: true, installGh: false, installChromium: false, installDocker: false });
     req.flush(buildSettingsResponse({ installDotnet: true, installGlab: true }));
   });
 
@@ -1173,7 +1192,7 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
 
     // Assert — before flush
     expect(service.savingImageFlags()).toBe(true);
@@ -1182,7 +1201,7 @@ describe('SettingsService', () => {
 
   it('should update workerImageFlags and clear savingImageFlags after updateWorkerImageFlags succeeds', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: true, installGlab: false, installGh: false });
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: true, installGlab: false, installGh: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({
       installDotnet: true,
       installAngular: true,
@@ -1199,7 +1218,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsSuccess to true after updateWorkerImageFlags succeeds', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({ installDotnet: true }));
 
     // Assert
@@ -1208,7 +1227,7 @@ describe('SettingsService', () => {
 
   it('should keep saveImageFlagsSuccess false when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert
@@ -1217,7 +1236,7 @@ describe('SettingsService', () => {
 
   it('should reset saveImageFlagsSuccess in loadSettings', () => {
     // Arrange — put success signal into true state
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
     expect(service.saveImageFlagsSuccess()).toBe(true);
 
@@ -1231,7 +1250,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsError when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1244,7 +1263,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsError to a fixed user-facing string when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',

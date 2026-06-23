@@ -299,6 +299,8 @@ export class SettingsService {
       installAngular: response.installAngular,
       installGlab: response.installGlab,
       installGh: response.installGh,
+      installChromium: response.installChromium,
+      installDocker: response.installDocker,
     };
   }
 

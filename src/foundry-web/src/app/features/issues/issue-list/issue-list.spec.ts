@@ -42,6 +42,8 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   installAngular: false,
   installGlab: false,
   installGh: false,
+  installChromium: false,
+  installDocker: false,
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
 };
