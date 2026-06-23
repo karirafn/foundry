@@ -111,9 +111,9 @@ public sealed class StartingAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task OnStartup_SetsImageBuildStatusToBuildingInDatabase()
+    public async Task OnStartup_DoesNotTransitionStatusToBuilding()
     {
-        // Arrange
+        // Arrange — Building transition is owned by ProcessRebuildAsync, not StartingAsync
         SeedGlobalSettings();
         WorkerImageRebuildService sut = BuildService();
 
@@ -125,7 +125,7 @@ public sealed class StartingAsync : IAsyncDisposable
         GlobalSettings? settings = await db.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
-        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Building>();
+        settings.ImageBuildState.ShouldNotBeOfType<ImageBuildState.Building>();
     }
 
     [Fact]

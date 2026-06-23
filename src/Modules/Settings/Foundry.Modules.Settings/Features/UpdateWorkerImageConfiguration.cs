@@ -44,10 +44,10 @@ internal static class UpdateWorkerImageConfiguration
 
             bool changed = settings.UpdateWorkerImageConfiguration(config);
 
-            await dbContext.SaveChangesAsync(cancellationToken);
-
             if (changed)
             {
+                await dbContext.SaveChangesAsync(cancellationToken);
+
                 await integrationEventDispatcher.DispatchAsync(
                     [new WorkerImageConfigurationChanged()],
                     cancellationToken);

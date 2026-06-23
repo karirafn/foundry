@@ -42,6 +42,7 @@ internal sealed class WorkerImageRebuildService(
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
         if (settings is null)
@@ -50,9 +51,6 @@ internal sealed class WorkerImageRebuildService(
                 "Startup image rebuild skipped: no GlobalSettings row exists.");
             return;
         }
-
-        settings.BeginImageBuild();
-        await dbContext.SaveChangesAsync(cancellationToken);
 
         rebuildQueue.TryEnqueue();
     }
@@ -79,10 +77,6 @@ internal sealed class WorkerImageRebuildService(
             return;
         }
 
-        await broadcaster.SendAsync(
-            new SystemNotification(ImageBuildCategory, true, BuildingMessage),
-            cancellationToken);
-
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
@@ -95,6 +89,10 @@ internal sealed class WorkerImageRebuildService(
                 "Worker image rebuild requested but no GlobalSettings row exists; skipping.");
             return;
         }
+
+        await broadcaster.SendAsync(
+            new SystemNotification(ImageBuildCategory, true, BuildingMessage),
+            cancellationToken);
 
         settings.BeginImageBuild();
         await dbContext.SaveChangesAsync(cancellationToken);

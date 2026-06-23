@@ -127,9 +127,10 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGlobalSettingsMissing_BroadcastsBuildingNotification()
+    public async Task WhenGlobalSettingsMissing_DoesNotBroadcastBuildingNotification()
     {
-        // Arrange
+        // Arrange — no GlobalSettings row seeded; Broadcasting "Building" with no settings
+        // would leave a stuck banner since no success/failure broadcast follows the early return.
         CapturingNotificationBroadcaster broadcaster = new();
         WorkerImageRebuildService sut = BuildService(new SpyImageOperations(), broadcaster);
 
@@ -137,7 +138,8 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        broadcaster.Sent.ShouldContain(n => n.Category == WorkerImageRebuildService.ImageBuildCategory
+        broadcaster.Sent.ShouldNotContain(n =>
+            n.Category == WorkerImageRebuildService.ImageBuildCategory
             && n.IsActive
             && n.Message == WorkerImageRebuildService.BuildingMessage);
     }
