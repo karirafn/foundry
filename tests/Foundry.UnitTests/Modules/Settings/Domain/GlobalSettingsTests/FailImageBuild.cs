@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
 
 using Shouldly;
@@ -10,7 +9,7 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.GlobalSettingsTests;
 public sealed class FailImageBuild
 {
     [Fact]
-    public void WhenCalled_SetsStatusToFailed()
+    public void WhenCalled_SetsStateToFailedRecord()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
@@ -20,11 +19,11 @@ public sealed class FailImageBuild
         settings.FailImageBuild("error log tail");
 
         // Assert
-        settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Failed);
+        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
     }
 
     [Fact]
-    public void WhenCalled_StoresErrorTail()
+    public void WhenCalled_StoresErrorTailOnFailedState()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
@@ -35,11 +34,12 @@ public sealed class FailImageBuild
         settings.FailImageBuild(errorTail);
 
         // Assert
-        settings.LastImageBuildError.ShouldBe(errorTail);
+        ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        failed.ErrorTail.ShouldBe(errorTail);
     }
 
     [Fact]
-    public void WhenCalledWithNullErrorTail_StoresNull()
+    public void WhenCalledWithNullErrorTail_ErrorTailIsNull()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
@@ -49,7 +49,8 @@ public sealed class FailImageBuild
         settings.FailImageBuild(null);
 
         // Assert
-        settings.LastImageBuildError.ShouldBeNull();
+        ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        failed.ErrorTail.ShouldBeNull();
     }
 
     [Fact]

@@ -1,7 +1,6 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features;
@@ -50,7 +49,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
     private void SeedGlobalSettings(
         WorkerImageConfiguration? config = null,
-        ImageBuildStatus initialStatus = ImageBuildStatus.Idle)
+        bool initiallyFailed = false)
     {
         using FoundryDbContext db = CreateDbContext();
         GlobalSettings settings = GlobalSettings.Create();
@@ -60,7 +59,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             settings.UpdateWorkerImageConfiguration(config);
         }
 
-        if (initialStatus == ImageBuildStatus.Failed)
+        if (initiallyFailed)
         {
             settings.FailImageBuild("previous error");
         }
@@ -165,7 +164,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             GlobalSettings? settings = await db.Set<GlobalSettings>()
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
             settings.ShouldNotBeNull();
-            settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
+            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
         }
         finally
         {
@@ -174,14 +173,14 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBuildSucceeds_ClearsLastImageBuildError()
+    public async Task WhenBuildSucceeds_ClearsFailedState()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
 
         try
         {
-            SeedGlobalSettings(initialStatus: ImageBuildStatus.Failed);
+            SeedGlobalSettings(initiallyFailed: true);
 
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
@@ -195,7 +194,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             GlobalSettings? settings = await db.Set<GlobalSettings>()
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
             settings.ShouldNotBeNull();
-            settings.LastImageBuildError.ShouldBeNull();
+            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
         }
         finally
         {
@@ -289,7 +288,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             GlobalSettings? settings = await db.Set<GlobalSettings>()
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
             settings.ShouldNotBeNull();
-            settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Failed);
+            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
         }
         finally
         {
@@ -298,7 +297,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerReportsError_StoresErrorTailInSettings()
+    public async Task WhenDockerReportsError_StoresErrorTailInFailedState()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
@@ -321,7 +320,8 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             GlobalSettings? settings = await db.Set<GlobalSettings>()
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
             settings.ShouldNotBeNull();
-            settings.LastImageBuildError.ShouldBe(dockerError);
+            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            failed.ErrorTail.ShouldBe(dockerError);
         }
         finally
         {
@@ -385,7 +385,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             GlobalSettings? settings = await db.Set<GlobalSettings>()
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
             settings.ShouldNotBeNull();
-            settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Failed);
+            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
         }
         finally
         {
@@ -412,7 +412,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert
-            capturingImages.CapturedStatusDuringBuild.ShouldBe(ImageBuildStatus.Building);
+            capturingImages.CapturedStateDuringBuild.ShouldBeOfType<ImageBuildState.Building>();
         }
         finally
         {
@@ -567,7 +567,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
                 .AsNoTracking()
                 .FirstOrDefaultAsync(CancellationToken.None);
             settings.ShouldNotBeNull();
-            settings.ImageBuildStatus.ShouldNotBe(ImageBuildStatus.Failed);
+            settings.ImageBuildState.ShouldNotBeOfType<ImageBuildState.Failed>();
         }
         finally
         {
@@ -607,7 +607,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         GlobalSettings? settings = await db.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
-        settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
+        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
 
     private static string CreateTempContextDir()
@@ -741,11 +741,11 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     /// <summary>
-    /// Captures the GlobalSettings.ImageBuildStatus mid-build to verify BeginImageBuild() was called.
+    /// Captures the GlobalSettings.ImageBuildState mid-build to verify BeginImageBuild() was called.
     /// </summary>
     private sealed class StatusCapturingImageOperations(Func<FoundryDbContext> dbContextFactory) : IImageOperations
     {
-        public ImageBuildStatus CapturedStatusDuringBuild { get; private set; }
+        public ImageBuildState? CapturedStateDuringBuild { get; private set; }
 
         public async Task BuildImageFromDockerfileAsync(
             ImageBuildParameters parameters,
@@ -762,7 +762,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
             if (settings is not null)
             {
-                CapturedStatusDuringBuild = settings.ImageBuildStatus;
+                CapturedStateDuringBuild = settings.ImageBuildState;
             }
         }
 

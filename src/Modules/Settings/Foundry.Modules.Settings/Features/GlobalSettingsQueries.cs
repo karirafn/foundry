@@ -96,11 +96,20 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
     public async Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
     {
-        ImageBuildStatus? value = await dbContext.Set<GlobalSettings>()
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
             .AsNoTracking()
-            .Select(s => (ImageBuildStatus?)s.ImageBuildStatus)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return value ?? ImageBuildStatus.Idle;
+        if (settings is null)
+        {
+            return ImageBuildStatus.Idle;
+        }
+
+        return settings.ImageBuildState switch
+        {
+            ImageBuildState.Building => ImageBuildStatus.Building,
+            ImageBuildState.Failed => ImageBuildStatus.Failed,
+            _ => ImageBuildStatus.Idle,
+        };
     }
 }

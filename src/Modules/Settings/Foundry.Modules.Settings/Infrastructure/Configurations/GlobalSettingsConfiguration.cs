@@ -1,6 +1,5 @@
 using System.Text.Json;
 
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared.Infrastructure;
@@ -19,6 +18,7 @@ internal sealed class GlobalSettingsConfiguration(
     : IEntityTypeConfiguration<GlobalSettings>
 {
     private static readonly JsonSerializerOptions SerializerOptions = BuildSerializerOptions();
+    private static readonly JsonSerializerOptions ImageBuildStateOptions = BuildImageBuildStateOptions();
 
     public void Configure(EntityTypeBuilder<GlobalSettings> builder)
     {
@@ -78,12 +78,14 @@ internal sealed class GlobalSettingsConfiguration(
             .HasColumnType("TEXT")
             .HasColumnName("worker_image_configuration");
 
-        builder.Property(s => s.ImageBuildStatus)
-            .HasConversion<string>()
-            .HasColumnName("image_build_status");
+        ValueConverter<ImageBuildState, string> imageBuildStateConverter = new(
+            state => SerializeImageBuildState(state),
+            json => DeserializeImageBuildState(json));
 
-        builder.Property(s => s.LastImageBuildError)
-            .HasColumnName("last_image_build_error");
+        builder.Property(s => s.ImageBuildState)
+            .HasConversion(imageBuildStateConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("image_build_status");
 
         builder.Property(s => s.CreatedAt)
             .HasColumnName("created_at");
@@ -106,10 +108,24 @@ internal sealed class GlobalSettingsConfiguration(
         return options;
     }
 
+    private static JsonSerializerOptions BuildImageBuildStateOptions()
+    {
+        JsonSerializerOptions options = new();
+        options.Converters.Add(new ImageBuildStateJsonConverter());
+        return options;
+    }
+
     private static string SerializeAuthMode(AuthMode mode)
         => JsonSerializer.Serialize(mode, SerializerOptions);
 
     private static AuthMode DeserializeAuthMode(string json)
         => JsonSerializer.Deserialize<AuthMode>(json, SerializerOptions)
             ?? throw new InvalidOperationException($"Failed to deserialize AuthMode from JSON: {json}");
+
+    private static string SerializeImageBuildState(ImageBuildState state)
+        => JsonSerializer.Serialize(state, ImageBuildStateOptions);
+
+    private static ImageBuildState DeserializeImageBuildState(string json)
+        => JsonSerializer.Deserialize<ImageBuildState>(json, ImageBuildStateOptions)
+            ?? throw new InvalidOperationException($"Failed to deserialize ImageBuildState from JSON: {json}");
 }

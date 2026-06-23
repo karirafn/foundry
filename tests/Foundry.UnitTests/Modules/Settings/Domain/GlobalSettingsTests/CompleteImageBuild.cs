@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
 
 using Shouldly;
@@ -10,7 +9,7 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.GlobalSettingsTests;
 public sealed class CompleteImageBuild
 {
     [Fact]
-    public void WhenCalled_SetsStatusToIdle()
+    public void WhenCalled_SetsStateToIdleRecord()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
@@ -20,11 +19,11 @@ public sealed class CompleteImageBuild
         settings.CompleteImageBuild();
 
         // Assert
-        settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
+        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
 
     [Fact]
-    public void WhenCalled_ClearsLastImageBuildError()
+    public void WhenCalledAfterFail_StateNoLongerContainsErrorTail()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
@@ -34,7 +33,7 @@ public sealed class CompleteImageBuild
         settings.CompleteImageBuild();
 
         // Assert
-        settings.LastImageBuildError.ShouldBeNull();
+        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
 
     [Fact]

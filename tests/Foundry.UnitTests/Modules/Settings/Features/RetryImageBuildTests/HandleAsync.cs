@@ -43,23 +43,9 @@ public sealed class HandleAsync : IAsyncLifetime
         return new FoundryDbContext(options);
     }
 
-    private async Task SeedSettingsWithStatusAsync(ImageBuildStatus status)
+    private async Task SeedSettingsAsync(GlobalSettings settings)
     {
         await using FoundryDbContext seedDb = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
-
-        switch (status)
-        {
-            case ImageBuildStatus.Failed:
-                settings.FailImageBuild("previous error");
-                break;
-            case ImageBuildStatus.Building:
-                settings.BeginImageBuild();
-                break;
-            case ImageBuildStatus.Idle:
-                break;
-        }
-
         seedDb.Set<GlobalSettings>().Add(settings);
         await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
@@ -68,7 +54,9 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenStatusIsFailed_PublishesWorkerImageConfigurationChangedEvent()
     {
         // Arrange
-        await SeedSettingsWithStatusAsync(ImageBuildStatus.Failed);
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.FailImageBuild("previous error");
+        await SeedSettingsAsync(settings);
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -85,10 +73,12 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenStatusIsFailed_DoesNotSetImageBuildStatusToBuilding()
+    public async Task WhenStatusIsFailed_DoesNotSetImageBuildStateToBuildingRecord()
     {
-        // Arrange — status transition to Building is owned by WorkerImageRebuildService, not this handler
-        await SeedSettingsWithStatusAsync(ImageBuildStatus.Failed);
+        // Arrange — state transition to Building is owned by WorkerImageRebuildService, not this handler
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.FailImageBuild("previous error");
+        await SeedSettingsAsync(settings);
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -102,14 +92,15 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
-        stored.ImageBuildStatus.ShouldBe(ImageBuildStatus.Failed);
+        stored.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
     }
 
     [Fact]
     public async Task WhenStatusIsIdle_ReturnsInvalidStatusError()
     {
         // Arrange
-        await SeedSettingsWithStatusAsync(ImageBuildStatus.Idle);
+        GlobalSettings settings = GlobalSettings.Create();
+        await SeedSettingsAsync(settings);
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -130,7 +121,9 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenStatusIsBuilding_ReturnsInvalidStatusError()
     {
         // Arrange
-        await SeedSettingsWithStatusAsync(ImageBuildStatus.Building);
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        await SeedSettingsAsync(settings);
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -151,7 +144,8 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenStatusIsIdle_DoesNotPublishEvent()
     {
         // Arrange
-        await SeedSettingsWithStatusAsync(ImageBuildStatus.Idle);
+        GlobalSettings settings = GlobalSettings.Create();
+        await SeedSettingsAsync(settings);
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();

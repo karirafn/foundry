@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
@@ -51,33 +50,37 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ImageBuildStatusBuilding_RoundTrips()
+    public async Task ImageBuildStateBuilding_RoundTrips()
     {
         // Arrange
-        GlobalSettingsId id = await SeedSettingsWithImageBuildStatusAsync(ImageBuildStatus.Building);
+        GlobalSettings seed = GlobalSettings.Create();
+        seed.BeginImageBuild();
+        GlobalSettingsId id = await SeedSettingsAsync(seed);
 
         // Act
         GlobalSettings? reloaded = await ReloadSettingsAsync(id);
 
         // Assert
         reloaded.ShouldNotBeNull();
-        reloaded.ImageBuildStatus.ShouldBe(ImageBuildStatus.Building);
+        reloaded.ImageBuildState.ShouldBeOfType<ImageBuildState.Building>();
     }
 
     [Fact]
-    public async Task ImageBuildStatusFailed_RoundTripsWithError()
+    public async Task ImageBuildStateFailed_RoundTripsWithErrorTail()
     {
         // Arrange
-        GlobalSettingsId id = await SeedSettingsWithFailedBuildAsync("build error output");
+        GlobalSettings seed = GlobalSettings.Create();
+        seed.BeginImageBuild();
+        seed.FailImageBuild("build error output");
+        GlobalSettingsId id = await SeedSettingsAsync(seed);
 
         // Act
         GlobalSettings? reloaded = await ReloadSettingsAsync(id);
 
         // Assert
         reloaded.ShouldNotBeNull();
-        reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.ImageBuildStatus.ShouldBe(ImageBuildStatus.Failed),
-            () => reloaded.LastImageBuildError.ShouldBe("build error output"));
+        ImageBuildState.Failed failed = reloaded.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        failed.ErrorTail.ShouldBe("build error output");
     }
 
     private async Task<GlobalSettingsId> SeedSettingsWithConfigAsync(WorkerImageConfiguration config)
@@ -94,33 +97,12 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
         return settings.Id;
     }
 
-    private async Task<GlobalSettingsId> SeedSettingsWithImageBuildStatusAsync(ImageBuildStatus status)
+    private async Task<GlobalSettingsId> SeedSettingsAsync(GlobalSettings settings)
     {
-        // No endpoint exists to set build status — seed directly through DbContext.
+        // No endpoint exists to set these new properties — seed directly through DbContext.
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GlobalSettings settings = GlobalSettings.Create();
-        if (status == ImageBuildStatus.Building)
-        {
-            settings.BeginImageBuild();
-        }
-
-        dbContext.Set<GlobalSettings>().Add(settings);
-        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        return settings.Id;
-    }
-
-    private async Task<GlobalSettingsId> SeedSettingsWithFailedBuildAsync(string errorTail)
-    {
-        // No endpoint exists to set failed build status — seed directly through DbContext.
-        using IServiceScope scope = _factory.Services.CreateScope();
-        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
-
-        GlobalSettings settings = GlobalSettings.Create();
-        settings.BeginImageBuild();
-        settings.FailImageBuild(errorTail);
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

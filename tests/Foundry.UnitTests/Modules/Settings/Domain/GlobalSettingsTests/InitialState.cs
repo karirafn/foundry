@@ -1,6 +1,4 @@
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
-using Foundry.Modules.Settings.Domain.ValueObjects;
 
 using Shouldly;
 
@@ -8,7 +6,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Settings.Domain.GlobalSettingsTests;
 
-public sealed class WorkerImageConfiguration
+public sealed class InitialState
 {
     [Fact]
     public void WhenCreated_WorkerImageConfigurationIsDefault()
@@ -22,22 +20,12 @@ public sealed class WorkerImageConfiguration
     }
 
     [Fact]
-    public void WhenCreated_ImageBuildStatusIsIdle()
+    public void WhenCreated_ImageBuildStateIsIdle()
     {
         // Arrange & Act
         GlobalSettings settings = GlobalSettings.Create();
 
         // Assert
-        settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
-    }
-
-    [Fact]
-    public void WhenCreated_LastImageBuildErrorIsNull()
-    {
-        // Arrange & Act
-        GlobalSettings settings = GlobalSettings.Create();
-
-        // Assert
-        settings.LastImageBuildError.ShouldBeNull();
+        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
 }

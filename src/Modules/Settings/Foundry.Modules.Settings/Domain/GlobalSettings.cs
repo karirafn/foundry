@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -30,7 +29,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         AutoResumeOnUsageReset = true;
         DefaultCooldownMinutes = DefaultCooldownMinutesValue;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
-        ImageBuildStatus = ImageBuildStatus.Idle;
+        ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
@@ -55,9 +54,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
 
-    public ImageBuildStatus ImageBuildStatus { get; private set; }
-
-    public string? LastImageBuildError { get; private set; }
+    public ImageBuildState ImageBuildState { get; private set; } = null!;
 
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -160,22 +157,19 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public void BeginImageBuild()
     {
-        ImageBuildStatus = ImageBuildStatus.Building;
-        LastImageBuildError = null;
+        ImageBuildState = new ImageBuildState.Building();
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     public void CompleteImageBuild()
     {
-        ImageBuildStatus = ImageBuildStatus.Idle;
-        LastImageBuildError = null;
+        ImageBuildState = new ImageBuildState.Idle();
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     public void FailImageBuild(string? errorTail)
     {
-        ImageBuildStatus = ImageBuildStatus.Failed;
-        LastImageBuildError = errorTail;
+        ImageBuildState = new ImageBuildState.Failed(errorTail);
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

@@ -31,7 +31,7 @@ internal static class RetryImageBuild
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            if (settings.ImageBuildStatus != ImageBuildStatus.Failed)
+            if (settings.ImageBuildState is not ImageBuildState.Failed)
             {
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.InvalidRetryStatus);
             }

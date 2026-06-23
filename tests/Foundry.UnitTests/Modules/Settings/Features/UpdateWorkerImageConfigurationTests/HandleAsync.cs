@@ -119,7 +119,7 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
-        stored.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
+        stored.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
-        stored.ImageBuildStatus.ShouldNotBe(ImageBuildStatus.Building);
+        stored.ImageBuildState.ShouldNotBeOfType<ImageBuildState.Building>();
     }
 
     [Fact]

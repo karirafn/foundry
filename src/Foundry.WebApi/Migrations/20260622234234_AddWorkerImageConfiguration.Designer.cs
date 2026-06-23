@@ -260,7 +260,7 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("default_cooldown_minutes");
 
-                    b.Property<string>("ImageBuildStatus")
+                    b.Property<string>("ImageBuildState")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("image_build_status");
@@ -268,10 +268,6 @@ namespace Foundry.WebApi.Migrations
                     b.Property<bool>("IsDispatchPaused")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_dispatch_paused");
-
-                    b.Property<string>("LastImageBuildError")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("last_image_build_error");
 
                     b.Property<int>("MaxConcurrent")
                         .HasColumnType("INTEGER")

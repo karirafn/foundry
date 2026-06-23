@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
@@ -44,12 +43,12 @@ public sealed class StartingAsync : IAsyncDisposable
         return new FoundryDbContext(options);
     }
 
-    private void SeedGlobalSettings(ImageBuildStatus initialStatus = ImageBuildStatus.Idle)
+    private void SeedGlobalSettings(bool initiallyFailed = false)
     {
         using FoundryDbContext db = CreateDbContext();
         GlobalSettings settings = GlobalSettings.Create();
 
-        if (initialStatus == ImageBuildStatus.Failed)
+        if (initiallyFailed)
         {
             settings.FailImageBuild("previous error");
         }
@@ -126,7 +125,7 @@ public sealed class StartingAsync : IAsyncDisposable
         GlobalSettings? settings = await db.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
-        settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Building);
+        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Building>();
     }
 
     [Fact]
@@ -170,7 +169,7 @@ public sealed class StartingAsync : IAsyncDisposable
         GlobalSettings? settings = await db.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
-        settings.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
+        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
 
     private sealed class SpyWorkerImageRebuildQueue : IWorkerImageRebuildQueue

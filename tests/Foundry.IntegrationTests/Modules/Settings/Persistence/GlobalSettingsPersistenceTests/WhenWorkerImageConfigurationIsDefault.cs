@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
@@ -41,7 +40,7 @@ public sealed class WhenWorkerImageConfigurationIsDefault : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ImageBuildStatusRoundTripsAsIdle()
+    public async Task ImageBuildStateRoundTripsAsIdle()
     {
         // Arrange
         GlobalSettingsId id = await SeedDefaultSettingsAsync();
@@ -51,21 +50,7 @@ public sealed class WhenWorkerImageConfigurationIsDefault : IAsyncDisposable
 
         // Assert
         reloaded.ShouldNotBeNull();
-        reloaded.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
-    }
-
-    [Fact]
-    public async Task LastImageBuildErrorRoundTripsAsNull()
-    {
-        // Arrange
-        GlobalSettingsId id = await SeedDefaultSettingsAsync();
-
-        // Act
-        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
-
-        // Assert
-        reloaded.ShouldNotBeNull();
-        reloaded.LastImageBuildError.ShouldBeNull();
+        reloaded.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
 
     private async Task<GlobalSettingsId> SeedDefaultSettingsAsync()
