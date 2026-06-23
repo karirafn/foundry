@@ -116,8 +116,8 @@ describe('SystemSignalRService', () => {
     expect(captured.onReconnected).not.toBeNull();
   });
 
-  // Cycle 6: firing the reconnect callback emits on reconnected subject
-  it('should emit on reconnected subject when the hub reconnects', () => {
+  // Cycle 6: firing the reconnect callback emits on reconnected observable
+  it('should emit on reconnected observable when the hub reconnects', () => {
     // Arrange
     const { svc, captured } = setup();
     let emitCount = 0;
@@ -128,5 +128,14 @@ describe('SystemSignalRService', () => {
 
     // Assert
     expect(emitCount).toBe(1);
+  });
+
+  // Cycle 7: reconnected is an Observable, not a writable Subject
+  it('should expose reconnected as an Observable (no next() method)', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert — Observable does not expose next(), so callers cannot emit spurious events
+    expect((svc.reconnected as unknown as { next?: unknown }).next).toBeUndefined();
   });
 });

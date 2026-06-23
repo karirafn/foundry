@@ -11,11 +11,13 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideHttpClient(),
-    provideAppInitializer(() => {
+    provideAppInitializer(async () => {
       const settingsService = inject(SettingsService);
       const accountService = inject(AccountService);
-      settingsService.loadSettings();
-      accountService.loadAccounts();
+      await Promise.all([
+        settingsService.loadSettings(),
+        accountService.loadAccounts(),
+      ]);
     }),
   ]
 };

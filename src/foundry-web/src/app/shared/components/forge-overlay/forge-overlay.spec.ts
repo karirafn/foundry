@@ -307,4 +307,45 @@ describe('ForgeOverlayComponent', () => {
     // Assert
     expect(mockSettings.loadSettings).toHaveBeenCalledOnce();
   });
+
+  // Reconnect + hasUsableImage true dismisses the overlay
+  it('should dismiss overlay after reconnected fires and hasUsableImage becomes true', () => {
+    // Arrange
+    const { fixture, mockSettings, mockSignalR } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+    expect((fixture.nativeElement as HTMLElement).querySelector('.forge-overlay')).not.toBeNull();
+
+    // Act — simulate reconnect followed by a settings reload that now has a usable image
+    mockSignalR.reconnected.next();
+    mockSettings._hasUsableImageSignal.set(true);
+    fixture.detectChanges();
+
+    // Assert — overlay is dismissed
+    expect((fixture.nativeElement as HTMLElement).querySelector('.forge-overlay')).toBeNull();
+  });
+
+  // State transition: Building -> Failed renders Failed branch
+  it('should render the Failed branch when imageBuildStatus transitions from Building to Failed', () => {
+    // Arrange — start in Building state
+    const { fixture, mockSettings } = setup({
+      accounts: [{ id: '1' }],
+      hasUsableImage: false,
+      imageBuildStatus: 'Building',
+      imageBuildLogTail: null,
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Building worker image…');
+    expect(el.querySelector('button')).toBeNull();
+
+    // Act — transition to Failed with an error log tail
+    mockSettings._imageBuildStatusSignal.set('Failed');
+    mockSettings._imageBuildLogTailSignal.set('Step 3/5 FAILED');
+    fixture.detectChanges();
+
+    // Assert — Failed branch is rendered with error tail and Retry button
+    expect(el.textContent).toContain('Worker image build failed');
+    expect(el.textContent).toContain('Step 3/5 FAILED');
+    const retryBtn = el.querySelector('button');
+    expect(retryBtn).not.toBeNull();
+    expect(retryBtn?.textContent?.trim()).toBe('Retry');
+  });
 });

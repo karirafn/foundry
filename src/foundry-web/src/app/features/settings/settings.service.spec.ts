@@ -1351,6 +1351,21 @@ describe('SettingsService', () => {
     expect(service.imageBuildLogTail()).toBeNull();
   });
 
+  // retryImageBuild resets saveImageFlagsSuccess
+  it('should reset saveImageFlagsSuccess to false when retryImageBuild is called', () => {
+    // Arrange — drive saveImageFlagsSuccess to true via updateWorkerImageFlags
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
+    expect(service.saveImageFlagsSuccess()).toBe(true);
+
+    // Act
+    service.retryImageBuild();
+
+    // Assert — cleared before the response arrives
+    expect(service.saveImageFlagsSuccess()).toBe(false);
+    httpMock.expectOne('/api/settings/worker-image/retry').flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+  });
+
   // hasUsableImage signal
   it('should start with hasUsableImage false', () => {
     // Arrange / Act — (no action — testing initial state)

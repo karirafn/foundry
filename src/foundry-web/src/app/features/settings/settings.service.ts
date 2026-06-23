@@ -101,7 +101,7 @@ export class SettingsService {
   private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
-  loadSettings(): void {
+  loadSettings(): Promise<void> {
     this._loadErrorSignal.set(null);
     this._saveErrorSignal.set(null);
     this._switchErrorSignal.set(null);
@@ -122,25 +122,29 @@ export class SettingsService {
     this.switching.set(false);
     this.loading.set(true);
 
-    this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
-      next: (response) => {
-        this._settingsSignal.set(response);
-        this.authSettings.set(this._mapToAuthSettings(response));
-        this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
-        this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
-        this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
-        this._dispatchService.updateFromSettings(response);
-        this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
-        this._imageBuildStatusSignal.set(response.imageBuildStatus);
-        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
-        this._hasUsableImageSignal.set(response.hasUsableImage);
-        this.loading.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._loadErrorSignal.set(LOAD_SETTINGS_ERROR);
-        this.loading.set(false);
-      },
+    return new Promise<void>((resolve) => {
+      this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
+        next: (response) => {
+          this._settingsSignal.set(response);
+          this.authSettings.set(this._mapToAuthSettings(response));
+          this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
+          this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
+          this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
+          this._dispatchService.updateFromSettings(response);
+          this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
+          this._imageBuildStatusSignal.set(response.imageBuildStatus);
+          this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+          this._hasUsableImageSignal.set(response.hasUsableImage);
+          this.loading.set(false);
+          resolve();
+        },
+        error: (err: HttpErrorResponse) => {
+          console.error(err);
+          this._loadErrorSignal.set(LOAD_SETTINGS_ERROR);
+          this.loading.set(false);
+          resolve();
+        },
+      });
     });
   }
 
@@ -276,6 +280,7 @@ export class SettingsService {
 
   retryImageBuild(): void {
     this._saveImageFlagsErrorSignal.set(null);
+    this._saveImageFlagsSuccessSignal.set(false);
     this._savingImageFlagsSignal.set(true);
 
     this._http.post<GlobalSettingsResponse>('/api/settings/worker-image/retry', null).subscribe({

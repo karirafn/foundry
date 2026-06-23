@@ -46,21 +46,25 @@ export class AccountService {
   private readonly _validationErrorSignal: WritableSignal<string | null> = signal(null);
   readonly validationError: Signal<string | null> = this._validationErrorSignal.asReadonly();
 
-  loadAccounts(): void {
+  loadAccounts(): Promise<void> {
     this._loadErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
     this._loadingSignal.set(true);
 
-    this._http.get<AccountSummary[]>(API_BASE).subscribe({
-      next: (accounts) => {
-        this._accountsSignal.set(accounts);
-        this._loadingSignal.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._loadErrorSignal.set(this._extractErrorMessage(err));
-        this._loadingSignal.set(false);
-      },
+    return new Promise<void>((resolve) => {
+      this._http.get<AccountSummary[]>(API_BASE).subscribe({
+        next: (accounts) => {
+          this._accountsSignal.set(accounts);
+          this._loadingSignal.set(false);
+          resolve();
+        },
+        error: (err: HttpErrorResponse) => {
+          console.error(err);
+          this._loadErrorSignal.set(this._extractErrorMessage(err));
+          this._loadingSignal.set(false);
+          resolve();
+        },
+      });
     });
   }
 

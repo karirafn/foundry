@@ -1,5 +1,5 @@
 import { Injectable, InjectionToken, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { SystemNotification } from '../models/system-notification.model';
 
@@ -35,7 +35,8 @@ export class SystemSignalRService {
 
   readonly notifications: Signal<SystemNotification[]> = computed(() => this._notifications());
 
-  readonly reconnected = new Subject<void>();
+  private readonly _reconnected = new Subject<void>();
+  readonly reconnected: Observable<void> = this._reconnected.asObservable();
 
   constructor() {
     const hub = this._hubFactory();
@@ -48,7 +49,7 @@ export class SystemSignalRService {
     });
 
     hub.onReconnected(() => {
-      this.reconnected.next();
+      this._reconnected.next();
     });
 
     hub.start().catch(() => {
