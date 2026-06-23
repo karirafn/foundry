@@ -29,13 +29,19 @@ public sealed class StartAsync
 
     private static WorkerContainerSpec MinimalSpec(
         string image = "test-image:latest",
-        IReadOnlyList<BindMount>? bindMounts = null) =>
+        IReadOnlyList<BindMount>? bindMounts = null,
+        IReadOnlyList<string>? securityOptions = null,
+        IReadOnlyList<string>? devices = null) =>
         new(
             Image: image,
             EnvironmentVariables: new Dictionary<string, string>(),
             BindMounts: bindMounts ?? [],
             Labels: new Dictionary<string, string>(),
-            Command: []);
+            Command: [])
+        {
+            SecurityOptions = securityOptions ?? [],
+            Devices = devices ?? [],
+        };
 
     [Fact]
     public async Task WhenStarted_SetsMemoryLimitFromOptions()
@@ -121,6 +127,64 @@ public sealed class StartAsync
         result.IsSuccess.ShouldBeTrue();
         Result<ContainerId>.Success success = result.ShouldBeOfType<Result<ContainerId>.Success>();
         success.Value.Value.ShouldBe("created-container-abc");
+    }
+
+    [Fact]
+    public async Task WhenSpecHasSecurityOptions_SetsHostConfigSecurityOpt()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        IReadOnlyList<string> securityOptions = ["seccomp=unconfined", "apparmor=unconfined"];
+        DockerWorkerOrchestrator sut = new(spy, Options.Create(DefaultOptions()));
+
+        // Act
+        await sut.StartAsync(MinimalSpec(securityOptions: securityOptions), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.HostConfig.SecurityOpt.ShouldBe(
+            ["seccomp=unconfined", "apparmor=unconfined"],
+            ignoreOrder: false);
+    }
+
+    [Fact]
+    public async Task WhenSpecHasDevices_SetsHostConfigDevicesWithCorrectMapping()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        IReadOnlyList<string> devices = ["/dev/fuse"];
+        DockerWorkerOrchestrator sut = new(spy, Options.Create(DefaultOptions()));
+
+        // Act
+        await sut.StartAsync(MinimalSpec(devices: devices), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        IList<DeviceMapping> hostDevices = captured.HostConfig.Devices.ShouldNotBeNull();
+        hostDevices.Count.ShouldBe(1);
+        DeviceMapping mapping = hostDevices[0];
+        mapping.ShouldSatisfyAllConditions(
+            () => mapping.PathOnHost.ShouldBe("/dev/fuse"),
+            () => mapping.PathInContainer.ShouldBe("/dev/fuse"),
+            () => mapping.CgroupPermissions.ShouldBe("rwm"));
+    }
+
+    [Fact]
+    public async Task WhenSpecHasEmptyCollections_DoesNotSetSecurityOptOrDevices()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = new(spy, Options.Create(DefaultOptions()));
+
+        // Act
+        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        (captured.HostConfig.SecurityOpt is null || captured.HostConfig.SecurityOpt.Count == 0).ShouldBeTrue(
+            "SecurityOpt should be null or empty when no security options are specified");
+        (captured.HostConfig.Devices is null || captured.HostConfig.Devices.Count == 0).ShouldBeTrue(
+            "Devices should be null or empty when no devices are specified");
     }
 
     private sealed class SpyContainerOperations(string containerId = "spy-container-id") : IContainerOperations

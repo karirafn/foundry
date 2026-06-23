@@ -30,6 +30,14 @@ internal sealed class DockerWorkerOrchestrator(
             ? $"{mount.HostPath}:{mount.ContainerPath}:ro"
             : $"{mount.HostPath}:{mount.ContainerPath}";
 
+    internal static DeviceMapping MapDevice(string devicePath) =>
+        new()
+        {
+            PathOnHost = devicePath,
+            PathInContainer = devicePath,
+            CgroupPermissions = "rwm",
+        };
+
     public async Task<Result<ContainerId>> StartAsync(
         WorkerContainerSpec spec,
         CancellationToken cancellationToken)
@@ -48,6 +56,12 @@ internal sealed class DockerWorkerOrchestrator(
                     Memory = _options.MemoryLimitMb * BytesPerMegabyte,
                     NanoCPUs = (long)(_options.CpuLimit * NanoCpusPerCpu),
                     PidsLimit = _options.PidsLimit,
+                    SecurityOpt = spec.SecurityOptions.Count > 0
+                        ? [.. spec.SecurityOptions]
+                        : null,
+                    Devices = spec.Devices.Count > 0
+                        ? [.. spec.Devices.Select(MapDevice)]
+                        : null,
                 },
             };
 
