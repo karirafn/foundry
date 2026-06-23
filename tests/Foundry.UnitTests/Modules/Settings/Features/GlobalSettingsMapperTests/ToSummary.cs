@@ -30,7 +30,9 @@ public sealed class ToSummary
             () => result.InstallDotnet.ShouldBeFalse(),
             () => result.InstallAngular.ShouldBeFalse(),
             () => result.InstallGlab.ShouldBeFalse(),
-            () => result.InstallGh.ShouldBeFalse());
+            () => result.InstallGh.ShouldBeFalse(),
+            () => result.InstallChromium.ShouldBeFalse(),
+            () => result.InstallDocker.ShouldBeFalse());
     }
 
     [Fact]
@@ -42,7 +44,9 @@ public sealed class ToSummary
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false));
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false));
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
@@ -60,7 +64,9 @@ public sealed class ToSummary
             InstallDotnet: true,
             InstallAngular: true,
             InstallGlab: true,
-            InstallGh: true));
+            InstallGh: true,
+            InstallChromium: true,
+            InstallDocker: true));
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
@@ -70,7 +76,9 @@ public sealed class ToSummary
             () => result.InstallDotnet.ShouldBeTrue(),
             () => result.InstallAngular.ShouldBeTrue(),
             () => result.InstallGlab.ShouldBeTrue(),
-            () => result.InstallGh.ShouldBeTrue());
+            () => result.InstallGh.ShouldBeTrue(),
+            () => result.InstallChromium.ShouldBeTrue(),
+            () => result.InstallDocker.ShouldBeTrue());
     }
 
     [Fact]

@@ -16,13 +16,17 @@ public sealed class ValueEquality
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: true,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         WorkerImageConfiguration second = new(
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: true,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         bool result = first == second;
@@ -39,13 +43,17 @@ public sealed class ValueEquality
             InstallDotnet: true,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         WorkerImageConfiguration second = new(
             InstallDotnet: false,
             InstallAngular: false,
             InstallGlab: false,
-            InstallGh: false);
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
 
         // Act
         bool result = first == second;

@@ -19,6 +19,8 @@ public sealed class Default
             () => config.InstallDotnet.ShouldBeFalse(),
             () => config.InstallAngular.ShouldBeFalse(),
             () => config.InstallGlab.ShouldBeFalse(),
-            () => config.InstallGh.ShouldBeFalse());
+            () => config.InstallGh.ShouldBeFalse(),
+            () => config.InstallChromium.ShouldBeFalse(),
+            () => config.InstallDocker.ShouldBeFalse());
     }
 }

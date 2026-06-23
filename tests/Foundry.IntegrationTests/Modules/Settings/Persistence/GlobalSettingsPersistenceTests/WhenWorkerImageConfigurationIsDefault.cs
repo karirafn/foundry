@@ -40,6 +40,34 @@ public sealed class WhenWorkerImageConfigurationIsDefault : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDefaultSettings_InstallChromiumIsFalse()
+    {
+        // Arrange
+        GlobalSettingsId id = await SeedDefaultSettingsAsync();
+
+        // Act
+        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
+
+        // Assert
+        reloaded.ShouldNotBeNull();
+        reloaded.WorkerImageConfiguration.InstallChromium.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenDefaultSettings_InstallDockerIsFalse()
+    {
+        // Arrange
+        GlobalSettingsId id = await SeedDefaultSettingsAsync();
+
+        // Act
+        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
+
+        // Assert
+        reloaded.ShouldNotBeNull();
+        reloaded.WorkerImageConfiguration.InstallDocker.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task ImageBuildStateRoundTripsAsIdle()
     {
         // Arrange

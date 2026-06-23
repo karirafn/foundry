@@ -23,6 +23,8 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     installAngular: false,
     installGlab: false,
     installGh: false,
+    installChromium: false,
+    installDocker: false,
     imageBuildStatus: 'Idle',
     lastImageBuildError: null,
     ...overrides,

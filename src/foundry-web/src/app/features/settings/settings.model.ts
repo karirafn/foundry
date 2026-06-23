@@ -7,6 +7,8 @@ export interface WorkerImageFlags {
   installAngular: boolean;
   installGlab: boolean;
   installGh: boolean;
+  installChromium: boolean;
+  installDocker: boolean;
 }
 
 export interface OAuthScanResponse {
@@ -58,6 +60,8 @@ export interface GlobalSettingsResponse {
   installAngular: boolean;
   installGlab: boolean;
   installGh: boolean;
+  installChromium: boolean;
+  installDocker: boolean;
   imageBuildStatus: ImageBuildStatus;
   lastImageBuildError: string | null;
 }

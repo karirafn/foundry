@@ -47,7 +47,15 @@ public sealed class WhenFlagsChange : IAsyncDisposable
     {
         // Arrange
         await SeedDefaultSettingsAsync();
-        object body = new { installDotnet = true, installAngular = false, installGlab = true, installGh = false };
+        object body = new
+        {
+            installDotnet = true,
+            installAngular = false,
+            installGlab = true,
+            installGh = false,
+            installChromium = true,
+            installDocker = true,
+        };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
@@ -64,7 +72,9 @@ public sealed class WhenFlagsChange : IAsyncDisposable
             () => summary.InstallDotnet.ShouldBeTrue(),
             () => summary.InstallAngular.ShouldBeFalse(),
             () => summary.InstallGlab.ShouldBeTrue(),
-            () => summary.InstallGh.ShouldBeFalse());
+            () => summary.InstallGh.ShouldBeFalse(),
+            () => summary.InstallChromium.ShouldBeTrue(),
+            () => summary.InstallDocker.ShouldBeTrue());
     }
 
     [Fact]
@@ -72,7 +82,15 @@ public sealed class WhenFlagsChange : IAsyncDisposable
     {
         // Arrange — Building status is set by WorkerImageRebuildService (background), not the handler
         await SeedDefaultSettingsAsync();
-        object body = new { installDotnet = true, installAngular = false, installGlab = false, installGh = false };
+        object body = new
+        {
+            installDotnet = true,
+            installAngular = false,
+            installGlab = false,
+            installGh = false,
+            installChromium = false,
+            installDocker = false,
+        };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(

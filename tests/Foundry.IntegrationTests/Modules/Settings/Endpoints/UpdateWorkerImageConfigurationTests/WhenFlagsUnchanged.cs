@@ -32,13 +32,19 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task SeedSettingsWithFlagsAsync(bool dotnet, bool angular, bool glab, bool gh)
+    private async Task SeedSettingsWithFlagsAsync(
+        bool dotnet,
+        bool angular,
+        bool glab,
+        bool gh,
+        bool chromium,
+        bool docker)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(dotnet, angular, glab, gh));
+        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(dotnet, angular, glab, gh, chromium, docker));
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
@@ -47,8 +53,16 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
     public async Task ReturnsOkWithExistingFlags()
     {
         // Arrange
-        await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, glab: false, gh: false);
-        object body = new { installDotnet = true, installAngular = false, installGlab = false, installGh = false };
+        await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, glab: false, gh: false, chromium: false, docker: false);
+        object body = new
+        {
+            installDotnet = true,
+            installAngular = false,
+            installGlab = false,
+            installGh = false,
+            installChromium = false,
+            installDocker = false,
+        };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
@@ -68,8 +82,16 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
     public async Task DoesNotSetBuildingStatus()
     {
         // Arrange
-        await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, glab: false, gh: false);
-        object body = new { installDotnet = true, installAngular = false, installGlab = false, installGh = false };
+        await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, glab: false, gh: false, chromium: false, docker: false);
+        object body = new
+        {
+            installDotnet = true,
+            installAngular = false,
+            installGlab = false,
+            installGh = false,
+            installChromium = false,
+            installDocker = false,
+        };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
