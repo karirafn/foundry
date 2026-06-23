@@ -184,5 +184,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);
+
+        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 }

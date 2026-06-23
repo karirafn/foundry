@@ -24,6 +24,10 @@ internal sealed class IssueClaimedHandler(
     IPostExitProviderQueries postExitProviderQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
+    private const string SeccompUnconfined = "seccomp=unconfined";
+    private const string ApparmorUnconfined = "apparmor=unconfined";
+    private const string FuseDevicePath = "/dev/fuse";
+
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
     public async Task HandleAsync(IssueClaimed @event, CancellationToken cancellationToken)
@@ -178,12 +182,27 @@ internal sealed class IssueClaimedHandler(
             ["foundry.worker-run-id"] = startingRun.Id.Value.ToString(),
         };
 
-        return Result<WorkerContainerSpec>.Ok(new WorkerContainerSpec(
+        bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
+
+        WorkerContainerSpec spec = new(
             _options.Image,
             envVars,
             bindMounts,
             labels,
-            ["/entrypoint.sh"]));
+            ["/entrypoint.sh"]);
+
+        return installsDocker
+            ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec))
+            : Result<WorkerContainerSpec>.Ok(spec);
+    }
+
+    private static WorkerContainerSpec ApplyRootlessDinD(WorkerContainerSpec spec)
+    {
+        return spec with
+        {
+            SecurityOptions = [SeccompUnconfined, ApparmorUnconfined],
+            Devices = [FuseDevicePath],
+        };
     }
 
     private Result<List<BindMount>> BuildBindMounts()
