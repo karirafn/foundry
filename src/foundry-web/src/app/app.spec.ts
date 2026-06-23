@@ -6,6 +6,7 @@ import { SYSTEM_HUB_FACTORY, SystemHub } from './core/services/system-signalr.se
 
 const mockSystemHubFactory = (): SystemHub => ({
   on: () => {},
+  onReconnected: () => {},
   start: () => Promise.resolve(),
 });
 

@@ -46,6 +46,7 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   installDocker: false,
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
+  hasUsableImage: false,
 };
 
 function setupComponent() {

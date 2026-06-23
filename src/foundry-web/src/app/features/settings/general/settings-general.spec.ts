@@ -15,6 +15,7 @@ const IMAGE_FLAGS_DEFAULTS = {
   installDocker: false,
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
+  hasUsableImage: false,
 };
 
 const API_KEY_RESPONSE = {

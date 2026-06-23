@@ -1,9 +1,11 @@
 import { Injectable, InjectionToken, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { SystemNotification } from '../models/system-notification.model';
 
 export interface SystemHub {
   on(methodName: string, callback: (notification: SystemNotification) => void): void;
+  onReconnected(callback: () => void): void;
   start(): Promise<void>;
 }
 
@@ -15,6 +17,7 @@ function buildSystemHub(): SystemHub {
 
   return {
     on: (methodName, callback) => conn.on(methodName, callback),
+    onReconnected: (callback) => conn.onreconnected(callback),
     start: () => conn.start(),
   };
 }
@@ -32,6 +35,8 @@ export class SystemSignalRService {
 
   readonly notifications: Signal<SystemNotification[]> = computed(() => this._notifications());
 
+  readonly reconnected = new Subject<void>();
+
   constructor() {
     const hub = this._hubFactory();
 
@@ -40,6 +45,10 @@ export class SystemSignalRService {
         const filtered = current.filter((n) => n.category !== notification.category);
         return notification.isActive ? [...filtered, notification] : filtered;
       });
+    });
+
+    hub.onReconnected(() => {
+      this.reconnected.next();
     });
 
     hub.start().catch(() => {

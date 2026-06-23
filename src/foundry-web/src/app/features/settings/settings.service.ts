@@ -89,6 +89,9 @@ export class SettingsService {
   private readonly _imageBuildLogTailSignal: WritableSignal<string | null> = signal(null);
   readonly imageBuildLogTail: Signal<string | null> = this._imageBuildLogTailSignal.asReadonly();
 
+  private readonly _hasUsableImageSignal: WritableSignal<boolean> = signal(false);
+  readonly hasUsableImage: Signal<boolean> = this._hasUsableImageSignal.asReadonly();
+
   private readonly _savingImageFlagsSignal: WritableSignal<boolean> = signal(false);
   readonly savingImageFlags: Signal<boolean> = this._savingImageFlagsSignal.asReadonly();
 
@@ -130,6 +133,7 @@ export class SettingsService {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
         this._imageBuildStatusSignal.set(response.imageBuildStatus);
         this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+        this._hasUsableImageSignal.set(response.hasUsableImage);
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -258,6 +262,7 @@ export class SettingsService {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
         this._imageBuildStatusSignal.set(response.imageBuildStatus);
         this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+        this._hasUsableImageSignal.set(response.hasUsableImage);
         this._savingImageFlagsSignal.set(false);
         this._saveImageFlagsSuccessSignal.set(true);
       },
@@ -278,6 +283,7 @@ export class SettingsService {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
         this._imageBuildStatusSignal.set(response.imageBuildStatus);
         this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+        this._hasUsableImageSignal.set(response.hasUsableImage);
         this._savingImageFlagsSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {

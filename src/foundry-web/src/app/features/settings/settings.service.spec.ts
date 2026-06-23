@@ -63,6 +63,7 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     installDocker: false,
     imageBuildStatus: 'Idle',
     lastImageBuildError: null,
+    hasUsableImage: false,
     ...overrides,
   };
 }
@@ -1348,6 +1349,62 @@ describe('SettingsService', () => {
     // Assert
     expect(service.imageBuildStatus()).toBe('Idle');
     expect(service.imageBuildLogTail()).toBeNull();
+  });
+
+  // hasUsableImage signal
+  it('should start with hasUsableImage false', () => {
+    // Arrange / Act — (no action — testing initial state)
+
+    // Assert
+    expect(service.hasUsableImage()).toBe(false);
+  });
+
+  it('should set hasUsableImage true when loadSettings response has hasUsableImage true', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: true }));
+
+    // Assert
+    expect(service.hasUsableImage()).toBe(true);
+  });
+
+  it('should keep hasUsableImage false when loadSettings response has hasUsableImage false', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: false }));
+
+    // Assert
+    expect(service.hasUsableImage()).toBe(false);
+  });
+
+  it('should set hasUsableImage true after retryImageBuild response has hasUsableImage true', () => {
+    // Arrange
+    service.retryImageBuild();
+
+    // Act
+    httpMock.expectOne('/api/settings/worker-image/retry').flush(
+      buildSettingsResponse({ imageBuildStatus: 'Idle', hasUsableImage: true })
+    );
+
+    // Assert
+    expect(service.hasUsableImage()).toBe(true);
+  });
+
+  it('should set hasUsableImage from updateWorkerImageFlags response', () => {
+    // Arrange
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+
+    // Act
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({ hasUsableImage: true }));
+
+    // Assert
+    expect(service.hasUsableImage()).toBe(true);
   });
 
   // loadSettings resets image signals
