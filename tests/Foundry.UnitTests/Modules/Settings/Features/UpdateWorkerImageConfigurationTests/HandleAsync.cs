@@ -131,6 +131,78 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WhenOnlyInstallChromiumChanges_PublishesWorkerImageConfigurationChangedEvent()
+    {
+        // Arrange
+        WorkerImageConfiguration initial = new(
+            InstallDotnet: false,
+            InstallAngular: false,
+            InstallGlab: false,
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
+
+        await SeedSettingsAsync(initial);
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+
+        UpdateWorkerImageConfiguration.Command command = new(
+            InstallDotnet: false,
+            InstallAngular: false,
+            InstallGlab: false,
+            InstallGh: false,
+            InstallChromium: true,
+            InstallDocker: false);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
+        dispatcher.Captured.ShouldContain(e => e is WorkerImageConfigurationChanged);
+    }
+
+    [Fact]
+    public async Task WhenOnlyInstallDockerChanges_PublishesWorkerImageConfigurationChangedEvent()
+    {
+        // Arrange
+        WorkerImageConfiguration initial = new(
+            InstallDotnet: false,
+            InstallAngular: false,
+            InstallGlab: false,
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false);
+
+        await SeedSettingsAsync(initial);
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+
+        UpdateWorkerImageConfiguration.Command command = new(
+            InstallDotnet: false,
+            InstallAngular: false,
+            InstallGlab: false,
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: true);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
+        dispatcher.Captured.ShouldContain(e => e is WorkerImageConfigurationChanged);
+    }
+
+    [Fact]
     public async Task WhenFlagsUnchanged_DoesNotPublishEvent()
     {
         // Arrange

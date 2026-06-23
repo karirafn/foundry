@@ -34,8 +34,8 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
             InstallAngular: true,
             InstallGlab: false,
             InstallGh: true,
-            InstallChromium: false,
-            InstallDocker: false);
+            InstallChromium: true,
+            InstallDocker: true);
 
         GlobalSettingsId id = await SeedSettingsWithConfigAsync(config);
 
@@ -48,7 +48,9 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
             () => reloaded.WorkerImageConfiguration.InstallDotnet.ShouldBeTrue(),
             () => reloaded.WorkerImageConfiguration.InstallAngular.ShouldBeTrue(),
             () => reloaded.WorkerImageConfiguration.InstallGlab.ShouldBeFalse(),
-            () => reloaded.WorkerImageConfiguration.InstallGh.ShouldBeTrue());
+            () => reloaded.WorkerImageConfiguration.InstallGh.ShouldBeTrue(),
+            () => reloaded.WorkerImageConfiguration.InstallChromium.ShouldBeTrue(),
+            () => reloaded.WorkerImageConfiguration.InstallDocker.ShouldBeTrue());
     }
 
     [Fact]
