@@ -42,6 +42,11 @@ start_rootless_dockerd() {
         # Poll daemon readiness — check the API, not just socket-file existence
         if docker -H "$socket" version > /dev/null 2>&1; then
             export DOCKER_HOST="$socket"
+            # DOCKER_HOST is a unix:// URI. Testcontainers .NET (ResourceReaper / Ryuk) derives
+            # the Docker socket bind-mount path from the scheme — when the scheme is "unix" it
+            # extracts the absolute path from the URI, so no TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE
+            # is required. Ryuk therefore mounts the correct rootless-socket path automatically.
+            # Source: UnixSocketMount in testcontainers-dotnet/Containers/ResourceReaper.cs
             echo "Rootless dockerd is ready (attempt $((attempt + 1))/${retry_count})" >&2
             return 0
         fi

@@ -146,3 +146,70 @@ EOF
     run start_rootless_dockerd
     [[ "$output" == *"timed out"* ]] || [[ "$output" == *"Timed out"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# AC4 — DOCKER_HOST uses a unix:// URI so Testcontainers .NET derives the
+# correct Ryuk socket bind-mount path without TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE.
+# (Testcontainers checks the URI scheme; "unix" → extracts AbsolutePath as source)
+# ---------------------------------------------------------------------------
+@test "start_rootless_dockerd exports DOCKER_HOST as a unix:// URI for Testcontainers Ryuk compat" {
+    make_fake_dockerd_background
+    make_fake_docker_healthy
+
+    start_rootless_dockerd
+    [[ "$DOCKER_HOST" == unix://* ]]
+}
+
+# ---------------------------------------------------------------------------
+# AC5 — full entrypoint proof: when dockerd-rootless.sh is absent the
+# entrypoint is a no-op for Docker setup and still invokes claude.
+# All external commands are stubbed via helpers so no real network/daemon needed.
+# ---------------------------------------------------------------------------
+
+# Write a fake claude that records it was called, then exits 0
+make_fake_claude() {
+    cat > "$HELPERS_DIR/claude" <<'EOF'
+#!/bin/bash
+# Fake claude: record invocation and exit 0
+echo "claude-invoked" > /tmp/bats_claude_called
+exit 0
+EOF
+    chmod +x "$HELPERS_DIR/claude"
+}
+
+# Write a fake git that handles clone/remote/switch without a real repo
+make_fake_git() {
+    cat > "$HELPERS_DIR/git" <<'EOF'
+#!/bin/bash
+# Fake git: handle the subcommands entrypoint uses, ignore the rest
+case "${1:-}" in
+    clone)  mkdir -p /workspace ;;
+    -C)     shift; shift; shift; shift ;;  # git -C /workspace remote set-url origin ...
+    *)      true ;;
+esac
+exit 0
+EOF
+    chmod +x "$HELPERS_DIR/git"
+}
+
+@test "entrypoint invokes claude when dockerd-rootless.sh is absent (no-Docker path)" {
+    rm -f "$HELPERS_DIR/dockerd-rootless.sh"
+    make_fake_claude
+    make_fake_git
+
+    # Minimal required env vars for the entrypoint
+    export ANTHROPIC_API_KEY="test-key"
+    export CLONE_URL="https://github.com/example/repo"
+    export GIT_PAT="test-pat"
+    export WORKER_PROMPT="test-prompt"
+    export SYSTEM_PROMPT="test-system"
+    export ISSUE_NUMBER="1"
+    export CLAUDE_SETTINGS_JSON=""
+
+    rm -f /tmp/bats_claude_called
+
+    run bash "$ENTRYPOINT"
+
+    [ -f /tmp/bats_claude_called ]
+    rm -f /tmp/bats_claude_called
+}
