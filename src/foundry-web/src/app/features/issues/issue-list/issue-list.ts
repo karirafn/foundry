@@ -2,17 +2,21 @@ import { Component, OnInit, inject } from '@angular/core';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { IssueCardComponent } from '../issue-card/issue-card';
+import { IssueCardSkeletonComponent } from '../issue-card/issue-card-skeleton';
 import { IssueDetailComponent } from '../issue-detail/issue-detail';
 import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state';
 import { DispatchControlsComponent } from './dispatch-controls/dispatch-controls';
 import { SettingsService } from '../../../features/settings/settings.service';
 
+const SKELETON_COUNT = 4;
+
 @Component({
   selector: 'fd-issue-list',
   standalone: true,
   imports: [
     IssueCardComponent,
+    IssueCardSkeletonComponent,
     IssueDetailComponent,
     ConnectionIndicatorComponent,
     EmptyStateComponent,
@@ -26,6 +30,20 @@ import { SettingsService } from '../../../features/settings/settings.service';
       </header>
 
       <fd-dispatch-controls />
+
+      @if (issueService.initialLoading()) {
+        <div
+          class="issue-list__skeletons"
+          role="status"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          <span class="sr-only">Loading tracked issues…</span>
+          @for (placeholder of skeletonPlaceholders; track placeholder) {
+            <fd-issue-card-skeleton />
+          }
+        </div>
+      }
 
       @if (issueService.loadError()) {
         <div class="issue-list__error" role="alert">
@@ -80,6 +98,8 @@ export class IssueListComponent implements OnInit {
   protected readonly issueService = inject(IssueService);
   protected readonly signalR = inject(IssueSignalRService);
   private readonly _settingsService = inject(SettingsService);
+
+  protected readonly skeletonPlaceholders = Array.from({ length: SKELETON_COUNT }, (_, i) => i);
 
   ngOnInit(): void {
     this.issueService.loadIssues();
