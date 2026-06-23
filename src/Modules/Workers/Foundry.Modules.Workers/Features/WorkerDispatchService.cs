@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
@@ -102,6 +103,16 @@ internal sealed class WorkerDispatchService(
                 "Dispatch skipped: dispatch is paused (IsDispatchPaused={IsDispatchPaused}, UsageLimitResetsAt={UsageLimitResetsAt}).",
                 pauseState.IsDispatchPaused,
                 pauseState.UsageLimitResetsAt);
+            return;
+        }
+
+        ImageBuildStatus imageBuildStatus = await settingsQueries.GetImageBuildStatusAsync(cancellationToken);
+
+        if (imageBuildStatus is ImageBuildStatus.Building or ImageBuildStatus.Failed)
+        {
+            logger.LogDebug(
+                "Dispatch skipped: worker image build is not ready (ImageBuildStatus={ImageBuildStatus}).",
+                imageBuildStatus);
             return;
         }
 

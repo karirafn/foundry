@@ -93,4 +93,23 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
         return value is > 0 ? value.Value : GlobalSettings.DefaultCooldownMinutesValue;
     }
+
+    public async Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
+    {
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is null)
+        {
+            return ImageBuildStatus.Idle;
+        }
+
+        return settings.ImageBuildState switch
+        {
+            ImageBuildState.Building => ImageBuildStatus.Building,
+            ImageBuildState.Failed => ImageBuildStatus.Failed,
+            _ => ImageBuildStatus.Idle,
+        };
+    }
 }

@@ -257,6 +257,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("default_cooldown_minutes");
 
+                    b.Property<string>("ImageBuildState")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("image_build_status");
+
                     b.Property<bool>("IsDispatchPaused")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_dispatch_paused");
@@ -281,6 +286,11 @@ namespace Foundry.WebApi.Migrations
                     b.Property<DateTimeOffset?>("UsageLimitResetsAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("usage_limit_resets_at");
+
+                    b.Property<string>("WorkerImageConfiguration")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker_image_configuration");
 
                     b.Property<string>("WorkerPromptTemplate")
                         .HasMaxLength(32768)

@@ -16,6 +16,17 @@ internal static class GlobalSettingsMapper
             _ => "Unknown",
         };
 
+        Contracts.ImageBuildStatus status = settings.ImageBuildState switch
+        {
+            ImageBuildState.Building => Contracts.ImageBuildStatus.Building,
+            ImageBuildState.Failed => Contracts.ImageBuildStatus.Failed,
+            _ => Contracts.ImageBuildStatus.Idle,
+        };
+
+        string? lastError = settings.ImageBuildState is ImageBuildState.Failed failed
+            ? failed.ErrorTail
+            : null;
+
         return new GlobalSettingsSummary(
             authModeName,
             settings.MaxConcurrent,
@@ -29,6 +40,12 @@ internal static class GlobalSettingsMapper
             settings.UsageLimitResetsAt,
             settings.IsDispatchPaused,
             settings.AutoResumeOnUsageReset,
-            settings.DefaultCooldownMinutes);
+            settings.DefaultCooldownMinutes,
+            settings.WorkerImageConfiguration.InstallDotnet,
+            settings.WorkerImageConfiguration.InstallAngular,
+            settings.WorkerImageConfiguration.InstallGlab,
+            settings.WorkerImageConfiguration.InstallGh,
+            status,
+            lastError);
     }
 }

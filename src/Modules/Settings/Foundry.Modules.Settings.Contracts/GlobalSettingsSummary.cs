@@ -13,4 +13,10 @@ public sealed record GlobalSettingsSummary(
     DateTimeOffset? UsageLimitResetsAt,
     bool IsDispatchPaused,
     bool AutoResumeOnUsageReset,
-    int DefaultCooldownMinutes);
+    int DefaultCooldownMinutes,
+    bool InstallDotnet,
+    bool InstallAngular,
+    bool InstallGlab,
+    bool InstallGh,
+    ImageBuildStatus ImageBuildStatus,
+    string? LastImageBuildError);

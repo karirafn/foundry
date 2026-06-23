@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.DataProtection;
@@ -17,6 +18,7 @@ internal sealed class GlobalSettingsConfiguration(
     : IEntityTypeConfiguration<GlobalSettings>
 {
     private static readonly JsonSerializerOptions SerializerOptions = BuildSerializerOptions();
+    private static readonly JsonSerializerOptions ImageBuildStateOptions = BuildImageBuildStateOptions();
 
     public void Configure(EntityTypeBuilder<GlobalSettings> builder)
     {
@@ -67,6 +69,24 @@ internal sealed class GlobalSettingsConfiguration(
         builder.Property(s => s.DefaultCooldownMinutes)
             .HasColumnName("default_cooldown_minutes");
 
+        ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
+            config => SerializeWorkerImageConfiguration(config),
+            json => DeserializeWorkerImageConfiguration(json));
+
+        builder.Property(s => s.WorkerImageConfiguration)
+            .HasConversion(workerImageConfigConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("worker_image_configuration");
+
+        ValueConverter<ImageBuildState, string> imageBuildStateConverter = new(
+            state => SerializeImageBuildState(state),
+            json => DeserializeImageBuildState(json));
+
+        builder.Property(s => s.ImageBuildState)
+            .HasConversion(imageBuildStateConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("image_build_status");
+
         builder.Property(s => s.CreatedAt)
             .HasColumnName("created_at");
 
@@ -74,10 +94,24 @@ internal sealed class GlobalSettingsConfiguration(
             .HasColumnName("updated_at");
     }
 
+    private static string SerializeWorkerImageConfiguration(WorkerImageConfiguration config)
+        => JsonSerializer.Serialize(config);
+
+    private static WorkerImageConfiguration DeserializeWorkerImageConfiguration(string json)
+        => JsonSerializer.Deserialize<WorkerImageConfiguration>(json)
+            ?? WorkerImageConfiguration.Default;
+
     private static JsonSerializerOptions BuildSerializerOptions()
     {
         JsonSerializerOptions options = new();
         options.Converters.Add(new AuthModeJsonConverter());
+        return options;
+    }
+
+    private static JsonSerializerOptions BuildImageBuildStateOptions()
+    {
+        JsonSerializerOptions options = new();
+        options.Converters.Add(new ImageBuildStateJsonConverter());
         return options;
     }
 
@@ -87,4 +121,11 @@ internal sealed class GlobalSettingsConfiguration(
     private static AuthMode DeserializeAuthMode(string json)
         => JsonSerializer.Deserialize<AuthMode>(json, SerializerOptions)
             ?? throw new InvalidOperationException($"Failed to deserialize AuthMode from JSON: {json}");
+
+    private static string SerializeImageBuildState(ImageBuildState state)
+        => JsonSerializer.Serialize(state, ImageBuildStateOptions);
+
+    private static ImageBuildState DeserializeImageBuildState(string json)
+        => JsonSerializer.Deserialize<ImageBuildState>(json, ImageBuildStateOptions)
+            ?? throw new InvalidOperationException($"Failed to deserialize ImageBuildState from JSON: {json}");
 }

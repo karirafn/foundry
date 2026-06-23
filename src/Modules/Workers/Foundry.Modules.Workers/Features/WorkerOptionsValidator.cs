@@ -8,9 +8,6 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
 {
-    [GeneratedRegex(@"^[A-Z_][A-Z0-9_]*$")]
-    private static partial Regex BuildArgKeyPattern();
-
     [GeneratedRegex(@"^(Bash|Edit|Read|Write|MultiEdit|Glob|Grep)\(.+\)$")]
     private static partial Regex DenyRuleFormatPattern();
 
@@ -158,24 +155,6 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
         else if (ContainsPathTraversal(imageBuild.ContextPath))
         {
             failures.Add("Workers:ImageBuild:ContextPath must not contain path traversal segments (..).");
-        }
-
-        foreach (KeyValuePair<string, string> buildArg in imageBuild.BuildArgs)
-        {
-            if (!BuildArgKeyPattern().IsMatch(buildArg.Key))
-            {
-                failures.Add(
-                    $"Workers:ImageBuild:BuildArgs key '{buildArg.Key}' is invalid. " +
-                    "Keys must match ^[A-Z_][A-Z0-9_]*$ (Docker build arg convention).");
-            }
-
-            if (buildArg.Value.Contains('\n', StringComparison.Ordinal)
-                || buildArg.Value.Contains('\r', StringComparison.Ordinal)
-                || buildArg.Value.Contains('\0', StringComparison.Ordinal))
-            {
-                failures.Add(
-                    $"Workers:ImageBuild:BuildArgs value for key '{buildArg.Key}' must not contain newlines, carriage returns, or null bytes.");
-            }
         }
     }
 

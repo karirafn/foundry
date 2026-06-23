@@ -4,9 +4,11 @@ import {
   AuthMode,
   AuthSettings,
   GlobalSettingsResponse,
+  ImageBuildStatus,
   OAuthCredentialInfo,
   OAuthScanResponse,
   UpdatePromptTemplatesRequest,
+  WorkerImageFlags,
   WorkerLimits,
 } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
@@ -17,6 +19,7 @@ const SWITCH_OAUTH_ERROR = 'Failed to switch to OAuth mode';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
+const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -77,6 +80,24 @@ export class SettingsService {
   private readonly _saveDispatchErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveDispatchError: Signal<string | null> = this._saveDispatchErrorSignal.asReadonly();
 
+  private readonly _workerImageFlagsSignal: WritableSignal<WorkerImageFlags | null> = signal(null);
+  readonly workerImageFlags: Signal<WorkerImageFlags | null> = this._workerImageFlagsSignal.asReadonly();
+
+  private readonly _imageBuildStatusSignal: WritableSignal<ImageBuildStatus> = signal('Idle');
+  readonly imageBuildStatus: Signal<ImageBuildStatus> = this._imageBuildStatusSignal.asReadonly();
+
+  private readonly _imageBuildLogTailSignal: WritableSignal<string | null> = signal(null);
+  readonly imageBuildLogTail: Signal<string | null> = this._imageBuildLogTailSignal.asReadonly();
+
+  private readonly _savingImageFlagsSignal: WritableSignal<boolean> = signal(false);
+  readonly savingImageFlags: Signal<boolean> = this._savingImageFlagsSignal.asReadonly();
+
+  private readonly _saveImageFlagsSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveImageFlagsSuccess: Signal<boolean> = this._saveImageFlagsSuccessSignal.asReadonly();
+
+  private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
+
   loadSettings(): void {
     this._loadErrorSignal.set(null);
     this._saveErrorSignal.set(null);
@@ -84,14 +105,17 @@ export class SettingsService {
     this._saveLimitsErrorSignal.set(null);
     this._savePromptsErrorSignal.set(null);
     this._saveDispatchErrorSignal.set(null);
+    this._saveImageFlagsErrorSignal.set(null);
     this.saveSuccess.set(false);
     this._saveLimitsSuccessSignal.set(false);
     this._savePromptsSuccessSignal.set(false);
     this._saveDispatchSuccessSignal.set(false);
+    this._saveImageFlagsSuccessSignal.set(false);
     this.saving.set(false);
     this._savingLimitsSignal.set(false);
     this._savingPromptsSignal.set(false);
     this._savingDispatchSignal.set(false);
+    this._savingImageFlagsSignal.set(false);
     this.switching.set(false);
     this.loading.set(true);
 
@@ -103,6 +127,9 @@ export class SettingsService {
         this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
         this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
         this._dispatchService.updateFromSettings(response);
+        this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
+        this._imageBuildStatusSignal.set(response.imageBuildStatus);
+        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -219,6 +246,60 @@ export class SettingsService {
         this.switching.set(false);
       },
     });
+  }
+
+  updateWorkerImageFlags(flags: WorkerImageFlags): void {
+    this._saveImageFlagsErrorSignal.set(null);
+    this._saveImageFlagsSuccessSignal.set(false);
+    this._savingImageFlagsSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/worker-image', flags).subscribe({
+      next: (response) => {
+        this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
+        this._imageBuildStatusSignal.set(response.imageBuildStatus);
+        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+        this._savingImageFlagsSignal.set(false);
+        this._saveImageFlagsSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveImageFlagsErrorSignal.set(SAVE_IMAGE_FLAGS_ERROR);
+        this._savingImageFlagsSignal.set(false);
+      },
+    });
+  }
+
+  retryImageBuild(): void {
+    this._saveImageFlagsErrorSignal.set(null);
+    this._savingImageFlagsSignal.set(true);
+
+    this._http.post<GlobalSettingsResponse>('/api/settings/worker-image/retry', null).subscribe({
+      next: (response) => {
+        this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
+        this._imageBuildStatusSignal.set(response.imageBuildStatus);
+        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+        this._savingImageFlagsSignal.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveImageFlagsErrorSignal.set(SAVE_IMAGE_FLAGS_ERROR);
+        this._savingImageFlagsSignal.set(false);
+      },
+    });
+  }
+
+  setImageBuildStatus(status: ImageBuildStatus, logTail: string | null): void {
+    this._imageBuildStatusSignal.set(status);
+    this._imageBuildLogTailSignal.set(logTail);
+  }
+
+  private _mapToWorkerImageFlags(response: GlobalSettingsResponse): WorkerImageFlags {
+    return {
+      installDotnet: response.installDotnet,
+      installAngular: response.installAngular,
+      installGlab: response.installGlab,
+      installGh: response.installGh,
+    };
   }
 
   private _mapToAuthSettings(response: GlobalSettingsResponse): AuthSettings {

@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
 import { SystemBannerComponent } from './system-banner';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
@@ -39,7 +40,10 @@ function createMockDispatchService(overrides: DispatchServiceOverrides = {}) {
 }
 
 function createMockSettingsService() {
-  return { loadSettings: vi.fn() };
+  return {
+    loadSettings: vi.fn(),
+    setImageBuildStatus: vi.fn(),
+  };
 }
 
 interface SetupOptions {
@@ -55,6 +59,7 @@ function setup(options: SetupOptions = {}) {
   TestBed.configureTestingModule({
     imports: [SystemBannerComponent],
     providers: [
+      provideRouter([]),
       { provide: SystemSignalRService, useValue: mockSignalR },
       { provide: DispatchService, useValue: mockDispatch },
       { provide: SettingsService, useValue: mockSettings },
@@ -277,6 +282,114 @@ describe('SystemBannerComponent', () => {
       // Assert
       const button = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
       expect(button.textContent?.trim()).toBe('Resuming...');
+    });
+  });
+
+  describe('image-build notifications', () => {
+    it('should call setImageBuildStatus when an image-build notification arrives', () => {
+      // Arrange
+      const { fixture, mockSignalR, mockSettings } = setup({ notifications: [] });
+      const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Building|null' };
+
+      // Act
+      mockSignalR._signal.set([notification]);
+      fixture.detectChanges();
+
+      // Assert
+      expect(mockSettings.setImageBuildStatus).toHaveBeenCalled();
+    });
+
+    it('should render a Building bar when an image-build Building notification is active', () => {
+      // Arrange
+      const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Building|null' };
+
+      // Act
+      const { fixture } = setup({ notifications: [notification] });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — there should be an image-build bar
+      const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
+      expect(imageBuildBar).toBeTruthy();
+      expect(imageBuildBar.textContent).toContain('Worker image is building');
+    });
+
+    it('should render a Failed bar with Retry button when an image-build Failed notification is active', () => {
+      // Arrange
+      const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|Step 2/5 FAILED' };
+
+      // Act
+      const { fixture } = setup({ notifications: [notification] });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
+      expect(imageBuildBar).toBeTruthy();
+      expect(imageBuildBar.textContent).toContain('Worker image build failed');
+
+      const retryBtn = imageBuildBar.querySelector('.system-banner__action-btn') as HTMLButtonElement;
+      expect(retryBtn).toBeTruthy();
+      expect(retryBtn.textContent?.trim()).toBe('Retry');
+    });
+
+    it('should show "View details" routerLink to /settings/general when image build fails', () => {
+      // Arrange
+      const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|error log' };
+
+      // Act
+      const { fixture } = setup({ notifications: [notification] });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
+      const link = imageBuildBar?.querySelector('a.system-banner__details-link') as HTMLAnchorElement;
+      expect(link).toBeTruthy();
+      expect(link.textContent?.trim()).toBe('View details');
+      expect(link.getAttribute('href')).toBe('/settings/general');
+    });
+
+    it('should treat an empty log part after separator as null (no log tail shown)', () => {
+      // Arrange — message with separator but no log content
+      const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|' };
+
+      // Act
+      const { fixture } = setup({ notifications: [notification] });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — failed bar rendered but no log-tail span
+      const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
+      expect(imageBuildBar).toBeTruthy();
+      const logTail = imageBuildBar.querySelector('.system-banner__log-tail');
+      expect(logTail).toBeFalsy();
+    });
+
+    it('should not render an image-build bar when there are no image-build notifications', () => {
+      // Arrange
+      const notification: SystemNotification = { category: 'auth', isActive: true, message: 'Auth invalid' };
+
+      // Act
+      const { fixture } = setup({ notifications: [notification] });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const imageBuildBar = el.querySelector('.system-banner__bar--image-build');
+      expect(imageBuildBar).toBeFalsy();
+    });
+
+    it('should sort failed conditions before building/in-progress notifications', () => {
+      // Arrange
+      const notifications: SystemNotification[] = [
+        { category: 'image-build', isActive: true, message: 'Building|null' },
+        { category: 'auth', isActive: true, message: 'Auth invalid' },
+      ];
+
+      // Act
+      const { fixture } = setup({ notifications });
+      const el = fixture.nativeElement as HTMLElement;
+      const bars = Array.from(el.querySelectorAll('.system-banner__bar:not(.system-banner__bar--dispatch):not(.system-banner__bar--image-build)'));
+
+      // Assert — auth (failure-category) renders first, image-build (building) renders below
+      const firstBar = bars[0];
+      expect(firstBar?.textContent).toContain('Auth invalid');
     });
   });
 });

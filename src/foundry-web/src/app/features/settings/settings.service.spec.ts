@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { WritableSignal } from '@angular/core';
 import { SettingsService } from './settings.service';
-import { AuthSettings } from './settings.model';
+import { AuthSettings, ImageBuildStatus } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
 
 const mockAuthSettings: AuthSettings = {
@@ -55,6 +55,12 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     isDispatchPaused: false,
     autoResumeOnUsageReset: true,
     defaultCooldownMinutes: 60,
+    installDotnet: false,
+    installAngular: false,
+    installGlab: false,
+    installGh: false,
+    imageBuildStatus: 'Idle',
+    lastImageBuildError: null,
     ...overrides,
   };
 }
@@ -1074,6 +1080,268 @@ describe('SettingsService', () => {
     expect(service.saveDispatchSuccess()).toBe(false);
     expect(service.savingDispatch()).toBe(false);
     expect(service.saveDispatchError()).toBeNull();
+
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Worker image flags: initial signal state
+  it('should start with null workerImageFlags, Idle imageBuildStatus, null imageBuildLogTail', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    // (no action — testing initial state)
+
+    // Assert
+    expect(service.workerImageFlags()).toBeNull();
+    expect(service.imageBuildStatus()).toBe('Idle');
+    expect(service.imageBuildLogTail()).toBeNull();
+    expect(service.savingImageFlags()).toBe(false);
+    expect(service.saveImageFlagsError()).toBeNull();
+  });
+
+  // loadSettings populates workerImageFlags from response
+  it('should populate workerImageFlags from loadSettings response', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+      installDotnet: true,
+      installAngular: false,
+      installGlab: true,
+      installGh: false,
+      imageBuildStatus: 'Idle',
+    }));
+
+    // Assert
+    const flags = service.workerImageFlags();
+    expect(flags).not.toBeNull();
+    expect(flags!.installDotnet).toBe(true);
+    expect(flags!.installAngular).toBe(false);
+    expect(flags!.installGlab).toBe(true);
+    expect(flags!.installGh).toBe(false);
+  });
+
+  // loadSettings sets imageBuildStatus from response
+  it('should populate imageBuildStatus from loadSettings response', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+
+    // Assert
+    expect(service.imageBuildStatus()).toBe('Building');
+  });
+
+  // loadSettings sets imageBuildLogTail from lastImageBuildError when status is Failed
+  it('should set imageBuildLogTail from lastImageBuildError when status is Failed', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+      imageBuildStatus: 'Failed',
+      lastImageBuildError: 'Step 3/5 FAILED',
+    }));
+
+    // Assert
+    expect(service.imageBuildLogTail()).toBe('Step 3/5 FAILED');
+  });
+
+  // updateWorkerImageFlags calls PUT /api/settings/worker-image
+  it('should PUT to /api/settings/worker-image when updateWorkerImageFlags is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: true, installGh: false });
+    const req = httpMock.expectOne('/api/settings/worker-image');
+
+    // Assert
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installGlab: true, installGh: false });
+    req.flush(buildSettingsResponse({ installDotnet: true, installGlab: true }));
+  });
+
+  it('should set savingImageFlags to true while updateWorkerImageFlags is in flight', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+
+    // Assert — before flush
+    expect(service.savingImageFlags()).toBe(true);
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
+  });
+
+  it('should update workerImageFlags and clear savingImageFlags after updateWorkerImageFlags succeeds', () => {
+    // Arrange
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: true, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({
+      installDotnet: true,
+      installAngular: true,
+      installGlab: false,
+      installGh: false,
+    }));
+
+    // Assert
+    expect(service.savingImageFlags()).toBe(false);
+    expect(service.saveImageFlagsError()).toBeNull();
+    expect(service.workerImageFlags()!.installDotnet).toBe(true);
+    expect(service.workerImageFlags()!.installAngular).toBe(true);
+  });
+
+  it('should set saveImageFlagsSuccess to true after updateWorkerImageFlags succeeds', () => {
+    // Arrange
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({ installDotnet: true }));
+
+    // Assert
+    expect(service.saveImageFlagsSuccess()).toBe(true);
+  });
+
+  it('should keep saveImageFlagsSuccess false when updateWorkerImageFlags fails', () => {
+    // Arrange
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert
+    expect(service.saveImageFlagsSuccess()).toBe(false);
+  });
+
+  it('should reset saveImageFlagsSuccess in loadSettings', () => {
+    // Arrange — put success signal into true state
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
+    expect(service.saveImageFlagsSuccess()).toBe(true);
+
+    // Act
+    service.loadSettings();
+
+    // Assert — cleared before the response arrives
+    expect(service.saveImageFlagsSuccess()).toBe(false);
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  it('should set saveImageFlagsError when updateWorkerImageFlags fails', () => {
+    // Arrange
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.saveImageFlagsError()).not.toBeNull();
+    expect(service.savingImageFlags()).toBe(false);
+  });
+
+  it('should set saveImageFlagsError to a fixed user-facing string when updateWorkerImageFlags fails', () => {
+    // Arrange
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false });
+    httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.saveImageFlagsError()).toBe('Failed to save worker image settings');
+  });
+
+  // retryImageBuild calls POST /api/settings/worker-image/retry
+  it('should POST to /api/settings/worker-image/retry when retryImageBuild is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.retryImageBuild();
+    const req = httpMock.expectOne('/api/settings/worker-image/retry');
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toBeNull();
+    req.flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+  });
+
+  it('should update imageBuildStatus after retryImageBuild succeeds', () => {
+    // Arrange
+    service.retryImageBuild();
+    httpMock.expectOne('/api/settings/worker-image/retry').flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+
+    // Assert
+    expect(service.imageBuildStatus()).toBe('Building');
+  });
+
+  it('should set savingImageFlags to true while retryImageBuild is in flight', () => {
+    // Arrange / Act
+    service.retryImageBuild();
+
+    // Assert — before flush
+    expect(service.savingImageFlags()).toBe(true);
+    httpMock.expectOne('/api/settings/worker-image/retry').flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+  });
+
+  it('should clear savingImageFlags after retryImageBuild succeeds', () => {
+    // Arrange
+    service.retryImageBuild();
+    httpMock.expectOne('/api/settings/worker-image/retry').flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+
+    // Assert
+    expect(service.savingImageFlags()).toBe(false);
+  });
+
+  it('should set saveImageFlagsError when retryImageBuild fails', () => {
+    // Arrange
+    service.retryImageBuild();
+    httpMock.expectOne('/api/settings/worker-image/retry').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert
+    expect(service.saveImageFlagsError()).toBe('Failed to save worker image settings');
+    expect(service.savingImageFlags()).toBe(false);
+  });
+
+  // setImageBuildStatus updates status and logTail signals
+  it('should update imageBuildStatus and imageBuildLogTail when setImageBuildStatus is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.setImageBuildStatus('Failed', 'Build failed at step 2');
+
+    // Assert
+    expect(service.imageBuildStatus()).toBe('Failed');
+    expect(service.imageBuildLogTail()).toBe('Build failed at step 2');
+  });
+
+  it('should clear imageBuildLogTail when setImageBuildStatus is called with Idle', () => {
+    // Arrange
+    service.setImageBuildStatus('Failed', 'some error');
+
+    // Act
+    service.setImageBuildStatus('Idle', null);
+
+    // Assert
+    expect(service.imageBuildStatus()).toBe('Idle');
+    expect(service.imageBuildLogTail()).toBeNull();
+  });
+
+  // loadSettings resets image signals
+  it('should reset image signals in loadSettings', () => {
+    // Arrange — put signals into dirty state
+    service.setImageBuildStatus('Failed', 'error text');
+
+    // Act
+    service.loadSettings();
+
+    // Assert — cleared before the response arrives
+    expect(service.savingImageFlags()).toBe(false);
+    expect(service.saveImageFlagsError()).toBeNull();
 
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });

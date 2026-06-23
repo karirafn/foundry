@@ -34,6 +34,8 @@ public static class SettingsModule
         services.AddCommandHandler<UpdateDispatchSettings.Command, GlobalSettingsSummary, UpdateDispatchSettings.Handler, UpdateDispatchSettings.Validator>();
         services.AddCommandHandler<PauseDispatch.Command, GlobalSettingsSummary, PauseDispatch.Handler>();
         services.AddCommandHandler<ResumeDispatch.Command, GlobalSettingsSummary, ResumeDispatch.Handler>();
+        services.AddCommandHandler<UpdateWorkerImageConfiguration.Command, GlobalSettingsSummary, UpdateWorkerImageConfiguration.Handler>();
+        services.AddCommandHandler<RetryImageBuild.Command, GlobalSettingsSummary, RetryImageBuild.Handler>();
 
         return services;
     }

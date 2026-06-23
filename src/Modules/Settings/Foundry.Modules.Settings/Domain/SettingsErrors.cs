@@ -35,6 +35,11 @@ internal static class SettingsErrors
     internal static Error InvalidTimeout(int value) =>
         new(InvalidTimeoutCode, $"Timeout must be between 1 and 1440 minutes, but was {value}.");
 
+    internal const string InvalidRetryStatusCode = "Settings.InvalidRetryStatus";
+
+    internal static readonly Error InvalidRetryStatus =
+        new(InvalidRetryStatusCode, "Retry is only valid when the last build failed.");
+
     internal static Error InvalidDefaultCooldown(int value) =>
         new(InvalidDefaultCooldownCode, $"Default cooldown must be between 1 and 1440 minutes, but was {value}.");
 }

@@ -1,3 +1,4 @@
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Settings.Domain;
@@ -27,6 +28,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         TimeoutMinutes = DefaultTimeoutMinutes;
         AutoResumeOnUsageReset = true;
         DefaultCooldownMinutes = DefaultCooldownMinutesValue;
+        WorkerImageConfiguration = WorkerImageConfiguration.Default;
+        ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
@@ -48,6 +51,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public bool AutoResumeOnUsageReset { get; private set; }
 
     public int DefaultCooldownMinutes { get; private set; }
+
+    public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
+
+    public ImageBuildState ImageBuildState { get; private set; } = null!;
 
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -134,6 +141,36 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         WorkerPromptTemplate = workerPromptTemplate;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
+    }
+
+    public bool UpdateWorkerImageConfiguration(WorkerImageConfiguration config)
+    {
+        if (WorkerImageConfiguration == config)
+        {
+            return false;
+        }
+
+        WorkerImageConfiguration = config;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    public void BeginImageBuild()
+    {
+        ImageBuildState = new ImageBuildState.Building();
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void CompleteImageBuild()
+    {
+        ImageBuildState = new ImageBuildState.Idle();
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void FailImageBuild(string? errorTail)
+    {
+        ImageBuildState = new ImageBuildState.Failed(errorTail);
+        UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     public Result UpdateLimits(int maxConcurrent, int timeoutMinutes)

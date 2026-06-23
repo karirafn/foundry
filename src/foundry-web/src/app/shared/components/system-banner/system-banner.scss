@@ -12,11 +12,6 @@
   &[hidden] {
     display: none;
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--fd-text-link);
-    outline-offset: -2px;
-  }
 }
 
 .system-banner__bar {
@@ -74,5 +69,65 @@
   &:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+  }
+}
+
+.system-banner__bar--image-build {
+  &.system-banner__bar--building {
+    background: var(--fd-bg-warning-subtle);
+    border-bottom-color: var(--fd-border-warning);
+    color: var(--fd-text-warning);
+  }
+
+  &.system-banner__bar--failed {
+    background: var(--fd-bg-error-subtle);
+    border-bottom-color: var(--fd-state-failed);
+    color: var(--fd-text-error);
+
+    .system-banner__action-btn {
+      border-color: var(--fd-text-error);
+      color: var(--fd-text-error);
+
+      &:hover:not(:disabled) {
+        background: rgba(220, 53, 69, 0.1);
+      }
+
+      &:focus-visible {
+        outline-color: var(--fd-state-failed);
+      }
+    }
+  }
+}
+
+.system-banner__spinner-icon {
+  animation: system-banner-spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes system-banner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.system-banner__log-tail {
+  color: var(--fd-text-secondary);
+  flex: 1;
+  font-family: var(--fd-font-mono);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-banner__details-link {
+  color: inherit;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+
+  &:focus-visible {
+    outline: 2px solid currentcolor;
+    outline-offset: 2px;
   }
 }
