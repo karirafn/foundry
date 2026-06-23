@@ -5,4 +5,9 @@ internal sealed record WorkerContainerSpec(
     IReadOnlyDictionary<string, string> EnvironmentVariables,
     IReadOnlyList<BindMount> BindMounts,
     IReadOnlyDictionary<string, string> Labels,
-    IReadOnlyList<string> Command);
+    IReadOnlyList<string> Command)
+{
+    public IReadOnlyList<string> SecurityOptions { get; init; } = [];
+
+    public IReadOnlyList<string> Devices { get; init; } = [];
+}

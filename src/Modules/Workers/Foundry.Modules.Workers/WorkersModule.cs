@@ -30,6 +30,7 @@ public static class WorkersModule
             return config.CreateClient();
         });
         services.AddSingleton<IImageOperations>(sp => sp.GetRequiredService<DockerClient>().Images);
+        services.AddSingleton<IContainerOperations>(sp => sp.GetRequiredService<DockerClient>().Containers);
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();

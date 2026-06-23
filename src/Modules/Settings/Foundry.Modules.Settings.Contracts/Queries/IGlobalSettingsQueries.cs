@@ -23,4 +23,6 @@ public interface IGlobalSettingsQueries
     Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken);
 
     Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken);
+
+    Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken);
 }

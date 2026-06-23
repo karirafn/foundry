@@ -1,6 +1,80 @@
 #!/bin/bash
 set -euo pipefail
 
+# ---------------------------------------------------------------------------
+# start_rootless_dockerd
+#
+# Starts rootless dockerd in the background and polls until its socket is ready.
+# Exports DOCKER_HOST so subsequent commands (e.g. Testcontainers) can reach it.
+# Is a no-op when dockerd-rootless.sh is not on PATH (non-Docker image builds).
+#
+# Tunable via env vars (defaults chosen for typical container cold-start):
+#   DOCKER_RETRY_COUNT — number of readiness poll attempts  (default: 30)
+#   DOCKER_RETRY_SLEEP — seconds between attempts           (default: 1)
+# ---------------------------------------------------------------------------
+start_rootless_dockerd() {
+    if ! command -v dockerd-rootless.sh > /dev/null 2>&1; then
+        return 0
+    fi
+
+    local uid
+    uid="$(id -u)"
+
+    local retry_count="${DOCKER_RETRY_COUNT:-30}"
+    # Validate retry_count: must be a non-negative integer no greater than 300
+    [[ "$retry_count" =~ ^[0-9]+$ ]] && [ "$retry_count" -le 300 ] || retry_count=30
+
+    local retry_sleep="${DOCKER_RETRY_SLEEP:-1}"
+    # Validate retry_sleep: must be a non-negative integer no greater than 60
+    [[ "$retry_sleep" =~ ^[0-9]+$ ]] && [ "$retry_sleep" -le 60 ] || retry_sleep=1
+
+    # Pin XDG_RUNTIME_DIR to the canonical per-user path — Foundry's dispatcher never
+    # sets this variable, and unconditional assignment removes an injection surface.
+    export XDG_RUNTIME_DIR="/run/user/${uid}"
+    mkdir -p "$XDG_RUNTIME_DIR"
+
+    # Derive socket path from XDG_RUNTIME_DIR so it matches the actual runtime dir in use
+    local socket="unix://${XDG_RUNTIME_DIR}/docker.sock"
+
+    # Write daemon output into the runtime dir (owned by node) to avoid /tmp symlink attacks
+    local daemon_log="${XDG_RUNTIME_DIR}/dockerd-rootless.log"
+
+    echo "Starting rootless dockerd (uid=${uid}, socket=${socket})..." >&2
+
+    # Launch daemon in background; capture PID so we can detect early exits
+    dockerd-rootless.sh > "$daemon_log" 2>&1 &
+    local daemon_pid=$!
+
+    local attempt=0
+    while [ "$attempt" -lt "$retry_count" ]; do
+        # Poll daemon readiness — check the API, not just socket-file existence
+        if docker -H "$socket" version > /dev/null 2>&1; then
+            export DOCKER_HOST="$socket"
+            # DOCKER_HOST is a unix:// URI. Testcontainers .NET (ResourceReaper / Ryuk) derives
+            # the Docker socket bind-mount path from the scheme — when the scheme is "unix" it
+            # extracts the absolute path from the URI, so no TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE
+            # is required. Ryuk therefore mounts the correct rootless-socket path automatically.
+            # Source: UnixSocketMount in testcontainers-dotnet/Containers/ResourceReaper.cs
+            echo "Rootless dockerd is ready (attempt $((attempt + 1))/${retry_count})" >&2
+            return 0
+        fi
+
+        # Detect daemon crash before sleeping
+        if ! kill -0 "$daemon_pid" 2>/dev/null; then
+            echo "ERROR: dockerd-rootless.sh (pid ${daemon_pid}) exited unexpectedly. Log:" >&2
+            cat "$daemon_log" >&2
+            return 1
+        fi
+
+        attempt=$((attempt + 1))
+        sleep "$retry_sleep"
+    done
+
+    echo "ERROR: Timed out waiting for rootless dockerd after ${retry_count} attempts (${retry_count}s). Log:" >&2
+    cat "$daemon_log" >&2
+    return 1
+}
+
 # Required environment variables
 if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
     echo "Either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN is required" >&2
@@ -74,6 +148,8 @@ if [[ -n "${BRANCH_NAME:-}" ]]; then
     fi
     git switch -- "$BRANCH_NAME" || git switch -c "$BRANCH_NAME"
 fi
+
+start_rootless_dockerd
 
 claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \

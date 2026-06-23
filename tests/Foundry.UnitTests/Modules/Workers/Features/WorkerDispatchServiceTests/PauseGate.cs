@@ -267,6 +267,9 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);
+
+        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator
