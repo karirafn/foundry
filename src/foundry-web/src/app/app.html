@@ -25,7 +25,7 @@
     </a>
   </nav>
 </header>
-<fd-system-banner />
+<fd-system-banner [attr.inert]="overlayBlocking() ? '' : null" />
 <fd-forge-overlay />
 <main class="app-content" [attr.inert]="overlayBlocking() ? '' : null">
   <router-outlet />

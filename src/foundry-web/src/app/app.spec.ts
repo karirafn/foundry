@@ -17,9 +17,10 @@ const mockSystemHubFactory = (): SystemHub => ({
   start: () => Promise.resolve(),
 });
 
-function createMockSettingsService(hasUsableImage = true) {
+function createMockSettingsService(isColdBuildBlocking = false) {
   return {
-    hasUsableImage: signal(hasUsableImage).asReadonly(),
+    isColdBuildBlocking: signal(isColdBuildBlocking).asReadonly(),
+    hasUsableImage: signal(!isColdBuildBlocking).asReadonly(),
     imageBuildStatus: signal('Idle').asReadonly(),
     imageBuildLogTail: signal(null).asReadonly(),
     settings: signal(null).asReadonly(),
@@ -97,7 +98,7 @@ function createMockSignalRService() {
   };
 }
 
-function setupApp(hasUsableImage = true) {
+function setupApp(isColdBuildBlocking = false) {
   TestBed.configureTestingModule({
     imports: [App],
     providers: [
@@ -105,7 +106,7 @@ function setupApp(hasUsableImage = true) {
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: SYSTEM_HUB_FACTORY, useValue: mockSystemHubFactory },
-      { provide: SettingsService, useValue: createMockSettingsService(hasUsableImage) },
+      { provide: SettingsService, useValue: createMockSettingsService(isColdBuildBlocking) },
       { provide: AccountService, useValue: createMockAccountService() },
       { provide: DispatchService, useValue: createMockDispatchService() },
       { provide: SystemSignalRService, useValue: createMockSignalRService() },
@@ -138,33 +139,37 @@ describe('App', () => {
     expect(compiled.querySelector('fd-forge-overlay')).not.toBeNull();
   });
 
-  // F1: header and main are not inert when overlay is not blocking
-  it('should not set inert on header or main when overlay is not blocking', () => {
-    // Arrange
-    const fixture = setupApp(true);
-
-    // Act
-    const compiled = fixture.nativeElement as HTMLElement;
-    const header = compiled.querySelector('header');
-    const main = compiled.querySelector('main');
-
-    // Assert
-    expect(header?.hasAttribute('inert')).toBe(false);
-    expect(main?.hasAttribute('inert')).toBe(false);
-  });
-
-  // F1: header and main are inert when overlay is blocking
-  it('should set inert on header and main when overlay is blocking (no usable image, accounts exist)', () => {
+  // F1: header, system banner, and main are not inert when overlay is not blocking
+  it('should not set inert on header, system-banner, or main when overlay is not blocking', () => {
     // Arrange
     const fixture = setupApp(false);
 
     // Act
     const compiled = fixture.nativeElement as HTMLElement;
     const header = compiled.querySelector('header');
+    const banner = compiled.querySelector('fd-system-banner');
+    const main = compiled.querySelector('main');
+
+    // Assert
+    expect(header?.hasAttribute('inert')).toBe(false);
+    expect(banner?.hasAttribute('inert')).toBe(false);
+    expect(main?.hasAttribute('inert')).toBe(false);
+  });
+
+  // F1: header, system banner, and main are inert when overlay is blocking
+  it('should set inert on header, system-banner, and main when overlay is blocking', () => {
+    // Arrange
+    const fixture = setupApp(true);
+
+    // Act
+    const compiled = fixture.nativeElement as HTMLElement;
+    const header = compiled.querySelector('header');
+    const banner = compiled.querySelector('fd-system-banner');
     const main = compiled.querySelector('main');
 
     // Assert
     expect(header?.hasAttribute('inert')).toBe(true);
+    expect(banner?.hasAttribute('inert')).toBe(true);
     expect(main?.hasAttribute('inert')).toBe(true);
   });
 });

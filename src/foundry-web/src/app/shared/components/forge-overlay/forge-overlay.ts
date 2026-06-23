@@ -1,7 +1,6 @@
 import { Component, DestroyRef, ElementRef, Signal, ViewChild, afterRenderEffect, computed, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SettingsService } from '../../../features/settings/settings.service';
-import { AccountService } from '../../../features/settings/accounts/account.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { ImageBuildStatus } from '../../../features/settings/settings.model';
 
@@ -17,15 +16,12 @@ const STATUS_TEXT_FAILED = 'Worker image build failed';
 })
 export class ForgeOverlayComponent {
   private readonly _settingsService = inject(SettingsService);
-  private readonly _accountService = inject(AccountService);
   private readonly _signalR = inject(SystemSignalRService);
   private readonly _destroyRef = inject(DestroyRef);
 
   @ViewChild('retryButton') retryButtonRef?: ElementRef<HTMLButtonElement>;
 
-  readonly isColdBuildBlocking: Signal<boolean> = computed(
-    () => this._accountService.accounts().length > 0 && !this._settingsService.hasUsableImage()
-  );
+  readonly isColdBuildBlocking: Signal<boolean> = this._settingsService.isColdBuildBlocking;
 
   readonly imageBuildStatus: Signal<ImageBuildStatus> = this._settingsService.imageBuildStatus;
   readonly imageBuildLogTail: Signal<string | null> = this._settingsService.imageBuildLogTail;

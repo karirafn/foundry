@@ -4,38 +4,29 @@ import { vi } from 'vitest';
 import { Subject } from 'rxjs';
 import { ForgeOverlayComponent } from './forge-overlay';
 import { SettingsService } from '../../../features/settings/settings.service';
-import { AccountService } from '../../../features/settings/accounts/account.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { ImageBuildStatus } from '../../../features/settings/settings.model';
 
 function createMockSettingsService(overrides: {
-  hasUsableImage?: boolean;
+  isColdBuildBlocking?: boolean;
   imageBuildStatus?: ImageBuildStatus;
   imageBuildLogTail?: string | null;
 } = {}) {
-  const hasUsableImageSignal = signal(overrides.hasUsableImage ?? false);
+  const isColdBuildBlockingSignal = signal(overrides.isColdBuildBlocking ?? true);
   const imageBuildStatusSignal = signal<ImageBuildStatus>(overrides.imageBuildStatus ?? 'Idle');
   const imageBuildLogTailSignal = signal<string | null>(overrides.imageBuildLogTail ?? null);
   const retryImageBuild = vi.fn();
   const loadSettings = vi.fn();
 
   return {
-    hasUsableImage: hasUsableImageSignal.asReadonly(),
+    isColdBuildBlocking: isColdBuildBlockingSignal.asReadonly(),
     imageBuildStatus: imageBuildStatusSignal.asReadonly(),
     imageBuildLogTail: imageBuildLogTailSignal.asReadonly(),
     retryImageBuild,
     loadSettings,
-    _hasUsableImageSignal: hasUsableImageSignal,
+    _isColdBuildBlockingSignal: isColdBuildBlockingSignal,
     _imageBuildStatusSignal: imageBuildStatusSignal,
     _imageBuildLogTailSignal: imageBuildLogTailSignal,
-  };
-}
-
-function createMockAccountService(accounts: unknown[] = []) {
-  const accountsSignal = signal(accounts);
-  return {
-    accounts: accountsSignal.asReadonly(),
-    _accountsSignal: accountsSignal,
   };
 }
 
@@ -46,26 +37,23 @@ function createMockSignalRService() {
 }
 
 interface SetupOptions {
-  hasUsableImage?: boolean;
+  isColdBuildBlocking?: boolean;
   imageBuildStatus?: ImageBuildStatus;
   imageBuildLogTail?: string | null;
-  accounts?: unknown[];
 }
 
 function setup(options: SetupOptions = {}) {
   const mockSettings = createMockSettingsService({
-    hasUsableImage: options.hasUsableImage ?? false,
+    isColdBuildBlocking: options.isColdBuildBlocking ?? true,
     imageBuildStatus: options.imageBuildStatus ?? 'Idle',
     imageBuildLogTail: options.imageBuildLogTail ?? null,
   });
-  const mockAccounts = createMockAccountService(options.accounts ?? [{ id: '1' }]);
   const mockSignalR = createMockSignalRService();
 
   TestBed.configureTestingModule({
     imports: [ForgeOverlayComponent],
     providers: [
       { provide: SettingsService, useValue: mockSettings },
-      { provide: AccountService, useValue: mockAccounts },
       { provide: SystemSignalRService, useValue: mockSignalR },
     ],
   });
@@ -73,16 +61,16 @@ function setup(options: SetupOptions = {}) {
   const fixture = TestBed.createComponent(ForgeOverlayComponent);
   fixture.detectChanges();
 
-  return { fixture, mockSettings, mockAccounts, mockSignalR };
+  return { fixture, mockSettings, mockSignalR };
 }
 
 describe('ForgeOverlayComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  // Tracer bullet: overlay is visible when setup complete and no usable image
-  it('should show the overlay when setup is complete and hasUsableImage is false', () => {
+  // Tracer bullet: overlay is visible when isColdBuildBlocking is true
+  it('should show the overlay when isColdBuildBlocking is true', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+    const { fixture } = setup({ isColdBuildBlocking: true });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -91,10 +79,10 @@ describe('ForgeOverlayComponent', () => {
     expect(el.querySelector('.forge-overlay')).not.toBeNull();
   });
 
-  // Overlay is hidden when hasUsableImage becomes true
-  it('should hide the overlay when hasUsableImage is true', () => {
+  // Overlay is hidden when isColdBuildBlocking is false
+  it('should hide the overlay when isColdBuildBlocking is false', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: true });
+    const { fixture } = setup({ isColdBuildBlocking: false });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -103,26 +91,14 @@ describe('ForgeOverlayComponent', () => {
     expect(el.querySelector('.forge-overlay')).toBeNull();
   });
 
-  // Overlay is hidden when no accounts (setup not complete)
-  it('should hide the overlay when there are no accounts (setup incomplete)', () => {
+  // Overlay dismisses when isColdBuildBlocking transitions to false
+  it('should dismiss the overlay when isColdBuildBlocking changes to false', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [], hasUsableImage: false });
-
-    // Act
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    expect(el.querySelector('.forge-overlay')).toBeNull();
-  });
-
-  // Overlay dismisses when hasUsableImage transitions to true
-  it('should dismiss the overlay when hasUsableImage changes to true', () => {
-    // Arrange
-    const { fixture, mockSettings } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+    const { fixture, mockSettings } = setup({ isColdBuildBlocking: true });
     expect((fixture.nativeElement as HTMLElement).querySelector('.forge-overlay')).not.toBeNull();
 
     // Act
-    mockSettings._hasUsableImageSignal.set(true);
+    mockSettings._isColdBuildBlockingSignal.set(false);
     fixture.detectChanges();
 
     // Assert
@@ -132,7 +108,7 @@ describe('ForgeOverlayComponent', () => {
   // State: Idle shows "Starting…" text
   it('should show "Starting…" text when imageBuildStatus is Idle', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Idle' });
+    const { fixture } = setup({ imageBuildStatus: 'Idle' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -144,7 +120,7 @@ describe('ForgeOverlayComponent', () => {
   // State: Building shows "Building worker image…" text
   it('should show "Building worker image…" text when imageBuildStatus is Building', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Building' });
+    const { fixture } = setup({ imageBuildStatus: 'Building' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -157,8 +133,6 @@ describe('ForgeOverlayComponent', () => {
   it('should show "Worker image build failed" heading when imageBuildStatus is Failed', () => {
     // Arrange
     const { fixture } = setup({
-      accounts: [{ id: '1' }],
-      hasUsableImage: false,
       imageBuildStatus: 'Failed',
       imageBuildLogTail: 'Step 2/5 FAILED',
     });
@@ -174,8 +148,6 @@ describe('ForgeOverlayComponent', () => {
   it('should show the error log tail when imageBuildStatus is Failed', () => {
     // Arrange
     const { fixture } = setup({
-      accounts: [{ id: '1' }],
-      hasUsableImage: false,
       imageBuildStatus: 'Failed',
       imageBuildLogTail: 'Step 2/5 FAILED',
     });
@@ -190,11 +162,7 @@ describe('ForgeOverlayComponent', () => {
   // State: Failed shows Retry button
   it('should render a Retry button when imageBuildStatus is Failed', () => {
     // Arrange
-    const { fixture } = setup({
-      accounts: [{ id: '1' }],
-      hasUsableImage: false,
-      imageBuildStatus: 'Failed',
-    });
+    const { fixture } = setup({ imageBuildStatus: 'Failed' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -208,11 +176,7 @@ describe('ForgeOverlayComponent', () => {
   // Retry button calls retryImageBuild
   it('should call retryImageBuild when Retry button is clicked', () => {
     // Arrange
-    const { fixture, mockSettings } = setup({
-      accounts: [{ id: '1' }],
-      hasUsableImage: false,
-      imageBuildStatus: 'Failed',
-    });
+    const { fixture, mockSettings } = setup({ imageBuildStatus: 'Failed' });
     const retryBtn = (fixture.nativeElement as HTMLElement).querySelector('button') as HTMLButtonElement;
 
     // Act
@@ -225,11 +189,7 @@ describe('ForgeOverlayComponent', () => {
   // No Retry button when Building
   it('should not render a Retry button when imageBuildStatus is Building', () => {
     // Arrange
-    const { fixture } = setup({
-      accounts: [{ id: '1' }],
-      hasUsableImage: false,
-      imageBuildStatus: 'Building',
-    });
+    const { fixture } = setup({ imageBuildStatus: 'Building' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -241,7 +201,7 @@ describe('ForgeOverlayComponent', () => {
   // Accessibility: role="alertdialog" on the surface
   it('should have role="alertdialog" on the overlay surface', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+    const { fixture } = setup();
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -254,7 +214,7 @@ describe('ForgeOverlayComponent', () => {
   // Accessibility: aria-modal="true" on the surface
   it('should have aria-modal="true" on the overlay surface', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+    const { fixture } = setup();
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -267,7 +227,7 @@ describe('ForgeOverlayComponent', () => {
   // Accessibility: persistent aria-live status region
   it('should have a persistent role="status" aria-live region', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+    const { fixture } = setup();
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -280,7 +240,7 @@ describe('ForgeOverlayComponent', () => {
   // Live region text for Idle state
   it('should announce "Starting…" in the live region when Idle', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Idle' });
+    const { fixture } = setup({ imageBuildStatus: 'Idle' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -293,7 +253,7 @@ describe('ForgeOverlayComponent', () => {
   // Live region text for Building state
   it('should announce "Building worker image…" in the live region when Building', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Building' });
+    const { fixture } = setup({ imageBuildStatus: 'Building' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -306,7 +266,7 @@ describe('ForgeOverlayComponent', () => {
   // Live region text for Failed state
   it('should announce "Worker image build failed" in the live region when Failed', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Failed' });
+    const { fixture } = setup({ imageBuildStatus: 'Failed' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -319,7 +279,7 @@ describe('ForgeOverlayComponent', () => {
   // Forge scene is always present while blocking (state-invariant)
   it('should always render the forge scene element while blocking', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Building' });
+    const { fixture } = setup({ imageBuildStatus: 'Building' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -331,7 +291,7 @@ describe('ForgeOverlayComponent', () => {
   // Accessibility: dialog has stable aria-labelledby pointing at persistent title (F4)
   it('should have aria-labelledby pointing at the persistent title element', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Failed' });
+    const { fixture } = setup({ imageBuildStatus: 'Failed' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -347,7 +307,7 @@ describe('ForgeOverlayComponent', () => {
   // Accessibility: dialog accessible name does not include "Retry" (F4)
   it('should not include "Retry" in the dialog accessible name', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Failed' });
+    const { fixture } = setup({ imageBuildStatus: 'Failed' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -362,7 +322,7 @@ describe('ForgeOverlayComponent', () => {
   // Accessibility: dialog has aria-describedby pointing at status-detail region (F7)
   it('should have aria-describedby pointing at the status-detail element', () => {
     // Arrange
-    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Building' });
+    const { fixture } = setup({ imageBuildStatus: 'Building' });
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
@@ -378,7 +338,7 @@ describe('ForgeOverlayComponent', () => {
   // Reconnect triggers loadSettings
   it('should call loadSettings when SignalR reconnects', () => {
     // Arrange
-    const { mockSettings, mockSignalR } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+    const { mockSettings, mockSignalR } = setup();
 
     // Act
     mockSignalR.reconnected.next();
@@ -387,15 +347,15 @@ describe('ForgeOverlayComponent', () => {
     expect(mockSettings.loadSettings).toHaveBeenCalledOnce();
   });
 
-  // Reconnect + hasUsableImage true dismisses the overlay
-  it('should dismiss overlay after reconnected fires and hasUsableImage becomes true', () => {
+  // Reconnect + isColdBuildBlocking false dismisses the overlay
+  it('should dismiss overlay after reconnected fires and isColdBuildBlocking becomes false', () => {
     // Arrange
-    const { fixture, mockSettings, mockSignalR } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+    const { fixture, mockSettings, mockSignalR } = setup({ isColdBuildBlocking: true });
     expect((fixture.nativeElement as HTMLElement).querySelector('.forge-overlay')).not.toBeNull();
 
     // Act — simulate reconnect followed by a settings reload that now has a usable image
     mockSignalR.reconnected.next();
-    mockSettings._hasUsableImageSignal.set(true);
+    mockSettings._isColdBuildBlockingSignal.set(false);
     fixture.detectChanges();
 
     // Assert — overlay is dismissed
@@ -406,8 +366,6 @@ describe('ForgeOverlayComponent', () => {
   it('should render the Failed branch when imageBuildStatus transitions from Building to Failed', () => {
     // Arrange — start in Building state
     const { fixture, mockSettings } = setup({
-      accounts: [{ id: '1' }],
-      hasUsableImage: false,
       imageBuildStatus: 'Building',
       imageBuildLogTail: null,
     });
@@ -431,16 +389,12 @@ describe('ForgeOverlayComponent', () => {
   // F2: Retry button receives focus after Building -> Failed transition
   it('should move focus to the Retry button when status transitions to Failed while blocking', async () => {
     // Arrange — start in Building state
-    const { fixture, mockSettings } = setup({
-      accounts: [{ id: '1' }],
-      hasUsableImage: false,
-      imageBuildStatus: 'Building',
-    });
+    const { fixture, mockSettings } = setup({ imageBuildStatus: 'Building' });
 
-    // Act — transition to Failed so afterNextRender queues a focus call
+    // Act — transition to Failed so afterRenderEffect queues a focus call
     mockSettings._imageBuildStatusSignal.set('Failed');
     fixture.detectChanges();
-    await fixture.whenStable();
+    TestBed.flushEffects();
 
     // Assert — Retry button exists and is focused
     const retryBtn = (fixture.nativeElement as HTMLElement).querySelector('button') as HTMLButtonElement;

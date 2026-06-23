@@ -1,4 +1,4 @@
-import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
+import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import {
   AuthMode,
@@ -12,6 +12,7 @@ import {
   WorkerLimits,
 } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
+import { AccountService } from './accounts/account.service';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
@@ -25,6 +26,7 @@ const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
 export class SettingsService {
   private readonly _http = inject(HttpClient);
   private readonly _dispatchService = inject(DispatchService);
+  private readonly _accountService = inject(AccountService);
 
   private readonly _settingsSignal: WritableSignal<GlobalSettingsResponse | null> = signal(null);
   readonly settings: Signal<GlobalSettingsResponse | null> = this._settingsSignal.asReadonly();
@@ -91,6 +93,10 @@ export class SettingsService {
 
   private readonly _hasUsableImageSignal: WritableSignal<boolean> = signal(false);
   readonly hasUsableImage: Signal<boolean> = this._hasUsableImageSignal.asReadonly();
+
+  readonly isColdBuildBlocking: Signal<boolean> = computed(
+    () => this._accountService.accounts().length > 0 && !this._hasUsableImageSignal()
+  );
 
   private readonly _savingImageFlagsSignal: WritableSignal<boolean> = signal(false);
   readonly savingImageFlags: Signal<boolean> = this._savingImageFlagsSignal.asReadonly();
