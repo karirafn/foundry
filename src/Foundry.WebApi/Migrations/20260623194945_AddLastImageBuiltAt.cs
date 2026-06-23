@@ -21,10 +21,12 @@ namespace Foundry.WebApi.Migrations
 
             // Backfill: existing rows with idle image_build_status have had a successful build.
             // Stamp them with the current UTC time so existing healthy installs are not blocked.
+            // strftime + offset suffix produces yyyy-MM-dd HH:mm:ss.fffffffzzz, which matches the
+            // EF Core SQLite DateTimeOffset storage format and parses back as UTC on all hosts.
             migrationBuilder.Sql(
                 $"""
                 UPDATE global_settings
-                SET last_image_built_at = datetime('now')
+                SET last_image_built_at = strftime('%Y-%m-%d %H:%M:%S', 'now') || '.0000000+00:00'
                 WHERE image_build_status = '{IdleStatus}';
                 """);
         }
