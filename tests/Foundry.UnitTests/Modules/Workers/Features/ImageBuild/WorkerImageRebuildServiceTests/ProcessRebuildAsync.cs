@@ -459,7 +459,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     [Fact]
     public async Task BuildingMessage_HasPipeSeparatedFormat()
     {
-        // Arrange / Act
+        // Act
         string message = WorkerImageRebuildService.BuildingMessage;
 
         // Assert — Angular parser expects "Status|logTail"
@@ -521,13 +521,16 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
                 cancellingImages,
                 contextPath: contextDir);
 
-            // Act / Assert
-            await Should.ThrowAsync<OperationCanceledException>(
+            // Act
+            OperationCanceledException ex = await Should.ThrowAsync<OperationCanceledException>(
                 async () =>
                 {
                     await cts.CancelAsync();
                     await sut.ProcessRebuildAsync(cts.Token);
                 });
+
+            // Assert
+            ex.ShouldNotBeNull();
         }
         finally
         {

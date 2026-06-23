@@ -193,7 +193,7 @@
 
   &__retry-btn {
     border: 1px solid var(--fd-state-failed);
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
     font-weight: 500;
     transition: background 0.15s ease;
 
@@ -236,7 +236,7 @@
     }
 
     &--missing {
-      color: var(--fd-state-failed);
+      color: var(--fd-text-error);
     }
   }
 

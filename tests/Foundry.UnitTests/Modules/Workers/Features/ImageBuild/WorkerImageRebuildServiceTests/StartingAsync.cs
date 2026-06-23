@@ -134,9 +134,11 @@ public sealed class StartingAsync : IAsyncDisposable
         // Arrange — no GlobalSettings seeded
         WorkerImageRebuildService sut = BuildService();
 
-        // Act / Assert — should not throw
-        await Should.NotThrowAsync(
-            async () => await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken));
+        // Act
+        Task act = ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await Should.NotThrowAsync(act);
     }
 
     [Fact]

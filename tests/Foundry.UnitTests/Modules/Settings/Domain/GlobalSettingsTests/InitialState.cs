@@ -11,7 +11,7 @@ public sealed class InitialState
     [Fact]
     public void WhenCreated_WorkerImageConfigurationIsDefault()
     {
-        // Arrange & Act
+        // Act
         GlobalSettings settings = GlobalSettings.Create();
 
         // Assert
@@ -22,7 +22,7 @@ public sealed class InitialState
     [Fact]
     public void WhenCreated_ImageBuildStateIsIdle()
     {
-        // Arrange & Act
+        // Act
         GlobalSettings settings = GlobalSettings.Create();
 
         // Assert
