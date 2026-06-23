@@ -181,10 +181,8 @@ public sealed class StartAsync
 
         // Assert
         CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
-        (captured.HostConfig.SecurityOpt is null || captured.HostConfig.SecurityOpt.Count == 0).ShouldBeTrue(
-            "SecurityOpt should be null or empty when no security options are specified");
-        (captured.HostConfig.Devices is null || captured.HostConfig.Devices.Count == 0).ShouldBeTrue(
-            "Devices should be null or empty when no devices are specified");
+        captured.HostConfig.SecurityOpt.ShouldBeNull();
+        captured.HostConfig.Devices.ShouldBeNull();
     }
 
     private sealed class SpyContainerOperations(string containerId = "spy-container-id") : IContainerOperations

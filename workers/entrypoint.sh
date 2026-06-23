@@ -19,22 +19,30 @@ start_rootless_dockerd() {
 
     local uid
     uid="$(id -u)"
-    local retry_count="${DOCKER_RETRY_COUNT:-30}"
-    local retry_sleep="${DOCKER_RETRY_SLEEP:-1}"
 
-    # Ensure XDG_RUNTIME_DIR is set and the directory exists — rootless dockerd requires it.
-    # Honour an existing value (container runtimes often pre-create the dir);
-    # fall back to the canonical per-user path.
-    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/${uid}}"
+    local retry_count="${DOCKER_RETRY_COUNT:-30}"
+    # Validate retry_count: must be a non-negative integer no greater than 300
+    [[ "$retry_count" =~ ^[0-9]+$ ]] && [ "$retry_count" -le 300 ] || retry_count=30
+
+    local retry_sleep="${DOCKER_RETRY_SLEEP:-1}"
+    # Validate retry_sleep: must be a non-negative integer no greater than 60
+    [[ "$retry_sleep" =~ ^[0-9]+$ ]] && [ "$retry_sleep" -le 60 ] || retry_sleep=1
+
+    # Pin XDG_RUNTIME_DIR to the canonical per-user path — Foundry's dispatcher never
+    # sets this variable, and unconditional assignment removes an injection surface.
+    export XDG_RUNTIME_DIR="/run/user/${uid}"
     mkdir -p "$XDG_RUNTIME_DIR"
 
     # Derive socket path from XDG_RUNTIME_DIR so it matches the actual runtime dir in use
     local socket="unix://${XDG_RUNTIME_DIR}/docker.sock"
 
+    # Write daemon output into the runtime dir (owned by node) to avoid /tmp symlink attacks
+    local daemon_log="${XDG_RUNTIME_DIR}/dockerd-rootless.log"
+
     echo "Starting rootless dockerd (uid=${uid}, socket=${socket})..." >&2
 
     # Launch daemon in background; capture PID so we can detect early exits
-    dockerd-rootless.sh > /tmp/dockerd-rootless.log 2>&1 &
+    dockerd-rootless.sh > "$daemon_log" 2>&1 &
     local daemon_pid=$!
 
     local attempt=0
@@ -54,7 +62,7 @@ start_rootless_dockerd() {
         # Detect daemon crash before sleeping
         if ! kill -0 "$daemon_pid" 2>/dev/null; then
             echo "ERROR: dockerd-rootless.sh (pid ${daemon_pid}) exited unexpectedly. Log:" >&2
-            cat /tmp/dockerd-rootless.log >&2
+            cat "$daemon_log" >&2
             return 1
         fi
 
@@ -63,7 +71,7 @@ start_rootless_dockerd() {
     done
 
     echo "ERROR: Timed out waiting for rootless dockerd after ${retry_count} attempts (${retry_count}s). Log:" >&2
-    cat /tmp/dockerd-rootless.log >&2
+    cat "$daemon_log" >&2
     return 1
 }
 

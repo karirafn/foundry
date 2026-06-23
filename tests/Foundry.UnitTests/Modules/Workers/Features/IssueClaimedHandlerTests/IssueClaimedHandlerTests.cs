@@ -813,6 +813,52 @@ public sealed class HandleAsync : IAsyncDisposable
             defaultWorkerPromptTemplate.Replace("{issueNumber}", "7", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task WhenDockerEnabled_SecurityOptionsAndDevicesAreSet()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(
+                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
+                installsDocker: true));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"]),
+            () => spec.Devices.ShouldBe(["/dev/fuse"]));
+    }
+
+    [Fact]
+    public async Task WhenDockerDisabled_SecurityOptionsAndDevicesAreEmpty()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(
+                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
+                installsDocker: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.SecurityOptions.ShouldBeEmpty(),
+            () => spec.Devices.ShouldBeEmpty());
+    }
+
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
     {
         public Task<Result<bool>> CreateBranchAsync(
@@ -889,52 +935,6 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
-    }
-
-    [Fact]
-    public async Task WhenDockerEnabled_SecurityOptionsAndDevicesAreSet()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind");
-        IssueClaimedHandler sut = BuildHandler(
-            orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(
-                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
-                installsDocker: true));
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.ShouldSatisfyAllConditions(
-            () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"]),
-            () => spec.Devices.ShouldBe(["/dev/fuse"]));
-    }
-
-    [Fact]
-    public async Task WhenDockerDisabled_SecurityOptionsAndDevicesAreEmpty()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
-        IssueClaimedHandler sut = BuildHandler(
-            orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(
-                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
-                installsDocker: false));
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.ShouldSatisfyAllConditions(
-            () => spec.SecurityOptions.ShouldBeEmpty(),
-            () => spec.Devices.ShouldBeEmpty());
     }
 
     private sealed class StubGlobalSettingsQueries(
