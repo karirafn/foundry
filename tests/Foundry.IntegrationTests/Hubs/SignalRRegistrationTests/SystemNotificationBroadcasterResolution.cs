@@ -35,4 +35,24 @@ public sealed class SystemNotificationBroadcasterResolution : IAsyncDisposable
         // Assert
         broadcaster.ShouldBeOfType<SignalRSystemNotificationBroadcaster>();
     }
+
+    [Fact]
+    public void WhenRegistrationIsInspected_LifetimeIsSingleton()
+    {
+        // Arrange
+        ServiceDescriptor? descriptor = null;
+
+        using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            descriptor = services.LastOrDefault(
+                sd => sd.ServiceType == typeof(ISystemNotificationBroadcaster));
+        });
+
+        // Act — accessing Services triggers host build, which runs ConfigureServices
+        _ = factory.Services;
+
+        // Assert
+        descriptor.ShouldNotBeNull();
+        descriptor.Lifetime.ShouldBe(ServiceLifetime.Singleton);
+    }
 }

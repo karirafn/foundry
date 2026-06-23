@@ -31,7 +31,7 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
-builder.Services.AddScoped<ISystemNotificationBroadcaster, SignalRSystemNotificationBroadcaster>();
+builder.Services.AddSingleton<ISystemNotificationBroadcaster, SignalRSystemNotificationBroadcaster>();
 
 builder.Services.AddCors(options =>
 {
