@@ -85,18 +85,19 @@ internal static class UpdateWorkerImageConfiguration
 
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, BadRequest<string>>>(
                         summary => TypedResults.Ok(summary),
                         error => error.Code switch
                         {
                             SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.NotFound(),
+                            _ => TypedResults.BadRequest(error.Message),
                         });
                 })
                 .WithName("UpdateWorkerImageConfiguration")
                 .WithSummary("Updates the worker image build flags")
                 .Produces<GlobalSettingsSummary>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }
