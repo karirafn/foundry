@@ -108,7 +108,9 @@ EOF
 
     # Call in the same shell so we can inspect exported vars
     start_rootless_dockerd
-    expected_sock="unix://${XDG_RUNTIME_DIR}/docker.sock"
+    # Assert against the concrete expected path, not the function's own
+    # XDG_RUNTIME_DIR, so a regression that changes both in lock-step is caught.
+    expected_sock="unix://${FAKE_RUN_DIR}/user/$(id -u)/docker.sock"
     [ "$DOCKER_HOST" = "$expected_sock" ]
 }
 
