@@ -119,7 +119,7 @@
 }
 
 .forge-overlay__status-text--failed {
-  color: var(--fd-state-failed);
+  color: var(--fd-text-error);
   font-size: 1.125rem;
 }
 
@@ -142,9 +142,9 @@
 
 .forge-overlay__retry-btn {
   background: transparent;
-  border: 1px solid var(--fd-state-failed);
+  border: 1px solid var(--fd-text-error);
   border-radius: var(--fd-radius-sm);
-  color: var(--fd-state-failed);
+  color: var(--fd-text-error);
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
@@ -153,11 +153,11 @@
   transition: background-color 150ms ease;
 
   &:hover:not(:disabled) {
-    background: rgba(218, 54, 51, 0.1);
+    background: color-mix(in srgb, var(--fd-state-failed) 10%, transparent);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--fd-state-failed);
+    outline: 2px solid var(--fd-text-error);
     outline-offset: 2px;
   }
 

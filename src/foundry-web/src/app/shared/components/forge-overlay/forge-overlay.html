@@ -4,8 +4,11 @@
       class="forge-overlay__surface"
       role="alertdialog"
       aria-modal="true"
-      aria-labelledby="forge-overlay-status"
+      aria-labelledby="forge-overlay-title"
+      aria-describedby="forge-overlay-status"
     >
+      <h2 id="forge-overlay-title" class="sr-only">Worker Image Build</h2>
+
       <div class="forge-overlay__scene" aria-hidden="true">
         <div class="forge-overlay__ember" [class.forge-overlay__ember--failed]="imageBuildStatus() === 'Failed'"></div>
         <div class="forge-overlay__hammer" [class.forge-overlay__hammer--failed]="imageBuildStatus() === 'Failed'">
@@ -26,7 +29,7 @@
             <p class="forge-overlay__status-text">{{ statusTextBuilding }}</p>
           }
           @case ('Failed') {
-            <h2 class="forge-overlay__status-text forge-overlay__status-text--failed">{{ statusTextFailed }}</h2>
+            <h3 class="forge-overlay__status-text forge-overlay__status-text--failed">{{ statusTextFailed }}</h3>
             @if (imageBuildLogTail()) {
               <pre class="forge-overlay__log-tail">{{ imageBuildLogTail() }}</pre>
             }

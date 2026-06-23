@@ -81,8 +81,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Tracer bullet: overlay is visible when setup complete and no usable image
   it('should show the overlay when setup is complete and hasUsableImage is false', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -91,8 +93,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Overlay is hidden when hasUsableImage becomes true
   it('should hide the overlay when hasUsableImage is true', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: true });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -101,8 +105,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Overlay is hidden when no accounts (setup not complete)
   it('should hide the overlay when there are no accounts (setup incomplete)', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [], hasUsableImage: false });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -125,8 +131,10 @@ describe('ForgeOverlayComponent', () => {
 
   // State: Idle shows "Starting…" text
   it('should show "Starting…" text when imageBuildStatus is Idle', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Idle' });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -135,8 +143,10 @@ describe('ForgeOverlayComponent', () => {
 
   // State: Building shows "Building worker image…" text
   it('should show "Building worker image…" text when imageBuildStatus is Building', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Building' });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -145,13 +155,15 @@ describe('ForgeOverlayComponent', () => {
 
   // State: Failed shows error heading
   it('should show "Worker image build failed" heading when imageBuildStatus is Failed', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({
       accounts: [{ id: '1' }],
       hasUsableImage: false,
       imageBuildStatus: 'Failed',
       imageBuildLogTail: 'Step 2/5 FAILED',
     });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -160,13 +172,15 @@ describe('ForgeOverlayComponent', () => {
 
   // State: Failed shows error tail
   it('should show the error log tail when imageBuildStatus is Failed', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({
       accounts: [{ id: '1' }],
       hasUsableImage: false,
       imageBuildStatus: 'Failed',
       imageBuildLogTail: 'Step 2/5 FAILED',
     });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -175,12 +189,14 @@ describe('ForgeOverlayComponent', () => {
 
   // State: Failed shows Retry button
   it('should render a Retry button when imageBuildStatus is Failed', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({
       accounts: [{ id: '1' }],
       hasUsableImage: false,
       imageBuildStatus: 'Failed',
     });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -208,12 +224,14 @@ describe('ForgeOverlayComponent', () => {
 
   // No Retry button when Building
   it('should not render a Retry button when imageBuildStatus is Building', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({
       accounts: [{ id: '1' }],
       hasUsableImage: false,
       imageBuildStatus: 'Building',
     });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -222,8 +240,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Accessibility: role="alertdialog" on the surface
   it('should have role="alertdialog" on the overlay surface', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -233,8 +253,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Accessibility: aria-modal="true" on the surface
   it('should have aria-modal="true" on the overlay surface', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -244,8 +266,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Accessibility: persistent aria-live status region
   it('should have a persistent role="status" aria-live region', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -255,8 +279,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Live region text for Idle state
   it('should announce "Starting…" in the live region when Idle', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Idle' });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
     const liveRegion = el.querySelector('[role="status"]');
 
@@ -266,8 +292,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Live region text for Building state
   it('should announce "Building worker image…" in the live region when Building', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Building' });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
     const liveRegion = el.querySelector('[role="status"]');
 
@@ -277,8 +305,10 @@ describe('ForgeOverlayComponent', () => {
 
   // Live region text for Failed state
   it('should announce "Worker image build failed" in the live region when Failed', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Failed' });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
     const liveRegion = el.querySelector('[role="status"]');
 
@@ -288,12 +318,61 @@ describe('ForgeOverlayComponent', () => {
 
   // Forge scene is always present while blocking (state-invariant)
   it('should always render the forge scene element while blocking', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Building' });
+
+    // Act
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     expect(el.querySelector('.forge-overlay__scene')).not.toBeNull();
+  });
+
+  // Accessibility: dialog has stable aria-labelledby pointing at persistent title (F4)
+  it('should have aria-labelledby pointing at the persistent title element', () => {
+    // Arrange
+    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Failed' });
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const surface = el.querySelector('[role="alertdialog"]') as HTMLElement;
+    const labelId = surface?.getAttribute('aria-labelledby');
+    const labelEl = labelId ? el.querySelector(`#${labelId}`) : null;
+
+    // Assert
+    expect(labelEl).not.toBeNull();
+    expect(labelEl?.textContent?.trim()).toBe('Worker Image Build');
+  });
+
+  // Accessibility: dialog accessible name does not include "Retry" (F4)
+  it('should not include "Retry" in the dialog accessible name', () => {
+    // Arrange
+    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Failed' });
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const surface = el.querySelector('[role="alertdialog"]') as HTMLElement;
+    const labelId = surface?.getAttribute('aria-labelledby');
+    const labelEl = labelId ? el.querySelector(`#${labelId}`) : null;
+
+    // Assert
+    expect(labelEl?.textContent?.trim()).not.toContain('Retry');
+  });
+
+  // Accessibility: dialog has aria-describedby pointing at status-detail region (F7)
+  it('should have aria-describedby pointing at the status-detail element', () => {
+    // Arrange
+    const { fixture } = setup({ accounts: [{ id: '1' }], hasUsableImage: false, imageBuildStatus: 'Building' });
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const surface = el.querySelector('[role="alertdialog"]') as HTMLElement;
+    const descId = surface?.getAttribute('aria-describedby');
+    const descEl = descId ? el.querySelector(`#${descId}`) : null;
+
+    // Assert
+    expect(descEl).not.toBeNull();
+    expect(descEl?.textContent).toContain('Building worker image…');
   });
 
   // Reconnect triggers loadSettings
@@ -347,5 +426,25 @@ describe('ForgeOverlayComponent', () => {
     const retryBtn = el.querySelector('button');
     expect(retryBtn).not.toBeNull();
     expect(retryBtn?.textContent?.trim()).toBe('Retry');
+  });
+
+  // F2: Retry button receives focus after Building -> Failed transition
+  it('should move focus to the Retry button when status transitions to Failed while blocking', async () => {
+    // Arrange — start in Building state
+    const { fixture, mockSettings } = setup({
+      accounts: [{ id: '1' }],
+      hasUsableImage: false,
+      imageBuildStatus: 'Building',
+    });
+
+    // Act — transition to Failed so afterNextRender queues a focus call
+    mockSettings._imageBuildStatusSignal.set('Failed');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Assert — Retry button exists and is focused
+    const retryBtn = (fixture.nativeElement as HTMLElement).querySelector('button') as HTMLButtonElement;
+    expect(retryBtn).not.toBeNull();
+    expect(document.activeElement).toBe(retryBtn);
   });
 });

@@ -17,9 +17,9 @@ const mockSystemHubFactory = (): SystemHub => ({
   start: () => Promise.resolve(),
 });
 
-function createMockSettingsService() {
+function createMockSettingsService(hasUsableImage = true) {
   return {
-    hasUsableImage: signal(true).asReadonly(),
+    hasUsableImage: signal(hasUsableImage).asReadonly(),
     imageBuildStatus: signal('Idle').asReadonly(),
     imageBuildLogTail: signal(null).asReadonly(),
     settings: signal(null).asReadonly(),
@@ -97,40 +97,74 @@ function createMockSignalRService() {
   };
 }
 
-describe('App', () => {
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [App],
-      providers: [
-        provideRouter(routes),
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: SYSTEM_HUB_FACTORY, useValue: mockSystemHubFactory },
-        { provide: SettingsService, useValue: createMockSettingsService() },
-        { provide: AccountService, useValue: createMockAccountService() },
-        { provide: DispatchService, useValue: createMockDispatchService() },
-        { provide: SystemSignalRService, useValue: createMockSignalRService() },
-      ],
-    }).compileComponents();
+function setupApp(hasUsableImage = true) {
+  TestBed.configureTestingModule({
+    imports: [App],
+    providers: [
+      provideRouter(routes),
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      { provide: SYSTEM_HUB_FACTORY, useValue: mockSystemHubFactory },
+      { provide: SettingsService, useValue: createMockSettingsService(hasUsableImage) },
+      { provide: AccountService, useValue: createMockAccountService() },
+      { provide: DispatchService, useValue: createMockDispatchService() },
+      { provide: SystemSignalRService, useValue: createMockSignalRService() },
+    ],
   });
+  const fixture = TestBed.createComponent(App);
+  fixture.detectChanges();
+  return fixture;
+}
+
+describe('App', () => {
+  afterEach(() => TestBed.resetTestingModule());
 
   it('should create the app', () => {
-    const fixture = TestBed.createComponent(App);
+    const fixture = setupApp();
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
   });
 
   it('should render header with Foundry logo', async () => {
-    const fixture = TestBed.createComponent(App);
+    const fixture = setupApp();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.app-header__logo')?.textContent).toContain('Foundry');
   });
 
   it('should include the forge overlay component', () => {
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
+    const fixture = setupApp();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('fd-forge-overlay')).not.toBeNull();
+  });
+
+  // F1: header and main are not inert when overlay is not blocking
+  it('should not set inert on header or main when overlay is not blocking', () => {
+    // Arrange
+    const fixture = setupApp(true);
+
+    // Act
+    const compiled = fixture.nativeElement as HTMLElement;
+    const header = compiled.querySelector('header');
+    const main = compiled.querySelector('main');
+
+    // Assert
+    expect(header?.hasAttribute('inert')).toBe(false);
+    expect(main?.hasAttribute('inert')).toBe(false);
+  });
+
+  // F1: header and main are inert when overlay is blocking
+  it('should set inert on header and main when overlay is blocking (no usable image, accounts exist)', () => {
+    // Arrange
+    const fixture = setupApp(false);
+
+    // Act
+    const compiled = fixture.nativeElement as HTMLElement;
+    const header = compiled.querySelector('header');
+    const main = compiled.querySelector('main');
+
+    // Assert
+    expect(header?.hasAttribute('inert')).toBe(true);
+    expect(main?.hasAttribute('inert')).toBe(true);
   });
 });

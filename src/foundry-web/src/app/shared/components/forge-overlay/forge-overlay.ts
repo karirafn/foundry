@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, Signal, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Signal, ViewChild, afterRenderEffect, computed, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SettingsService } from '../../../features/settings/settings.service';
 import { AccountService } from '../../../features/settings/accounts/account.service';
@@ -45,7 +45,12 @@ export class ForgeOverlayComponent {
   readonly statusTextBuilding = STATUS_TEXT_BUILDING;
   readonly statusTextFailed = STATUS_TEXT_FAILED;
 
-  private readonly _focusRetrySignal = signal(0);
+  private readonly _focusRetryAfterRender = afterRenderEffect(() => {
+    const shouldFocus = this.isColdBuildBlocking() && this.imageBuildStatus() === 'Failed';
+    if (shouldFocus) {
+      this.retryButtonRef?.nativeElement?.focus();
+    }
+  });
 
   constructor() {
     this._signalR.reconnected
@@ -53,21 +58,6 @@ export class ForgeOverlayComponent {
       .subscribe(() => {
         this._settingsService.loadSettings();
       });
-
-    effect(() => {
-      const status = this.imageBuildStatus();
-      const blocking = this.isColdBuildBlocking();
-      if (blocking && status === 'Failed') {
-        this._focusRetrySignal.update((n) => n + 1);
-      }
-    });
-
-    effect(() => {
-      this._focusRetrySignal();
-      if (this.retryButtonRef?.nativeElement) {
-        this.retryButtonRef.nativeElement.focus();
-      }
-    });
   }
 
   retryImageBuild(): void {

@@ -1,4 +1,4 @@
-<header class="app-header">
+<header class="app-header" [attr.inert]="overlayBlocking() ? '' : null">
   <span class="app-header__logo">Foundry</span>
   <nav class="app-header__nav" aria-label="Global navigation">
     <a
@@ -27,6 +27,6 @@
 </header>
 <fd-system-banner />
 <fd-forge-overlay />
-<main class="app-content">
+<main class="app-content" [attr.inert]="overlayBlocking() ? '' : null">
   <router-outlet />
 </main>
