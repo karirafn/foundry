@@ -80,6 +80,32 @@ RUN if [ "$INSTALL_GH" = "true" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
+# Conditional Chromium install — chromium-headless-shell is the smallest headless footprint on
+# Bookworm (no GUI dependencies). CHROME_BIN is set unconditionally so Angular test runners pick
+# it up when the binary is present; it is harmless when INSTALL_CHROMIUM is false.
+ARG INSTALL_CHROMIUM=false
+RUN if [ "$INSTALL_CHROMIUM" = "true" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            chromium-headless-shell \
+            libglib2.0-0 \
+            libnss3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libasound2 && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+# Path must match the chromium-headless-shell package's installed binary location on Bookworm
+ENV CHROME_BIN=/usr/lib/chromium/chromium-headless-shell
+
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod 555 /entrypoint.sh
 
