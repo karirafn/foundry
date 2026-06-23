@@ -21,4 +21,5 @@ public sealed record GlobalSettingsSummary(
     bool InstallChromium,
     bool InstallDocker,
     ImageBuildStatus ImageBuildStatus,
-    string? LastImageBuildError);
+    string? LastImageBuildError,
+    bool HasUsableImage);

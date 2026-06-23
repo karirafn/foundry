@@ -1,4 +1,4 @@
-import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
+import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import {
   AuthMode,
@@ -12,6 +12,7 @@ import {
   WorkerLimits,
 } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
+import { AccountService } from './accounts/account.service';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
@@ -25,6 +26,7 @@ const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
 export class SettingsService {
   private readonly _http = inject(HttpClient);
   private readonly _dispatchService = inject(DispatchService);
+  private readonly _accountService = inject(AccountService);
 
   private readonly _settingsSignal: WritableSignal<GlobalSettingsResponse | null> = signal(null);
   readonly settings: Signal<GlobalSettingsResponse | null> = this._settingsSignal.asReadonly();
@@ -89,6 +91,13 @@ export class SettingsService {
   private readonly _imageBuildLogTailSignal: WritableSignal<string | null> = signal(null);
   readonly imageBuildLogTail: Signal<string | null> = this._imageBuildLogTailSignal.asReadonly();
 
+  private readonly _hasUsableImageSignal: WritableSignal<boolean> = signal(false);
+  readonly hasUsableImage: Signal<boolean> = this._hasUsableImageSignal.asReadonly();
+
+  readonly isColdBuildBlocking: Signal<boolean> = computed(
+    () => this._accountService.accounts().length > 0 && !this._hasUsableImageSignal()
+  );
+
   private readonly _savingImageFlagsSignal: WritableSignal<boolean> = signal(false);
   readonly savingImageFlags: Signal<boolean> = this._savingImageFlagsSignal.asReadonly();
 
@@ -98,7 +107,7 @@ export class SettingsService {
   private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
-  loadSettings(): void {
+  loadSettings(): Promise<void> {
     this._loadErrorSignal.set(null);
     this._saveErrorSignal.set(null);
     this._switchErrorSignal.set(null);
@@ -119,24 +128,29 @@ export class SettingsService {
     this.switching.set(false);
     this.loading.set(true);
 
-    this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
-      next: (response) => {
-        this._settingsSignal.set(response);
-        this.authSettings.set(this._mapToAuthSettings(response));
-        this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
-        this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
-        this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
-        this._dispatchService.updateFromSettings(response);
-        this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
-        this._imageBuildStatusSignal.set(response.imageBuildStatus);
-        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
-        this.loading.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._loadErrorSignal.set(LOAD_SETTINGS_ERROR);
-        this.loading.set(false);
-      },
+    return new Promise<void>((resolve) => {
+      this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
+        next: (response) => {
+          this._settingsSignal.set(response);
+          this.authSettings.set(this._mapToAuthSettings(response));
+          this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
+          this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
+          this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
+          this._dispatchService.updateFromSettings(response);
+          this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
+          this._imageBuildStatusSignal.set(response.imageBuildStatus);
+          this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+          this._hasUsableImageSignal.set(response.hasUsableImage);
+          this.loading.set(false);
+          resolve();
+        },
+        error: (err: HttpErrorResponse) => {
+          console.error(err);
+          this._loadErrorSignal.set(LOAD_SETTINGS_ERROR);
+          this.loading.set(false);
+          resolve();
+        },
+      });
     });
   }
 
@@ -258,6 +272,7 @@ export class SettingsService {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
         this._imageBuildStatusSignal.set(response.imageBuildStatus);
         this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+        this._hasUsableImageSignal.set(response.hasUsableImage);
         this._savingImageFlagsSignal.set(false);
         this._saveImageFlagsSuccessSignal.set(true);
       },
@@ -271,6 +286,7 @@ export class SettingsService {
 
   retryImageBuild(): void {
     this._saveImageFlagsErrorSignal.set(null);
+    this._saveImageFlagsSuccessSignal.set(false);
     this._savingImageFlagsSignal.set(true);
 
     this._http.post<GlobalSettingsResponse>('/api/settings/worker-image/retry', null).subscribe({
@@ -278,6 +294,7 @@ export class SettingsService {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
         this._imageBuildStatusSignal.set(response.imageBuildStatus);
         this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+        this._hasUsableImageSignal.set(response.hasUsableImage);
         this._savingImageFlagsSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {

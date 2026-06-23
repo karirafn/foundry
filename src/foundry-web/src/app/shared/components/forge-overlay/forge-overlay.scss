@@ -1,0 +1,207 @@
+:host {
+  display: contents;
+}
+
+.forge-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fd-bg-page);
+}
+
+.forge-overlay__surface {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--fd-spacing-xl);
+  padding: var(--fd-spacing-2xl);
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+}
+
+// Forge scene
+.forge-overlay__scene {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.forge-overlay__ember {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 60%, var(--fd-text-warning) 0%, transparent 70%);
+  opacity: 0.7;
+  animation: forge-ember-pulse 1.4s ease-in-out infinite;
+}
+
+.forge-overlay__ember--failed {
+  background: radial-gradient(circle at 50% 60%, var(--fd-state-failed) 0%, transparent 70%);
+}
+
+.forge-overlay__hammer {
+  position: relative;
+  z-index: 2;
+  animation: forge-hammer-strike 1.4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.forge-overlay__hammer--failed .forge-overlay__hammer-head {
+  background: var(--fd-state-failed);
+}
+
+.forge-overlay__hammer-head {
+  width: 32px;
+  height: 20px;
+  background: var(--fd-text-warning);
+  border-radius: var(--fd-radius-sm) var(--fd-radius-sm) 2px 2px;
+  margin: 0 auto;
+}
+
+.forge-overlay__hammer-handle {
+  width: 8px;
+  height: 28px;
+  background: var(--fd-text-secondary);
+  border-radius: 0 0 var(--fd-radius-sm) var(--fd-radius-sm);
+  margin: 0 auto;
+}
+
+.forge-overlay__sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.forge-overlay__spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--fd-text-warning);
+  animation: forge-spark-fly 1.4s ease-out infinite;
+  opacity: 0;
+}
+
+.forge-overlay__sparks--failed .forge-overlay__spark {
+  background: var(--fd-state-failed);
+}
+
+.forge-overlay__spark--1 { animation-delay: 0.2s; --spark-dx: -24px; --spark-dy: -20px; }
+.forge-overlay__spark--2 { animation-delay: 0.4s; --spark-dx: 24px; --spark-dy: -20px; }
+.forge-overlay__spark--3 { animation-delay: 0s; --spark-dx: -16px; --spark-dy: -32px; }
+.forge-overlay__spark--4 { animation-delay: 0.6s; --spark-dx: 16px; --spark-dy: -32px; }
+
+// Content
+.forge-overlay__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--fd-spacing-md);
+  width: 100%;
+}
+
+.forge-overlay__status-text {
+  margin: 0;
+  color: var(--fd-text-primary);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.forge-overlay__status-text--failed {
+  color: var(--fd-text-error);
+  font-size: 1.125rem;
+}
+
+.forge-overlay__log-tail {
+  margin: 0;
+  padding: var(--fd-spacing-md);
+  background: var(--fd-bg-card);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-secondary);
+  font-family: var(--fd-font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  max-height: 120px;
+  overflow-y: auto;
+  text-align: left;
+  white-space: pre-wrap;
+  width: 100%;
+}
+
+.forge-overlay__retry-btn {
+  background: transparent;
+  border: 1px solid var(--fd-text-error);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-error);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  min-height: 44px;
+  padding: 0 var(--fd-spacing-xl);
+  transition: background-color 150ms ease;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--fd-state-failed) 10%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-error);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.forge-overlay__live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// Animations
+@keyframes forge-ember-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+
+@keyframes forge-hammer-strike {
+  0%, 45%, 65%, 100% { transform: rotate(-30deg) translateY(0); }
+  55% { transform: rotate(0deg) translateY(4px); }
+}
+
+@keyframes forge-spark-fly {
+  0% { opacity: 0; transform: translate(0, 0) scale(1); }
+  20% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(var(--spark-dx, -20px), var(--spark-dy, -24px)) scale(0.3);
+  }
+}
+
+// Reduced motion
+@media (prefers-reduced-motion: reduce) {
+  .forge-overlay__hammer { animation: none; }
+  .forge-overlay__spark { animation: none; display: none; }
+  .forge-overlay__ember { animation: none; opacity: 0.7; }
+}

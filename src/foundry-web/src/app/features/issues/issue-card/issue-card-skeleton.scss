@@ -1,0 +1,53 @@
+.issue-card-skeleton {
+  background: var(--fd-bg-card);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-md);
+  padding: var(--fd-spacing-lg);
+  width: 100%;
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-xs);
+    margin-bottom: var(--fd-spacing-sm);
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--fd-spacing-sm);
+    margin-top: var(--fd-spacing-sm);
+  }
+
+  &__line {
+    display: inline-block;
+    height: 0.8125rem;
+    border-radius: var(--fd-radius-sm);
+    background: linear-gradient(
+      90deg,
+      var(--fd-border-default) 0%,
+      var(--fd-bg-card-hover) 50%,
+      var(--fd-border-default) 100%
+    );
+    background-size: 200% 100%;
+    animation: fd-skeleton-shimmer 1.4s ease-in-out infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+      background: var(--fd-border-default);
+    }
+  }
+
+  &__line--number    { width: 2.5rem; }
+  &__line--slug      { flex: 1; max-width: 12rem; }
+  &__line--badge     { width: 4rem; height: 1.1rem; margin-left: auto; border-radius: 9999px; }
+  &__line--title     { width: 70%; height: 0.9375rem; margin-top: var(--fd-spacing-xs); }
+  &__line--timestamp { width: 5rem; height: 0.75rem; }
+  &__line--icon      { width: 14px; height: 14px; }
+}
+
+@keyframes fd-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

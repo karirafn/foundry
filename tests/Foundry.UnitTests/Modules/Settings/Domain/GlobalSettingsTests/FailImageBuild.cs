@@ -67,4 +67,21 @@ public sealed class FailImageBuild
         // Assert
         settings.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
     }
+
+    [Fact]
+    public void WhenCalledAfterSuccessfulBuild_LastImageBuiltAtIsPreserved()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        settings.CompleteImageBuild();
+        DateTimeOffset? lastBuiltAt = settings.LastImageBuiltAt;
+
+        // Act
+        settings.BeginImageBuild();
+        settings.FailImageBuild("error after prior success");
+
+        // Assert
+        settings.LastImageBuiltAt.ShouldBe(lastBuiltAt);
+    }
 }

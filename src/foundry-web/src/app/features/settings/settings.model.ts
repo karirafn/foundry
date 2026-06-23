@@ -64,6 +64,7 @@ export interface GlobalSettingsResponse {
   installDocker: boolean;
   imageBuildStatus: ImageBuildStatus;
   lastImageBuildError: string | null;
+  hasUsableImage: boolean;
 }
 
 export interface UpdatePromptTemplatesRequest {

@@ -27,6 +27,7 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     installDocker: false,
     imageBuildStatus: 'Idle',
     lastImageBuildError: null,
+    hasUsableImage: false,
     ...overrides,
   };
 }

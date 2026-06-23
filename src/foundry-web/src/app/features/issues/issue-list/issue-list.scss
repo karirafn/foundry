@@ -29,6 +29,12 @@
     gap: 1rem;
   }
 
+  &__skeletons {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
   &__item {
     display: flex;
     flex-direction: column;

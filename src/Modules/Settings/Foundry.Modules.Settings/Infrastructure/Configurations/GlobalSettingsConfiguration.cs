@@ -87,6 +87,9 @@ internal sealed class GlobalSettingsConfiguration(
             .HasColumnType("TEXT")
             .HasColumnName("image_build_status");
 
+        builder.Property(s => s.LastImageBuiltAt)
+            .HasColumnName("last_image_built_at");
+
         builder.Property(s => s.CreatedAt)
             .HasColumnName("created_at");
 

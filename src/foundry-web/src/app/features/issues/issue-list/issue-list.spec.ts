@@ -46,6 +46,7 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   installDocker: false,
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
+  hasUsableImage: false,
 };
 
 function setupComponent() {
@@ -517,6 +518,59 @@ describe('IssueListComponent', () => {
     // Assert
     const detail = el.querySelector('fd-issue-detail');
     expect(detail).toBeTruthy();
+  });
+
+  // Cycle 10: skeleton cards shown during initial load
+  it('should render .issue-list__skeletons with fd-issue-card-skeleton elements while initialLoading is true', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act — detect changes but do NOT flush so initialLoading stays true
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const skeletons = el.querySelector('.issue-list__skeletons');
+    expect(skeletons).toBeTruthy();
+    expect(skeletons?.getAttribute('role')).toBe('status');
+    expect(skeletons?.querySelectorAll('fd-issue-card-skeleton').length).toBeGreaterThan(0);
+
+    // Cleanup
+    flushInit(httpMock);
+  });
+
+  it('should remove .issue-list__skeletons after initial load completes successfully', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+
+    // Act
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const skeletons = el.querySelector('.issue-list__skeletons');
+    expect(skeletons).toBeFalsy();
+  });
+
+  it('should remove .issue-list__skeletons after initial load fails with an error', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+
+    // Act — simulate server error
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const skeletons = el.querySelector('.issue-list__skeletons');
+    expect(skeletons).toBeFalsy();
   });
 
   // Cycle 9: fd-dispatch-controls renders below the header
