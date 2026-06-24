@@ -78,9 +78,11 @@ EOF
 make_fake_dockerd_background() {
     cat > "$FAKE_BIN_DIR/dockerd-rootless.sh" <<'EOF'
 #!/bin/bash
-# Fake: runs in background, stays alive so the process can be tracked
-sleep 9999 &
-wait
+# Fake daemon: close FD 3 (BATS' output fd) so the test harness does not block
+# waiting on this backgrounded child, then stay alive briefly so the readiness
+# poll observes a live daemon before exiting.
+exec 3>&- 2>/dev/null || true
+sleep 5
 EOF
     chmod +x "$FAKE_BIN_DIR/dockerd-rootless.sh"
 }
