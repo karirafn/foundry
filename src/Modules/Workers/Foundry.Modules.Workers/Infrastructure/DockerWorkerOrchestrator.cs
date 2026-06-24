@@ -250,13 +250,14 @@ internal sealed class DockerWorkerOrchestrator(
                 outputStream,
                 cancellationToken);
 
-            long startPosition = outputStream.Length > ContainerOutputMaxBytes
-                ? outputStream.Length - ContainerOutputMaxBytes
-                : 0;
-            outputStream.Seek(startPosition, SeekOrigin.Begin);
+            outputStream.Seek(0, SeekOrigin.Begin);
             using StreamReader reader = new(outputStream);
             string output = await reader.ReadToEndAsync(cancellationToken);
-            return SecretRedactor.Redact(output);
+            string redacted = SecretRedactor.Redact(output);
+
+            return redacted.Length > ContainerOutputMaxBytes
+                ? redacted[^ContainerOutputMaxBytes..]
+                : redacted;
         }
         catch (DockerContainerNotFoundException)
         {

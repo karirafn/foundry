@@ -42,7 +42,8 @@ public sealed class StreamLogsAsync
 
         // Act
         List<string> lines = [];
-        await foreach (string emitted in sut.StreamLogsAsync("container-1", CancellationToken.None))
+        await foreach (string emitted in sut.StreamLogsAsync("container-1", TestContext.Current.CancellationToken)
+            .WithCancellation(TestContext.Current.CancellationToken))
         {
             lines.Add(emitted);
         }
@@ -63,7 +64,8 @@ public sealed class StreamLogsAsync
 
         // Act
         List<string> lines = [];
-        await foreach (string emitted in sut.StreamLogsAsync("container-2", CancellationToken.None))
+        await foreach (string emitted in sut.StreamLogsAsync("container-2", TestContext.Current.CancellationToken)
+            .WithCancellation(TestContext.Current.CancellationToken))
         {
             lines.Add(emitted);
         }
@@ -84,7 +86,8 @@ public sealed class StreamLogsAsync
 
         // Act
         List<string> lines = [];
-        await foreach (string emitted in sut.StreamLogsAsync("container-3", CancellationToken.None))
+        await foreach (string emitted in sut.StreamLogsAsync("container-3", TestContext.Current.CancellationToken)
+            .WithCancellation(TestContext.Current.CancellationToken))
         {
             lines.Add(emitted);
         }

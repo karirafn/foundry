@@ -96,6 +96,27 @@ public sealed class GetLogsAsync
         result.ShouldNotContain("ghp_SecretNearBoundary");
     }
 
+    [Fact]
+    public async Task WhenSecretPrefixStraddlesByteWindow_ValueIsRedacted()
+    {
+        // Arrange — token sits at the very start of the output, followed by >65_519 bytes
+        // of padding. The old code seeks to (total_bytes - 65_536), which puts the read
+        // cursor at byte 1 — cutting off the 'g' in "ghp_" so the tail string begins with
+        // "hp_StraddleToken..." and the ghp_\S+ regex never matches, leaking the value.
+        // The fix must redact the FULL buffer first, then keep the tail.
+        string suffix = new('b', 65_520);                    // 65_520 padding bytes after token
+        string raw = "ghp_StraddleToken" + suffix;           // total = 65_537 chars; window start = byte 1
+        FixedLogsStub stub = new(raw);
+        DockerWorkerOrchestrator sut = BuildSut(stub);
+
+        // Act
+        string? result = await sut.GetLogsAsync("container-5", 500, CancellationToken.None);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.ShouldNotContain("StraddleToken");
+    }
+
     private sealed class FixedLogsStub(string logContent) : IContainerOperations
     {
         public Task<MultiplexedStream> GetContainerLogsAsync(
