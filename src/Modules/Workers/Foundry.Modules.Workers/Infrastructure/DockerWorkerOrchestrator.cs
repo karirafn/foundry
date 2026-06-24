@@ -215,7 +215,7 @@ internal sealed class DockerWorkerOrchestrator(
         string? line;
         while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
         {
-            yield return line;
+            yield return SecretRedactor.Redact(line);
         }
 
         await copyTask;
@@ -255,7 +255,8 @@ internal sealed class DockerWorkerOrchestrator(
                 : 0;
             outputStream.Seek(startPosition, SeekOrigin.Begin);
             using StreamReader reader = new(outputStream);
-            return await reader.ReadToEndAsync(cancellationToken);
+            string output = await reader.ReadToEndAsync(cancellationToken);
+            return SecretRedactor.Redact(output);
         }
         catch (DockerContainerNotFoundException)
         {
