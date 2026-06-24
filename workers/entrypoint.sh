@@ -2,6 +2,37 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
+# make_clone_url <clone_url>
+#
+# Converts a plain HTTPS clone URL into an authenticated URL using the oauth2
+# username scheme understood by both GitHub and GitLab:
+#   https://host/path[.git] → https://oauth2@host/path.git
+#
+# The token is NOT embedded in the URL. GIT_ASKPASS delivers it at clone time.
+# ---------------------------------------------------------------------------
+make_clone_url() {
+    local url="$1"
+    # Strip the scheme, insert oauth2@ user, ensure .git suffix
+    local without_scheme="${url#https://}"
+    local with_user="https://oauth2@${without_scheme}"
+    if [[ "$with_user" != *.git ]]; then
+        with_user="${with_user}.git"
+    fi
+    printf '%s' "$with_user"
+}
+
+# ---------------------------------------------------------------------------
+# make_askpass_script
+#
+# Returns a minimal sh script string suitable for use as GIT_ASKPASS.
+# When git invokes the script for the password, it prints $GIT_PAT.
+# Using printf avoids a trailing newline that some git versions misread.
+# ---------------------------------------------------------------------------
+make_askpass_script() {
+    printf '%s' 'printf "%s" "$GIT_PAT"'
+}
+
+# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -101,13 +132,23 @@ if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
     chmod 444 ~/.claude/settings.json
 fi
 
-# Transform https://github.com/owner/repo -> https://<PAT>@github.com/owner/repo.git
-AUTHENTICATED_URL="${CLONE_URL/#https:\/\//https:\/\/${GIT_PAT}@}"
-if [[ "$AUTHENTICATED_URL" != *.git ]]; then
-    AUTHENTICATED_URL="${AUTHENTICATED_URL}.git"
-fi
+# Authenticate the clone via GIT_ASKPASS so the token never appears in the
+# clone URL, on a command line, or in git's output.  The clone URL uses the
+# oauth2 username (accepted by both GitHub and GitLab); GIT_ASKPASS delivers
+# the password ($GIT_PAT) when git prompts for credentials.
+CLONE_AUTH_URL="$(make_clone_url "$CLONE_URL")"
 
-git clone "$AUTHENTICATED_URL" /workspace
+ASKPASS_FILE="$(mktemp)"
+printf '%s\n' "#!/bin/sh" "$(make_askpass_script)" > "$ASKPASS_FILE"
+chmod 700 "$ASKPASS_FILE"
+
+# GIT_ASKPASS is scoped to this one command — not exported — so push falls
+# through to the gh/glab credential helpers set up below.
+GIT_ASKPASS="$ASKPASS_FILE" git clone "$CLONE_AUTH_URL" /workspace
+
+rm -f "$ASKPASS_FILE"
+unset ASKPASS_FILE
+
 git -C /workspace remote set-url origin "$CLONE_URL"
 
 cd /workspace
