@@ -105,7 +105,13 @@ jobs:
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
-        run: bats workers/tests/entrypoint.bats
+        run: |
+          # The full-entrypoint test runs entrypoint.sh on the host, which clones
+          # into the container's hardcoded /workspace. Provision it writable so the
+          # bare runner can exercise that path (in the worker image it is node-owned).
+          sudo mkdir -p /workspace
+          sudo chown "$(id -u):$(id -g)" /workspace
+          bats workers/tests/entrypoint.bats
 
       - name: Build worker image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
