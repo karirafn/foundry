@@ -11,4 +11,8 @@ internal abstract record ContainerOutputParseResult
     internal sealed record UsageLimited(DateTimeOffset ResetsAt) : ContainerOutputParseResult;
 
     internal sealed record ParseFailure(string RawOutput) : ContainerOutputParseResult;
+
+    internal sealed record WorkerBootstrapFailed(string Detail) : ContainerOutputParseResult;
+
+    internal sealed record NoResultLine : ContainerOutputParseResult;
 }

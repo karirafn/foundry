@@ -252,3 +252,180 @@ EOF
 
     [ -f "$BATS_TEST_TMPDIR/claude_called" ]
 }
+
+# ---------------------------------------------------------------------------
+# Shared helpers for bootstrap-failure sentinel tests
+# ---------------------------------------------------------------------------
+
+# Minimal env vars needed for the entrypoint to reach the bootstrap steps
+set_required_env() {
+    export ANTHROPIC_API_KEY="test-key"
+    export CLONE_URL="https://github.com/example/repo"
+    export GIT_PAT="test-pat"
+    export WORKER_PROMPT="test-prompt"
+    export SYSTEM_PROMPT="test-system"
+    export ISSUE_NUMBER="1"
+    export CLAUDE_SETTINGS_JSON=""
+}
+
+# Write a fake git where clone exits non-zero (bootstrap-failure: clone)
+make_fake_git_clone_fail() {
+    cat > "$FAKE_BIN_DIR/git" <<'EOF'
+#!/bin/bash
+case "${1:-}" in
+    clone) exit 1 ;;
+    *)     true ;;
+esac
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/git"
+}
+
+# Write a fake gh that exits non-zero (bootstrap-failure: auth)
+make_fake_gh_fail() {
+    cat > "$FAKE_BIN_DIR/gh" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+    chmod +x "$FAKE_BIN_DIR/gh"
+}
+
+# Write a fake git where switch exits non-zero (bootstrap-failure: branch)
+make_fake_git_switch_fail() {
+    cat > "$FAKE_BIN_DIR/git" <<'EOF'
+#!/bin/bash
+case "${1:-}" in
+    clone)  mkdir -p /workspace ;;
+    -C)     true ;;
+    switch) exit 1 ;;
+    *)      true ;;
+esac
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/git"
+}
+
+# Write a fake dockerd-rootless.sh that exits non-zero immediately
+make_fake_dockerd_fail() {
+    cat > "$FAKE_BIN_DIR/dockerd-rootless.sh" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+    chmod +x "$FAKE_BIN_DIR/dockerd-rootless.sh"
+}
+
+# ---------------------------------------------------------------------------
+# Bootstrap-failure sentinel tests
+# ---------------------------------------------------------------------------
+
+@test "clone failure emits FOUNDRY_BOOTSTRAP_FAILED stage=clone" {
+    set_required_env
+    make_fake_git_clone_fail
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone"* ]]
+}
+
+@test "clone failure does not emit stage=auth or stage=branch" {
+    set_required_env
+    make_fake_git_clone_fail
+
+    run bash "$ENTRYPOINT"
+
+    [[ "$output" != *"stage=auth"* ]]
+    [[ "$output" != *"stage=branch"* ]]
+}
+
+@test "auth failure emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
+    set_required_env
+    make_fake_git
+
+    # Provide GH_TOKEN so the gh auth path is taken; fake gh fails
+    export GH_TOKEN="test-gh-token"
+    make_fake_gh_fail
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
+}
+
+@test "branch-switch failure emits FOUNDRY_BOOTSTRAP_FAILED stage=branch" {
+    set_required_env
+    make_fake_git_switch_fail
+
+    # Set a branch name so the switch path is taken
+    export BRANCH_NAME="feat/test-branch"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=branch"* ]]
+}
+
+@test "start_rootless_dockerd failure does NOT emit FOUNDRY_BOOTSTRAP_FAILED (trap disarmed)" {
+    set_required_env
+    make_fake_git
+    make_fake_docker_unhealthy
+    make_fake_dockerd_fail
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+}
+
+@test "successful bootstrap emits no sentinel and invokes claude" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "gh hostname contains @ guard emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
+    set_required_env
+    make_fake_git
+
+    # Craft a CLONE_URL whose hostname-derivation produces a string containing @
+    export CLONE_URL="https://oauth2@github.example.com/org/repo"
+    export GH_TOKEN="test-gh-token"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
+}
+
+@test "glab hostname contains @ guard emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
+    set_required_env
+    make_fake_git
+
+    # Craft a CLONE_URL whose hostname-derivation produces a string containing @
+    export CLONE_URL="https://oauth2@gitlab.example.com/org/repo"
+    export GITLAB_TOKEN="test-gitlab-token"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
+}
+
+@test "invalid BRANCH_NAME characters guard emits FOUNDRY_BOOTSTRAP_FAILED stage=branch" {
+    set_required_env
+    make_fake_git
+
+    # A branch name with characters outside [a-zA-Z0-9_/.-]
+    export BRANCH_NAME="feat/bad name with spaces"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=branch"* ]]
+}

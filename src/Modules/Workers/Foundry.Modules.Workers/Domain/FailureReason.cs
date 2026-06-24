@@ -7,6 +7,7 @@ namespace Foundry.Modules.Workers.Domain;
 [JsonDerivedType(typeof(TimedOut), typeDiscriminator: "timed_out")]
 [JsonDerivedType(typeof(ContainerError), typeDiscriminator: "container_error")]
 [JsonDerivedType(typeof(UsageLimited), typeDiscriminator: "usage_limited")]
+[JsonDerivedType(typeof(WorkerBootstrapFailed), typeDiscriminator: "worker_bootstrap_failed")]
 public abstract record FailureReason
 {
     private FailureReason()
@@ -20,4 +21,6 @@ public abstract record FailureReason
     public sealed record ContainerError(string Message) : FailureReason;
 
     public sealed record UsageLimited(DateTimeOffset ResetsAt) : FailureReason;
+
+    public sealed record WorkerBootstrapFailed(string Detail) : FailureReason;
 }

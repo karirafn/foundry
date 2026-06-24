@@ -21,7 +21,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     {
         if (string.IsNullOrWhiteSpace(log))
         {
-            return new ContainerOutputParseResult.ParseFailure(log ?? string.Empty);
+            return new ContainerOutputParseResult.NoResultLine();
         }
 
         if (log.Length > MaxLogLength)
@@ -38,7 +38,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
 
         if (lastJsonLine is null)
         {
-            return new ContainerOutputParseResult.ParseFailure(log);
+            return BootstrapSentinelOrNoResultLine(log);
         }
 
         JsonNode? node;
@@ -190,6 +190,27 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         return candidate;
     }
 
+    private const int MaxBootstrapDetailLength = 500;
+
+    private static ContainerOutputParseResult BootstrapSentinelOrNoResultLine(string log)
+    {
+        Match match = BootstrapSentinelPattern().Match(log);
+
+        if (!match.Success)
+        {
+            return new ContainerOutputParseResult.NoResultLine();
+        }
+
+        string detail = match.Value.Trim();
+
+        if (detail.Length > MaxBootstrapDetailLength)
+        {
+            detail = detail[..MaxBootstrapDetailLength];
+        }
+
+        return new ContainerOutputParseResult.WorkerBootstrapFailed(detail);
+    }
+
     [GeneratedRegex(
         @"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
         RegexOptions.ExplicitCapture,
@@ -201,4 +222,10 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex WallClockResetTimePattern();
+
+    [GeneratedRegex(
+        @"FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|auth|branch)[^\n]*",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex BootstrapSentinelPattern();
 }
