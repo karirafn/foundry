@@ -7,11 +7,18 @@ namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
 public sealed class ContinuationQueuedIssueConfiguration : IEntityTypeConfiguration<ContinuationQueuedIssue>
 {
+    private const int FailureReasonMaxLength = 500;
+
     public void Configure(EntityTypeBuilder<ContinuationQueuedIssue> builder)
     {
         builder.Property(i => i.BranchName)
             .HasMaxLength(IssueColumnLimits.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
+
+        builder.Property(i => i.FailureReason)
+            .HasMaxLength(FailureReasonMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("failure_reason");
     }
 }

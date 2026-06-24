@@ -58,4 +58,18 @@ public sealed class FromContinuableFailed
             () => queued.DetectedAt.ShouldBe(failed.DetectedAt),
             () => queued.BranchName.ShouldBe(failed.BranchName));
     }
+
+    [Fact]
+    public void WhenCreatedFromContinuableFailed_CopiesFailureReason()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        ContinuableFailedIssue failed = CreateContinuableFailedIssue(repositoryId);
+
+        // Act
+        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(failed);
+
+        // Assert
+        queued.FailureReason.ShouldBe(failed.FailureReason);
+    }
 }

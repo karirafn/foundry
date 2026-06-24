@@ -15,6 +15,8 @@ public sealed class ContinuationQueuedIssue : Issue
 
     public string BranchName { get; private set; } = string.Empty;
 
+    public string FailureReason { get; private set; } = string.Empty;
+
     internal static ContinuationQueuedIssue FromContinuableFailed(ContinuableFailedIssue source)
     {
         ContinuationQueuedIssue queued = new(source.Id);
@@ -28,6 +30,7 @@ public sealed class ContinuationQueuedIssue : Issue
             source.Labels,
             source.DetectedAt);
         queued.BranchName = source.BranchName;
+        queued.FailureReason = source.FailureReason;
         return queued;
     }
 
@@ -44,6 +47,7 @@ public sealed class ContinuationQueuedIssue : Issue
             source.Labels,
             source.DetectedAt);
         queued.BranchName = source.BranchName;
+        queued.FailureReason = string.Empty;
         return queued;
     }
 
