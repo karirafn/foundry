@@ -160,13 +160,18 @@ internal sealed class WorkerDispatchService(
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 runsToRemove.Add(activeRun);
 
+                string? orphanBranchName = await ResolveBranchForFailureAsync(
+                    activeRun,
+                    postExitProviderQueries,
+                    cancellationToken);
+
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Orphaned after restart",
-                        BranchName: activeRun.BranchName.Value)],
+                        BranchName: orphanBranchName)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -249,13 +254,18 @@ internal sealed class WorkerDispatchService(
             FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Container not found"));
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
+            string? containerNotFoundBranchName = await ResolveBranchForFailureAsync(
+                activeRun,
+                postExitProviderQueries,
+                cancellationToken);
+
             await TryDispatchAsync(
                 integrationEventDispatcher,
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     "Container not found",
-                    BranchName: activeRun.BranchName.Value)],
+                    BranchName: containerNotFoundBranchName)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -284,13 +294,18 @@ internal sealed class WorkerDispatchService(
                 FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut(), containerOutput);
                 await dbContext.TransitionAsync(activeRun, timedOut, domainEventDispatcher, cancellationToken);
 
+                string? timedOutBranchName = await ResolveBranchForFailureAsync(
+                    activeRun,
+                    postExitProviderQueries,
+                    cancellationToken);
+
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Timed out",
-                        BranchName: activeRun.BranchName.Value)],
+                        BranchName: timedOutBranchName)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -631,6 +646,37 @@ internal sealed class WorkerDispatchService(
         }
 
         await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves the branch name to include on a <see cref="WorkerRunFailed"/> event for non-clean-exit paths
+    /// (timeout, orphan-reconcile, container-not-found).
+    /// Returns the branch name when the branch has commits so the handler routes to
+    /// <c>ContinuableFailedIssue</c>; returns <c>null</c> when there are no commits so the handler
+    /// routes to <c>FailedIssue</c> instead. On a query failure (e.g. provider outage) falls back to
+    /// the branch name to preserve existing behavior and avoid losing recoverable branches.
+    /// </summary>
+    private async Task<string?> ResolveBranchForFailureAsync(
+        ActiveRun activeRun,
+        IPostExitProviderQueries postExitProviderQueries,
+        CancellationToken cancellationToken)
+    {
+        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
+            activeRun.MonitoredRepositoryId,
+            activeRun.BranchName.Value,
+            cancellationToken);
+
+        if (commitsResult is Result<bool>.Failure commitsFailure)
+        {
+            logger.LogWarning(
+                "Failed to check branch commits for run {RunId} during failure resolution: {Error}; defaulting to branch name.",
+                activeRun.Id,
+                commitsFailure.Error);
+            return activeRun.BranchName.Value;
+        }
+
+        bool hasCommits = commitsResult is Result<bool>.Success { Value: true };
+        return hasCommits ? activeRun.BranchName.Value : null;
     }
 
     /// <summary>
