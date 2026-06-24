@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Foundry.Shared\Foundry.Shared.csproj" />
     <ProjectReference Include="..\..\src\Modules\Monitoring\Foundry.Modules.Monitoring.Contracts\Foundry.Modules.Monitoring.Contracts.csproj" />
   </ItemGroup>
 
