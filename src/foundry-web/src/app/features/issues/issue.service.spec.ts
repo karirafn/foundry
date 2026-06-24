@@ -674,4 +674,88 @@ describe('IssueService', () => {
     expect(svc.issues()).toEqual([]);
     http.verify();
   });
+
+  // Cycle 16: retryFailed — POSTs to /api/issues/{id}/retry and reloads detail
+  it('should POST to /api/issues/{id}/retry when retryFailed is called', () => {
+    // Arrange / Act
+    service.retryFailed('abc123');
+
+    // Assert
+    const req = httpMock.expectOne('/api/issues/abc123/retry');
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({});
+  });
+
+  it('should set retryingFailed to true while the retryFailed request is in flight', () => {
+    // Arrange / Act
+    service.retryFailed('abc123');
+
+    // Assert — signal is true before the response arrives
+    expect(service.retryingFailed()).toBe(true);
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({});
+  });
+
+  it('should set retryingFailed to false after retryFailed succeeds', () => {
+    // Arrange
+    service.retryFailed('abc123');
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({});
+
+    // Assert
+    expect(service.retryingFailed()).toBe(false);
+  });
+
+  it('should reload issue detail after retryFailed succeeds', () => {
+    // Arrange
+    service.retryFailed('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+
+    // Act / Assert — loadDetail is called
+    const req = httpMock.expectOne('/api/issues/abc123');
+    expect(req.request.method).toBe('GET');
+    req.flush({ ...mockSummary });
+  });
+
+  it('should set retryFailedError and retryingFailed to false when retryFailed fails', () => {
+    // Arrange
+    service.retryFailed('abc123');
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.retryingFailed()).toBe(false);
+    expect(service.retryFailedError()).not.toBeNull();
+  });
+
+  it('should set retryFailedError to the dedicated error constant when retryFailed fails', () => {
+    // Arrange / Act
+    service.retryFailed('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — dedicated string, not the detail-load error
+    expect(service.retryFailedError()).toBe('Failed to retry issue.');
+  });
+
+  it('should not change detailError when retryFailed fails', () => {
+    // Arrange — confirm detailError stays null (retryFailed has its own error surface)
+    service.retryFailed('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.detailError()).toBeNull();
+  });
 });

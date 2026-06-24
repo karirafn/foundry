@@ -154,6 +154,21 @@ import { providerTerminology } from '../../settings/accounts/provider.util';
             >{{ _issueService.retryingEligibility() ? 'Retrying...' : 'Retry Eligibility Check' }}</button>
           </div>
         }
+
+        @if (d.state === 'failed' || d.state === 'continuable_failed' || d.state === 'revision_failed') {
+          <div class="issue-detail__actions">
+            <button
+              class="issue-detail__retry-failed-btn"
+              type="button"
+              [disabled]="_issueService.retryingFailed()"
+              [attr.aria-label]="'Retry failed issue #' + d.issueNumber"
+              (click)="retryFailed(d.id)"
+            >{{ _issueService.retryingFailed() ? 'Retrying...' : 'Retry' }}</button>
+            @if (_issueService.retryFailedError(); as retryErr) {
+              <span class="issue-detail__retry-failed-error" role="alert">{{ retryErr }}</span>
+            }
+          </div>
+        }
       </div>
     }
   `,
@@ -169,6 +184,10 @@ export class IssueDetailComponent {
 
   retryEligibility(id: string): void {
     this._issueService.retryEligibility(id);
+  }
+
+  retryFailed(id: string): void {
+    this._issueService.retryFailed(id);
   }
 
   protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {

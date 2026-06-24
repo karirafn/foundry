@@ -712,4 +712,149 @@ describe('IssueDetailComponent', () => {
     expect(authorField).toBeTruthy();
     expect(authorField?.querySelector('.issue-detail__field-value')?.textContent?.trim()).toBe('octocat');
   });
+
+  // Retry Failed button — shown for the three failed states
+  it('should render the retry failed button when state is failed', () => {
+    // Arrange
+    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
+
+    // Act
+    const fixture = createComponent(failedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    expect(btn?.textContent?.trim()).toBe('Retry');
+  });
+
+  it('should render the retry failed button when state is continuable_failed', () => {
+    // Arrange
+    const continuableDetail: IssueDetail = { ...mockDetail, state: 'continuable_failed' };
+
+    // Act
+    const fixture = createComponent(continuableDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+  });
+
+  it('should render the retry failed button when state is revision_failed', () => {
+    // Arrange
+    const revisionFailedDetail: IssueDetail = { ...mockDetail, state: 'revision_failed' };
+
+    // Act
+    const fixture = createComponent(revisionFailedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+  });
+
+  it('should not render the retry failed button for a non-failed state', () => {
+    // Arrange — completed is not in the failed set
+    const fixture = createComponent(mockDetail); // mockDetail.state = 'completed'
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-failed-btn');
+    expect(btn).toBeFalsy();
+  });
+
+  it('should not render the retry failed button for ineligible state', () => {
+    // Arrange
+    const ineligibleDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'ineligible',
+      stateDetails: { ...mockStateDetails, violations: null },
+    };
+    const fixture = createComponent(ineligibleDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-failed-btn');
+    expect(btn).toBeFalsy();
+  });
+
+  it('should call retryFailed on the service when retry failed button is clicked', () => {
+    // Arrange
+    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
+    const fixture = createComponent(failedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+    const http = TestBed.inject(HttpTestingController);
+
+    // Act
+    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    btn.click();
+    const req = http.expectOne(`/api/issues/${failedDetail.id}/retry`);
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+    http.expectOne(`/api/issues/${failedDetail.id}`).flush(failedDetail);
+    http.verify();
+  });
+
+  it('should set aria-label on retry failed button referencing the issue number', () => {
+    // Arrange
+    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
+
+    // Act
+    const fixture = createComponent(failedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    expect(btn?.getAttribute('aria-label')).toBe('Retry failed issue #42');
+  });
+
+  it('should disable the retry failed button while retryingFailed is true', () => {
+    // Arrange
+    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
+    const fixture = createComponent(failedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+    const http = TestBed.inject(HttpTestingController);
+
+    // Act — click starts the request
+    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert — button is disabled while in flight
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent?.trim()).toBe('Retrying...');
+
+    // Cleanup
+    http.expectOne(`/api/issues/${failedDetail.id}/retry`).flush({});
+    http.expectOne(`/api/issues/${failedDetail.id}`).flush(failedDetail);
+    http.verify();
+  });
+
+  it('should show retry failed error message when retryFailed fails', () => {
+    // Arrange
+    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
+    const fixture = createComponent(failedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+    const issueService = TestBed.inject(IssueService);
+    const http = TestBed.inject(HttpTestingController);
+
+    // Act — trigger a failure
+    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    btn.click();
+    http.expectOne(`/api/issues/${failedDetail.id}/retry`).flush('Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — error is surfaced next to the button
+    expect(issueService.retryFailedError()).toBe('Failed to retry issue.');
+    const errorEl = el.querySelector('.issue-detail__retry-failed-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.textContent?.trim()).toBe('Failed to retry issue.');
+    http.verify();
+  });
 });
