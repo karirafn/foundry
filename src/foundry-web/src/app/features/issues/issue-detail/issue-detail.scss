@@ -230,7 +230,8 @@
 
     &:disabled {
       cursor: not-allowed;
-      opacity: 0.6;
+      color: var(--fd-text-error-muted);
+      border-color: var(--fd-text-error-muted);
     }
 
     &:focus-visible {
@@ -243,5 +244,9 @@
     align-self: center;
     color: var(--fd-text-error);
     font-size: 0.875rem;
+
+    &:empty {
+      display: none;
+    }
   }
 }

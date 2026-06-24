@@ -725,7 +725,7 @@ describe('IssueDetailComponent', () => {
     // Assert
     const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
     expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toBe('Retry');
+    expect(btn?.textContent?.trim()).toBe('Retry Issue');
   });
 
   it('should render the retry failed button when state is continuable_failed', () => {
@@ -825,12 +825,26 @@ describe('IssueDetailComponent', () => {
 
     // Assert — button is disabled while in flight
     expect(btn.disabled).toBe(true);
-    expect(btn.textContent?.trim()).toBe('Retrying...');
+    expect(btn.textContent?.trim()).toBe('Retrying Issue...');
 
     // Cleanup
     http.expectOne(`/api/issues/${failedDetail.id}/retry`).flush({});
     http.expectOne(`/api/issues/${failedDetail.id}`).flush(failedDetail);
     http.verify();
+  });
+
+  it('should always render the retry failed error span in the DOM when state is failed', () => {
+    // Arrange
+    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
+
+    // Act
+    const fixture = createComponent(failedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — span is present even with no error (empty content)
+    const errorEl = el.querySelector('.issue-detail__retry-failed-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.textContent?.trim()).toBe('');
   });
 
   it('should show retry failed error message when retryFailed fails', () => {
@@ -850,11 +864,46 @@ describe('IssueDetailComponent', () => {
     });
     fixture.detectChanges();
 
-    // Assert — error is surfaced next to the button
+    // Assert — error is surfaced next to the button (span always present, now contains text)
     expect(issueService.retryFailedError()).toBe('Failed to retry issue.');
     const errorEl = el.querySelector('.issue-detail__retry-failed-error');
     expect(errorEl).toBeTruthy();
     expect(errorEl?.textContent?.trim()).toBe('Failed to retry issue.');
+    http.verify();
+  });
+
+  // UX-5: success announcement live region
+  it('should render a polite live region for success announcements in the actions area', () => {
+    // Arrange
+    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
+
+    // Act
+    const fixture = createComponent(failedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — live region is always present
+    const liveRegion = el.querySelector('.issue-detail__retry-success-announcement');
+    expect(liveRegion).toBeTruthy();
+    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('should announce success message after successful retry', () => {
+    // Arrange
+    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
+    const fixture = createComponent(failedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+    const http = TestBed.inject(HttpTestingController);
+
+    // Act — trigger a successful retry
+    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    btn.click();
+    http.expectOne(`/api/issues/${failedDetail.id}/retry`).flush({});
+    http.expectOne(`/api/issues/${failedDetail.id}`).flush(failedDetail);
+    fixture.detectChanges();
+
+    // Assert — announcement text is set
+    const liveRegion = el.querySelector('.issue-detail__retry-success-announcement');
+    expect(liveRegion?.textContent?.trim()).toBe('Retry queued. Issue status is updating.');
     http.verify();
   });
 });

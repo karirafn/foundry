@@ -26,6 +26,8 @@
   --fd-state-failed: #da3633;
   --fd-state-completed: #238636;
   --fd-text-error: #f85149;
+  /* Muted error text — contrast ≥4.5:1 against --fd-bg-card (#161b22) for disabled states */
+  --fd-text-error-muted: #e06060;
   --fd-text-completed: #3fb950;
   --fd-text-success: #3fb950;
   --fd-border-subtle: #21262d;

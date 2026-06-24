@@ -163,10 +163,18 @@ import { providerTerminology } from '../../settings/accounts/provider.util';
               [disabled]="_issueService.retryingFailed()"
               [attr.aria-label]="'Retry failed issue #' + d.issueNumber"
               (click)="retryFailed(d.id)"
-            >{{ _issueService.retryingFailed() ? 'Retrying...' : 'Retry' }}</button>
-            @if (_issueService.retryFailedError(); as retryErr) {
-              <span class="issue-detail__retry-failed-error" role="alert">{{ retryErr }}</span>
-            }
+            >{{ _issueService.retryingFailed() ? 'Retrying Issue...' : 'Retry Issue' }}</button>
+            <span
+              class="issue-detail__retry-failed-error"
+              role="alert"
+              aria-live="assertive"
+              aria-atomic="true"
+            >{{ _issueService.retryFailedError() ?? '' }}</span>
+            <span
+              class="issue-detail__retry-success-announcement sr-only"
+              aria-live="polite"
+              aria-atomic="true"
+            >{{ _issueService.retryFailedSuccess() ?? '' }}</span>
           </div>
         }
       </div>

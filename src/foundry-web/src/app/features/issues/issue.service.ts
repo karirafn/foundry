@@ -7,6 +7,7 @@ import { IssueDetail, IssueSummary, LIVE_STATES } from './issue.model';
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
 const RETRY_FAILED_ERROR = 'Failed to retry issue.';
+const RETRY_FAILED_SUCCESS = 'Retry queued. Issue status is updating.';
 const SAFE_ID_RE = /^[\w-]+$/;
 
 @Injectable({ providedIn: 'root' })
@@ -30,6 +31,9 @@ export class IssueService {
 
   private readonly _retryFailedErrorSignal: WritableSignal<string | null> = signal(null);
   readonly retryFailedError: Signal<string | null> = this._retryFailedErrorSignal.asReadonly();
+
+  private readonly _retryFailedSuccessSignal: WritableSignal<string | null> = signal(null);
+  readonly retryFailedSuccess: Signal<string | null> = this._retryFailedSuccessSignal.asReadonly();
 
   private _detailSub: Subscription | null = null;
 
@@ -102,6 +106,10 @@ export class IssueService {
   }
 
   toggleExpand(id: string): void {
+    this._retryFailedErrorSignal.set(null);
+    this._retryFailedSuccessSignal.set(null);
+    this.retryingFailed.set(false);
+
     if (this.expandedIssueId() === id) {
       this.expandedIssueId.set(null);
       this.issueDetail.set(null);
@@ -131,10 +139,12 @@ export class IssueService {
 
   retryFailed(id: string): void {
     this._retryFailedErrorSignal.set(null);
+    this._retryFailedSuccessSignal.set(null);
     this.retryingFailed.set(true);
     this._http.post<IssueDetail>(`/api/issues/${encodeURIComponent(id)}/retry`, {}).subscribe({
       next: () => {
         this.retryingFailed.set(false);
+        this._retryFailedSuccessSignal.set(RETRY_FAILED_SUCCESS);
         this.loadDetail(id);
       },
       error: (err: HttpErrorResponse) => {

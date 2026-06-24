@@ -758,4 +758,100 @@ describe('IssueService', () => {
     // Assert
     expect(service.detailError()).toBeNull();
   });
+
+  // UX-4: stale retry state cleared on issue switch
+  it('should clear retryFailedError when switching to a different issue via toggleExpand', () => {
+    // Arrange — set a retry error for abc123
+    service.retryFailed('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(service.retryFailedError()).not.toBeNull();
+
+    // Act — switch to a different issue
+    service.toggleExpand('def456');
+
+    // Assert — retry error is cleared
+    expect(service.retryFailedError()).toBeNull();
+    httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
+  });
+
+  it('should clear retryingFailed when switching to a different issue via toggleExpand', () => {
+    // Arrange — simulate retryingFailed stuck at true
+    service.retryFailed('abc123');
+    expect(service.retryingFailed()).toBe(true);
+
+    // Act — switch to a different issue before the request resolves
+    service.toggleExpand('def456');
+
+    // Assert — loading flag is cleared synchronously
+    expect(service.retryingFailed()).toBe(false);
+
+    // Cleanup — flush retry (its loadDetail then cancels the def456 request)
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+    // The retry success handler calls loadDetail('abc123'), which cancels the def456 request
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+  });
+
+  it('should clear retryFailedError when collapsing the current issue via toggleExpand', () => {
+    // Arrange — expand and set error
+    service.toggleExpand('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+    service.retryFailed('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
+      status: 500, statusText: 'Internal Server Error',
+    });
+    expect(service.retryFailedError()).not.toBeNull();
+
+    // Act — collapse same issue (toggleExpand with same id)
+    service.toggleExpand('abc123');
+
+    // Assert
+    expect(service.retryFailedError()).toBeNull();
+  });
+
+  // UX-5: success announcement signal
+  it('should set retryFailedSuccess after a successful retry', () => {
+    // Arrange / Act
+    service.retryFailed('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+
+    // Assert
+    expect(service.retryFailedSuccess()).toBe('Retry queued. Issue status is updating.');
+  });
+
+  it('should clear retryFailedSuccess when toggleExpand is called', () => {
+    // Arrange — get a success message set
+    service.retryFailed('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+    expect(service.retryFailedSuccess()).not.toBeNull();
+
+    // Act — switch issue
+    service.toggleExpand('def456');
+
+    // Assert
+    expect(service.retryFailedSuccess()).toBeNull();
+    httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
+  });
+
+  it('should clear retryFailedSuccess at the start of a new retryFailed call', () => {
+    // Arrange — set success
+    service.retryFailed('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+    expect(service.retryFailedSuccess()).not.toBeNull();
+
+    // Act — initiate another retry
+    service.retryFailed('abc123');
+
+    // Assert — success cleared immediately when next retry starts
+    expect(service.retryFailedSuccess()).toBeNull();
+
+    // Cleanup
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+  });
 });
