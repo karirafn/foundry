@@ -28,10 +28,16 @@ start_rootless_dockerd() {
     # Validate retry_sleep: must be a non-negative integer no greater than 60
     [[ "$retry_sleep" =~ ^[0-9]+$ ]] && [ "$retry_sleep" -le 60 ] || retry_sleep=1
 
-    # Pin XDG_RUNTIME_DIR to the canonical per-user path — Foundry's dispatcher never
-    # sets this variable, and unconditional assignment removes an injection surface.
-    export XDG_RUNTIME_DIR="/run/user/${uid}"
+    # Derive the home directory from the OS passwd database rather than $HOME so that
+    # neither XDG_RUNTIME_DIR nor HOME from the environment can redirect the runtime dir.
+    # getent is OS-sourced and cannot be influenced by dispatcher-controlled env vars.
+    # /run is root-owned; the unprivileged node user (uid 1000) cannot create dirs there,
+    # so the runtime dir lives under the passwd-sourced home where node has write access.
+    local _runtime_home
+    _runtime_home="$(getent passwd "$(id -u)" | cut -d: -f6)"
+    export XDG_RUNTIME_DIR="${_runtime_home}/.runtime"
     mkdir -p "$XDG_RUNTIME_DIR"
+    chmod 700 "$XDG_RUNTIME_DIR"
 
     # Derive socket path from XDG_RUNTIME_DIR so it matches the actual runtime dir in use
     local socket="unix://${XDG_RUNTIME_DIR}/docker.sock"

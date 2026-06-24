@@ -83,3 +83,77 @@ jobs:
         if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
         run: npx ng test --watch=false
         working-directory: src/foundry-web
+
+  workers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Detect changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: changes
+        with:
+          filters: |
+            workers:
+              - 'workers/**'
+
+      - name: Install bats
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        # npm-registry pin is reproducible across runner-image updates; apt version pins are not
+        run: sudo npm install -g bats@1.11.1
+
+      - name: Run BATS suite
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          # The full-entrypoint test runs entrypoint.sh on the host, which clones
+          # into the container's hardcoded /workspace. Provision it writable so the
+          # bare runner can exercise that path (in the worker image it is node-owned).
+          sudo mkdir -p /workspace
+          sudo chown "$(id -u):$(id -g)" /workspace
+          bats workers/tests/entrypoint.bats
+
+      - name: Build worker image
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: docker build --build-arg INSTALL_DOCKER=true -t foundry-worker:ci workers/
+
+      - name: Smoke test — start_rootless_dockerd creates XDG_RUNTIME_DIR as node user
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          docker run --rm \
+            --user node \
+            foundry-worker:ci \
+            bash -euo pipefail -c '
+              # Install stub dockerd-rootless.sh that stays alive long enough for the
+              # readiness poll, then exits. The stub docker CLI always reports healthy
+              # so the poll succeeds on the first attempt.
+              mkdir -p /tmp/stub-bin
+
+              cat > /tmp/stub-bin/dockerd-rootless.sh <<'"'"'STUB'"'"'
+          #!/bin/bash
+          sleep 30 &
+          wait
+          STUB
+              chmod +x /tmp/stub-bin/dockerd-rootless.sh
+
+              cat > /tmp/stub-bin/docker <<'"'"'STUB'"'"'
+          #!/bin/bash
+          exit 0
+          STUB
+              chmod +x /tmp/stub-bin/docker
+
+              export PATH="/tmp/stub-bin:$PATH"
+              export DOCKER_RETRY_COUNT=3
+              export DOCKER_RETRY_SLEEP=0
+
+              # Source the function and run it
+              eval "$(awk '"'"'/^start_rootless_dockerd\(\)/,/^\}/'"'"' /entrypoint.sh)"
+              start_rootless_dockerd
+
+              # Assert XDG_RUNTIME_DIR was created, is writable, and has mode 700
+              [ -d "$XDG_RUNTIME_DIR" ] || { echo "XDG_RUNTIME_DIR not created"; exit 1; }
+              [ -w "$XDG_RUNTIME_DIR" ] || { echo "XDG_RUNTIME_DIR not writable"; exit 1; }
+              mode="$(stat --format='%a' "$XDG_RUNTIME_DIR")"
+              [ "$mode" = "700" ] || { echo "XDG_RUNTIME_DIR mode is $mode, expected 700"; exit 1; }
+              echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR} — created, writable, mode 700"
+            '
