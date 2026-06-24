@@ -65,6 +65,11 @@ fail_bootstrap() {
 #   DOCKER_RETRY_SLEEP — seconds between attempts           (default: 1)
 # ---------------------------------------------------------------------------
 start_rootless_dockerd() {
+    # Unconditionally own DOCKER_HOST so no inherited ambient value survives any
+    # exit path (success, no-dockerd, or daemon failure/degraded mode).
+    # On success the function re-exports it below; on all other paths it stays unset.
+    unset DOCKER_HOST
+
     if ! command -v dockerd-rootless.sh > /dev/null 2>&1; then
         return 0
     fi
