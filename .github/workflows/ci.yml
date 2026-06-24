@@ -101,7 +101,7 @@ jobs:
       - name: Install bats
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         # npm-registry pin is reproducible across runner-image updates; apt version pins are not
-        run: npm install -g bats@1.11.1
+        run: sudo npm install -g bats@1.11.1
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
