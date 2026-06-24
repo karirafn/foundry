@@ -299,4 +299,98 @@ public sealed class Parse
         DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
         limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
     }
+
+    [Fact]
+    public void WhenBootstrapSentinelPresent_NoClauseJson_ReturnsWorkerBootstrapFailed()
+    {
+        // Arrange
+        string log = """
+            Cloning repository...
+            FOUNDRY_BOOTSTRAP_FAILED stage=clone unable to reach remote
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
+        failed.Detail.ShouldContain("clone");
+    }
+
+    [Theory]
+    [InlineData("clone")]
+    [InlineData("auth")]
+    [InlineData("branch")]
+    public void WhenBootstrapSentinelWithKnownStage_ReturnsWorkerBootstrapFailed(string stage)
+    {
+        // Arrange
+        string log = $"FOUNDRY_BOOTSTRAP_FAILED stage={stage} some detail message";
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
+        failed.Detail.ShouldContain(stage);
+    }
+
+    [Fact]
+    public void WhenUsageLimitedJsonPlusBootstrapSentinel_UsageLimitedWins()
+    {
+        // Arrange
+        string log = """
+            FOUNDRY_BOOTSTRAP_FAILED stage=clone spoofed sentinel
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":300,"num_turns":1,"result":"Usage limit hit. Resets at 2026-06-18T16:30:00+00:00.","session_id":"abc","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+    }
+
+    [Fact]
+    public void WhenNormalExitJsonPlusBootstrapSentinel_NormalExitWins()
+    {
+        // Arrange
+        string log = """
+            FOUNDRY_BOOTSTRAP_FAILED stage=auth spoofed sentinel
+            {"type":"result","subtype":"success","is_error":false,"duration_ms":1234,"num_turns":5,"result":"All done.","session_id":"abc","terminal_reason":"stop_reason"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenBootstrapSentinelWithUnknownStage_ReturnsParseFailure()
+    {
+        // Arrange
+        string log = "FOUNDRY_BOOTSTRAP_FAILED stage=bogus unknown stage token";
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.ParseFailure>();
+    }
+
+    [Fact]
+    public void WhenBootstrapSentinelDetailExceedsCap_DetailIsTruncated()
+    {
+        // Arrange
+        string longDetail = new string('x', 600);
+        string log = $"FOUNDRY_BOOTSTRAP_FAILED stage=clone {longDetail}";
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
+        failed.Detail.Length.ShouldBeLessThanOrEqualTo(500);
+    }
 }
