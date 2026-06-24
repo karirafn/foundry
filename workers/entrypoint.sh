@@ -37,6 +37,23 @@ make_askpass_script() {
 }
 
 # ---------------------------------------------------------------------------
+# fail_bootstrap <stage> <detail>
+#
+# Prints the bootstrap-failure sentinel line to stderr so Foundry's log parser
+# can classify the failure.  The sentinel format is the single source of truth:
+#   FOUNDRY_BOOTSTRAP_FAILED stage=<stage> detail=<detail>
+#
+# <detail> is collapsed to a single line (newlines replaced with spaces) so the
+# parser's line-oriented scan always finds the complete sentinel on one line.
+# ---------------------------------------------------------------------------
+fail_bootstrap() {
+    local stage="$1"
+    local detail
+    detail="$(printf '%s' "${2:-}" | tr '\n' ' ')"
+    printf 'FOUNDRY_BOOTSTRAP_FAILED stage=%s detail=%s\n' "$stage" "$detail" >&2
+}
+
+# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -148,6 +165,13 @@ trap 'rm -f "${ASKPASS_FILE:-}"' EXIT
 printf '%s\n' "#!/bin/sh" "$(make_askpass_script)" > "$ASKPASS_FILE"
 chmod 700 "$ASKPASS_FILE"
 
+# Arm the bootstrap ERR trap before the first bootstrap step.
+# Each step updates BOOTSTRAP_STAGE so the trap reports the correct stage.
+# The trap is disarmed before start_rootless_dockerd — failures there are
+# out of scope for bootstrap classification (see issue #221).
+BOOTSTRAP_STAGE="clone"
+trap 'fail_bootstrap "$BOOTSTRAP_STAGE" "bootstrap failed at stage $BOOTSTRAP_STAGE"' ERR
+
 # GIT_ASKPASS is scoped to this one command — not exported — so push falls
 # through to the gh/glab credential helpers set up below.
 GIT_ASKPASS="$ASKPASS_FILE" git clone "$CLONE_AUTH_URL" /workspace
@@ -165,6 +189,7 @@ git -C /workspace remote set-url origin "$CLONE_URL"
 
 cd /workspace
 
+BOOTSTRAP_STAGE="auth"
 if [[ -n "${GH_TOKEN:-}" ]]; then
     GH_HOST="${CLONE_URL#https://}"
     GH_HOST="${GH_HOST%%/*}"
@@ -200,6 +225,7 @@ if [[ -n "${GITLAB_TOKEN:-}" ]]; then
     fi
 fi
 
+BOOTSTRAP_STAGE="branch"
 if [[ -n "${BRANCH_NAME:-}" ]]; then
     if [[ ! "$BRANCH_NAME" =~ ^[a-zA-Z0-9_/.-]+$ ]]; then
         echo "ERROR: BRANCH_NAME contains invalid characters: $BRANCH_NAME" >&2
@@ -207,6 +233,10 @@ if [[ -n "${BRANCH_NAME:-}" ]]; then
     fi
     git switch -- "$BRANCH_NAME" || git switch -c "$BRANCH_NAME"
 fi
+
+# Disarm the bootstrap ERR trap — failures beyond this point (rootless-dockerd
+# startup, claude invocation) are out of scope for bootstrap classification.
+trap - ERR
 
 start_rootless_dockerd
 
