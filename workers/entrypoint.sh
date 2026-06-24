@@ -65,6 +65,11 @@ fail_bootstrap() {
 #   DOCKER_RETRY_SLEEP — seconds between attempts           (default: 1)
 # ---------------------------------------------------------------------------
 start_rootless_dockerd() {
+    # Unconditionally own DOCKER_HOST so no inherited ambient value survives any
+    # exit path (success, no-dockerd, or daemon failure/degraded mode).
+    # On success the function re-exports it below; on all other paths it stays unset.
+    unset DOCKER_HOST
+
     if ! command -v dockerd-rootless.sh > /dev/null 2>&1; then
         return 0
     fi
@@ -241,7 +246,12 @@ fi
 # startup, claude invocation) are out of scope for bootstrap classification.
 trap - ERR
 
-start_rootless_dockerd
+if start_rootless_dockerd; then
+    :
+else
+    echo "WARNING: rootless dockerd unavailable; continuing in degraded mode (unit tests only, no Docker daemon). DOCKER_HOST left unset; integration tests will execute where a daemon exists (CI / native-Linux host)." >&2
+    echo "FOUNDRY_DOCKER_UNAVAILABLE detail=rootless dockerd failed to start" >&2
+fi
 
 claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \

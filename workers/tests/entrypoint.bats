@@ -368,12 +368,50 @@ EOF
 @test "start_rootless_dockerd failure does NOT emit FOUNDRY_BOOTSTRAP_FAILED (trap disarmed)" {
     set_required_env
     make_fake_git
+    make_fake_claude
     make_fake_docker_unhealthy
     make_fake_dockerd_fail
 
     run bash "$ENTRYPOINT"
 
-    [ "$status" -ne 0 ]
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+}
+
+@test "dockerd failure: entrypoint exits 0 and claude is still invoked (degraded mode)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "dockerd failure: entrypoint emits FOUNDRY_DOCKER_UNAVAILABLE sentinel" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    run bash "$ENTRYPOINT"
+
+    [[ "$output" == *"FOUNDRY_DOCKER_UNAVAILABLE"* ]]
+}
+
+@test "dockerd failure: entrypoint does NOT emit FOUNDRY_BOOTSTRAP_FAILED" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    run bash "$ENTRYPOINT"
+
     [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
 }
 
@@ -428,4 +466,46 @@ EOF
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=branch"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# Security: ambient DOCKER_HOST must not survive the degraded path
+# ---------------------------------------------------------------------------
+
+# Write a fake claude that records the value of DOCKER_HOST (empty string if unset)
+# at invocation time into a marker file so the test can assert it was cleared.
+make_fake_claude_record_docker_host() {
+    local docker_host_file="$BATS_TEST_TMPDIR/claude_docker_host"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: record DOCKER_HOST (empty if unset) and exit 0
+printf '%s' "\${DOCKER_HOST:-}" > "${docker_host_file}"
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "degraded path (dockerd fail): ambient DOCKER_HOST is not passed to claude" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_docker_host
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    # Inject an ambient DOCKER_HOST that points at the host daemon
+    export DOCKER_HOST="unix:///var/run/docker.sock"
+
+    run bash "$ENTRYPOINT"
+
+    # Entrypoint must succeed (degraded mode)
+    [ "$status" -eq 0 ]
+
+    # claude must have been invoked — marker file must exist
+    local docker_host_file="$BATS_TEST_TMPDIR/claude_docker_host"
+    [ -f "$docker_host_file" ]
+
+    # The DOCKER_HOST seen by claude must be empty — not the injected host value
+    local recorded_docker_host
+    recorded_docker_host="$(cat "$docker_host_file")"
+    [ -z "$recorded_docker_host" ]
 }
