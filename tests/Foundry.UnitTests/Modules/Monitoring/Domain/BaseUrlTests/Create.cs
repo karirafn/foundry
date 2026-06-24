@@ -85,6 +85,36 @@ public sealed class Create
     }
 
     [Fact]
+    public void WhenUrlContainsQueryString_ReturnsInvalidError()
+    {
+        // Arrange
+        string url = "https://gitlab.example.com/?x=1";
+
+        // Act
+        Result<BaseUrl> result = BaseUrl.Create(url);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result<BaseUrl>.Failure)result).Error;
+        error.Code.ShouldBe("BaseUrl.Invalid");
+    }
+
+    [Fact]
+    public void WhenUrlContainsFragment_ReturnsInvalidError()
+    {
+        // Arrange
+        string url = "https://gitlab.example.com/#section";
+
+        // Act
+        Result<BaseUrl> result = BaseUrl.Create(url);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result<BaseUrl>.Failure)result).Error;
+        error.Code.ShouldBe("BaseUrl.Invalid");
+    }
+
+    [Fact]
     public void WhenFromPersistedStringCalledWithValidUrl_ReturnsBaseUrl()
     {
         // Arrange
