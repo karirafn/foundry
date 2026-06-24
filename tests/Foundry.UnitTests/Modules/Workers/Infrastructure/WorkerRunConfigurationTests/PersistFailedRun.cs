@@ -110,6 +110,29 @@ public sealed class PersistFailedRun : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenFailedRunWithWorkerBootstrapFailed_RoundTripsCorrectly()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
+        FailedRun run = starting.Fail(new FailureReason.WorkerBootstrapFailed("git clone failed: exit 128"));
+
+        _dbContext.Set<WorkerRun>().Add(run);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        WorkerRun? result = await _dbContext
+            .Set<WorkerRun>()
+            .FindAsync([run.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        FailedRun reloaded = result.ShouldBeOfType<FailedRun>();
+        FailureReason.WorkerBootstrapFailed reason = reloaded.Reason.ShouldBeOfType<FailureReason.WorkerBootstrapFailed>();
+        reason.Detail.ShouldBe("git clone failed: exit 128");
+    }
+
+    [Fact]
     public async Task WhenFailedRunFromActiveWithBranchName_PropagatesBranchName()
     {
         // Arrange
