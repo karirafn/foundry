@@ -14,7 +14,7 @@ Monitors repositories across multiple providers for issues with a trigger label,
 A Claude Code Docker container dispatched to implement a single issue.
 Ephemeral — created on demand, destroyed after completion.
 Has no identity independent of its WorkerRun — the container is the execution mechanism, not a separate domain concept.
-Workers clone the repo, implement the issue, push a branch, and write reports to a shared volume.
+Workers clone the repo, implement the issue, push a branch, and open a PR. Foundry discovers each run's outcome by polling the container and querying the provider after the container exits.
 
 ## Worker Authentication
 
@@ -162,9 +162,9 @@ Transitions: `FailedIssue.Retry()` → `QueuedIssue`.
 ## Continuable Failed Issue
 
 A lifecycle state for an issue whose worker run failed but left recoverable work on a pushed branch.
-Carries `WorkerRunId`, `BranchName`, `LatestProgress`, `FailureReason`, and `FailedAt` — all non-nullable.
+Carries `WorkerRunId`, `BranchName`, `FailureReason`, and `FailedAt` — all non-nullable.
 Optionally carries `PullRequestUrl` — present when created from `ReviewIssue.Fail()` (PR was closed without merge), absent when created from `InProgressIssue` (no PR existed).
-Created from `InProgressIssue` when the `WorkerRunFailed` event carries a branch name (captured from a `"branch-created"` or `"milestone"` report).
+Created from `InProgressIssue` when the failed run left commits on the branch — Foundry checks via `HasBranchCommitsAsync` against the provider after the container exits.
 Also created from `ReviewIssue.Fail()` since `ReviewIssue` always has a branch.
 Retry dispatches a continuation run that checks out the existing branch and resumes implementation.
 Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue`.
@@ -172,14 +172,14 @@ Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue`.
 ## Continuation Queued Issue
 
 A lifecycle state for an issue queued for continuation from an existing branch with prior work.
-Carries `BranchName` and `LatestProgress` — all non-nullable.
+Carries `BranchName`.
 Created from `ContinuableFailedIssue.Retry()`.
 Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress variant; the continuation context lives in the dispatch payload).
 
 ## Continuation Context
 
 The dispatch payload extension for continuation-aware worker execution.
-Carries `BranchName` and `LatestProgress`.
+Carries `BranchName`.
 Present on `ClaimedIssueDispatch` when the claimed issue was a `ContinuationQueuedIssue`; absent for fresh attempts.
 Semantically distinct from `RevisionContext` — continuation resumes interrupted implementation, revision addresses review feedback on a completed PR.
 
@@ -231,24 +231,22 @@ Value object — `Name` is the last segment, `Owner` is everything before it (a 
 A single execution of a worker against an issue — the primary aggregate for the Workers module.
 Modeled as a polymorphic aggregate with state variants: `StartingRun` (container creation requested), `ActiveRun` (container running), `CompletedRun` (exited successfully), `FailedRun` (exited with error, timed out, or failed to start).
 An issue can have multiple runs (e.g. after retry from Failed or Review state).
-Each run captures reports, exit status, branch name, and PR/MR URL.
-`ActiveRun` carries an optional `BranchName` — set when a `"branch-created"` report is ingested, propagated to `FailedRun` on failure.
+Foundry derives each run's outcome after the container exits: exit status from the container, branch commits and PR/MR URL from provider queries.
+`ActiveRun` carries the `BranchName` — set at activation from the dispatch payload's pre-created branch name, propagated to `FailedRun` and `CompletedRun`.
 
-## WorkerReport
+## Worker Outcome Detection
 
-A progress or final report written by a worker during execution.
-Owned by a WorkerRun as a collection — persisted to the database after ingestion from the shared reports volume.
-Report types: `"branch-created"` (branch pushed, captures branch name and summary), `"milestone"` (significant implementation progress, worker-judged), `"final"` (outcome with branch name, PR URL, summary, error details).
-Reporting instructions are hardcoded in the system prompt (appended after the user-configurable template) — the worker must push the branch before writing a `"branch-created"` report.
-JSON format: `{ type, status, summary, error, prUrl, branchName, metrics }`.
+How Foundry establishes what a worker accomplished, performed entirely on the Foundry side after the container exits.
+The worker runs `claude -p <WORKER_PROMPT> --append-system-prompt <SYSTEM_PROMPT> --output-format json`, pushes its branch, and opens a PR.
+After exit, Foundry reads the container exit code and queries the provider: `HasBranchCommitsAsync` decides whether the branch holds recoverable work (driving `FailedIssue` vs `ContinuableFailedIssue`), and `GetPullRequestByBranchAsync` resolves the PR URL.
+Foundry reads the final `claude` JSON line from stdout solely for usage-limit signals (`api_error_status` / `terminal_reason`), which produce the `UsageLimited` failure reason.
 
 ## Container Output
 
 The captured tail of a failed worker container's stdout/stderr, stored on `FailedRun` as a nullable string.
 Captured by Foundry (not the worker) from the Docker API after the container stops but before removal.
 Best-effort — null when the container is already gone, never started, or the Docker API call fails.
-Distinct from `WorkerReport` entries, which are structured JSON written by the worker itself.
-Displayed in the worker-log-panel as a collapsible section below reports.
+Displayed in the worker-log-panel as a collapsible section.
 
 ## First-Run Wizard
 
