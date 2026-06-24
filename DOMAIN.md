@@ -157,7 +157,7 @@ A lifecycle state for an issue whose fresh worker run failed without producing r
 Also used when a PR is closed without merge and the review had no prior branch context.
 Carries `WorkerRunId`, `FailureReason` (string description), and `FailedAt`.
 Can come from `InProgressIssue` (worker failed before pushing a branch) or `ReviewIssue` (PR closed without merge, no branch recovery needed).
-Transitions: `FailedIssue.Retry()` → `QueuedIssue`.
+Transitions: `FailedIssue.Retry()` → `QueuedIssue` (fresh run, no branch context).
 
 ## Continuable Failed Issue
 
@@ -167,7 +167,7 @@ Optionally carries `PullRequestUrl` — present when created from `ReviewIssue.F
 Created from `InProgressIssue` when the failed run left commits on the branch — Foundry checks via `HasBranchCommitsAsync` against the provider after the container exits.
 Also created from `ReviewIssue.Fail()` since `ReviewIssue` always has a branch.
 Retry dispatches a continuation run that checks out the existing branch and resumes implementation.
-Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue`.
+Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch).
 
 ## Continuation Queued Issue
 
@@ -179,8 +179,9 @@ Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress va
 ## Continuation Context
 
 The dispatch payload extension for continuation-aware worker execution.
-Carries `BranchName`.
+Carries `BranchName` and optional `FailureReason`.
 Present on `ClaimedIssueDispatch` when the claimed issue was a `ContinuationQueuedIssue`; absent for fresh attempts.
+When `FailureReason` is set, it is surfaced (fenced as data) in the continuation section of the worker's system prompt so the worker has context on why the previous run failed.
 Semantically distinct from `RevisionContext` — continuation resumes interrupted implementation, revision addresses review feedback on a completed PR.
 
 ## Revision Failed Issue
@@ -189,7 +190,13 @@ A lifecycle state for an issue whose revision worker run failed.
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `FailureReason`, and `FailedAt` — all non-nullable.
 Created from `RevisionInProgressIssue.MarkFailed()`.
 Preserves branch context so retry re-enters the revision path.
-Transitions: `Retry()` → `RevisionQueuedIssue`.
+Transitions: `Retry()` → `RevisionQueuedIssue` (re-enters revision path with existing branch).
+
+## Operator-Triggered Retry
+
+A manual action available on any failed issue via `POST /api/issues/{id}/retry`.
+Dispatches polymorphically on the loaded issue state: `FailedIssue.Retry()` → `QueuedIssue` (fresh run); `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `RevisionFailedIssue.Retry()` → `RevisionQueuedIssue` (re-enters revision path).
+Any non-retryable state returns a validation/conflict error with no state change.
 
 ## Review Comment
 
@@ -240,6 +247,8 @@ How Foundry establishes what a worker accomplished, performed entirely on the Fo
 The worker runs `claude -p <WORKER_PROMPT> --append-system-prompt <SYSTEM_PROMPT> --output-format json`, pushes its branch, and opens a PR.
 After exit, Foundry reads the container exit code and queries the provider: `HasBranchCommitsAsync` decides whether the branch holds recoverable work (driving `FailedIssue` vs `ContinuableFailedIssue`), and `GetPullRequestByBranchAsync` resolves the PR URL.
 Foundry reads the final `claude` JSON line from stdout solely for usage-limit signals (`api_error_status` / `terminal_reason`), which produce the `UsageLimited` failure reason.
+Watchdog paths (timeout, orphaned container, container not found) apply the same `HasBranchCommitsAsync` check as the clean-exit path — routing to `ContinuableFailedIssue` only when the branch has commits, and to `FailedIssue` otherwise.
+This prevents a continuation retry from attempting to check out a branch that was never pushed.
 
 ## Container Output
 
