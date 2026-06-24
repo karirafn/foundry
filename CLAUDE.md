@@ -72,7 +72,7 @@ SQLite via EF Core. Data stored in `data/foundry.db` (configurable via connectio
 
 ### Worker Containers
 
-Dispatched via Docker socket (`IWorkerOrchestrator` abstraction). Workers push to `foundry/<issue-id>/*` branches and call back to Foundry's API with results.
+Dispatched via Docker socket (`IWorkerOrchestrator` abstraction). Workers push to `<prefix>/<issue-number>-<slug>` branches (e.g. `feat/42-add-retry`) and open a PR. Foundry tracks outcomes by polling the container and querying the provider after the container exits.
 
 ## Code Style
 
