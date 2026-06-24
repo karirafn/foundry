@@ -36,6 +36,22 @@ public sealed class Redact
     }
 
     [Theory]
+    [InlineData("sk-ant-api03-abcDEF123xyz")]
+    [InlineData("sk-ant-api03-abc123-DEF456_xyz")]
+    public void WhenInputContainsAnthropicApiKey_KeyIsMasked(string token)
+    {
+        // Arrange
+        string output = $"ANTHROPIC_API_KEY={token}";
+
+        // Act
+        string result = SecretRedactor.Redact(output);
+
+        // Assert
+        result.ShouldNotContain(token);
+        result.ShouldContain("***");
+    }
+
+    [Theory]
     [InlineData("glpat-abc123DEF")]
     [InlineData("ghp_abcDEF123xyz")]
     [InlineData("github_pat_abc123DEFxyz")]
