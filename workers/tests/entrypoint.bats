@@ -15,9 +15,14 @@ setup() {
     export DOCKER_RETRY_COUNT=3
     export DOCKER_RETRY_SLEEP=0
 
+    # Derive the expected runtime home the same way production does — via the
+    # OS passwd database — so tests remain correct even when the runner sets a
+    # custom $HOME that differs from the passwd entry.
+    EXPECTED_RUNTIME_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)"
+
     # Load start_rootless_dockerd directly from the entrypoint — no path redirect
-    # needed because XDG_RUNTIME_DIR is now a $HOME-based path that the test user
-    # already owns.
+    # needed because XDG_RUNTIME_DIR is now a passwd-sourced path that the test
+    # user already owns.
     load_function
 }
 
@@ -31,8 +36,10 @@ load_function() {
 teardown() {
     # Kill any background jobs left by the test
     jobs -p | xargs -r kill 2>/dev/null || true
-    # Clean up the runtime dir created by the function under test
-    rm -rf "${HOME}/.runtime"
+    # Clean up the runtime dir created by the function under test.
+    # Use the same passwd-derived home as production so the correct dir is
+    # removed even when $HOME differs from the passwd entry on the runner.
+    rm -rf "${EXPECTED_RUNTIME_HOME}/.runtime"
 }
 
 # ---------------------------------------------------------------------------
@@ -97,9 +104,10 @@ EOF
 
     # Call in the same shell so we can inspect exported vars
     start_rootless_dockerd
-    # Assert against the concrete expected path, not the function's own
-    # XDG_RUNTIME_DIR, so a regression that changes both in lock-step is caught.
-    expected_sock="unix://${HOME}/.runtime/docker.sock"
+    # Assert against the concrete expected path derived from the passwd database
+    # (same derivation as production) so a regression that changes both the
+    # production path and the env var in lock-step is still caught.
+    expected_sock="unix://${EXPECTED_RUNTIME_HOME}/.runtime/docker.sock"
     [ "$DOCKER_HOST" = "$expected_sock" ]
 }
 
@@ -107,9 +115,9 @@ EOF
     make_fake_dockerd_background
     make_fake_docker_healthy
 
-    # The function pins XDG_RUNTIME_DIR to $HOME/.runtime.
+    # The function pins XDG_RUNTIME_DIR to <passwd-home>/.runtime.
     # Remove the dir so the function must re-create it.
-    local expected_dir="${HOME}/.runtime"
+    local expected_dir="${EXPECTED_RUNTIME_HOME}/.runtime"
     rm -rf "$expected_dir"
     start_rootless_dockerd
     [ -d "$expected_dir" ]
@@ -119,7 +127,7 @@ EOF
     make_fake_dockerd_background
     make_fake_docker_healthy
 
-    local expected_dir="${HOME}/.runtime"
+    local expected_dir="${EXPECTED_RUNTIME_HOME}/.runtime"
     rm -rf "$expected_dir"
     start_rootless_dockerd
     # stat --format=%a is available on Linux (GNU coreutils)
@@ -132,7 +140,7 @@ EOF
     make_fake_dockerd_background
     make_fake_docker_healthy
 
-    local expected_dir="${HOME}/.runtime"
+    local expected_dir="${EXPECTED_RUNTIME_HOME}/.runtime"
     rm -rf "$expected_dir"
     start_rootless_dockerd
     [ -w "$expected_dir" ]
