@@ -368,12 +368,50 @@ EOF
 @test "start_rootless_dockerd failure does NOT emit FOUNDRY_BOOTSTRAP_FAILED (trap disarmed)" {
     set_required_env
     make_fake_git
+    make_fake_claude
     make_fake_docker_unhealthy
     make_fake_dockerd_fail
 
     run bash "$ENTRYPOINT"
 
-    [ "$status" -ne 0 ]
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+}
+
+@test "dockerd failure: entrypoint exits 0 and claude is still invoked (degraded mode)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "dockerd failure: entrypoint emits FOUNDRY_DOCKER_UNAVAILABLE sentinel" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    run bash "$ENTRYPOINT"
+
+    [[ "$output" == *"FOUNDRY_DOCKER_UNAVAILABLE"* ]]
+}
+
+@test "dockerd failure: entrypoint does NOT emit FOUNDRY_BOOTSTRAP_FAILED" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    run bash "$ENTRYPOINT"
+
     [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
 }
 

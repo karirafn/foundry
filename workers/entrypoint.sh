@@ -241,7 +241,12 @@ fi
 # startup, claude invocation) are out of scope for bootstrap classification.
 trap - ERR
 
-start_rootless_dockerd
+if start_rootless_dockerd; then
+    :
+else
+    echo "WARNING: rootless dockerd unavailable; continuing in degraded mode (unit tests only, no Docker daemon). DOCKER_HOST left unset; integration tests will execute where a daemon exists (CI / native-Linux host)." >&2
+    echo "FOUNDRY_DOCKER_UNAVAILABLE detail=rootless dockerd failed to start" >&2
+fi
 
 claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \
