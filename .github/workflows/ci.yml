@@ -101,7 +101,9 @@ jobs:
       - name: Install bats
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: |
-          sudo apt-get install -y bats
+          sudo apt-get update -q
+          # Pin to the version available in ubuntu-latest (Ubuntu 24.04 noble) for reproducible builds
+          sudo apt-get install -y bats=1.8.2-1
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
@@ -144,8 +146,10 @@ jobs:
               eval "$(awk '"'"'/^start_rootless_dockerd\(\)/,/^\}/'"'"' /entrypoint.sh)"
               start_rootless_dockerd
 
-              # Assert XDG_RUNTIME_DIR was created and is writable
+              # Assert XDG_RUNTIME_DIR was created, is writable, and has mode 700
               [ -d "$XDG_RUNTIME_DIR" ] || { echo "XDG_RUNTIME_DIR not created"; exit 1; }
               [ -w "$XDG_RUNTIME_DIR" ] || { echo "XDG_RUNTIME_DIR not writable"; exit 1; }
-              echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR} — created and writable"
+              mode="$(stat --format='%a' "$XDG_RUNTIME_DIR")"
+              [ "$mode" = "700" ] || { echo "XDG_RUNTIME_DIR mode is $mode, expected 700"; exit 1; }
+              echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR} — created, writable, mode 700"
             '
