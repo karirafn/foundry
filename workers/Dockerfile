@@ -10,8 +10,12 @@ ENV DISABLE_AUTOUPDATER=1
 # Pin exact version to avoid unexpected CLI behaviour changes
 RUN npm install -g @anthropic-ai/claude-code@2.1.138
 
-# Pre-create ~/.claude owned by the built-in node user (UID 1000)
-RUN mkdir -p /home/node/.claude && chown node:node /home/node/.claude
+# Pre-create ~/.claude and ~/.runtime owned by the built-in node user (UID 1000).
+# ~/.runtime is the XDG_RUNTIME_DIR used by rootless dockerd; pre-creating it here
+# is belt-and-suspenders — the entrypoint mkdir -p also suffices since node owns $HOME.
+RUN mkdir -p /home/node/.claude /home/node/.runtime \
+    && chown node:node /home/node/.claude /home/node/.runtime \
+    && chmod 700 /home/node/.runtime
 
 # Conditional .NET SDK install — uses apt GPG signing key for authenticity verification
 ARG INSTALL_DOTNET=false

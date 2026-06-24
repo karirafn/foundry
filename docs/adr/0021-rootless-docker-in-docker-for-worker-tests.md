@@ -14,13 +14,14 @@ The worker image already gained a `INSTALL_DOCKER` build-arg (ADR 0019 flag plum
 
 ## Decision
 
-Workers that need Docker run their **own rootless `dockerd`** started by the entrypoint, and Testcontainers is pointed at that nested socket via `DOCKER_HOST=unix:///run/user/<uid>/docker.sock`.
+Workers that need Docker run their **own rootless `dockerd`** started by the entrypoint, and Testcontainers is pointed at that nested socket via `DOCKER_HOST=unix:///home/node/.runtime/docker.sock`.
 The host Docker daemon is never mounted or reachable, so a worker escape lands as the unprivileged `node` user (UID 1000) mapped into the host's subordinate-ID range (`node:100000:65536` in `/etc/subuid`/`/etc/subgid`) rather than as host root.
 
 The worker is dispatched as an **unprivileged** container with the minimal allowances rootless `dockerd` requires — `seccomp=unconfined`, `apparmor=unconfined`, and the `/dev/fuse` device for fuse-overlayfs — injected onto the container's `HostConfig` by `DockerWorkerOrchestrator`.
 These allowances are set only when the persisted `WorkerImageConfiguration.InstallDocker` flag is true (read via `IGlobalSettingsQueries.GetWorkerImageInstallsDockerAsync`), so workers built without Docker get an identical run spec and entrypoint behaviour to before.
 
 The entrypoint gates the whole concern behind `command -v dockerd-rootless.sh`: present (Docker image) means start the daemon, poll `docker version` against the nested socket until the API responds, then export `DOCKER_HOST`; absent (non-Docker image) means skip entirely.
+`XDG_RUNTIME_DIR` is set unconditionally to `$HOME/.runtime` (mode 0700) — the canonical `/run/user/<uid>` path is root-owned and the unprivileged `node` user (uid 1000) cannot create directories there.
 Ryuk stays enabled — Testcontainers .NET derives the reaper's socket bind-mount from the `unix://` `DOCKER_HOST`, so cleanup resolves under rootless with no extra configuration.
 
 ## Considered Options
@@ -35,6 +36,7 @@ Ryuk stays enabled — Testcontainers .NET derives the reaper's socket bind-moun
 
 - The host (or runtime) where workers are dispatched must permit `seccomp=unconfined`, `apparmor=unconfined`, and expose `/dev/fuse`; where these are denied, Docker-enabled workers fail to start. The failure is scoped to opted-in workers and surfaces through the existing orchestrator start-failure path.
 - Some kernels gate unprivileged user namespaces behind the host sysctl `kernel.apparmor_restrict_unprivileged_userns`; `apparmor=unconfined` covers the in-container side, but the host sysctl is out of scope here.
+- `XDG_RUNTIME_DIR` is `$HOME/.runtime` rather than `/run/user/<uid>` — the unprivileged `node` user (uid 1000) cannot create directories under root-owned `/run`, so the runtime dir lives under `$HOME` where `node` has write access.
 - Waiting for the daemon adds per-worker startup latency, accepted as the cost of integration-first TDD.
 - AC2 and AC4 (a real suite passing against the nested daemon, with Ryuk cleanup) cannot be unit-tested — they require a real nested daemon and `/dev/fuse` — and are verified by the manual runbook below.
 - The hardening tracked in #60 (cap-drop, seccomp profiles, read-only fs) and #61 (network isolation) must be reconciled with Ryuk's needs: an over-tight profile can block the reaper.

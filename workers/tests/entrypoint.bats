@@ -15,35 +15,24 @@ setup() {
     export DOCKER_RETRY_COUNT=3
     export DOCKER_RETRY_SLEEP=0
 
-    # In the worker Docker container, /run/user/<uid> is writable by the node
-    # user via the container runtime.  In this workspace container /run is
-    # owned by root.  We redirect the canonical runtime-dir path to a writable
-    # per-test temp location by patching the function after eval so that
-    # XDG_RUNTIME_DIR is overridden to the fake location before it is used.
-    export FAKE_RUN_DIR="$BATS_TEST_TMPDIR/run"
-    /bin/mkdir -p "$FAKE_RUN_DIR/user/$(id -u)"
-
-    load_function_with_redirect
+    # Load start_rootless_dockerd directly from the entrypoint — no path redirect
+    # needed because XDG_RUNTIME_DIR is now a $HOME-based path that the test user
+    # already owns.
+    load_function
 }
 
-# Loads start_rootless_dockerd from entrypoint.sh, patching the canonical
-# /run/user/<uid> path to FAKE_RUN_DIR/user/<uid> so that all file I/O lands
-# in a writable per-test temp location.  The production behaviour (pin
-# XDG_RUNTIME_DIR to /run/user/<uid>) is unchanged in the production entrypoint;
-# here we substitute the path prefix only for test isolation.
-load_function_with_redirect() {
-    # Extract the raw function body, replace /run/user/ with the per-test
-    # writable fake dir prefix, then eval.  sed is used because bash parameter
-    # expansion mangles braces inside the replacement string.
-    local patched_func
-    patched_func="$(awk '/^start_rootless_dockerd\(\)/,/^\}/' "$ENTRYPOINT" \
-        | sed "s|/run/user/|${FAKE_RUN_DIR}/user/|g")"
-    eval "$patched_func"
+# Loads start_rootless_dockerd from entrypoint.sh into the current shell.
+load_function() {
+    local func_body
+    func_body="$(awk '/^start_rootless_dockerd\(\)/,/^\}/' "$ENTRYPOINT")"
+    eval "$func_body"
 }
 
 teardown() {
     # Kill any background jobs left by the test
     jobs -p | xargs -r kill 2>/dev/null || true
+    # Clean up the runtime dir created by the function under test
+    rm -rf "${HOME}/.runtime"
 }
 
 # ---------------------------------------------------------------------------
@@ -110,7 +99,7 @@ EOF
     start_rootless_dockerd
     # Assert against the concrete expected path, not the function's own
     # XDG_RUNTIME_DIR, so a regression that changes both in lock-step is caught.
-    expected_sock="unix://${FAKE_RUN_DIR}/user/$(id -u)/docker.sock"
+    expected_sock="unix://${HOME}/.runtime/docker.sock"
     [ "$DOCKER_HOST" = "$expected_sock" ]
 }
 
@@ -118,15 +107,35 @@ EOF
     make_fake_dockerd_background
     make_fake_docker_healthy
 
-    # The function pins XDG_RUNTIME_DIR to the canonical /run/user/<uid> path
-    # (patched here to FAKE_RUN_DIR/user/<uid> for test isolation).
+    # The function pins XDG_RUNTIME_DIR to $HOME/.runtime.
     # Remove the dir so the function must re-create it.
-    local uid
-    uid="$(id -u)"
-    local expected_dir="${FAKE_RUN_DIR}/user/${uid}"
+    local expected_dir="${HOME}/.runtime"
     rm -rf "$expected_dir"
     start_rootless_dockerd
     [ -d "$expected_dir" ]
+}
+
+@test "start_rootless_dockerd creates XDG_RUNTIME_DIR with mode 0700" {
+    make_fake_dockerd_background
+    make_fake_docker_healthy
+
+    local expected_dir="${HOME}/.runtime"
+    rm -rf "$expected_dir"
+    start_rootless_dockerd
+    # stat --format=%a is available on Linux (GNU coreutils)
+    local perms
+    perms="$(stat --format='%a' "$expected_dir")"
+    [ "$perms" = "700" ]
+}
+
+@test "start_rootless_dockerd creates a writable XDG_RUNTIME_DIR" {
+    make_fake_dockerd_background
+    make_fake_docker_healthy
+
+    local expected_dir="${HOME}/.runtime"
+    rm -rf "$expected_dir"
+    start_rootless_dockerd
+    [ -w "$expected_dir" ]
 }
 
 @test "start_rootless_dockerd is a no-op when dockerd-rootless.sh is absent" {
