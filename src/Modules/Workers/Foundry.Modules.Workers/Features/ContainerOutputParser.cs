@@ -38,7 +38,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
 
         if (lastJsonLine is null)
         {
-            return BootstrapSentinelOrParseFailure(log);
+            return BootstrapSentinelOrNoResultLine(log);
         }
 
         JsonNode? node;
@@ -192,7 +192,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
 
     private const int MaxBootstrapDetailLength = 500;
 
-    private static ContainerOutputParseResult BootstrapSentinelOrParseFailure(string log)
+    private static ContainerOutputParseResult BootstrapSentinelOrNoResultLine(string log)
     {
         Match match = BootstrapSentinelPattern().Match(log);
 
