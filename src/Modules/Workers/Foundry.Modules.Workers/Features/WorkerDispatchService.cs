@@ -566,10 +566,11 @@ internal sealed class WorkerDispatchService(
             containerOutput,
             defaultCooldownMinutes);
 
-        // ParseFailure with non-zero exit means the container terminated before emitting a
-        // result line — treat as a bootstrap failure. NormalExit means Claude ran and produced
-        // JSON, so NonZeroExit semantics are preserved.
-        FailureReason fallbackReason = parseResult is ContainerOutputParseResult.ParseFailure
+        // NoResultLine with non-zero exit means the container terminated before emitting any
+        // result line — treat as a bootstrap failure. ParseFailure means a JSON line was found
+        // but was malformed/oversized (Claude ran and produced output), so NonZeroExit semantics
+        // are preserved.
+        FailureReason fallbackReason = parseResult is ContainerOutputParseResult.NoResultLine
             ? new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail)
             : new FailureReason.NonZeroExit(exitCode);
 
@@ -612,6 +613,13 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 exitCode,
                 usageLimitedReason.ResetsAt);
+        }
+        else if (failureReason is FailureReason.WorkerBootstrapFailed bootstrapFailed)
+        {
+            logger.LogWarning(
+                "Worker run {WorkerRunId} failed during bootstrap ({Detail}).",
+                activeRun.Id,
+                bootstrapFailed.Detail);
         }
         else
         {

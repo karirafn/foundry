@@ -21,7 +21,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     {
         if (string.IsNullOrWhiteSpace(log))
         {
-            return new ContainerOutputParseResult.ParseFailure(log ?? string.Empty);
+            return new ContainerOutputParseResult.NoResultLine();
         }
 
         if (log.Length > MaxLogLength)
@@ -198,7 +198,7 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
 
         if (!match.Success)
         {
-            return new ContainerOutputParseResult.ParseFailure(log);
+            return new ContainerOutputParseResult.NoResultLine();
         }
 
         string detail = match.Value.Trim();

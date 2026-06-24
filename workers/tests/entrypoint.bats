@@ -388,3 +388,44 @@ EOF
     [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
     [ -f "$BATS_TEST_TMPDIR/claude_called" ]
 }
+
+@test "gh hostname contains @ guard emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
+    set_required_env
+    make_fake_git
+
+    # Craft a CLONE_URL whose hostname-derivation produces a string containing @
+    export CLONE_URL="https://oauth2@github.example.com/org/repo"
+    export GH_TOKEN="test-gh-token"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
+}
+
+@test "glab hostname contains @ guard emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
+    set_required_env
+    make_fake_git
+
+    # Craft a CLONE_URL whose hostname-derivation produces a string containing @
+    export CLONE_URL="https://oauth2@gitlab.example.com/org/repo"
+    export GITLAB_TOKEN="test-gitlab-token"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
+}
+
+@test "invalid BRANCH_NAME characters guard emits FOUNDRY_BOOTSTRAP_FAILED stage=branch" {
+    set_required_env
+    make_fake_git
+
+    # A branch name with characters outside [a-zA-Z0-9_/.-]
+    export BRANCH_NAME="feat/bad name with spaces"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=branch"* ]]
+}

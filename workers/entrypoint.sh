@@ -197,6 +197,7 @@ if [[ -n "${GH_TOKEN:-}" ]]; then
         echo "WARNING: could not derive hostname from CLONE_URL; skipping gh auth setup-git" >&2
     elif [[ "$GH_HOST" == *@* ]]; then
         echo "ERROR: derived hostname contains '@' — CLONE_URL may embed credentials in the URL. Aborting gh auth setup-git." >&2
+        fail_bootstrap "auth" "derived hostname contains @ — CLONE_URL may embed credentials"
         exit 1
     elif command -v gh > /dev/null 2>&1; then
         gh auth setup-git --hostname "$GH_HOST" --force
@@ -214,6 +215,7 @@ if [[ -n "${GITLAB_TOKEN:-}" ]]; then
         echo "WARNING: could not derive hostname from CLONE_URL; skipping glab credential helper setup" >&2
     elif [[ "$GL_HOST" == *@* ]]; then
         echo "ERROR: derived hostname contains '@' — CLONE_URL may embed credentials in the URL. Aborting glab credential helper setup." >&2
+        fail_bootstrap "auth" "derived hostname contains @ — CLONE_URL may embed credentials"
         exit 1
     elif command -v glab > /dev/null 2>&1; then
         export GITLAB_HOST="https://${GL_HOST}"
@@ -229,6 +231,7 @@ BOOTSTRAP_STAGE="branch"
 if [[ -n "${BRANCH_NAME:-}" ]]; then
     if [[ ! "$BRANCH_NAME" =~ ^[a-zA-Z0-9_/.-]+$ ]]; then
         echo "ERROR: BRANCH_NAME contains invalid characters: $BRANCH_NAME" >&2
+        fail_bootstrap "branch" "invalid BRANCH_NAME characters"
         exit 1
     fi
     git switch -- "$BRANCH_NAME" || git switch -c "$BRANCH_NAME"

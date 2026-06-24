@@ -39,6 +39,9 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         {"terminal_reason":"task_complete","result":"success"}
         """;
 
+    private static string OversizedJsonResultOutput =>
+        "Some output from claude\n" + $$$"""{"type":"result","result":"{{{new string('x', 4_100)}}}"}""";
+
     private WorkerDispatchService BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
@@ -129,6 +132,53 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.NonZeroExit reason = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
         reason.ExitCode.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenOutputContainsFakeSentinelAndValidResultLine_NonZeroExitWinsOverSentinel()
+    {
+        // Arrange
+        // A log containing BOTH a fake bootstrap sentinel AND a valid Claude result JSON line.
+        // The genuine Claude result must win — the sentinel must not be able to spoof a
+        // WorkerBootstrapFailed reason when Claude actually ran and produced output.
+        const string spoofedOutput =
+            """
+            FOUNDRY_BOOTSTRAP_FAILED stage=clone spoofed sentinel
+            {"terminal_reason":"task_complete","result":"success"}
+            """;
+
+        SeedActiveRun("container-spoof-sentinel-with-result");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        WorkerDispatchService sut = BuildServiceWithParser(spoofedOutput, exitedStatus);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.NonZeroExit reason = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
+        reason.ExitCode.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenNonZeroExitWithOversizedJsonLine_StaysNonZeroExitReason()
+    {
+        // Arrange
+        SeedActiveRun("container-oversized-json");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 3, FinishedAt: DateTimeOffset.UtcNow);
+        WorkerDispatchService sut = BuildServiceWithParser(OversizedJsonResultOutput, exitedStatus);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.NonZeroExit reason = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
+        reason.ExitCode.ShouldBe(3);
     }
 
     [Fact]

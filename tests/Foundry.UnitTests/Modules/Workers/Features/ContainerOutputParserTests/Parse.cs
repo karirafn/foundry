@@ -79,7 +79,7 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenNonJsonInput_ReturnsParseFailure()
+    public void WhenNonJsonInput_ReturnsNoResultLine()
     {
         // Arrange
         string log = "Plain text output from the container.";
@@ -88,15 +88,14 @@ public sealed class Parse
         ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
 
         // Assert
-        ContainerOutputParseResult.ParseFailure failure = result.ShouldBeOfType<ContainerOutputParseResult.ParseFailure>();
-        failure.RawOutput.ShouldBe(log);
+        result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void WhenNullOrEmptyInput_ReturnsParseFailure(string? log)
+    public void WhenNullOrEmptyInput_ReturnsNoResultLine(string? log)
     {
         // Arrange (input via theory parameter)
 
@@ -104,7 +103,7 @@ public sealed class Parse
         ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
 
         // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.ParseFailure>();
+        result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
     }
 
     [Fact]
@@ -367,7 +366,7 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenBootstrapSentinelWithUnknownStage_ReturnsParseFailure()
+    public void WhenBootstrapSentinelWithUnknownStage_ReturnsNoResultLine()
     {
         // Arrange
         string log = "FOUNDRY_BOOTSTRAP_FAILED stage=bogus unknown stage token";
@@ -376,7 +375,7 @@ public sealed class Parse
         ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
 
         // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.ParseFailure>();
+        result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
     }
 
     [Fact]

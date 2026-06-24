@@ -24,25 +24,27 @@ public sealed class WorkerBootstrapFailed
     public void WhenTwoInstancesHaveSameDetail_AreEqual()
     {
         // Arrange
-        FailureReason.WorkerBootstrapFailed a = new(Detail: "npm install failed");
-        FailureReason.WorkerBootstrapFailed b = new(Detail: "npm install failed");
+        FailureReason.WorkerBootstrapFailed first = new(Detail: "npm install failed");
+        FailureReason.WorkerBootstrapFailed second = new(Detail: "npm install failed");
 
         // Act
+        bool areEqual = first == second;
 
         // Assert
-        a.ShouldBe(b);
+        areEqual.ShouldBeTrue();
     }
 
     [Fact]
     public void WhenTwoInstancesHaveDifferentDetail_AreNotEqual()
     {
         // Arrange
-        FailureReason.WorkerBootstrapFailed a = new(Detail: "git clone failed");
-        FailureReason.WorkerBootstrapFailed b = new(Detail: "npm install failed");
+        FailureReason.WorkerBootstrapFailed first = new(Detail: "git clone failed");
+        FailureReason.WorkerBootstrapFailed second = new(Detail: "npm install failed");
 
         // Act
+        bool areEqual = first == second;
 
         // Assert
-        a.ShouldNotBe(b);
+        areEqual.ShouldBeFalse();
     }
 }
