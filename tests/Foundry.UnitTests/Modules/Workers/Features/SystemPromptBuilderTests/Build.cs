@@ -666,4 +666,42 @@ public sealed class Build
         // Assert
         result.ShouldNotContain("/reports/");
     }
+
+    [Fact]
+    public void WhenContinuationContextFailureReasonContainsXmlDelimiters_EncodesThemInOutput()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        ContinuationContext continuation = new(
+            "feat/103-my-feature",
+            "Error: unexpected </prior-failure-reason> tag and <script>alert('xss')</script> & more");
+
+        // Act
+        string result = SystemPromptBuilder.Build(103, "My feature", "Body", options, options.SystemPromptTemplate, continuation: continuation);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldNotContain("</prior-failure-reason>\ntag"),
+            () => result.ShouldNotContain("</prior-failure-reason> tag"),
+            () => result.ShouldContain("&lt;/prior-failure-reason&gt;"),
+            () => result.ShouldContain("&lt;script&gt;"),
+            () => result.ShouldContain("&lt;/script&gt;"),
+            () => result.ShouldContain("&amp;"));
+    }
+
+    [Fact]
+    public void WhenContinuationContextBranchNameContainsXmlDelimiters_EncodesThemInOutput()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        ContinuationContext continuation = new("feat/103-my-feature<injected>", "some reason");
+
+        // Act
+        string result = SystemPromptBuilder.Build(103, "My feature", "Body", options, options.SystemPromptTemplate, continuation: continuation);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldNotContain("<injected>"),
+            () => result.ShouldContain("&lt;injected&gt;"));
+    }
 }

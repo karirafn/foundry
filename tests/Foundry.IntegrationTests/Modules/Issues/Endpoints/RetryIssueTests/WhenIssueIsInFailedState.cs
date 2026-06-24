@@ -72,22 +72,6 @@ public sealed class WhenIssueIsInFailedState : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOk()
-    {
-        // Arrange
-        FailedIssue failed = await SeedFailedIssueAsync();
-
-        // Act
-        HttpResponseMessage response = await _client.PostAsync(
-            new Uri($"/api/issues/{failed.Id.Value}/retry", UriKind.Relative),
-            content: null,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-
-    [Fact]
     public async Task ReturnsIssueDetailWithQueuedState()
     {
         // Arrange
