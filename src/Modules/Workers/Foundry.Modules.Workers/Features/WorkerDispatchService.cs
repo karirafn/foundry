@@ -546,6 +546,9 @@ internal sealed class WorkerDispatchService(
         await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
     }
 
+    private const string HeuristicBootstrapDetail =
+        "stage=unknown (no result line; container terminated before producing output)";
+
     private async Task ProcessNonZeroExitAsync(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
@@ -563,18 +566,31 @@ internal sealed class WorkerDispatchService(
             containerOutput,
             defaultCooldownMinutes);
 
+        // ParseFailure with non-zero exit means the container terminated before emitting a
+        // result line — treat as a bootstrap failure. NormalExit means Claude ran and produced
+        // JSON, so NonZeroExit semantics are preserved.
+        FailureReason fallbackReason = parseResult is ContainerOutputParseResult.ParseFailure
+            ? new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail)
+            : new FailureReason.NonZeroExit(exitCode);
+
         FailureReason failureReason = await ResolveFailureReasonAsync(
             dbContext,
             parseResult,
-            new FailureReason.NonZeroExit(exitCode),
+            fallbackReason,
             cancellationToken);
 
         // Null branch name when no commits → FailedIssue; non-null → ContinuableFailedIssue
         string? branchNameForEvent = hasCommits ? activeRun.BranchName.Value : null;
 
-        string exitReason = failureReason is FailureReason.UsageLimited
-            ? WorkerRunFailedEvent.UsageLimitedReason
-            : $"Non-zero exit code: {exitCode}";
+        string exitReason = failureReason switch
+        {
+            FailureReason.WorkerBootstrapFailed bootstrapFailed =>
+                $"Worker bootstrap failed: {bootstrapFailed.Detail}",
+            FailureReason.UsageLimited =>
+                WorkerRunFailedEvent.UsageLimitedReason,
+            _ =>
+                $"Non-zero exit code: {exitCode}",
+        };
 
         FailedRun failedRun = activeRun.Fail(failureReason, containerOutput);
         await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
@@ -622,6 +638,12 @@ internal sealed class WorkerDispatchService(
         FailureReason fallbackReason,
         CancellationToken cancellationToken)
     {
+        if (parseResult is ContainerOutputParseResult.WorkerBootstrapFailed bootstrapFailed)
+        {
+            string redactedDetail = SecretRedactor.Redact(bootstrapFailed.Detail);
+            return new FailureReason.WorkerBootstrapFailed(redactedDetail);
+        }
+
         if (parseResult is not ContainerOutputParseResult.UsageLimited usageLimited)
         {
             return fallbackReason;
