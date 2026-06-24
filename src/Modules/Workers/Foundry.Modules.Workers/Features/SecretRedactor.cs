@@ -9,7 +9,7 @@ namespace Foundry.Modules.Workers.Features;
 /// </summary>
 internal static partial class SecretRedactor
 {
-    public static string Redact(string output)
+    internal static string Redact(string output)
     {
         string result = HttpsUserinfoPattern().Replace(output, "https://***@");
         result = KnownTokenPattern().Replace(result, "***");
@@ -24,9 +24,10 @@ internal static partial class SecretRedactor
     private static partial Regex HttpsUserinfoPattern();
 
     // Matches known PAT token shapes: glpat-, ghp_, github_pat_, gho_
-    // followed by the token value (non-whitespace characters)
+    // followed by the token value (non-whitespace characters).
+    // The whole match (prefix + value) is replaced with *** to mask the full token.
     [GeneratedRegex(
-        @"(glpat-|ghp_|github_pat_|gho_)\S+",
+        @"(?:glpat-|ghp_|github_pat_|gho_)\S+",
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex KnownTokenPattern();

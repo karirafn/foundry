@@ -12,6 +12,10 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 make_clone_url() {
     local url="$1"
+    if [[ "$url" != https://* ]]; then
+        echo "ERROR: make_clone_url requires an https:// URL; got: $url" >&2
+        return 1
+    fi
     # Strip the scheme, insert oauth2@ user, ensure .git suffix
     local without_scheme="${url#https://}"
     local with_user="https://oauth2@${without_scheme}"
@@ -139,6 +143,8 @@ fi
 CLONE_AUTH_URL="$(make_clone_url "$CLONE_URL")"
 
 ASKPASS_FILE="$(mktemp)"
+# Ensure the temp file is removed on every exit path (including clone failure)
+trap 'rm -f "${ASKPASS_FILE:-}"' EXIT
 printf '%s\n' "#!/bin/sh" "$(make_askpass_script)" > "$ASKPASS_FILE"
 chmod 700 "$ASKPASS_FILE"
 
@@ -148,6 +154,12 @@ GIT_ASKPASS="$ASKPASS_FILE" git clone "$CLONE_AUTH_URL" /workspace
 
 rm -f "$ASKPASS_FILE"
 unset ASKPASS_FILE
+trap - EXIT
+
+# GIT_PAT is no longer needed after clone — unset it before invoking claude
+# so the token is not visible in the container's environment during the run.
+# Push auth uses GH_TOKEN / GITLAB_TOKEN via the gh/glab credential helpers.
+unset GIT_PAT
 
 git -C /workspace remote set-url origin "$CLONE_URL"
 

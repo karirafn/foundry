@@ -1,8 +1,8 @@
-#!/bin/sh
-# POSIX sh tests for make_clone_url and make_askpass_script in entrypoint.sh.
-# Run with: sh workers/tests/clone_auth.sh
+#!/bin/bash
+# bash tests for make_clone_url and make_askpass_script in entrypoint.sh.
+# Run with: bash workers/tests/clone_auth.sh
 
-set -e
+set -euo pipefail
 
 ENTRYPOINT="$(cd "$(dirname "$0")/.." && pwd)/entrypoint.sh"
 
@@ -96,6 +96,15 @@ assert_not_contains \
     "token never appears in clone URL" \
     "$result" \
     "supersecret"
+
+# Non-https URL is rejected with exit 1
+if make_clone_url "git@gitlab.example.com:owner/repo.git" 2>/dev/null; then
+    FAIL=$((FAIL + 1))
+    printf "FAIL: non-https URL should be rejected\n"
+else
+    PASS=$((PASS + 1))
+    printf "PASS: non-https URL is rejected with non-zero exit\n"
+fi
 
 # ---------------------------------------------------------------------------
 # Tests for make_askpass_script

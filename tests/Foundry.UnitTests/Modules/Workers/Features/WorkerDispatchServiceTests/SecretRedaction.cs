@@ -30,9 +30,9 @@ public sealed class SecretRedaction : WorkerDispatchServiceTestBase
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.ContainerOutput.ShouldNotBeNull();
-        failedRun.ContainerOutput!.ShouldNotContain("glpat-MySecretToken");
-        failedRun.ContainerOutput.ShouldContain("https://***@gitlab.example.com");
+        string output1 = failedRun.ContainerOutput.ShouldNotBeNull();
+        output1.ShouldNotContain("glpat-MySecretToken");
+        output1.ShouldContain("https://***@gitlab.example.com");
     }
 
     [Fact]
@@ -52,9 +52,9 @@ public sealed class SecretRedaction : WorkerDispatchServiceTestBase
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.ContainerOutput.ShouldNotBeNull();
-        failedRun.ContainerOutput!.ShouldNotContain("ghp_abc123DefXyz");
-        failedRun.ContainerOutput.ShouldContain("***");
+        string output2 = failedRun.ContainerOutput.ShouldNotBeNull();
+        output2.ShouldNotContain("ghp_abc123DefXyz");
+        output2.ShouldContain("***");
     }
 
     [Fact]
@@ -77,8 +77,8 @@ public sealed class SecretRedaction : WorkerDispatchServiceTestBase
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.ContainerOutput.ShouldNotBeNull();
-        failedRun.ContainerOutput!.ShouldNotContain("ghp_SecretNearBoundary");
+        string output3 = failedRun.ContainerOutput.ShouldNotBeNull();
+        output3.ShouldNotContain("ghp_SecretNearBoundary");
     }
 
     private sealed class FixedLogsStub(WorkerStatus? status, string? logs) : IWorkerOrchestrator

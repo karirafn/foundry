@@ -36,11 +36,11 @@ public sealed class Redact
     }
 
     [Theory]
-    [InlineData("glpat-abc123DEF", "glpat-")]
-    [InlineData("ghp_abcDEF123xyz", "ghp_")]
-    [InlineData("github_pat_abc123DEFxyz", "github_pat_")]
-    [InlineData("gho_abc123DEFxyz", "gho_")]
-    public void WhenInputContainsKnownTokenShape_TokenIsMasked(string token, string prefix)
+    [InlineData("glpat-abc123DEF")]
+    [InlineData("ghp_abcDEF123xyz")]
+    [InlineData("github_pat_abc123DEFxyz")]
+    [InlineData("gho_abc123DEFxyz")]
+    public void WhenInputContainsKnownTokenShape_TokenIsMasked(string token)
     {
         // Arrange
         string output = $"fatal: repository 'https://example.com/repo.git' not found (token={token})";
@@ -51,7 +51,6 @@ public sealed class Redact
         // Assert
         result.ShouldNotContain(token);
         result.ShouldContain("***");
-        _ = prefix; // suppress unused warning — prefix is evidence for which shape matched
     }
 
     [Fact]
