@@ -47,8 +47,7 @@ public sealed class Redact
         string result = SecretRedactor.Redact(output);
 
         // Assert
-        result.ShouldNotContain(token);
-        result.ShouldContain("***");
+        result.ShouldBe($"ANTHROPIC_API_KEY=***");
     }
 
     [Theory]

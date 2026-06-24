@@ -5,7 +5,7 @@ namespace Foundry.Modules.Workers.Features;
 /// <summary>
 /// Redacts secrets from container output before persistence.
 /// Rewrites HTTPS URLs with userinfo (<c>https://user@host</c> → <c>https://***@host</c>)
-/// and masks known token shapes (<c>glpat-</c>, <c>ghp_</c>, <c>github_pat_</c>, <c>gho_</c>).
+/// and masks known token shapes (<c>glpat-</c>, <c>ghp_</c>, <c>github_pat_</c>, <c>gho_</c>, <c>sk-ant-</c>).
 /// </summary>
 internal static partial class SecretRedactor
 {
