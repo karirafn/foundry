@@ -31,6 +31,7 @@ public sealed class WhenContainerEmitsFramedLogsWithSecrets : IAsyncLifetime
     private const char StdoutFrameMarker = '\x01';
     private const char StderrFrameMarker = '\x02';
 
+    private DockerClientConfiguration? _config;
     private DockerClient? _dockerClient;
     private string? _containerId;
     private DockerWorkerOrchestrator? _sut;
@@ -38,8 +39,8 @@ public sealed class WhenContainerEmitsFramedLogsWithSecrets : IAsyncLifetime
 
     async ValueTask IAsyncLifetime.InitializeAsync()
     {
-        using DockerClientConfiguration config = new();
-        _dockerClient = config.CreateClient();
+        _config = new DockerClientConfiguration();
+        _dockerClient = _config.CreateClient();
 
         _daemonReachable = await ProbeDaemonAsync();
         if (!_daemonReachable)
@@ -100,22 +101,28 @@ public sealed class WhenContainerEmitsFramedLogsWithSecrets : IAsyncLifetime
             return;
         }
 
-        if (_containerId is not null)
+        try
         {
-            try
+            if (_containerId is not null)
             {
-                await _dockerClient.Containers.RemoveContainerAsync(
-                    _containerId,
-                    new ContainerRemoveParameters { Force = true },
-                    CancellationToken.None);
-            }
-            catch (DockerContainerNotFoundException)
-            {
-                // Already removed — nothing to do.
+                try
+                {
+                    await _dockerClient.Containers.RemoveContainerAsync(
+                        _containerId,
+                        new ContainerRemoveParameters { Force = true },
+                        CancellationToken.None);
+                }
+                catch (DockerContainerNotFoundException)
+                {
+                    // Already removed — nothing to do.
+                }
             }
         }
-
-        _dockerClient.Dispose();
+        finally
+        {
+            _dockerClient.Dispose();
+            _config?.Dispose();
+        }
     }
 
     [Fact]
@@ -155,8 +162,7 @@ public sealed class WhenContainerEmitsFramedLogsWithSecrets : IAsyncLifetime
 
         // Act
         List<string> lines = [];
-        await foreach (string line in sut.StreamLogsAsync(_containerId.ShouldNotBeNull(), cts.Token)
-            .WithCancellation(cts.Token))
+        await foreach (string line in sut.StreamLogsAsync(_containerId.ShouldNotBeNull(), cts.Token))
         {
             lines.Add(line);
         }
