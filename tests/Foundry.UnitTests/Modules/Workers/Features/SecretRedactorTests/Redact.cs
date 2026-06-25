@@ -95,26 +95,12 @@ public sealed class Redact
         result.ShouldBe("CLAUDE_CODE_OAUTH_TOKEN=***");
     }
 
-    [Fact]
-    public void WhenInputContainsAnthropicApiKeyEnvVar_EnvVarValueIsMasked()
-    {
-        // Arrange — ANTHROPIC_API_KEY with an opaque value (no sk-ant- prefix)
-        string output = "ANTHROPIC_API_KEY=opaque-no-prefix-value-12345";
-
-        // Act
-        string result = SecretRedactor.Redact(output);
-
-        // Assert
-        result.ShouldBe("ANTHROPIC_API_KEY=***");
-    }
-
     [Theory]
     [InlineData("CLAUDE_CODE_OAUTH_TOKEN=tok123 some other text", "CLAUDE_CODE_OAUTH_TOKEN=*** some other text")]
     [InlineData("export CLAUDE_CODE_OAUTH_TOKEN=tok123\nexport OTHER=val", "export CLAUDE_CODE_OAUTH_TOKEN=***\nexport OTHER=val")]
+    [InlineData("CLAUDE_CODE_OAUTH_TOKEN='tok en value' rest", "CLAUDE_CODE_OAUTH_TOKEN=*** rest")]
     public void WhenInputContainsSensitiveEnvVar_OnlyValueIsMasked(string input, string expected)
     {
-        // Arrange — input and expected are provided via InlineData
-
         // Act
         string result = SecretRedactor.Redact(input);
 

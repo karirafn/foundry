@@ -22,14 +22,15 @@ internal static partial class SecretRedactor
     // Matches https://<userinfo>@ — replaces the scheme+userinfo part
     [GeneratedRegex(
         @"https://[^@/\s]+@",
-        RegexOptions.ExplicitCapture,
+        RegexOptions.None,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex HttpsUserinfoPattern();
 
     // Matches sensitive env-var assignments by key name, capturing the key and masking the value.
-    // Handles opaque token values that have no known prefix shape.
+    // Handles opaque token values that have no known prefix shape, including single- and double-quoted values
+    // that may contain internal whitespace (e.g. CLAUDE_CODE_OAUTH_TOKEN='tok en value').
     [GeneratedRegex(
-        @"(?<key>CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=\S+",
+        @"(?<key>CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=(?:'[^']*'|""[^""]*""|\S+)",
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex SensitiveEnvVarPattern();
