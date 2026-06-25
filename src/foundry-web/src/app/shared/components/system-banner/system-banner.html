@@ -90,20 +90,11 @@
 >
   <div class="system-banner__bar system-banner__bar--dispatch">
     <span class="system-banner__message" role="alert">
-      {{ countdownText() !== null ? 'Usage limit active' : 'Dispatch is paused' }}
+      @if (isUsageLimitActive()) {
+        Usage limit reached. Resets in {{ countdownText() }}
+      } @else {
+        Dispatch is paused
+      }
     </span>
-    @if (countdownText() !== null) {
-      <span class="system-banner__countdown">
-        &mdash; resets in {{ countdownText() }}
-      </span>
-    }
-    <button
-      type="button"
-      class="system-banner__action-btn"
-      [disabled]="isResuming()"
-      (click)="resumeDispatch()"
-    >
-      {{ isResuming() ? 'Resuming...' : 'Resume All' }}
-    </button>
   </div>
 </div>

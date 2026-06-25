@@ -144,7 +144,7 @@ describe('SystemBannerComponent', () => {
   });
 
   describe('dispatch banner', () => {
-    // Cycle 6: dispatch banner visible when isDispatchPaused is true
+    // Cycle 6: dispatch banner visible when isDispatchPaused is true (no usage limit)
     it('should show dispatch banner when dispatch is paused', () => {
       // Arrange / Act
       const { fixture } = setup({ dispatch: { isDispatchPaused: true } });
@@ -167,7 +167,7 @@ describe('SystemBannerComponent', () => {
       expect(dispatchRegion?.hidden).toBe(true);
     });
 
-    // Cycle 8: dispatch banner visible when usage limit is active (even if not explicitly paused)
+    // Cycle 8: dispatch banner visible when usage limit is active (future timestamp)
     it('should show dispatch banner when usage limit is active', () => {
       // Arrange
       const futureDate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -192,13 +192,84 @@ describe('SystemBannerComponent', () => {
       expect(bar?.textContent).toContain('Dispatch is paused');
     });
 
-    // Cycle 10: shows countdown when usage limit is active (hours format)
+    // Cycle 10: banner hides when reset time has elapsed and dispatch is not manually paused
+    it('should hide dispatch banner when usage limit reset time has elapsed and dispatch is not paused', () => {
+      // Arrange — past timestamp (elapsed)
+      const pastDate = new Date(Date.now() - 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: pastDate } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — banner is hidden because remainingMs <= 0 and not manually paused
+      const dispatchRegion = el.querySelector('[aria-label="Dispatch status"]') as HTMLElement;
+      expect(dispatchRegion?.hidden).toBe(true);
+    });
+
+    // Cycle 11: banner shows "Dispatch is paused" when reset time has elapsed but dispatch IS manually paused
+    it('should show "Dispatch is paused" when usage limit has elapsed but dispatch is still manually paused', () => {
+      // Arrange — past timestamp (elapsed), but dispatch paused manually
+      const pastDate = new Date(Date.now() - 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: pastDate } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — banner visible, no countdown shown
+      const dispatchRegion = el.querySelector('[aria-label="Dispatch status"]') as HTMLElement;
+      expect(dispatchRegion?.hidden).toBe(false);
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar?.textContent).toContain('Dispatch is paused');
+    });
+
+    // Cycle 12: usage-limit banner shows new copy "Usage limit reached. Resets in <countdown>"
+    it('should show "Usage limit reached. Resets in <countdown>" when usage limit is active', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() + 45 * 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — full new copy in bar text
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar?.textContent).toContain('Usage limit reached. Resets in');
+      expect(bar?.textContent).toContain('45s');
+    });
+
+    // Cycle 13: no mdash separator span in dispatch bar
+    it('should not render an mdash separator span in the dispatch bar', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() + 60 * 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — no .system-banner__countdown element
+      const countdownSpan = el.querySelector('.system-banner__countdown');
+      expect(countdownSpan).toBeNull();
+    });
+
+    // Cycle 14: no "Resume All" button in dispatch bar
+    it('should not render a "Resume All" button in the dispatch bar', () => {
+      // Arrange / Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — no action button inside the dispatch bar
+      const dispatchBar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      const btn = dispatchBar?.querySelector('.system-banner__action-btn');
+      expect(btn).toBeNull();
+    });
+
+    // Cycle 15: countdown in "Xh Ym" format when more than one hour remains
     it('should show countdown in "Xh Ym" format when more than one hour remains', () => {
       // Arrange
       const resetsAt = new Date(Date.now() + (2 * 60 * 60 + 34 * 60) * 1000).toISOString();
 
       // Act
-      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt } });
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt } });
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
@@ -206,13 +277,13 @@ describe('SystemBannerComponent', () => {
       expect(bar?.textContent).toContain('2h 34m');
     });
 
-    // Cycle 11: countdown in "Xm Ys" format when between 1 and 60 minutes remain
+    // Cycle 16: countdown in "Xm Ys" format when between 1 and 60 minutes remain
     it('should show countdown in "Xm Ys" format when between one minute and one hour remains', () => {
       // Arrange
       const resetsAt = new Date(Date.now() + (12 * 60 + 5) * 1000).toISOString();
 
       // Act
-      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt } });
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt } });
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
@@ -220,68 +291,18 @@ describe('SystemBannerComponent', () => {
       expect(bar?.textContent).toContain('12m 5s');
     });
 
-    // Cycle 12: countdown in "Xs" format when less than one minute remains
+    // Cycle 17: countdown in "Xs" format when less than one minute remains
     it('should show countdown in "Xs" format when less than one minute remains', () => {
       // Arrange
       const resetsAt = new Date(Date.now() + 45 * 1000).toISOString();
 
       // Act
-      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt } });
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt } });
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
       const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
       expect(bar?.textContent).toContain('45s');
-    });
-
-    // Cycle 13: countdown shows "momentarily" when time has elapsed
-    it('should show "momentarily" when the reset time has passed', () => {
-      // Arrange
-      const resetsAt = new Date(Date.now() - 1000).toISOString();
-
-      // Act
-      const { fixture } = setup({ dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt } });
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Assert
-      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
-      expect(bar?.textContent).toContain('momentarily');
-    });
-
-    // Cycle 14: "Resume All" button calls resumeDispatch
-    it('should call resumeDispatch when "Resume All" button is clicked', () => {
-      // Arrange
-      const { fixture, mockDispatch } = setup({ dispatch: { isDispatchPaused: true } });
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Act
-      const button = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
-      button.click();
-
-      // Assert
-      expect(mockDispatch.resumeDispatch).toHaveBeenCalledTimes(1);
-    });
-
-    // Cycle 15: button disabled while resuming
-    it('should disable the "Resume All" button while resuming', () => {
-      // Arrange / Act
-      const { fixture } = setup({ dispatch: { isDispatchPaused: true, resuming: true } });
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Assert
-      const button = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
-      expect(button.disabled).toBe(true);
-    });
-
-    // Cycle 16: button shows "Resuming..." text while resuming
-    it('should show "Resuming..." text on the button while resuming', () => {
-      // Arrange / Act
-      const { fixture } = setup({ dispatch: { isDispatchPaused: true, resuming: true } });
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Assert
-      const button = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
-      expect(button.textContent?.trim()).toBe('Resuming...');
     });
   });
 

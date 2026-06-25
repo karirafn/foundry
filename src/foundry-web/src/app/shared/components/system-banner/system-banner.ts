@@ -48,19 +48,30 @@ export class SystemBannerComponent {
     return this._parseImageBuildMessage(notification.message);
   });
 
-  readonly isDispatchBannerVisible: Signal<boolean> = computed(
-    () => this._dispatchService.isDispatchPaused() || this._dispatchService.usageLimitResetsAt() !== null
-  );
-
-  readonly isResuming: Signal<boolean> = this._dispatchService.resuming;
-
-  readonly countdownText: Signal<string | null> = computed(() => {
+  readonly remainingMs: Signal<number | null> = computed(() => {
     this._tickSignal();
     const resetsAt = this._dispatchService.usageLimitResetsAt();
     if (resetsAt === null) {
       return null;
     }
-    return this._formatCountdown(new Date(resetsAt).getTime() - Date.now());
+    return new Date(resetsAt).getTime() - Date.now();
+  });
+
+  readonly isUsageLimitActive: Signal<boolean> = computed(() => {
+    const ms = this.remainingMs();
+    return ms !== null && ms > 0;
+  });
+
+  readonly isDispatchBannerVisible: Signal<boolean> = computed(
+    () => this._dispatchService.isDispatchPaused() || this.isUsageLimitActive()
+  );
+
+  readonly countdownText: Signal<string | null> = computed(() => {
+    const ms = this.remainingMs();
+    if (ms === null || ms <= 0) {
+      return null;
+    }
+    return this._formatCountdown(ms);
   });
 
   constructor() {
@@ -88,10 +99,6 @@ export class SystemBannerComponent {
     this._destroyRef.onDestroy(() => clearInterval(intervalId));
   }
 
-  resumeDispatch(): void {
-    this._dispatchService.resumeDispatch();
-  }
-
   retryImageBuild(): void {
     this._settingsService.retryImageBuild();
   }
@@ -110,10 +117,6 @@ export class SystemBannerComponent {
   }
 
   private _formatCountdown(remainingMs: number): string {
-    if (remainingMs <= 0) {
-      return 'momentarily';
-    }
-
     const totalSeconds = Math.ceil(remainingMs / 1000);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
