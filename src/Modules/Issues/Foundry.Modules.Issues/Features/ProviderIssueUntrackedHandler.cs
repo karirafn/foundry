@@ -19,23 +19,15 @@ internal sealed class ProviderIssueUntrackedHandler(
 
         if (issue is null)
         {
-            logger.LogWarning(
+            // Expected idempotent case: record was already deleted (e.g. duplicate event delivery).
+            logger.LogInformation(
                 "ProviderIssueUntracked received for repository {RepositoryId} issue {IssueNumber} but it was not found; ignoring.",
                 @event.RepositoryId,
                 @event.IssueNumber);
             return;
         }
 
-        bool isRestingState = issue is DetectedIssue
-            or QueuedIssue
-            or BlockedIssue
-            or FailedIssue
-            or ContinuableFailedIssue
-            or RevisionFailedIssue
-            or RevisionQueuedIssue
-            or ContinuationQueuedIssue;
-
-        if (!isRestingState)
+        if (!issue.IsRestingState())
         {
             logger.LogInformation(
                 "ProviderIssueUntracked received for repository {RepositoryId} issue {IssueNumber} in state {State}; preserving record.",

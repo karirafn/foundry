@@ -38,6 +38,21 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     // GitHub limits dependencies to 50 per direction; cap silently to match.
     private const int MaxBlockers = 50;
 
+    /// <summary>
+    /// Returns true for states that can be safely hard-deleted when a provider untrack event is received.
+    /// Active states (in_progress, revision_in_progress, review) and terminal states (completed, unchanged)
+    /// return false so in-flight or completed work is preserved.
+    /// </summary>
+    public bool IsRestingState() =>
+        this is DetectedIssue
+            or QueuedIssue
+            or BlockedIssue
+            or FailedIssue
+            or ContinuableFailedIssue
+            or RevisionFailedIssue
+            or RevisionQueuedIssue
+            or ContinuationQueuedIssue;
+
     internal void SetBlockedBy(IReadOnlyList<int> blockers)
     {
         BlockedBy = blockers.Count <= MaxBlockers

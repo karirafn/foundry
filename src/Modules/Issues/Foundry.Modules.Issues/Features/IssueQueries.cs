@@ -49,6 +49,10 @@ internal sealed class IssueQueries(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
     {
+        // EF Core cannot translate a C# instance method call (Issue.IsRestingState()) into SQL,
+        // so the type-pattern Where clause is kept explicit here. A unit test in
+        // GetUntrackableIssueNumbersAsync.cs asserts that both sets agree, so any future drift
+        // between this expression and Issue.IsRestingState() fails a test.
         List<int> numbers = await db.Set<Issue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)

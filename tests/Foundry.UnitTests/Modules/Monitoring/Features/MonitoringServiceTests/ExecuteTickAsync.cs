@@ -85,6 +85,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
+        services.AddLogging();
         services.AddScoped<IIssueQueries, StubIssueQueries>();
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();

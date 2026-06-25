@@ -290,6 +290,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_ProviderIssueUntrackedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<ProviderIssueUntracked> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<ProviderIssueUntracked>>();
+        handler.ShouldBeOfType<ProviderIssueUntrackedHandler>();
+    }
+
+    [Fact]
     public void WhenServicesRegistered_DispatchResumedHandlerResolvable()
     {
         // Arrange & Act
