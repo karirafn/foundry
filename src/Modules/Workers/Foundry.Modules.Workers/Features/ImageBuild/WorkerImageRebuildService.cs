@@ -65,7 +65,21 @@ internal sealed class WorkerImageRebuildService(
     {
         await foreach (bool _ in rebuildQueue.ReadAllAsync(stoppingToken))
         {
-            await ProcessRebuildAsync(stoppingToken);
+            try
+            {
+                await ProcessRebuildAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Clean shutdown — stopping token tripped mid-item; not a failure.
+                return;
+            }
+#pragma warning disable CA1031 // An item failure must not crash the background service or the host; the error log surfaces the issue without interrupting the consumer loop.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                logger.LogError(ex, "Unhandled exception in {ServiceName} while processing image rebuild.", nameof(WorkerImageRebuildService));
+            }
         }
     }
 
@@ -148,7 +162,7 @@ internal sealed class WorkerImageRebuildService(
 #pragma warning restore CA1031
         {
             logger.LogError(ex, "Worker image build failed with an unhandled exception.");
-            errorTail = TruncateTail(ex.Message);
+            errorTail = TruncateTail(SecretRedactor.Redact(ex.Message));
         }
 
         if (errorTail is null)

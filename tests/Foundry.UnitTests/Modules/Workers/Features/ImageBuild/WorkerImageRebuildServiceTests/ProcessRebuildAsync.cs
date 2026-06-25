@@ -8,6 +8,7 @@ using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -23,11 +24,11 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebui
 
 public sealed class ProcessRebuildAsync : IAsyncDisposable
 {
-    private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
+    private readonly SqliteConnection _connection;
 
     public ProcessRebuildAsync()
     {
-        _connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
         using FoundryDbContext setup = CreateDbContext();
         setup.Database.EnsureCreated();
@@ -75,7 +76,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         string? contextPath = null,
         bool imageBuildEnabled = true)
     {
-        Microsoft.Data.Sqlite.SqliteConnection connection = _connection;
+        SqliteConnection connection = _connection;
 
         Microsoft.Extensions.DependencyInjection.ServiceCollection services = new();
         services.AddScoped<FoundryDbContext>(_ =>
@@ -390,6 +391,41 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
             settings.ShouldNotBeNull();
             settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenDockerThrowsExceptionWithSecret_RedactsSecretFromPersistedErrorTail()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            const string secretMessage = "pull access denied: https://user:sk-ant-api03-secret@registry.example.com/image";
+            ThrowingImageOperations throwingImages = new(secretMessage);
+            WorkerImageRebuildService sut = BuildService(
+                throwingImages,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — the persisted error tail must not contain the raw secret token
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            string errorTail = failed.ErrorTail.ShouldNotBeNull();
+            errorTail.ShouldNotContain("sk-ant-api03-secret");
+            errorTail.ShouldContain("***");
         }
         finally
         {

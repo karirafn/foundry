@@ -1,10 +1,10 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -13,22 +13,17 @@ namespace Foundry.Modules.Monitoring.Features;
 internal sealed class MonitoringService(
     IServiceScopeFactory scopeFactory,
     IOptions<MonitoringOptions> optionsAccessor,
-    ILogger<MonitoringService> logger) : BackgroundService
+    ILogger<MonitoringService> logger) : PeriodicBackgroundService(logger)
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
     private readonly TimeSpan _defaultPollInterval =
         TimeSpan.FromSeconds(optionsAccessor.Value.DefaultPollIntervalSeconds);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using PeriodicTimer timer = new(TickInterval);
+    protected override TimeSpan TickInterval => Interval;
 
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
-            await ExecuteTickAsync(DateTimeOffset.UtcNow, stoppingToken);
-        }
-    }
+    protected override Task TickAsync(CancellationToken cancellationToken)
+        => ExecuteTickAsync(DateTimeOffset.UtcNow, cancellationToken);
 
     internal async Task ExecuteTickAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
