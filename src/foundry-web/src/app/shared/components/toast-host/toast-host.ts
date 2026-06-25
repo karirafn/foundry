@@ -1,4 +1,4 @@
-import { Component, ElementRef, QueryList, Signal, ViewChildren, inject } from '@angular/core';
+import { Component, ElementRef, Signal, inject, viewChildren } from '@angular/core';
 import { Toast, ToastService } from '../../../core/services/toast.service';
 
 @Component({
@@ -11,7 +11,7 @@ export class ToastHostComponent {
   private readonly _toastService = inject(ToastService);
   private readonly _elementRef = inject(ElementRef);
 
-  @ViewChildren('dismissBtn') private readonly _dismissButtons!: QueryList<ElementRef<HTMLButtonElement>>;
+  private readonly _dismissButtons = viewChildren<ElementRef<HTMLButtonElement>>('dismissBtn');
 
   readonly toasts: Signal<Toast[]> = this._toastService.toasts;
 
@@ -30,7 +30,8 @@ export class ToastHostComponent {
   dismissFromButton(id: number, toastIndex: number): void {
     this._pendingKeyboardDismissIndex = toastIndex;
     this._toastService.dismiss(id);
-    // Move focus after the signal update propagates to DOM (microtask)
+    // Use a microtask to let the signal update and DOM mutation settle before
+    // reading the viewChildren() query result and moving focus.
     Promise.resolve().then(() => {
       this._moveFocusAfterDismiss();
     });
@@ -53,7 +54,7 @@ export class ToastHostComponent {
     const dismissedIndex = this._pendingKeyboardDismissIndex;
     this._pendingKeyboardDismissIndex = null;
 
-    const buttons = this._dismissButtons.toArray();
+    const buttons = this._dismissButtons();
     if (buttons.length === 0) {
       // No toasts remain — restore prior focus
       if (this._priorFocusedElement !== null) {

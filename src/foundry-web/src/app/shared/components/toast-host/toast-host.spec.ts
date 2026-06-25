@@ -153,8 +153,8 @@ describe('ToastHostComponent', () => {
     expect(button.getAttribute('aria-label')).toBe('Dismiss notification');
   });
 
-  // Cycle 11: pressing Enter on the dismiss button dismisses the toast
-  it('should dismiss the toast when Enter is pressed on the dismiss button', () => {
+  // Cycle 11: activating the dismiss button dismisses the toast
+  it('should dismiss the toast when the dismiss button is activated', () => {
     // Arrange
     const { el, mockService } = setup({ toasts: [{ id: 7, message: 'Press Enter' }] });
     const button = el.querySelector('.toast .toast__dismiss') as HTMLButtonElement;
@@ -311,6 +311,28 @@ describe('ToastHostComponent', () => {
       expect(document.activeElement).not.toBe(el.querySelector('.toast__dismiss'));
 
       document.body.removeChild(outside);
+    });
+
+    // Cycle 20: relatedTarget === null does not throw and does not call focus() on null
+    it('should not throw and should remove the toast when relatedTarget is null on the focusin that captured prior focus', async () => {
+      // Arrange — focusin arrives with relatedTarget null (e.g. focus from address bar)
+      const { fixture, mockService, el } = setup({
+        toasts: [{ id: 10, message: 'Only toast' }],
+      });
+      el.querySelector('.toast-host')!.dispatchEvent(
+        new FocusEvent('focusin', { bubbles: true, relatedTarget: null })
+      );
+
+      // Act — dismiss the only toast (so no buttons remain and restore branch runs)
+      const dismissButton = el.querySelector<HTMLButtonElement>('.toast__dismiss')!;
+      dismissButton.click();
+      mockService._signal.set([]);
+      fixture.detectChanges();
+      await Promise.resolve(); // microtask tick
+
+      // Assert — no error thrown; toast is gone; no focus() call attempted on null
+      expect(mockService.dismiss).toHaveBeenCalledWith(10);
+      expect(el.querySelectorAll('.toast').length).toBe(0);
     });
   });
 });
