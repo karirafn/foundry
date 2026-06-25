@@ -49,10 +49,6 @@
     background-color: var(--fd-state-completed);
   }
 
-  &--dismissed {
-    background-color: var(--fd-state-dismissed);
-  }
-
   &--revision-queued {
     background-color: var(--fd-state-queued);
   }

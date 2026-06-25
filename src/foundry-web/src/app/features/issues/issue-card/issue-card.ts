@@ -22,7 +22,6 @@ const STATE_ARIA_LABELS: Record<IssueState, string> = {
   continuable_failed: 'continuable failed',
   continuation_queued: 'continuation queued',
   completed: 'completed',
-  dismissed: 'dismissed',
   revision_queued: 'revision queued',
   revision_in_progress: 'revision in progress',
   revision_failed: 'revision failed',

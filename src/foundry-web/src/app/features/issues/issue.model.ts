@@ -9,7 +9,6 @@ export type IssueState =
   | 'continuable_failed'
   | 'continuation_queued'
   | 'completed'
-  | 'dismissed'
   | 'revision_queued'
   | 'revision_in_progress'
   | 'revision_failed'
