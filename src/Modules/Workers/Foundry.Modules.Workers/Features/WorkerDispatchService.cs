@@ -925,11 +925,9 @@ internal sealed class WorkerDispatchService(
                 return null;
             }
 
-            string redacted = SecretRedactor.Redact(output);
-
-            return redacted.Length > MaxContainerOutputLength
-                ? redacted[..MaxContainerOutputLength]
-                : redacted;
+            return output.Length > MaxContainerOutputLength
+                ? output[..MaxContainerOutputLength]
+                : output;
         }
 #pragma warning disable CA1031 // Best-effort log capture before transition; Docker exceptions must not crash the BackgroundService tick or prevent the failure transition.
         catch (Exception ex)
