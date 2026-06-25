@@ -81,4 +81,44 @@ public sealed class Redact
         result.ShouldNotContain("oauth2@");
         result.ShouldContain("https://***@gitlab.example.com");
     }
+
+    [Fact]
+    public void WhenInputContainsClaudeCodeOauthToken_TokenValueIsMasked()
+    {
+        // Arrange — opaque token with no known prefix (provider-opaque string)
+        string output = "CLAUDE_CODE_OAUTH_TOKEN=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.opaque.value";
+
+        // Act
+        string result = SecretRedactor.Redact(output);
+
+        // Assert
+        result.ShouldBe("CLAUDE_CODE_OAUTH_TOKEN=***");
+    }
+
+    [Fact]
+    public void WhenInputContainsAnthropicApiKeyEnvVar_EnvVarValueIsMasked()
+    {
+        // Arrange — ANTHROPIC_API_KEY with an opaque value (no sk-ant- prefix)
+        string output = "ANTHROPIC_API_KEY=opaque-no-prefix-value-12345";
+
+        // Act
+        string result = SecretRedactor.Redact(output);
+
+        // Assert
+        result.ShouldBe("ANTHROPIC_API_KEY=***");
+    }
+
+    [Theory]
+    [InlineData("CLAUDE_CODE_OAUTH_TOKEN=tok123 some other text", "CLAUDE_CODE_OAUTH_TOKEN=*** some other text")]
+    [InlineData("export CLAUDE_CODE_OAUTH_TOKEN=tok123\nexport OTHER=val", "export CLAUDE_CODE_OAUTH_TOKEN=***\nexport OTHER=val")]
+    public void WhenInputContainsSensitiveEnvVar_OnlyValueIsMasked(string input, string expected)
+    {
+        // Arrange — input and expected are provided via InlineData
+
+        // Act
+        string result = SecretRedactor.Redact(input);
+
+        // Assert
+        result.ShouldBe(expected);
+    }
 }
