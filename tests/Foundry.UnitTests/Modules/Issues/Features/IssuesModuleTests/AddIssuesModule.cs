@@ -242,18 +242,6 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
-    public void WhenServicesRegistered_IssueDismissedHandlerResolvable()
-    {
-        // Arrange & Act
-        using IServiceScope scope = _serviceProvider.CreateScope();
-
-        // Assert
-        IDomainEventHandler<IssueDismissed> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDismissed>>();
-        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueDismissed>>();
-    }
-
-    [Fact]
     public void WhenServicesRegistered_IssueRevisionQueuedHandlerResolvable()
     {
         // Arrange & Act
@@ -299,6 +287,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
         IDomainEventHandler<IssueRevisionInProgress> handler =
             scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueRevisionInProgress>>();
         handler.ShouldBeOfType<IssueStateChangedAdapter<IssueRevisionInProgress>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_ProviderIssueUntrackedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<ProviderIssueUntracked> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<ProviderIssueUntracked>>();
+        handler.ShouldBeOfType<ProviderIssueUntrackedHandler>();
     }
 
     [Fact]

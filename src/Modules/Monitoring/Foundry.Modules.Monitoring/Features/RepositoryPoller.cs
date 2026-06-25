@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Features;
 
@@ -12,7 +13,8 @@ internal sealed class RepositoryPoller(
     DbContext dbContext,
     IDomainEventDispatcher domainEventDispatcher,
     IIntegrationEventDispatcher integrationEventDispatcher,
-    IRepositoryEligibilityEvaluator eligibilityEvaluator)
+    IRepositoryEligibilityEvaluator eligibilityEvaluator,
+    ILogger<RepositoryPoller> logger)
 {
     public async Task<Result> PollAsync(
         MonitoredRepository repository,
@@ -43,8 +45,32 @@ internal sealed class RepositoryPoller(
 
         IReadOnlyList<ProviderIssue> fetchedIssues = providerSuccess.Value;
 
+        HashSet<int> fetchedNumbers = fetchedIssues
+            .Select(i => i.Number)
+            .ToHashSet();
+
+        IReadOnlySet<int> untrackableNumbers = await issueQueries.GetUntrackableIssueNumbersAsync(
+            repository.Id,
+            cancellationToken);
+
         DetectNewIssues(repository, fetchedIssues, knownNumbers, now);
         await DetectDetailChangesAsync(repository, fetchedIssues, knownNumbers, cancellationToken);
+
+        // Guard: an empty fetch while resting-state issues are known is treated as a suspect transient
+        // upstream blip rather than a genuine "all issues gone" signal. Skipping the untrack pass here
+        // trades a rare one-cycle delay (when a repo legitimately has zero open+labelled issues) for
+        // protection against irreversible mass-deletion on an empty response from a flaky provider.
+        if (fetchedNumbers.Count == 0 && untrackableNumbers.Count > 0)
+        {
+            logger.LogWarning(
+                "Provider returned an empty issue list for repository {RepositoryId} but {UntrackableCount} resting-state issue(s) are known; skipping untrack pass this cycle to guard against spurious mass-deletion.",
+                repository.Id,
+                untrackableNumbers.Count);
+        }
+        else
+        {
+            DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
+        }
 
         repository.MarkPolled(now);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -233,6 +259,20 @@ internal sealed class RepositoryPoller(
                     repository.Id,
                     reviewIssue.IssueNumber,
                     feedbackSuccess.Value.Comments));
+            }
+        }
+    }
+
+    private static void DetectUntrackedIssues(
+        MonitoredRepository repository,
+        IReadOnlySet<int> untrackableNumbers,
+        HashSet<int> fetchedNumbers)
+    {
+        foreach (int issueNumber in untrackableNumbers)
+        {
+            if (!fetchedNumbers.Contains(issueNumber))
+            {
+                repository.RecordIntegrationEvent(new ProviderIssueUntracked(repository.Id, issueNumber));
             }
         }
     }

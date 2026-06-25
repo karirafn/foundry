@@ -61,7 +61,7 @@ Runs on a fixed tick interval (30s default) and checks whether each repo is due 
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `DismissedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ## Issue Kind
@@ -123,8 +123,8 @@ Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete
 ## Unchanged Issue
 
 A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
-Requires manual resolution: the user can dismiss the issue (agreeing no changes are needed) or retry (disagreeing with the worker's assessment).
-Transitions: `UnchangedIssue.Complete()` → `DismissedIssue`, `UnchangedIssue.Retry()` → `QueuedIssue`.
+Requires manual resolution: the user can retry (disagreeing with the worker's assessment).
+Transitions: `UnchangedIssue.Retry()` → `QueuedIssue`.
 
 ## Revision Queued Issue
 
@@ -146,12 +146,7 @@ Transitions: `MarkInReview()` → `ReviewIssue` (worker pushed changes); `MarkUn
 Terminal lifecycle state — the issue is resolved via a merged PR.
 Carries `BranchName`, `PullRequestUrl`, and `CompletedAt` — all non-nullable.
 Created from `ReviewIssue.Complete()` when the provider-side issue is closed.
-
-## Dismissed Issue
-
-Terminal lifecycle state — the issue is resolved without code changes.
-Carries `CompletedAt`.
-Created from `UnchangedIssue.Complete()` when the user agrees no changes are needed.
+Preserved when the issue is subsequently untracked (completion wins over provider closure).
 
 ## Failed Issue
 
@@ -224,6 +219,16 @@ The worker uses this to check out the existing branch and address the specific r
 The constant label `foundry` applied to a provider-side issue to flag it for Foundry processing.
 The label stays on the issue untouched — Foundry does not add, remove, or swap labels on the provider.
 All lifecycle state is tracked internally in the database.
+
+## Provider as Source of Truth for Issue Closure
+
+The provider is the authoritative signal for issue closure.
+When an issue's trigger label is removed or the issue is closed on the provider, it disappears from the `?labels=foundry&state=open` fetch.
+On each poll cycle, the poller emits a `ProviderIssueUntracked` integration event for any tracked issue absent from that fetch.
+The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states: `detected`, `queued`, `blocked`, `failed`, `continuable_failed`, `revision_failed`, `revision_queued`, and `continuation_queued`.
+`completed` and `unchanged` are preserved — completion wins over provider closure.
+`in_progress`, `revision_in_progress`, and `review` are preserved — a live worker is running or the issue is under active review; worker cancellation is out of scope.
+An issue closed on the provider and later reopened with the trigger label is re-detected as a new issue.
 
 ## Provider Issue
 

@@ -109,15 +109,6 @@ describe('StateBadgeComponent', () => {
     expect(el.querySelector('span')?.textContent?.trim()).toBe('COMPLETED');
   });
 
-  it('should display "DISMISSED" for dismissed state', () => {
-    // Arrange / Act
-    const fixture = createComponent('dismissed');
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    expect(el.querySelector('span')?.textContent?.trim()).toBe('DISMISSED');
-  });
-
   it('should display "REV QUEUED" for revision_queued state', () => {
     // Arrange / Act
     const fixture = createComponent('revision_queued');

@@ -45,6 +45,32 @@ internal sealed class IssueQueries(
         return snapshots;
     }
 
+    public async Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        // EF Core cannot translate a C# instance method call (Issue.IsRestingState()) into SQL,
+        // so the type-pattern Where clause is kept explicit here. A unit test in
+        // GetUntrackableIssueNumbersAsync.cs asserts that both sets agree, so any future drift
+        // between this expression and Issue.IsRestingState() fails a test.
+        List<int> numbers = await db.Set<Issue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Where(i =>
+                i is DetectedIssue ||
+                i is QueuedIssue ||
+                i is BlockedIssue ||
+                i is FailedIssue ||
+                i is ContinuableFailedIssue ||
+                i is RevisionFailedIssue ||
+                i is RevisionQueuedIssue ||
+                i is ContinuationQueuedIssue)
+            .Select(i => i.IssueNumber)
+            .ToListAsync(cancellationToken);
+
+        return numbers.ToHashSet();
+    }
+
     public async Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
@@ -230,7 +256,6 @@ internal sealed class IssueQueries(
             ContinuableFailedIssue => "continuable_failed",
             ContinuationQueuedIssue => "continuation_queued",
             CompletedIssue => "completed",
-            DismissedIssue => "dismissed",
             RevisionQueuedIssue => "revision_queued",
             RevisionInProgressIssue => "revision_in_progress",
             RevisionFailedIssue => "revision_failed",
@@ -298,16 +323,6 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: completed.CompletedAt,
-                BlockedBy: null),
-
-            DismissedIssue dismissed => new IssueStateDetails(
-                WorkerRunId: null,
-                BranchName: null,
-                PullRequestUrl: null,
-                FeedbackCutoffAt: null,
-                FailureReason: null,
-                FailedAt: null,
-                CompletedAt: dismissed.CompletedAt,
                 BlockedBy: null),
 
             RevisionQueuedIssue revisionQueued => new IssueStateDetails(

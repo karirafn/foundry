@@ -125,5 +125,10 @@ public sealed class AdapterHandleAsync
 
         public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
             => Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
+
+        public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
     }
 }

@@ -85,6 +85,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
+        services.AddLogging();
         services.AddScoped<IIssueQueries, StubIssueQueries>();
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
@@ -327,6 +328,13 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
+        }
+
+        public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
         }
     }
 

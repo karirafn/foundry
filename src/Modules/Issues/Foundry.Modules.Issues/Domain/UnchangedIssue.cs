@@ -37,11 +37,4 @@ public sealed class UnchangedIssue : Issue
         AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }
-
-    public DismissedIssue Complete(DateTimeOffset completedAt)
-    {
-        DismissedIssue dismissed = DismissedIssue.FromUnchanged(this, completedAt);
-        AddDomainEvent(new Events.IssueDismissed(Id, MonitoredRepositoryId));
-        return dismissed;
-    }
 }
