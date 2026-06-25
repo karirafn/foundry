@@ -78,9 +78,10 @@ internal sealed class DockerWorkerOrchestrator(
         }
         catch (DockerApiException ex)
         {
-            string message = ex.Message.Length > DockerErrorMessageMaxLength
-                ? ex.Message[..DockerErrorMessageMaxLength]
-                : ex.Message;
+            string redacted = SecretRedactor.Redact(ex.Message);
+            string message = redacted.Length > DockerErrorMessageMaxLength
+                ? redacted[..DockerErrorMessageMaxLength]
+                : redacted;
             return Result<ContainerId>.Fail(new Error("Docker.StartFailed", message));
         }
     }
