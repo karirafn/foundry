@@ -193,7 +193,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
         await db.TransitionAsync(continuationQueued, inProgress, domainEventDispatcher, cancellationToken);
 
-        ContinuationContext continuation = new(continuationQueued.BranchName);
+        ContinuationContext continuation = new(continuationQueued.BranchName, continuationQueued.FailureReason);
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,

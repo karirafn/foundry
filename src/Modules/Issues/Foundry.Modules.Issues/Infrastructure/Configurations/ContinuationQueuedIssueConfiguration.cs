@@ -13,5 +13,10 @@ public sealed class ContinuationQueuedIssueConfiguration : IEntityTypeConfigurat
             .HasMaxLength(IssueColumnLimits.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("branch_name");
+
+        builder.Property(i => i.FailureReason)
+            .HasMaxLength(ContinuationQueuedIssue.FailureReasonMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("failure_reason");
     }
 }

@@ -52,4 +52,18 @@ public sealed class FromReview
             () => queued.Id.ShouldBe(review.Id),
             () => queued.BranchName.ShouldBe(review.BranchName));
     }
+
+    [Fact]
+    public void WhenCreatedFromReview_SetsFailureReasonToEmpty()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        ReviewIssue review = CreateReviewIssue(repositoryId);
+
+        // Act
+        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromReview(review);
+
+        // Assert
+        queued.FailureReason.ShouldBe(string.Empty);
+    }
 }

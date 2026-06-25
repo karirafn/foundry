@@ -17,6 +17,8 @@ public static class IssuesModule
     {
         services.AddScoped<IIssueQueries, IssueQueries>();
 
+        services.AddCommandHandler<RetryIssue.Command, IssueDetail, RetryIssue.Handler>();
+
         services.AddIntegrationEventHandler<IssueDetected, CreateIssueHandler>();
         services.AddIntegrationEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();
         services.AddIntegrationEventHandler<IssueDependenciesDetected, ProcessIssueDependenciesHandler>();
