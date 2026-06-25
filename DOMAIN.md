@@ -102,13 +102,15 @@ Both GitHub (REST API v2026-03-10) and GitLab (Issue Links API, Premium+) expose
 Foundry fetches dependencies during the detection poll cycle and reconciles them on each subsequent poll.
 When the provider does not expose dependency links (e.g. GitLab Free tier), the provider degrades gracefully — it treats the issue as having no dependencies and logs once, rather than failing the poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
+A blocker is *resolved* when it is closed in the provider — the provider client filters out closed blockers at the anti-corruption boundary so domain logic never sees them.
+When a blocker's state is missing or unrecognized, it is treated as still blocking (fail-safe).
 
 ## Blocked Issue
 
 A lifecycle state for an issue that has unresolved dependencies.
 A `DetectedIssue` with blockers transitions to `BlockedIssue` instead of `QueuedIssue`.
 A `QueuedIssue` that gains blockers is demoted to `BlockedIssue`.
-When all blockers are resolved, a `BlockedIssue` transitions to `QueuedIssue`.
+When all blockers are resolved — that is, closed in the provider — a `BlockedIssue` transitions to `QueuedIssue`.
 
 ## Review Issue
 
