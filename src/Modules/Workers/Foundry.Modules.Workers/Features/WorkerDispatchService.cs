@@ -28,15 +28,15 @@ internal sealed class WorkerDispatchService(
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
 
-    protected override TimeSpan TickInterval => Interval;
-
-    protected override Task TickAsync(CancellationToken cancellationToken)
-        => ExecuteTickAsync(cancellationToken);
-
     private readonly TimeSpan _prRetryDelay = prRetryDelay ?? DefaultPrRetryDelay;
 
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
+
+    protected override TimeSpan TickInterval => Interval;
+
+    protected override Task TickAsync(CancellationToken cancellationToken)
+        => ExecuteTickAsync(cancellationToken);
 
     internal async Task ExecuteTickAsync(CancellationToken cancellationToken)
     {

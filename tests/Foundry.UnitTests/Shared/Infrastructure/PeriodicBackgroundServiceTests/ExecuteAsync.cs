@@ -1,4 +1,7 @@
+using System.Threading;
+
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 
 using Microsoft.Extensions.Logging;
 
@@ -100,7 +103,7 @@ public sealed class ExecuteAsync
 
         protected override Task TickAsync(CancellationToken cancellationToken)
         {
-            int tick = System.Threading.Interlocked.Increment(ref _ticks);
+            int tick = Interlocked.Increment(ref _ticks);
             _onTick();
 
             if (tick == 1)
@@ -143,7 +146,7 @@ public sealed class ExecuteAsync
 
         protected override Task TickAsync(CancellationToken cancellationToken)
         {
-            int tick = System.Threading.Interlocked.Increment(ref _ticks);
+            int tick = Interlocked.Increment(ref _ticks);
 
             if (tick == 1)
             {

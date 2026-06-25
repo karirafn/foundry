@@ -162,7 +162,7 @@ internal sealed class WorkerImageRebuildService(
 #pragma warning restore CA1031
         {
             logger.LogError(ex, "Worker image build failed with an unhandled exception.");
-            errorTail = TruncateTail(ex.Message);
+            errorTail = TruncateTail(SecretRedactor.Redact(ex.Message));
         }
 
         if (errorTail is null)

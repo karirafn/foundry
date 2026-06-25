@@ -1,3 +1,5 @@
+using System.Threading;
+
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
@@ -5,14 +7,15 @@ using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 using Shouldly;
@@ -23,11 +26,11 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebui
 
 public sealed class ExecuteAsync : IAsyncDisposable
 {
-    private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
+    private readonly SqliteConnection _connection;
 
     public ExecuteAsync()
     {
-        _connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
         using FoundryDbContext setup = CreateDbContext();
         setup.Database.EnsureCreated();
@@ -60,7 +63,7 @@ public sealed class ExecuteAsync : IAsyncDisposable
         ISystemNotificationBroadcaster broadcaster,
         CapturingLogger logger)
     {
-        Microsoft.Data.Sqlite.SqliteConnection connection = _connection;
+        SqliteConnection connection = _connection;
 
         ServiceCollection services = new();
         services.AddScoped<FoundryDbContext>(_ =>
@@ -206,7 +209,7 @@ public sealed class ExecuteAsync : IAsyncDisposable
 
         public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
         {
-            int call = System.Threading.Interlocked.Increment(ref _callCount);
+            int call = Interlocked.Increment(ref _callCount);
             onSendAsync();
 
             if (call == 1)
@@ -288,27 +291,4 @@ public sealed class ExecuteAsync : IAsyncDisposable
         public string EnvironmentName { get; set; } = "Development";
     }
 
-    /// <summary>
-    /// Captures log calls so tests can assert on logged messages and exceptions.
-    /// </summary>
-    private sealed class CapturingLogger : ILogger
-    {
-        private readonly List<(LogLevel Level, string Message, Exception? Exception)> _entries = [];
-
-        public IReadOnlyList<(LogLevel Level, string Message, Exception? Exception)> Entries => _entries;
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            _entries.Add((logLevel, formatter(state, exception), exception));
-        }
-    }
 }
