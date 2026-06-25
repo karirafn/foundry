@@ -10,6 +10,9 @@ import {
 import { DispatchService } from '../../../core/services/dispatch.service';
 import { SettingsService } from '../../../features/settings/settings.service';
 import { ImageBuildStatus } from '../../../features/settings/settings.model';
+import { ToastService } from '../../../core/services/toast.service';
+
+const USAGE_LIMIT_RESET_MESSAGE = 'Usage limit reset';
 
 const COUNTDOWN_INTERVAL_MS = 1000;
 const IMAGE_BUILD_MESSAGE_SEPARATOR = '|';
@@ -30,7 +33,10 @@ export class SystemBannerComponent {
   private readonly _systemSignalR = inject(SystemSignalRService);
   private readonly _dispatchService = inject(DispatchService);
   private readonly _settingsService = inject(SettingsService);
+  private readonly _toastService = inject(ToastService);
   private readonly _destroyRef = inject(DestroyRef);
+
+  private _wasCountingDown = false;
 
   private readonly _tickSignal = signal(0);
 
@@ -87,6 +93,27 @@ export class SystemBannerComponent {
       const imageBuild = this.imageBuildNotification();
       if (imageBuild !== null) {
         this._settingsService.setImageBuildStatus(imageBuild.status, imageBuild.logTail);
+      }
+    });
+
+    effect(() => {
+      const current = this.remainingMs();
+      const resetsAt = this._dispatchService.usageLimitResetsAt();
+
+      if (current === null || resetsAt === null) {
+        this._wasCountingDown = false;
+        return;
+      }
+
+      if (current > 0) {
+        this._wasCountingDown = true;
+        return;
+      }
+
+      // current <= 0 and resetsAt is non-null
+      if (this._wasCountingDown) {
+        this._toastService.show(USAGE_LIMIT_RESET_MESSAGE);
+        this._wasCountingDown = false;
       }
     });
 

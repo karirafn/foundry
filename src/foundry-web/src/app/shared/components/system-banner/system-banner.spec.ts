@@ -7,6 +7,7 @@ import { SystemSignalRService } from '../../../core/services/system-signalr.serv
 import { SystemNotification } from '../../../core/models/system-notification.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
 import { SettingsService } from '../../../features/settings/settings.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 function createMockSignalRService(notifications: SystemNotification[]) {
   const notificationsSignal = signal(notifications);
@@ -46,6 +47,13 @@ function createMockSettingsService() {
   };
 }
 
+function createMockToastService() {
+  return {
+    show: vi.fn(),
+    dismiss: vi.fn(),
+  };
+}
+
 interface SetupOptions {
   notifications?: SystemNotification[];
   dispatch?: DispatchServiceOverrides;
@@ -55,6 +63,7 @@ function setup(options: SetupOptions = {}) {
   const mockSignalR = createMockSignalRService(options.notifications ?? []);
   const mockDispatch = createMockDispatchService(options.dispatch ?? {});
   const mockSettings = createMockSettingsService();
+  const mockToast = createMockToastService();
 
   TestBed.configureTestingModule({
     imports: [SystemBannerComponent],
@@ -63,12 +72,13 @@ function setup(options: SetupOptions = {}) {
       { provide: SystemSignalRService, useValue: mockSignalR },
       { provide: DispatchService, useValue: mockDispatch },
       { provide: SettingsService, useValue: mockSettings },
+      { provide: ToastService, useValue: mockToast },
     ],
   });
 
   const fixture = TestBed.createComponent(SystemBannerComponent);
   fixture.detectChanges();
-  return { fixture, mockSignalR, mockDispatch, mockSettings };
+  return { fixture, mockSignalR, mockDispatch, mockSettings, mockToast };
 }
 
 describe('SystemBannerComponent', () => {
@@ -411,6 +421,115 @@ describe('SystemBannerComponent', () => {
       // Assert — auth (failure-category) renders first, image-build (building) renders below
       const firstBar = bars[0];
       expect(firstBar?.textContent).toContain('Auth invalid');
+    });
+  });
+
+  describe('usage-limit toast (zero-crossing)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Scenario 1: active countdown crossing zero in-session → toast fires exactly once
+    it('should fire "Usage limit reset" toast exactly once when countdown crosses zero in-session', () => {
+      // Arrange — reset 1.5 s in the future so the component starts counting down
+      const resetsAt = new Date(Date.now() + 1500).toISOString();
+      const { fixture, mockDispatch, mockToast } = setup({
+        dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt },
+      });
+
+      // Act — advance past expiry (2 s), then one more tick to ensure the interval fires
+      vi.advanceTimersByTime(2000);
+      fixture.detectChanges();
+      TestBed.flushEffects();
+
+      // Assert
+      expect(mockToast.show).toHaveBeenCalledTimes(1);
+      expect(mockToast.show).toHaveBeenCalledWith('Usage limit reset');
+      // Verify: usageLimitResetsAt is still non-null (server hasn't cleared it yet)
+      expect(mockDispatch.usageLimitResetsAt()).toBe(resetsAt);
+    });
+
+    // Scenario 2: load after expiry → no toast, banner not shown
+    it('should not fire toast when page is loaded after expiry (initial remainingMs already <= 0)', () => {
+      // Arrange — past timestamp already expired when component initialises
+      const resetsAt = new Date(Date.now() - 5000).toISOString();
+      const { fixture, mockToast } = setup({
+        dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt },
+      });
+
+      // Act — let some ticks run, no zero-crossing happened in-session
+      vi.advanceTimersByTime(3000);
+      fixture.detectChanges();
+      TestBed.flushEffects();
+
+      // Assert — no toast and banner hidden
+      expect(mockToast.show).not.toHaveBeenCalled();
+      const el = fixture.nativeElement as HTMLElement;
+      const dispatchRegion = el.querySelector('[aria-label="Dispatch status"]') as HTMLElement;
+      expect(dispatchRegion?.hidden).toBe(true);
+    });
+
+    // Scenario 3: manual resume clears usageLimitResetsAt before zero → no toast
+    it('should not fire toast when usageLimitResetsAt is cleared (manual resume) before countdown reaches zero', () => {
+      // Arrange — reset 3 s in the future
+      const resetsAt = new Date(Date.now() + 3000).toISOString();
+      const { fixture, mockDispatch, mockToast } = setup({
+        dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt },
+      });
+
+      // Act — server clears the limit after 1 s (manual resume), then time advances past original expiry
+      vi.advanceTimersByTime(1000);
+      mockDispatch._usageLimitSignal.set(null);
+      vi.advanceTimersByTime(3000);
+      fixture.detectChanges();
+      TestBed.flushEffects();
+
+      // Assert — remainingMs became null (not <= 0), so no toast
+      expect(mockToast.show).not.toHaveBeenCalled();
+    });
+
+    // Scenario 4: interval keeps ticking past zero → toast fires exactly once (not per tick)
+    it('should fire toast only once even when interval ticks continue past zero', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() + 1500).toISOString();
+      const { fixture, mockToast } = setup({
+        dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt },
+      });
+
+      // Act — advance 5 s total (4 ticks past zero)
+      vi.advanceTimersByTime(5000);
+      fixture.detectChanges();
+      TestBed.flushEffects();
+
+      // Assert — still only one call
+      expect(mockToast.show).toHaveBeenCalledTimes(1);
+    });
+
+    // Scenario 5: usage limit + manual pause both active at zero → banner shows "Dispatch is paused" AND toast fires once
+    it('should fire toast once and show "Dispatch is paused" when both usage limit expires and dispatch is manually paused', () => {
+      // Arrange — usage limit expires, dispatch is also manually paused
+      const resetsAt = new Date(Date.now() + 1500).toISOString();
+      const { fixture, mockToast } = setup({
+        dispatch: { isDispatchPaused: true, usageLimitResetsAt: resetsAt },
+      });
+
+      // Act
+      vi.advanceTimersByTime(2000);
+      fixture.detectChanges();
+      TestBed.flushEffects();
+
+      // Assert — toast fired
+      expect(mockToast.show).toHaveBeenCalledTimes(1);
+      expect(mockToast.show).toHaveBeenCalledWith('Usage limit reset');
+
+      // Assert — banner text shows pause message (not countdown)
+      const el = fixture.nativeElement as HTMLElement;
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar?.textContent).toContain('Dispatch is paused');
     });
   });
 });
