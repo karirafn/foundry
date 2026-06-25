@@ -380,5 +380,10 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
+
+        public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
     }
 }

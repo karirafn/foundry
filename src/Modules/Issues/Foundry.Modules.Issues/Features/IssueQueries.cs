@@ -45,6 +45,28 @@ internal sealed class IssueQueries(
         return snapshots;
     }
 
+    public async Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        List<int> numbers = await db.Set<Issue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Where(i =>
+                i is DetectedIssue ||
+                i is QueuedIssue ||
+                i is BlockedIssue ||
+                i is FailedIssue ||
+                i is ContinuableFailedIssue ||
+                i is RevisionFailedIssue ||
+                i is RevisionQueuedIssue ||
+                i is ContinuationQueuedIssue)
+            .Select(i => i.IssueNumber)
+            .ToListAsync(cancellationToken);
+
+        return numbers.ToHashSet();
+    }
+
     public async Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)

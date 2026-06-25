@@ -925,6 +925,119 @@ public sealed class PollAsync : IAsyncDisposable
         eligibility.Violations.ShouldHaveSingleItem();
     }
 
+    [Fact]
+    public async Task WhenRestingStateIssueAbsentFromFetch_RaisesProviderIssueUntrackedEvent()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator);
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        ProviderIssueUntracked untracked = _dispatcher.DispatchedEvents
+            .OfType<ProviderIssueUntracked>()
+            .ShouldHaveSingleItem();
+        untracked.ShouldSatisfyAllConditions(
+            () => untracked.RepositoryId.ShouldBe(repository.Id),
+            () => untracked.IssueNumber.ShouldBe(7));
+    }
+
+    [Fact]
+    public async Task WhenRestingStateIssueStillPresentInFetch_RaisesNoUntrackedEvent()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ProviderIssue existingIssue = new(
+            Number: 7,
+            Title: "Existing",
+            Body: "Body",
+            Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/7",
+            Labels: ["bug"],
+            IssueKindLabel: "bug");
+        IssueSnapshot snapshot = new("Existing", "Body", ["bug"]);
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot> { [7] = snapshot },
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator);
+        StubIssueProvider provider = new([existingIssue]);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueUntracked>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenPreservedStateIssueAbsentFromFetch_RaisesNoUntrackedEvent()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+
+        // Issue 42 is absent from fetch but NOT in untrackable numbers (e.g. it is completed/in-progress)
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 42 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int>());
+
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator);
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueUntracked>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenMultipleRestingStateIssuesAbsentFromFetch_RaisesUntrackedEventForEach()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 5, 6 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            knownNumbersSecondCall: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 5, 6 });
+
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator);
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderIssueUntracked> untrackedEvents = _dispatcher.DispatchedEvents
+            .OfType<ProviderIssueUntracked>()
+            .ToList();
+        untrackedEvents.Count.ShouldBe(2);
+        untrackedEvents.ShouldContain(e => e.IssueNumber == 5);
+        untrackedEvents.ShouldContain(e => e.IssueNumber == 6);
+    }
+
     private sealed class StubIssueProvider(
         IReadOnlyList<ProviderIssue> issues,
         IReadOnlyDictionary<int, Result<IReadOnlyList<int>>>? dependencyResults = null,
@@ -1113,6 +1226,7 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
         private readonly IReadOnlySet<int>? _knownNumbersSecondCall;
         private readonly IReadOnlyList<ReviewIssueInfo> _reviewIssues;
+        private readonly IReadOnlySet<int> _untrackableNumbers;
         private int _getKnownNumbersCallCount;
 
         public StubIssueQueries()
@@ -1129,12 +1243,14 @@ public sealed class PollAsync : IAsyncDisposable
             IReadOnlySet<int> knownNumbers,
             IReadOnlyDictionary<int, IssueSnapshot> snapshots,
             IReadOnlySet<int>? knownNumbersSecondCall,
-            IReadOnlyList<ReviewIssueInfo>? reviewIssues = null)
+            IReadOnlyList<ReviewIssueInfo>? reviewIssues = null,
+            IReadOnlySet<int>? untrackableNumbers = null)
         {
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
             _knownNumbersSecondCall = knownNumbersSecondCall;
             _reviewIssues = reviewIssues ?? [];
+            _untrackableNumbers = untrackableNumbers ?? new HashSet<int>();
         }
 
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
@@ -1168,6 +1284,13 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(_reviewIssues);
+        }
+
+        public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_untrackableNumbers);
         }
 
         public Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(

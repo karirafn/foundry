@@ -43,8 +43,17 @@ internal sealed class RepositoryPoller(
 
         IReadOnlyList<ProviderIssue> fetchedIssues = providerSuccess.Value;
 
+        HashSet<int> fetchedNumbers = fetchedIssues
+            .Select(i => i.Number)
+            .ToHashSet();
+
+        IReadOnlySet<int> untrackableNumbers = await issueQueries.GetUntrackableIssueNumbersAsync(
+            repository.Id,
+            cancellationToken);
+
         DetectNewIssues(repository, fetchedIssues, knownNumbers, now);
         await DetectDetailChangesAsync(repository, fetchedIssues, knownNumbers, cancellationToken);
+        DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
 
         repository.MarkPolled(now);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -233,6 +242,20 @@ internal sealed class RepositoryPoller(
                     repository.Id,
                     reviewIssue.IssueNumber,
                     feedbackSuccess.Value.Comments));
+            }
+        }
+    }
+
+    private static void DetectUntrackedIssues(
+        MonitoredRepository repository,
+        IReadOnlySet<int> untrackableNumbers,
+        HashSet<int> fetchedNumbers)
+    {
+        foreach (int issueNumber in untrackableNumbers)
+        {
+            if (!fetchedNumbers.Contains(issueNumber))
+            {
+                repository.RecordIntegrationEvent(new ProviderIssueUntracked(repository.Id, issueNumber));
             }
         }
     }

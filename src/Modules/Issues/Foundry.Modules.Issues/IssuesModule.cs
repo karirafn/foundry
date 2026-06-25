@@ -26,6 +26,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<WorkerRunCompleted, WorkerRunCompletedHandler>();
         services.AddIntegrationEventHandler<WorkerRunFailed, WorkerRunFailedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
+        services.AddIntegrationEventHandler<ProviderIssueUntracked, ProviderIssueUntrackedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
