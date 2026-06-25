@@ -99,6 +99,7 @@ public sealed class Redact
     [InlineData("CLAUDE_CODE_OAUTH_TOKEN=tok123 some other text", "CLAUDE_CODE_OAUTH_TOKEN=*** some other text")]
     [InlineData("export CLAUDE_CODE_OAUTH_TOKEN=tok123\nexport OTHER=val", "export CLAUDE_CODE_OAUTH_TOKEN=***\nexport OTHER=val")]
     [InlineData("CLAUDE_CODE_OAUTH_TOKEN='tok en value' rest", "CLAUDE_CODE_OAUTH_TOKEN=*** rest")]
+    [InlineData("ANTHROPIC_API_KEY=opaqueValue123 rest", "ANTHROPIC_API_KEY=*** rest")]
     public void WhenInputContainsSensitiveEnvVar_OnlyValueIsMasked(string input, string expected)
     {
         // Act
