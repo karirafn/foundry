@@ -77,7 +77,9 @@ describe('IssueService', () => {
 
   // Cycle 2: loadIssues with repositoryId appends query param
   it('should append repositoryId query param when provided to loadIssues', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadIssues('repo-id-1');
     const req = httpMock.expectOne('/api/issues?repositoryId=repo-id-1');
     req.flush([]);
@@ -190,12 +192,18 @@ describe('IssueService', () => {
 
   // Cycle 4: isEmpty computed signal reflects issue count
   it('should report isEmpty as true when no issues are loaded', () => {
-    // Arrange / Act / Assert
+    // Arrange — no issues loaded (initial state)
+
+    // Act — read the computed signal
+
+    // Assert
     expect(service.isEmpty()).toBe(true);
   });
 
   it('should report isEmpty as false after issues are loaded', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush([mockSummary]);
 
@@ -235,7 +243,9 @@ describe('IssueService', () => {
   });
 
   it('should set detailLoading to true before the detail request resolves', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadDetail('abc123');
 
     // Assert (before flush, loading is true)
@@ -260,7 +270,9 @@ describe('IssueService', () => {
 
   // Cycle 7: toggleExpand — expand new and fetch detail
   it('should expand a new issue and fetch its detail when toggleExpand is called', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.toggleExpand('abc123');
 
     // Assert
@@ -426,7 +438,9 @@ describe('IssueService', () => {
 
   // Cycle 12a: initialLoading starts true, becomes false after first loadIssues response
   it('should have initialLoading true before first loadIssues response', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadIssues();
 
     // Assert — before the response, still loading
@@ -435,7 +449,9 @@ describe('IssueService', () => {
   });
 
   it('should set initialLoading to false after loadIssues succeeds', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush([]);
 
@@ -444,7 +460,9 @@ describe('IssueService', () => {
   });
 
   it('should set initialLoading to false after loadIssues fails', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush('Server Error', {
       status: 500,
@@ -473,7 +491,9 @@ describe('IssueService', () => {
   });
 
   it('should set loadError when loadIssues fails', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush('Server Error', {
       status: 500,
@@ -485,7 +505,9 @@ describe('IssueService', () => {
   });
 
   it('should set loadError to a fixed user-facing string when loadIssues fails', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush('Server Error', {
       status: 500,
@@ -497,7 +519,9 @@ describe('IssueService', () => {
   });
 
   it('should set detailError to a fixed user-facing string when loadDetail fails', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadDetail('abc123');
     httpMock.expectOne('/api/issues/abc123').flush('Not Found', {
       status: 404,
@@ -509,7 +533,9 @@ describe('IssueService', () => {
   });
 
   it('should set detailError to a fixed user-facing string when retryEligibility fails', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.retryEligibility('abc123');
     httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush('Server Error', {
       status: 500,
@@ -553,7 +579,9 @@ describe('IssueService', () => {
   });
 
   it('should set detailError when loadDetail fails', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.loadDetail('abc123');
     httpMock.expectOne('/api/issues/abc123').flush('Not Found', {
       status: 404,
@@ -566,7 +594,9 @@ describe('IssueService', () => {
 
   // Cycle 13: retryEligibility posts to retry-eligibility endpoint and reloads detail
   it('should POST to retry-eligibility endpoint when retryEligibility is called', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.retryEligibility('abc123');
 
     // Assert
@@ -581,14 +611,18 @@ describe('IssueService', () => {
     service.retryEligibility('abc123');
     httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush(null);
 
-    // Act / Assert — loadDetail is called and fetches updated detail
+    // Act — loadDetail is triggered after success
     const req = httpMock.expectOne('/api/issues/abc123');
-    expect(req.request.method).toBe('GET');
     req.flush({ ...mockSummary });
+
+    // Assert
+    expect(req.request.method).toBe('GET');
   });
 
   it('should set retryingEligibility to true before the retry request resolves', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.retryEligibility('abc123');
 
     // Assert — signal is true while the request is in flight
@@ -677,7 +711,9 @@ describe('IssueService', () => {
 
   // Cycle 16: retryFailed — POSTs to /api/issues/{id}/retry and reloads detail
   it('should POST to /api/issues/{id}/retry when retryFailed is called', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.retryFailed('abc123');
 
     // Assert
@@ -688,7 +724,9 @@ describe('IssueService', () => {
   });
 
   it('should set retryingFailed to true while the retryFailed request is in flight', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.retryFailed('abc123');
 
     // Assert — signal is true before the response arrives
@@ -714,10 +752,12 @@ describe('IssueService', () => {
     service.retryFailed('abc123');
     httpMock.expectOne('/api/issues/abc123/retry').flush({});
 
-    // Act / Assert — loadDetail is called
+    // Act — loadDetail is triggered after success
     const req = httpMock.expectOne('/api/issues/abc123');
-    expect(req.request.method).toBe('GET');
     req.flush({ ...mockSummary });
+
+    // Assert
+    expect(req.request.method).toBe('GET');
   });
 
   it('should set retryFailedError and retryingFailed to false when retryFailed fails', () => {
@@ -736,7 +776,9 @@ describe('IssueService', () => {
   });
 
   it('should set retryFailedError to the dedicated error constant when retryFailed fails', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.retryFailed('abc123');
     httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
       status: 500,
@@ -813,7 +855,9 @@ describe('IssueService', () => {
 
   // UX-5: success announcement signal
   it('should set retryFailedSuccess after a successful retry', () => {
-    // Arrange / Act
+    // Arrange — no additional setup
+
+    // Act
     service.retryFailed('abc123');
     httpMock.expectOne('/api/issues/abc123/retry').flush({});
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });

@@ -244,9 +244,5 @@
     align-self: center;
     color: var(--fd-text-error);
     font-size: 0.875rem;
-
-    &:empty {
-      display: none;
-    }
   }
 }

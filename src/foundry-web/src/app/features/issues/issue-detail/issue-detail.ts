@@ -167,8 +167,6 @@ import { providerTerminology } from '../../settings/accounts/provider.util';
             <span
               class="issue-detail__retry-failed-error"
               role="alert"
-              aria-live="assertive"
-              aria-atomic="true"
             >{{ _issueService.retryFailedError() ?? '' }}</span>
             <span
               class="issue-detail__retry-success-announcement sr-only"
