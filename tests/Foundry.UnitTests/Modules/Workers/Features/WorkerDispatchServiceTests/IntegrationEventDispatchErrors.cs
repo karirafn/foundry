@@ -73,6 +73,19 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         run.ShouldBeOfType<FailedRun>();
     }
 
+    [Fact]
+    public async Task WhenDispatchThrowsOnCapacityAvailable_TickCompletesWithoutPropagating()
+    {
+        // Arrange — no active runs so the capacity-available path is reached
+        ThrowingAllIntegrationEventDispatcher dispatcher = new();
+        StubWorkerOrchestrator orchestrator = new(status: null);
+        WorkerDispatchService sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
+
+        // Act — must not throw even though the capacity-available dispatch throws
+        Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await Should.NotThrowAsync(act);
+    }
+
     internal sealed class StubWorkerOrchestrator(WorkerStatus? status) : IWorkerOrchestrator
     {
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
@@ -107,7 +120,7 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
     }
 
     // Throws for run-specific events (WorkerRunCompleted/WorkerRunFailed) but not for
-    // WorkerCapacityAvailable, which is dispatched unconditionally at the end of each tick.
+    // WorkerCapacityAvailable, which is dispatched via TryDispatchAsync at the end of each tick.
     internal sealed class ThrowingIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
@@ -121,5 +134,12 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
 
             return Task.FromException(new InvalidOperationException("Simulated dispatch failure"));
         }
+    }
+
+    // Throws for every event type — used to verify the capacity-available path is guarded.
+    internal sealed class ThrowingAllIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+            => Task.FromException(new InvalidOperationException("Simulated dispatch failure"));
     }
 }

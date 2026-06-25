@@ -22,25 +22,21 @@ namespace Foundry.Modules.Workers.Features;
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
     ILogger<WorkerDispatchService> logger,
-    TimeSpan? prRetryDelay = null) : BackgroundService
+    TimeSpan? prRetryDelay = null) : PeriodicBackgroundService(logger)
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan DefaultPrRetryDelay = TimeSpan.FromSeconds(10);
+
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
+
+    protected override TimeSpan TickInterval => Interval;
+
+    protected override Task TickAsync(CancellationToken cancellationToken)
+        => ExecuteTickAsync(cancellationToken);
 
     private readonly TimeSpan _prRetryDelay = prRetryDelay ?? DefaultPrRetryDelay;
 
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using PeriodicTimer timer = new(TickInterval);
-
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
-            await ExecuteTickAsync(stoppingToken);
-        }
-    }
 
     internal async Task ExecuteTickAsync(CancellationToken cancellationToken)
     {
@@ -129,8 +125,10 @@ internal sealed class WorkerDispatchService(
         }
 
         Guid workerRunId = Guid.NewGuid();
-        await integrationEventDispatcher.DispatchAsync(
+        await TryDispatchAsync(
+            integrationEventDispatcher,
             [new WorkerCapacityAvailable(workerRunId)],
+            workerRunId,
             cancellationToken);
     }
 
