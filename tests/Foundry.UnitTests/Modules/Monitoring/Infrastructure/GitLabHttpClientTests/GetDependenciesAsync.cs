@@ -209,4 +209,145 @@ public sealed class GetDependenciesAsync
         request.RequestUri.ShouldNotBeNull();
         request.RequestUri.AbsolutePath.ShouldBe("/api/v4/projects/group%2Fproject/issues/42/links");
     }
+
+    [Fact]
+    public async Task WhenBlockerIsClosed_ExcludesItFromResult()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "iid": 10,
+                "title": "Closed blocker",
+                "link_type": "is_blocked_by",
+                "state": "closed"
+              },
+              {
+                "iid": 20,
+                "title": "Open blocker",
+                "link_type": "is_blocked_by",
+                "state": "opened"
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<IReadOnlyList<int>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
+        success.Value.ShouldBe([20]);
+    }
+
+    [Fact]
+    public async Task WhenBlockerIsOpened_IncludesItInResult()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "iid": 30,
+                "title": "Open blocker",
+                "link_type": "is_blocked_by",
+                "state": "opened"
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<IReadOnlyList<int>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
+        success.Value.ShouldBe([30]);
+    }
+
+    [Fact]
+    public async Task WhenBlockerStateMissing_IncludesItInResult()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "iid": 40,
+                "title": "Blocker without state",
+                "link_type": "is_blocked_by"
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<IReadOnlyList<int>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
+        success.Value.ShouldBe([40]);
+    }
+
+    [Fact]
+    public async Task WhenBlockerStateIsUnrecognized_IncludesItInResult()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "iid": 50,
+                "title": "Blocker with unknown state",
+                "link_type": "is_blocked_by",
+                "state": "locked"
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<IReadOnlyList<int>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
+        success.Value.ShouldBe([50]);
+    }
 }

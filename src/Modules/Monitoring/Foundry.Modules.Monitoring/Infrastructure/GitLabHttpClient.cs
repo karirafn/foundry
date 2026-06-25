@@ -135,6 +135,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         IReadOnlyList<int> issueNumbers = (dtos ?? [])
             .Where(dto => string.Equals(dto.LinkType, "is_blocked_by", StringComparison.OrdinalIgnoreCase))
+            .Where(dto => !string.Equals(dto.State, "closed", StringComparison.OrdinalIgnoreCase))
             .Select(dto => dto.Iid)
             .ToList();
 
@@ -620,7 +621,8 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
     private sealed record GitLabIssueLinkDto(
         int Iid,
-        string LinkType);
+        string LinkType,
+        string? State);
 
     private sealed record GitLabIssueStateDto(string State);
 
