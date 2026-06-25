@@ -33,15 +33,15 @@ internal static class RetryIssue
                 return Result<IssueDetail>.Fail(IssueErrors.NotFound(command.IssueId));
             }
 
-            Issue next = issue switch
+            Issue? next = issue switch
             {
                 FailedIssue failed => failed.Retry(),
                 ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
                 RevisionFailedIssue revisionFailed => revisionFailed.Retry(),
-                _ => issue,
+                _ => null,
             };
 
-            if (ReferenceEquals(next, issue))
+            if (next is null)
             {
                 return Result<IssueDetail>.Fail(IssueErrors.WrongState(command.IssueId, "failed, continuable_failed, or revision_failed"));
             }
@@ -64,7 +64,7 @@ internal static class RetryIssue
                     IssueId issueId = IssueId.From(id);
                     Result<IssueDetail> result = await handler.HandleAsync(new Command(issueId), cancellationToken);
 
-                    return result.Match<Results<Ok<IssueDetail>, NotFound, Conflict>>(
+                    return result.Match<Results<Ok<IssueDetail>, NotFound, Conflict, ProblemHttpResult>>(
                         detail => TypedResults.Ok(detail),
                         error =>
                         {
@@ -73,14 +73,22 @@ internal static class RetryIssue
                                 return TypedResults.NotFound();
                             }
 
-                            return TypedResults.Conflict();
+                            if (error.Code == IssueErrors.WrongStateCode)
+                            {
+                                return TypedResults.Conflict();
+                            }
+
+                            return TypedResults.Problem(
+                                title: "An unexpected error occurred.",
+                                statusCode: StatusCodes.Status500InternalServerError);
                         });
                 })
                 .WithName("RetryIssue")
                 .WithSummary("Retries a failed issue")
-                .Produces<IssueDetail>()
+                .Produces<IssueDetail>(StatusCodes.Status200OK)
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict);
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }
 }

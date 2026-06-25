@@ -160,7 +160,7 @@ internal sealed class WorkerDispatchService(
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 runsToRemove.Add(activeRun);
 
-                string? orphanBranchName = await ResolveBranchForFailureAsync(
+                string? resolvedBranchName = await ResolveBranchForFailureAsync(
                     activeRun,
                     postExitProviderQueries,
                     cancellationToken);
@@ -171,7 +171,7 @@ internal sealed class WorkerDispatchService(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Orphaned after restart",
-                        BranchName: orphanBranchName)],
+                        BranchName: resolvedBranchName)],
                     activeRun.Id.Value,
                     cancellationToken);
 
@@ -254,7 +254,7 @@ internal sealed class WorkerDispatchService(
             FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Container not found"));
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
-            string? containerNotFoundBranchName = await ResolveBranchForFailureAsync(
+            string? resolvedBranchName = await ResolveBranchForFailureAsync(
                 activeRun,
                 postExitProviderQueries,
                 cancellationToken);
@@ -265,7 +265,7 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     "Container not found",
-                    BranchName: containerNotFoundBranchName)],
+                    BranchName: resolvedBranchName)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -294,7 +294,7 @@ internal sealed class WorkerDispatchService(
                 FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut(), containerOutput);
                 await dbContext.TransitionAsync(activeRun, timedOut, domainEventDispatcher, cancellationToken);
 
-                string? timedOutBranchName = await ResolveBranchForFailureAsync(
+                string? resolvedBranchName = await ResolveBranchForFailureAsync(
                     activeRun,
                     postExitProviderQueries,
                     cancellationToken);
@@ -305,7 +305,7 @@ internal sealed class WorkerDispatchService(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
                         "Timed out",
-                        BranchName: timedOutBranchName)],
+                        BranchName: resolvedBranchName)],
                     activeRun.Id.Value,
                     cancellationToken);
 
