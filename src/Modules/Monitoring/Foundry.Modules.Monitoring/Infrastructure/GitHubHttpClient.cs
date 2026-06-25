@@ -192,6 +192,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string expectedFullName = $"{slug.Owner}/{slug.Name}";
         IReadOnlyList<int> issueNumbers = (dtos ?? [])
             .Where(dto => string.Equals(dto.Repository.FullName, expectedFullName, StringComparison.OrdinalIgnoreCase))
+            .Where(dto => !string.Equals(dto.State, "closed", StringComparison.OrdinalIgnoreCase))
             .Select(dto => dto.Number)
             .ToList();
 
@@ -757,6 +758,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private sealed record GitHubDependencyDto(
         int Number,
         string Title,
+        string? State,
         GitHubRepositoryDto Repository);
 
     private sealed record GitHubRepositoryDto(string FullName);

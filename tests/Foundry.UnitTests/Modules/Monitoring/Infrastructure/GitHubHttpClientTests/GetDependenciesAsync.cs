@@ -227,4 +227,145 @@ public sealed class GetDependenciesAsync
             result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
         success.Value.ShouldBe([10, 20]);
     }
+
+    [Fact]
+    public async Task WhenBlockerHasUnrecognizedState_IncludesItInResults()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "number": 10,
+                "title": "Blocker with unknown state",
+                "state": "draft",
+                "repository": { "full_name": "owner/repo" }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "ghp_token123",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<IReadOnlyList<int>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
+        success.Value.ShouldBe([10]);
+    }
+
+    [Fact]
+    public async Task WhenBlockerHasNoStateField_IncludesItInResults()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "number": 10,
+                "title": "Blocker without state",
+                "repository": { "full_name": "owner/repo" }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "ghp_token123",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<IReadOnlyList<int>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
+        success.Value.ShouldBe([10]);
+    }
+
+    [Fact]
+    public async Task WhenBlockerIsOpen_IncludesItInResults()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "number": 10,
+                "title": "Open blocker",
+                "state": "open",
+                "repository": { "full_name": "owner/repo" }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "ghp_token123",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<IReadOnlyList<int>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
+        success.Value.ShouldBe([10]);
+    }
+
+    [Fact]
+    public async Task WhenBlockerIsClosed_ExcludesItFromResults()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "number": 10,
+                "title": "Open blocker",
+                "state": "open",
+                "repository": { "full_name": "owner/repo" }
+              },
+              {
+                "number": 20,
+                "title": "Closed blocker",
+                "state": "closed",
+                "repository": { "full_name": "owner/repo" }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "ghp_token123",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<IReadOnlyList<int>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
+        success.Value.ShouldBe([10]);
+    }
 }
