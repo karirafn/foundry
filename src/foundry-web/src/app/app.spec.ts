@@ -156,6 +156,37 @@ describe('App', () => {
     expect(main?.hasAttribute('inert')).toBe(false);
   });
 
+  // Step 3: toast host is mounted exactly once at app root, outside inert regions
+  it('should render exactly one fd-toast host', () => {
+    // Arrange
+    const fixture = setupApp();
+
+    // Act
+    const compiled = fixture.nativeElement as HTMLElement;
+    const toastHosts = compiled.querySelectorAll('fd-toast');
+
+    // Assert
+    expect(toastHosts.length).toBe(1);
+  });
+
+  it('should render fd-toast outside inert-gated regions', () => {
+    // Arrange
+    const fixture = setupApp(true);
+
+    // Act
+    const compiled = fixture.nativeElement as HTMLElement;
+    const toastHost = compiled.querySelector('fd-toast');
+    const main = compiled.querySelector('main');
+    const header = compiled.querySelector('header');
+    const banner = compiled.querySelector('fd-system-banner');
+
+    // Assert — fd-toast must not be a descendant of any inert element
+    expect(toastHost).not.toBeNull();
+    expect(main?.contains(toastHost)).toBe(false);
+    expect(header?.contains(toastHost)).toBe(false);
+    expect(banner?.contains(toastHost)).toBe(false);
+  });
+
   // F1: header, system banner, and main are inert when overlay is blocking
   it('should set inert on header, system-banner, and main when overlay is blocking', () => {
     // Arrange

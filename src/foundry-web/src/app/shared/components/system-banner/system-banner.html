@@ -88,22 +88,11 @@
   aria-label="Dispatch status"
   [hidden]="!isDispatchBannerVisible()"
 >
-  <div class="system-banner__bar system-banner__bar--dispatch">
-    <span class="system-banner__message" role="alert">
-      {{ countdownText() !== null ? 'Usage limit active' : 'Dispatch is paused' }}
-    </span>
-    @if (countdownText() !== null) {
-      <span class="system-banner__countdown">
-        &mdash; resets in {{ countdownText() }}
-      </span>
+  <div class="system-banner__bar system-banner__bar--dispatch" role="status">
+    @if (isUsageLimitActive()) {
+      <span class="system-banner__message">Usage limit reached. Resets in <span class="system-banner__countdown-value" aria-hidden="true">{{ countdownText() }}</span></span>
+    } @else {
+      <span class="system-banner__message">Dispatch is paused</span>
     }
-    <button
-      type="button"
-      class="system-banner__action-btn"
-      [disabled]="isResuming()"
-      (click)="resumeDispatch()"
-    >
-      {{ isResuming() ? 'Resuming...' : 'Resume All' }}
-    </button>
   </div>
 </div>

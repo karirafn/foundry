@@ -10,6 +10,9 @@ import {
 import { DispatchService } from '../../../core/services/dispatch.service';
 import { SettingsService } from '../../../features/settings/settings.service';
 import { ImageBuildStatus } from '../../../features/settings/settings.model';
+import { ToastService } from '../../../core/services/toast.service';
+
+const USAGE_LIMIT_RESET_MESSAGE = 'Usage limit reset';
 
 const COUNTDOWN_INTERVAL_MS = 1000;
 const IMAGE_BUILD_MESSAGE_SEPARATOR = '|';
@@ -30,7 +33,12 @@ export class SystemBannerComponent {
   private readonly _systemSignalR = inject(SystemSignalRService);
   private readonly _dispatchService = inject(DispatchService);
   private readonly _settingsService = inject(SettingsService);
+  private readonly _toastService = inject(ToastService);
   private readonly _destroyRef = inject(DestroyRef);
+
+  // Mutable cross-effect state: effects cannot read their own previous signal values,
+  // so we track whether we were counting down to detect the zero-crossing.
+  private _wasCountingDown = false;
 
   private readonly _tickSignal = signal(0);
 
@@ -48,19 +56,30 @@ export class SystemBannerComponent {
     return this._parseImageBuildMessage(notification.message);
   });
 
-  readonly isDispatchBannerVisible: Signal<boolean> = computed(
-    () => this._dispatchService.isDispatchPaused() || this._dispatchService.usageLimitResetsAt() !== null
-  );
-
-  readonly isResuming: Signal<boolean> = this._dispatchService.resuming;
-
-  readonly countdownText: Signal<string | null> = computed(() => {
+  readonly remainingMs: Signal<number | null> = computed(() => {
     this._tickSignal();
     const resetsAt = this._dispatchService.usageLimitResetsAt();
     if (resetsAt === null) {
       return null;
     }
-    return this._formatCountdown(new Date(resetsAt).getTime() - Date.now());
+    return new Date(resetsAt).getTime() - Date.now();
+  });
+
+  readonly isUsageLimitActive: Signal<boolean> = computed(() => {
+    const ms = this.remainingMs();
+    return ms !== null && ms > 0;
+  });
+
+  readonly isDispatchBannerVisible: Signal<boolean> = computed(
+    () => this._dispatchService.isDispatchPaused() || this.isUsageLimitActive()
+  );
+
+  readonly countdownText: Signal<string | null> = computed(() => {
+    const ms = this.remainingMs();
+    if (ms === null || ms <= 0) {
+      return null;
+    }
+    return this._formatCountdown(ms);
   });
 
   constructor() {
@@ -79,6 +98,25 @@ export class SystemBannerComponent {
       }
     });
 
+    effect(() => {
+      const current = this.remainingMs();
+
+      if (current === null) {
+        this._wasCountingDown = false;
+        return;
+      }
+
+      if (current > 0) {
+        this._wasCountingDown = true;
+        return;
+      }
+
+      if (this._wasCountingDown) {
+        this._toastService.show(USAGE_LIMIT_RESET_MESSAGE);
+        this._wasCountingDown = false;
+      }
+    });
+
     const intervalId = setInterval(() => {
       if (this._dispatchService.usageLimitResetsAt() !== null) {
         this._tickSignal.update((n) => n + 1);
@@ -86,10 +124,6 @@ export class SystemBannerComponent {
     }, COUNTDOWN_INTERVAL_MS);
 
     this._destroyRef.onDestroy(() => clearInterval(intervalId));
-  }
-
-  resumeDispatch(): void {
-    this._dispatchService.resumeDispatch();
   }
 
   retryImageBuild(): void {
@@ -110,10 +144,6 @@ export class SystemBannerComponent {
   }
 
   private _formatCountdown(remainingMs: number): string {
-    if (remainingMs <= 0) {
-      return 'momentarily';
-    }
-
     const totalSeconds = Math.ceil(remainingMs / 1000);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);

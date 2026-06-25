@@ -26,9 +26,6 @@
   line-height: 1.4;
 }
 
-.system-banner__bar--dispatch {
-  justify-content: space-between;
-}
 
 .system-banner__icon {
   flex-shrink: 0;
@@ -37,11 +34,6 @@
 
 .system-banner__message {
   flex: 1;
-}
-
-.system-banner__countdown {
-  color: var(--fd-text-warning);
-  font-size: 0.875rem;
 }
 
 .system-banner__action-btn {
@@ -107,6 +99,12 @@
 @keyframes system-banner-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .system-banner__spinner-icon {
+    animation: none;
   }
 }
 
