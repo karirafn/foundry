@@ -16,10 +16,11 @@ export class ToastHostComponent {
     this._toastService.dismiss(id);
   }
 
-  onKeydown(event: KeyboardEvent, id: number): void {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      this._toastService.dismiss(id);
-    }
+  pause(id: number): void {
+    this._toastService.pause(id);
+  }
+
+  resume(id: number): void {
+    this._toastService.resume(id);
   }
 }

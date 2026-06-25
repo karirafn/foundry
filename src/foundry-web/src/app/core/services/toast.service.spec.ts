@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 import { ToastService } from './toast.service';
 
 function setup() {
@@ -166,7 +167,117 @@ describe('ToastService', () => {
     vi.advanceTimersByTime(10000);
 
     // Assert — toasts that were cleared won't re-emit; no thrown errors
-    // The key assertion is that the timers were cancelled (queue drained or no late effects)
     expect(service.toasts().length).toBe(0);
+  });
+
+  // Cycle 11: pause() suspends auto-dismiss — toast survives past 5s while paused
+  it('should not dismiss a toast while it is paused even after 5s', () => {
+    // Arrange
+    const service = setup();
+    service.show('Pause me');
+    const id = service.toasts()[0].id;
+
+    // Act — pause after 2s, then advance past original 5s deadline
+    vi.advanceTimersByTime(2000);
+    service.pause(id);
+    vi.advanceTimersByTime(4000); // 6s total, but 3s remaining
+
+    // Assert — still alive
+    expect(service.toasts().length).toBe(1);
+  });
+
+  // Cycle 12: resume() restarts timer with remaining time
+  it('should dismiss the toast after the remaining time when resumed', () => {
+    // Arrange
+    const service = setup();
+    service.show('Resume me');
+    const id = service.toasts()[0].id;
+
+    // Pause at 2s elapsed (3s remaining)
+    vi.advanceTimersByTime(2000);
+    service.pause(id);
+
+    // Advance 1000ms while paused — should not dismiss
+    vi.advanceTimersByTime(1000);
+    expect(service.toasts().length).toBe(1);
+
+    // Act — resume; 3s remaining
+    service.resume(id);
+
+    // Advance 2999ms — still alive
+    vi.advanceTimersByTime(2999);
+    expect(service.toasts().length).toBe(1);
+
+    // Advance 1ms more — remaining time (3000ms) has elapsed
+    vi.advanceTimersByTime(1);
+    expect(service.toasts().length).toBe(0);
+  });
+
+  // Cycle 13: message is truncated to MAX_MESSAGE_LENGTH characters
+  it('should truncate messages longer than 200 characters', () => {
+    // Arrange
+    const service = setup();
+    const longMessage = 'a'.repeat(300);
+
+    // Act
+    service.show(longMessage);
+
+    // Assert
+    expect(service.toasts()[0].message.length).toBe(200);
+  });
+
+  // Cycle 14: message is trimmed before storing
+  it('should trim whitespace from the message before storing', () => {
+    // Arrange
+    const service = setup();
+
+    // Act
+    service.show('  hello  ');
+
+    // Assert
+    expect(service.toasts()[0].message).toBe('hello');
+  });
+
+  // Cycle 15: queue is capped at 5; oldest toast is dropped when full
+  it('should drop the oldest toast when the queue exceeds 5 entries', () => {
+    // Arrange
+    const service = setup();
+    service.show('Toast 1');
+    service.show('Toast 2');
+    service.show('Toast 3');
+    service.show('Toast 4');
+    service.show('Toast 5');
+    const firstId = service.toasts()[0].id;
+    expect(service.toasts().length).toBe(5);
+
+    // Act — adding a 6th drops the oldest
+    service.show('Toast 6');
+
+    // Assert
+    expect(service.toasts().length).toBe(5);
+    expect(service.toasts().find((t) => t.id === firstId)).toBeUndefined();
+    expect(service.toasts()[4].message).toBe('Toast 6');
+  });
+
+  // Cycle 16: dropped toast's timer is cancelled (no late firing)
+  it('should cancel the timer for a dropped toast when queue overflows', () => {
+    // Arrange
+    const service = setup();
+    service.show('Toast 1');
+    const droppedId = service.toasts()[0].id;
+    service.show('Toast 2');
+    service.show('Toast 3');
+    service.show('Toast 4');
+    service.show('Toast 5');
+
+    // Act — 6th toast causes the first to be dropped
+    service.show('Toast 6');
+
+    // Advance well past 5s — no late removal of already-dropped toast causes errors
+    vi.advanceTimersByTime(6000);
+
+    // Assert — dropped toast is gone and did not re-trigger a removal that corrupts state
+    expect(service.toasts().find((t) => t.id === droppedId)).toBeUndefined();
+    expect(service.toasts().length).toBeLessThanOrEqual(4); // remaining 4 dismiss over time
   });
 });

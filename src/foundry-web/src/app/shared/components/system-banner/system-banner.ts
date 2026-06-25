@@ -36,6 +36,8 @@ export class SystemBannerComponent {
   private readonly _toastService = inject(ToastService);
   private readonly _destroyRef = inject(DestroyRef);
 
+  // Mutable cross-effect state: effects cannot read their own previous signal values,
+  // so we track whether we were counting down to detect the zero-crossing.
   private _wasCountingDown = false;
 
   private readonly _tickSignal = signal(0);
@@ -98,9 +100,8 @@ export class SystemBannerComponent {
 
     effect(() => {
       const current = this.remainingMs();
-      const resetsAt = this._dispatchService.usageLimitResetsAt();
 
-      if (current === null || resetsAt === null) {
+      if (current === null) {
         this._wasCountingDown = false;
         return;
       }
@@ -110,7 +111,6 @@ export class SystemBannerComponent {
         return;
       }
 
-      // current <= 0 and resetsAt is non-null
       if (this._wasCountingDown) {
         this._toastService.show(USAGE_LIMIT_RESET_MESSAGE);
         this._wasCountingDown = false;

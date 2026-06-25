@@ -35,11 +35,6 @@
   &:hover {
     background: var(--fd-bg-card-hover);
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--fd-text-link);
-    outline-offset: 2px;
-  }
 }
 
 .toast__icon {
@@ -48,7 +43,35 @@
 }
 
 .toast__message {
+  flex: 1;
   overflow-wrap: break-word;
+}
+
+.toast__dismiss {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: calc(-1 * var(--fd-spacing-md)) calc(-1 * var(--fd-spacing-lg)) calc(-1 * var(--fd-spacing-md)) 0;
+  background: transparent;
+  border: none;
+  border-radius: 0 var(--fd-radius-md) var(--fd-radius-md) 0;
+  color: var(--fd-text-secondary);
+  cursor: pointer;
+  font-size: 1.125rem;
+  line-height: 1;
+
+  &:hover {
+    color: var(--fd-text-primary);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
 }
 
 @keyframes toast-enter {

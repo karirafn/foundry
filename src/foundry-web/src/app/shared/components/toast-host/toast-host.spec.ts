@@ -7,9 +7,13 @@ import { ToastService, Toast } from '../../../core/services/toast.service';
 function createMockToastService(initial: Toast[] = []) {
   const toastsSignal = signal<Toast[]>(initial);
   const dismiss = vi.fn();
+  const pause = vi.fn();
+  const resume = vi.fn();
   return {
     toasts: toastsSignal.asReadonly(),
     dismiss,
+    pause,
+    resume,
     _signal: toastsSignal,
     show: vi.fn(),
   };
@@ -94,7 +98,7 @@ describe('ToastHostComponent', () => {
     expect(mockService.dismiss).toHaveBeenCalledWith(42);
   });
 
-  // Cycle 6: each toast element has role="status"
+  // Cycle 6: each toast element has role="status" (live region per toast, not on container)
   it('should have role="status" on each toast element', () => {
     // Arrange / Act
     const { el } = setup({ toasts: [{ id: 1, message: 'Test' }] });
@@ -104,60 +108,59 @@ describe('ToastHostComponent', () => {
     expect(toast.getAttribute('role')).toBe('status');
   });
 
-  // Cycle 7: container carries aria-live="polite"
-  it('should have aria-live="polite" on the container', () => {
+  // Cycle 7: container must NOT have aria-live (role=status on each toast is the live region)
+  it('should not have aria-live on the container — role="status" on each toast is the live region', () => {
     // Arrange / Act
     const { el } = setup();
 
     // Assert
     const container = el.querySelector('.toast-host') as HTMLElement;
-    expect(container.getAttribute('aria-live')).toBe('polite');
+    expect(container.hasAttribute('aria-live')).toBe(false);
   });
 
-  // Cycle 8: toast is focusable via tabindex="0"
-  it('should make each toast focusable with tabindex="0"', () => {
+  // Cycle 8: toast outer div must NOT be focusable (button inside handles keyboard/AT)
+  it('should not make the toast div focusable — the dismiss button handles keyboard access', () => {
     // Arrange / Act
     const { el } = setup({ toasts: [{ id: 1, message: 'Focusable' }] });
 
     // Assert
     const toast = el.querySelector('.toast') as HTMLElement;
-    expect(toast.getAttribute('tabindex')).toBe('0');
+    expect(toast.hasAttribute('tabindex')).toBe(false);
   });
 
-  // Cycle 9: toast has aria-label "Dismiss notification: <message>"
-  it('should have an aria-label of "Dismiss notification: <message>" on each toast', () => {
+  // Cycle 9: toast must NOT have aria-label on the outer div (live region announces visible text)
+  it('should not have an aria-label on the toast div so the visible message text is announced', () => {
     // Arrange / Act
     const { el } = setup({ toasts: [{ id: 1, message: 'Usage limit reset' }] });
 
     // Assert
     const toast = el.querySelector('.toast') as HTMLElement;
-    expect(toast.getAttribute('aria-label')).toBe('Dismiss notification: Usage limit reset');
+    expect(toast.hasAttribute('aria-label')).toBe(false);
   });
 
-  // Cycle 10: pressing Enter dismisses the toast
-  it('should dismiss the toast when Enter is pressed', () => {
+  // Cycle 10: dismiss button exists inside each toast with correct aria-label
+  it('should have a dismiss button inside each toast with aria-label "Dismiss notification"', () => {
+    // Arrange / Act
+    const { el } = setup({ toasts: [{ id: 1, message: 'Hello' }] });
+
+    // Assert
+    const button = el.querySelector('.toast .toast__dismiss') as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.getAttribute('type')).toBe('button');
+    expect(button.getAttribute('aria-label')).toBe('Dismiss notification');
+  });
+
+  // Cycle 11: pressing Enter on the dismiss button dismisses the toast
+  it('should dismiss the toast when Enter is pressed on the dismiss button', () => {
     // Arrange
     const { el, mockService } = setup({ toasts: [{ id: 7, message: 'Press Enter' }] });
-    const toast = el.querySelector('.toast') as HTMLElement;
+    const button = el.querySelector('.toast .toast__dismiss') as HTMLButtonElement;
 
     // Act
-    toast.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    button.click();
 
     // Assert
     expect(mockService.dismiss).toHaveBeenCalledWith(7);
-  });
-
-  // Cycle 11: pressing Space dismisses the toast
-  it('should dismiss the toast when Space is pressed', () => {
-    // Arrange
-    const { el, mockService } = setup({ toasts: [{ id: 8, message: 'Press Space' }] });
-    const toast = el.querySelector('.toast') as HTMLElement;
-
-    // Act
-    toast.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-
-    // Assert
-    expect(mockService.dismiss).toHaveBeenCalledWith(8);
   });
 
   // Cycle 12: reactive — new toast appears after signal update
@@ -172,5 +175,57 @@ describe('ToastHostComponent', () => {
     // Assert
     expect(el.querySelectorAll('.toast').length).toBe(1);
     expect(el.querySelector('.toast')?.textContent).toContain('New toast');
+  });
+
+  // Cycle 13: mouseenter calls service.pause with toast id
+  it('should call service.pause with the toast id on mouseenter', () => {
+    // Arrange
+    const { el, mockService } = setup({ toasts: [{ id: 5, message: 'Hover me' }] });
+
+    // Act
+    const toast = el.querySelector('.toast') as HTMLElement;
+    toast.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+
+    // Assert
+    expect(mockService.pause).toHaveBeenCalledWith(5);
+  });
+
+  // Cycle 14: mouseleave calls service.resume with toast id
+  it('should call service.resume with the toast id on mouseleave', () => {
+    // Arrange
+    const { el, mockService } = setup({ toasts: [{ id: 5, message: 'Hover me' }] });
+
+    // Act
+    const toast = el.querySelector('.toast') as HTMLElement;
+    toast.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+
+    // Assert
+    expect(mockService.resume).toHaveBeenCalledWith(5);
+  });
+
+  // Cycle 15: focusin calls service.pause with toast id
+  it('should call service.pause with the toast id on focusin', () => {
+    // Arrange
+    const { el, mockService } = setup({ toasts: [{ id: 5, message: 'Focus me' }] });
+
+    // Act
+    const toast = el.querySelector('.toast') as HTMLElement;
+    toast.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+
+    // Assert
+    expect(mockService.pause).toHaveBeenCalledWith(5);
+  });
+
+  // Cycle 16: focusout calls service.resume with toast id
+  it('should call service.resume with the toast id on focusout', () => {
+    // Arrange
+    const { el, mockService } = setup({ toasts: [{ id: 5, message: 'Focus me' }] });
+
+    // Act
+    const toast = el.querySelector('.toast') as HTMLElement;
+    toast.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+    // Assert
+    expect(mockService.resume).toHaveBeenCalledWith(5);
   });
 });

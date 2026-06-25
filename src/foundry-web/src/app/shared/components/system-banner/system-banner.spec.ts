@@ -441,6 +441,9 @@ describe('SystemBannerComponent', () => {
         dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt },
       });
 
+      // Assert — no toast before the countdown crosses zero
+      expect(mockToast.show).not.toHaveBeenCalled();
+
       // Act — advance past expiry (2 s), then one more tick to ensure the interval fires
       vi.advanceTimersByTime(2000);
       fixture.detectChanges();
