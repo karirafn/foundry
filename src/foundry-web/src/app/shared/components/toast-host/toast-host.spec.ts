@@ -98,14 +98,17 @@ describe('ToastHostComponent', () => {
     expect(mockService.dismiss).toHaveBeenCalledWith(42);
   });
 
-  // Cycle 6: each toast element has role="status" (live region per toast, not on container)
-  it('should have role="status" on each toast element', () => {
+  // Cycle 6: role="status" must be on the message span, not the outer div
+  it('should have role="status" on the message span, not the outer toast div', () => {
     // Arrange / Act
     const { el } = setup({ toasts: [{ id: 1, message: 'Test' }] });
 
-    // Assert
+    // Assert — message span carries the live region
+    const messageSpan = el.querySelector('.toast .toast__message') as HTMLElement;
+    expect(messageSpan.getAttribute('role')).toBe('status');
+    // Outer div must NOT be a live region
     const toast = el.querySelector('.toast') as HTMLElement;
-    expect(toast.getAttribute('role')).toBe('status');
+    expect(toast.getAttribute('role')).toBeNull();
   });
 
   // Cycle 7: container must NOT have aria-live (role=status on each toast is the live region)
@@ -227,5 +230,87 @@ describe('ToastHostComponent', () => {
 
     // Assert
     expect(mockService.resume).toHaveBeenCalledWith(5);
+  });
+
+  describe('focus management on keyboard dismiss', () => {
+    // Cycle 17: dismissing one of several toasts via button moves focus to the next dismiss button
+    it('should move focus to the next toast dismiss button when a non-last toast is dismissed', async () => {
+      // Arrange
+      const { fixture, mockService, el } = setup({
+        toasts: [
+          { id: 1, message: 'First' },
+          { id: 2, message: 'Second' },
+          { id: 3, message: 'Third' },
+        ],
+      });
+      const buttons = el.querySelectorAll<HTMLButtonElement>('.toast__dismiss');
+      // Act — click the first toast's dismiss button (keyboard/AT path)
+      buttons[0].click();
+      // Simulate the service removing toast 1 from the signal
+      mockService._signal.set([{ id: 2, message: 'Second' }, { id: 3, message: 'Third' }]);
+      fixture.detectChanges();
+      await Promise.resolve(); // microtask tick
+
+      // Assert — focus is on the dismiss button of the toast that was at index 1 (now index 0)
+      const remainingButtons = el.querySelectorAll<HTMLButtonElement>('.toast__dismiss');
+      expect(document.activeElement).toBe(remainingButtons[0]);
+    });
+
+    // Cycle 18: dismissing the last toast restores focus to a previously captured element
+    it('should restore focus to the previously focused element when the last toast is dismissed', async () => {
+      // Arrange
+      const { fixture, mockService, el } = setup({
+        toasts: [{ id: 1, message: 'Only one' }],
+      });
+      // Create a button outside the toast host to act as prior-focus element
+      const priorFocused = document.createElement('button');
+      document.body.appendChild(priorFocused);
+      priorFocused.focus();
+
+      // Simulate focus entering the toast stack from outside (captures priorFocused)
+      const dismissButton = el.querySelector<HTMLButtonElement>('.toast__dismiss')!;
+      el.querySelector('.toast-host')!.dispatchEvent(
+        new FocusEvent('focusin', { bubbles: true, relatedTarget: priorFocused })
+      );
+
+      // Act — click dismiss button and remove the toast
+      dismissButton.click();
+      mockService._signal.set([]);
+      fixture.detectChanges();
+      await Promise.resolve(); // microtask tick
+
+      // Assert — focus returned to the element that was focused before entering the stack
+      expect(document.activeElement).toBe(priorFocused);
+
+      // Cleanup
+      document.body.removeChild(priorFocused);
+    });
+
+    // Cycle 19: clicking the outer toast div (mouse) does NOT move focus to adjacent toasts
+    it('should not move focus when the outer toast div is clicked (mouse dismiss path)', async () => {
+      // Arrange
+      const { fixture, mockService, el } = setup({
+        toasts: [
+          { id: 1, message: 'First' },
+          { id: 2, message: 'Second' },
+        ],
+      });
+      // Focus something outside so we can detect unwanted focus moves
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      outside.focus();
+
+      // Act — click the outer div directly (not the dismiss button)
+      const toastDiv = el.querySelector<HTMLElement>('.toast')!;
+      toastDiv.click();
+      mockService._signal.set([{ id: 2, message: 'Second' }]);
+      fixture.detectChanges();
+      await Promise.resolve();
+
+      // Assert — focus was NOT pulled into the toast stack
+      expect(document.activeElement).not.toBe(el.querySelector('.toast__dismiss'));
+
+      document.body.removeChild(outside);
+    });
   });
 });

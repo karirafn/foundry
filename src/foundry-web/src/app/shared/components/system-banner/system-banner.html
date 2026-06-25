@@ -88,13 +88,11 @@
   aria-label="Dispatch status"
   [hidden]="!isDispatchBannerVisible()"
 >
-  <div class="system-banner__bar system-banner__bar--dispatch">
-    <span class="system-banner__message" role="alert">
-      @if (isUsageLimitActive()) {
-        Usage limit reached. Resets in {{ countdownText() }}
-      } @else {
-        Dispatch is paused
-      }
-    </span>
+  <div class="system-banner__bar system-banner__bar--dispatch" role="status">
+    @if (isUsageLimitActive()) {
+      <span class="system-banner__message">Usage limit reached. Resets in <span class="system-banner__countdown-value" aria-hidden="true">{{ countdownText() }}</span></span>
+    } @else {
+      <span class="system-banner__message">Dispatch is paused</span>
+    }
   </div>
 </div>

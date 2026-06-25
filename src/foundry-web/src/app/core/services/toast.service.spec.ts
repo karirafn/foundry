@@ -259,6 +259,28 @@ describe('ToastService', () => {
     expect(service.toasts()[4].message).toBe('Toast 6');
   });
 
+  // Cycle 16a: dismiss while paused removes toast immediately and no late callback fires
+  it('should remove a paused toast immediately on dismiss and not restore it after further timer advances', () => {
+    // Arrange
+    const service = setup();
+    service.show('Paused then dismissed');
+    const id = service.toasts()[0].id;
+
+    // Act — advance 1s, pause, then dismiss
+    vi.advanceTimersByTime(1000);
+    service.pause(id);
+    service.dismiss(id);
+
+    // Assert — toast is gone immediately
+    expect(service.toasts().length).toBe(0);
+
+    // Act — advance 5s more — no late callback should throw or re-surface the toast
+    expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
+
+    // Assert — still gone
+    expect(service.toasts().length).toBe(0);
+  });
+
   // Cycle 16: dropped toast's timer is cancelled (no late firing)
   it('should cancel the timer for a dropped toast when queue overflows', () => {
     // Arrange

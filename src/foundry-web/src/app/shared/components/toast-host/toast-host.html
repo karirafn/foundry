@@ -1,8 +1,7 @@
-<div class="toast-host">
-  @for (toast of toasts(); track toast.id) {
+<div class="toast-host" (focusin)="onHostFocusIn($event)">
+  @for (toast of toasts(); track toast.id; let i = $index) {
     <div
       class="toast"
-      role="status"
       (click)="dismiss(toast.id)"
       (mouseenter)="pause(toast.id)"
       (mouseleave)="resume(toast.id)"
@@ -25,12 +24,13 @@
         <circle cx="12" cy="12" r="10"></circle>
         <polyline points="9 12 11 14 15 10"></polyline>
       </svg>
-      <span class="toast__message">{{ toast.message }}</span>
+      <span class="toast__message" role="status">{{ toast.message }}</span>
       <button
+        #dismissBtn
         type="button"
         class="toast__dismiss"
         aria-label="Dismiss notification"
-        (click)="$event.stopPropagation(); dismiss(toast.id)"
+        (click)="$event.stopPropagation(); dismissFromButton(toast.id, i)"
       >
         &times;
       </button>

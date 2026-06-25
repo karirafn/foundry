@@ -424,6 +424,46 @@ describe('SystemBannerComponent', () => {
     });
   });
 
+  describe('dispatch banner a11y live-region', () => {
+    // Cycle: dispatch banner uses polite role="status", not assertive role="alert"
+    it('should use role="status" (polite) on the dispatch bar, not role="alert" (assertive)', () => {
+      // Arrange / Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: true } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const bar = el.querySelector('.system-banner__bar--dispatch') as HTMLElement;
+      expect(bar.getAttribute('role')).toBe('status');
+    });
+
+    it('should render the ticking countdown value with aria-hidden="true" when usage limit is active', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() + 45 * 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — countdown span is hidden from AT
+      const countdownValue = el.querySelector('.system-banner__bar--dispatch .system-banner__countdown-value') as HTMLElement;
+      expect(countdownValue).not.toBeNull();
+      expect(countdownValue.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('should include the static lead text in the dispatch bar without aria-hidden', () => {
+      // Arrange
+      const resetsAt = new Date(Date.now() + 45 * 1000).toISOString();
+
+      // Act
+      const { fixture } = setup({ dispatch: { isDispatchPaused: false, usageLimitResetsAt: resetsAt } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — the dispatch message span (the polite live region) contains the static text
+      const messageSpan = el.querySelector('.system-banner__bar--dispatch .system-banner__message') as HTMLElement;
+      expect(messageSpan.textContent).toContain('Usage limit reached. Resets in');
+    });
+  });
+
   describe('usage-limit toast (zero-crossing)', () => {
     beforeEach(() => {
       vi.useFakeTimers();
