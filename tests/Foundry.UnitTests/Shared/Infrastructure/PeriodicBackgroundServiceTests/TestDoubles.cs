@@ -1,1 +1,0 @@
-namespace Foundry.UnitTests.Shared.Infrastructure.PeriodicBackgroundServiceTests;
