@@ -52,9 +52,6 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
                 "ck_issues_completed_completed_at",
                 "state <> 'completed' OR completed_at IS NOT NULL");
             t.HasCheckConstraint(
-                "ck_issues_dismissed_completed_at",
-                "state <> 'dismissed' OR completed_at IS NOT NULL");
-            t.HasCheckConstraint(
                 "ck_issues_revision_queued_fields",
                 "state <> 'revision_queued' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL)");
             t.HasCheckConstraint(
@@ -177,7 +174,6 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<ContinuableFailedIssue>("continuable_failed")
             .HasValue<ContinuationQueuedIssue>("continuation_queued")
             .HasValue<CompletedIssue>("completed")
-            .HasValue<DismissedIssue>("dismissed")
             .HasValue<RevisionQueuedIssue>("revision_queued")
             .HasValue<RevisionInProgressIssue>("revision_in_progress")
             .HasValue<RevisionFailedIssue>("revision_failed")

@@ -93,19 +93,6 @@ public sealed class ImplementsIIssueStateChanged
     }
 
     [Fact]
-    public void IssueDismissed_ImplementsIIssueStateChanged()
-    {
-        // Arrange
-        IssueDismissed @event = new(AnyIssueId, AnyRepositoryId);
-
-        // Act
-        IIssueStateChanged stateChanged = @event;
-
-        // Assert
-        stateChanged.ShouldNotBeNull();
-    }
-
-    [Fact]
     public void IssueRevisionQueued_ImplementsIIssueStateChanged()
     {
         // Arrange

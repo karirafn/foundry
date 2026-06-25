@@ -242,18 +242,6 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
-    public void WhenServicesRegistered_IssueDismissedHandlerResolvable()
-    {
-        // Arrange & Act
-        using IServiceScope scope = _serviceProvider.CreateScope();
-
-        // Assert
-        IDomainEventHandler<IssueDismissed> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueDismissed>>();
-        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueDismissed>>();
-    }
-
-    [Fact]
     public void WhenServicesRegistered_IssueRevisionQueuedHandlerResolvable()
     {
         // Arrange & Act
