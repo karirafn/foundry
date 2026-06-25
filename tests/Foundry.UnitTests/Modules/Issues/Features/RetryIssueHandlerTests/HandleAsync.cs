@@ -52,7 +52,9 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private FailedIssue SeedFailedIssue(MonitoredRepositoryId repositoryId)
+    private async Task<FailedIssue> SeedFailedIssueAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken = default)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -67,12 +69,14 @@ public sealed class HandleAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(failed);
-        _dbContext.SaveChanges();
+        await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
         return failed;
     }
 
-    private ContinuableFailedIssue SeedContinuableFailedIssue(MonitoredRepositoryId repositoryId)
+    private async Task<ContinuableFailedIssue> SeedContinuableFailedIssueAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken = default)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -91,12 +95,14 @@ public sealed class HandleAsync : IAsyncDisposable
             "Non-zero exit code: 1",
             DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(failed);
-        _dbContext.SaveChanges();
+        await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
         return failed;
     }
 
-    private RevisionFailedIssue SeedRevisionFailedIssue(MonitoredRepositoryId repositoryId)
+    private async Task<RevisionFailedIssue> SeedRevisionFailedIssueAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken = default)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -122,12 +128,14 @@ public sealed class HandleAsync : IAsyncDisposable
             "Non-zero exit code: 2",
             DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(revisionFailed);
-        _dbContext.SaveChanges();
+        await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
         return revisionFailed;
     }
 
-    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId)
+    private async Task<QueuedIssue> SeedQueuedIssueAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken = default)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -140,7 +148,7 @@ public sealed class HandleAsync : IAsyncDisposable
             detectedAt: DateTimeOffset.UtcNow);
         QueuedIssue queued = QueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
-        _dbContext.SaveChanges();
+        await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
         return queued;
     }
@@ -149,8 +157,9 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenFailedIssue_TransitionsToQueuedIssue()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        FailedIssue failed = SeedFailedIssue(repositoryId);
+        FailedIssue failed = await SeedFailedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(failed.Id);
 
         // Act
@@ -161,17 +170,19 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repositoryId,
+                i => i.Id == failed.Id,
                 TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<QueuedIssue>();
+        result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.Id.ShouldBe(failed.Id.Value);
     }
 
     [Fact]
     public async Task WhenFailedIssue_DispatchesIssueQueuedEvent()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        FailedIssue failed = SeedFailedIssue(repositoryId);
+        FailedIssue failed = await SeedFailedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(failed.Id);
 
         // Act
@@ -187,8 +198,9 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenContinuableFailedIssue_TransitionsToContinuationQueuedIssue()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ContinuableFailedIssue failed = SeedContinuableFailedIssue(repositoryId);
+        ContinuableFailedIssue failed = await SeedContinuableFailedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(failed.Id);
 
         // Act
@@ -199,17 +211,19 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repositoryId,
+                i => i.Id == failed.Id,
                 TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<ContinuationQueuedIssue>();
+        result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.Id.ShouldBe(failed.Id.Value);
     }
 
     [Fact]
     public async Task WhenContinuableFailedIssue_DispatchesIssueContinuationQueuedEvent()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ContinuableFailedIssue failed = SeedContinuableFailedIssue(repositoryId);
+        ContinuableFailedIssue failed = await SeedContinuableFailedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(failed.Id);
 
         // Act
@@ -225,8 +239,9 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenRevisionFailedIssue_TransitionsToRevisionQueuedIssue()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        RevisionFailedIssue failed = SeedRevisionFailedIssue(repositoryId);
+        RevisionFailedIssue failed = await SeedRevisionFailedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(failed.Id);
 
         // Act
@@ -237,17 +252,19 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repositoryId,
+                i => i.Id == failed.Id,
                 TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<RevisionQueuedIssue>();
+        result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.Id.ShouldBe(failed.Id.Value);
     }
 
     [Fact]
     public async Task WhenRevisionFailedIssue_DispatchesIssueRevisionQueuedEvent()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        RevisionFailedIssue failed = SeedRevisionFailedIssue(repositoryId);
+        RevisionFailedIssue failed = await SeedRevisionFailedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(failed.Id);
 
         // Act
@@ -263,8 +280,9 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenIssueInWrongState_ReturnsWrongStateError()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId);
+        QueuedIssue queued = await SeedQueuedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(queued.Id);
 
         // Act
@@ -279,8 +297,9 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenIssueInWrongState_NoStateChange()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId);
+        QueuedIssue queued = await SeedQueuedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(queued.Id);
 
         // Act
@@ -290,7 +309,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repositoryId,
+                i => i.Id == queued.Id,
                 TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<QueuedIssue>();
     }
@@ -312,23 +331,24 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private sealed class StubIssueQueries : IIssueQueries
     {
-        private static readonly IssueDetail StubDetail = new(
-            Id: Guid.Empty,
-            IssueNumber: 1,
-            Title: "stub",
-            State: "queued",
-            RepositorySlug: "owner/repo",
-            ProviderType: "github",
-            DetectedAt: DateTimeOffset.UtcNow,
-            Url: "https://github.com/owner/repo/issues/1",
-            Author: "octocat",
-            Labels: [],
-            StateDetails: null);
-
         public Task<Result<IssueDetail>> GetIssueDetailAsync(
             IssueId issueId,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<IssueDetail>.Ok(StubDetail));
+        {
+            IssueDetail detail = new(
+                Id: issueId.Value,
+                IssueNumber: 1,
+                Title: "stub",
+                State: "queued",
+                RepositorySlug: "owner/repo",
+                ProviderType: "github",
+                DetectedAt: DateTimeOffset.UtcNow,
+                Url: "https://github.com/owner/repo/issues/1",
+                Author: "octocat",
+                Labels: [],
+                StateDetails: null);
+            return Task.FromResult(Result<IssueDetail>.Ok(detail));
+        }
 
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
