@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
+using Foundry.ServiceDefaults;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Hubs;
@@ -46,6 +47,8 @@ builder.Services.AddCors(options =>
 });
 
 WebApplication app = builder.Build();
+
+GlobalExceptionLogging.Install(app.Services.GetRequiredService<ILoggerFactory>());
 
 if (app.Environment.IsDevelopment())
 {
