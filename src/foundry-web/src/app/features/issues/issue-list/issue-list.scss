@@ -58,10 +58,13 @@
       display: block;
     }
 
-    // Bottom padding ensures the last issue card is not occluded by the sticky filter bar.
-    // Step 5 refines this placeholder with env(safe-area-inset-bottom) for notched devices.
+    // Bottom padding ensures the last issue card is not occluded by the fixed filter bar.
+    // --fd-filter-bar-height is defined on the bar's :host so it propagates here.
+    // env(safe-area-inset-bottom) accounts for notch/home-indicator on iOS/Android.
     .issue-list__body {
-      padding-block-end: 72px;
+      padding-block-end: calc(
+        var(--fd-filter-bar-height, 56px) + env(safe-area-inset-bottom, 0px)
+      );
     }
   }
 

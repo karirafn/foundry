@@ -48,7 +48,7 @@ const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]
           </button>
         </div>
         <div class="filter-sheet__body">
-          <fd-issue-filter-rail />
+          <fd-issue-filter-rail [touch]="true" />
         </div>
       </div>
     }

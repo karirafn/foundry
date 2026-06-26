@@ -20,9 +20,25 @@
   border-top: 1px solid var(--fd-border-default);
   display: flex;
   flex-direction: column;
-  max-height: 80vh;
-  overflow-y: auto;
+  // dvh tracks the dynamic viewport (excludes browser chrome) — better for mobile.
+  // Landscape cap (50dvh) keeps the panel small enough to see content behind it.
+  // Fallback chain: dvh → svh → vh for progressive enhancement.
+  max-height: min(80dvh, 80svh, 80vh);
+
+  // Landscape: cap at 50% of the viewport height so content remains reachable.
+  @media (orientation: landscape) {
+    max-height: min(50dvh, 50svh, 50vh);
+  }
+
+  // Padding-bottom accounts for the home indicator / notch safe area.
+  // max() ensures a non-zero minimum even on non-notched devices.
+  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+
+  overflow: hidden;
   outline: none;
+  // Fluid width — no fixed pixel dimension that could overflow at 200% zoom.
+  width: 100%;
+  box-sizing: border-box;
 
   @media (prefers-reduced-motion: no-preference) {
     transition: transform 200ms ease;
@@ -32,10 +48,13 @@
 .filter-sheet__header {
   display: flex;
   align-items: center;
+  // Fluid padding — wraps rather than overflows at 200% zoom.
   padding: var(--fd-spacing-md) var(--fd-spacing-lg);
   border-bottom: 1px solid var(--fd-border-muted);
   flex-shrink: 0;
   position: relative;
+  // Allow the header row to wrap at very narrow widths (200% zoom).
+  flex-wrap: wrap;
 }
 
 .filter-sheet__drag-handle {
@@ -56,12 +75,16 @@
   font-size: 1rem;
   font-weight: 600;
   color: var(--fd-text-primary);
+  // Prevent overflow at 200% zoom — allow natural wrapping.
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .filter-sheet__close-btn {
   display: flex;
   align-items: center;
   justify-content: center;
+  // 44×44 minimum touch target (WCAG 2.5.5).
   width: 44px;
   height: 44px;
   min-width: 44px;
@@ -74,6 +97,7 @@
   font-size: 1.25rem;
   line-height: 1;
   margin-top: var(--fd-spacing-sm);
+  flex-shrink: 0;
 
   &:hover {
     background: var(--fd-bg-card-hover);
@@ -89,5 +113,8 @@
 .filter-sheet__body {
   padding: var(--fd-spacing-md) var(--fd-spacing-lg);
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
+  // Ensure the body scrolls but does not contribute to horizontal overflow.
+  min-height: 0;
 }

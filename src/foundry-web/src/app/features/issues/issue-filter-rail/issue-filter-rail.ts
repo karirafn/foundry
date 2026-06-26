@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostBinding, inject, input } from '@angular/core';
 import { IssueService } from '../issue.service';
 import { STATE_GROUPS } from '../issue-lifecycle.model';
 import { IssueState } from '../issue.model';
@@ -50,6 +50,13 @@ import { STATE_RAIL_LABELS, STATE_COLOR_VARS } from '../state-display';
 export class IssueFilterRailComponent {
   protected readonly issueService = inject(IssueService);
   protected readonly groups = STATE_GROUPS;
+
+  readonly touch = input(false);
+
+  @HostBinding('class.filter-rail--touch')
+  get _touchClass(): boolean {
+    return this.touch();
+  }
 
   protected stateLabel(state: IssueState): string {
     return STATE_RAIL_LABELS[state];

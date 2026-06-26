@@ -339,4 +339,25 @@ describe('IssueFilterRailComponent', () => {
     // Assert
     expect(btn?.getAttribute('aria-label')).toBe('Queued, no issues, filter unavailable');
   });
+
+  // Cycle 12: touch input applies a host CSS class for 44px tap targets
+  it('should not apply filter-rail--touch host class when touch input is false (default)', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const host = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(host.classList.contains('filter-rail--touch')).toBe(false);
+  });
+
+  it('should apply filter-rail--touch host class when touch input is true', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.componentRef.setInput('touch', true);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(host.classList.contains('filter-rail--touch')).toBe(true);
+  });
 });

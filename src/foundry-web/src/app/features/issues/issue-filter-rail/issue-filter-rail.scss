@@ -62,6 +62,14 @@
   }
 }
 
+// Touch context: increase toggle tap targets to 44px (WCAG 2.5.5).
+// Applied only when the host has the .filter-rail--touch class (set via [touch]="true"
+// from fd-issue-filter-sheet). The desktop aside rail stays at 32px.
+:host(.filter-rail--touch) .filter-rail__toggle {
+  min-height: 44px;
+  padding-block: var(--fd-spacing-sm);
+}
+
 // The dot is purely decorative — the text label is the accessible state cue.
 // In forced-colors mode the system overrides custom colors, making the dot meaningless;
 // hide it so the label remains the sole reliable visual indicator.
