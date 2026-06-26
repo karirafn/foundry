@@ -1,0 +1,44 @@
+.filter-bar {
+  display: flex;
+  align-items: center;
+}
+
+.filter-bar__btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.875rem;
+  gap: var(--fd-spacing-xs);
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+  position: relative;
+
+  &:hover:not(:disabled) {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+}
+
+.filter-bar__badge {
+  align-items: center;
+  background: var(--fd-state-queued);
+  border-radius: 9999px;
+  color: var(--fd-text-on-state);
+  display: inline-flex;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  justify-content: center;
+  line-height: 1;
+  min-height: 1.125rem;
+  min-width: 1.125rem;
+  padding: 0 var(--fd-spacing-xs);
+}
