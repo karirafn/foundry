@@ -1531,8 +1531,8 @@ describe('IssueListComponent', () => {
     expect(document.activeElement).toBe(resolvedHeading);
   });
 
-  // F6: Empty-resolved state uses h2 heading with filter-scoped copy
-  it('should render an h2 heading in the empty-resolved state', () => {
+  // F6: Empty-resolved state uses a paragraph (not h2) to avoid duplicate h2 siblings inside the resolved section
+  it('should render a paragraph element in the empty-resolved state with the filter-scoped copy', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
@@ -1550,8 +1550,8 @@ describe('IssueListComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const heading = el.querySelector('.issue-list__empty-resolved-heading');
-    expect(heading?.tagName).toBe('H2');
-    expect(heading?.textContent?.trim()).toBe('No resolved issues match the selected filters');
+    const emptyMsg = el.querySelector('.issue-list__empty-resolved-heading');
+    expect(emptyMsg?.tagName).toBe('P');
+    expect(emptyMsg?.textContent?.trim()).toBe('No resolved issues match the selected filters');
   });
 });

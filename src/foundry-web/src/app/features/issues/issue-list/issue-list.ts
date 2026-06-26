@@ -133,7 +133,7 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
                 </div>
               } @else if (issueService.resolvedIssues().length === 0) {
                 <div class="issue-list__empty-resolved">
-                  <h2 class="issue-list__empty-resolved-heading">{{ emptyResolvedMessage }}</h2>
+                  <p class="issue-list__empty-resolved-heading">{{ emptyResolvedMessage }}</p>
                 </div>
               } @else {
                 <div class="issue-list__resolved-band">
