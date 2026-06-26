@@ -5,6 +5,7 @@ import { IssueService } from './issue.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueSummary, IssueDetail } from './issue.model';
 import { ACTIVE_STATES } from './issue-lifecycle.model';
+import { vi } from 'vitest';
 
 interface PagedIssues {
   items: IssueSummary[];
@@ -684,6 +685,54 @@ describe('IssueService', () => {
     http.verify();
   });
 
+  // Finding 3: loadIssues drops items with unknown state
+  it('should drop items with an unknown state on loadIssues', () => {
+    // Arrange
+    const valid: IssueSummary = { ...mockSummary, id: 'valid-id' };
+    const unknown = { ...mockSummary, id: 'unknown-state-id', state: 'ghost_state' as never };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([valid, unknown]);
+
+    // Assert — only valid issue is retained
+    expect(service.issues().length).toBe(1);
+    expect(service.issues()[0].id).toBe('valid-id');
+  });
+
+  it('should retain an ineligible-state item on loadIssues as a known valid state', () => {
+    // Arrange
+    const ineligible: IssueSummary = { ...mockSummary, id: 'ineligible-id', state: 'ineligible' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([ineligible]);
+
+    // Assert — ineligible is a known state and must not be dropped
+    expect(service.issues().length).toBe(1);
+    expect(service.issues()[0].id).toBe('ineligible-id');
+  });
+
+  // Finding 3: _upsertIssue drops items with unknown state
+  it('should reject an IssueUpdated event with an unknown state', () => {
+    // Arrange
+    const callbacks: Record<string, (data: IssueSummary) => void> = {};
+    const { svc, http } = setupWithCapturingSignalR(callbacks, []);
+
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([]);
+    expect(svc.issues().length).toBe(0);
+
+    const unknown = { ...mockSummary, id: 'ghost-id', state: 'ghost_state' as never };
+
+    // Act
+    callbacks['IssueUpdated'](unknown);
+
+    // Assert — issues list stays empty
+    expect(svc.issues().length).toBe(0);
+    http.verify();
+  });
+
   // Cycle 15: loadIssues filters out items with invalid IDs
   it('should filter out issues with invalid ids returned by loadIssues', () => {
     // Arrange
@@ -1318,9 +1367,27 @@ describe('IssueService (band transitions + counts debounce)', () => {
     expect(service.resolvedIssues()[0].id).toBe('issue-2');
   });
 
+  // Cycle B5-new: brand-new resolved id (never in issues) arriving via IssueUpdated when its state is selected
+  it('should prepend a brand-new resolved issue to resolvedIssues when its state is selected and the id was never in issues', () => {
+    // Arrange — select 'completed'; flush empty page (no prior resolved issues)
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+    expect(service.resolvedIssues().length).toBe(0);
+
+    const brandNew: IssueSummary = { ...resolvedSummary, id: 'brand-new-resolved', state: 'completed' };
+
+    // Act
+    callbacks['IssueUpdated'](brandNew);
+
+    // Assert — prepended to resolvedIssues, not in issues
+    expect(service.resolvedIssues()[0]).toEqual(brandNew);
+    expect(service.issues().some((i: IssueSummary) => i.id === 'brand-new-resolved')).toBe(false);
+  });
+
   // Cycle B6: expanded issue detail still reloads on IssueUpdated (regression guard)
   it('should still re-fetch detail when the expanded issue receives an IssueUpdated event (regression)', () => {
     // Arrange
+    vi.useFakeTimers();
     service.toggleExpand('issue-1');
     httpMock.expectOne('/api/issues/issue-1').flush({ ...activeSummary });
     expect(service.expandedIssueId()).toBe('issue-1');
@@ -1328,10 +1395,16 @@ describe('IssueService (band transitions + counts debounce)', () => {
     // Act — trigger an IssueUpdated event for the expanded issue
     callbacks['IssueUpdated']({ ...activeSummary, state: 'in_progress' });
 
-    // Assert — detail refetch triggered (debounce timer runs in background; verify only the detail call)
+    // Advance past the debounce window so the counts request fires
+    vi.advanceTimersByTime(400);
+    httpMock.expectOne('/api/issues/counts').flush({ counts: {} });
+
+    // Assert — detail refetch triggered
     const detailReq = httpMock.expectOne('/api/issues/issue-1');
     detailReq.flush({ ...activeSummary, state: 'in_progress' });
     expect(service.issueDetail()).toBeTruthy();
+
+    vi.useRealTimers();
   });
 
   // Cycle B5 (scoped fake timers): counts debounce — burst of N IssueUpdated events triggers exactly one counts request
@@ -1562,6 +1635,53 @@ describe('IssueService (resolved paging)', () => {
     );
     expect(newReq.request.params.has('cursor')).toBe(false);
     newReq.flush({ items: [], nextCursor: null });
+  });
+
+  // Finding 3: resolved page drops items with unknown state
+  it('should drop items with an unknown state from a resolved page', () => {
+    // Arrange
+    const valid: IssueSummary = { ...resolvedSummary, id: 'res-valid' };
+    const unknown = { ...resolvedSummary, id: 'res-ghost', state: 'ghost_state' as never };
+
+    // Act
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [valid, unknown], nextCursor: null });
+
+    // Assert — only valid item retained
+    expect(service.resolvedIssues().length).toBe(1);
+    expect(service.resolvedIssues()[0].id).toBe('res-valid');
+  });
+
+  // Finding 4: stale inflight resolved-page write race
+  it('should discard a stale resolved-page response when a newer selection change supersedes it', () => {
+    // Arrange — select completed; fire first request but do not flush it yet
+    service.toggleState('completed');
+    const staleReq = httpMock.expectOne(r =>
+      r.url === '/api/issues' && r.params.getAll('states[]')?.includes('completed') === true
+    );
+
+    // Act — toggle unchanged before the first request resolves (triggers a new token + new request)
+    service.toggleState('unchanged');
+    const freshReq = httpMock.expectOne(r =>
+      r.url === '/api/issues' &&
+      r.params.getAll('states[]')?.includes('completed') === true &&
+      r.params.getAll('states[]')?.includes('unchanged') === true
+    );
+
+    // Flush the stale response first — it should be discarded
+    const staleItem: IssueSummary = { ...resolvedSummary, id: 'stale-item' };
+    staleReq.flush({ items: [staleItem], nextCursor: null });
+
+    // Assert — stale response did not populate resolvedIssues
+    expect(service.resolvedIssues().length).toBe(0);
+
+    // Flush the fresh response
+    const freshItem: IssueSummary = { ...resolvedSummary, id: 'fresh-item' };
+    freshReq.flush({ items: [freshItem], nextCursor: null });
+
+    // Assert — only the fresh response is used
+    expect(service.resolvedIssues().length).toBe(1);
+    expect(service.resolvedIssues()[0].id).toBe('fresh-item');
   });
 
   // Cycle R3: loadMoreResolved appends next page with dedup; nextCursor null → no further request

@@ -1,9 +1,9 @@
-import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES } from './issue.model';
-import { ACTIVE_STATES, isResolvedState } from './issue-lifecycle.model';
+import { ACTIVE_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
@@ -25,6 +25,7 @@ const COUNTS_DEBOUNCE_MS = 300;
 export class IssueService {
   private readonly _http = inject(HttpClient);
   private readonly _signalR = inject(IssueSignalRService);
+  private readonly _destroyRef = inject(DestroyRef);
 
   readonly issues: WritableSignal<IssueSummary[]> = signal([]);
   readonly expandedIssueId: WritableSignal<string | null> = signal(null);
@@ -49,8 +50,11 @@ export class IssueService {
   private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
   readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
 
-  readonly selectedActiveStates: WritableSignal<ReadonlySet<IssueState>> = signal(ACTIVE_STATES);
-  readonly selectedResolvedStates: WritableSignal<ReadonlySet<IssueState>> = signal(new Set<IssueState>());
+  private readonly _selectedActiveStatesSignal: WritableSignal<ReadonlySet<IssueState>> = signal(ACTIVE_STATES);
+  readonly selectedActiveStates: Signal<ReadonlySet<IssueState>> = this._selectedActiveStatesSignal.asReadonly();
+
+  private readonly _selectedResolvedStatesSignal: WritableSignal<ReadonlySet<IssueState>> = signal(new Set<IssueState>());
+  readonly selectedResolvedStates: Signal<ReadonlySet<IssueState>> = this._selectedResolvedStatesSignal.asReadonly();
 
   private readonly _resolvedIssuesSignal: WritableSignal<IssueSummary[]> = signal([]);
   readonly resolvedIssues: Signal<IssueSummary[]> = this._resolvedIssuesSignal.asReadonly();
@@ -63,6 +67,7 @@ export class IssueService {
 
   private _detailSub: Subscription | null = null;
   private _countsDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  private _resolvedRequestToken = 0;
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
     const byDate = (a: IssueSummary, b: IssueSummary): number =>
@@ -88,6 +93,11 @@ export class IssueService {
   constructor() {
     this._signalR.on<IssueSummary>('IssueUpdated', (updated) => this._upsertIssue(updated));
     this._signalR.onReconnected(() => this.loadIssues());
+    this._destroyRef.onDestroy(() => {
+      if (this._countsDebounceHandle !== null) {
+        clearTimeout(this._countsDebounceHandle);
+      }
+    });
   }
 
   loadIssues(repositoryId?: string): void {
@@ -100,7 +110,7 @@ export class IssueService {
 
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
       next: (issues) => {
-        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id) && !isResolvedState(i.state)));
+        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state) && !isResolvedState(i.state)));
         this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
@@ -148,7 +158,7 @@ export class IssueService {
       } else {
         next.add(state);
       }
-      this.selectedResolvedStates.set(next);
+      this._selectedResolvedStatesSignal.set(next);
       this._onResolvedSelectionChanged(next);
     } else {
       const current = this.selectedActiveStates();
@@ -158,7 +168,7 @@ export class IssueService {
       } else {
         next.add(state);
       }
-      this.selectedActiveStates.set(next);
+      this._selectedActiveStatesSignal.set(next);
     }
   }
 
@@ -168,7 +178,7 @@ export class IssueService {
     }
 
     this.resolvedLoadingMore.set(true);
-    this._fetchResolvedPage(this.selectedResolvedStates(), this._resolvedCursor(), repositoryId, false);
+    this._fetchResolvedPage(this.selectedResolvedStates(), this._resolvedCursor(), repositoryId, false, this._resolvedRequestToken);
   }
 
   loadDetail(id: string): void {
@@ -253,6 +263,11 @@ export class IssueService {
       return;
     }
 
+    if (!isKnownState(updated.state)) {
+      console.warn('IssueService: rejected IssueUpdated event with unknown state');
+      return;
+    }
+
     const current = this.issues();
     const index = current.findIndex((i) => i.id === updated.id);
 
@@ -289,9 +304,10 @@ export class IssueService {
   }
 
   private _removeFromResolved(id: string): void {
-    const existing = this._resolvedIssuesSignal();
-    if (existing.some((i) => i.id === id)) {
-      this._resolvedIssuesSignal.set(existing.filter((i) => i.id !== id));
+    const current = this._resolvedIssuesSignal();
+    const next = current.filter(i => i.id !== id);
+    if (next.length !== current.length) {
+      this._resolvedIssuesSignal.set(next);
     }
   }
 
@@ -308,13 +324,14 @@ export class IssueService {
   private _onResolvedSelectionChanged(states: ReadonlySet<IssueState>): void {
     this._resolvedIssuesSignal.set([]);
     this._resolvedCursor.set(null);
+    this._resolvedRequestToken += 1;
 
     if (states.size === 0) {
       return;
     }
 
     this.resolvedLoading.set(true);
-    this._fetchResolvedPage(states, null, undefined, true);
+    this._fetchResolvedPage(states, null, undefined, true, this._resolvedRequestToken);
   }
 
   private _fetchResolvedPage(
@@ -322,6 +339,7 @@ export class IssueService {
     cursor: string | null,
     repositoryId: string | undefined,
     isFirstPage: boolean,
+    requestToken: number,
   ): void {
     let params = new HttpParams();
     for (const s of states) {
@@ -336,7 +354,10 @@ export class IssueService {
 
     this._http.get<PagedIssues>('/api/issues', { params }).subscribe({
       next: (page) => {
-        const safeItems = page.items.filter(i => SAFE_ID_RE.test(i.id));
+        if (requestToken !== this._resolvedRequestToken) {
+          return;
+        }
+        const safeItems = page.items.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state));
         if (isFirstPage) {
           this._resolvedIssuesSignal.set(safeItems);
         } else {

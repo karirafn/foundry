@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { vi } from 'vitest';
 import { IssueFilterRailComponent } from './issue-filter-rail';
 import { IssueService } from '../issue.service';
-import { STATE_GROUPS } from '../issue-lifecycle.model';
+import { STATE_GROUPS, isResolvedState } from '../issue-lifecycle.model';
 import { IssueState } from '../issue.model';
 
 function createMockIssueService(overrides: {
@@ -27,8 +27,7 @@ function createMockIssueService(overrides: {
     selectedResolvedStates: selectedResolvedStatesSignal.asReadonly(),
     countFor: (state: IssueState): number => countsMap[state] ?? 0,
     isStateSelected: (state: IssueState): boolean => {
-      const resolved = new Set<IssueState>(['completed', 'unchanged']);
-      if (resolved.has(state)) {
+      if (isResolvedState(state)) {
         return selectedResolvedStatesSignal().has(state);
       }
       return selectedActiveStatesSignal().has(state);

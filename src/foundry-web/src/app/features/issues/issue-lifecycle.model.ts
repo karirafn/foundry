@@ -28,6 +28,16 @@ export function isResolvedState(state: IssueState): boolean {
   return RESOLVED_STATES.has(state);
 }
 
+const KNOWN_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
+  ...ACTIVE_STATES,
+  ...RESOLVED_STATES,
+  'ineligible',
+]);
+
+export function isKnownState(state: string): state is IssueState {
+  return (KNOWN_STATES as ReadonlySet<string>).has(state);
+}
+
 export const STATE_GROUPS: readonly StateGroup[] = [
   {
     label: 'In progress',
