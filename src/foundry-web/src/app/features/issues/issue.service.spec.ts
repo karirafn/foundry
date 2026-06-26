@@ -898,4 +898,105 @@ describe('IssueService', () => {
     httpMock.expectOne('/api/issues/abc123/retry').flush({});
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
   });
+
+  // Cycle 17: loadCounts — populates counts signal
+  it('should populate counts signal after loadCounts', () => {
+    // Arrange
+    const mockCounts = { detected: 2, in_progress: 1 };
+
+    // Act
+    service.loadCounts();
+    const req = httpMock.expectOne('/api/issues/counts');
+    req.flush({ counts: mockCounts });
+
+    // Assert
+    expect(service.counts()).toEqual(mockCounts);
+  });
+
+  it('should issue a GET request to /api/issues/counts when loadCounts is called', () => {
+    // Arrange / Act
+    service.loadCounts();
+
+    // Assert
+    const req = httpMock.expectOne('/api/issues/counts');
+    expect(req.request.method).toBe('GET');
+    req.flush({ counts: {} });
+  });
+
+  // Cycle 18: loadCounts with repositoryId appends query param
+  it('should append repositoryId query param when provided to loadCounts', () => {
+    // Arrange / Act
+    service.loadCounts('repo-id-1');
+
+    // Assert
+    const req = httpMock.expectOne('/api/issues/counts?repositoryId=repo-id-1');
+    expect(req.request.method).toBe('GET');
+    req.flush({ counts: {} });
+  });
+
+  it('should not append repositoryId when not provided to loadCounts', () => {
+    // Arrange / Act
+    service.loadCounts();
+
+    // Assert — URL has no query string
+    const req = httpMock.expectOne('/api/issues/counts');
+    expect(req.request.url).toBe('/api/issues/counts');
+    req.flush({ counts: {} });
+  });
+
+  // Cycle 19: countFor returns count for a state, defaulting to 0
+  it('should return the count for a state via countFor', () => {
+    // Arrange
+    service.loadCounts();
+    httpMock.expectOne('/api/issues/counts').flush({ counts: { in_progress: 3 } });
+
+    // Act / Assert
+    expect(service.countFor('in_progress')).toBe(3);
+  });
+
+  it('should return 0 via countFor for a state with no count', () => {
+    // Arrange
+    service.loadCounts();
+    httpMock.expectOne('/api/issues/counts').flush({ counts: {} });
+
+    // Act / Assert
+    expect(service.countFor('detected')).toBe(0);
+  });
+
+  it('should return 0 via countFor before loadCounts is called', () => {
+    // Arrange — counts not loaded
+
+    // Act / Assert
+    expect(service.countFor('in_progress')).toBe(0);
+  });
+
+  // Cycle 20: loadCounts failure leaves prior counts intact
+  it('should leave prior counts intact when loadCounts fails', () => {
+    // Arrange — load initial counts
+    service.loadCounts();
+    httpMock.expectOne('/api/issues/counts').flush({ counts: { in_progress: 5 } });
+    expect(service.countFor('in_progress')).toBe(5);
+
+    // Act — second call fails
+    service.loadCounts();
+    httpMock.expectOne('/api/issues/counts').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — prior counts still present
+    expect(service.countFor('in_progress')).toBe(5);
+  });
+
+  it('should not set loadError when loadCounts fails', () => {
+    // Arrange / Act
+    service.loadCounts();
+    httpMock.expectOne('/api/issues/counts').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — no user-facing error block (loadError stays null)
+    expect(service.loadError()).toBeNull();
+  });
 });

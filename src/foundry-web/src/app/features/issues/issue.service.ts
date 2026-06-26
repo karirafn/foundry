@@ -2,7 +2,11 @@ import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@a
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { IssueDetail, IssueSummary, LIVE_STATES } from './issue.model';
+import { IssueDetail, IssueState, IssueSummary, LIVE_STATES } from './issue.model';
+
+interface IssueCountsResponse {
+  counts: Record<string, number>;
+}
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
@@ -34,6 +38,9 @@ export class IssueService {
 
   private readonly _retryFailedSuccessSignal: WritableSignal<string | null> = signal(null);
   readonly retryFailedSuccess: Signal<string | null> = this._retryFailedSuccessSignal.asReadonly();
+
+  private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
+  readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
 
   private _detailSub: Subscription | null = null;
 
@@ -77,6 +84,26 @@ export class IssueService {
         this.initialLoading.set(false);
       },
     });
+  }
+
+  loadCounts(repositoryId?: string): void {
+    let params = new HttpParams();
+    if (repositoryId !== undefined) {
+      params = params.set('repositoryId', repositoryId);
+    }
+
+    this._http.get<IssueCountsResponse>('/api/issues/counts', { params }).subscribe({
+      next: (response) => {
+        this._countsSignal.set(response.counts);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+      },
+    });
+  }
+
+  countFor(state: IssueState): number {
+    return this._countsSignal()[state] ?? 0;
   }
 
   loadDetail(id: string): void {
