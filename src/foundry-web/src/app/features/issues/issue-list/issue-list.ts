@@ -120,38 +120,59 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
               </div>
 
               @if (issueService.resolvedLoading()) {
-                <div class="issue-list__resolved-loading" aria-hidden="true">
+                <div class="issue-list__resolved-loading" aria-hidden="true"></div>
+              } @else if (issueService.resolvedError()) {
+                <div class="issue-list__error" role="alert">
+                  <span class="issue-list__error-message">Failed to load resolved issues</span>
+                  <button
+                    class="issue-list__error-retry"
+                    type="button"
+                    (click)="issueService.retryResolvedFetch()"
+                  >Retry</button>
+                </div>
+              } @else if (issueService.resolvedIssues().length === 0) {
+                <div class="issue-list__empty-resolved">
+                  <p class="issue-list__empty-resolved-text">No resolved issues</p>
+                </div>
+              } @else {
+                <div class="issue-list__resolved-band">
+                  @for (issue of issueService.resolvedIssues(); track issue.id) {
+                    <div class="issue-list__item">
+                      <fd-issue-card
+                        [issue]="issue"
+                        [expanded]="issueService.expandedIssueId() === issue.id"
+                        (toggle)="issueService.toggleExpand(issue.id)"
+                      />
+
+                      <div
+                        class="issue-list__detail-wrapper"
+                        [id]="'detail-' + issue.id"
+                        [hidden]="issueService.expandedIssueId() !== issue.id"
+                      >
+                        @if (issueService.expandedIssueId() === issue.id) {
+                          <fd-issue-detail
+                            [detail]="issueService.issueDetail()"
+                            [loading]="issueService.detailLoading()"
+                            [error]="issueService.detailError()"
+                            (retry)="issueService.loadDetail(issueService.expandedIssueId()!)"
+                          />
+                        }
+                      </div>
+                    </div>
+                  }
                 </div>
               }
 
-              <div class="issue-list__resolved-band">
-                @for (issue of issueService.resolvedIssues(); track issue.id) {
-                  <div class="issue-list__item">
-                    <fd-issue-card
-                      [issue]="issue"
-                      [expanded]="issueService.expandedIssueId() === issue.id"
-                      (toggle)="issueService.toggleExpand(issue.id)"
-                    />
-
-                    <div
-                      class="issue-list__detail-wrapper"
-                      [id]="'detail-' + issue.id"
-                      [hidden]="issueService.expandedIssueId() !== issue.id"
-                    >
-                      @if (issueService.expandedIssueId() === issue.id) {
-                        <fd-issue-detail
-                          [detail]="issueService.issueDetail()"
-                          [loading]="issueService.detailLoading()"
-                          [error]="issueService.detailError()"
-                          (retry)="issueService.loadDetail(issueService.expandedIssueId()!)"
-                        />
-                      }
-                    </div>
-                  </div>
-                }
-              </div>
-
-              @if (issueService.hasMoreResolved()) {
+              @if (issueService.resolvedLoadMoreError()) {
+                <div class="issue-list__resolved-load-more-error">
+                  <span class="issue-list__resolved-load-more-error-message">Failed to load more</span>
+                  <button
+                    class="issue-list__resolved-load-more-retry"
+                    type="button"
+                    (click)="loadMore()"
+                  >Retry</button>
+                </div>
+              } @else if (issueService.hasMoreResolved()) {
                 <button
                   type="button"
                   class="issue-list__load-more"

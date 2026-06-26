@@ -1471,16 +1471,16 @@ describe('IssueService (resolved paging)', () => {
 
   afterEach(() => httpMock.verify({ ignoreCancelled: true }));
 
-  // Cycle R1: selecting a resolved state fetches GET /api/issues with states[]=<state>
-  it('should fetch GET /api/issues with states[]=completed when toggleState("completed") is called', () => {
+  // Cycle R1: selecting a resolved state fetches GET /api/issues with states=<state>
+  it('should fetch GET /api/issues with states=completed (bracketless) when toggleState("completed") is called', () => {
     // Arrange — no resolved states selected initially
 
     // Act
     service.toggleState('completed');
 
-    // Assert — one request with states[]=completed, no cursor param
+    // Assert — one request with states=completed (bracketless), no cursor param
     const req = httpMock.expectOne(r =>
-      r.url === '/api/issues' && r.params.getAll('states[]')?.includes('completed') === true
+      r.url === '/api/issues' && r.params.getAll('states')?.includes('completed') === true
     );
     expect(req.request.method).toBe('GET');
     expect(req.request.params.has('cursor')).toBe(false);
@@ -1492,8 +1492,8 @@ describe('IssueService (resolved paging)', () => {
     expect(service.hasMoreResolved()).toBe(false);
   });
 
-  // Cycle R2: selecting two resolved states sends both as repeated states[] params in one request
-  it('should send both resolved states as repeated states[] params in a single request', () => {
+  // Cycle R2: selecting two resolved states sends both as repeated states params in one request
+  it('should send both resolved states as repeated bracketless states params in a single request', () => {
     // Arrange — select completed first
     service.toggleState('completed');
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
@@ -1501,13 +1501,13 @@ describe('IssueService (resolved paging)', () => {
     // Act — also select unchanged
     service.toggleState('unchanged');
 
-    // Assert — single request with both states[]
+    // Assert — single request with both states (bracketless)
     const req = httpMock.expectOne(r =>
       r.url === '/api/issues' &&
-      r.params.getAll('states[]')?.includes('completed') === true &&
-      r.params.getAll('states[]')?.includes('unchanged') === true
+      r.params.getAll('states')?.includes('completed') === true &&
+      r.params.getAll('states')?.includes('unchanged') === true
     );
-    expect(req.request.params.getAll('states[]')?.length).toBe(2);
+    expect(req.request.params.getAll('states')?.length).toBe(2);
     req.flush({ items: [], nextCursor: null });
   });
 
@@ -1630,8 +1630,8 @@ describe('IssueService (resolved paging)', () => {
     // The new request must NOT include the old cursor
     const newReq = httpMock.expectOne(r =>
       r.url === '/api/issues' &&
-      r.params.getAll('states[]')?.includes('completed') === true &&
-      r.params.getAll('states[]')?.includes('unchanged') === true
+      r.params.getAll('states')?.includes('completed') === true &&
+      r.params.getAll('states')?.includes('unchanged') === true
     );
     expect(newReq.request.params.has('cursor')).toBe(false);
     newReq.flush({ items: [], nextCursor: null });
@@ -1657,15 +1657,15 @@ describe('IssueService (resolved paging)', () => {
     // Arrange — select completed; fire first request but do not flush it yet
     service.toggleState('completed');
     const staleReq = httpMock.expectOne(r =>
-      r.url === '/api/issues' && r.params.getAll('states[]')?.includes('completed') === true
+      r.url === '/api/issues' && r.params.getAll('states')?.includes('completed') === true
     );
 
     // Act — toggle unchanged before the first request resolves (triggers a new token + new request)
     service.toggleState('unchanged');
     const freshReq = httpMock.expectOne(r =>
       r.url === '/api/issues' &&
-      r.params.getAll('states[]')?.includes('completed') === true &&
-      r.params.getAll('states[]')?.includes('unchanged') === true
+      r.params.getAll('states')?.includes('completed') === true &&
+      r.params.getAll('states')?.includes('unchanged') === true
     );
 
     // Flush the stale response first — it should be discarded
@@ -1713,6 +1713,183 @@ describe('IssueService (resolved paging)', () => {
     // loadMoreResolved with no cursor is a no-op
     service.loadMoreResolved();
     httpMock.expectNone(r => r.url === '/api/issues');
+  });
+
+  // New: bad-shape guard — bare array response sets resolvedError, does not throw
+  it('should set resolvedError when the resolved-page response is a bare array (bad shape)', () => {
+    // Arrange
+    service.toggleState('completed');
+
+    // Act — flush a bare array instead of PagedIssues
+    const req = httpMock.expectOne(r =>
+      r.url === '/api/issues' && r.params.getAll('states')?.includes('completed') === true
+    );
+    req.flush([resolvedSummary]); // bare array, not { items: [...], nextCursor: ... }
+
+    // Assert
+    expect(service.resolvedError()).toBe('Failed to load resolved issues');
+    expect(service.resolvedIssues().length).toBe(0);
+    expect(service.resolvedLoading()).toBe(false);
+  });
+
+  // New: first-page HTTP failure sets resolvedError, not loadError
+  it('should set resolvedError when the first-page resolved fetch fails with an HTTP error', () => {
+    // Arrange
+    service.toggleState('completed');
+
+    // Act
+    httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.resolvedError()).toBe('Failed to load resolved issues');
+    expect(service.resolvedLoading()).toBe(false);
+  });
+
+  // New: first-page failure does not affect active-band loadError (band independence)
+  it('should not set loadError when the resolved fetch fails', () => {
+    // Arrange
+    service.toggleState('completed');
+
+    // Act
+    httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.loadError()).toBeNull();
+  });
+
+  // New: active-band failure does not set resolvedError (band independence)
+  it('should not set resolvedError when loadIssues fails', () => {
+    // Arrange
+    service.loadIssues();
+
+    // Act
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.resolvedError()).toBeNull();
+  });
+
+  // New: resolvedError cleared at start of new selection-change fetch
+  it('should clear resolvedError when a new resolved selection triggers a fresh fetch', () => {
+    // Arrange — trigger a resolved error
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(service.resolvedError()).not.toBeNull();
+
+    // Act — change selection (deselect completed, select unchanged)
+    service.toggleState('completed'); // deselect — no request (empty set)
+    service.toggleState('unchanged'); // select new state — triggers fetch
+
+    // Assert — error cleared immediately before the new response arrives
+    expect(service.resolvedError()).toBeNull();
+
+    // Cleanup
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+  });
+
+  // New: retryResolvedFetch clears error and re-fetches
+  it('should clear resolvedError and re-fetch when retryResolvedFetch is called', () => {
+    // Arrange — trigger a resolved error
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(service.resolvedError()).not.toBeNull();
+
+    // Act
+    service.retryResolvedFetch();
+
+    // Assert — error cleared immediately
+    expect(service.resolvedError()).toBeNull();
+
+    // A new request is made for the same states
+    const req = httpMock.expectOne(r =>
+      r.url === '/api/issues' && r.params.getAll('states')?.includes('completed') === true
+    );
+    req.flush({ items: [resolvedSummary], nextCursor: null });
+
+    expect(service.resolvedIssues().length).toBe(1);
+  });
+
+  // New: load-more failure sets resolvedLoadMoreError, preserves prior issues
+  it('should set resolvedLoadMoreError and preserve prior resolved issues when load-more fails', () => {
+    // Arrange — get page 1 successfully with a cursor
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({
+      items: [resolvedSummary],
+      nextCursor: 'cursor-1',
+    });
+    expect(service.resolvedIssues().length).toBe(1);
+
+    // Act — load more fails
+    service.loadMoreResolved();
+    httpMock.expectOne(r =>
+      r.url === '/api/issues' && r.params.get('cursor') === 'cursor-1'
+    ).flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert
+    expect(service.resolvedLoadMoreError()).toBe('Failed to load more');
+    expect(service.resolvedIssues().length).toBe(1);
+    expect(service.resolvedIssues()[0].id).toBe('res-1');
+  });
+
+  // New: load-more failure does not set resolvedError (full-band error)
+  it('should not set resolvedError when load-more fails', () => {
+    // Arrange
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({
+      items: [resolvedSummary],
+      nextCursor: 'cursor-1',
+    });
+
+    // Act
+    service.loadMoreResolved();
+    httpMock.expectOne(r => r.params.get('cursor') === 'cursor-1').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.resolvedError()).toBeNull();
+  });
+
+  // New: loadMoreResolved clears resolvedLoadMoreError before retrying
+  it('should clear resolvedLoadMoreError and retry when loadMoreResolved is called after a load-more failure', () => {
+    // Arrange — fail a load-more
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({
+      items: [resolvedSummary],
+      nextCursor: 'cursor-1',
+    });
+    service.loadMoreResolved();
+    httpMock.expectOne(r => r.params.get('cursor') === 'cursor-1').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(service.resolvedLoadMoreError()).not.toBeNull();
+
+    // Act — retry via loadMoreResolved
+    service.loadMoreResolved();
+
+    // Assert — error cleared immediately before response
+    expect(service.resolvedLoadMoreError()).toBeNull();
+
+    // New request sent for the same cursor
+    const req = httpMock.expectOne(r => r.params.get('cursor') === 'cursor-1');
+    req.flush({ items: [], nextCursor: null });
   });
 
 });

@@ -169,6 +169,54 @@
     text-align: center;
   }
 
+  &__empty-resolved {
+    padding: var(--fd-spacing-2xl) var(--fd-spacing-lg);
+    text-align: center;
+  }
+
+  &__empty-resolved-text {
+    font-size: 0.875rem;
+    color: var(--fd-text-secondary);
+    margin: 0;
+  }
+
+  &__resolved-load-more-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--fd-spacing-sm);
+    margin-top: var(--fd-spacing-md);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-lg);
+    font-size: 0.875rem;
+    color: var(--fd-state-failed);
+  }
+
+  &__resolved-load-more-error-message {
+    flex: 1;
+    text-align: center;
+  }
+
+  &__resolved-load-more-retry {
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 36px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      border-color: var(--fd-text-secondary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
+
   &__load-more {
     display: block;
     width: 100%;

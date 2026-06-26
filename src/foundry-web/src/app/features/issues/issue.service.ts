@@ -15,6 +15,8 @@ interface PagedIssues {
 }
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
+const LOAD_RESOLVED_ERROR = 'Failed to load resolved issues';
+const LOAD_MORE_RESOLVED_ERROR = 'Failed to load more';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
 const RETRY_FAILED_ERROR = 'Failed to retry issue.';
 const RETRY_FAILED_SUCCESS = 'Retry queued. Issue status is updating.';
@@ -61,6 +63,12 @@ export class IssueService {
 
   private readonly _resolvedCursor: WritableSignal<string | null> = signal(null);
   readonly hasMoreResolved: Signal<boolean> = computed(() => this._resolvedCursor() !== null);
+
+  private readonly _resolvedErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly resolvedError: Signal<string | null> = this._resolvedErrorSignal.asReadonly();
+
+  private readonly _resolvedLoadMoreErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly resolvedLoadMoreError: Signal<string | null> = this._resolvedLoadMoreErrorSignal.asReadonly();
 
   readonly resolvedLoading: WritableSignal<boolean> = signal(false);
   readonly resolvedLoadingMore: WritableSignal<boolean> = signal(false);
@@ -177,8 +185,13 @@ export class IssueService {
       return;
     }
 
+    this._resolvedLoadMoreErrorSignal.set(null);
     this.resolvedLoadingMore.set(true);
     this._fetchResolvedPage(this.selectedResolvedStates(), this._resolvedCursor(), repositoryId, false, this._resolvedRequestToken);
+  }
+
+  retryResolvedFetch(): void {
+    this._onResolvedSelectionChanged(this.selectedResolvedStates());
   }
 
   loadDetail(id: string): void {
@@ -324,6 +337,8 @@ export class IssueService {
   private _onResolvedSelectionChanged(states: ReadonlySet<IssueState>): void {
     this._resolvedIssuesSignal.set([]);
     this._resolvedCursor.set(null);
+    this._resolvedErrorSignal.set(null);
+    this._resolvedLoadMoreErrorSignal.set(null);
     this._resolvedRequestToken += 1;
 
     if (states.size === 0) {
@@ -343,7 +358,7 @@ export class IssueService {
   ): void {
     let params = new HttpParams();
     for (const s of states) {
-      params = params.append('states[]', s);
+      params = params.append('states', s);
     }
     if (cursor !== null) {
       params = params.set('cursor', cursor);
@@ -355,6 +370,16 @@ export class IssueService {
     this._http.get<PagedIssues>('/api/issues', { params }).subscribe({
       next: (page) => {
         if (requestToken !== this._resolvedRequestToken) {
+          return;
+        }
+        if (!Array.isArray(page?.items)) {
+          if (isFirstPage) {
+            this._resolvedErrorSignal.set(LOAD_RESOLVED_ERROR);
+            this.resolvedLoading.set(false);
+          } else {
+            this._resolvedLoadMoreErrorSignal.set(LOAD_MORE_RESOLVED_ERROR);
+            this.resolvedLoadingMore.set(false);
+          }
           return;
         }
         const safeItems = page.items.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state));
@@ -376,8 +401,10 @@ export class IssueService {
       error: (err: HttpErrorResponse) => {
         console.error(err);
         if (isFirstPage) {
+          this._resolvedErrorSignal.set(LOAD_RESOLVED_ERROR);
           this.resolvedLoading.set(false);
         } else {
+          this._resolvedLoadMoreErrorSignal.set(LOAD_MORE_RESOLVED_ERROR);
           this.resolvedLoadingMore.set(false);
         }
       },

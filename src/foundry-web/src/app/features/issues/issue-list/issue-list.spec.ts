@@ -714,7 +714,7 @@ describe('IssueListComponent', () => {
     const issueService = TestBed.inject(IssueService);
     issueService.toggleState('completed');
     // Flush the paged resolved request
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
     });
@@ -739,7 +739,7 @@ describe('IssueListComponent', () => {
     // Act
     const issueService = TestBed.inject(IssueService);
     issueService.toggleState('completed');
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
     });
@@ -763,7 +763,7 @@ describe('IssueListComponent', () => {
     // Act
     const issueService = TestBed.inject(IssueService);
     issueService.toggleState('completed');
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
     });
@@ -786,7 +786,7 @@ describe('IssueListComponent', () => {
     // Act
     const issueService = TestBed.inject(IssueService);
     issueService.toggleState('completed');
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
     });
@@ -808,7 +808,7 @@ describe('IssueListComponent', () => {
 
     const issueService = TestBed.inject(IssueService);
     issueService.toggleState('completed');
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
     });
@@ -821,7 +821,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     // Assert — load more triggers another paged request
-    const req = httpMock.expectOne((r) => r.url === '/api/issues' && r.params.has('states[]') && r.params.has('cursor'));
+    const req = httpMock.expectOne((r) => r.url === '/api/issues' && r.params.has('states') && r.params.has('cursor'));
     expect(req.request.params.get('cursor')).toBe('cursor-abc');
     req.flush({ items: [], nextCursor: null });
   });
@@ -869,7 +869,7 @@ describe('IssueListComponent', () => {
     // Act
     const issueService = TestBed.inject(IssueService);
     issueService.toggleState('completed');
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
     });
@@ -892,7 +892,7 @@ describe('IssueListComponent', () => {
     // Act
     const issueService = TestBed.inject(IssueService);
     issueService.toggleState('completed');
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
     });
@@ -949,7 +949,7 @@ describe('IssueListComponent', () => {
     issueService.toggleState('completed');
     // First request immediately resolves but triggers resolvedLoading briefly;
     // we flush to get into steady state then check there is no stale role="status"
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
     });
@@ -984,7 +984,7 @@ describe('IssueListComponent', () => {
     const textWhileLoading = announcer?.textContent?.trim() ?? '';
 
     // Flush the pending request so afterEach verify() passes
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [],
       nextCursor: null,
     });
@@ -1005,7 +1005,7 @@ describe('IssueListComponent', () => {
 
     const issueService = TestBed.inject(IssueService);
     issueService.toggleState('completed');
-    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
     });
@@ -1043,5 +1043,296 @@ describe('IssueListComponent', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const componentDef = (IssueListComponent as any).ɵcmp;
     expect(componentDef?.onPush).toBe(true);
+  });
+
+  // Resolved band error state
+  it('should render a resolved-band error block when the first-page resolved fetch fails', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act — select a resolved state and fail the HTTP request
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — error block appears inside the resolved section
+    const el = fixture.nativeElement as HTMLElement;
+    const resolvedSection = el.querySelector('.issue-list__resolved-section');
+    const errorEl = resolvedSection?.querySelector('.issue-list__error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
+    expect(errorEl?.textContent).toContain('Failed to load resolved issues');
+  });
+
+  it('should render a retry button in the resolved-band error block', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const resolvedSection = el.querySelector('.issue-list__resolved-section');
+    const retryBtn = resolvedSection?.querySelector('.issue-list__error-retry');
+    expect(retryBtn).toBeTruthy();
+  });
+
+  it('should re-fetch resolved issues when the resolved-band retry button is clicked', () => {
+    // Arrange — select completed and fail the initial fetch
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Act — click retry
+    const el = fixture.nativeElement as HTMLElement;
+    const retryBtn = el.querySelector('.issue-list__resolved-section .issue-list__error-retry') as HTMLElement;
+    retryBtn.click();
+    fixture.detectChanges();
+
+    // Assert — a new request is made
+    const req = httpMock.expectOne((r) => r.url === '/api/issues' && r.params.has('states'));
+    req.flush({ items: [], nextCursor: null });
+  });
+
+  it('should not show the resolved issue list when the resolved fetch fails (error replaces list)', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — resolved band (issue cards) is not rendered
+    const el = fixture.nativeElement as HTMLElement;
+    const resolvedBand = el.querySelector('.issue-list__resolved-band');
+    expect(resolvedBand).toBeFalsy();
+  });
+
+  // Resolved band empty state
+  it('should render empty-resolved copy when resolved fetch succeeds with zero issues', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act — select completed, return empty result
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const emptyEl = el.querySelector('.issue-list__empty-resolved');
+    expect(emptyEl).toBeTruthy();
+    expect(emptyEl?.textContent).toContain('No resolved issues');
+  });
+
+  it('should not show the resolved issue list when empty-resolved is shown', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert — issue band not rendered
+    const el = fixture.nativeElement as HTMLElement;
+    const resolvedBand = el.querySelector('.issue-list__resolved-band');
+    expect(resolvedBand).toBeFalsy();
+  });
+
+  // Load-more error state
+  it('should render an inline load-more error when load-more fails', () => {
+    // Arrange — get page 1 with a cursor
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [resolvedIssue],
+      nextCursor: 'cursor-abc',
+    });
+    fixture.detectChanges();
+
+    // Act — click Load more, fail the request
+    const el = fixture.nativeElement as HTMLElement;
+    const loadMoreBtn = el.querySelector('.issue-list__load-more') as HTMLElement;
+    loadMoreBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne((r) => r.url === '/api/issues' && r.params.has('cursor')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — inline error rendered at bottom of resolved band
+    const loadMoreError = el.querySelector('.issue-list__resolved-load-more-error');
+    expect(loadMoreError).toBeTruthy();
+    expect(loadMoreError?.textContent).toContain('Failed to load more');
+  });
+
+  it('should preserve already-loaded resolved issues when load-more fails', () => {
+    // Arrange — get page 1 with a cursor
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [resolvedIssue],
+      nextCursor: 'cursor-abc',
+    });
+    fixture.detectChanges();
+
+    // Act — fail the load-more
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.issue-list__load-more') as HTMLElement).click();
+    fixture.detectChanges();
+    httpMock.expectOne((r) => r.params.has('cursor')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — the existing resolved card is still rendered
+    const resolvedBand = el.querySelector('.issue-list__resolved-band');
+    expect(resolvedBand).toBeTruthy();
+    expect(resolvedBand?.querySelectorAll('fd-issue-card').length).toBe(1);
+  });
+
+  it('should re-request the next page when the load-more retry button is clicked', () => {
+    // Arrange — fail a load-more
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [resolvedIssue],
+      nextCursor: 'cursor-abc',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.issue-list__load-more') as HTMLElement).click();
+    fixture.detectChanges();
+    httpMock.expectOne((r) => r.params.has('cursor')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Act — click the load-more retry button
+    const retryBtn = el.querySelector('.issue-list__resolved-load-more-retry') as HTMLElement;
+    retryBtn.click();
+    fixture.detectChanges();
+
+    // Assert — a new request with the same cursor is made
+    const req = httpMock.expectOne((r) => r.url === '/api/issues' && r.params.get('cursor') === 'cursor-abc');
+    req.flush({ items: [], nextCursor: null });
+  });
+
+  // Band independence
+  it('should not show a resolved error block when loadIssues fails (active error does not bleed into resolved band)', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+
+    // Act — fail the active-band load, succeed on settings and counts
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+    httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    fixture.detectChanges();
+
+    // Assert — active error block present, no resolved section
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.issue-list__error')).toBeTruthy();
+    expect(el.querySelector('.issue-list__resolved-section')).toBeFalsy();
+  });
+
+  it('should keep active band cards visible when the resolved fetch fails', () => {
+    // Arrange — load an active issue
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [mockSummary]);
+    fixture.detectChanges();
+
+    // Act — select resolved state and fail that fetch
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — active card still rendered
+    const el = fixture.nativeElement as HTMLElement;
+    const activeBand = el.querySelector('.issue-list__grid');
+    expect(activeBand?.querySelectorAll('fd-issue-card').length).toBe(1);
+    // Active-band loadError signal is untouched
+    expect(issueService.loadError()).toBeNull();
+    // Resolved error appears inside the resolved section only
+    expect(el.querySelector('.issue-list__resolved-section .issue-list__error')).toBeTruthy();
   });
 });
