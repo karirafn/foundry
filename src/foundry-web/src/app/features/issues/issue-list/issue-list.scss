@@ -1,4 +1,6 @@
 .issue-list {
+  container-type: inline-size;
+  container-name: issue-list;
   max-width: 1024px;
   margin-inline: auto;
   padding: var(--fd-spacing-lg);
@@ -27,8 +29,6 @@
     display: flex;
     gap: var(--fd-spacing-xl);
     align-items: flex-start;
-
-    // responsive: deferred
   }
 
   &__rail {
@@ -39,6 +39,30 @@
   &__body {
     flex: 1 1 0;
     min-width: 0;
+  }
+
+  // Threshold: rail (200px) + gap (~24px) + minimum readable card (~376px) = ~600px.
+  // Below this threshold the rail no longer coexists with a readable card, so switch to the
+  // sticky-bar layout. Use a container query (not a media query) because the breakpoint is
+  // content-driven — .issue-list is the named container.
+  &__filter-bar-container {
+    display: none;
+  }
+
+  @container issue-list (max-width: 600px) {
+    .issue-list__rail {
+      display: none;
+    }
+
+    .issue-list__filter-bar-container {
+      display: block;
+    }
+
+    // Bottom padding ensures the last issue card is not occluded by the sticky filter bar.
+    // Step 5 refines this placeholder with env(safe-area-inset-bottom) for notched devices.
+    .issue-list__body {
+      padding-block-end: 72px;
+    }
   }
 
   &__grid {
