@@ -1,19 +1,33 @@
-import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { IssueDetail, IssueSummary, LIVE_STATES } from './issue.model';
+import { IssueDetail, IssueState, IssueSummary, LIVE_STATES } from './issue.model';
+import { ACTIVE_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
+
+interface IssueCountsResponse {
+  counts: Record<string, number>;
+}
+
+interface PagedIssues {
+  items: IssueSummary[];
+  nextCursor: string | null;
+}
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
+const LOAD_RESOLVED_ERROR = 'Failed to load resolved issues';
+const LOAD_MORE_RESOLVED_ERROR = 'Failed to load more resolved issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
 const RETRY_FAILED_ERROR = 'Failed to retry issue.';
 const RETRY_FAILED_SUCCESS = 'Retry queued. Issue status is updating.';
 const SAFE_ID_RE = /^[\w-]+$/;
+const COUNTS_DEBOUNCE_MS = 300;
 
 @Injectable({ providedIn: 'root' })
 export class IssueService {
   private readonly _http = inject(HttpClient);
   private readonly _signalR = inject(IssueSignalRService);
+  private readonly _destroyRef = inject(DestroyRef);
 
   readonly issues: WritableSignal<IssueSummary[]> = signal([]);
   readonly expandedIssueId: WritableSignal<string | null> = signal(null);
@@ -35,7 +49,33 @@ export class IssueService {
   private readonly _retryFailedSuccessSignal: WritableSignal<string | null> = signal(null);
   readonly retryFailedSuccess: Signal<string | null> = this._retryFailedSuccessSignal.asReadonly();
 
+  private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
+  readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
+
+  private readonly _selectedActiveStatesSignal: WritableSignal<ReadonlySet<IssueState>> = signal(ACTIVE_STATES);
+  readonly selectedActiveStates: Signal<ReadonlySet<IssueState>> = this._selectedActiveStatesSignal.asReadonly();
+
+  private readonly _selectedResolvedStatesSignal: WritableSignal<ReadonlySet<IssueState>> = signal(new Set<IssueState>());
+  readonly selectedResolvedStates: Signal<ReadonlySet<IssueState>> = this._selectedResolvedStatesSignal.asReadonly();
+
+  private readonly _resolvedIssuesSignal: WritableSignal<IssueSummary[]> = signal([]);
+  readonly resolvedIssues: Signal<IssueSummary[]> = this._resolvedIssuesSignal.asReadonly();
+
+  private readonly _resolvedCursor: WritableSignal<string | null> = signal(null);
+  readonly hasMoreResolved: Signal<boolean> = computed(() => this._resolvedCursor() !== null);
+
+  private readonly _resolvedErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly resolvedError: Signal<string | null> = this._resolvedErrorSignal.asReadonly();
+
+  private readonly _resolvedLoadMoreErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly resolvedLoadMoreError: Signal<string | null> = this._resolvedLoadMoreErrorSignal.asReadonly();
+
+  readonly resolvedLoading: WritableSignal<boolean> = signal(false);
+  readonly resolvedLoadingMore: WritableSignal<boolean> = signal(false);
+
   private _detailSub: Subscription | null = null;
+  private _countsDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  private _resolvedRequestToken = 0;
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
     const byDate = (a: IssueSummary, b: IssueSummary): number =>
@@ -50,11 +90,22 @@ export class IssueService {
     this.issues().filter(i => LIVE_STATES.has(i.state)).length
   );
 
+  readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
+    this.sortedIssues().filter(i =>
+      i.state === 'ineligible' || this.selectedActiveStates().has(i.state)
+    )
+  );
+
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
 
   constructor() {
     this._signalR.on<IssueSummary>('IssueUpdated', (updated) => this._upsertIssue(updated));
     this._signalR.onReconnected(() => this.loadIssues());
+    this._destroyRef.onDestroy(() => {
+      if (this._countsDebounceHandle !== null) {
+        clearTimeout(this._countsDebounceHandle);
+      }
+    });
   }
 
   loadIssues(repositoryId?: string): void {
@@ -67,7 +118,7 @@ export class IssueService {
 
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
       next: (issues) => {
-        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id)));
+        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state) && !isResolvedState(i.state)));
         this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
@@ -77,6 +128,70 @@ export class IssueService {
         this.initialLoading.set(false);
       },
     });
+  }
+
+  loadCounts(repositoryId?: string): void {
+    let params = new HttpParams();
+    if (repositoryId !== undefined) {
+      params = params.set('repositoryId', repositoryId);
+    }
+
+    this._http.get<IssueCountsResponse>('/api/issues/counts', { params }).subscribe({
+      next: (response) => {
+        this._countsSignal.set(response.counts);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+      },
+    });
+  }
+
+  countFor(state: IssueState): number {
+    return this._countsSignal()[state] ?? 0;
+  }
+
+  isStateSelected(state: IssueState): boolean {
+    if (isResolvedState(state)) {
+      return this.selectedResolvedStates().has(state);
+    }
+    return this.selectedActiveStates().has(state);
+  }
+
+  toggleState(state: IssueState): void {
+    if (isResolvedState(state)) {
+      const current = this.selectedResolvedStates();
+      const next = new Set<IssueState>(current);
+      if (next.has(state)) {
+        next.delete(state);
+      } else {
+        next.add(state);
+      }
+      this._selectedResolvedStatesSignal.set(next);
+      this._onResolvedSelectionChanged(next);
+    } else {
+      const current = this.selectedActiveStates();
+      const next = new Set<IssueState>(current);
+      if (next.has(state)) {
+        next.delete(state);
+      } else {
+        next.add(state);
+      }
+      this._selectedActiveStatesSignal.set(next);
+    }
+  }
+
+  loadMoreResolved(repositoryId?: string): void {
+    if (!this._resolvedCursor() || this.resolvedLoadingMore()) {
+      return;
+    }
+
+    this._resolvedLoadMoreErrorSignal.set(null);
+    this.resolvedLoadingMore.set(true);
+    this._fetchResolvedPage(this.selectedResolvedStates(), this._resolvedCursor(), repositoryId, false, this._resolvedRequestToken);
+  }
+
+  retryResolvedFetch(): void {
+    this._onResolvedSelectionChanged(this.selectedResolvedStates());
   }
 
   loadDetail(id: string): void {
@@ -161,19 +276,138 @@ export class IssueService {
       return;
     }
 
+    if (!isKnownState(updated.state)) {
+      console.warn('IssueService: rejected IssueUpdated event with unknown state');
+      return;
+    }
+
     const current = this.issues();
     const index = current.findIndex((i) => i.id === updated.id);
 
-    if (index >= 0) {
-      const next = [...current];
-      next[index] = updated;
-      this.issues.set(next);
+    if (isResolvedState(updated.state)) {
+      if (index >= 0) {
+        this.issues.set(current.filter((i) => i.id !== updated.id));
+      }
+      this._prependToResolvedIfSelected(updated);
     } else {
-      this.issues.set([...current, updated]);
+      if (index >= 0) {
+        const next = [...current];
+        next[index] = updated;
+        this.issues.set(next);
+      } else {
+        this.issues.set([...current, updated]);
+      }
+      this._removeFromResolved(updated.id);
     }
 
     if (this.expandedIssueId() === updated.id) {
       this.loadDetail(updated.id);
     }
+
+    this._scheduleDebouncedCountsRefetch();
+  }
+
+  private _prependToResolvedIfSelected(issue: IssueSummary): void {
+    if (!this.selectedResolvedStates().has(issue.state)) {
+      return;
+    }
+    const existing = this._resolvedIssuesSignal();
+    const withoutDuplicate = existing.filter((i) => i.id !== issue.id);
+    this._resolvedIssuesSignal.set([issue, ...withoutDuplicate]);
+  }
+
+  private _removeFromResolved(id: string): void {
+    const current = this._resolvedIssuesSignal();
+    const next = current.filter(i => i.id !== id);
+    if (next.length !== current.length) {
+      this._resolvedIssuesSignal.set(next);
+    }
+  }
+
+  private _scheduleDebouncedCountsRefetch(): void {
+    if (this._countsDebounceHandle !== null) {
+      clearTimeout(this._countsDebounceHandle);
+    }
+    this._countsDebounceHandle = setTimeout(() => {
+      this._countsDebounceHandle = null;
+      this.loadCounts();
+    }, COUNTS_DEBOUNCE_MS);
+  }
+
+  private _onResolvedSelectionChanged(states: ReadonlySet<IssueState>): void {
+    this._resolvedIssuesSignal.set([]);
+    this._resolvedCursor.set(null);
+    this._resolvedErrorSignal.set(null);
+    this._resolvedLoadMoreErrorSignal.set(null);
+    this._resolvedRequestToken += 1;
+
+    if (states.size === 0) {
+      return;
+    }
+
+    this.resolvedLoading.set(true);
+    this._fetchResolvedPage(states, null, undefined, true, this._resolvedRequestToken);
+  }
+
+  private _fetchResolvedPage(
+    states: ReadonlySet<IssueState>,
+    cursor: string | null,
+    repositoryId: string | undefined,
+    isFirstPage: boolean,
+    requestToken: number,
+  ): void {
+    let params = new HttpParams();
+    for (const s of states) {
+      params = params.append('states', s);
+    }
+    if (cursor !== null) {
+      params = params.set('cursor', cursor);
+    }
+    if (repositoryId !== undefined) {
+      params = params.set('repositoryId', repositoryId);
+    }
+
+    this._http.get<PagedIssues>('/api/issues', { params }).subscribe({
+      next: (page) => {
+        if (requestToken !== this._resolvedRequestToken) {
+          return;
+        }
+        if (!Array.isArray(page?.items)) {
+          if (isFirstPage) {
+            this._resolvedErrorSignal.set(LOAD_RESOLVED_ERROR);
+            this.resolvedLoading.set(false);
+          } else {
+            this._resolvedLoadMoreErrorSignal.set(LOAD_MORE_RESOLVED_ERROR);
+            this.resolvedLoadingMore.set(false);
+          }
+          return;
+        }
+        const safeItems = page.items.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state));
+        if (isFirstPage) {
+          this._resolvedIssuesSignal.set(safeItems);
+        } else {
+          const existing = this._resolvedIssuesSignal();
+          const existingIds = new Set(existing.map(i => i.id));
+          const newItems = safeItems.filter(i => !existingIds.has(i.id));
+          this._resolvedIssuesSignal.set([...existing, ...newItems]);
+        }
+        this._resolvedCursor.set(page.nextCursor);
+        if (isFirstPage) {
+          this.resolvedLoading.set(false);
+        } else {
+          this.resolvedLoadingMore.set(false);
+        }
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        if (isFirstPage) {
+          this._resolvedErrorSignal.set(LOAD_RESOLVED_ERROR);
+          this.resolvedLoading.set(false);
+        } else {
+          this._resolvedLoadMoreErrorSignal.set(LOAD_MORE_RESOLVED_ERROR);
+          this.resolvedLoadingMore.set(false);
+        }
+      },
+    });
   }
 }

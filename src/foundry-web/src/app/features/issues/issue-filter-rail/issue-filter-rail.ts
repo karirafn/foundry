@@ -1,0 +1,75 @@
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { IssueService } from '../issue.service';
+import { STATE_GROUPS } from '../issue-lifecycle.model';
+import { IssueState } from '../issue.model';
+import { STATE_RAIL_LABELS, STATE_COLOR_VARS } from '../state-display';
+
+@Component({
+  selector: 'fd-issue-filter-rail',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <div class="filter-rail" role="group" aria-label="Filter issues by state">
+      @for (group of groups; track group.label) {
+        <div
+          class="filter-rail__group"
+          role="group"
+          [attr.aria-labelledby]="groupId(group.label)"
+        >
+          <span
+            class="filter-rail__group-label"
+            [id]="groupId(group.label)"
+          >{{ group.label }}</span>
+          @for (state of group.states; track state) {
+            <button
+              type="button"
+              class="filter-rail__toggle"
+              [class.filter-rail__toggle--dimmed]="issueService.countFor(state) === 0"
+              [class.filter-rail__toggle--pressed]="issueService.isStateSelected(state)"
+              [attr.aria-pressed]="issueService.isStateSelected(state)"
+              [attr.aria-label]="toggleAriaLabel(state)"
+              [disabled]="issueService.countFor(state) === 0"
+              [attr.data-state]="state"
+              (click)="issueService.toggleState(state)"
+            >
+              <span
+                class="filter-rail__dot"
+                [style.background]="dotColor(state)"
+                aria-hidden="true"
+              ></span>
+              <span class="filter-rail__state-label">{{ stateLabel(state) }}</span>
+              <span class="filter-rail__count">{{ issueService.countFor(state) }}</span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+  `,
+  styleUrl: './issue-filter-rail.scss',
+})
+export class IssueFilterRailComponent {
+  protected readonly issueService = inject(IssueService);
+  protected readonly groups = STATE_GROUPS;
+
+  protected stateLabel(state: IssueState): string {
+    return STATE_RAIL_LABELS[state];
+  }
+
+  protected dotColor(state: IssueState): string {
+    return STATE_COLOR_VARS[state];
+  }
+
+  protected groupId(label: string): string {
+    return 'rail-group-' + label.toLowerCase().replace(/\s+/g, '-');
+  }
+
+  protected toggleAriaLabel(state: IssueState): string {
+    const label = this.stateLabel(state);
+    const count = this.issueService.countFor(state);
+    if (count === 0) {
+      return `${label}, no issues, filter unavailable`;
+    }
+    const unit = count === 1 ? 'issue' : 'issues';
+    return `${label}, ${count} ${unit}`;
+  }
+}
