@@ -1191,6 +1191,183 @@ describe('IssueService', () => {
   });
 });
 
+// Step 6 — SignalR band-transition handling + counts debounce-refetch
+describe('IssueService (band transitions + counts debounce)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+  let callbacks: Record<string, (data: IssueSummary) => void>;
+
+  const activeSummary: IssueSummary = {
+    id: 'issue-1',
+    issueNumber: 10,
+    title: 'Active issue',
+    state: 'detected',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/10',
+  };
+
+  const resolvedSummary: IssueSummary = {
+    id: 'issue-2',
+    issueNumber: 20,
+    title: 'Resolved issue',
+    state: 'completed',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/20',
+  };
+
+  beforeEach(() => {
+    callbacks = {};
+    const capturingSignalR = {
+      on: (method: string, cb: (data: IssueSummary) => void) => { callbacks[method] = cb; },
+      onReconnected: () => {},
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: capturingSignalR },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify({ ignoreCancelled: true });
+  });
+
+  // Cycle B1: active→resolved transition with resolved state SELECTED → issue removed from issues,
+  // prepended to resolvedIssues
+  it('should remove issue from issues and prepend to resolvedIssues when transitioning to a selected resolved state', () => {
+    // Arrange — load an active issue, select 'completed' resolved state
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([activeSummary]);
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+
+    const transitioned: IssueSummary = { ...activeSummary, state: 'completed' };
+
+    // Act
+    callbacks['IssueUpdated'](transitioned);
+
+    // Assert — removed from active band
+    expect(service.issues().some((i: IssueSummary) => i.id === 'issue-1')).toBe(false);
+    // Prepended to resolvedIssues
+    expect(service.resolvedIssues()[0]).toEqual(transitioned);
+  });
+
+  // Cycle B2: active→resolved with resolved state NOT selected → removed from issues, NOT added to resolvedIssues
+  it('should remove issue from issues and not add to resolvedIssues when transitioning to a non-selected resolved state', () => {
+    // Arrange — load an active issue, do NOT select any resolved states
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([activeSummary]);
+
+    const transitioned: IssueSummary = { ...activeSummary, state: 'completed' };
+
+    // Act
+    callbacks['IssueUpdated'](transitioned);
+
+    // Assert — removed from active band
+    expect(service.issues().some((i: IssueSummary) => i.id === 'issue-1')).toBe(false);
+    // NOT added to resolvedIssues
+    expect(service.resolvedIssues().length).toBe(0);
+  });
+
+  // Cycle B3: resolved→active transition → added to issues, removed from resolvedIssues
+  it('should add issue to issues and remove from resolvedIssues when transitioning from resolved to active', () => {
+    // Arrange — select 'completed', load a resolved issue in the resolved band
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [resolvedSummary], nextCursor: null });
+    expect(service.resolvedIssues().length).toBe(1);
+
+    const backToActive: IssueSummary = { ...resolvedSummary, state: 'revision_queued' };
+
+    // Act
+    callbacks['IssueUpdated'](backToActive);
+
+    // Assert — added to issues
+    expect(service.issues().some((i: IssueSummary) => i.id === 'issue-2')).toBe(true);
+    // Removed from resolvedIssues
+    expect(service.resolvedIssues().some((i: IssueSummary) => i.id === 'issue-2')).toBe(false);
+  });
+
+  // Cycle B4: dedup-by-id on prepend — same id arriving twice yields single entry at front
+  it('should deduplicate by id on prepend to resolvedIssues, keeping newest data at front', () => {
+    // Arrange — select 'completed', load one resolved issue in the resolved band
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({
+      items: [resolvedSummary],
+      nextCursor: null,
+    });
+    expect(service.resolvedIssues().length).toBe(1);
+
+    const updatedResolved: IssueSummary = { ...resolvedSummary, title: 'Updated title' };
+
+    // Act — fire two IssueUpdated events for the same id
+    callbacks['IssueUpdated'](updatedResolved);
+    callbacks['IssueUpdated']({ ...updatedResolved, title: 'Second update' });
+
+    // Assert — only one entry, newest data, at front
+    expect(service.resolvedIssues().length).toBe(1);
+    expect(service.resolvedIssues()[0].title).toBe('Second update');
+    expect(service.resolvedIssues()[0].id).toBe('issue-2');
+  });
+
+  // Cycle B6: expanded issue detail still reloads on IssueUpdated (regression guard)
+  it('should still re-fetch detail when the expanded issue receives an IssueUpdated event (regression)', () => {
+    // Arrange
+    service.toggleExpand('issue-1');
+    httpMock.expectOne('/api/issues/issue-1').flush({ ...activeSummary });
+    expect(service.expandedIssueId()).toBe('issue-1');
+
+    // Act — trigger an IssueUpdated event for the expanded issue
+    callbacks['IssueUpdated']({ ...activeSummary, state: 'in_progress' });
+
+    // Assert — detail refetch triggered (debounce timer runs in background; verify only the detail call)
+    const detailReq = httpMock.expectOne('/api/issues/issue-1');
+    detailReq.flush({ ...activeSummary, state: 'in_progress' });
+    expect(service.issueDetail()).toBeTruthy();
+  });
+
+  // Cycle B5 (scoped fake timers): counts debounce — burst of N IssueUpdated events triggers exactly one counts request
+  describe('counts debounce', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should debounce counts refetch so that a burst of IssueUpdated events triggers exactly one GET /api/issues/counts', () => {
+      // Arrange
+      service.loadIssues();
+      httpMock.expectOne('/api/issues').flush([activeSummary]);
+
+      // Act — fire three IssueUpdated events in rapid succession
+      callbacks['IssueUpdated']({ ...activeSummary, state: 'in_progress' });
+      callbacks['IssueUpdated']({ ...activeSummary, state: 'review' });
+      callbacks['IssueUpdated']({ ...activeSummary, state: 'failed' });
+
+      // No counts request should have fired yet (debounce window not elapsed)
+      httpMock.expectNone('/api/issues/counts');
+
+      // Advance timers past the debounce window
+      vi.advanceTimersByTime(400);
+
+      // Assert — exactly one counts request
+      const req = httpMock.expectOne('/api/issues/counts');
+      expect(req.request.method).toBe('GET');
+      req.flush({ counts: { failed: 1 } });
+    });
+  });
+});
+
 // Step 5 — Lazy resolved paging + accumulation
 describe('IssueService (resolved paging)', () => {
   let service: IssueService;

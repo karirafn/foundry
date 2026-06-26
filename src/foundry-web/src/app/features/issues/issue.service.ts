@@ -19,6 +19,7 @@ const LOAD_DETAIL_ERROR = 'Failed to load issue details';
 const RETRY_FAILED_ERROR = 'Failed to retry issue.';
 const RETRY_FAILED_SUCCESS = 'Retry queued. Issue status is updating.';
 const SAFE_ID_RE = /^[\w-]+$/;
+const COUNTS_DEBOUNCE_MS = 300;
 
 @Injectable({ providedIn: 'root' })
 export class IssueService {
@@ -61,6 +62,7 @@ export class IssueService {
   readonly resolvedLoadingMore: WritableSignal<boolean> = signal(false);
 
   private _detailSub: Subscription | null = null;
+  private _countsDebounceHandle: ReturnType<typeof setTimeout> | null = null;
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
     const byDate = (a: IssueSummary, b: IssueSummary): number =>
@@ -258,17 +260,49 @@ export class IssueService {
       if (index >= 0) {
         this.issues.set(current.filter((i) => i.id !== updated.id));
       }
-    } else if (index >= 0) {
-      const next = [...current];
-      next[index] = updated;
-      this.issues.set(next);
+      this._prependToResolvedIfSelected(updated);
     } else {
-      this.issues.set([...current, updated]);
+      if (index >= 0) {
+        const next = [...current];
+        next[index] = updated;
+        this.issues.set(next);
+      } else {
+        this.issues.set([...current, updated]);
+      }
+      this._removeFromResolved(updated.id);
     }
 
     if (this.expandedIssueId() === updated.id) {
       this.loadDetail(updated.id);
     }
+
+    this._scheduleDebouncedCountsRefetch();
+  }
+
+  private _prependToResolvedIfSelected(issue: IssueSummary): void {
+    if (!this.selectedResolvedStates().has(issue.state)) {
+      return;
+    }
+    const existing = this._resolvedIssuesSignal();
+    const withoutDuplicate = existing.filter((i) => i.id !== issue.id);
+    this._resolvedIssuesSignal.set([issue, ...withoutDuplicate]);
+  }
+
+  private _removeFromResolved(id: string): void {
+    const existing = this._resolvedIssuesSignal();
+    if (existing.some((i) => i.id === id)) {
+      this._resolvedIssuesSignal.set(existing.filter((i) => i.id !== id));
+    }
+  }
+
+  private _scheduleDebouncedCountsRefetch(): void {
+    if (this._countsDebounceHandle !== null) {
+      clearTimeout(this._countsDebounceHandle);
+    }
+    this._countsDebounceHandle = setTimeout(() => {
+      this._countsDebounceHandle = null;
+      this.loadCounts();
+    }, COUNTS_DEBOUNCE_MS);
   }
 
   private _onResolvedSelectionChanged(states: ReadonlySet<IssueState>): void {
