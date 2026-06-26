@@ -12,6 +12,7 @@ internal static class IssueEndpoints
             .WithTags("Issues");
 
         GetIssues.Endpoint.Map(group);
+        GetIssueCounts.Endpoint.Map(group);
         GetIssueById.Endpoint.Map(group);
         RetryIssue.Endpoint.Map(group);
 
