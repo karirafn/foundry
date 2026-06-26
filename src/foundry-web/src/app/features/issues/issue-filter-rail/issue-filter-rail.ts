@@ -6,12 +6,20 @@ import { STATE_RAIL_LABELS, STATE_COLOR_VARS } from '../state-display';
 
 @Component({
   selector: 'fd-issue-filter-rail',
+  standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="filter-rail" role="group" aria-label="Filter issues by state">
       @for (group of groups; track group.label) {
-        <div class="filter-rail__group">
-          <span class="filter-rail__group-label">{{ group.label }}</span>
+        <div
+          class="filter-rail__group"
+          role="group"
+          [attr.aria-labelledby]="groupId(group.label)"
+        >
+          <span
+            class="filter-rail__group-label"
+            [id]="groupId(group.label)"
+          >{{ group.label }}</span>
           @for (state of group.states; track state) {
             <button
               type="button"
@@ -19,6 +27,7 @@ import { STATE_RAIL_LABELS, STATE_COLOR_VARS } from '../state-display';
               [class.filter-rail__toggle--dimmed]="issueService.countFor(state) === 0"
               [class.filter-rail__toggle--pressed]="issueService.isStateSelected(state)"
               [attr.aria-pressed]="issueService.isStateSelected(state)"
+              [attr.aria-label]="toggleAriaLabel(state)"
               [disabled]="issueService.countFor(state) === 0"
               [attr.data-state]="state"
               (click)="issueService.toggleState(state)"
@@ -48,5 +57,19 @@ export class IssueFilterRailComponent {
 
   protected dotColor(state: IssueState): string {
     return STATE_COLOR_VARS[state];
+  }
+
+  protected groupId(label: string): string {
+    return 'rail-group-' + label.toLowerCase().replace(/\s+/g, '-');
+  }
+
+  protected toggleAriaLabel(state: IssueState): string {
+    const label = this.stateLabel(state);
+    const count = this.issueService.countFor(state);
+    if (count === 0) {
+      return `${label}, no issues, filter unavailable`;
+    }
+    const unit = count === 1 ? 'issue' : 'issues';
+    return `${label}, ${count} ${unit}`;
   }
 }

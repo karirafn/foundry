@@ -259,4 +259,87 @@ describe('IssueFilterRailComponent', () => {
     const totalStates = STATE_GROUPS.reduce((sum, g) => sum + g.states.length, 0);
     expect(dots.length).toBe(totalStates);
   });
+
+  // Cycle 10: [WCAG 1.3.1] each group div has role="group" and aria-labelledby pointing at its label span
+  it('should give each group div role="group"', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const groups = Array.from(el.querySelectorAll('.filter-rail__group'));
+    for (const group of groups) {
+      expect(group.getAttribute('role')).toBe('group');
+    }
+  });
+
+  it('should set aria-labelledby on each group div pointing at its label span id', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — each group's aria-labelledby resolves to its label span
+    const groups = Array.from(el.querySelectorAll('.filter-rail__group'));
+    for (const group of groups) {
+      const labelledBy = group.getAttribute('aria-labelledby');
+      expect(labelledBy).toBeTruthy();
+      const labelEl = el.querySelector(`#${labelledBy}`);
+      expect(labelEl).not.toBeNull();
+      expect(labelEl?.classList.contains('filter-rail__group-label')).toBe(true);
+    }
+  });
+
+  it('should generate stable ids from the group label text', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — spot-check that the "In progress" group uses the slugified id
+    const groups = Array.from(el.querySelectorAll('.filter-rail__group'));
+    const inProgressGroup = groups.find(g => {
+      const label = g.querySelector('.filter-rail__group-label');
+      return label?.textContent?.trim() === 'In progress';
+    });
+    expect(inProgressGroup?.getAttribute('aria-labelledby')).toBe('rail-group-in-progress');
+  });
+
+  // Cycle 11: [WCAG 2.4.6] toggle buttons have explicit aria-label with count + unit
+  it('should set aria-label with plural "issues" when count is greater than one', () => {
+    // Arrange
+    const { fixture } = setup({ counts: { in_progress: 3 } });
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act
+    const toggles = Array.from(el.querySelectorAll<HTMLButtonElement>('.filter-rail__toggle'));
+    const btn = toggles.find(b => b.dataset['state'] === 'in_progress');
+
+    // Assert
+    expect(btn?.getAttribute('aria-label')).toBe('In Progress, 3 issues');
+  });
+
+  it('should set aria-label with singular "issue" when count is exactly one', () => {
+    // Arrange
+    const { fixture } = setup({ counts: { detected: 1 } });
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act
+    const toggles = Array.from(el.querySelectorAll<HTMLButtonElement>('.filter-rail__toggle'));
+    const btn = toggles.find(b => b.dataset['state'] === 'detected');
+
+    // Assert
+    expect(btn?.getAttribute('aria-label')).toBe('Detected, 1 issue');
+  });
+
+  it('should set aria-label with "no issues, filter unavailable" when count is zero', () => {
+    // Arrange
+    const { fixture } = setup({ counts: {} });
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act
+    const toggles = Array.from(el.querySelectorAll<HTMLButtonElement>('.filter-rail__toggle'));
+    const btn = toggles.find(b => b.dataset['state'] === 'queued');
+
+    // Assert
+    expect(btn?.getAttribute('aria-label')).toBe('Queued, no issues, filter unavailable');
+  });
 });

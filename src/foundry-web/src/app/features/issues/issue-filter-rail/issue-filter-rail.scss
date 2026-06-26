@@ -11,7 +11,8 @@
 }
 
 .filter-rail__group-label {
-  color: var(--fd-text-tertiary);
+  // Using --fd-text-secondary (#8b949e, 6.14:1 against #0f1117) — satisfies WCAG AA 4.5:1
+  color: var(--fd-text-secondary);
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -55,16 +56,24 @@
     color: var(--fd-text-primary);
   }
 
+  // Raised from 0.35 to 0.5 — ensures label contrast remains ≥3:1 (WCAG AA large text / UI components)
   &--dimmed {
-    opacity: 0.35;
+    opacity: 0.5;
   }
 }
 
+// The dot is purely decorative — the text label is the accessible state cue.
+// In forced-colors mode the system overrides custom colors, making the dot meaningless;
+// hide it so the label remains the sole reliable visual indicator.
 .filter-rail__dot {
   border-radius: 50%;
   flex-shrink: 0;
   height: 8px;
   width: 8px;
+
+  @media (forced-colors: active) {
+    display: none;
+  }
 }
 
 .filter-rail__state-label {
@@ -72,9 +81,12 @@
 }
 
 .filter-rail__count {
-  color: var(--fd-text-tertiary);
+  // Using --fd-text-secondary (#8b949e, 6.14:1) — satisfies WCAG AA 4.5:1.
+  // Visual hierarchy is maintained via reduced font-weight rather than a lighter color.
+  color: var(--fd-text-secondary);
   font-family: var(--fd-font-mono);
   font-size: 0.75rem;
+  font-weight: 400;
   margin-left: auto;
   min-width: 1.5ch;
   text-align: right;
