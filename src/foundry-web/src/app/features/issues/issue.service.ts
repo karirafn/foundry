@@ -9,6 +9,11 @@ interface IssueCountsResponse {
   counts: Record<string, number>;
 }
 
+interface PagedIssues {
+  items: IssueSummary[];
+  nextCursor: string | null;
+}
+
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
 const RETRY_FAILED_ERROR = 'Failed to retry issue.';
@@ -45,6 +50,15 @@ export class IssueService {
 
   readonly selectedActiveStates: WritableSignal<ReadonlySet<IssueState>> = signal(ACTIVE_STATES);
   readonly selectedResolvedStates: WritableSignal<ReadonlySet<IssueState>> = signal(new Set<IssueState>());
+
+  private readonly _resolvedIssuesSignal: WritableSignal<IssueSummary[]> = signal([]);
+  readonly resolvedIssues: Signal<IssueSummary[]> = this._resolvedIssuesSignal.asReadonly();
+
+  private readonly _resolvedCursor: WritableSignal<string | null> = signal(null);
+  readonly hasMoreResolved: Signal<boolean> = computed(() => this._resolvedCursor() !== null);
+
+  readonly resolvedLoading: WritableSignal<boolean> = signal(false);
+  readonly resolvedLoadingMore: WritableSignal<boolean> = signal(false);
 
   private _detailSub: Subscription | null = null;
 
@@ -133,6 +147,7 @@ export class IssueService {
         next.add(state);
       }
       this.selectedResolvedStates.set(next);
+      this._onResolvedSelectionChanged(next);
     } else {
       const current = this.selectedActiveStates();
       const next = new Set<IssueState>(current);
@@ -143,6 +158,15 @@ export class IssueService {
       }
       this.selectedActiveStates.set(next);
     }
+  }
+
+  loadMoreResolved(repositoryId?: string): void {
+    if (!this._resolvedCursor() || this.resolvedLoadingMore()) {
+      return;
+    }
+
+    this.resolvedLoadingMore.set(true);
+    this._fetchResolvedPage(this.selectedResolvedStates(), this._resolvedCursor(), repositoryId, false);
   }
 
   loadDetail(id: string): void {
@@ -245,5 +269,63 @@ export class IssueService {
     if (this.expandedIssueId() === updated.id) {
       this.loadDetail(updated.id);
     }
+  }
+
+  private _onResolvedSelectionChanged(states: ReadonlySet<IssueState>): void {
+    this._resolvedIssuesSignal.set([]);
+    this._resolvedCursor.set(null);
+
+    if (states.size === 0) {
+      return;
+    }
+
+    this.resolvedLoading.set(true);
+    this._fetchResolvedPage(states, null, undefined, true);
+  }
+
+  private _fetchResolvedPage(
+    states: ReadonlySet<IssueState>,
+    cursor: string | null,
+    repositoryId: string | undefined,
+    isFirstPage: boolean,
+  ): void {
+    let params = new HttpParams();
+    for (const s of states) {
+      params = params.append('states[]', s);
+    }
+    if (cursor !== null) {
+      params = params.set('cursor', cursor);
+    }
+    if (repositoryId !== undefined) {
+      params = params.set('repositoryId', repositoryId);
+    }
+
+    this._http.get<PagedIssues>('/api/issues', { params }).subscribe({
+      next: (page) => {
+        const safeItems = page.items.filter(i => SAFE_ID_RE.test(i.id));
+        if (isFirstPage) {
+          this._resolvedIssuesSignal.set(safeItems);
+        } else {
+          const existing = this._resolvedIssuesSignal();
+          const existingIds = new Set(existing.map(i => i.id));
+          const newItems = safeItems.filter(i => !existingIds.has(i.id));
+          this._resolvedIssuesSignal.set([...existing, ...newItems]);
+        }
+        this._resolvedCursor.set(page.nextCursor);
+        if (isFirstPage) {
+          this.resolvedLoading.set(false);
+        } else {
+          this.resolvedLoadingMore.set(false);
+        }
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        if (isFirstPage) {
+          this.resolvedLoading.set(false);
+        } else {
+          this.resolvedLoadingMore.set(false);
+        }
+      },
+    });
   }
 }
