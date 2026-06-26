@@ -11,8 +11,9 @@ import {
 } from '@angular/core';
 import { IssueFilterRailComponent } from '../issue-filter-rail/issue-filter-rail';
 
-const HEADING_ID = 'filter-sheet-heading';
 const SWIPE_DISMISS_THRESHOLD_PX = 96;
+
+let _headingIdCounter = 0;
 const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 @Component({
@@ -32,12 +33,14 @@ const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]
         role="dialog"
         aria-modal="true"
         [attr.aria-labelledby]="headingId"
-        (pointerdown)="onPanelPointerDown($event)"
         (pointermove)="onPanelPointerMove($event)"
         (pointerup)="onPanelPointerUp($event)"
         (pointercancel)="onPanelPointerCancel()"
       >
-        <div class="filter-sheet__header">
+        <div
+          class="filter-sheet__header"
+          (pointerdown)="onHandlePointerDown($event)"
+        >
           <div class="filter-sheet__drag-handle" aria-hidden="true"></div>
           <h2
             class="filter-sheet__title"
@@ -68,7 +71,7 @@ export class IssueFilterSheetComponent {
 
   readonly close: OutputEmitterRef<void> = output<void>();
 
-  protected readonly headingId = HEADING_ID;
+  protected readonly headingId = `filter-sheet-heading-${++_headingIdCounter}`;
 
   private _dragStartY: number | null = null;
 
@@ -116,7 +119,7 @@ export class IssueFilterSheetComponent {
     this.close.emit();
   }
 
-  protected onPanelPointerDown(event: PointerEvent): void {
+  protected onHandlePointerDown(event: PointerEvent): void {
     this._dragStartY = event.clientY;
     const panel = this._getPanel();
     if (panel !== null && typeof panel.setPointerCapture === 'function') {

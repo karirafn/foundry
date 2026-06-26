@@ -288,16 +288,17 @@ describe('IssueFilterSheetComponent', () => {
     expect(component.shouldDismiss(95)).toBe(false);
   });
 
-  it('should emit close when panel is dragged past the dismiss threshold', () => {
+  it('should emit close when handle is dragged past the dismiss threshold', () => {
     // Arrange
     const { fixture } = setup(true);
     const el = fixture.nativeElement as HTMLElement;
     const closeSpy = vi.fn();
     fixture.componentInstance.close.subscribe(closeSpy);
+    const handle = el.querySelector('.filter-sheet__drag-handle') as HTMLElement;
     const panel = el.querySelector('.filter-sheet__panel') as HTMLElement;
 
-    // Act — simulate a pointer drag exceeding 96px downward
-    panel.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
+    // Act — simulate a pointer drag exceeding 96px downward from the handle
+    handle.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
     panel.dispatchEvent(new PointerEvent('pointermove', { clientY: 200, bubbles: true }));
     panel.dispatchEvent(new PointerEvent('pointerup', { clientY: 200, bubbles: true }));
 
@@ -305,20 +306,124 @@ describe('IssueFilterSheetComponent', () => {
     expect(closeSpy).toHaveBeenCalledOnce();
   });
 
-  it('should not emit close when panel is dragged below the dismiss threshold', () => {
+  it('should not emit close when handle is dragged below the dismiss threshold', () => {
     // Arrange
     const { fixture } = setup(true);
     const el = fixture.nativeElement as HTMLElement;
     const closeSpy = vi.fn();
     fixture.componentInstance.close.subscribe(closeSpy);
+    const handle = el.querySelector('.filter-sheet__drag-handle') as HTMLElement;
     const panel = el.querySelector('.filter-sheet__panel') as HTMLElement;
 
-    // Act — simulate a pointer drag of only 50px downward
-    panel.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
+    // Act — simulate a pointer drag of only 50px downward from the handle
+    handle.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
     panel.dispatchEvent(new PointerEvent('pointermove', { clientY: 150, bubbles: true }));
     panel.dispatchEvent(new PointerEvent('pointerup', { clientY: 150, bubbles: true }));
 
     // Assert
     expect(closeSpy).not.toHaveBeenCalled();
+  });
+
+  // Finding A: per-instance heading IDs must be unique across instances
+  it('should generate a unique headingId per component instance', () => {
+    // Arrange — create two separate component instances
+    const { fixture: fixture1 } = setup(true);
+    TestBed.resetTestingModule();
+
+    const mockIssueService = {
+      counts: signal<Record<string, number>>({}).asReadonly(),
+      selectedActiveStates: signal<ReadonlySet<IssueState>>(new Set()).asReadonly(),
+      selectedResolvedStates: signal<ReadonlySet<IssueState>>(new Set()).asReadonly(),
+      countFor: (_state: IssueState): number => 0,
+      isStateSelected: (_state: IssueState): boolean => false,
+      toggleState: vi.fn(),
+      activeFilterCount: signal(0).asReadonly(),
+    };
+
+    TestBed.configureTestingModule({
+      imports: [IssueFilterSheetComponent],
+      providers: [{ provide: IssueService, useValue: mockIssueService }],
+    });
+
+    const fixture2 = TestBed.createComponent(IssueFilterSheetComponent);
+    fixture2.componentRef.setInput('open', true);
+    fixture2.detectChanges();
+
+    // Act
+    const id1 = fixture1.componentInstance['headingId'];
+    const id2 = fixture2.componentInstance['headingId'];
+
+    // Assert — each instance has its own unique ID
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+  });
+
+  it('should set aria-labelledby to match the heading id on the same instance', () => {
+    // Arrange / Act
+    const { fixture } = setup(true);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const dialog = el.querySelector('[role="dialog"]') as HTMLElement;
+    const headingId = fixture.componentInstance['headingId'];
+    expect(dialog.getAttribute('aria-labelledby')).toBe(headingId);
+    const heading = el.querySelector(`#${headingId}`);
+    expect(heading).not.toBeNull();
+  });
+
+  // Finding B: pointerdown on a body element must NOT start a drag / must NOT capture the pointer
+  it('should not start a drag when pointerdown occurs on a body element (not the handle)', () => {
+    // Arrange
+    const { fixture } = setup(true);
+    const el = fixture.nativeElement as HTMLElement;
+    const closeSpy = vi.fn();
+    fixture.componentInstance.close.subscribe(closeSpy);
+    const body = el.querySelector('.filter-sheet__body') as HTMLElement;
+
+    // Act — simulate a downward drag starting from the body
+    body.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
+    const panel = el.querySelector('.filter-sheet__panel') as HTMLElement;
+    panel.dispatchEvent(new PointerEvent('pointermove', { clientY: 300, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointerup', { clientY: 300, bubbles: true }));
+
+    // Assert — drag from body does not dismiss the sheet
+    expect(closeSpy).not.toHaveBeenCalled();
+  });
+
+  it('should start a drag and dismiss when pointerdown occurs on the drag handle', () => {
+    // Arrange
+    const { fixture } = setup(true);
+    const el = fixture.nativeElement as HTMLElement;
+    const closeSpy = vi.fn();
+    fixture.componentInstance.close.subscribe(closeSpy);
+    const handle = el.querySelector('.filter-sheet__drag-handle') as HTMLElement;
+    const panel = el.querySelector('.filter-sheet__panel') as HTMLElement;
+
+    // Act — simulate a downward drag starting from the handle
+    handle.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointermove', { clientY: 300, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointerup', { clientY: 300, bubbles: true }));
+
+    // Assert — drag from handle dismisses the sheet
+    expect(closeSpy).toHaveBeenCalledOnce();
+  });
+
+  it('should start a drag and dismiss when pointerdown occurs on the header', () => {
+    // Arrange
+    const { fixture } = setup(true);
+    const el = fixture.nativeElement as HTMLElement;
+    const closeSpy = vi.fn();
+    fixture.componentInstance.close.subscribe(closeSpy);
+    const header = el.querySelector('.filter-sheet__header') as HTMLElement;
+    const panel = el.querySelector('.filter-sheet__panel') as HTMLElement;
+
+    // Act — simulate a downward drag starting from the header
+    header.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointermove', { clientY: 300, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointerup', { clientY: 300, bubbles: true }));
+
+    // Assert — drag from header dismisses the sheet
+    expect(closeSpy).toHaveBeenCalledOnce();
   });
 });

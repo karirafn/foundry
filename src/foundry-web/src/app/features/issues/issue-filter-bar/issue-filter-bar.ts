@@ -22,6 +22,8 @@ import { IssueFilterSheetComponent } from '../issue-filter-sheet/issue-filter-sh
         #filterBtn
         type="button"
         class="filter-bar__btn"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="_sheetOpen()"
         [attr.aria-label]="filterBtnAriaLabel()"
         (click)="openSheet()"
       >

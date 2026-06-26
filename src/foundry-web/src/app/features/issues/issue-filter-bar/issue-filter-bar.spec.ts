@@ -157,4 +157,39 @@ describe('IssueFilterBarComponent', () => {
     // Assert
     expect(fixture.componentInstance['_sheetOpen']()).toBe(false);
   });
+
+  // Finding D: Filter button must expose dialog-control ARIA attributes
+  it('should have aria-haspopup="dialog" on the Filter button', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.filter-bar__btn') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-haspopup')).toBe('dialog');
+  });
+
+  it('should have aria-expanded="false" on the Filter button when the sheet is closed', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const btn = el.querySelector('.filter-bar__btn') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('should have aria-expanded="true" on the Filter button when the sheet is open', () => {
+    // Arrange
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+    const btn = el.querySelector('.filter-bar__btn') as HTMLButtonElement;
+
+    // Act — open the sheet
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+  });
 });
