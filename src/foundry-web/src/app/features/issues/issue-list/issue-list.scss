@@ -108,9 +108,7 @@
   }
 
   &__empty-active-announcer {
-    &:empty {
-      display: none;
-    }
+    // sr-only handles visibility; this class is an anchor for tests
   }
 
   &__empty-active {
@@ -156,6 +154,8 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     white-space: nowrap;
+    margin: 0;
+    line-height: inherit;
   }
 
   &__resolved-band {

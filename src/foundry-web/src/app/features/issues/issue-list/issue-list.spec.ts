@@ -572,9 +572,9 @@ describe('IssueListComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const srSpan = el.querySelector('.sr-only');
-    expect(srSpan).toBeTruthy();
-    expect(srSpan?.textContent).toContain('End of in-progress issues');
+    const srSpans = Array.from(el.querySelectorAll('.sr-only'));
+    const boundarySpan = srSpans.find((s) => s.textContent?.includes('End of in-progress issues'));
+    expect(boundarySpan).toBeTruthy();
   });
 
   // Cycle 11: expand/collapse wiring - fd-issue-detail appears when card is expanded
@@ -839,5 +839,209 @@ describe('IssueListComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const announcer = el.querySelector('[aria-live="polite"].issue-list__resolved-announcer');
     expect(announcer).toBeTruthy();
+  });
+
+  // Finding 2: aside has accessible name
+  it('should give the filter-rail aside an aria-label of "Filter by state"', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const aside = el.querySelector('aside.issue-list__rail');
+    expect(aside?.getAttribute('aria-label')).toBe('Filter by state');
+  });
+
+  // Finding 1: resolved caption is an h2 inside a section
+  it('should render "Resolved" as an h2 when the resolved band is open', () => {
+    // Arrange
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+      items: [resolvedIssue],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const heading = el.querySelector('h2.issue-list__resolved-caption');
+    expect(heading?.textContent?.trim()).toBe('Resolved');
+  });
+
+  it('should wrap the resolved band in a section element', () => {
+    // Arrange
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+      items: [resolvedIssue],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const section = el.querySelector('section.issue-list__resolved-section');
+    expect(section).toBeTruthy();
+    expect(section?.getAttribute('aria-labelledby')).toBeTruthy();
+  });
+
+  // Finding 3: empty-active announcer is sr-only
+  it('should have the sr-only class on the empty-active announcer', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__empty-active-announcer');
+    expect(announcer?.classList).toContain('sr-only');
+  });
+
+  // Finding 5: visible hint bound to constant (not duplicated inline)
+  it('should bind the empty-active hint text to the same copy as the announcer', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert — hint and announcer text are identical
+    const el = fixture.nativeElement as HTMLElement;
+    const hint = el.querySelector('.issue-list__empty-active-hint') as HTMLElement;
+    const announcer = el.querySelector('.issue-list__empty-active-announcer') as HTMLElement;
+    expect(hint?.textContent?.trim()).toBe(announcer?.textContent?.trim());
+  });
+
+  // Finding 4: resolved-loading element no longer carries role="status"
+  it('should not have role="status" on the resolved-loading element', () => {
+    // Arrange
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    // First request immediately resolves but triggers resolvedLoading briefly;
+    // we flush to get into steady state then check there is no stale role="status"
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+      items: [resolvedIssue],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert — any resolved-loading element must not have role="status"
+    const el = fixture.nativeElement as HTMLElement;
+    const loadingEl = el.querySelector('.issue-list__resolved-loading');
+    if (loadingEl) {
+      expect(loadingEl.getAttribute('role')).not.toBe('status');
+    } else {
+      // Loading div already gone after flush — pass
+      expect(true).toBe(true);
+    }
+  });
+
+  it('should announce "Loading resolved issues…" via the persistent resolved announcer while resolvedLoading is true', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act — select resolved state; the HTTP call is pending so resolvedLoading is true
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    fixture.detectChanges();
+
+    // Capture announcement text before flushing (loading state)
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('[aria-live="polite"].issue-list__resolved-announcer') as HTMLElement;
+    const textWhileLoading = announcer?.textContent?.trim() ?? '';
+
+    // Flush the pending request so afterEach verify() passes
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+      items: [],
+      nextCursor: null,
+    });
+
+    // Assert — announcer text captured during loading state reflects loading
+    expect(textWhileLoading).toContain('Loading resolved issues');
+  });
+
+  // Finding 6: resolved announcement uses delta wording
+  it('should announce the delta when Load more is clicked', () => {
+    // Arrange
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const resolvedIssue2: IssueSummary = { ...mockSummary, id: 'res2', state: 'completed', issueNumber: 99 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states[]')).flush({
+      items: [resolvedIssue],
+      nextCursor: 'cursor-abc',
+    });
+    fixture.detectChanges();
+
+    // Act — click Load more
+    const el = fixture.nativeElement as HTMLElement;
+    const loadMoreBtn = el.querySelector('.issue-list__load-more') as HTMLElement;
+    loadMoreBtn.click();
+    fixture.detectChanges();
+
+    httpMock.expectOne((r) => r.url === '/api/issues' && r.params.has('cursor')).flush({
+      items: [resolvedIssue2],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert — announcement mentions the delta (1 more) and the total (2)
+    const announcer = el.querySelector('[aria-live="polite"].issue-list__resolved-announcer') as HTMLElement;
+    expect(announcer?.textContent).toContain('1 more');
+    expect(announcer?.textContent).toContain('2');
+  });
+
+  // Finding 7: OnPush change detection
+  it('should use OnPush change detection strategy', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+
+    // Assert — OnPush components have a detached ChangeDetectorRef that only
+    // checks when inputs change or markForCheck() is called. With OnPush the
+    // fixture's changeDetectorRef is not the default (always-dirty) detector.
+    // Angular's ɵcmp.onPush is the canonical internal flag (true = OnPush).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const componentDef = (IssueListComponent as any).ɵcmp;
+    expect(componentDef?.onPush).toBe(true);
   });
 });

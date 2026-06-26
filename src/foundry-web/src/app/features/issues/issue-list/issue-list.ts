@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { IssueCardComponent } from '../issue-card/issue-card';
@@ -11,10 +11,12 @@ import { SettingsService } from '../../../features/settings/settings.service';
 
 const SKELETON_COUNT = 4;
 const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts in the filter rail.';
+const RESOLVED_HEADING_ID = 'resolved-band-heading';
 
 @Component({
   selector: 'fd-issue-list',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     IssueCardComponent,
     IssueCardSkeletonComponent,
@@ -33,7 +35,7 @@ const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check 
       <fd-dispatch-controls />
 
       <div class="issue-list__layout">
-        <aside class="issue-list__rail">
+        <aside class="issue-list__rail" aria-label="Filter by state">
           <fd-issue-filter-rail />
         </aside>
 
@@ -66,13 +68,13 @@ const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check 
           <!-- Persistent live-region announcer for empty-active state (always mounted). -->
           <p
             role="status"
-            class="issue-list__empty-active-announcer"
+            class="issue-list__empty-active-announcer sr-only"
           >{{ emptyActiveMessage() }}</p>
 
           @if (!issueService.initialLoading() && issueService.activeBandIssues().length === 0 && !issueService.loadError()) {
             <div class="issue-list__empty-active">
               <h2 class="issue-list__empty-active-heading">No active issues</h2>
-              <p class="issue-list__empty-active-hint">No active issues match the current filters. Check the Resolved counts in the filter rail.</p>
+              <p class="issue-list__empty-active-hint">{{ emptyActiveHint }}</p>
             </div>
           }
 
@@ -108,15 +110,17 @@ const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check 
           </div>
 
           @if (issueService.selectedResolvedStates().size > 0) {
-            <div class="issue-list__resolved-section">
+            <section
+              class="issue-list__resolved-section"
+              [attr.aria-labelledby]="resolvedHeadingId"
+            >
               <div class="issue-list__resolved-divider">
                 <hr class="issue-list__resolved-hr" aria-hidden="true" />
-                <span class="issue-list__resolved-caption">Resolved</span>
+                <h2 [id]="resolvedHeadingId" class="issue-list__resolved-caption">Resolved</h2>
               </div>
 
               @if (issueService.resolvedLoading()) {
-                <div class="issue-list__resolved-loading" role="status" aria-busy="true">
-                  <span class="sr-only">Loading resolved issues…</span>
+                <div class="issue-list__resolved-loading" aria-hidden="true">
                 </div>
               }
 
@@ -152,7 +156,7 @@ const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check 
                   type="button"
                   class="issue-list__load-more"
                   [disabled]="issueService.resolvedLoadingMore()"
-                  (click)="issueService.loadMoreResolved()"
+                  (click)="loadMore()"
                 >
                   @if (issueService.resolvedLoadingMore()) {
                     <span class="sr-only">Loading more resolved issues…</span>
@@ -161,7 +165,7 @@ const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check 
                   }
                 </button>
               }
-            </div>
+            </section>
           }
 
           <!-- Persistent live-region announcer for resolved band (always mounted). -->
@@ -181,6 +185,10 @@ export class IssueListComponent implements OnInit {
   private readonly _settingsService = inject(SettingsService);
 
   protected readonly skeletonPlaceholders = Array.from({ length: SKELETON_COUNT }, (_, i) => i);
+  protected readonly emptyActiveHint = EMPTY_ACTIVE_MESSAGE;
+  protected readonly resolvedHeadingId = RESOLVED_HEADING_ID;
+
+  private _preLoadResolvedCount = 0;
 
   protected readonly emptyActiveMessage = computed(() => {
     if (
@@ -194,12 +202,24 @@ export class IssueListComponent implements OnInit {
   });
 
   protected readonly resolvedAnnouncement = computed(() => {
+    if (this.issueService.resolvedLoading()) {
+      return 'Loading resolved issues…';
+    }
     const count = this.issueService.resolvedIssues().length;
     if (this.issueService.selectedResolvedStates().size > 0 && count > 0) {
+      const delta = count - this._preLoadResolvedCount;
+      if (delta > 0 && this._preLoadResolvedCount > 0) {
+        return `Loaded ${delta} more resolved issue${delta === 1 ? '' : 's'} (${count} total)`;
+      }
       return `Loaded ${count} resolved issue${count === 1 ? '' : 's'}`;
     }
     return '';
   });
+
+  loadMore(): void {
+    this._preLoadResolvedCount = this.issueService.resolvedIssues().length;
+    this.issueService.loadMoreResolved();
+  }
 
   ngOnInit(): void {
     this.issueService.loadIssues();
