@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES } from './issue.model';
-import { isResolvedState } from './issue-lifecycle.model';
+import { ACTIVE_STATES, isResolvedState } from './issue-lifecycle.model';
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
@@ -43,6 +43,9 @@ export class IssueService {
   private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
   readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
 
+  readonly selectedActiveStates: WritableSignal<ReadonlySet<IssueState>> = signal(ACTIVE_STATES);
+  readonly selectedResolvedStates: WritableSignal<ReadonlySet<IssueState>> = signal(new Set<IssueState>());
+
   private _detailSub: Subscription | null = null;
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
@@ -56,6 +59,12 @@ export class IssueService {
 
   readonly liveIssueCount: Signal<number> = computed(() =>
     this.issues().filter(i => LIVE_STATES.has(i.state)).length
+  );
+
+  readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
+    this.sortedIssues().filter(i =>
+      i.state === 'ineligible' || this.selectedActiveStates().has(i.state)
+    )
   );
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
@@ -105,6 +114,35 @@ export class IssueService {
 
   countFor(state: IssueState): number {
     return this._countsSignal()[state] ?? 0;
+  }
+
+  isStateSelected(state: IssueState): boolean {
+    if (isResolvedState(state)) {
+      return this.selectedResolvedStates().has(state);
+    }
+    return this.selectedActiveStates().has(state);
+  }
+
+  toggleState(state: IssueState): void {
+    if (isResolvedState(state)) {
+      const current = this.selectedResolvedStates();
+      const next = new Set<IssueState>(current);
+      if (next.has(state)) {
+        next.delete(state);
+      } else {
+        next.add(state);
+      }
+      this.selectedResolvedStates.set(next);
+    } else {
+      const current = this.selectedActiveStates();
+      const next = new Set<IssueState>(current);
+      if (next.has(state)) {
+        next.delete(state);
+      } else {
+        next.add(state);
+      }
+      this.selectedActiveStates.set(next);
+    }
   }
 
   loadDetail(id: string): void {

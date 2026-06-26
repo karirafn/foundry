@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { IssueService } from './issue.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueSummary, IssueDetail } from './issue.model';
+import { ACTIVE_STATES } from './issue-lifecycle.model';
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -1084,5 +1085,103 @@ describe('IssueService', () => {
 
     // Assert — no user-facing error block (loadError stays null)
     expect(service.loadError()).toBeNull();
+  });
+
+  // Step 4 — Selected-state signals + active-band filtering
+
+  // Cycle S1: default selectedActiveStates contains all active states
+  it('should initialize selectedActiveStates with all active states and isStateSelected true for each', () => {
+    // Arrange — initial state of the service
+
+    // Act / Assert
+    for (const state of ACTIVE_STATES) {
+      expect(service.isStateSelected(state)).toBe(true);
+    }
+  });
+
+  // Cycle S2: toggleState deselects an active state; toggling again re-selects
+  it('should deselect an active state after toggleState and re-select on second toggle', () => {
+    // Arrange
+    expect(service.isStateSelected('detected')).toBe(true);
+
+    // Act — first toggle deselects
+    service.toggleState('detected');
+
+    // Assert
+    expect(service.isStateSelected('detected')).toBe(false);
+
+    // Act — second toggle re-selects
+    service.toggleState('detected');
+
+    // Assert
+    expect(service.isStateSelected('detected')).toBe(true);
+  });
+
+  // Cycle S3: activeBandIssues preserves sortedIssues ordering (live before non-live)
+  it('should preserve sortedIssues ordering in activeBandIssues (live issues before non-live)', () => {
+    // Arrange
+    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
+    const live: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([nonLive, live]);
+
+    // Assert — live appears first even though it has an older detectedAt
+    expect(service.activeBandIssues()[0].id).toBe('live');
+    expect(service.activeBandIssues()[1].id).toBe('non-live');
+  });
+
+  // Cycle S5: ineligible always in activeBandIssues even when no states selected
+  it('should always include ineligible issues in activeBandIssues even when no states are selected', () => {
+    // Arrange — load an ineligible issue and a detected issue
+    const ineligible: IssueSummary = { ...mockSummary, id: 'ineligible-1', state: 'ineligible' };
+    const detected: IssueSummary = { ...mockSummary, id: 'detected-1', state: 'detected' };
+
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([ineligible, detected]);
+
+    // Act — deselect all active states
+    for (const state of ACTIVE_STATES) {
+      service.toggleState(state);
+    }
+
+    // Assert — ineligible still appears; detected does not
+    expect(service.activeBandIssues().find((i: IssueSummary) => i.id === 'ineligible-1')).toBeDefined();
+    expect(service.activeBandIssues().find((i: IssueSummary) => i.id === 'detected-1')).toBeUndefined();
+  });
+
+  // Cycle S6: selection sets are replaced immutably after toggleState
+  it('should replace the selectedActiveStates set immutably on toggleState', () => {
+    // Arrange
+    const setBeforeToggle = service.selectedActiveStates();
+
+    // Act
+    service.toggleState('detected');
+
+    // Assert — a new Set was created; the old reference is unchanged
+    const setAfterToggle = service.selectedActiveStates();
+    expect(setAfterToggle).not.toBe(setBeforeToggle);
+    expect(setBeforeToggle.has('detected')).toBe(true);
+    expect(setAfterToggle.has('detected')).toBe(false);
+  });
+
+  // Cycle S4: activeBandIssues excludes issues of deselected state with no HTTP request
+  it('should exclude issues of a deselected state from activeBandIssues without making an HTTP request', () => {
+    // Arrange — load one detected issue
+    const detectedIssue: IssueSummary = { ...mockSummary, id: 'detected-1', state: 'detected' };
+    const failedIssue: IssueSummary = { ...mockSummary, id: 'failed-1', state: 'failed' };
+
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([detectedIssue, failedIssue]);
+    expect(service.activeBandIssues().length).toBe(2);
+
+    // Act — deselect 'detected'
+    service.toggleState('detected');
+
+    // Assert — no HTTP requests were made
+    httpMock.expectNone('/api/issues');
+    expect(service.activeBandIssues().find((i: IssueSummary) => i.id === 'detected-1')).toBeUndefined();
+    expect(service.activeBandIssues().find((i: IssueSummary) => i.id === 'failed-1')).toBeDefined();
   });
 });
