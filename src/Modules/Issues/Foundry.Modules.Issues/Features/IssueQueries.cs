@@ -438,15 +438,74 @@ internal sealed class IssueQueries(
         return Expression.Lambda<Func<Issue, bool>>(body, parameter);
     }
 
-    // TODO(#237 step 4): implemented in step 4
-    public Task<PagedIssues> GetResolvedIssueSummariesAsync(
+    /// <summary>
+    /// Returns a page of resolved issue summaries in DetectedAt DESC, Id ASC order.
+    ///
+    /// Cursor contract: the caller is responsible for validating the cursor via
+    /// <see cref="IssueCursor.Decode"/> before calling this method. When <paramref name="cursor"/>
+    /// is non-null this method assumes it is well-formed. The endpoint (step 6) validates
+    /// the cursor and returns 400 on <see cref="IssueErrors.InvalidCursor"/> before calling here.
+    /// </summary>
+    public async Task<PagedIssues> GetResolvedIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         IReadOnlyCollection<string> states,
         string? cursor,
         int limit,
         CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        const int DefaultLimit = 50;
+        const int MaxLimit = 100;
+
+        int effectiveLimit = limit <= 0
+            ? DefaultLimit
+            : Math.Min(limit, MaxLimit);
+
+        Expression<Func<Issue, bool>> statePredicate = BuildTypeOrPredicate(states);
+
+        IQueryable<Issue> query = db.Set<Issue>()
+            .AsNoTracking()
+            .Where(statePredicate);
+
+        if (repositoryId is not null)
+        {
+            query = query.Where(i => i.MonitoredRepositoryId == repositoryId);
+        }
+
+        if (cursor is not null)
+        {
+            Result<(DateTimeOffset DetectedAt, IssueId Id)> decoded = IssueCursor.Decode(cursor);
+            if (decoded is Result<(DateTimeOffset DetectedAt, IssueId Id)>.Success success)
+            {
+                DateTimeOffset cursorDetectedAt = success.Value.DetectedAt;
+                IssueId cursorId = success.Value.Id;
+
+                query = query.Where(i =>
+                    i.DetectedAt < cursorDetectedAt
+                    || (i.DetectedAt == cursorDetectedAt && i.Id > cursorId));
+            }
+        }
+
+        List<Issue> issues = await query
+            .OrderByDescending(i => i.DetectedAt)
+            .ThenBy(i => i.Id)
+            .Take(effectiveLimit + 1)
+            .ToListAsync(cancellationToken);
+
+        bool hasNextPage = issues.Count > effectiveLimit;
+        List<Issue> pageIssues = hasNextPage
+            ? issues.Take(effectiveLimit).ToList()
+            : issues;
+
+        IReadOnlyList<IssueSummary> summaries = await EnrichAsync(pageIssues, cancellationToken);
+
+        string? nextCursor = null;
+        if (hasNextPage && summaries.Count > 0)
+        {
+            Issue lastIssue = pageIssues[^1];
+            nextCursor = IssueCursor.Encode(lastIssue.DetectedAt, lastIssue.Id);
+        }
+
+        return new PagedIssues(summaries, nextCursor);
     }
 
     // TODO(#237 step 5): implemented in step 5
