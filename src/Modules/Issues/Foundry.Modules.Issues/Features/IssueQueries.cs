@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
@@ -14,7 +16,6 @@ internal sealed class IssueQueries(
     IRepositorySlugQueries slugQueries,
     IRepositoryEligibilityQuery eligibilityQuery) : IIssueQueries
 {
-
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
@@ -98,6 +99,13 @@ internal sealed class IssueQueries(
             .OrderByDescending(i => i.DetectedAt)
             .ToListAsync(cancellationToken);
 
+        return await EnrichAsync(issues, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<IssueSummary>> EnrichAsync(
+        List<Issue> issues,
+        CancellationToken cancellationToken)
+    {
         if (issues.Count == 0)
         {
             return [];
@@ -378,6 +386,163 @@ internal sealed class IssueQueries(
             _ => null
         };
 
+    public async Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
+        MonitoredRepositoryId? repositoryId,
+        IReadOnlyCollection<string>? states,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyCollection<string> effectiveStates =
+            states is null || states.Count == 0
+                ? IssueStateRegistry.Active
+                : states;
+
+        Expression<Func<Issue, bool>> statePredicate = BuildTypeOrPredicate(effectiveStates);
+
+        IQueryable<Issue> query = db.Set<Issue>()
+            .AsNoTracking()
+            .Where(statePredicate);
+
+        if (repositoryId is not null)
+        {
+            query = query.Where(i => i.MonitoredRepositoryId == repositoryId);
+        }
+
+        List<Issue> issues = await query
+            .OrderByDescending(i => i.DetectedAt)
+            .ToListAsync(cancellationToken);
+
+        return await EnrichAsync(issues, cancellationToken);
+    }
+
+    private static Expression<Func<Issue, bool>> BuildTypeOrPredicate(IReadOnlyCollection<string> stateNames)
+    {
+        ParameterExpression parameter = Expression.Parameter(typeof(Issue), "i");
+
+        Expression? body = null;
+        foreach (string name in stateNames)
+        {
+            Type? entityType = IssueStateRegistry.GetEntityType(name);
+            if (entityType is null)
+            {
+                continue;
+            }
+
+            // Expression.TypeIs over the TPH hierarchy is translated by EF Core to a
+            // `state = '<discriminator>'` SQL filter — this is server-side, not client evaluation.
+            Expression typeCheck = Expression.TypeIs(parameter, entityType);
+            body = body is null ? typeCheck : Expression.OrElse(body, typeCheck);
+        }
+
+        // When no recognised names map to a type (should not happen with validated input),
+        // return a predicate that matches nothing.
+        body ??= Expression.Constant(false);
+
+        return Expression.Lambda<Func<Issue, bool>>(body, parameter);
+    }
+
+    /// <summary>
+    /// Returns a page of resolved issue summaries in DetectedAt DESC, Id ASC order.
+    ///
+    /// Cursor contract: the caller is responsible for validating the cursor via
+    /// <see cref="IssueCursor.Decode"/> before calling this method. When <paramref name="cursor"/>
+    /// is non-null this method assumes it is well-formed. The endpoint (step 6) validates
+    /// the cursor and returns 400 on <see cref="IssueErrors.InvalidCursor"/> before calling here.
+    /// </summary>
+    public async Task<PagedIssues> GetResolvedIssueSummariesAsync(
+        MonitoredRepositoryId? repositoryId,
+        IReadOnlyCollection<string> states,
+        string? cursor,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        const int DefaultLimit = 50;
+        const int MaxLimit = 100;
+
+        int effectiveLimit = limit <= 0
+            ? DefaultLimit
+            : Math.Min(limit, MaxLimit);
+
+        Expression<Func<Issue, bool>> statePredicate = BuildTypeOrPredicate(states);
+
+        IQueryable<Issue> query = db.Set<Issue>()
+            .AsNoTracking()
+            .Where(statePredicate);
+
+        if (repositoryId is not null)
+        {
+            query = query.Where(i => i.MonitoredRepositoryId == repositoryId);
+        }
+
+        if (cursor is not null)
+        {
+            Result<(DateTimeOffset DetectedAt, IssueId Id)> decoded = IssueCursor.Decode(cursor);
+            if (decoded is Result<(DateTimeOffset DetectedAt, IssueId Id)>.Success success)
+            {
+                DateTimeOffset cursorDetectedAt = success.Value.DetectedAt;
+                IssueId cursorId = success.Value.Id;
+
+                query = query.Where(i =>
+                    i.DetectedAt < cursorDetectedAt
+                    || (i.DetectedAt == cursorDetectedAt && i.Id > cursorId));
+            }
+        }
+
+        List<Issue> issues = await query
+            .OrderByDescending(i => i.DetectedAt)
+            .ThenBy(i => i.Id)
+            .Take(effectiveLimit + 1)
+            .ToListAsync(cancellationToken);
+
+        bool hasNextPage = issues.Count > effectiveLimit;
+        List<Issue> pageIssues = hasNextPage
+            ? issues.Take(effectiveLimit).ToList()
+            : issues;
+
+        IReadOnlyList<IssueSummary> summaries = await EnrichAsync(pageIssues, cancellationToken);
+
+        string? nextCursor = null;
+        if (hasNextPage && summaries.Count > 0)
+        {
+            Issue lastIssue = pageIssues[^1];
+            nextCursor = IssueCursor.Encode(lastIssue.DetectedAt, lastIssue.Id);
+        }
+
+        return new PagedIssues(summaries, nextCursor);
+    }
+
+    public async Task<IssueStateCounts> GetIssueStateCountsAsync(
+        MonitoredRepositoryId? repositoryId,
+        CancellationToken cancellationToken)
+    {
+        IQueryable<Issue> query = db.Set<Issue>()
+            .AsNoTracking();
+
+        if (repositoryId is not null)
+        {
+            query = query.Where(i => i.MonitoredRepositoryId == repositoryId);
+        }
+
+        List<StateCountRow> rows = await query
+            .GroupBy(i => EF.Property<string>(i, "state"))
+            .Select(g => new StateCountRow(g.Key, g.Count()))
+            .ToListAsync(cancellationToken);
+
+        Dictionary<string, int> counts = IssueStateRegistry.Active
+            .Concat(IssueStateRegistry.Resolved)
+            .ToDictionary(name => name, _ => 0, StringComparer.Ordinal);
+
+        foreach (StateCountRow row in rows)
+        {
+            // Skip discriminator values not in the registry — TryGetValue avoids a double lookup.
+            if (counts.TryGetValue(row.State, out _))
+            {
+                counts[row.State] = row.Count;
+            }
+        }
+
+        return new IssueStateCounts(counts);
+    }
+
     public async Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
@@ -398,4 +563,6 @@ internal sealed class IssueQueries(
 
         return edges;
     }
+
+    private sealed record StateCountRow(string State, int Count);
 }

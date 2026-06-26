@@ -33,4 +33,20 @@ public interface IIssueQueries
     Task<IssueSummary?> GetIssueSummaryAsync(IssueId issueId, CancellationToken cancellationToken);
 
     Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
+        MonitoredRepositoryId? repositoryId,
+        IReadOnlyCollection<string>? states,
+        CancellationToken cancellationToken);
+
+    Task<PagedIssues> GetResolvedIssueSummariesAsync(
+        MonitoredRepositoryId? repositoryId,
+        IReadOnlyCollection<string> states,
+        string? cursor,
+        int limit,
+        CancellationToken cancellationToken);
+
+    Task<IssueStateCounts> GetIssueStateCountsAsync(
+        MonitoredRepositoryId? repositoryId,
+        CancellationToken cancellationToken);
 }
