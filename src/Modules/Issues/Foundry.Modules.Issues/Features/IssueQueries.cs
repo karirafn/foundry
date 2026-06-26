@@ -378,6 +378,34 @@ internal sealed class IssueQueries(
             _ => null
         };
 
+    // TODO(#237 step 3): implemented in step 3
+    public Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
+        MonitoredRepositoryId? repositoryId,
+        IReadOnlyCollection<string>? states,
+        CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    // TODO(#237 step 4): implemented in step 4
+    public Task<PagedIssues> GetResolvedIssueSummariesAsync(
+        MonitoredRepositoryId? repositoryId,
+        IReadOnlyCollection<string> states,
+        string? cursor,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    // TODO(#237 step 5): implemented in step 5
+    public Task<IssueStateCounts> GetIssueStateCountsAsync(
+        MonitoredRepositoryId? repositoryId,
+        CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
     public async Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)

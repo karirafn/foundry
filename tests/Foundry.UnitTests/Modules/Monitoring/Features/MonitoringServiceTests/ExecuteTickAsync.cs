@@ -336,6 +336,25 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         {
             return Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
         }
+
+        public Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
+            MonitoredRepositoryId? repositoryId,
+            IReadOnlyCollection<string>? states,
+            CancellationToken cancellationToken)
+            => throw new NotImplementedException();
+
+        public Task<PagedIssues> GetResolvedIssueSummariesAsync(
+            MonitoredRepositoryId? repositoryId,
+            IReadOnlyCollection<string> states,
+            string? cursor,
+            int limit,
+            CancellationToken cancellationToken)
+            => throw new NotImplementedException();
+
+        public Task<IssueStateCounts> GetIssueStateCountsAsync(
+            MonitoredRepositoryId? repositoryId,
+            CancellationToken cancellationToken)
+            => throw new NotImplementedException();
     }
 
     private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
