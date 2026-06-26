@@ -33,9 +33,6 @@ function createMockIssueService(overrides: {
       return selectedActiveStatesSignal().has(state);
     },
     toggleState,
-    _countsSignal: countsSignal,
-    _selectedActiveStatesSignal: selectedActiveStatesSignal,
-    _selectedResolvedStatesSignal: selectedResolvedStatesSignal,
   };
 }
 
