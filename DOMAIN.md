@@ -79,6 +79,15 @@ Uniquely identified by the pair (Host, Repository Slug) — the same repo on the
 Tracks `LastPolledAt` for per-repo poll timing.
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
 
+## Repository Priority
+
+The global dispatch order over monitored repositories.
+Each Monitored Repository holds a 0-based, contiguous, unique `Position` integer — lower value means higher priority.
+When a worker slot opens and multiple eligible repositories have queued issues in the same claim tier, the lowest-Position repository's issue is claimed first; ties within the same position are broken by oldest `DetectedAt`.
+Tier precedence (revision → continuation → fresh) is unchanged — Repository Priority orders only within a tier.
+Affects dispatch only; polling is independent of position.
+New repositories append at the end (highest existing Position + 1); deleting a repository renumbers survivors contiguously.
+
 ## Repository Eligibility
 
 Whether a Monitored Repository meets Foundry's processing preconditions (Branch Protection).
