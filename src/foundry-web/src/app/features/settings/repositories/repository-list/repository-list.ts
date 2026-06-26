@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, computed, inject, input, output, signal } from '@angular/core';
+import { CdkDragDrop, CdkDropList, CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { RepositorySummary, eligibilityStatusLabel } from '../repository.model';
 import { RepositoryEligibilityComponent } from '../repository-eligibility/repository-eligibility';
 import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility-details/repository-eligibility-details';
@@ -8,7 +9,14 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
 @Component({
   selector: 'fd-repository-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RepositoryEligibilityComponent, RepositoryEligibilityDetailsComponent, ProviderIconComponent],
+  imports: [
+    RepositoryEligibilityComponent,
+    RepositoryEligibilityDetailsComponent,
+    ProviderIconComponent,
+    CdkDropList,
+    CdkDrag,
+    CdkDragHandle,
+  ],
   template: `
     <span
       class="sr-only repository-list__announcement"
@@ -57,10 +65,55 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
           (click)="add.emit()"
         >+ Add Repository</button>
       </div>
-      <ul class="repository-list__list" role="list">
-        @for (repo of repositories(); track repo.id) {
-          <li class="repository-list__item" role="listitem">
+
+      @if (_multipleRepos()) {
+        <p class="repository-list__priority-hint">
+          Issues are claimed in this priority order — drag or use the arrow buttons to reorder.
+        </p>
+      }
+
+      <ul
+        class="repository-list__list"
+        role="list"
+        cdkDropList
+        (cdkDropListDropped)="onDrop($event)"
+      >
+        @for (repo of repositories(); track repo.id; let i = $index) {
+          <li
+            class="repository-list__item"
+            role="listitem"
+            cdkDrag
+            [id]="'repo-item-' + repo.id"
+          >
             <div class="repository-list__slug-row">
+              @if (_multipleRepos()) {
+                <button
+                  class="repository-list__drag-handle"
+                  cdkDragHandle
+                  type="button"
+                  [attr.aria-label]="'Drag to reorder ' + repo.slug"
+                  (keydown.arrowup)="onMoveKey($event, i, -1)"
+                  (keydown.arrowdown)="onMoveKey($event, i, 1)"
+                  (keydown.home)="onMoveKey($event, i, -i)"
+                  (keydown.end)="onMoveKey($event, i, repositories().length - 1 - i)"
+                >
+                  <svg
+                    aria-hidden="true"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <circle cx="9" cy="6" r="1.5" />
+                    <circle cx="15" cy="6" r="1.5" />
+                    <circle cx="9" cy="12" r="1.5" />
+                    <circle cx="15" cy="12" r="1.5" />
+                    <circle cx="9" cy="18" r="1.5" />
+                    <circle cx="15" cy="18" r="1.5" />
+                  </svg>
+                </button>
+              }
               <fd-provider-icon
                 [providerType]="repo.providerType"
                 class="repository-list__provider"
@@ -106,6 +159,22 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
                   </div>
                 }
                 <div class="repository-list__actions">
+                  @if (_multipleRepos()) {
+                    <button
+                      class="repository-list__move-up-btn"
+                      type="button"
+                      [disabled]="i === 0"
+                      [attr.aria-label]="'Move ' + repo.slug + ' up'"
+                      (click)="onMove(i, -1)"
+                    >&#9650;</button>
+                    <button
+                      class="repository-list__move-down-btn"
+                      type="button"
+                      [disabled]="i === repositories().length - 1"
+                      [attr.aria-label]="'Move ' + repo.slug + ' down'"
+                      (click)="onMove(i, 1)"
+                    >&#9660;</button>
+                  }
                   <button
                     class="repository-list__edit-btn"
                     type="button"
@@ -174,6 +243,7 @@ export class RepositoryListComponent {
   protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
   protected readonly _recheckError: WritableSignal<{ id: string; message: string } | null> = signal(null);
   protected readonly _announcement: WritableSignal<string> = signal('');
+  protected readonly _multipleRepos = computed(() => this.repositories().length > 1);
 
   toggleExpand(id: string): void {
     if (this._expandedId() === id) {
@@ -186,6 +256,54 @@ export class RepositoryListComponent {
   onToggleKeydown(event: Event, id: string): void {
     event.preventDefault();
     this.toggleExpand(id);
+  }
+
+  onDrop(event: CdkDragDrop<RepositorySummary[]>): void {
+    if (event.previousIndex === event.currentIndex) {
+      return;
+    }
+    const repo = this.repositories()[event.previousIndex];
+    this._doMove(repo, event.currentIndex);
+  }
+
+  onMove(currentIndex: number, delta: number): void {
+    const newIndex = currentIndex + delta;
+    if (newIndex < 0 || newIndex >= this.repositories().length) {
+      return;
+    }
+    const repo = this.repositories()[currentIndex];
+    this._doMove(repo, newIndex);
+  }
+
+  onMoveKey(event: Event, currentIndex: number, delta: number): void {
+    if (delta === 0) {
+      return;
+    }
+    event.preventDefault();
+    const newIndex = Math.max(0, Math.min(this.repositories().length - 1, currentIndex + delta));
+    if (newIndex === currentIndex) {
+      return;
+    }
+    const repo = this.repositories()[currentIndex];
+    this._doMove(repo, newIndex, () => {
+      const handle = document.getElementById(`repo-item-${repo.id}`)?.querySelector<HTMLElement>('.repository-list__drag-handle');
+      handle?.focus();
+    });
+  }
+
+  private _doMove(repo: RepositorySummary, newIndex: number, afterMove?: () => void): void {
+    this._repositoryService.moveRepository(repo.id, newIndex).subscribe({
+      next: () => {
+        const repos = this._repositoryService.repositories();
+        const actualIndex = repos.findIndex(r => r.id === repo.id);
+        const displayIndex = actualIndex !== -1 ? actualIndex + 1 : newIndex + 1;
+        this._announcement.set(`${repo.slug} moved to position ${displayIndex}`);
+        afterMove?.();
+      },
+      error: () => {
+        this._announcement.set(`Failed to reorder ${repo.slug}`);
+      },
+    });
   }
 
   onRecheck(repo: RepositorySummary): void {

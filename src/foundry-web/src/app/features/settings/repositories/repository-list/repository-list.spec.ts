@@ -12,6 +12,7 @@ const MOCK_REPO: RepositorySummary = {
   accountId: '00000000-0000-0000-0000-000000000010',
   accountName: 'my-github',
   providerType: 'github',
+  position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
@@ -24,6 +25,7 @@ const MOCK_REPO_2: RepositorySummary = {
   accountId: '00000000-0000-0000-0000-000000000011',
   accountName: 'work-gitlab',
   providerType: 'gitlab',
+  position: 1,
   pollIntervalSeconds: null,
   isActive: false,
   lastPolledAt: null,
@@ -36,6 +38,7 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   accountId: '00000000-0000-0000-0000-000000000010',
   accountName: 'my-github',
   providerType: 'github',
+  position: 2,
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
@@ -48,6 +51,7 @@ const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
   accountId: '00000000-0000-0000-0000-000000000010',
   accountName: 'my-github',
   providerType: 'github',
+  position: 4,
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: null,
@@ -60,6 +64,7 @@ const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   accountId: '00000000-0000-0000-0000-000000000010',
   accountName: 'my-github',
   providerType: 'github',
+  position: 3,
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
@@ -84,6 +89,8 @@ function setup(overrides: {
     repositoryService: TestBed.inject(RepositoryService),
   };
 }
+
+// Cycle 44 — helper text, drag handle, move buttons, single-item suppression
 
 describe('RepositoryListComponent', () => {
   beforeEach(async () => {
@@ -662,6 +669,118 @@ describe('RepositoryListComponent', () => {
     const liveRegion = el.querySelector('.repository-list__announcement');
     expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
     expect(liveRegion?.textContent?.trim()).toBe(`${MOCK_REPO_INELIGIBLE.slug}: Eligible`);
+  });
+
+  // Cycle 44: helper text visible when multiple repositories exist
+  it('should render priority helper text when there are multiple repositories', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const helper = el.querySelector('.repository-list__priority-hint');
+    expect(helper).toBeTruthy();
+    expect(helper?.textContent).toContain('priority');
+  });
+
+  // Cycle 45: drag handle and move buttons are shown with multiple repositories
+  it('should render a drag handle for each item when multiple repositories exist', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const handles = el.querySelectorAll('.repository-list__drag-handle');
+    expect(handles.length).toBe(2);
+  });
+
+  it('should render move-up and move-down buttons for each item when multiple repositories exist', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const moveUpBtns = el.querySelectorAll('.repository-list__move-up-btn');
+    const moveDownBtns = el.querySelectorAll('.repository-list__move-down-btn');
+    expect(moveUpBtns.length).toBe(2);
+    expect(moveDownBtns.length).toBe(2);
+  });
+
+  // Cycle 46: single item — reorder affordances are hidden
+  it('should NOT render drag handle, move-up, or move-down buttons when only one repository exists', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    expect(el.querySelector('.repository-list__drag-handle')).toBeFalsy();
+    expect(el.querySelector('.repository-list__move-up-btn')).toBeFalsy();
+    expect(el.querySelector('.repository-list__move-down-btn')).toBeFalsy();
+  });
+
+  it('should NOT render priority helper text when only one repository exists', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const helper = el.querySelector('.repository-list__priority-hint');
+    expect(helper).toBeFalsy();
+  });
+
+  // Cycle 47: move-down calls moveRepository with new index and announces
+  it('should call moveRepository with index + 1 when move-down is clicked for the first item', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Act
+    const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
+    moveDownBtn.click();
+    fixture.detectChanges();
+
+    // Assert — PATCH sent to correct URL
+    const req = httpMock.expectOne(`/api/repositories/${MOCK_REPO.id}/position`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ position: 1 });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  // Cycle 48: move-up calls moveRepository with index - 1
+  it('should call moveRepository with index - 1 when move-up is clicked for the second item', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Act
+    const moveUpBtn = el.querySelectorAll('.repository-list__move-up-btn')[1] as HTMLButtonElement;
+    moveUpBtn.click();
+    fixture.detectChanges();
+
+    // Assert
+    const req = httpMock.expectOne(`/api/repositories/${MOCK_REPO_2.id}/position`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ position: 0 });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  // Cycle 49: live region announces new position after move
+  it('should announce the new position in the live region after a move succeeds', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Act
+    const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
+    moveDownBtn.click();
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO.id}/position`).flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+
+    // Assert — live region updated
+    const liveRegion = el.querySelector('.repository-list__announcement');
+    expect(liveRegion?.textContent?.trim()).toContain(MOCK_REPO.slug);
   });
 
   // Cycle 43: live region announces failure when recheck errors

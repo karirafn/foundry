@@ -261,6 +261,110 @@
     }
   }
 
+  &__priority-hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    margin-block-end: var(--fd-spacing-sm);
+    margin-block-start: 0;
+  }
+
+  &__drag-handle {
+    align-items: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-tertiary);
+    cursor: grab;
+    display: inline-flex;
+    flex-shrink: 0;
+    justify-content: center;
+    min-height: 28px;
+    min-width: 24px;
+    padding: var(--fd-spacing-xs) 2px;
+    touch-action: none;
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      color: var(--fd-text-secondary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  &__move-up-btn,
+  &__move-down-btn {
+    align-items: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.625rem;
+    justify-content: center;
+    min-height: 28px;
+    min-width: 24px;
+    padding: var(--fd-spacing-xs) 2px;
+
+    &:hover:not([disabled]) {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+
+    &[disabled] {
+      color: var(--fd-text-tertiary);
+      cursor: default;
+      opacity: 0.4;
+    }
+  }
+
+  &__item {
+    &.cdk-drag-preview {
+      background: var(--fd-bg-page);
+      border: 1px solid var(--fd-text-link);
+      border-radius: var(--fd-radius-sm);
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+      opacity: 0.95;
+    }
+
+    &.cdk-drag-placeholder {
+      background: var(--fd-bg-card-hover);
+      border: 1px dashed var(--fd-border-muted);
+      opacity: 0.5;
+
+      * {
+        visibility: hidden;
+      }
+    }
+
+    &.cdk-drag-animating {
+      transition: transform 0.25s ease;
+
+      @media (prefers-reduced-motion: reduce) {
+        transition: none;
+      }
+    }
+  }
+
+  &__list.cdk-drop-list-dragging &__item:not(.cdk-drag-placeholder) {
+    transition: transform 0.25s ease;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+
   &__actions {
     display: flex;
     gap: var(--fd-spacing-sm);
