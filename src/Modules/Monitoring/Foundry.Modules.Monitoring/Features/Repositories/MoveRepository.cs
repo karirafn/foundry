@@ -15,6 +15,21 @@ internal static class MoveRepository
 {
     internal sealed record Command(Guid Id, int Position) : ICommand<bool>;
 
+    internal sealed class Validator : ICommandValidator<Command>
+    {
+        internal const string PositionNegativeCode = "MoveRepository.PositionNegative";
+
+        public Result Validate(Command command)
+        {
+            if (command.Position < 0)
+            {
+                return new Error(PositionNegativeCode, "Position must be non-negative.");
+            }
+
+            return Result.Ok();
+        }
+    }
+
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, bool>
     {
         public async Task<Result<bool>> HandleAsync(
@@ -70,14 +85,19 @@ internal static class MoveRepository
                     Command command = new(id, body.Position);
                     Result<bool> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<NoContent, NotFound>>(
+                    return result.Match<Results<NoContent, NotFound, BadRequest<string>>>(
                         _ => TypedResults.NoContent(),
-                        _ => TypedResults.NotFound());
+                        error => error.Code switch
+                        {
+                            RepositoryErrors.NotFoundCode => TypedResults.NotFound(),
+                            _ => TypedResults.BadRequest(error.Message),
+                        });
                 })
                 .WithName("MoveRepository")
                 .WithSummary("Moves a monitored repository to the specified position in the dispatch order")
                 .Produces(StatusCodes.Status204NoContent)
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

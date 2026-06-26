@@ -21,6 +21,13 @@ internal static class RepositoryRenumber
         IReadOnlyList<MonitoredRepository> orderedRepositories,
         CancellationToken cancellationToken)
     {
+        // Guard against integer overflow in Phase 1: OffsetBand + i must not exceed int.MaxValue.
+        if (orderedRepositories.Count > int.MaxValue - OffsetBand)
+        {
+            throw new InvalidOperationException(
+                $"Cannot renumber {orderedRepositories.Count} repositories: offset band arithmetic would overflow int.MaxValue.");
+        }
+
         // Phase 1 — offset every position into a collision-free band.
         for (int i = 0; i < orderedRepositories.Count; i++)
         {

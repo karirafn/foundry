@@ -42,10 +42,7 @@ internal static class DeleteRepository
                 .OrderBy(r => r.Position)
                 .ToListAsync(cancellationToken);
 
-            if (survivors.Count > 0)
-            {
-                await RepositoryRenumber.RenumberAsync(dbContext, survivors, cancellationToken);
-            }
+            await RepositoryRenumber.RenumberAsync(dbContext, survivors, cancellationToken);
 
             await tx.CommitAsync(cancellationToken);
 

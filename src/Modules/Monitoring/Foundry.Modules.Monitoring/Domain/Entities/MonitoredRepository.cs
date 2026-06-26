@@ -61,6 +61,11 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public void SetPosition(int position)
     {
+        if (position < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(position), position, "Position must be non-negative.");
+        }
+
         Position = position;
     }
 

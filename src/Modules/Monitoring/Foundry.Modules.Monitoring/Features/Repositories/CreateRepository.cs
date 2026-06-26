@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
 
@@ -53,6 +54,18 @@ internal static class CreateRepository
         IIssueProviderFactory providerFactory,
         IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
+        // The slug unique index name, used to identify slug-collision DbUpdateExceptions
+        // and distinguish them from position-collision exceptions.
+        private const string SlugIndexName = "ix_monitored_repositories_host_slug";
+
+        private static bool IsSlugConstraintViolation(DbUpdateException ex, RepositorySlug slug)
+        {
+            string slugValue = slug.ToString();
+            string message = ex.InnerException?.Message ?? ex.Message;
+            return message.Contains(SlugIndexName, StringComparison.OrdinalIgnoreCase)
+                || message.Contains(slugValue, StringComparison.OrdinalIgnoreCase);
+        }
+
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
             CancellationToken cancellationToken)
@@ -85,6 +98,8 @@ internal static class CreateRepository
                 ? TimeSpan.FromSeconds(command.PollIntervalSeconds.Value)
                 : null;
 
+            await using IDbContextTransaction tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             int position = await dbContext.Set<MonitoredRepository>().CountAsync(cancellationToken);
 
             MonitoredRepository repository = MonitoredRepository.Create(
@@ -99,10 +114,15 @@ internal static class CreateRepository
             try
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (IsSlugConstraintViolation(ex, repositorySlug))
+            {
+                return Result<RepositorySummary>.Fail(RepositoryErrors.DuplicateSlug(command.Slug));
             }
             catch (DbUpdateException)
             {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.DuplicateSlug(command.Slug));
+                return Result<RepositorySummary>.Fail(RepositoryErrors.ConflictOnCreate());
             }
 
             if (!string.IsNullOrEmpty(account.Token))
@@ -156,6 +176,7 @@ internal static class CreateRepository
                         {
                             RepositoryErrors.AccountNotFoundCode => TypedResults.NotFound(error.Message),
                             RepositoryErrors.DuplicateSlugCode => TypedResults.Conflict(error.Message),
+                            RepositoryErrors.ConflictOnCreateCode => TypedResults.Conflict(error.Message),
                             _ => TypedResults.BadRequest(error.Message),
                         });
                 })

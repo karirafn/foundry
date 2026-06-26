@@ -17,8 +17,10 @@ namespace Foundry.WebApi.Migrations
                 nullable: false,
                 defaultValue: 0);
 
-            // Backfill contiguous 0..n-1 positions ordered by id so existing rows
-            // receive a stable, unique position before the unique index is created.
+            // Backfill contiguous 0..n-1 positions ordered lexicographically by id (GUID text).
+            // The resulting order is arbitrary-but-deterministic — GUIDs carry no meaningful creation
+            // order — so the positions are unique and contiguous, which satisfies the unique index.
+            // Operators set meaningful dispatch priority via the reorder UI after migration.
             migrationBuilder.Sql(
                 """
                 UPDATE monitored_repositories

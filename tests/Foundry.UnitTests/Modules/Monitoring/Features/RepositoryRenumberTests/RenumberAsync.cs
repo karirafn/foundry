@@ -15,6 +15,21 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Features.RepositoryRenumberTests;
 
+/// <summary>
+/// Lightweight IReadOnlyList stub that reports a large Count without allocating elements.
+/// Used to trigger the overflow guard in RenumberAsync without real data.
+/// </summary>
+file sealed class FakeListOfSize(int count) : IReadOnlyList<MonitoredRepository>
+{
+    public int Count => count;
+
+    public MonitoredRepository this[int index] => throw new NotSupportedException();
+
+    public IEnumerator<MonitoredRepository> GetEnumerator() => throw new NotSupportedException();
+
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => throw new NotSupportedException();
+}
+
 public sealed class RenumberAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
@@ -91,6 +106,22 @@ public sealed class RenumberAsync : IAsyncDisposable
         reloaded[0].Id.ShouldBe(third.Id);
         reloaded[1].Id.ShouldBe(first.Id);
         reloaded[2].Id.ShouldBe(second.Id);
+    }
+
+    [Fact]
+    public async Task WhenRepositoryCountWouldOverflowOffsetBand_ThrowsInvalidOperationException()
+    {
+        // Arrange — create a list stub large enough to exceed int.MaxValue - OffsetBand.
+        // OffsetBand = 1_000_000; int.MaxValue = 2_147_483_647.
+        // Use a ReadOnlyList wrapper to avoid actually allocating 2 billion items.
+        IReadOnlyList<MonitoredRepository> hugeList = new FakeListOfSize(int.MaxValue);
+
+        // Act
+        InvalidOperationException ex = await Should.ThrowAsync<InvalidOperationException>(async () =>
+            await RepositoryRenumber.RenumberAsync(_dbContext, hugeList, CancellationToken.None));
+
+        // Assert
+        ex.Message.ShouldContain("overflow");
     }
 
     [Fact]

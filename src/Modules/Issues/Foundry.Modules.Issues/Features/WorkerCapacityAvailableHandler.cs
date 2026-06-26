@@ -125,7 +125,6 @@ internal sealed class WorkerCapacityAvailableHandler(
 
         return eligibleRepos
             .Select(r => (Id: MonitoredRepositoryId.From(r.Id), r.Position))
-            .Where(r => candidateRepoIds.Contains(r.Id))
             .ToDictionary(r => r.Id, r => r.Position);
     }
 
