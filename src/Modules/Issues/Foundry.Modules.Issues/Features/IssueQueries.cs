@@ -427,6 +427,8 @@ internal sealed class IssueQueries(
                 continue;
             }
 
+            // Expression.TypeIs over the TPH hierarchy is translated by EF Core to a
+            // `state = '<discriminator>'` SQL filter — this is server-side, not client evaluation.
             Expression typeCheck = Expression.TypeIs(parameter, entityType);
             body = body is null ? typeCheck : Expression.OrElse(body, typeCheck);
         }
@@ -531,7 +533,8 @@ internal sealed class IssueQueries(
 
         foreach (StateCountRow row in rows)
         {
-            if (counts.ContainsKey(row.State))
+            // Skip discriminator values not in the registry — TryGetValue avoids a double lookup.
+            if (counts.TryGetValue(row.State, out _))
             {
                 counts[row.State] = row.Count;
             }

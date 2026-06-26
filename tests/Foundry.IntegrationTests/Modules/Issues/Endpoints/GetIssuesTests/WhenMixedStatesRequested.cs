@@ -1,4 +1,7 @@
 using System.Net;
+using System.Net.Http.Json;
+
+using Microsoft.AspNetCore.Mvc;
 
 using Shouldly;
 
@@ -8,6 +11,8 @@ namespace Foundry.IntegrationTests.Modules.Issues.Endpoints.GetIssuesTests;
 
 public sealed class WhenMixedStatesRequested : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -24,7 +29,7 @@ public sealed class WhenMixedStatesRequested : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsBadRequest()
+    public async Task ReturnsBadRequestAsProblemDetails()
     {
         // Arrange — mix of an active state ("detected") and a resolved state ("completed")
 
@@ -35,5 +40,10 @@ public sealed class WhenMixedStatesRequested : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.Status.ShouldBe(BadRequestStatus);
     }
 }

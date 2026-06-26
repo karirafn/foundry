@@ -37,8 +37,9 @@ internal static class GetIssues
 
                         if (unknownNames.Count > 0)
                         {
-                            return (IResult)TypedResults.BadRequest(
-                                IssueErrors.InvalidStates(unknownNames).Message);
+                            return (IResult)TypedResults.Problem(
+                                detail: IssueErrors.InvalidStates(unknownNames).Message,
+                                statusCode: StatusCodes.Status400BadRequest);
                         }
 
                         bool hasActive = normalizedStates.Any(IssueStateRegistry.Active.Contains);
@@ -46,7 +47,9 @@ internal static class GetIssues
 
                         if (hasActive && hasResolved)
                         {
-                            return TypedResults.BadRequest(IssueErrors.MixedStates().Message);
+                            return (IResult)TypedResults.Problem(
+                                detail: IssueErrors.MixedStates().Message,
+                                statusCode: StatusCodes.Status400BadRequest);
                         }
 
                         if (hasResolved)
@@ -58,15 +61,6 @@ internal static class GetIssues
                                 limit,
                                 queries,
                                 cancellationToken);
-                        }
-                    }
-
-                    if (cursor is not null)
-                    {
-                        Result<(DateTimeOffset DetectedAt, IssueId Id)> decoded = IssueCursor.Decode(cursor);
-                        if (decoded.IsFailure)
-                        {
-                            return TypedResults.BadRequest(IssueErrors.InvalidCursor().Message);
                         }
                     }
 
@@ -98,7 +92,9 @@ internal static class GetIssues
                 Result<(DateTimeOffset DetectedAt, IssueId Id)> decoded = IssueCursor.Decode(cursor);
                 if (decoded.IsFailure)
                 {
-                    return TypedResults.BadRequest(IssueErrors.InvalidCursor().Message);
+                    return TypedResults.Problem(
+                        detail: IssueErrors.InvalidCursor().Message,
+                        statusCode: StatusCodes.Status400BadRequest);
                 }
             }
 
@@ -112,6 +108,9 @@ internal static class GetIssues
             return TypedResults.Ok(paged);
         }
 
+        private const int MaxStateTokenLength = 64;
+        private const int MaxStateTokenCount = 50;
+
         private static List<string> NormalizeStates(string[]? states)
         {
             if (states is null || states.Length == 0)
@@ -120,9 +119,11 @@ internal static class GetIssues
             }
 
             return states
+                .Take(MaxStateTokenCount)
                 .SelectMany(s => s.Split(','))
                 .Select(s => s.Trim().ToLowerInvariant())
-                .Where(s => s.Length > 0)
+                .Where(s => s.Length > 0 && s.Length <= MaxStateTokenLength)
+                .Take(MaxStateTokenCount)
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
         }
