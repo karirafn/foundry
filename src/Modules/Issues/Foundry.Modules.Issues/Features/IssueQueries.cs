@@ -508,12 +508,36 @@ internal sealed class IssueQueries(
         return new PagedIssues(summaries, nextCursor);
     }
 
-    // TODO(#237 step 5): implemented in step 5
-    public Task<IssueStateCounts> GetIssueStateCountsAsync(
+    public async Task<IssueStateCounts> GetIssueStateCountsAsync(
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        IQueryable<Issue> query = db.Set<Issue>()
+            .AsNoTracking();
+
+        if (repositoryId is not null)
+        {
+            query = query.Where(i => i.MonitoredRepositoryId == repositoryId);
+        }
+
+        List<StateCountRow> rows = await query
+            .GroupBy(i => EF.Property<string>(i, "state"))
+            .Select(g => new StateCountRow(g.Key, g.Count()))
+            .ToListAsync(cancellationToken);
+
+        Dictionary<string, int> counts = IssueStateRegistry.Active
+            .Concat(IssueStateRegistry.Resolved)
+            .ToDictionary(name => name, _ => 0, StringComparer.Ordinal);
+
+        foreach (StateCountRow row in rows)
+        {
+            if (counts.ContainsKey(row.State))
+            {
+                counts[row.State] = row.Count;
+            }
+        }
+
+        return new IssueStateCounts(counts);
     }
 
     public async Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
@@ -536,4 +560,6 @@ internal sealed class IssueQueries(
 
         return edges;
     }
+
+    private sealed record StateCountRow(string State, int Count);
 }
