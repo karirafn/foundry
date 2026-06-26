@@ -8,9 +8,9 @@ public readonly record struct IssueId(Guid Value) : IStronglyTypedId<IssueId>, I
 
     public static IssueId From(Guid value) => new(value);
 
-    // The id column is stored as TEXT in SQLite (Guid "D" format, e.g. "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx").
-    // SQLite sorts TEXT columns using ordinal string order, so the C# comparison must use the same
-    // ordering — otherwise i.Id > cursorId in the keyset query diverges from the in-memory sort.
+    // IssueId is persisted by SQLite as TEXT in "D" format and compared ordinally by the database engine.
+    // Using string.CompareOrdinal on the "D" representation guarantees that the C# ordering matches
+    // SQLite's ORDER BY and keyset WHERE (i.Id > cursorId), preventing pagination gaps or duplicates.
     public int CompareTo(IssueId other) =>
         string.CompareOrdinal(Value.ToString("D"), other.Value.ToString("D"));
 
