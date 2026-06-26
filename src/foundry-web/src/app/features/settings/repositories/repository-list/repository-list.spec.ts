@@ -684,6 +684,19 @@ describe('RepositoryListComponent', () => {
     expect(helper?.textContent).toContain('priority');
   });
 
+  // Fix 5 — helper text clarifies dispatch direction (Low)
+  it('should include dispatch direction hint in priority helper text', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const helper = el.querySelector('.repository-list__priority-hint');
+    expect(helper?.textContent).toContain('top');
+    expect(helper?.textContent).toContain('first');
+  });
+
   // Cycle 45: drag handle and move buttons are shown with multiple repositories
   it('should render a drag handle for each item when multiple repositories exist', () => {
     // Arrange
@@ -694,6 +707,30 @@ describe('RepositoryListComponent', () => {
     // Assert
     const handles = el.querySelectorAll('.repository-list__drag-handle');
     expect(handles.length).toBe(2);
+  });
+
+  // Fix 1 — drag handle aria-label conveys keyboard affordance (WCAG 4.1.2)
+  it('should set the drag handle aria-label to include keyboard instruction for reordering', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const handle = el.querySelector('.repository-list__drag-handle') as HTMLElement;
+    expect(handle?.getAttribute('aria-label')).toBe(`Reorder ${MOCK_REPO.slug}, use arrow keys to move`);
+  });
+
+  it('should set aria-roledescription="reorderable item" on each draggable list item when multiple repositories exist', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const items = el.querySelectorAll('[role="listitem"]');
+    expect(items[0]?.getAttribute('aria-roledescription')).toBe('reorderable item');
+    expect(items[1]?.getAttribute('aria-roledescription')).toBe('reorderable item');
   });
 
   it('should render move-up and move-down buttons for each item when multiple repositories exist', () => {
@@ -731,6 +768,51 @@ describe('RepositoryListComponent', () => {
     // Assert
     const helper = el.querySelector('.repository-list__priority-hint');
     expect(helper).toBeFalsy();
+  });
+
+  // Fix 3b — visible inline error when reorder fails (WCAG 4.1.3)
+  it('should display a visible move error message when the PATCH fails', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Act
+    const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
+    moveDownBtn.click();
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO.id}/position`).flush('Server error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — visible error element is shown
+    const moveError = el.querySelector('.repository-list__move-error');
+    expect(moveError).toBeTruthy();
+    expect(moveError?.textContent).toContain('reorder');
+  });
+
+  it('should clear the visible move error when a subsequent move succeeds', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const moveDownBtns = el.querySelectorAll('.repository-list__move-down-btn');
+    (moveDownBtns[0] as HTMLButtonElement).click();
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO.id}/position`).flush('Server error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Act — retry the move successfully
+    const moveDownBtns2 = el.querySelectorAll('.repository-list__move-down-btn');
+    (moveDownBtns2[0] as HTMLButtonElement).click();
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO.id}/position`).flush(null, {
+      status: 204,
+      statusText: 'No Content',
+    });
+    fixture.detectChanges();
+
+    // Assert — visible error is gone
+    const moveError = el.querySelector('.repository-list__move-error');
+    expect(moveError).toBeFalsy();
   });
 
   // Cycle 47: move-down calls moveRepository with new index and announces
@@ -781,6 +863,48 @@ describe('RepositoryListComponent', () => {
     // Assert — live region updated
     const liveRegion = el.querySelector('.repository-list__announcement');
     expect(liveRegion?.textContent?.trim()).toContain(MOCK_REPO.slug);
+  });
+
+  // Fix 2 — focus restored to moved item after button-triggered reorder (WCAG 2.4.3)
+  it('should restore focus to a control within the moved item after a successful move-down', async () => {
+    // Arrange
+    vi.useFakeTimers();
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
+    moveDownBtn.focus();
+
+    // Act
+    moveDownBtn.click();
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO.id}/position`).flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+    vi.runAllTimers(); // flush setTimeout(0) for focus restoration
+
+    // Assert — focus lands within the moved repo's list item (looked up by id, stable regardless of render order)
+    const movedItemEl = el.querySelector(`#repo-item-${MOCK_REPO.id}`) as HTMLElement;
+    expect(movedItemEl).toBeTruthy();
+    expect(movedItemEl.contains(document.activeElement)).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('should restore focus to a control within the moved item after a successful move-up', async () => {
+    // Arrange
+    vi.useFakeTimers();
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const moveUpBtns = el.querySelectorAll('.repository-list__move-up-btn');
+    const moveUpBtn = moveUpBtns[1] as HTMLButtonElement;
+    moveUpBtn.focus();
+
+    // Act
+    moveUpBtn.click();
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO_2.id}/position`).flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+    vi.runAllTimers(); // flush setTimeout(0) for focus restoration
+
+    // Assert — focus lands within the moved repo's list item (looked up by id)
+    const movedItemEl = el.querySelector(`#repo-item-${MOCK_REPO_2.id}`) as HTMLElement;
+    expect(movedItemEl).toBeTruthy();
+    expect(movedItemEl.contains(document.activeElement)).toBe(true);
+    vi.useRealTimers();
   });
 
   // Cycle 43: live region announces failure when recheck errors

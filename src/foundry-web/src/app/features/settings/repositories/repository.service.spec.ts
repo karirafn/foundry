@@ -678,6 +678,25 @@ describe('RepositoryService', () => {
     expect(repos[1].id).toBe(REPO_ID);
   });
 
+  // Fix 3a — signal reverted on PATCH error (WCAG 4.1.3 + status visibility)
+  it('should revert the repositories signal to the pre-move order when moveRepository fails', () => {
+    // Arrange — load two repos in initial order
+    service.loadRepositories(ACCOUNT_ID);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY, MOCK_REPOSITORY_2]);
+
+    // Act — attempt to move repo at index 0 to index 1; server returns error
+    service.moveRepository(REPO_ID, 1).subscribe({ error: () => {} });
+    httpMock.expectOne(`/api/repositories/${REPO_ID}/position`).flush('Server error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — original order preserved
+    const repos = service.repositories();
+    expect(repos[0].id).toBe(REPO_ID);
+    expect(repos[1].id).toBe(REPO_ID_2);
+  });
+
   // Cycle 8: recheckEligibility calls POST to recheck endpoint
   it('should POST to /api/accounts/{accountId}/repositories/{id}/recheck when recheckEligibility is called', () => {
     // Arrange
