@@ -8,6 +8,7 @@ public static class IssueErrors
     public static readonly string WrongStateCode = "Issue.WrongState";
     public static readonly string InvalidStatesCode = "Issue.InvalidStates";
     public static readonly string InvalidCursorCode = "Issue.InvalidCursor";
+    public static readonly string MixedStatesCode = "Issue.MixedStates";
 
     public static Error NotFound(IssueId id) =>
         new(NotFoundCode, $"Issue with ID '{id.Value}' was not found.");
@@ -20,4 +21,7 @@ public static class IssueErrors
 
     public static Error InvalidCursor() =>
         new(InvalidCursorCode, "The provided cursor is malformed or expired.");
+
+    public static Error MixedStates() =>
+        new(MixedStatesCode, "States must all be active or all be resolved — mixing active and resolved states is not supported.");
 }
