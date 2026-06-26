@@ -382,7 +382,7 @@ describe('IssueListComponent', () => {
   it('should render an hr separator when there are both live and non-live issues', () => {
     // Arrange
     const liveIssue: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
-    const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'non-live', state: 'completed', issueNumber: 43 };
+    const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'non-live', state: 'detected', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
     flushInit(httpMock, [liveIssue, nonLiveIssue]);
@@ -400,7 +400,7 @@ describe('IssueListComponent', () => {
   it('should sort continuation_queued above the separator alongside other live states', () => {
     // Arrange — continuation_queued is operationally equivalent to queued and must appear above the separator
     const continuationQueued: IssueSummary = { ...mockSummary, id: 'cont-queued', state: 'continuation_queued' };
-    const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'completed', issueNumber: 43 };
+    const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'detected', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
     flushInit(httpMock, [nonLiveIssue, continuationQueued]);
@@ -467,7 +467,7 @@ describe('IssueListComponent', () => {
   it('should render an sr-only span announcing the section boundary when there are both live and non-live issues', () => {
     // Arrange
     const liveIssue: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
-    const completedIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'completed', issueNumber: 43 };
+    const completedIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'detected', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
     flushInit(httpMock, [liveIssue, completedIssue]);

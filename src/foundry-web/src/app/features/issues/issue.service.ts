@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES } from './issue.model';
+import { isResolvedState } from './issue-lifecycle.model';
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
@@ -74,7 +75,7 @@ export class IssueService {
 
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
       next: (issues) => {
-        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id)));
+        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id) && !isResolvedState(i.state)));
         this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
@@ -191,7 +192,11 @@ export class IssueService {
     const current = this.issues();
     const index = current.findIndex((i) => i.id === updated.id);
 
-    if (index >= 0) {
+    if (isResolvedState(updated.state)) {
+      if (index >= 0) {
+        this.issues.set(current.filter((i) => i.id !== updated.id));
+      }
+    } else if (index >= 0) {
       const next = [...current];
       next[index] = updated;
       this.issues.set(next);

@@ -88,11 +88,11 @@ describe('IssueService', () => {
     expect(req.request.method).toBe('GET');
   });
 
-  // Cycle 3: sortedIssues computed signal returns non-live issues sorted by detectedAt descending
+  // Cycle 3: sortedIssues computed signal returns non-live active issues sorted by detectedAt descending
   it('should sort non-live issues by detectedAt descending in sortedIssues', () => {
     // Arrange
-    const older: IssueSummary = { ...mockSummary, id: 'older', state: 'completed', detectedAt: '2026-01-01T00:00:00Z' };
-    const newer: IssueSummary = { ...mockSummary, id: 'newer', state: 'completed', detectedAt: '2026-06-01T00:00:00Z' };
+    const older: IssueSummary = { ...mockSummary, id: 'older', state: 'detected', detectedAt: '2026-01-01T00:00:00Z' };
+    const newer: IssueSummary = { ...mockSummary, id: 'newer', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
 
     // Act
     service.loadIssues();
@@ -106,7 +106,7 @@ describe('IssueService', () => {
   // Cycle 3b: live issues sort before non-live issues
   it('should sort live issues before non-live issues in sortedIssues', () => {
     // Arrange
-    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'completed', detectedAt: '2026-06-01T00:00:00Z' };
+    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
     const live: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
 
     // Act
@@ -151,7 +151,7 @@ describe('IssueService', () => {
   // Cycle 3e: liveIssueCount returns 0 when no live issues
   it('should return 0 for liveIssueCount when there are no live issues', () => {
     // Arrange
-    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'completed' };
+    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'detected' };
 
     // Act
     service.loadIssues();
@@ -179,7 +179,7 @@ describe('IssueService', () => {
   it('should return the number of live issues for liveIssueCount in a mixed list', () => {
     // Arrange
     const live: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
-    const nonLive1: IssueSummary = { ...mockSummary, id: 'non-live-1', state: 'completed' };
+    const nonLive1: IssueSummary = { ...mockSummary, id: 'non-live-1', state: 'detected' };
     const nonLive2: IssueSummary = { ...mockSummary, id: 'non-live-2', state: 'failed' };
 
     // Act
@@ -897,6 +897,92 @@ describe('IssueService', () => {
     // Cleanup
     httpMock.expectOne('/api/issues/abc123/retry').flush({});
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+  });
+
+  // Cycle 21: _upsertIssue removes issue from issues when its new state is resolved
+  it('should remove an issue from issues when an IssueUpdated event transitions it to a resolved state', () => {
+    // Arrange
+    const callbacks: Record<string, (data: IssueSummary) => void> = {};
+    const { svc, http } = setupWithCapturingSignalR(callbacks, []);
+
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([mockSummary]);
+    expect(svc.issues().length).toBe(1);
+
+    const resolved: IssueSummary = { ...mockSummary, state: 'completed' };
+
+    // Act
+    callbacks['IssueUpdated'](resolved);
+
+    // Assert — issue leaves the active set; it is not appended
+    expect(svc.issues().length).toBe(0);
+    http.verify();
+  });
+
+  it('should remove an issue from issues when an IssueUpdated event transitions it to unchanged', () => {
+    // Arrange
+    const callbacks: Record<string, (data: IssueSummary) => void> = {};
+    const { svc, http } = setupWithCapturingSignalR(callbacks, []);
+
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([mockSummary]);
+    expect(svc.issues().length).toBe(1);
+
+    const resolved: IssueSummary = { ...mockSummary, state: 'unchanged' };
+
+    // Act
+    callbacks['IssueUpdated'](resolved);
+
+    // Assert
+    expect(svc.issues().length).toBe(0);
+    http.verify();
+  });
+
+  it('should not append a new resolved issue when IssueUpdated arrives for an id not in issues', () => {
+    // Arrange
+    const callbacks: Record<string, (data: IssueSummary) => void> = {};
+    const { svc, http } = setupWithCapturingSignalR(callbacks, []);
+
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([]);
+
+    const newResolved: IssueSummary = { ...mockSummary, id: 'brand-new-resolved', state: 'completed' };
+
+    // Act
+    callbacks['IssueUpdated'](newResolved);
+
+    // Assert — resolved items are not added to issues
+    expect(svc.issues().some((i: IssueSummary) => i.id === 'brand-new-resolved')).toBe(false);
+    http.verify();
+  });
+
+  // Cycle 21 (load): loadIssues excludes resolved-state items from issues signal
+  it('should exclude resolved-state items (completed, unchanged) from issues on loadIssues', () => {
+    // Arrange
+    const active: IssueSummary = { ...mockSummary, id: 'active-1', state: 'detected' };
+    const completed: IssueSummary = { ...mockSummary, id: 'completed-1', state: 'completed' };
+    const unchanged: IssueSummary = { ...mockSummary, id: 'unchanged-1', state: 'unchanged' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([active, completed, unchanged]);
+
+    // Assert — only the active item is stored
+    expect(service.issues().length).toBe(1);
+    expect(service.issues()[0].id).toBe('active-1');
+  });
+
+  it('should retain ineligible-state issues in issues on loadIssues', () => {
+    // Arrange — ineligible is neither active nor resolved; it belongs in the active band (AC8)
+    const ineligible: IssueSummary = { ...mockSummary, id: 'ineligible-1', state: 'ineligible' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([ineligible]);
+
+    // Assert
+    expect(service.issues().length).toBe(1);
+    expect(service.issues()[0].id).toBe('ineligible-1');
   });
 
   // Cycle 17: loadCounts — populates counts signal
