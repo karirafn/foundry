@@ -8,15 +8,20 @@ internal static class RepositoryEndpoints
 {
     internal static IEndpointRouteBuilder MapRepositoryEndpoints(this IEndpointRouteBuilder routes)
     {
-        RouteGroupBuilder group = routes.MapGroup("/api/accounts/{accountId:guid}/repositories")
+        RouteGroupBuilder accountScopedGroup = routes.MapGroup("/api/accounts/{accountId:guid}/repositories")
             .WithTags("Repositories");
 
-        GetRepositories.Endpoint.Map(group);
-        GetAvailableRepositories.Endpoint.Map(group);
-        CreateRepository.Endpoint.Map(group);
-        UpdateRepository.Endpoint.Map(group);
-        DeleteRepository.Endpoint.Map(group);
-        RecheckRepositoryEligibility.Endpoint.Map(group);
+        GetRepositories.Endpoint.Map(accountScopedGroup);
+        GetAvailableRepositories.Endpoint.Map(accountScopedGroup);
+        CreateRepository.Endpoint.Map(accountScopedGroup);
+        UpdateRepository.Endpoint.Map(accountScopedGroup);
+        DeleteRepository.Endpoint.Map(accountScopedGroup);
+        RecheckRepositoryEligibility.Endpoint.Map(accountScopedGroup);
+
+        RouteGroupBuilder repositoriesGroup = routes.MapGroup("/api/repositories")
+            .WithTags("Repositories");
+
+        MoveRepository.Endpoint.Map(repositoriesGroup);
 
         return routes;
     }

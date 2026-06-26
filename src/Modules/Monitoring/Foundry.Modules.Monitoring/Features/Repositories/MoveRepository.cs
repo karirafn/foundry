@@ -11,9 +11,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
 
-internal static class DeleteRepository
+internal static class MoveRepository
 {
-    internal sealed record Command(Guid AccountId, Guid Id) : ICommand<bool>;
+    internal sealed record Command(Guid Id, int Position) : ICommand<bool>;
 
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, bool>
     {
@@ -21,32 +21,34 @@ internal static class DeleteRepository
             Command command,
             CancellationToken cancellationToken)
         {
-            AccountId accountId = AccountId.From(command.AccountId);
             MonitoredRepositoryId repositoryId = MonitoredRepositoryId.From(command.Id);
 
-            if (await dbContext.Set<MonitoredRepository>()
-                    .Where(r => r.Id == repositoryId)
-                    .FirstOrDefaultAsync(r => r.AccountId == accountId, cancellationToken)
-                is not MonitoredRepository repository)
-            {
-                return Result<bool>.Fail(RepositoryErrors.NotFound(repositoryId));
-            }
-
-            await using IDbContextTransaction tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-            dbContext.Set<MonitoredRepository>().Remove(repository);
-            await dbContext.SaveChangesAsync(cancellationToken);
-
-            List<MonitoredRepository> survivors = await dbContext
+            List<MonitoredRepository> allRepositories = await dbContext
                 .Set<MonitoredRepository>()
                 .OrderBy(r => r.Position)
                 .ToListAsync(cancellationToken);
 
-            if (survivors.Count > 0)
+            MonitoredRepository? target = allRepositories.FirstOrDefault(r => r.Id == repositoryId);
+
+            if (target is null)
             {
-                await RepositoryRenumber.RenumberAsync(dbContext, survivors, cancellationToken);
+                return Result<bool>.Fail(RepositoryErrors.NotFound(repositoryId));
             }
 
+            int count = allRepositories.Count;
+            int clampedPosition = Math.Clamp(command.Position, 0, count - 1);
+
+            int currentPosition = allRepositories.IndexOf(target);
+            if (currentPosition == clampedPosition)
+            {
+                return Result<bool>.Ok(true);
+            }
+
+            allRepositories.RemoveAt(currentPosition);
+            allRepositories.Insert(clampedPosition, target);
+
+            await using IDbContextTransaction tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            await RepositoryRenumber.RenumberAsync(dbContext, allRepositories, cancellationToken);
             await tx.CommitAsync(cancellationToken);
 
             return Result<bool>.Ok(true);
@@ -55,23 +57,25 @@ internal static class DeleteRepository
 
     internal static class Endpoint
     {
+        private sealed record RequestBody(int Position);
+
         public static void Map(RouteGroupBuilder group)
         {
-            group.MapDelete("{id:guid}", static async (
-                    Guid accountId,
+            group.MapMethods("{id:guid}/position", ["PATCH"], static async (
                     Guid id,
+                    RequestBody body,
                     ICommandHandler<Command, bool> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(accountId, id);
+                    Command command = new(id, body.Position);
                     Result<bool> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<NoContent, NotFound>>(
                         _ => TypedResults.NoContent(),
                         _ => TypedResults.NotFound());
                 })
-                .WithName("DeleteRepository")
-                .WithSummary("Deletes a monitored repository")
+                .WithName("MoveRepository")
+                .WithSummary("Moves a monitored repository to the specified position in the dispatch order")
                 .Produces(StatusCodes.Status204NoContent)
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
