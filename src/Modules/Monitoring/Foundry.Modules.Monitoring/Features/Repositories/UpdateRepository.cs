@@ -92,7 +92,8 @@ internal static class UpdateRepository
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
                 repository.LastPolledAt,
-                RepositoryMappings.ToEligibilityInfo(repository.Eligibility));
+                RepositoryMappings.ToEligibilityInfo(repository.Eligibility),
+                repository.Position);
 
             return Result<RepositorySummary>.Ok(summary);
         }

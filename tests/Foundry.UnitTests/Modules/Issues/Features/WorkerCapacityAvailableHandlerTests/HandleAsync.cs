@@ -102,7 +102,8 @@ public sealed class HandleAsync : IAsyncDisposable
         SeedQueuedIssue(repositoryId);
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: [repositoryId.Value]));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories: [new EligibleRepository(repositoryId.Value, Position: 0)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -127,7 +128,7 @@ public sealed class HandleAsync : IAsyncDisposable
         SeedQueuedIssue(repositoryId);
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -153,7 +154,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // No eligible IDs — simulates repo with no eligibility record
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -181,7 +182,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleIds: [eligibleRepoId.Value]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -239,7 +240,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleIds: [eligibleRepoId.Value]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -274,7 +275,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleIds: [eligibleRepoId.Value]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -309,7 +310,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleIds: [eligibleRepoId.Value]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -343,7 +344,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleIds: [continuationRepoId.Value]));
+                eligibleRepositories: [new EligibleRepository(continuationRepoId.Value, Position: 0)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -375,7 +376,7 @@ public sealed class HandleAsync : IAsyncDisposable
         SeedQueuedIssue(repositoryId, issueNumber: 99);
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -498,7 +499,7 @@ public sealed class HandleAsync : IAsyncDisposable
         SeedRevisionQueuedIssue(repositoryId);
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -523,7 +524,7 @@ public sealed class HandleAsync : IAsyncDisposable
         SeedContinuationQueuedIssue(repositoryId);
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
-            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleIds: []));
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -866,6 +867,280 @@ public sealed class HandleAsync : IAsyncDisposable
             .BranchName.ShouldBe("feat/103-fix");
     }
 
+    // Repo priority (Position) within a tier — lower Position wins
+    [Fact]
+    public async Task WhenTwoQueuedIssuesInDifferentRepos_ClaimsIssueFromLowerPositionRepo()
+    {
+        // Arrange
+        MonitoredRepositoryId highPriorityRepoId = MonitoredRepositoryId.New(); // position 0
+        MonitoredRepositoryId lowPriorityRepoId = MonitoredRepositoryId.New();  // position 1
+
+        // Both issues have the same DetectedAt so position is the tiebreaker.
+        DateTimeOffset sameTime = DateTimeOffset.UtcNow;
+        SeedQueuedIssueAtTime(highPriorityRepoId, issueNumber: 1, detectedAt: sameTime);
+        SeedQueuedIssueAtTime(lowPriorityRepoId, issueNumber: 2, detectedAt: sameTime);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories:
+                [
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
+                ]));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? highPriorityIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == highPriorityRepoId,
+                TestContext.Current.CancellationToken);
+        Issue? lowPriorityIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == lowPriorityRepoId,
+                TestContext.Current.CancellationToken);
+        highPriorityIssue.ShouldBeOfType<InProgressIssue>();
+        lowPriorityIssue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    // DetectedAt tiebreaker within the same Position
+    [Fact]
+    public async Task WhenTwoQueuedIssuesHaveSamePosition_ClaimsOldestDetectedAtIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repoAId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId repoBId = MonitoredRepositoryId.New();
+
+        // Both repos have position 0 — DetectedAt decides
+        DateTimeOffset olderTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+        DateTimeOffset newerTime = DateTimeOffset.UtcNow;
+        SeedQueuedIssueAtTime(repoBId, issueNumber: 1, detectedAt: newerTime);
+        SeedQueuedIssueAtTime(repoAId, issueNumber: 2, detectedAt: olderTime);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories:
+                [
+                    new EligibleRepository(repoAId.Value, Position: 0),
+                    new EligibleRepository(repoBId.Value, Position: 0),
+                ]));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — repo A has older DetectedAt so its issue should be claimed
+        _dbContext.ChangeTracker.Clear();
+        Issue? repoAIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repoAId,
+                TestContext.Current.CancellationToken);
+        Issue? repoBIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repoBId,
+                TestContext.Current.CancellationToken);
+        repoAIssue.ShouldBeOfType<InProgressIssue>();
+        repoBIssue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    // Cross-tier: high-position revision queued still beats low-position fresh queued
+    [Fact]
+    public async Task WhenRevisionQueuedHasHigherPositionThanQueuedIssue_RevisionTierStillWins()
+    {
+        // Arrange
+        MonitoredRepositoryId freshRepoId = MonitoredRepositoryId.New();    // position 0 (highest priority)
+        MonitoredRepositoryId revisionRepoId = MonitoredRepositoryId.New(); // position 1 (lower priority)
+
+        SeedQueuedIssue(freshRepoId, issueNumber: 1);
+        SeedRevisionQueuedIssue(revisionRepoId, issueNumber: 20);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories:
+                [
+                    new EligibleRepository(freshRepoId.Value, Position: 0),
+                    new EligibleRepository(revisionRepoId.Value, Position: 1),
+                ]));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — revision tier always beats fresh tier regardless of repo position
+        _dbContext.ChangeTracker.Clear();
+        Issue? freshIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == freshRepoId,
+                TestContext.Current.CancellationToken);
+        Issue? revisionIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == revisionRepoId,
+                TestContext.Current.CancellationToken);
+        freshIssue.ShouldBeOfType<QueuedIssue>();
+        revisionIssue.ShouldBeOfType<RevisionInProgressIssue>();
+    }
+
+    // Position ordering in revision tier
+    [Fact]
+    public async Task WhenTwoRevisionQueuedIssuesInDifferentRepos_ClaimsIssueFromLowerPositionRepo()
+    {
+        // Arrange
+        MonitoredRepositoryId highPriorityRepoId = MonitoredRepositoryId.New(); // position 0
+        MonitoredRepositoryId lowPriorityRepoId = MonitoredRepositoryId.New();  // position 1
+
+        DateTimeOffset sameTime = DateTimeOffset.UtcNow;
+        SeedRevisionQueuedIssueAtTime(highPriorityRepoId, issueNumber: 20, detectedAt: sameTime);
+        SeedRevisionQueuedIssueAtTime(lowPriorityRepoId, issueNumber: 21, detectedAt: sameTime);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories:
+                [
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
+                ]));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? highPriorityIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == highPriorityRepoId,
+                TestContext.Current.CancellationToken);
+        Issue? lowPriorityIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == lowPriorityRepoId,
+                TestContext.Current.CancellationToken);
+        highPriorityIssue.ShouldBeOfType<RevisionInProgressIssue>();
+        lowPriorityIssue.ShouldBeOfType<RevisionQueuedIssue>();
+    }
+
+    // Position ordering in continuation tier
+    [Fact]
+    public async Task WhenTwoContinuationQueuedIssuesInDifferentRepos_ClaimsIssueFromLowerPositionRepo()
+    {
+        // Arrange
+        MonitoredRepositoryId highPriorityRepoId = MonitoredRepositoryId.New(); // position 0
+        MonitoredRepositoryId lowPriorityRepoId = MonitoredRepositoryId.New();  // position 1
+
+        DateTimeOffset sameTime = DateTimeOffset.UtcNow;
+        SeedContinuationQueuedIssueAtTime(highPriorityRepoId, detectedAt: sameTime);
+        SeedContinuationQueuedIssueAtTime(lowPriorityRepoId, detectedAt: sameTime);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories:
+                [
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
+                ]));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? highPriorityIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == highPriorityRepoId,
+                TestContext.Current.CancellationToken);
+        Issue? lowPriorityIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == lowPriorityRepoId,
+                TestContext.Current.CancellationToken);
+        highPriorityIssue.ShouldBeOfType<InProgressIssue>();
+        lowPriorityIssue.ShouldBeOfType<ContinuationQueuedIssue>();
+    }
+
+    private QueuedIssue SeedQueuedIssueAtTime(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber,
+        DateTimeOffset detectedAt)
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber,
+            title: $"Issue {issueNumber}",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: detectedAt);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        _dbContext.Set<Issue>().Add(queued);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return queued;
+    }
+
+    private RevisionQueuedIssue SeedRevisionQueuedIssueAtTime(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber,
+        DateTimeOffset detectedAt)
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: issueNumber,
+            title: $"Issue {issueNumber}",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: detectedAt);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ReviewIssue review = inProgress.MarkInReview(
+            Guid.NewGuid(),
+            $"feat/issue-{issueNumber}",
+            $"https://github.com/owner/repo/pull/{issueNumber}",
+            DateTimeOffset.UtcNow);
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
+        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+        _dbContext.Set<Issue>().Add(revisionQueued);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return revisionQueued;
+    }
+
+    private ContinuationQueuedIssue SeedContinuationQueuedIssueAtTime(
+        MonitoredRepositoryId repositoryId,
+        DateTimeOffset detectedAt)
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 10,
+            title: "Issue 10",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: detectedAt);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
+            Guid.NewGuid(),
+            "feat/10-issue",
+            "Non-zero exit code: 1",
+            DateTimeOffset.UtcNow);
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        _dbContext.Set<Issue>().Add(continuationQueued);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return continuationQueued;
+    }
+
     private ContinuationQueuedIssue SeedContinuationQueuedIssue(
         MonitoredRepositoryId repositoryId,
         string branchName = "feat/103-fix",
@@ -924,9 +1199,9 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     /// <summary>
-    /// Stub that returns exactly the provided eligible IDs.
+    /// Stub that returns exactly the provided eligible repositories (with positions).
     /// </summary>
-    private sealed class StubRepositoryEligibilityQuery(IReadOnlyCollection<Guid> eligibleIds)
+    private sealed class StubRepositoryEligibilityQuery(IReadOnlyCollection<EligibleRepository> eligibleRepositories)
         : IRepositoryEligibilityQuery
     {
         public Task<RepositoryEligibilityInfo?> GetEligibilityAsync(
@@ -934,14 +1209,14 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<RepositoryEligibilityInfo?>(null);
 
-        public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+        public Task<IReadOnlyList<EligibleRepository>> GetEligibleRepositoriesAsync(
             IReadOnlyCollection<Guid> repositoryIds,
             CancellationToken cancellationToken)
         {
-            HashSet<Guid> eligible = repositoryIds
-                .Where(eligibleIds.Contains)
-                .ToHashSet();
-            return Task.FromResult<IReadOnlySet<Guid>>(eligible);
+            IReadOnlyList<EligibleRepository> eligible = eligibleRepositories
+                .Where(r => repositoryIds.Contains(r.Id))
+                .ToList();
+            return Task.FromResult(eligible);
         }
 
         public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
@@ -951,7 +1226,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     /// <summary>
-    /// Stub that marks every queried repository as eligible.
+    /// Stub that marks every queried repository as eligible with default position 0.
     /// </summary>
     private sealed class AllEligibleRepositoryEligibilityQuery : IRepositoryEligibilityQuery
     {
@@ -960,10 +1235,15 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<RepositoryEligibilityInfo?>(null);
 
-        public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+        public Task<IReadOnlyList<EligibleRepository>> GetEligibleRepositoriesAsync(
             IReadOnlyCollection<Guid> repositoryIds,
             CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlySet<Guid>>(repositoryIds.ToHashSet());
+        {
+            IReadOnlyList<EligibleRepository> eligible = repositoryIds
+                .Select(id => new EligibleRepository(id, Position: 0))
+                .ToList();
+            return Task.FromResult(eligible);
+        }
 
         public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
             IReadOnlyCollection<Guid> repositoryIds,

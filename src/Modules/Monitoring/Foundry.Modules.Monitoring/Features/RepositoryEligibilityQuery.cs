@@ -29,27 +29,27 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
         return MapToInfo(repo);
     }
 
-    public async Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+    public async Task<IReadOnlyList<EligibleRepository>> GetEligibleRepositoriesAsync(
         IReadOnlyCollection<Guid> repositoryIds,
         CancellationToken cancellationToken)
     {
         if (repositoryIds.Count == 0)
         {
-            return new HashSet<Guid>();
+            return [];
         }
 
         HashSet<MonitoredRepositoryId> typedIds = repositoryIds
             .Select(MonitoredRepositoryId.From)
             .ToHashSet();
 
-        HashSet<Guid> eligibleIds = await db.Set<MonitoredRepository>()
+        List<EligibleRepository> eligibleRepositories = await db.Set<MonitoredRepository>()
             .AsNoTracking()
             .Where(r => typedIds.Contains(r.Id))
             .Where(r => r.EligibilityStatus == EligibleStatus)
-            .Select(r => r.Id.Value)
-            .ToHashSetAsync(cancellationToken);
+            .Select(r => new EligibleRepository(r.Id.Value, r.Position))
+            .ToListAsync(cancellationToken);
 
-        return eligibleIds;
+        return eligibleRepositories;
     }
 
     public async Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(

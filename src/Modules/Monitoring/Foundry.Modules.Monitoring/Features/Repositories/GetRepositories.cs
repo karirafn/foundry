@@ -43,7 +43,9 @@ internal static class GetRepositories
                         r.IsActive,
                         r.LastPolledAt,
                         r.Eligibility,
+                        r.Position,
                     })
+                .OrderBy(r => r.Position)
                 .ToListAsync(cancellationToken);
 
             List<RepositorySummary> repositories = repositorySummaryRows
@@ -56,7 +58,8 @@ internal static class GetRepositories
                     RepositoryMappings.ToSeconds(r.PollInterval),
                     r.IsActive,
                     r.LastPolledAt,
-                    RepositoryMappings.ToEligibilityInfo(r.Eligibility)))
+                    RepositoryMappings.ToEligibilityInfo(r.Eligibility),
+                    r.Position))
                 .ToList();
 
             return Result<IReadOnlyList<RepositorySummary>>.Ok(repositories);
