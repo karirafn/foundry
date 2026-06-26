@@ -31,6 +31,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public bool IsActive { get; private set; }
 
+    public int Position { get; private set; }
+
     public DateTimeOffset? LastPolledAt { get; private set; }
 
     public RepositoryEligibility? Eligibility { get; private set; }
@@ -41,7 +43,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         RepositorySlug slug,
         AccountId accountId,
         string host,
-        TimeSpan? pollInterval)
+        TimeSpan? pollInterval,
+        int position = 0)
     {
         return new MonitoredRepository(MonitoredRepositoryId.New())
         {
@@ -50,9 +53,15 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             Host = host,
             PollInterval = pollInterval,
             IsActive = true,
+            Position = position,
             Eligibility = new RepositoryEligibility.Unreachable(),
             EligibilityStatus = UnreachableStatus,
         };
+    }
+
+    public void SetPosition(int position)
+    {
+        Position = position;
     }
 
     public bool IsDueForPoll(TimeSpan defaultInterval, DateTimeOffset now)

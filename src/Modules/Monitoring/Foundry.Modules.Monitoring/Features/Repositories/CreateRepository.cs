@@ -85,11 +85,14 @@ internal static class CreateRepository
                 ? TimeSpan.FromSeconds(command.PollIntervalSeconds.Value)
                 : null;
 
+            int position = await dbContext.Set<MonitoredRepository>().CountAsync(cancellationToken);
+
             MonitoredRepository repository = MonitoredRepository.Create(
                 repositorySlug,
                 accountId,
                 account.BaseUrl.Value.Host,
-                pollInterval);
+                pollInterval,
+                position);
 
             dbContext.Set<MonitoredRepository>().Add(repository);
 

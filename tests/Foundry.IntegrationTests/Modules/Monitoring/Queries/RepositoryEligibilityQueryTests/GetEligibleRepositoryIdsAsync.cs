@@ -98,11 +98,13 @@ public sealed class GetEligibleRepositoryIdsAsync : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
+        int position = await dbContext.Set<MonitoredRepository>().CountAsync(TestContext.Current.CancellationToken);
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
             AccountId.From(accountId),
             "github.com",
-            pollInterval: null);
+            pollInterval: null,
+            position);
 
         if (eligibility is not null)
         {

@@ -86,8 +86,8 @@ public sealed class GetSlugsAsync : IAsyncDisposable
         GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
 
-        MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), account.Id, "github.com", null);
-        MonitoredRepository repoB = MonitoredRepository.Create(ValidSlug("owner/repo-b"), account.Id, "github.com", null);
+        MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), account.Id, "github.com", null, position: 0);
+        MonitoredRepository repoB = MonitoredRepository.Create(ValidSlug("owner/repo-b"), account.Id, "github.com", null, position: 1);
         _dbContext.Set<MonitoredRepository>().AddRange(repoA, repoB);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
