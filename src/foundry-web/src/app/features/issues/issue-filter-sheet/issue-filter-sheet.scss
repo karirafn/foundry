@@ -22,12 +22,16 @@
   flex-direction: column;
   // dvh tracks the dynamic viewport (excludes browser chrome) — better for mobile.
   // Landscape cap (50dvh) keeps the panel small enough to see content behind it.
-  // Fallback chain: dvh → svh → vh for progressive enhancement.
-  max-height: min(80dvh, 80svh, 80vh);
+  // Cascade fallbacks: vh → svh → dvh in ascending support order.
+  max-height: 80vh;
+  max-height: 80svh;
+  max-height: 80dvh;
 
   // Landscape: cap at 50% of the viewport height so content remains reachable.
   @media (orientation: landscape) {
-    max-height: min(50dvh, 50svh, 50vh);
+    max-height: 50vh;
+    max-height: 50svh;
+    max-height: 50dvh;
   }
 
   // Padding-bottom accounts for the home indicator / notch safe area.
@@ -40,8 +44,14 @@
   width: 100%;
   box-sizing: border-box;
 
+  transform: translateY(0);
+
   @media (prefers-reduced-motion: no-preference) {
     transition: transform 200ms ease;
+
+    @starting-style {
+      transform: translateY(100%);
+    }
   }
 }
 

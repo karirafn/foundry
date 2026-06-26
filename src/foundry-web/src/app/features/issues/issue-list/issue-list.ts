@@ -11,7 +11,7 @@ import { IssueFilterBarComponent } from '../issue-filter-bar/issue-filter-bar';
 import { SettingsService } from '../../../features/settings/settings.service';
 
 const SKELETON_COUNT = 4;
-const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts in the filter rail.';
+const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
 const EMPTY_RESOLVED_MESSAGE = 'No resolved issues match the selected filters';
 const RESOLVED_HEADING_ID = 'resolved-band-heading';
 

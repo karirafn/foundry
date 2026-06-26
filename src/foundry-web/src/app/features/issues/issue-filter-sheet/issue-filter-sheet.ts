@@ -12,6 +12,7 @@ import {
 import { IssueFilterRailComponent } from '../issue-filter-rail/issue-filter-rail';
 
 const HEADING_ID = 'filter-sheet-heading';
+const SWIPE_DISMISS_THRESHOLD_PX = 96;
 const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 @Component({
@@ -31,6 +32,10 @@ const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]
         role="dialog"
         aria-modal="true"
         [attr.aria-labelledby]="headingId"
+        (pointerdown)="onPanelPointerDown($event)"
+        (pointermove)="onPanelPointerMove($event)"
+        (pointerup)="onPanelPointerUp($event)"
+        (pointercancel)="onPanelPointerCancel()"
       >
         <div class="filter-sheet__header">
           <div class="filter-sheet__drag-handle" aria-hidden="true"></div>
@@ -48,7 +53,7 @@ const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]
           </button>
         </div>
         <div class="filter-sheet__body">
-          <fd-issue-filter-rail [touch]="true" />
+          <fd-issue-filter-rail [touch]="true" idPrefix="sheet-" />
         </div>
       </div>
     }
@@ -65,6 +70,8 @@ export class IssueFilterSheetComponent {
 
   protected readonly headingId = HEADING_ID;
 
+  private _dragStartY: number | null = null;
+
   private readonly _focusEffect = afterRenderEffect(() => {
     const isOpen = this.open();
     if (isOpen) {
@@ -80,6 +87,11 @@ export class IssueFilterSheetComponent {
       }
     }
   });
+
+  /** Returns true when the drag distance exceeds the dismiss threshold. */
+  shouldDismiss(dragDistancePx: number): boolean {
+    return dragDistancePx >= SWIPE_DISMISS_THRESHOLD_PX;
+  }
 
   @HostListener('keydown', ['$event'])
   protected onHostKeydown(event: KeyboardEvent): void {
@@ -102,6 +114,59 @@ export class IssueFilterSheetComponent {
 
   protected onCloseClick(): void {
     this.close.emit();
+  }
+
+  protected onPanelPointerDown(event: PointerEvent): void {
+    this._dragStartY = event.clientY;
+    const panel = this._getPanel();
+    if (panel !== null && typeof panel.setPointerCapture === 'function') {
+      panel.setPointerCapture(event.pointerId);
+    }
+  }
+
+  protected onPanelPointerMove(event: PointerEvent): void {
+    if (this._dragStartY === null) {
+      return;
+    }
+    const delta = event.clientY - this._dragStartY;
+    if (delta <= 0) {
+      return;
+    }
+    const panel = this._getPanel();
+    if (panel !== null) {
+      panel.style.transform = `translateY(${delta}px)`;
+      panel.style.transition = 'none';
+    }
+  }
+
+  protected onPanelPointerUp(event: PointerEvent): void {
+    if (this._dragStartY === null) {
+      return;
+    }
+    const delta = Math.max(0, event.clientY - this._dragStartY);
+    this._dragStartY = null;
+    if (this.shouldDismiss(delta)) {
+      this.close.emit();
+    } else {
+      this._snapBack();
+    }
+  }
+
+  protected onPanelPointerCancel(): void {
+    this._dragStartY = null;
+    this._snapBack();
+  }
+
+  private _snapBack(): void {
+    const panel = this._getPanel();
+    if (panel === null) {
+      return;
+    }
+    const prefersReducedMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    panel.style.transition = prefersReducedMotion ? 'none' : 'transform 200ms ease';
+    panel.style.transform = 'translateY(0)';
   }
 
   private _getPanel(): HTMLElement | null {

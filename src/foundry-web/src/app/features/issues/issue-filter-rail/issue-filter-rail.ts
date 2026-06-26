@@ -52,6 +52,7 @@ export class IssueFilterRailComponent {
   protected readonly groups = STATE_GROUPS;
 
   readonly touch = input(false);
+  readonly idPrefix = input('');
 
   @HostBinding('class.filter-rail--touch')
   get _touchClass(): boolean {
@@ -67,7 +68,7 @@ export class IssueFilterRailComponent {
   }
 
   protected groupId(label: string): string {
-    return 'rail-group-' + label.toLowerCase().replace(/\s+/g, '-');
+    return this.idPrefix() + 'rail-group-' + label.toLowerCase().replace(/\s+/g, '-');
   }
 
   protected toggleAriaLabel(state: IssueState): string {

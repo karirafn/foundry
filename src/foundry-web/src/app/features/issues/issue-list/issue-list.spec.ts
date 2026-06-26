@@ -197,7 +197,7 @@ describe('IssueListComponent', () => {
     expect(heading?.textContent?.trim()).toBe('No active issues');
   });
 
-  it('should render the empty-active hint pointing to the filter rail', () => {
+  it('should render the empty-active hint with layout-neutral copy', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
@@ -206,10 +206,11 @@ describe('IssueListComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert
+    // Assert — copy must not reference "filter rail" (hidden on mobile)
     const el = fixture.nativeElement as HTMLElement;
     const hint = el.querySelector('.issue-list__empty-active-hint');
-    expect(hint?.textContent?.trim()).toContain('filter rail');
+    expect(hint?.textContent?.trim()).not.toContain('filter rail');
+    expect(hint?.textContent?.trim()).toContain('Resolved counts');
   });
 
   it('should not render "No active issues" when active band has issues', () => {

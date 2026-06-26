@@ -264,4 +264,61 @@ describe('IssueFilterSheetComponent', () => {
     const handle = el.querySelector('.filter-sheet__drag-handle');
     expect(handle).not.toBeNull();
   });
+
+  // Cycle 11: swipe-to-dismiss threshold logic
+  it('should classify drag past threshold (96px) as a dismiss gesture', () => {
+    // Arrange
+    const { fixture } = setup(true);
+    const component = fixture.componentInstance;
+
+    // Act / Assert
+    expect(component.shouldDismiss(96)).toBe(true);
+    expect(component.shouldDismiss(100)).toBe(true);
+    expect(component.shouldDismiss(200)).toBe(true);
+  });
+
+  it('should classify drag below threshold (96px) as a snap-back gesture', () => {
+    // Arrange
+    const { fixture } = setup(true);
+    const component = fixture.componentInstance;
+
+    // Act / Assert
+    expect(component.shouldDismiss(0)).toBe(false);
+    expect(component.shouldDismiss(50)).toBe(false);
+    expect(component.shouldDismiss(95)).toBe(false);
+  });
+
+  it('should emit close when panel is dragged past the dismiss threshold', () => {
+    // Arrange
+    const { fixture } = setup(true);
+    const el = fixture.nativeElement as HTMLElement;
+    const closeSpy = vi.fn();
+    fixture.componentInstance.close.subscribe(closeSpy);
+    const panel = el.querySelector('.filter-sheet__panel') as HTMLElement;
+
+    // Act — simulate a pointer drag exceeding 96px downward
+    panel.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointermove', { clientY: 200, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointerup', { clientY: 200, bubbles: true }));
+
+    // Assert
+    expect(closeSpy).toHaveBeenCalledOnce();
+  });
+
+  it('should not emit close when panel is dragged below the dismiss threshold', () => {
+    // Arrange
+    const { fixture } = setup(true);
+    const el = fixture.nativeElement as HTMLElement;
+    const closeSpy = vi.fn();
+    fixture.componentInstance.close.subscribe(closeSpy);
+    const panel = el.querySelector('.filter-sheet__panel') as HTMLElement;
+
+    // Act — simulate a pointer drag of only 50px downward
+    panel.dispatchEvent(new PointerEvent('pointerdown', { clientY: 100, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointermove', { clientY: 150, bubbles: true }));
+    panel.dispatchEvent(new PointerEvent('pointerup', { clientY: 150, bubbles: true }));
+
+    // Assert
+    expect(closeSpy).not.toHaveBeenCalled();
+  });
 });
