@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, inject, viewChild } from '@angular/core';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { IssueCardComponent } from '../issue-card/issue-card';
@@ -11,6 +11,7 @@ import { SettingsService } from '../../../features/settings/settings.service';
 
 const SKELETON_COUNT = 4;
 const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts in the filter rail.';
+const EMPTY_RESOLVED_MESSAGE = 'No resolved issues match the selected filters';
 const RESOLVED_HEADING_ID = 'resolved-band-heading';
 
 @Component({
@@ -28,7 +29,7 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
   template: `
     <div class="issue-list">
       <header class="issue-list__header">
-        <h1 class="issue-list__heading">Tracked Issues</h1>
+        <h1 #issueListHeadingEl class="issue-list__heading" tabindex="-1">Tracked Issues</h1>
         <fd-connection-indicator [status]="signalR.connectionStatus()" />
       </header>
 
@@ -60,7 +61,7 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
               <button
                 class="issue-list__error-retry"
                 type="button"
-                (click)="issueService.loadIssues()"
+                (click)="retryActiveLoad()"
               >Retry</button>
             </div>
           }
@@ -116,7 +117,7 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
             >
               <div class="issue-list__resolved-divider">
                 <hr class="issue-list__resolved-hr" aria-hidden="true" />
-                <h2 [id]="resolvedHeadingId" class="issue-list__resolved-caption">Resolved</h2>
+                <h2 #resolvedBandHeadingEl [id]="resolvedHeadingId" class="issue-list__resolved-caption" tabindex="-1">Resolved</h2>
               </div>
 
               @if (issueService.resolvedLoading()) {
@@ -127,12 +128,12 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
                   <button
                     class="issue-list__error-retry"
                     type="button"
-                    (click)="issueService.retryResolvedFetch()"
+                    (click)="retryResolvedLoad()"
                   >Retry</button>
                 </div>
               } @else if (issueService.resolvedIssues().length === 0) {
                 <div class="issue-list__empty-resolved">
-                  <p class="issue-list__empty-resolved-text">No resolved issues</p>
+                  <h2 class="issue-list__empty-resolved-heading">{{ emptyResolvedMessage }}</h2>
                 </div>
               } @else {
                 <div class="issue-list__resolved-band">
@@ -164,12 +165,12 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
               }
 
               @if (issueService.resolvedLoadMoreError()) {
-                <div class="issue-list__resolved-load-more-error">
-                  <span class="issue-list__resolved-load-more-error-message">Failed to load more</span>
+                <div class="issue-list__resolved-load-more-error" role="alert">
+                  <span class="issue-list__resolved-load-more-error-message">{{ issueService.resolvedLoadMoreError() }}</span>
                   <button
                     class="issue-list__resolved-load-more-retry"
                     type="button"
-                    (click)="loadMore()"
+                    (click)="retryLoadMore()"
                   >Retry</button>
                 </div>
               } @else if (issueService.hasMoreResolved()) {
@@ -205,8 +206,12 @@ export class IssueListComponent implements OnInit {
   protected readonly signalR = inject(IssueSignalRService);
   private readonly _settingsService = inject(SettingsService);
 
+  private readonly issueListHeadingEl = viewChild.required<ElementRef<HTMLHeadingElement>>('issueListHeadingEl');
+  private readonly resolvedBandHeadingEl = viewChild<ElementRef<HTMLHeadingElement>>('resolvedBandHeadingEl');
+
   protected readonly skeletonPlaceholders = Array.from({ length: SKELETON_COUNT }, (_, i) => i);
   protected readonly emptyActiveHint = EMPTY_ACTIVE_MESSAGE;
+  protected readonly emptyResolvedMessage = EMPTY_RESOLVED_MESSAGE;
   protected readonly resolvedHeadingId = RESOLVED_HEADING_ID;
 
   private _preLoadResolvedCount = 0;
@@ -234,8 +239,30 @@ export class IssueListComponent implements OnInit {
       }
       return `Loaded ${count} resolved issue${count === 1 ? '' : 's'}`;
     }
+    if (
+      this.issueService.selectedResolvedStates().size > 0 &&
+      !this.issueService.resolvedError() &&
+      count === 0
+    ) {
+      return EMPTY_RESOLVED_MESSAGE;
+    }
     return '';
   });
+
+  protected retryActiveLoad(): void {
+    this.issueService.loadIssues();
+    this.issueListHeadingEl().nativeElement.focus();
+  }
+
+  protected retryResolvedLoad(): void {
+    this.issueService.retryResolvedFetch();
+    this.resolvedBandHeadingEl()?.nativeElement.focus();
+  }
+
+  protected retryLoadMore(): void {
+    this.loadMore();
+    this.resolvedBandHeadingEl()?.nativeElement.focus();
+  }
 
   loadMore(): void {
     this._preLoadResolvedCount = this.issueService.resolvedIssues().length;

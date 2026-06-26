@@ -1841,7 +1841,7 @@ describe('IssueService (resolved paging)', () => {
     ).flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert
-    expect(service.resolvedLoadMoreError()).toBe('Failed to load more');
+    expect(service.resolvedLoadMoreError()).toBe('Failed to load more resolved issues');
     expect(service.resolvedIssues().length).toBe(1);
     expect(service.resolvedIssues()[0].id).toBe('res-1');
   });

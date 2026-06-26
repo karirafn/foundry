@@ -1335,4 +1335,223 @@ describe('IssueListComponent', () => {
     // Resolved error appears inside the resolved section only
     expect(el.querySelector('.issue-list__resolved-section .issue-list__error')).toBeTruthy();
   });
+
+  // F1: Load-more error has role="alert"
+  it('should have role="alert" on the load-more error container', () => {
+    // Arrange — get page 1 with cursor, then fail load-more
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [resolvedIssue],
+      nextCursor: 'cursor-abc',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.issue-list__load-more') as HTMLElement).click();
+    fixture.detectChanges();
+    httpMock.expectOne((r) => r.url === '/api/issues' && r.params.has('cursor')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const loadMoreError = el.querySelector('.issue-list__resolved-load-more-error');
+    expect(loadMoreError?.getAttribute('role')).toBe('alert');
+  });
+
+  // F2: Empty-resolved state announced to screen readers
+  it('should announce the empty-resolved message via the resolved announcer when resolved fetch returns zero results', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act — select a resolved state and return empty results
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert — persistent resolved announcer shows the empty-resolved message
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('[aria-live="polite"].issue-list__resolved-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).toContain('No resolved issues match the selected filters');
+  });
+
+  it('should not announce the empty-resolved message when the resolved band has issues', () => {
+    // Arrange
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act — select a resolved state and return results
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [resolvedIssue],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert — announcer does not contain the empty message
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('[aria-live="polite"].issue-list__resolved-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).not.toContain('No resolved issues match the selected filters');
+  });
+
+  it('should not announce empty-resolved when the resolved error is set', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act — select a resolved state and fail the fetch
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — announcer is empty (error state, not empty state)
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('[aria-live="polite"].issue-list__resolved-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).not.toContain('No resolved issues match the selected filters');
+  });
+
+  // F3: Focus management on retry buttons
+  it('should move focus to the issue-list heading after clicking the active-band retry button', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/issues').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+    httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    fixture.detectChanges();
+
+    // Act — click retry; flush the resulting request before asserting so cleanup runs even on failure
+    const el = fixture.nativeElement as HTMLElement;
+    const retryBtn = el.querySelector('.issue-list__error-retry') as HTMLElement;
+    retryBtn.click();
+    httpMock.expectOne('/api/issues').flush([]);
+    fixture.detectChanges();
+
+    // Assert
+    const heading = el.querySelector('.issue-list__heading') as HTMLElement;
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it('should move focus to the resolved-band heading after clicking the resolved first-page retry button', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Act — click retry; flush the resulting request before asserting so cleanup runs even on failure
+    const el = fixture.nativeElement as HTMLElement;
+    const retryBtn = el.querySelector('.issue-list__resolved-section .issue-list__error-retry') as HTMLElement;
+    retryBtn.click();
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert — focus moves to the resolved section heading
+    const resolvedHeading = el.querySelector('.issue-list__resolved-caption') as HTMLElement;
+    expect(document.activeElement).toBe(resolvedHeading);
+  });
+
+  it('should move focus to the resolved-band heading after clicking the load-more retry button', () => {
+    // Arrange
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'res1', state: 'completed' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [resolvedIssue],
+      nextCursor: 'cursor-abc',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.issue-list__load-more') as HTMLElement).click();
+    fixture.detectChanges();
+    httpMock.expectOne((r) => r.url === '/api/issues' && r.params.has('cursor')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Act — click retry; flush the resulting request before asserting so cleanup runs even on failure
+    const retryBtn = el.querySelector('.issue-list__resolved-load-more-retry') as HTMLElement;
+    retryBtn.click();
+    httpMock.expectOne((r) => r.url === '/api/issues' && r.params.has('cursor')).flush({
+      items: [],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const resolvedHeading = el.querySelector('.issue-list__resolved-caption') as HTMLElement;
+    expect(document.activeElement).toBe(resolvedHeading);
+  });
+
+  // F6: Empty-resolved state uses h2 heading with filter-scoped copy
+  it('should render an h2 heading in the empty-resolved state', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Act — select completed, return empty result
+    const issueService = TestBed.inject(IssueService);
+    issueService.toggleState('completed');
+    httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
+      items: [],
+      nextCursor: null,
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const heading = el.querySelector('.issue-list__empty-resolved-heading');
+    expect(heading?.tagName).toBe('H2');
+    expect(heading?.textContent?.trim()).toBe('No resolved issues match the selected filters');
+  });
 });

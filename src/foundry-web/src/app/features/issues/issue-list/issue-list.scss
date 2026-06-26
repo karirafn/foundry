@@ -174,9 +174,10 @@
     text-align: center;
   }
 
-  &__empty-resolved-text {
-    font-size: 0.875rem;
-    color: var(--fd-text-secondary);
+  &__empty-resolved-heading {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--fd-text-primary);
     margin: 0;
   }
 
@@ -188,7 +189,7 @@
     margin-top: var(--fd-spacing-md);
     padding: var(--fd-spacing-sm) var(--fd-spacing-lg);
     font-size: 0.875rem;
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
   }
 
   &__resolved-load-more-error-message {
@@ -197,13 +198,15 @@
   }
 
   &__resolved-load-more-retry {
+    align-items: center;
     background: transparent;
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-sm);
     color: var(--fd-text-primary);
     cursor: pointer;
+    display: inline-flex;
     font-size: 0.875rem;
-    min-height: 36px;
+    min-height: 44px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
 
     &:hover {

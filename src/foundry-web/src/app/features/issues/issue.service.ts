@@ -16,7 +16,7 @@ interface PagedIssues {
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_RESOLVED_ERROR = 'Failed to load resolved issues';
-const LOAD_MORE_RESOLVED_ERROR = 'Failed to load more';
+const LOAD_MORE_RESOLVED_ERROR = 'Failed to load more resolved issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
 const RETRY_FAILED_ERROR = 'Failed to retry issue.';
 const RETRY_FAILED_SUCCESS = 'Retry queued. Issue status is updating.';
