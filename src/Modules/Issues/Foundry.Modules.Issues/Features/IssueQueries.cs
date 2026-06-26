@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
@@ -14,7 +16,6 @@ internal sealed class IssueQueries(
     IRepositorySlugQueries slugQueries,
     IRepositoryEligibilityQuery eligibilityQuery) : IIssueQueries
 {
-
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
@@ -98,6 +99,13 @@ internal sealed class IssueQueries(
             .OrderByDescending(i => i.DetectedAt)
             .ToListAsync(cancellationToken);
 
+        return await EnrichAsync(issues, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<IssueSummary>> EnrichAsync(
+        List<Issue> issues,
+        CancellationToken cancellationToken)
+    {
         if (issues.Count == 0)
         {
             return [];
@@ -378,13 +386,56 @@ internal sealed class IssueQueries(
             _ => null
         };
 
-    // TODO(#237 step 3): implemented in step 3
-    public Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
+    public async Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         IReadOnlyCollection<string>? states,
         CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        IReadOnlyCollection<string> effectiveStates =
+            states is null || states.Count == 0
+                ? IssueStateRegistry.Active
+                : states;
+
+        Expression<Func<Issue, bool>> statePredicate = BuildTypeOrPredicate(effectiveStates);
+
+        IQueryable<Issue> query = db.Set<Issue>()
+            .AsNoTracking()
+            .Where(statePredicate);
+
+        if (repositoryId is not null)
+        {
+            query = query.Where(i => i.MonitoredRepositoryId == repositoryId);
+        }
+
+        List<Issue> issues = await query
+            .OrderByDescending(i => i.DetectedAt)
+            .ToListAsync(cancellationToken);
+
+        return await EnrichAsync(issues, cancellationToken);
+    }
+
+    private static Expression<Func<Issue, bool>> BuildTypeOrPredicate(IReadOnlyCollection<string> stateNames)
+    {
+        ParameterExpression parameter = Expression.Parameter(typeof(Issue), "i");
+
+        Expression? body = null;
+        foreach (string name in stateNames)
+        {
+            Type? entityType = IssueStateRegistry.GetEntityType(name);
+            if (entityType is null)
+            {
+                continue;
+            }
+
+            Expression typeCheck = Expression.TypeIs(parameter, entityType);
+            body = body is null ? typeCheck : Expression.OrElse(body, typeCheck);
+        }
+
+        // When no recognised names map to a type (should not happen with validated input),
+        // return a predicate that matches nothing.
+        body ??= Expression.Constant(false);
+
+        return Expression.Lambda<Func<Issue, bool>>(body, parameter);
     }
 
     // TODO(#237 step 4): implemented in step 4
