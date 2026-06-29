@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -87,6 +88,11 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 {
     private const int ContainerIdMaxLength = 200;
 
+    private static readonly JsonSerializerOptions CommitMarkersJsonOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
     private static readonly ValueConverter<ContainerId, string> ContainerIdConverter = new(
         id => id.Value,
         value => ContainerId.From(value));
@@ -94,6 +100,11 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
     private static readonly ValueConverter<MonitoredRepositoryId, Guid> MonitoredRepositoryIdConverter = new(
         id => id.Value,
         value => MonitoredRepositoryId.From(value));
+
+    private static readonly ValueConverter<IReadOnlyList<CommitMarker>, string> CommitMarkersConverter = new(
+        markers => JsonSerializer.Serialize(markers, CommitMarkersJsonOptions),
+        json => JsonSerializer.Deserialize<List<CommitMarker>>(json, CommitMarkersJsonOptions)
+            ?? new List<CommitMarker>());
 
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
@@ -117,6 +128,15 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         builder.Property(r => r.MonitoredRepositoryId)
             .HasConversion(MonitoredRepositoryIdConverter)
             .HasColumnName("monitored_repository_id");
+
+        builder.Property(r => r.LastActivityAt)
+            .HasColumnName("last_activity_at");
+
+        builder.Property(r => r.CommitMarkers)
+            .HasConversion(CommitMarkersConverter)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("commit_markers");
     }
 }
 

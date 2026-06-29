@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Features.PostExitProviderQueriesTests;
 
-public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
+public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
@@ -24,7 +24,7 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
 
     private StubIssueProvider _stubProvider = new();
 
-    public GetPullRequestByBranchAsync()
+    public GetLatestBranchCommitAsync()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -68,54 +68,59 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
         MonitoredRepositoryId nonExistentId = MonitoredRepositoryId.New();
 
         // Act
-        Result<string> result = await _sut.GetPullRequestByBranchAsync(
+        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
             nonExistentId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<string>.Failure failure = result.ShouldBeOfType<Result<string>.Failure>();
+        Result<LatestBranchCommit>.Failure failure = result.ShouldBeOfType<Result<LatestBranchCommit>.Failure>();
         failure.Error.Code.ShouldBe("PostExitProviderQueries.RepositoryNotFound");
     }
 
     [Fact]
-    public async Task WhenPullRequestExists_ReturnsPrUrl()
+    public async Task WhenProviderReturnsCommit_ReturnsCommitDetails()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
+        LatestBranchCommit commit = new("abc1234", "feat: add something");
         _stubProvider = new StubIssueProvider(
-            getPullRequestResult: Result<string>.Ok("https://github.com/owner/repo/pull/42"));
+            getLatestBranchCommitResult: Result<LatestBranchCommit>.Ok(commit));
 
         // Act
-        Result<string> result = await _sut.GetPullRequestByBranchAsync(
+        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
             repoId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
-        success.Value.ShouldBe("https://github.com/owner/repo/pull/42");
+        Result<LatestBranchCommit>.Success success = result.ShouldBeOfType<Result<LatestBranchCommit>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.Sha.ShouldBe("abc1234"),
+            () => success.Value.Message.ShouldBe("feat: add something"));
     }
 
     [Fact]
-    public async Task WhenNoPullRequestExists_ReturnsEmptyString()
+    public async Task WhenProviderIsUnreachable_ReturnsFailure()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
-        _stubProvider = new StubIssueProvider(getPullRequestResult: Result<string>.Ok(string.Empty));
+        Error providerError = new("Provider.Unreachable", "Provider is unreachable");
+        _stubProvider = new StubIssueProvider(
+            getLatestBranchCommitResult: Result<LatestBranchCommit>.Fail(providerError));
 
         // Act
-        Result<string> result = await _sut.GetPullRequestByBranchAsync(
+        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
             repoId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
-        success.Value.ShouldBeEmpty();
+        result.IsFailure.ShouldBeTrue();
+        Result<LatestBranchCommit>.Failure failure = result.ShouldBeOfType<Result<LatestBranchCommit>.Failure>();
+        failure.Error.Code.ShouldBe("Provider.Unreachable");
     }
 
     private sealed class StubProviderFactory(Func<StubIssueProvider> providerFactory) : IIssueProviderFactory
@@ -124,7 +129,7 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
     }
 
     private sealed class StubIssueProvider(
-        Result<string>? getPullRequestResult = null) : IIssueProvider
+        Result<LatestBranchCommit>? getLatestBranchCommitResult = null) : IIssueProvider
     {
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -171,7 +176,8 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
+            return Task.FromResult(
+                Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
         }
 
         public Task<Result<bool>> CreateBranchAsync(
@@ -195,7 +201,7 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
             string branchName,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(getPullRequestResult ?? Result<string>.Ok(string.Empty));
+            return Task.FromResult(Result<string>.Ok(string.Empty));
         }
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
@@ -204,7 +210,8 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(
-                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+                getLatestBranchCommitResult
+                ?? Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
         }
     }
 }

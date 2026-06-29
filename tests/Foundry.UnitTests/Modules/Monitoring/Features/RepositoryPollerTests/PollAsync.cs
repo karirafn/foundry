@@ -1194,6 +1194,15 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(Result<string>.Ok(string.Empty));
         }
+
+        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
+                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+        }
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
@@ -1267,6 +1276,14 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<string>.Fail(error));
+        }
+
+        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<LatestBranchCommit>.Fail(error));
         }
     }
 

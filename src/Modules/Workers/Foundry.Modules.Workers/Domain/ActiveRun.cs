@@ -28,6 +28,8 @@ public sealed class ActiveRun : WorkerRun
         StartedAt = startedAt;
     }
 
+    private readonly List<CommitMarker> _commitMarkers = [];
+
     public ContainerId ContainerId { get; private set; }
 
     public DateTimeOffset StartedAt { get; private set; }
@@ -35,6 +37,34 @@ public sealed class ActiveRun : WorkerRun
     public BranchName BranchName { get; private set; }
 
     public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
+
+    public DateTimeOffset? LastActivityAt { get; private set; }
+
+    public IReadOnlyList<CommitMarker> CommitMarkers => _commitMarkers;
+
+    public void RecordActivity(DateTimeOffset observedAt)
+    {
+        if (LastActivityAt.HasValue && observedAt <= LastActivityAt.Value)
+        {
+            return;
+        }
+
+        LastActivityAt = observedAt;
+        AddDomainEvent(new WorkerActivityObserved(Id, IssueId, observedAt, null));
+    }
+
+    public void RecordCommit(CommitMarker marker)
+    {
+        bool alreadyPresent = _commitMarkers.Any(m => m.Sha == marker.Sha);
+
+        if (alreadyPresent)
+        {
+            return;
+        }
+
+        _commitMarkers.Add(marker);
+        AddDomainEvent(new WorkerActivityObserved(Id, IssueId, marker.ObservedAt, marker));
+    }
 
     internal static ActiveRun FromStarting(
         StartingRun starting,

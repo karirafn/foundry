@@ -614,6 +614,56 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<bool>.Ok((dto?.AheadBy ?? 0) > 0);
     }
 
+    public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<LatestBranchCommit>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"repos/{owner}/{repo}/commits?sha={encodedBranch}&per_page=1";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<LatestBranchCommit>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitHubCommitListItemDto>? dtos =
+            JsonSerializer.Deserialize<List<GitHubCommitListItemDto>>(body, JsonOptions);
+
+        GitHubCommitListItemDto? latest = (dtos ?? []).FirstOrDefault();
+
+        if (latest is null)
+        {
+            return Result<LatestBranchCommit>.Fail(GitHubErrors.NoBranchCommits);
+        }
+
+        string shortSha = latest.Sha.Length >= 7 ? latest.Sha[..7] : latest.Sha;
+        string commitMessage = latest.Commit?.Message ?? string.Empty;
+        int newlineIndex = commitMessage.IndexOf('\n', StringComparison.Ordinal);
+        string firstLine = newlineIndex >= 0 ? commitMessage[..newlineIndex] : commitMessage;
+
+        return Result<LatestBranchCommit>.Ok(new LatestBranchCommit(shortSha, firstLine));
+    }
+
     public async Task<Result<string>> GetPullRequestByBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -788,6 +838,10 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private sealed record GitHubCompareDto(int AheadBy);
 
     private sealed record GitHubPullRequestListItemDto(string HtmlUrl);
+
+    private sealed record GitHubCommitListItemDto(string Sha, GitHubCommitDetailDto? Commit);
+
+    private sealed record GitHubCommitDetailDto(string Message);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
@@ -829,6 +883,10 @@ internal static class GitHubErrors
     public static readonly Error InvalidPullRequestUrl = new(
         "GitHub.InvalidPullRequestUrl",
         "The pull request URL does not contain a valid PR number.");
+
+    public static readonly Error NoBranchCommits = new(
+        "GitHub.NoBranchCommits",
+        "The branch has no commits.");
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitHub.UnexpectedStatusCode", $"GitHub API returned unexpected status code {statusCode}.");

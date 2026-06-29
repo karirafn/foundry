@@ -124,6 +124,13 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             string value = prUrl ?? string.Empty;
             return Task.FromResult(Result<string>.Ok(value));
         }
+
+        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
     }
 
     protected sealed class NullDomainEventDispatcher : IDomainEventDispatcher

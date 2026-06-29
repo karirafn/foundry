@@ -278,6 +278,15 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             {
                 return Task.FromResult(Result<string>.Ok(string.Empty));
             }
+
+            public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(
+                    Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+            }
         }
     }
 

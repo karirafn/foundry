@@ -511,6 +511,50 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<string>.Ok(mergeRequestUrl);
     }
 
+    public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<LatestBranchCommit>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"projects/{encodedPath}/repository/commits?ref_name={encodedBranch}&per_page=1";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<LatestBranchCommit>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitLabCommitListItemDto>? dtos =
+            JsonSerializer.Deserialize<List<GitLabCommitListItemDto>>(body, JsonOptions);
+
+        GitLabCommitListItemDto? latest = (dtos ?? []).FirstOrDefault();
+
+        if (latest is null)
+        {
+            return Result<LatestBranchCommit>.Fail(GitLabErrors.NoBranchCommits);
+        }
+
+        string shortSha = latest.Id.Length >= 7 ? latest.Id[..7] : latest.Id;
+        string commitMessage = latest.Title ?? string.Empty;
+
+        return Result<LatestBranchCommit>.Ok(new LatestBranchCommit(shortSha, commitMessage));
+    }
+
     public async Task<Result<string>> GetDefaultBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -701,6 +745,8 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
     private sealed record GitLabCommitDto(string Id);
 
+    private sealed record GitLabCommitListItemDto(string Id, string? Title);
+
     private sealed record GitLabMergeRequestListItemDto(string WebUrl);
 
     private sealed record GitLabProtectedBranchDto(
@@ -723,6 +769,10 @@ internal static class GitLabErrors
     public static readonly Error InvalidMergeRequestUrl = new(
         "GitLab.InvalidMergeRequestUrl",
         "The merge request URL does not contain a valid MR IID.");
+
+    public static readonly Error NoBranchCommits = new(
+        "GitLab.NoBranchCommits",
+        "The branch has no commits.");
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitLab.UnexpectedStatusCode", $"GitLab API returned unexpected status code {statusCode}.");
