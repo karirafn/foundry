@@ -74,7 +74,8 @@ export class RepositoryService {
 
     forkJoin(requests).subscribe({
       next: (results) => {
-        this._repositoriesSignal.set(results.flat());
+        const sorted = results.flat().sort((a, b) => a.position - b.position);
+        this._repositoriesSignal.set(sorted);
         this._loadingSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -141,6 +142,27 @@ export class RepositoryService {
         this._saveErrorSignal.set(this._extractErrorMessage(err));
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(false);
+        throw err;
+      }),
+    );
+  }
+
+  moveRepository(id: string, position: number): Observable<void> {
+    return this._http.patch<void>(`/api/repositories/${id}/position`, { position }).pipe(
+      tap(() => {
+        this._repositoriesSignal.update(repositories => {
+          const currentIndex = repositories.findIndex(r => r.id === id);
+          if (currentIndex === -1) {
+            return repositories;
+          }
+          const updated = [...repositories];
+          const [moved] = updated.splice(currentIndex, 1);
+          updated.splice(position, 0, moved);
+          return updated;
+        });
+      }),
+      catchError((err: HttpErrorResponse) => {
+        console.error(err);
         throw err;
       }),
     );

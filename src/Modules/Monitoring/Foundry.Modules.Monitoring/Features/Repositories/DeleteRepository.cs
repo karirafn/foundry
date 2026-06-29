@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
 
@@ -31,8 +32,19 @@ internal static class DeleteRepository
                 return Result<bool>.Fail(RepositoryErrors.NotFound(repositoryId));
             }
 
+            await using IDbContextTransaction tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             dbContext.Set<MonitoredRepository>().Remove(repository);
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            List<MonitoredRepository> survivors = await dbContext
+                .Set<MonitoredRepository>()
+                .OrderBy(r => r.Position)
+                .ToListAsync(cancellationToken);
+
+            await RepositoryRenumber.RenumberAsync(dbContext, survivors, cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
 
             return Result<bool>.Ok(true);
         }

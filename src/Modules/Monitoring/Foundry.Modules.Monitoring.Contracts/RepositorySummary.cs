@@ -9,4 +9,5 @@ public sealed record RepositorySummary(
     int? PollIntervalSeconds,
     bool IsActive,
     DateTimeOffset? LastPolledAt,
-    RepositoryEligibilityInfo? Eligibility);
+    RepositoryEligibilityInfo? Eligibility,
+    int Position);

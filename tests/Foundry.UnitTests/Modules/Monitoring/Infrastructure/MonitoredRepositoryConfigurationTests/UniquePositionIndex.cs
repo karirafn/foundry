@@ -13,12 +13,12 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.MonitoredRepositoryConfigurationTests;
 
-public sealed class UniqueSlugIndex : IAsyncDisposable
+public sealed class UniquePositionIndex : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
-    public UniqueSlugIndex()
+    public UniquePositionIndex()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -37,52 +37,52 @@ public sealed class UniqueSlugIndex : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static RepositorySlug ValidSlug =>
-        RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
+    private static RepositorySlug SlugFor(string owner) =>
+        RepositorySlug.Create($"{owner}/repo").ValueOrThrow();
 
     [Fact]
-    public async Task WhenDuplicateSlugOnSameHost_ThrowsOnSave()
+    public async Task WhenRepositoryPersisted_PositionRoundTrips()
     {
         // Arrange
         GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         _dbContext.Set<Account>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        MonitoredRepository first = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", pollInterval: null);
-        MonitoredRepository duplicate = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", pollInterval: null);
+        MonitoredRepository repository = MonitoredRepository.Create(SlugFor("owner1"), account.Id, "github.com", null, position: 7);
+        _dbContext.Set<MonitoredRepository>().Add(repository);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        MonitoredRepository? reloaded = await _dbContext
+            .Set<MonitoredRepository>()
+            .FindAsync([repository.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        MonitoredRepository loaded = reloaded.ShouldNotBeNull();
+        loaded.Position.ShouldBe(7);
+    }
+
+    [Fact]
+    public async Task WhenDuplicatePosition_ThrowsOnSave()
+    {
+        // Arrange
+        GitHubAccount account = GitHubAccount.Create("my-org2", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        _dbContext.Set<Account>().Add(account);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        MonitoredRepository first = MonitoredRepository.Create(SlugFor("owner-a"), account.Id, "github.com", null, position: 0);
+        MonitoredRepository second = MonitoredRepository.Create(SlugFor("owner-b"), account.Id, "github.com", null, position: 0);
 
         _dbContext.Set<MonitoredRepository>().Add(first);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        _dbContext.Set<MonitoredRepository>().Add(duplicate);
+        _dbContext.Set<MonitoredRepository>().Add(second);
 
         // Assert
         await Should.ThrowAsync<DbUpdateException>(
             () => _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task WhenSameSlugOnDifferentHosts_SavesSuccessfully()
-    {
-        // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        MonitoredRepository github = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", pollInterval: null, position: 0);
-        MonitoredRepository gitlab = MonitoredRepository.Create(ValidSlug, account.Id, "gitlab.com", pollInterval: null, position: 1);
-
-        _dbContext.Set<MonitoredRepository>().Add(github);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Act
-        _dbContext.Set<MonitoredRepository>().Add(gitlab);
-
-        // Assert
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        _dbContext.Set<MonitoredRepository>().Count().ShouldBe(2);
     }
 }

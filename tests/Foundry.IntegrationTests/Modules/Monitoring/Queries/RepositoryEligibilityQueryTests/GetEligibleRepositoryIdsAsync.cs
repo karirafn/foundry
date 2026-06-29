@@ -13,11 +13,11 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Queries.RepositoryEligibilityQueryTests;
 
-public sealed class GetEligibleRepositoryIdsAsync : IAsyncDisposable
+public sealed class GetEligibleRepositoriesAsync : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
 
-    public GetEligibleRepositoryIdsAsync()
+    public GetEligibleRepositoriesAsync()
     {
         _factory = new FoundryWebAppFactory();
     }
@@ -28,7 +28,7 @@ public sealed class GetEligibleRepositoryIdsAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRepositoriesHaveMixedEligibility_ReturnsOnlyEligibleIds()
+    public async Task WhenRepositoriesHaveMixedEligibility_ReturnsOnlyEligibleRepositories()
     {
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
@@ -43,16 +43,16 @@ public sealed class GetEligibleRepositoryIdsAsync : IAsyncDisposable
         Guid nullEligibilityId = await SeedRepositoryAsync(accountId, "owner/null-eligibility", eligibility: null);
 
         // Act
-        IReadOnlySet<Guid> result = await QueryEligibleIdsAsync(
+        IReadOnlyList<EligibleRepository> result = await QueryEligibleRepositoriesAsync(
             [eligibleId, ineligibleId, unreachableId, nullEligibilityId]);
 
         // Assert
         result.ShouldSatisfyAllConditions(
             () => result.Count.ShouldBe(1),
-            () => result.ShouldContain(eligibleId),
-            () => result.ShouldNotContain(ineligibleId),
-            () => result.ShouldNotContain(unreachableId),
-            () => result.ShouldNotContain(nullEligibilityId));
+            () => result.ShouldContain(r => r.Id == eligibleId),
+            () => result.ShouldNotContain(r => r.Id == ineligibleId),
+            () => result.ShouldNotContain(r => r.Id == unreachableId),
+            () => result.ShouldNotContain(r => r.Id == nullEligibilityId));
     }
 
     [Fact]
@@ -64,28 +64,49 @@ public sealed class GetEligibleRepositoryIdsAsync : IAsyncDisposable
         Guid unrelatedId = Guid.NewGuid();
 
         // Act
-        IReadOnlySet<Guid> result = await QueryEligibleIdsAsync([unrelatedId]);
+        IReadOnlyList<EligibleRepository> result = await QueryEligibleRepositoriesAsync([unrelatedId]);
 
         // Assert
         result.ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task WhenEmptyListProvided_ReturnsEmptySet()
+    public async Task WhenEmptyListProvided_ReturnsEmptyList()
     {
         // Act
-        IReadOnlySet<Guid> result = await QueryEligibleIdsAsync([]);
+        IReadOnlyList<EligibleRepository> result = await QueryEligibleRepositoriesAsync([]);
 
         // Assert
         result.ShouldBeEmpty();
     }
 
-    private async Task<IReadOnlySet<Guid>> QueryEligibleIdsAsync(IReadOnlyCollection<Guid> repositoryIds)
+    [Fact]
+    public async Task WhenEligibleRepositoryExists_IncludesPosition()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Org 3");
+        Guid firstId = await SeedRepositoryAsync(accountId, "owner/first", new RepositoryEligibility.Eligible());
+        Guid secondId = await SeedRepositoryAsync(accountId, "owner/second", new RepositoryEligibility.Eligible());
+
+        // Act
+        IReadOnlyList<EligibleRepository> result = await QueryEligibleRepositoriesAsync([firstId, secondId]);
+
+        // Assert
+        result.Count.ShouldBe(2);
+        result.ShouldContain(r => r.Id == firstId);
+        result.ShouldContain(r => r.Id == secondId);
+        int firstPosition = result.Single(r => r.Id == firstId).Position;
+        int secondPosition = result.Single(r => r.Id == secondId).Position;
+        firstPosition.ShouldBeLessThan(secondPosition);
+    }
+
+    private async Task<IReadOnlyList<EligibleRepository>> QueryEligibleRepositoriesAsync(
+        IReadOnlyCollection<Guid> repositoryIds)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         IRepositoryEligibilityQuery query = scope.ServiceProvider.GetRequiredService<IRepositoryEligibilityQuery>();
 
-        return await query.GetEligibleRepositoryIdsAsync(repositoryIds, TestContext.Current.CancellationToken);
+        return await query.GetEligibleRepositoriesAsync(repositoryIds, TestContext.Current.CancellationToken);
     }
 
     private async Task<Guid> SeedRepositoryAsync(
@@ -98,11 +119,13 @@ public sealed class GetEligibleRepositoryIdsAsync : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
+        int position = await dbContext.Set<MonitoredRepository>().CountAsync(TestContext.Current.CancellationToken);
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
             AccountId.From(accountId),
             "github.com",
-            pollInterval: null);
+            pollInterval: null,
+            position);
 
         if (eligibility is not null)
         {

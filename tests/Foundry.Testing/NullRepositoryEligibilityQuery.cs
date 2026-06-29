@@ -10,10 +10,10 @@ public sealed class NullRepositoryEligibilityQuery : IRepositoryEligibilityQuery
         CancellationToken cancellationToken)
         => Task.FromResult<RepositoryEligibilityInfo?>(null);
 
-    public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+    public Task<IReadOnlyList<EligibleRepository>> GetEligibleRepositoriesAsync(
         IReadOnlyCollection<Guid> repositoryIds,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
+        => Task.FromResult<IReadOnlyList<EligibleRepository>>([]);
 
     public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
         IReadOnlyCollection<Guid> repositoryIds,

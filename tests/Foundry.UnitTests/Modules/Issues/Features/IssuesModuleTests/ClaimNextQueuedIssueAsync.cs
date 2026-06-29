@@ -366,10 +366,15 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<RepositoryEligibilityInfo?>(null);
 
-        public Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+        public Task<IReadOnlyList<EligibleRepository>> GetEligibleRepositoriesAsync(
             IReadOnlyCollection<Guid> repositoryIds,
             CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlySet<Guid>>(repositoryIds.ToHashSet());
+        {
+            IReadOnlyList<EligibleRepository> eligible = repositoryIds
+                .Select(id => new EligibleRepository(id, Position: 0))
+                .ToList();
+            return Task.FromResult(eligible);
+        }
 
         public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
             IReadOnlyCollection<Guid> repositoryIds,

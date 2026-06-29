@@ -14,6 +14,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   accountId: ACCOUNT_ID,
   accountName: 'My GitHub',
   providerType: 'github',
+  position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
@@ -26,6 +27,7 @@ const MOCK_REPOSITORY_2: RepositorySummary = {
   accountId: ACCOUNT_ID,
   accountName: 'My GitHub',
   providerType: 'github',
+  position: 1,
   pollIntervalSeconds: null,
   isActive: false,
   lastPolledAt: null,
@@ -544,6 +546,23 @@ describe('RepositoryService', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush([MOCK_REPOSITORY_2]);
   });
 
+  it('should sort combined repositories by position after loadAllRepositories succeeds', () => {
+    // Arrange
+    const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
+    const repoA: RepositorySummary = { ...MOCK_REPOSITORY, position: 1 };
+    const repoB: RepositorySummary = { ...MOCK_REPOSITORY_2, accountId: ACCOUNT_ID_2, position: 0 };
+
+    // Act — API returns repos in reverse position order across accounts
+    service.loadAllRepositories([ACCOUNT_ID, ACCOUNT_ID_2]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([repoA]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush([repoB]);
+
+    // Assert — result sorted by position ascending
+    const repos = service.repositories();
+    expect(repos[0].id).toBe(MOCK_REPOSITORY_2.id);
+    expect(repos[1].id).toBe(MOCK_REPOSITORY.id);
+  });
+
   it('should combine repositories from all accounts into a single signal', () => {
     // Arrange
     const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
@@ -628,6 +647,54 @@ describe('RepositoryService', () => {
     // Assert
     expect(service.repositories()).toEqual([]);
     expect(service.loading()).toBe(false);
+  });
+
+  // Cycle 9: moveRepository calls PATCH /api/repositories/{id}/position
+  it('should PATCH /api/repositories/{id}/position when moveRepository is called', () => {
+    // Arrange
+
+    // Act
+    service.moveRepository(REPO_ID, 2).subscribe();
+    const req = httpMock.expectOne(`/api/repositories/${REPO_ID}/position`);
+
+    // Assert
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ position: 2 });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it('should reorder the repositories signal to reflect the new position after moveRepository succeeds', () => {
+    // Arrange — load two repos in initial order
+    service.loadRepositories(ACCOUNT_ID);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY, MOCK_REPOSITORY_2]);
+
+    // Act — move repo at index 0 to index 1
+    service.moveRepository(REPO_ID, 1).subscribe();
+    httpMock.expectOne(`/api/repositories/${REPO_ID}/position`).flush(null, { status: 204, statusText: 'No Content' });
+
+    // Assert — local order updated immediately
+    const repos = service.repositories();
+    expect(repos[0].id).toBe(REPO_ID_2);
+    expect(repos[1].id).toBe(REPO_ID);
+  });
+
+  // Fix 3a — signal reverted on PATCH error (WCAG 4.1.3 + status visibility)
+  it('should revert the repositories signal to the pre-move order when moveRepository fails', () => {
+    // Arrange — load two repos in initial order
+    service.loadRepositories(ACCOUNT_ID);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY, MOCK_REPOSITORY_2]);
+
+    // Act — attempt to move repo at index 0 to index 1; server returns error
+    service.moveRepository(REPO_ID, 1).subscribe({ error: () => {} });
+    httpMock.expectOne(`/api/repositories/${REPO_ID}/position`).flush('Server error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — original order preserved
+    const repos = service.repositories();
+    expect(repos[0].id).toBe(REPO_ID);
+    expect(repos[1].id).toBe(REPO_ID_2);
   });
 
   // Cycle 8: recheckEligibility calls POST to recheck endpoint

@@ -6,7 +6,7 @@ public interface IRepositoryEligibilityQuery
         Guid repositoryId,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlySet<Guid>> GetEligibleRepositoryIdsAsync(
+    Task<IReadOnlyList<EligibleRepository>> GetEligibleRepositoriesAsync(
         IReadOnlyCollection<Guid> repositoryIds,
         CancellationToken cancellationToken);
 

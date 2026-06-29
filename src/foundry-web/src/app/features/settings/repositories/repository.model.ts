@@ -27,6 +27,7 @@ export interface RepositorySummary {
   accountId: string;
   accountName: string;
   providerType: string;
+  position: number;
   pollIntervalSeconds: number | null;
   isActive: boolean;
   lastPolledAt: string | null;

@@ -10,6 +10,7 @@ internal static class RepositoryErrors
     internal const string AccountNotFoundCode = "Repository.AccountNotFound";
     internal const string AccountHasNoTokenCode = "Repository.AccountHasNoToken";
     internal const string NoTokenCode = "Repository.NoToken";
+    internal const string ConflictOnCreateCode = "Repository.ConflictOnCreate";
 
     internal static Error NotFound(MonitoredRepositoryId id) =>
         new(NotFoundCode, $"Repository with ID '{id.Value}' was not found.");
@@ -25,4 +26,7 @@ internal static class RepositoryErrors
 
     internal static Error NoToken(AccountId id) =>
         new(NoTokenCode, $"Account with ID '{id.Value}' has no token — eligibility cannot be re-checked.");
+
+    internal static Error ConflictOnCreate() =>
+        new(ConflictOnCreateCode, "The repository could not be created due to a conflict. Please try again.");
 }

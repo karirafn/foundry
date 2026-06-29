@@ -61,6 +61,14 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
         builder.Property(r => r.IsActive)
             .HasColumnName("is_active");
 
+        builder.Property(r => r.Position)
+            .HasDefaultValue(0)
+            .HasColumnName("position");
+
+        builder.HasIndex(r => r.Position)
+            .IsUnique()
+            .HasDatabaseName("ix_monitored_repositories_position");
+
         builder.Property(r => r.LastPolledAt)
             .HasColumnName("last_polled_at");
 
