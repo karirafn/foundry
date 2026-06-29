@@ -143,6 +143,8 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<CompletedRun>
 {
     private const int PullRequestUrlMaxLength = 2000;
+    private const int ResultTextMaxLength = 100;
+    private const int SubtypeMaxLength = 50;
 
     private static readonly ValueConverter<PullRequestUrl, string> PullRequestUrlConverter = new(
         url => url.Value,
@@ -167,11 +169,45 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             .HasMaxLength(PullRequestUrlMaxLength)
             .IsUnicode(false)
             .HasColumnName("pull_request_url");
+
+        builder.OwnsOne(r => r.ResultSummary, summary =>
+        {
+            summary.Property(s => s.ResultText)
+                .HasMaxLength(ResultTextMaxLength)
+                .IsUnicode(false)
+                .HasColumnName("result_text");
+
+            summary.Property(s => s.Subtype)
+                .HasMaxLength(SubtypeMaxLength)
+                .IsUnicode(false)
+                .HasColumnName("subtype");
+
+            summary.Property(s => s.IsError)
+                .HasColumnName("is_error");
+
+            summary.Property(s => s.DurationMs)
+                .HasColumnName("duration_ms");
+
+            summary.Property(s => s.NumTurns)
+                .HasColumnName("num_turns");
+
+            summary.Property(s => s.TotalCostUsd)
+                .HasColumnName("total_cost_usd");
+
+            summary.Property(s => s.InputTokens)
+                .HasColumnName("input_tokens");
+
+            summary.Property(s => s.OutputTokens)
+                .HasColumnName("output_tokens");
+        });
     }
 }
 
 public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 {
+    private const int ResultTextMaxLength = 100;
+    private const int SubtypeMaxLength = 50;
+
     private static FailureReason DeserializeReason(string json)
     {
         return JsonSerializer.Deserialize<FailureReason>(json, (JsonSerializerOptions?)null)
@@ -204,5 +240,36 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
             .IsUnicode(true)
             .HasColumnType("TEXT")
             .HasColumnName("container_output");
+
+        builder.OwnsOne(r => r.ResultSummary, summary =>
+        {
+            summary.Property(s => s.ResultText)
+                .HasMaxLength(ResultTextMaxLength)
+                .IsUnicode(false)
+                .HasColumnName("result_text");
+
+            summary.Property(s => s.Subtype)
+                .HasMaxLength(SubtypeMaxLength)
+                .IsUnicode(false)
+                .HasColumnName("subtype");
+
+            summary.Property(s => s.IsError)
+                .HasColumnName("is_error");
+
+            summary.Property(s => s.DurationMs)
+                .HasColumnName("duration_ms");
+
+            summary.Property(s => s.NumTurns)
+                .HasColumnName("num_turns");
+
+            summary.Property(s => s.TotalCostUsd)
+                .HasColumnName("total_cost_usd");
+
+            summary.Property(s => s.InputTokens)
+                .HasColumnName("input_tokens");
+
+            summary.Property(s => s.OutputTokens)
+                .HasColumnName("output_tokens");
+        });
     }
 }

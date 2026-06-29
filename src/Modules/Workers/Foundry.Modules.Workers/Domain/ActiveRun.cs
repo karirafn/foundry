@@ -82,16 +82,23 @@ public sealed class ActiveRun : WorkerRun
             DateTimeOffset.UtcNow);
     }
 
-    public CompletedRun Complete(int exitCode, BranchName? branchName, PullRequestUrl? pullRequestUrl)
+    public CompletedRun Complete(
+        int exitCode,
+        BranchName? branchName,
+        PullRequestUrl? pullRequestUrl,
+        RunResultSummary? resultSummary = null)
     {
-        CompletedRun completed = CompletedRun.FromActive(this, exitCode, branchName, pullRequestUrl);
+        CompletedRun completed = CompletedRun.FromActive(this, exitCode, branchName, pullRequestUrl, resultSummary);
         AddDomainEvent(new WorkerRunCompleted(Id, IssueId, branchName?.Value, pullRequestUrl?.Value));
         return completed;
     }
 
-    public FailedRun Fail(FailureReason reason, string? containerOutput = null)
+    public FailedRun Fail(
+        FailureReason reason,
+        string? containerOutput = null,
+        RunResultSummary? resultSummary = null)
     {
-        FailedRun failed = FailedRun.FromActive(this, reason, containerOutput);
+        FailedRun failed = FailedRun.FromActive(this, reason, containerOutput, resultSummary);
         AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.Summary, reason.CategoryToken, BranchName.Value));
         return failed;
     }

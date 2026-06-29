@@ -3,7 +3,7 @@ namespace Foundry.Modules.Workers.Domain;
 /// <summary>
 /// Parsed summary from the final JSON result line emitted by a claude --output-format json run.
 /// </summary>
-internal sealed record RunResultSummary
+public sealed record RunResultSummary
 {
     public string? ResultText { get; }
     public string? Subtype { get; }
@@ -34,7 +34,7 @@ internal sealed record RunResultSummary
         OutputTokens = outputTokens;
     }
 
-    internal static RunResultSummary Create(
+    public static RunResultSummary Create(
         string? resultText,
         string? subtype,
         bool isError,
