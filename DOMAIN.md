@@ -112,6 +112,8 @@ Foundry fetches dependencies during the detection poll cycle and reconciles them
 When the provider does not expose dependency links (e.g. GitLab Free tier), the provider degrades gracefully — it treats the issue as having no dependencies and logs once, rather than failing the poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
 A blocker is *resolved* when it is closed in the provider — the provider client filters out closed blockers at the anti-corruption boundary so domain logic never sees them.
+The provider client also scopes "blocked by" links to the same repository or project at this boundary — GitHub by `repository.full_name`, GitLab by the linked issue's numeric `project_id` — so cross-project and cross-repository links never reach domain logic.
+Link entries whose project or repository cannot be determined are kept as blockers (fail-safe toward blocking).
 When a blocker's state is missing or unrecognized, it is treated as still blocking (fail-safe).
 
 ## Blocked Issue
