@@ -1,6 +1,7 @@
 using Docker.DotNet;
 
 using Foundry.Modules.Workers;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
@@ -179,5 +180,41 @@ public sealed class AddWorkersModule
         // Assert
         IContainerOutputParser parser = provider.GetRequiredService<IContainerOutputParser>();
         parser.ShouldBeOfType<ContainerOutputParser>();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersDispatchPausedBroadcastHandler()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IIntegrationEventHandler<DispatchPaused>> handlers =
+            provider.GetServices<IIntegrationEventHandler<DispatchPaused>>();
+        handlers.ShouldContain(h => h is DispatchPausedBroadcastHandler);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersDispatchResumedBroadcastHandler()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IIntegrationEventHandler<DispatchResumed>> handlers =
+            provider.GetServices<IIntegrationEventHandler<DispatchResumed>>();
+        handlers.ShouldContain(h => h is DispatchResumedBroadcastHandler);
     }
 }

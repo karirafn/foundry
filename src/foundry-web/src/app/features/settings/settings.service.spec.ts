@@ -2,9 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { WritableSignal } from '@angular/core';
+import { Subject } from 'rxjs';
+import { vi } from 'vitest';
 import { SettingsService } from './settings.service';
 import { AuthSettings, ImageBuildStatus } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
+import { SystemSignalRService } from '../../core/services/system-signalr.service';
 
 const mockAuthSettings: AuthSettings = {
   mode: 'api_key',
@@ -24,11 +27,22 @@ const mockOAuthSettings: AuthSettings = {
   },
 };
 
-function setupService() {
+function createMockSignalRService() {
+  return {
+    reconnected: new Subject<void>(),
+    dispatchStateChanged: new Subject<void>(),
+    notifications: [] as never,
+  };
+}
+
+function setupService(signalROverride?: ReturnType<typeof createMockSignalRService>) {
+  const mockSignalR = signalROverride ?? createMockSignalRService();
+
   TestBed.configureTestingModule({
     providers: [
       SettingsService,
       DispatchService,
+      { provide: SystemSignalRService, useValue: mockSignalR },
       provideHttpClient(),
       provideHttpClientTesting(),
     ],
@@ -37,6 +51,7 @@ function setupService() {
     service: TestBed.inject(SettingsService),
     dispatchService: TestBed.inject(DispatchService),
     httpMock: TestBed.inject(HttpTestingController),
+    mockSignalR,
   };
 }
 
@@ -1434,6 +1449,101 @@ describe('SettingsService', () => {
     expect(service.savingImageFlags()).toBe(false);
     expect(service.saveImageFlagsError()).toBeNull();
 
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+});
+
+describe('SettingsService — SignalR re-sync', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    TestBed.resetTestingModule();
+  });
+
+  // Cycle: reconnected triggers a GET /api/settings after debounce window
+  it('should reload settings when SystemSignalRService.reconnected emits (after debounce)', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { httpMock } = setupService(mockSignalR);
+
+    // Act
+    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+
+    // Assert — exactly one GET request fired
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: dispatchStateChanged triggers a GET /api/settings after debounce window
+  it('should reload settings when SystemSignalRService.dispatchStateChanged emits (after debounce)', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { httpMock } = setupService(mockSignalR);
+
+    // Act
+    mockSignalR.dispatchStateChanged.next();
+    vi.advanceTimersByTime(300);
+
+    // Assert — exactly one GET request fired
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: separate emissions (outside debounce window) each trigger a reload
+  it('should reload settings each time reconnected emits outside the debounce window', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { httpMock } = setupService(mockSignalR);
+
+    // Act — first emission + advance past debounce
+    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+
+    // Second emission + advance past debounce
+    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+
+    // Assert — second GET fires
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: rapid burst of emissions collapses to a single reload (debounce coalescing)
+  it('should coalesce a rapid burst of dispatchStateChanged emissions into a single reload', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { httpMock } = setupService(mockSignalR);
+
+    // Act — fire three emissions rapidly (within the debounce window)
+    mockSignalR.dispatchStateChanged.next();
+    mockSignalR.dispatchStateChanged.next();
+    mockSignalR.dispatchStateChanged.next();
+
+    // No reload should have fired yet (debounce window not elapsed)
+    httpMock.expectNone('/api/settings');
+
+    // Advance past the debounce window
+    vi.advanceTimersByTime(300);
+
+    // Assert — exactly one reload, not three
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: a new trigger cancels the in-flight reload (switchMap)
+  it('should cancel the in-flight reload when a new trigger arrives before the previous response completes', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { httpMock } = setupService(mockSignalR);
+
+    // Act — first emission, advance past debounce, request is in-flight
+    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+    httpMock.expectOne('/api/settings'); // first request pending — do NOT flush
+
+    // Second emission cancels first and starts a new one after debounce
+    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+
+    // Assert — only the second request is active; first was cancelled
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 });

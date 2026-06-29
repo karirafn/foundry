@@ -1,7 +1,7 @@
 import { Injectable, InjectionToken, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
-import { SystemNotification } from '../models/system-notification.model';
+import { DISPATCH_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
 
 export interface SystemHub {
   on(methodName: string, callback: (notification: SystemNotification) => void): void;
@@ -38,10 +38,17 @@ export class SystemSignalRService {
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
 
+  private readonly _dispatchStateChanged = new Subject<void>();
+  readonly dispatchStateChanged: Observable<void> = this._dispatchStateChanged.asObservable();
+
   constructor() {
     const hub = this._hubFactory();
 
     hub.on('SystemNotificationReceived', (notification: SystemNotification) => {
+      if (notification.category === DISPATCH_NOTIFICATION_CATEGORY) {
+        this._dispatchStateChanged.next();
+      }
+
       this._notifications.update((current) => {
         const filtered = current.filter((n) => n.category !== notification.category);
         return notification.isActive ? [...filtered, notification] : filtered;

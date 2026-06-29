@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { SystemSignalRService, SYSTEM_HUB_FACTORY, SystemHub } from './system-signalr.service';
-import { SystemNotification } from '../models/system-notification.model';
+import { DISPATCH_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
 
 interface CapturedHubCallbacks {
   onSystemNotificationReceived: ((notification: SystemNotification) => void) | null;
@@ -137,5 +137,71 @@ describe('SystemSignalRService', () => {
 
     // Assert — Observable does not expose next(), so callers cannot emit spurious events
     expect((svc.reconnected as unknown as { next?: unknown }).next).toBeUndefined();
+  });
+
+  // Cycle 8: dispatchStateChanged emits when a dispatch notification arrives with isActive: true
+  it('should emit on dispatchStateChanged when a dispatch notification with isActive: true arrives', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    let emitCount = 0;
+    svc.dispatchStateChanged.subscribe(() => emitCount++);
+    const notification: SystemNotification = {
+      category: DISPATCH_NOTIFICATION_CATEGORY,
+      isActive: true,
+      message: 'Usage limit hit',
+    };
+
+    // Act
+    captured.onSystemNotificationReceived!(notification);
+
+    // Assert
+    expect(emitCount).toBe(1);
+  });
+
+  // Cycle 9: dispatchStateChanged emits when a dispatch notification arrives with isActive: false
+  it('should emit on dispatchStateChanged when a dispatch notification with isActive: false arrives', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    let emitCount = 0;
+    svc.dispatchStateChanged.subscribe(() => emitCount++);
+    const notification: SystemNotification = {
+      category: DISPATCH_NOTIFICATION_CATEGORY,
+      isActive: false,
+      message: '',
+    };
+
+    // Act
+    captured.onSystemNotificationReceived!(notification);
+
+    // Assert
+    expect(emitCount).toBe(1);
+  });
+
+  // Cycle 10: dispatchStateChanged does NOT emit for a non-dispatch category
+  it('should not emit on dispatchStateChanged for a non-dispatch category notification', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    let emitCount = 0;
+    svc.dispatchStateChanged.subscribe(() => emitCount++);
+    const notification: SystemNotification = {
+      category: 'image-build',
+      isActive: true,
+      message: 'Build in progress',
+    };
+
+    // Act
+    captured.onSystemNotificationReceived!(notification);
+
+    // Assert
+    expect(emitCount).toBe(0);
+  });
+
+  // Cycle 11: dispatchStateChanged is an Observable, not a writable Subject
+  it('should expose dispatchStateChanged as an Observable (no next() method)', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert — Observable does not expose next(), so callers cannot emit spurious events
+    expect((svc.dispatchStateChanged as unknown as { next?: unknown }).next).toBeUndefined();
   });
 });
