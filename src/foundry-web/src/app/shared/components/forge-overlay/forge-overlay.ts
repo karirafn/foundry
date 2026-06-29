@@ -1,7 +1,5 @@
-import { Component, DestroyRef, ElementRef, Signal, ViewChild, afterRenderEffect, computed, inject } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, ElementRef, Signal, ViewChild, afterRenderEffect, computed, inject } from '@angular/core';
 import { SettingsService } from '../../../features/settings/settings.service';
-import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { ImageBuildStatus } from '../../../features/settings/settings.model';
 
 const STATUS_TEXT_STARTING = 'Starting…';
@@ -16,8 +14,6 @@ const STATUS_TEXT_FAILED = 'Worker image build failed';
 })
 export class ForgeOverlayComponent {
   private readonly _settingsService = inject(SettingsService);
-  private readonly _signalR = inject(SystemSignalRService);
-  private readonly _destroyRef = inject(DestroyRef);
 
   @ViewChild('retryButton') retryButtonRef?: ElementRef<HTMLButtonElement>;
 
@@ -47,14 +43,6 @@ export class ForgeOverlayComponent {
       this.retryButtonRef?.nativeElement?.focus();
     }
   });
-
-  constructor() {
-    this._signalR.reconnected
-      .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe(() => {
-        this._settingsService.loadSettings();
-      });
-  }
 
   retryImageBuild(): void {
     this._settingsService.retryImageBuild();

@@ -4,7 +4,11 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { provideRouter, Router } from '@angular/router';
 import { Component } from '@angular/core';
 import { vi } from 'vitest';
+import { NEVER } from 'rxjs';
 import { SetupWizardComponent } from './setup-wizard';
+import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
 
 @Component({ template: '', standalone: true })
 class StubIssuesComponent {}
@@ -17,6 +21,7 @@ function setup() {
       provideHttpClient(),
       provideHttpClientTesting(),
       provideRouter([{ path: 'issues', component: StubIssuesComponent }]),
+      { provide: SystemSignalRService, useValue: mockSystemSignalR },
     ],
   });
 

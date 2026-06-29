@@ -3,8 +3,12 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { By } from '@angular/platform-browser';
 import { NgModel } from '@angular/forms';
+import { NEVER } from 'rxjs';
 import { SettingsGeneralComponent } from './settings-general';
 import { SettingsService } from '../settings.service';
+import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
 
 const IMAGE_FLAGS_DEFAULTS = {
   installDotnet: false,
@@ -56,6 +60,7 @@ function setup() {
       SettingsService,
       provideHttpClient(),
       provideHttpClientTesting(),
+      { provide: SystemSignalRService, useValue: mockSystemSignalR },
     ],
   });
 

@@ -1,5 +1,7 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { merge } from 'rxjs';
 import {
   AuthMode,
   AuthSettings,
@@ -13,6 +15,7 @@ import {
 } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
 import { AccountService } from './accounts/account.service';
+import { SystemSignalRService } from '../../core/services/system-signalr.service';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
@@ -27,6 +30,15 @@ export class SettingsService {
   private readonly _http = inject(HttpClient);
   private readonly _dispatchService = inject(DispatchService);
   private readonly _accountService = inject(AccountService);
+  private readonly _signalR = inject(SystemSignalRService);
+
+  constructor() {
+    merge(this._signalR.reconnected, this._signalR.dispatchStateChanged)
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => {
+        this.loadSettings();
+      });
+  }
 
   private readonly _settingsSignal: WritableSignal<GlobalSettingsResponse | null> = signal(null);
   readonly settings: Signal<GlobalSettingsResponse | null> = this._settingsSignal.asReadonly();

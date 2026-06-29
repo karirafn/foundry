@@ -3,9 +3,13 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { NEVER } from 'rxjs';
 import { SettingsLayoutComponent } from './settings-layout';
 import { SettingsService } from '../settings.service';
+import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { SETTINGS_ROUTES } from '../settings.routes';
+
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
 
 const SETTINGS_RESPONSE = {
   authMode: 'ApiKey',
@@ -26,6 +30,7 @@ function setup() {
       provideHttpClient(),
       provideHttpClientTesting(),
       provideRouter([]),
+      { provide: SystemSignalRService, useValue: mockSystemSignalR },
     ],
   });
 
@@ -268,6 +273,7 @@ describe('SettingsLayoutComponent', () => {
         provideRouter([
           { path: 'settings', children: SETTINGS_ROUTES },
         ]),
+        { provide: SystemSignalRService, useValue: mockSystemSignalR },
       ],
     });
     const router = TestBed.inject(Router);
@@ -292,6 +298,7 @@ describe('SettingsLayoutComponent', () => {
         provideRouter([
           { path: 'settings', children: SETTINGS_ROUTES },
         ]),
+        { provide: SystemSignalRService, useValue: mockSystemSignalR },
       ],
     });
     const httpMock = TestBed.inject(HttpTestingController);

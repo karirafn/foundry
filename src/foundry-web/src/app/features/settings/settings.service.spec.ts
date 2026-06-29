@@ -2,9 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { WritableSignal } from '@angular/core';
+import { Subject } from 'rxjs';
+import { vi } from 'vitest';
 import { SettingsService } from './settings.service';
 import { AuthSettings, ImageBuildStatus } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
+import { SystemSignalRService } from '../../core/services/system-signalr.service';
 
 const mockAuthSettings: AuthSettings = {
   mode: 'api_key',
@@ -24,11 +27,22 @@ const mockOAuthSettings: AuthSettings = {
   },
 };
 
-function setupService() {
+function createMockSignalRService() {
+  return {
+    reconnected: new Subject<void>(),
+    dispatchStateChanged: new Subject<void>(),
+    notifications: [] as never,
+  };
+}
+
+function setupService(signalROverride?: ReturnType<typeof createMockSignalRService>) {
+  const mockSignalR = signalROverride ?? createMockSignalRService();
+
   TestBed.configureTestingModule({
     providers: [
       SettingsService,
       DispatchService,
+      { provide: SystemSignalRService, useValue: mockSignalR },
       provideHttpClient(),
       provideHttpClientTesting(),
     ],
@@ -37,6 +51,7 @@ function setupService() {
     service: TestBed.inject(SettingsService),
     dispatchService: TestBed.inject(DispatchService),
     httpMock: TestBed.inject(HttpTestingController),
+    mockSignalR,
   };
 }
 
@@ -1435,5 +1450,56 @@ describe('SettingsService', () => {
     expect(service.saveImageFlagsError()).toBeNull();
 
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+});
+
+describe('SettingsService — SignalR re-sync', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  // Cycle: reconnected triggers loadSettings
+  it('should call loadSettings when SystemSignalRService.reconnected emits', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { service, httpMock } = setupService(mockSignalR);
+    const loadSettingsSpy = vi.spyOn(service, 'loadSettings');
+
+    // Act
+    mockSignalR.reconnected.next();
+
+    // Assert
+    expect(loadSettingsSpy).toHaveBeenCalledOnce();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: dispatchStateChanged triggers loadSettings
+  it('should call loadSettings when SystemSignalRService.dispatchStateChanged emits', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { service, httpMock } = setupService(mockSignalR);
+    const loadSettingsSpy = vi.spyOn(service, 'loadSettings');
+
+    // Act
+    mockSignalR.dispatchStateChanged.next();
+
+    // Assert
+    expect(loadSettingsSpy).toHaveBeenCalledOnce();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: multiple emissions each trigger loadSettings
+  it('should call loadSettings each time reconnected emits', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { service, httpMock } = setupService(mockSignalR);
+    const loadSettingsSpy = vi.spyOn(service, 'loadSettings');
+
+    // Act
+    mockSignalR.reconnected.next();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    mockSignalR.reconnected.next();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+
+    // Assert
+    expect(loadSettingsSpy).toHaveBeenCalledTimes(2);
   });
 });
