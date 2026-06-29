@@ -304,11 +304,12 @@ public sealed class GetDependenciesAsync
     [Fact]
     public async Task WhenBlockerStateMissing_IncludesItInResult()
     {
-        // Arrange — no project_id and no state: fail-safe keeps it
+        // Arrange
         string linksJson = """
             [
               {
                 "iid": 40,
+                "project_id": 1,
                 "title": "Blocker without state",
                 "link_type": "is_blocked_by"
               }
@@ -332,6 +333,26 @@ public sealed class GetDependenciesAsync
         Result<IReadOnlyList<int>>.Success success =
             result.ShouldBeOfType<Result<IReadOnlyList<int>>.Success>();
         success.Value.ShouldBe([40]);
+    }
+
+    [Fact]
+    public async Task WhenProjectLookupReturns200WithNullBody_ReturnsFailure()
+    {
+        // Arrange — project lookup returns 200 but body deserializes to null
+        FakeHandler handler = new(HttpStatusCode.OK, "null");
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            issueNumber: 42,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
     }
 
     [Fact]

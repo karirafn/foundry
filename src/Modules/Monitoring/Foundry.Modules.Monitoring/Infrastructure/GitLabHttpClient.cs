@@ -159,6 +159,24 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         string token,
         CancellationToken cancellationToken)
     {
+        Result<GitLabProjectInfoDto> infoResult =
+            await GetProjectInfoAsync(apiBaseUrl, slug, token, cancellationToken);
+
+        if (infoResult is not Result<GitLabProjectInfoDto>.Success infoSuccess)
+        {
+            Error error = ((Result<GitLabProjectInfoDto>.Failure)infoResult).Error;
+            return Result<int>.Fail(error);
+        }
+
+        return Result<int>.Ok(infoSuccess.Value.Id);
+    }
+
+    private async Task<Result<GitLabProjectInfoDto>> GetProjectInfoAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
         string relativePath = $"projects/{encodedPath}";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
@@ -170,13 +188,19 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<int>.Fail(ErrorFromNonSuccess(response));
+            return Result<GitLabProjectInfoDto>.Fail(ErrorFromNonSuccess(response));
         }
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitLabProjectInfoDto? dto = JsonSerializer.Deserialize<GitLabProjectInfoDto>(body, JsonOptions);
 
-        return Result<int>.Ok(dto?.Id ?? 0);
+        if (dto is null)
+        {
+            return Result<GitLabProjectInfoDto>.Fail(
+                GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
+        }
+
+        return Result<GitLabProjectInfoDto>.Ok(dto);
     }
 
     public async Task<Result<bool>> IsIssueClosedAsync(
@@ -498,24 +522,16 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
             return Result<string>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
-        string encodedPath = Uri.EscapeDataString(slug.FullPath);
-        string relativePath = $"projects/{encodedPath}";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+        Result<GitLabProjectInfoDto> infoResult =
+            await GetProjectInfoAsync(apiBaseUrl, slug, token, cancellationToken);
 
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        AddCommonHeaders(request, token);
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
+        if (infoResult is not Result<GitLabProjectInfoDto>.Success infoSuccess)
         {
-            return Result<string>.Fail(ErrorFromNonSuccess(response));
+            Error error = ((Result<GitLabProjectInfoDto>.Failure)infoResult).Error;
+            return Result<string>.Fail(error);
         }
 
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        GitLabProjectInfoDto? dto = JsonSerializer.Deserialize<GitLabProjectInfoDto>(body, JsonOptions);
-
-        return Result<string>.Ok(dto?.DefaultBranch ?? string.Empty);
+        return Result<string>.Ok(infoSuccess.Value.DefaultBranch ?? string.Empty);
     }
 
     public async Task<Result<BranchRules>> GetBranchProtectionAsync(
