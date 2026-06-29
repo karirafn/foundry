@@ -182,7 +182,7 @@ internal sealed class DockerWorkerOrchestrator(
             Follow = true,
             ShowStdout = true,
             ShowStderr = true,
-            Timestamps = false,
+            Timestamps = true,
         };
 
         using MultiplexedStream multiplexedStream = await containerOperations.GetContainerLogsAsync(
@@ -234,7 +234,7 @@ internal sealed class DockerWorkerOrchestrator(
                 Follow = false,
                 ShowStdout = true,
                 ShowStderr = true,
-                Timestamps = false,
+                Timestamps = true,
                 Tail = tailLines.ToString(CultureInfo.InvariantCulture),
             };
 

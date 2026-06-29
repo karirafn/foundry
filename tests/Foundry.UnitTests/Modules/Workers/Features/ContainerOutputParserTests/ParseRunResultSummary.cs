@@ -174,4 +174,55 @@ public sealed class ParseRunResultSummary
             () => result.DurationMs.ShouldBe(1234),
             () => result.NumTurns.ShouldBe(5));
     }
+
+    [Fact]
+    public void WhenJsonLineHasDockerTimestampPrefix_StillExtractsRunResultSummary()
+    {
+        // Arrange — realistic multi-line output with RFC3339Nano Docker timestamps
+        string log = """
+            2026-06-29T21:24:01.000000000Z Starting claude...
+            2026-06-29T21:24:02.123456789Z Cloning repository...
+            2026-06-29T21:24:03.987654321Z Running task...
+            2026-06-29T21:24:05.123456789Z {"type":"result","subtype":"success","is_error":false,"duration_ms":4123,"num_turns":7,"result":"Task completed successfully.","session_id":"abc","terminal_reason":"stop_reason","total_cost_usd":0.0123,"usage":{"input_tokens":1000,"output_tokens":500}}
+            """;
+
+        // Act
+        RunResultSummary? result = _sut.ParseRunResultSummary(log);
+
+        // Assert
+        RunResultSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.ResultText.ShouldBe("Task completed successfully."),
+            () => summary.Subtype.ShouldBe("success"),
+            () => summary.IsError.ShouldBeFalse(),
+            () => summary.DurationMs.ShouldBe(4123),
+            () => summary.NumTurns.ShouldBe(7),
+            () => summary.TotalCostUsd.ShouldBe(0.0123m),
+            () => summary.InputTokens.ShouldBe(1000),
+            () => summary.OutputTokens.ShouldBe(500));
+    }
+
+    [Fact]
+    public void WhenMixedTimestampedAndPlainLines_StillExtractsRunResultSummary()
+    {
+        // Arrange — lines without timestamps (e.g. persisted output before timestamps were enabled)
+        // mixed with a timestamped final JSON line
+        string log = """
+            Plain log line without timestamp
+            Another plain line
+            2026-06-29T21:24:05.000000000Z {"type":"result","subtype":"error","is_error":true,"duration_ms":300,"num_turns":1,"result":"Usage limit hit.","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        RunResultSummary? result = _sut.ParseRunResultSummary(log);
+
+        // Assert
+        RunResultSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.IsError.ShouldBeTrue(),
+            () => summary.Subtype.ShouldBe("error"),
+            () => summary.ResultText.ShouldBe("Usage limit hit."),
+            () => summary.NumTurns.ShouldBe(1),
+            () => summary.DurationMs.ShouldBe(300));
+    }
 }

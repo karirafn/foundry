@@ -238,20 +238,46 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             if (span[i] == '\n')
             {
                 ReadOnlySpan<char> candidate = span[(i + 1)..].TrimStart();
+                string? jsonLine = StripDockerTimestampAndExtractJson(candidate);
 
-                if (!candidate.IsEmpty && candidate[0] == '{')
+                if (jsonLine is not null)
                 {
-                    return candidate.ToString();
+                    return jsonLine;
                 }
             }
         }
 
         // No newline found — the entire trimmed input might be the JSON line
         ReadOnlySpan<char> trimmed = span.TrimStart();
+        return StripDockerTimestampAndExtractJson(trimmed);
+    }
 
-        if (!trimmed.IsEmpty && trimmed[0] == '{')
+    private static string? StripDockerTimestampAndExtractJson(ReadOnlySpan<char> candidate)
+    {
+        if (candidate.IsEmpty)
         {
-            return trimmed.ToString();
+            return null;
+        }
+
+        if (candidate[0] == '{')
+        {
+            return candidate.ToString();
+        }
+
+        // Strip optional Docker RFC3339Nano timestamp prefix (e.g. "2026-06-29T21:24:05.123456789Z ")
+        string candidateStr = candidate.ToString();
+        System.Text.RegularExpressions.Match match = DockerTimestampPrefixPattern().Match(candidateStr);
+
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        ReadOnlySpan<char> afterTimestamp = candidateStr.AsSpan(match.Length).TrimStart();
+
+        if (!afterTimestamp.IsEmpty && afterTimestamp[0] == '{')
+        {
+            return afterTimestamp.ToString();
         }
 
         return null;
@@ -344,4 +370,12 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();
+
+    // Matches a Docker log timestamp prefix: RFC3339Nano date-time followed by a space.
+    // Example: "2026-06-29T21:24:05.123456789Z " or "2026-06-29T21:24:05Z "
+    [GeneratedRegex(
+        @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) ",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex DockerTimestampPrefixPattern();
 }
