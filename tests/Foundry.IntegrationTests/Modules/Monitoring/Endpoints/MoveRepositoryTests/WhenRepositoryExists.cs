@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.Modules.Monitoring.Contracts;
+
 using Shouldly;
 
 using Xunit;
@@ -40,5 +42,38 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task PersistsNewPositionOrder()
+    {
+        // Arrange — seed two repos; repoA gets position 0, repoB gets position 1
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
+        Guid repoAId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, "owner-a/repo");
+        Guid repoBId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, "owner-b/repo");
+
+        // Act — move repoA from position 0 to position 1
+        await _client.PatchAsJsonAsync(
+            new Uri($"/api/repositories/{repoAId}/position", UriKind.Relative),
+            new { position = 1 },
+            TestContext.Current.CancellationToken);
+
+        // Assert — GET the list and confirm repoB is now first, repoA is second
+        HttpResponseMessage getResponse = await _client.GetAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        IReadOnlyList<RepositorySummary> repositories = (await getResponse.Content
+            .ReadFromJsonAsync<IReadOnlyList<RepositorySummary>>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+
+        repositories.Count.ShouldBe(2);
+        repositories[0].ShouldSatisfyAllConditions(
+            () => repositories[0].Id.ShouldBe(repoBId),
+            () => repositories[0].Position.ShouldBe(0));
+        repositories[1].ShouldSatisfyAllConditions(
+            () => repositories[1].Id.ShouldBe(repoAId),
+            () => repositories[1].Position.ShouldBe(1));
     }
 }

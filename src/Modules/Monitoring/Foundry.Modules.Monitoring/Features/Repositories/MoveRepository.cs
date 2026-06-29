@@ -38,6 +38,10 @@ internal static class MoveRepository
         {
             MonitoredRepositoryId repositoryId = MonitoredRepositoryId.From(command.Id);
 
+            // Open the transaction before the read so the read-renumber-commit is one
+            // consistent unit of work, preventing corruption under concurrent moves/deletes.
+            await using IDbContextTransaction tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             List<MonitoredRepository> allRepositories = await dbContext
                 .Set<MonitoredRepository>()
                 .OrderBy(r => r.Position)
@@ -62,7 +66,6 @@ internal static class MoveRepository
             allRepositories.RemoveAt(currentPosition);
             allRepositories.Insert(clampedPosition, target);
 
-            await using IDbContextTransaction tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
             await RepositoryRenumber.RenumberAsync(dbContext, allRepositories, cancellationToken);
             await tx.CommitAsync(cancellationToken);
 

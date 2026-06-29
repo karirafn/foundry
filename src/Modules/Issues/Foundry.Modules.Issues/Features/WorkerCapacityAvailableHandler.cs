@@ -51,7 +51,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        HashSet<MonitoredRepositoryId> eligibleRepoIds = positionByRepoId.Keys.ToHashSet();
+        Dictionary<MonitoredRepositoryId, int>.KeyCollection eligibleRepoIds = positionByRepoId.Keys;
 
         // Claim priority: revision queued first (addressing review feedback takes precedence),
         // then continuation queued (resuming interrupted work), then fresh queued issues.
