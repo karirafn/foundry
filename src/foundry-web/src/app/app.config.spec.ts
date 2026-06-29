@@ -1,8 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { NEVER } from 'rxjs';
 import { SettingsService } from './features/settings/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
+import { SystemSignalRService } from './core/services/system-signalr.service';
+
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
 
 function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -42,6 +46,7 @@ describe('app initializer', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        { provide: SystemSignalRService, useValue: mockSystemSignalR },
       ],
     });
 
@@ -71,6 +76,7 @@ describe('app initializer', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        { provide: SystemSignalRService, useValue: mockSystemSignalR },
       ],
     });
 

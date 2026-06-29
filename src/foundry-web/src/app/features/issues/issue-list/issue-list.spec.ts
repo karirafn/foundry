@@ -2,11 +2,15 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
+import { NEVER } from 'rxjs';
 import { IssueListComponent } from './issue-list';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
+import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { IssueSummary } from '../issue.model';
 import { GlobalSettingsResponse } from '../../../features/settings/settings.model';
+
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -59,6 +63,7 @@ function setupComponent() {
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      { provide: SystemSignalRService, useValue: mockSystemSignalR },
     ],
   });
 

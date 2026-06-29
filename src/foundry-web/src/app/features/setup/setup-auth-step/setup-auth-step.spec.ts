@@ -1,7 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { NEVER } from 'rxjs';
 import { SetupAuthStepComponent } from './setup-auth-step';
+import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
 
 const OAUTH_SCAN_RESPONSE = {
   accessTokenPresent: true,
@@ -38,7 +42,11 @@ function setup() {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
     imports: [SetupAuthStepComponent],
-    providers: [provideHttpClient(), provideHttpClientTesting()],
+    providers: [
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      { provide: SystemSignalRService, useValue: mockSystemSignalR },
+    ],
   });
 
   const fixture = TestBed.createComponent(SetupAuthStepComponent);

@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
+using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
 using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.DispatchResumed;
 
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
@@ -463,6 +464,7 @@ internal sealed class WorkerDispatchService(
 
             FailureReason failureReason = await ResolveFailureReasonAsync(
                 dbContext,
+                integrationEventDispatcher,
                 parseResult,
                 new FailureReason.ContainerError("No pull request found after retries"),
                 cancellationToken);
@@ -513,6 +515,7 @@ internal sealed class WorkerDispatchService(
         {
             FailureReason failureReason = await ResolveFailureReasonAsync(
                 dbContext,
+                integrationEventDispatcher,
                 parseResult,
                 new FailureReason.ContainerError("No commits and usage limited"),
                 cancellationToken);
@@ -589,6 +592,7 @@ internal sealed class WorkerDispatchService(
 
         FailureReason failureReason = await ResolveFailureReasonAsync(
             dbContext,
+            integrationEventDispatcher,
             parseResult,
             fallbackReason,
             cancellationToken);
@@ -681,11 +685,12 @@ internal sealed class WorkerDispatchService(
     /// Resolves the failure reason from a container output parse result.
     /// If the parse result indicates a usage limit, sets <see cref="GlobalSettings.UsageLimitResetsAt"/>
     /// (extend-only; past times are ignored by <see cref="GlobalSettings.SetUsageLimitResetsAt"/>)
-    /// and returns <see cref="FailureReason.UsageLimited"/>.
+    /// and dispatches <see cref="DispatchPausedEvent"/> when the reset time is newly persisted or extended.
     /// Otherwise returns the <paramref name="fallbackReason"/>.
     /// </summary>
     private async Task<FailureReason> ResolveFailureReasonAsync(
         DbContext dbContext,
+        IIntegrationEventDispatcher integrationEventDispatcher,
         ContainerOutputParseResult parseResult,
         FailureReason fallbackReason,
         CancellationToken cancellationToken)
@@ -711,8 +716,19 @@ internal sealed class WorkerDispatchService(
         }
         else
         {
+            DateTimeOffset? resetsAtBefore = settings.UsageLimitResetsAt;
             settings.SetUsageLimitResetsAt(usageLimited.ResetsAt);
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            bool resetsAtChanged = settings.UsageLimitResetsAt != resetsAtBefore;
+
+            if (resetsAtChanged)
+            {
+                await TryDispatchAsync(
+                    integrationEventDispatcher,
+                    new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value),
+                    cancellationToken);
+            }
 
             logger.LogWarning(
                 "Usage limit detected; dispatch paused until {ResetsAt}.",
@@ -839,6 +855,30 @@ internal sealed class WorkerDispatchService(
 #pragma warning restore CA1031
         {
             logger.LogWarning(ex, "Failed to dispatch integration event for WorkerRun {WorkerRunId}", workerRunId);
+        }
+    }
+
+    /// <summary>
+    /// System-level overload: no worker run is associated with the dispatch, so the failure
+    /// message references only the event type rather than a meaningless empty GUID.
+    /// </summary>
+    private async Task TryDispatchAsync(
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IIntegrationEvent systemEvent,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await integrationEventDispatcher.DispatchAsync([systemEvent], cancellationToken);
+        }
+#pragma warning disable CA1031 // System-level dispatch failures (e.g. DB error in event handler) must not crash the BackgroundService tick; the event type in the warning is sufficient for triage.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to dispatch system integration event {EventType}",
+                systemEvent.GetType().Name);
         }
     }
 

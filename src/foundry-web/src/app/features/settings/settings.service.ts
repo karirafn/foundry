@@ -1,5 +1,8 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, merge } from 'rxjs';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   AuthMode,
   AuthSettings,
@@ -13,6 +16,7 @@ import {
 } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
 import { AccountService } from './accounts/account.service';
+import { SystemSignalRService } from '../../core/services/system-signalr.service';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
@@ -27,6 +31,17 @@ export class SettingsService {
   private readonly _http = inject(HttpClient);
   private readonly _dispatchService = inject(DispatchService);
   private readonly _accountService = inject(AccountService);
+  private readonly _signalR = inject(SystemSignalRService);
+
+  constructor() {
+    merge(this._signalR.reconnected, this._signalR.dispatchStateChanged)
+      .pipe(
+        debounceTime(300),
+        switchMap(() => this._fetchSettings()),
+        takeUntilDestroyed()
+      )
+      .subscribe();
+  }
 
   private readonly _settingsSignal: WritableSignal<GlobalSettingsResponse | null> = signal(null);
   readonly settings: Signal<GlobalSettingsResponse | null> = this._settingsSignal.asReadonly();
@@ -108,6 +123,12 @@ export class SettingsService {
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
   loadSettings(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this._fetchSettings().subscribe({ next: resolve, error: resolve });
+    });
+  }
+
+  private _fetchSettings(): Observable<void> {
     this._loadErrorSignal.set(null);
     this._saveErrorSignal.set(null);
     this._switchErrorSignal.set(null);
@@ -128,8 +149,8 @@ export class SettingsService {
     this.switching.set(false);
     this.loading.set(true);
 
-    return new Promise<void>((resolve) => {
-      this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
+    return new Observable<void>((observer) => {
+      const subscription = this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
         next: (response) => {
           this._settingsSignal.set(response);
           this.authSettings.set(this._mapToAuthSettings(response));
@@ -142,15 +163,18 @@ export class SettingsService {
           this._imageBuildLogTailSignal.set(response.lastImageBuildError);
           this._hasUsableImageSignal.set(response.hasUsableImage);
           this.loading.set(false);
-          resolve();
+          observer.next();
+          observer.complete();
         },
         error: (err: HttpErrorResponse) => {
           console.error(err);
           this._loadErrorSignal.set(LOAD_SETTINGS_ERROR);
           this.loading.set(false);
-          resolve();
+          observer.error(err);
         },
       });
+
+      return () => subscription.unsubscribe();
     });
   }
 

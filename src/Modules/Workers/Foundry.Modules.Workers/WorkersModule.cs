@@ -37,6 +37,8 @@ public static class WorkersModule
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
+        services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
+        services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
 
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageRebuildService>();

@@ -1,10 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { vi } from 'vitest';
-import { Subject } from 'rxjs';
 import { ForgeOverlayComponent } from './forge-overlay';
 import { SettingsService } from '../../../features/settings/settings.service';
-import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { ImageBuildStatus } from '../../../features/settings/settings.model';
 
 function createMockSettingsService(overrides: {
@@ -30,12 +28,6 @@ function createMockSettingsService(overrides: {
   };
 }
 
-function createMockSignalRService() {
-  return {
-    reconnected: new Subject<void>(),
-  };
-}
-
 interface SetupOptions {
   isColdBuildBlocking?: boolean;
   imageBuildStatus?: ImageBuildStatus;
@@ -48,20 +40,18 @@ function setup(options: SetupOptions = {}) {
     imageBuildStatus: options.imageBuildStatus ?? 'Idle',
     imageBuildLogTail: options.imageBuildLogTail ?? null,
   });
-  const mockSignalR = createMockSignalRService();
 
   TestBed.configureTestingModule({
     imports: [ForgeOverlayComponent],
     providers: [
       { provide: SettingsService, useValue: mockSettings },
-      { provide: SystemSignalRService, useValue: mockSignalR },
     ],
   });
 
   const fixture = TestBed.createComponent(ForgeOverlayComponent);
   fixture.detectChanges();
 
-  return { fixture, mockSettings, mockSignalR };
+  return { fixture, mockSettings };
 }
 
 describe('ForgeOverlayComponent', () => {
@@ -333,33 +323,6 @@ describe('ForgeOverlayComponent', () => {
     // Assert
     expect(descEl).not.toBeNull();
     expect(descEl?.textContent).toContain('Building worker image…');
-  });
-
-  // Reconnect triggers loadSettings
-  it('should call loadSettings when SignalR reconnects', () => {
-    // Arrange
-    const { mockSettings, mockSignalR } = setup();
-
-    // Act
-    mockSignalR.reconnected.next();
-
-    // Assert
-    expect(mockSettings.loadSettings).toHaveBeenCalledOnce();
-  });
-
-  // Reconnect + isColdBuildBlocking false dismisses the overlay
-  it('should dismiss overlay after reconnected fires and isColdBuildBlocking becomes false', () => {
-    // Arrange
-    const { fixture, mockSettings, mockSignalR } = setup({ isColdBuildBlocking: true });
-    expect((fixture.nativeElement as HTMLElement).querySelector('.forge-overlay')).not.toBeNull();
-
-    // Act — simulate reconnect followed by a settings reload that now has a usable image
-    mockSignalR.reconnected.next();
-    mockSettings._isColdBuildBlockingSignal.set(false);
-    fixture.detectChanges();
-
-    // Assert — overlay is dismissed
-    expect((fixture.nativeElement as HTMLElement).querySelector('.forge-overlay')).toBeNull();
   });
 
   // State transition: Building -> Failed renders Failed branch
