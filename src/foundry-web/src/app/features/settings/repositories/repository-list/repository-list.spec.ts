@@ -907,6 +907,112 @@ describe('RepositoryListComponent', () => {
     vi.useRealTimers();
   });
 
+  // Fix — onDrop restores focus to moved item after pointer drag (WCAG 2.4.3)
+  it('should restore focus to a control within the moved item after a pointer drag drop', async () => {
+    // Arrange
+    vi.useFakeTimers();
+    const { el, fixture, httpMock, repositoryService } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    // Simulate a drop event moving first item to second position
+    const component = fixture.componentInstance;
+    const dropEvent = {
+      previousIndex: 0,
+      currentIndex: 1,
+      item: {} as never,
+      container: {} as never,
+      previousContainer: {} as never,
+      isPointerOverContainer: true,
+      distance: { x: 0, y: 0 },
+      dropPoint: { x: 0, y: 0 },
+    };
+
+    // Act
+    component.onDrop(dropEvent as never);
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO.id}/position`).flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+    vi.runAllTimers();
+
+    // Assert — focus lands within the moved repo's list item
+    const movedItemEl = el.querySelector(`#repo-item-${MOCK_REPO.id}`) as HTMLElement;
+    expect(movedItemEl).toBeTruthy();
+    expect(movedItemEl.contains(document.activeElement)).toBe(true);
+    vi.useRealTimers();
+  });
+
+  // Fix — announcement resets to empty before each move so identical consecutive announcements are always re-announced
+  it('should reset the announcement to empty before calling moveRepository so identical messages always cause a DOM mutation', () => {
+    // Arrange
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
+    // First move — succeed
+    moveDownBtn.click();
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO.id}/position`).flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+
+    // Verify initial announcement is set
+    const liveRegion = el.querySelector('.repository-list__announcement');
+    expect(liveRegion?.textContent?.trim()).not.toBe('');
+
+    // Act — trigger a move on any button; the announcement should clear before the response arrives
+    const moveUpBtn = el.querySelectorAll('.repository-list__move-up-btn')[1] as HTMLButtonElement;
+    moveUpBtn.click();
+    fixture.detectChanges();
+
+    // Assert — live region is empty while the request is in flight (reset happened)
+    expect(liveRegion?.textContent?.trim()).toBe('');
+
+    // Clean up pending request
+    httpMock.expectOne(`/api/repositories/${MOCK_REPO_2.id}/position`).flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+  });
+
+  // Fix — ul has accessible name via aria-label (WCAG 4.1.2 / Medium)
+  it('should give the drop list an accessible name via aria-label', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const list = el.querySelector('[role="list"]');
+    expect(list?.getAttribute('aria-label')).toBeTruthy();
+  });
+
+  // Fix — priority hint is programmatically associated with the list via aria-describedby (Medium)
+  it('should associate the priority hint with the list via aria-describedby', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const list = el.querySelector('[role="list"]');
+    const hintId = list?.getAttribute('aria-describedby');
+    expect(hintId).toBeTruthy();
+    const hintEl = el.querySelector(`#${hintId}`);
+    expect(hintEl).toBeTruthy();
+    expect(hintEl?.textContent).toContain('priority');
+  });
+
+  // Fix — up/down buttons use attr.disabled so enabled buttons have no disabled attribute (Low)
+  it('should have no disabled attribute on enabled move-up and move-down buttons', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert — first move-up is disabled (index 0), last move-down is disabled (index 1)
+    const moveUpBtns = el.querySelectorAll('.repository-list__move-up-btn');
+    const moveDownBtns = el.querySelectorAll('.repository-list__move-down-btn');
+
+    // The enabled buttons (not first up, not last down) must NOT have a disabled attribute at all
+    expect(moveUpBtns[1]?.hasAttribute('disabled')).toBe(false);
+    expect(moveDownBtns[0]?.hasAttribute('disabled')).toBe(false);
+
+    // The disabled buttons should carry the attribute
+    expect(moveUpBtns[0]?.hasAttribute('disabled')).toBe(true);
+    expect(moveDownBtns[1]?.hasAttribute('disabled')).toBe(true);
+  });
+
   // Cycle 43: live region announces failure when recheck errors
   it('should announce "slug: Re-check failed" when recheck fails', () => {
     // Arrange

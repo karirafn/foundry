@@ -73,7 +73,7 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
       }
 
       @if (_multipleRepos()) {
-        <p class="repository-list__priority-hint">
+        <p id="repository-priority-hint" class="repository-list__priority-hint">
           Issues are claimed in this priority order — the repository at the top is dispatched first. Drag or use the arrow buttons to reorder.
         </p>
       }
@@ -81,6 +81,8 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
       <ul
         class="repository-list__list"
         role="list"
+        aria-label="Repository priority order"
+        [attr.aria-describedby]="_multipleRepos() ? 'repository-priority-hint' : null"
         cdkDropList
         (cdkDropListDropped)="onDrop($event)"
       >
@@ -170,14 +172,14 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
                     <button
                       class="repository-list__move-up-btn"
                       type="button"
-                      [disabled]="i === 0"
+                      [attr.disabled]="i === 0 ? '' : null"
                       [attr.aria-label]="'Move ' + repo.slug + ' up'"
                       (click)="onMove(i, -1)"
                     >&#9650;</button>
                     <button
                       class="repository-list__move-down-btn"
                       type="button"
-                      [disabled]="i === repositories().length - 1"
+                      [attr.disabled]="i === repositories().length - 1 ? '' : null"
                       [attr.aria-label]="'Move ' + repo.slug + ' down'"
                       (click)="onMove(i, 1)"
                     >&#9660;</button>
@@ -271,7 +273,16 @@ export class RepositoryListComponent {
       return;
     }
     const repo = this.repositories()[event.previousIndex];
-    this._doMove(repo, event.currentIndex);
+    this._doMove(repo, event.currentIndex, () => {
+      setTimeout(() => {
+        const movedItem = document.getElementById(`repo-item-${repo.id}`);
+        const focusTarget =
+          movedItem?.querySelector<HTMLElement>('.repository-list__drag-handle') ??
+          movedItem?.querySelector<HTMLElement>('.repository-list__move-up-btn') ??
+          movedItem?.querySelector<HTMLElement>('.repository-list__move-down-btn');
+        focusTarget?.focus();
+      });
+    });
   }
 
   onMove(currentIndex: number, delta: number): void {
@@ -333,6 +344,7 @@ export class RepositoryListComponent {
 
   private _doMove(repo: RepositorySummary, newIndex: number, afterMove?: () => void): void {
     this._moveError.set(null);
+    this._announcement.set('');
     this._repositoryService.moveRepository(repo.id, newIndex).subscribe({
       next: () => {
         const repos = this._repositoryService.repositories();
