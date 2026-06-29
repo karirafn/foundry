@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 
 namespace Foundry.Modules.Workers.Domain;
@@ -13,6 +14,26 @@ public abstract record FailureReason
     private FailureReason()
     {
     }
+
+    public string CategoryToken => this switch
+    {
+        NonZeroExit => "non_zero_exit",
+        TimedOut => "timed_out",
+        ContainerError => "container_error",
+        UsageLimited => "usage_limited",
+        WorkerBootstrapFailed => "worker_bootstrap_failed",
+        _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
+    };
+
+    public string Summary => this switch
+    {
+        NonZeroExit nonZeroExit => $"Non-zero exit code: {nonZeroExit.ExitCode}",
+        TimedOut => "Worker run timed out",
+        ContainerError containerError => $"Container error: {containerError.Message}",
+        UsageLimited => "Usage limit reached",
+        WorkerBootstrapFailed bootstrapFailed => $"Worker bootstrap failed: {bootstrapFailed.Detail}",
+        _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
+    };
 
     public sealed record NonZeroExit(int ExitCode) : FailureReason;
 

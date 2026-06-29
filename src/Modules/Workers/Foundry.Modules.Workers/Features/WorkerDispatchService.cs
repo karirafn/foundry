@@ -600,15 +600,7 @@ internal sealed class WorkerDispatchService(
         // Null branch name when no commits → FailedIssue; non-null → ContinuableFailedIssue
         string? branchNameForEvent = hasCommits ? activeRun.BranchName.Value : null;
 
-        string exitReason = failureReason switch
-        {
-            FailureReason.WorkerBootstrapFailed bootstrapFailed =>
-                $"Worker bootstrap failed: {bootstrapFailed.Detail}",
-            FailureReason.UsageLimited =>
-                WorkerRunFailedEvent.UsageLimitedReason,
-            _ =>
-                $"Non-zero exit code: {exitCode}",
-        };
+        string exitReason = failureReason.Summary;
 
         FailedRun failedRun = activeRun.Fail(failureReason, containerOutput);
         await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
