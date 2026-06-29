@@ -43,7 +43,11 @@ export class SystemBannerComponent {
   private readonly _tickSignal = signal(0);
 
   readonly generalNotifications: Signal<SystemNotification[]> = computed(() =>
-    this._systemSignalR.notifications().filter((n) => n.category !== IMAGE_BUILD_NOTIFICATION_CATEGORY)
+    this._systemSignalR
+      .notifications()
+      .filter(
+        (n) => n.category !== IMAGE_BUILD_NOTIFICATION_CATEGORY && n.category !== DISPATCH_NOTIFICATION_CATEGORY
+      )
   );
 
   readonly imageBuildNotification: Signal<ParsedImageBuildNotification | null> = computed(() => {
@@ -83,14 +87,6 @@ export class SystemBannerComponent {
   });
 
   constructor() {
-    effect(() => {
-      const notifications = this._systemSignalR.notifications();
-      const hasDispatch = notifications.some((n) => n.category === DISPATCH_NOTIFICATION_CATEGORY);
-      if (hasDispatch) {
-        this._settingsService.loadSettings();
-      }
-    });
-
     effect(() => {
       const imageBuild = this.imageBuildNotification();
       if (imageBuild !== null) {

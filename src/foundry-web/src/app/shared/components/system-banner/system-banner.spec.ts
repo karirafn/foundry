@@ -316,6 +316,36 @@ describe('SystemBannerComponent', () => {
     });
   });
 
+  describe('dispatch notification filtering', () => {
+    // Cycle 18: dispatch notification with empty message must not render a general alert bar
+    it('should not render any general alert bar when the only notification is a dispatch notification', () => {
+      // Arrange — dispatch notification with empty message (used as a reload trigger)
+      const notification: SystemNotification = { category: 'dispatch', isActive: true, message: '' };
+
+      // Act
+      const { fixture } = setup({ notifications: [notification] });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — no general bars rendered (dispatch is excluded from generalNotifications)
+      const bars = el.querySelectorAll('.system-banner__bar:not(.system-banner__bar--dispatch):not(.system-banner__bar--image-build)');
+      expect(bars.length).toBe(0);
+    });
+
+    // Cycle 19: dispatch notification does not produce an empty alert element
+    it('should produce zero elements with role="alert" when the only notification is a dispatch notification', () => {
+      // Arrange
+      const notification: SystemNotification = { category: 'dispatch', isActive: true, message: '' };
+
+      // Act
+      const { fixture } = setup({ notifications: [notification] });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — no role="alert" elements from general bars
+      const alerts = el.querySelectorAll('.system-banner__bar:not(.system-banner__bar--dispatch)[role="alert"]');
+      expect(alerts.length).toBe(0);
+    });
+  });
+
   describe('image-build notifications', () => {
     it('should call setImageBuildStatus when an image-build notification arrives', () => {
       // Arrange
