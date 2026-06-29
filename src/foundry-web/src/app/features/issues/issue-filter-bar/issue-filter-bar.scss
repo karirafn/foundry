@@ -1,0 +1,66 @@
+// The bar height is declared as --fd-filter-bar-height in :root (styles.scss) so that
+// issue-list can consume it for body bottom-padding without a shared ancestor coupling.
+:host {
+  display: block;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--fd-bg-page);
+  border-top: 1px solid var(--fd-border-default);
+  // Safe-area padding for notched/home-indicator devices.
+  // max() ensures a sane minimum on non-notched devices.
+  padding-bottom: max(var(--fd-spacing-sm), env(safe-area-inset-bottom, 0px));
+  padding-inline: var(--fd-spacing-lg);
+  padding-top: var(--fd-spacing-sm);
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  // Fluid width — avoids overflow at 200% zoom.
+  width: 100%;
+  max-width: 100%;
+}
+
+.filter-bar__btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.875rem;
+  gap: var(--fd-spacing-xs);
+  // 44px minimum touch target (WCAG 2.5.5).
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+  position: relative;
+
+  &:hover:not(:disabled) {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+}
+
+.filter-bar__badge {
+  align-items: center;
+  background: var(--fd-state-queued);
+  border-radius: 9999px;
+  color: var(--fd-text-on-state);
+  display: inline-flex;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  justify-content: center;
+  line-height: 1;
+  min-height: 1.125rem;
+  min-width: 1.125rem;
+  padding: 0 var(--fd-spacing-xs);
+}

@@ -7,10 +7,11 @@ import { IssueDetailComponent } from '../issue-detail/issue-detail';
 import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
 import { DispatchControlsComponent } from './dispatch-controls/dispatch-controls';
 import { IssueFilterRailComponent } from '../issue-filter-rail/issue-filter-rail';
+import { IssueFilterBarComponent } from '../issue-filter-bar/issue-filter-bar';
 import { SettingsService } from '../../../features/settings/settings.service';
 
 const SKELETON_COUNT = 4;
-const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts in the filter rail.';
+const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
 const EMPTY_RESOLVED_MESSAGE = 'No resolved issues match the selected filters';
 const RESOLVED_HEADING_ID = 'resolved-band-heading';
 
@@ -25,6 +26,7 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
     ConnectionIndicatorComponent,
     DispatchControlsComponent,
     IssueFilterRailComponent,
+    IssueFilterBarComponent,
   ],
   template: `
     <div class="issue-list">
@@ -196,6 +198,10 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
             class="issue-list__resolved-announcer sr-only"
           >{{ resolvedAnnouncement() }}</span>
         </div>
+      </div>
+
+      <div class="issue-list__filter-bar-container">
+        <fd-issue-filter-bar />
       </div>
     </div>
   `,

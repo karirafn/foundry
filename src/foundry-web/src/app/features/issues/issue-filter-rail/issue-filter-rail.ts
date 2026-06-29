@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostBinding, inject, input } from '@angular/core';
 import { IssueService } from '../issue.service';
 import { STATE_GROUPS } from '../issue-lifecycle.model';
 import { IssueState } from '../issue.model';
@@ -51,6 +51,14 @@ export class IssueFilterRailComponent {
   protected readonly issueService = inject(IssueService);
   protected readonly groups = STATE_GROUPS;
 
+  readonly touch = input(false);
+  readonly idPrefix = input('');
+
+  @HostBinding('class.filter-rail--touch')
+  get _touchClass(): boolean {
+    return this.touch();
+  }
+
   protected stateLabel(state: IssueState): string {
     return STATE_RAIL_LABELS[state];
   }
@@ -60,7 +68,7 @@ export class IssueFilterRailComponent {
   }
 
   protected groupId(label: string): string {
-    return 'rail-group-' + label.toLowerCase().replace(/\s+/g, '-');
+    return this.idPrefix() + 'rail-group-' + label.toLowerCase().replace(/\s+/g, '-');
   }
 
   protected toggleAriaLabel(state: IssueState): string {

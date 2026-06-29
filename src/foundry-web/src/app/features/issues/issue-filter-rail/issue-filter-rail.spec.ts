@@ -300,6 +300,71 @@ describe('IssueFilterRailComponent', () => {
     expect(inProgressGroup?.getAttribute('aria-labelledby')).toBe('rail-group-in-progress');
   });
 
+  // Cycle 13: idPrefix input — distinct prefixes produce distinct IDs per rail instance
+  it('should prepend idPrefix to each group id when idPrefix is provided', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.componentRef.setInput('idPrefix', 'sheet-');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — label span ids should include the prefix
+    const labelSpans = Array.from(el.querySelectorAll('.filter-rail__group-label'));
+    for (const span of labelSpans) {
+      expect(span.id).toMatch(/^sheet-rail-group-/);
+    }
+  });
+
+  it('should set aria-labelledby with the prefix so it resolves within the same rail instance', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.componentRef.setInput('idPrefix', 'sheet-');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — each group's aria-labelledby still resolves to its label span
+    const groups = Array.from(el.querySelectorAll('.filter-rail__group'));
+    for (const group of groups) {
+      const labelledBy = group.getAttribute('aria-labelledby');
+      expect(labelledBy).toMatch(/^sheet-rail-group-/);
+      const labelEl = el.querySelector(`#${labelledBy}`);
+      expect(labelEl).not.toBeNull();
+      expect(labelEl?.classList.contains('filter-rail__group-label')).toBe(true);
+    }
+  });
+
+  it('should use no prefix (default empty string) when idPrefix is not set', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — ids use the plain rail-group- prefix
+    const labelSpans = Array.from(el.querySelectorAll('.filter-rail__group-label'));
+    for (const span of labelSpans) {
+      expect(span.id).toMatch(/^rail-group-/);
+    }
+  });
+
+  it('should produce distinct IDs between two instances with different prefixes', () => {
+    // Arrange — create first instance with no prefix
+    const { fixture: fixture1 } = setup();
+    const el1 = fixture1.nativeElement as HTMLElement;
+
+    // Arrange — create second instance with sheet- prefix
+    TestBed.resetTestingModule();
+    const { fixture: fixture2 } = setup();
+    fixture2.componentRef.setInput('idPrefix', 'sheet-');
+    fixture2.detectChanges();
+    const el2 = fixture2.nativeElement as HTMLElement;
+
+    // Assert — IDs in instance 1 are different from IDs in instance 2
+    const ids1 = Array.from(el1.querySelectorAll('.filter-rail__group-label')).map(s => s.id);
+    const ids2 = Array.from(el2.querySelectorAll('.filter-rail__group-label')).map(s => s.id);
+    for (const id of ids1) {
+      expect(ids2).not.toContain(id);
+    }
+  });
+
   // Cycle 11: [WCAG 2.4.6] toggle buttons have explicit aria-label with count + unit
   it('should set aria-label with plural "issues" when count is greater than one', () => {
     // Arrange
@@ -338,5 +403,26 @@ describe('IssueFilterRailComponent', () => {
 
     // Assert
     expect(btn?.getAttribute('aria-label')).toBe('Queued, no issues, filter unavailable');
+  });
+
+  // Cycle 12: touch input applies a host CSS class for 44px tap targets
+  it('should not apply filter-rail--touch host class when touch input is false (default)', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const host = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(host.classList.contains('filter-rail--touch')).toBe(false);
+  });
+
+  it('should apply filter-rail--touch host class when touch input is true', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.componentRef.setInput('touch', true);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(host.classList.contains('filter-rail--touch')).toBe(true);
   });
 });
