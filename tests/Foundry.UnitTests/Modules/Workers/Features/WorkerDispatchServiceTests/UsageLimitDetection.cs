@@ -177,6 +177,29 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenContainerExitsWithUsageLimitedOutput_DispatchesFailedEventWithUsageLimitedCategory()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        SeedActiveRun("container-usage-limited-category");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildServiceWithParser(
+            UsageLimitedFutureOutput,
+            exitedStatus,
+            integrationEventDispatcher: dispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunFailed failedEvent = dispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.Category.ShouldBe("usage_limited");
+    }
+
+    [Fact]
     public async Task WhenSecondContainerExitsWithLaterResetTime_ExtendsThePause()
     {
         // Arrange

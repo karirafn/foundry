@@ -87,6 +87,8 @@ public sealed class Fail
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.WorkerRunId.ShouldBe(starting.Id),
             () => domainEvent.IssueId.ShouldBe(issueId),
-            () => domainEvent.ReasonDescription.ShouldBe(reason.ToString()));
+            () => domainEvent.ReasonDescription.ShouldBe(reason.Summary),
+            () => domainEvent.Category.ShouldBe(reason.CategoryToken),
+            () => domainEvent.BranchName.ShouldBeNull());
     }
 }

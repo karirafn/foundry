@@ -55,9 +55,37 @@ public sealed class Create
         Guid issueId = Guid.NewGuid();
 
         // Act
-        WorkerRunFailed @event = new(workerRunId, issueId, "reason");
+        WorkerRunFailed @event = new(workerRunId, issueId, "reason", Category: "non_zero_exit");
 
         // Assert
         @event.BranchName.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenCreatedWithCategory_SetsCategory()
+    {
+        // Arrange
+        Guid workerRunId = Guid.NewGuid();
+        Guid issueId = Guid.NewGuid();
+
+        // Act
+        WorkerRunFailed @event = new(workerRunId, issueId, "Non-zero exit code: 1", Category: "non_zero_exit");
+
+        // Assert
+        @event.Category.ShouldBe("non_zero_exit");
+    }
+
+    [Fact]
+    public void WhenCreatedWithoutCategory_CategoryIsNull()
+    {
+        // Arrange
+        Guid workerRunId = Guid.NewGuid();
+        Guid issueId = Guid.NewGuid();
+
+        // Act
+        WorkerRunFailed @event = new(workerRunId, issueId, "reason");
+
+        // Assert
+        @event.Category.ShouldBeNull();
     }
 }

@@ -155,7 +155,8 @@ internal sealed class WorkerDispatchService(
 
             if (status is null)
             {
-                FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
+                FailureReason orphanReason = new FailureReason.ContainerError("Orphaned after restart");
+                FailedRun failedRun = activeRun.Fail(orphanReason);
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 runsToRemove.Add(activeRun);
 
@@ -169,7 +170,8 @@ internal sealed class WorkerDispatchService(
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
-                        "Orphaned after restart",
+                        orphanReason.Summary,
+                        Category: orphanReason.CategoryToken,
                         BranchName: resolvedBranchName)],
                     activeRun.Id.Value,
                     cancellationToken);
@@ -250,7 +252,8 @@ internal sealed class WorkerDispatchService(
 
         if (status is null)
         {
-            FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Container not found"));
+            FailureReason containerNotFoundReason = new FailureReason.ContainerError("Container not found");
+            FailedRun failedRun = activeRun.Fail(containerNotFoundReason);
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             string? resolvedBranchName = await ResolveBranchForFailureAsync(
@@ -263,7 +266,8 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    "Container not found",
+                    containerNotFoundReason.Summary,
+                    Category: containerNotFoundReason.CategoryToken,
                     BranchName: resolvedBranchName)],
                 activeRun.Id.Value,
                 cancellationToken);
@@ -290,7 +294,8 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     cancellationToken);
 
-                FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut(), containerOutput);
+                FailureReason timedOutReason = new FailureReason.TimedOut();
+                FailedRun timedOut = activeRun.Fail(timedOutReason, containerOutput);
                 await dbContext.TransitionAsync(activeRun, timedOut, domainEventDispatcher, cancellationToken);
 
                 string? resolvedBranchName = await ResolveBranchForFailureAsync(
@@ -303,7 +308,8 @@ internal sealed class WorkerDispatchService(
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
-                        "Timed out",
+                        timedOutReason.Summary,
+                        Category: timedOutReason.CategoryToken,
                         BranchName: resolvedBranchName)],
                     activeRun.Id.Value,
                     cancellationToken);
@@ -477,7 +483,8 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    "No pull request found after retries",
+                    failureReason.Summary,
+                    Category: failureReason.CategoryToken,
                     BranchName: activeRun.BranchName.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
@@ -528,7 +535,8 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    WorkerRunFailedEvent.UsageLimitedReason)],
+                    failureReason.Summary,
+                    Category: failureReason.CategoryToken)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -611,6 +619,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id.Value,
                 activeRun.IssueId.Value,
                 exitReason,
+                Category: failureReason.CategoryToken,
                 BranchName: branchNameForEvent)],
             activeRun.Id.Value,
             cancellationToken);
