@@ -8,6 +8,7 @@ using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -106,6 +107,15 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         json => JsonSerializer.Deserialize<List<CommitMarker>>(json, CommitMarkersJsonOptions)
             ?? new List<CommitMarker>());
 
+    // Compares by serialized JSON so EF detects mutations to the list contents.
+    private static readonly ValueComparer<IReadOnlyList<CommitMarker>> CommitMarkersComparer = new(
+        (a, b) => JsonSerializer.Serialize(a, CommitMarkersJsonOptions)
+            == JsonSerializer.Serialize(b, CommitMarkersJsonOptions),
+        list => JsonSerializer.Serialize(list, CommitMarkersJsonOptions).GetHashCode(),
+        list => JsonSerializer.Deserialize<List<CommitMarker>>(
+            JsonSerializer.Serialize(list, CommitMarkersJsonOptions),
+            CommitMarkersJsonOptions) ?? new List<CommitMarker>());
+
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
         builder.Property(r => r.ContainerId)
@@ -133,7 +143,7 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
             .HasColumnName("last_activity_at");
 
         builder.Property(r => r.CommitMarkers)
-            .HasConversion(CommitMarkersConverter)
+            .HasConversion(CommitMarkersConverter, CommitMarkersComparer)
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
             .HasColumnName("commit_markers");

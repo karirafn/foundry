@@ -3,6 +3,7 @@ using Docker.DotNet;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
@@ -39,6 +40,7 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
+        services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
 
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageRebuildService>();
