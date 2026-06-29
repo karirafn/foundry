@@ -83,23 +83,23 @@ internal sealed class WorkerCapacityAvailableHandler(
     }
 
     /// <summary>
-    /// Loads all candidates of type <typeparamref name="T"/>, filters to those whose repository
-    /// id appears in <paramref name="positionByRepoId"/> (via TryGetValue — absent ids are skipped
-    /// rather than throwing), then returns the candidate with the lowest (Position, DetectedAt).
+    /// Loads candidates of type <typeparamref name="T"/> whose repository id appears in
+    /// <paramref name="positionByRepoId"/>, then returns the one with the lowest (Position, DetectedAt).
+    /// Pre-filtering at the database level avoids loading the entire table on each dispatch event.
     /// </summary>
     private async Task<T?> PickHighestPriorityAsync<T>(
         Dictionary<MonitoredRepositoryId, int> positionByRepoId,
         CancellationToken cancellationToken)
         where T : Issue
     {
+        Dictionary<MonitoredRepositoryId, int>.KeyCollection eligibleIds = positionByRepoId.Keys;
+
         List<T> candidates = await db.Set<T>()
+            .Where(i => eligibleIds.Contains(i.MonitoredRepositoryId))
             .ToListAsync(cancellationToken);
 
         return candidates
-            .Select(i => positionByRepoId.TryGetValue(i.MonitoredRepositoryId, out int position)
-                ? (Issue: i, Position: position, Included: true)
-                : (Issue: i, Position: 0, Included: false))
-            .Where(x => x.Included)
+            .Select(i => (Issue: i, Position: positionByRepoId[i.MonitoredRepositoryId]))
             .OrderBy(x => x.Position)
             .ThenBy(x => x.Issue.DetectedAt)
             .Select(x => x.Issue)
