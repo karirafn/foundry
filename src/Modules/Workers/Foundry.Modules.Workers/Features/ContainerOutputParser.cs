@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
+using Foundry.Modules.Workers.Domain;
+
 namespace Foundry.Modules.Workers.Features;
 
 internal sealed partial class ContainerOutputParser : IContainerOutputParser
@@ -68,6 +70,120 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         DateTimeOffset resetsAt = ParseResetTime(ReadString(node["result"]), defaultCooldownMinutes);
 
         return new ContainerOutputParseResult.UsageLimited(resetsAt);
+    }
+
+    public RunResultSummary? ParseRunResultSummary(string? log)
+    {
+        if (string.IsNullOrWhiteSpace(log))
+        {
+            return null;
+        }
+
+        if (log.Length > MaxLogLength)
+        {
+            log = log[^MaxLogLength..];
+        }
+
+        string? lastJsonLine = ExtractLastJsonLine(log);
+
+        if (lastJsonLine is null || lastJsonLine.Length > MaxJsonLineLength)
+        {
+            return null;
+        }
+
+        JsonNode? node;
+
+        try
+        {
+            node = JsonNode.Parse(lastJsonLine);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        if (node is null)
+        {
+            return null;
+        }
+
+        string? resultText = ReadString(node["result"]);
+        string? subtype = ReadString(node["subtype"]);
+        bool isError = ReadBool(node["is_error"]);
+        long durationMs = ReadLong(node["duration_ms"]);
+        int numTurns = ReadInt(node["num_turns"]);
+        decimal? totalCostUsd = ReadDecimal(node["total_cost_usd"]);
+        int? inputTokens = ReadNullableInt(node["usage"]?["input_tokens"]);
+        int? outputTokens = ReadNullableInt(node["usage"]?["output_tokens"]);
+
+        return RunResultSummary.Create(
+            resultText,
+            subtype,
+            isError,
+            durationMs,
+            numTurns,
+            totalCostUsd,
+            inputTokens,
+            outputTokens);
+    }
+
+    private static bool ReadBool(JsonNode? node)
+    {
+        return node is not null && node.GetValueKind() == JsonValueKind.True;
+    }
+
+    private static long ReadLong(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.Number)
+        {
+            return 0;
+        }
+
+        return node.GetValue<long>();
+    }
+
+    private static int ReadInt(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.Number)
+        {
+            return 0;
+        }
+
+        long value = node.GetValue<long>();
+
+        if (value < int.MinValue || value > int.MaxValue)
+        {
+            return 0;
+        }
+
+        return (int)value;
+    }
+
+    private static int? ReadNullableInt(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        long value = node.GetValue<long>();
+
+        if (value < int.MinValue || value > int.MaxValue)
+        {
+            return null;
+        }
+
+        return (int)value;
+    }
+
+    private static decimal? ReadDecimal(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        return node.GetValue<decimal>();
     }
 
     private static bool IsUsageLimit(int? apiErrorStatus, string? terminalReason)

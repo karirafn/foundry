@@ -155,6 +155,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     {
         public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
             => new ContainerOutputParseResult.NormalExit();
+
+        public RunResultSummary? ParseRunResultSummary(string? log) => null;
     }
 
     protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)
