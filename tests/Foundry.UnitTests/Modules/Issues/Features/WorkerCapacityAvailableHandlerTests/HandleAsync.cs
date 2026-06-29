@@ -1064,6 +1064,44 @@ public sealed class HandleAsync : IAsyncDisposable
         lowPriorityIssue.ShouldBeOfType<ContinuationQueuedIssue>();
     }
 
+    // Guards the TryGetValue refactoring: a candidate whose repo id is absent from the
+    // eligible dictionary must be excluded without throwing, even when eligible repos exist.
+    [Fact]
+    public async Task WhenCandidateRepoIdAbsentFromEligibleDictionary_ExcludesCandidateWithoutThrowing()
+    {
+        // Arrange
+        MonitoredRepositoryId absentRepoId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId eligibleRepoId = MonitoredRepositoryId.New();
+
+        // Seed issues for both repos
+        SeedQueuedIssue(absentRepoId, issueNumber: 1);
+        SeedQueuedIssue(eligibleRepoId, issueNumber: 2);
+
+        // Only eligibleRepoId is returned from the eligibility query;
+        // absentRepoId has a queued issue but no position entry in the dictionary.
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act — must not throw a KeyNotFoundException
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — the eligible repo's issue is claimed; the absent repo's issue is skipped
+        _dbContext.ChangeTracker.Clear();
+        Issue? absentIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == absentRepoId,
+                TestContext.Current.CancellationToken);
+        Issue? eligibleIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == eligibleRepoId,
+                TestContext.Current.CancellationToken);
+        absentIssue.ShouldBeOfType<QueuedIssue>();
+        eligibleIssue.ShouldBeOfType<InProgressIssue>();
+    }
+
     private QueuedIssue SeedQueuedIssueAtTime(
         MonitoredRepositoryId repositoryId,
         int issueNumber,

@@ -51,20 +51,12 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        Dictionary<MonitoredRepositoryId, int>.KeyCollection eligibleRepoIds = positionByRepoId.Keys;
-
         // Claim priority: revision queued first (addressing review feedback takes precedence),
         // then continuation queued (resuming interrupted work), then fresh queued issues.
         // Within each tier, order by (Position, DetectedAt) — lower position = higher priority,
         // ties broken by oldest DetectedAt.
-        List<RevisionQueuedIssue> revisionCandidates = await db.Set<RevisionQueuedIssue>()
-            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
-            .ToListAsync(cancellationToken);
-
-        RevisionQueuedIssue? revisionQueued = revisionCandidates
-            .OrderBy(i => positionByRepoId[i.MonitoredRepositoryId])
-            .ThenBy(i => i.DetectedAt)
-            .FirstOrDefault();
+        RevisionQueuedIssue? revisionQueued =
+            await PickHighestPriorityAsync<RevisionQueuedIssue>(positionByRepoId, cancellationToken);
 
         if (revisionQueued is not null)
         {
@@ -72,14 +64,8 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        List<ContinuationQueuedIssue> continuationCandidates = await db.Set<ContinuationQueuedIssue>()
-            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
-            .ToListAsync(cancellationToken);
-
-        ContinuationQueuedIssue? continuationQueued = continuationCandidates
-            .OrderBy(i => positionByRepoId[i.MonitoredRepositoryId])
-            .ThenBy(i => i.DetectedAt)
-            .FirstOrDefault();
+        ContinuationQueuedIssue? continuationQueued =
+            await PickHighestPriorityAsync<ContinuationQueuedIssue>(positionByRepoId, cancellationToken);
 
         if (continuationQueued is not null)
         {
@@ -87,19 +73,37 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        List<QueuedIssue> queuedCandidates = await db.Set<QueuedIssue>()
-            .Where(i => eligibleRepoIds.Contains(i.MonitoredRepositoryId))
-            .ToListAsync(cancellationToken);
-
-        QueuedIssue? queued = queuedCandidates
-            .OrderBy(i => positionByRepoId[i.MonitoredRepositoryId])
-            .ThenBy(i => i.DetectedAt)
-            .FirstOrDefault();
+        QueuedIssue? queued =
+            await PickHighestPriorityAsync<QueuedIssue>(positionByRepoId, cancellationToken);
 
         if (queued is not null)
         {
             await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Loads all candidates of type <typeparamref name="T"/>, filters to those whose repository
+    /// id appears in <paramref name="positionByRepoId"/> (via TryGetValue — absent ids are skipped
+    /// rather than throwing), then returns the candidate with the lowest (Position, DetectedAt).
+    /// </summary>
+    private async Task<T?> PickHighestPriorityAsync<T>(
+        Dictionary<MonitoredRepositoryId, int> positionByRepoId,
+        CancellationToken cancellationToken)
+        where T : Issue
+    {
+        List<T> candidates = await db.Set<T>()
+            .ToListAsync(cancellationToken);
+
+        return candidates
+            .Select(i => positionByRepoId.TryGetValue(i.MonitoredRepositoryId, out int position)
+                ? (Issue: i, Position: position, Included: true)
+                : (Issue: i, Position: 0, Included: false))
+            .Where(x => x.Included)
+            .OrderBy(x => x.Position)
+            .ThenBy(x => x.Issue.DetectedAt)
+            .Select(x => x.Issue)
+            .FirstOrDefault();
     }
 
     private async Task<Dictionary<MonitoredRepositoryId, int>> ResolveEligibleRepositoryPositionsAsync(
