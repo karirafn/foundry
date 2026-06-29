@@ -111,6 +111,16 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
             return Result<IReadOnlyList<int>>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
+        Result<int> projectIdResult = await ResolveProjectIdAsync(apiBaseUrl, slug, token, cancellationToken);
+
+        if (projectIdResult is not Result<int>.Success projectIdSuccess)
+        {
+            Error error = ((Result<int>.Failure)projectIdResult).Error;
+            return Result<IReadOnlyList<int>>.Fail(error);
+        }
+
+        int resolvedProjectId = projectIdSuccess.Value;
+
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
         string relativePath = $"projects/{encodedPath}/issues/{issueNumber}/links";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
@@ -136,10 +146,37 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         IReadOnlyList<int> issueNumbers = (dtos ?? [])
             .Where(dto => string.Equals(dto.LinkType, "is_blocked_by", StringComparison.OrdinalIgnoreCase))
             .Where(dto => !string.Equals(dto.State, "closed", StringComparison.OrdinalIgnoreCase))
+            .Where(dto => dto.ProjectId is null || dto.ProjectId == resolvedProjectId)
             .Select(dto => dto.Iid)
             .ToList();
 
         return Result<IReadOnlyList<int>>.Ok(issueNumbers);
+    }
+
+    private async Task<Result<int>> ResolveProjectIdAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<int>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabProjectInfoDto? dto = JsonSerializer.Deserialize<GitLabProjectInfoDto>(body, JsonOptions);
+
+        return Result<int>.Ok(dto?.Id ?? 0);
     }
 
     public async Task<Result<bool>> IsIssueClosedAsync(
@@ -607,7 +644,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return GitLabErrors.UnexpectedStatusCode(statusCode);
     }
 
-    private sealed record GitLabProjectInfoDto(string DefaultBranch);
+    private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
 
     private sealed record GitLabIssueDto(
         int Iid,
@@ -622,7 +659,8 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private sealed record GitLabIssueLinkDto(
         int Iid,
         string LinkType,
-        string? State);
+        string? State,
+        int? ProjectId);
 
     private sealed record GitLabIssueStateDto(string State);
 
