@@ -31,7 +31,7 @@ public sealed class Retry
             detectedAt: DateTimeOffset.UtcNow);
         QueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        return inProgress.MarkFailed(Guid.NewGuid(), "Container exited with code 1", DateTimeOffset.UtcNow);
+        return inProgress.MarkFailed(Guid.NewGuid(), "Container exited with code 1", DateTimeOffset.UtcNow, "generic_failure");
     }
 
     [Fact]

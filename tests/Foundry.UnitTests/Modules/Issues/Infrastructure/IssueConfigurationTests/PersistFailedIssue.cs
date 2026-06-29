@@ -85,7 +85,7 @@ public sealed class PersistFailedIssue : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid failedWorkerRunId = Guid.NewGuid();
-        FailedIssue failed = inProgress.MarkFailed(failedWorkerRunId, "Container exited with code 1", failedAt);
+        FailedIssue failed = inProgress.MarkFailed(failedWorkerRunId, "Container exited with code 1", failedAt, "generic_failure");
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 

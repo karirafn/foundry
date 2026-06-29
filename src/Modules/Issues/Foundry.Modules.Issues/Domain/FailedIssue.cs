@@ -17,12 +17,15 @@ public sealed class FailedIssue : Issue
 
     public string FailureReason { get; private set; } = string.Empty;
 
+    public string FailureCategory { get; private set; } = string.Empty;
+
     public DateTimeOffset FailedAt { get; private set; }
 
     internal static FailedIssue FromInProgress(
         InProgressIssue source,
         Guid workerRunId,
         string failureReason,
+        string failureCategory,
         DateTimeOffset failedAt)
     {
         FailedIssue failed = new(source.Id);
@@ -37,6 +40,7 @@ public sealed class FailedIssue : Issue
             source.DetectedAt);
         failed.WorkerRunId = workerRunId;
         failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
         return failed;
     }
@@ -44,6 +48,7 @@ public sealed class FailedIssue : Issue
     internal static FailedIssue FromReview(
         ReviewIssue source,
         string failureReason,
+        string failureCategory,
         DateTimeOffset failedAt)
     {
         FailedIssue failed = new(source.Id);
@@ -58,6 +63,7 @@ public sealed class FailedIssue : Issue
             source.DetectedAt);
         failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
         return failed;
     }

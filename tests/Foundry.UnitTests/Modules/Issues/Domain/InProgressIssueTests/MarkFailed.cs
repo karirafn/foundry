@@ -43,7 +43,7 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Container exited with code 1", failedAt);
+        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Container exited with code 1", failedAt, "generic_failure");
 
         // Assert
         failed.Id.ShouldBe(inProgress.Id);
@@ -59,7 +59,7 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        inProgress.MarkFailed(workerRunId, "Container exited with code 1", failedAt);
+        inProgress.MarkFailed(workerRunId, "Container exited with code 1", failedAt, "generic_failure");
 
         // Assert
         IssueFailed domainEvent = inProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueFailed>();
@@ -79,7 +79,7 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = inProgress.MarkFailed(workerRunId, failureReason, failedAt);
+        FailedIssue failed = inProgress.MarkFailed(workerRunId, failureReason, failedAt, "generic_failure");
 
         // Assert
         failed.ShouldSatisfyAllConditions(
@@ -90,5 +90,21 @@ public sealed class MarkFailed
             () => failed.IssueNumber.ShouldBe(inProgress.IssueNumber),
             () => failed.Title.ShouldBe(inProgress.Title),
             () => failed.DetectedAt.ShouldBe(inProgress.DetectedAt));
+    }
+
+    [Fact]
+    public void WhenMarkedFailed_FailedIssueHasFailureCategory()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = CreateInProgressIssue(repositoryId);
+        Guid workerRunId = Guid.NewGuid();
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+
+        // Act
+        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Usage limit reached", failedAt, "usage_limited");
+
+        // Assert
+        failed.FailureCategory.ShouldBe("usage_limited");
     }
 }

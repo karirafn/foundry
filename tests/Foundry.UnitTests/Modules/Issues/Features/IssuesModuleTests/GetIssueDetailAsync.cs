@@ -240,7 +240,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
-        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Container exited non-zero", failedAt);
+        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Container exited non-zero", failedAt, "generic_failure");
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -317,6 +317,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Container timeout",
+            failureCategory: "generic_failure",
             failedAt: failedAt);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -354,6 +355,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Container timeout",
+            failureCategory: "generic_failure",
             failedAt: DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 

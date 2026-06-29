@@ -46,7 +46,7 @@ public sealed class FromReview
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", failedAt);
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", "pr_closed", failedAt);
 
         // Assert
         failed.ShouldSatisfyAllConditions(
@@ -67,7 +67,7 @@ public sealed class FromReview
         ReviewIssue review = CreateReviewIssue(repositoryId);
 
         // Act
-        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", DateTimeOffset.UtcNow);
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", "pr_closed", DateTimeOffset.UtcNow);
 
         // Assert
         failed.ShouldSatisfyAllConditions(

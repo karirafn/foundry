@@ -137,7 +137,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             detectedAt: Now);
         QueuedIssue queued = QueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Failure reason", Now);
+        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Failure reason", Now, "generic_failure");
         _dbContext.Set<Issue>().Add(failed);
         _dbContext.SaveChanges();
         return failed;
@@ -160,6 +160,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             Guid.NewGuid(),
             "feat/1-fix",
             "Failure reason",
+            "generic_failure",
             Now);
         _dbContext.Set<Issue>().Add(continuableFailed);
         _dbContext.SaveChanges();
@@ -210,7 +211,11 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             Now);
         RevisionQueuedIssue revisionQueued = review.Revise([new ReviewComment("Fix this")]);
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(Guid.NewGuid());
-        RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(Guid.NewGuid(), "Failure reason", Now);
+        RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
+            Guid.NewGuid(),
+            "Failure reason",
+            "generic_failure",
+            Now);
         _dbContext.Set<Issue>().Add(revisionFailed);
         _dbContext.SaveChanges();
         return revisionFailed;
@@ -233,6 +238,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             Guid.NewGuid(),
             "feat/1-fix",
             "Failure reason",
+            "generic_failure",
             Now);
         ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
         _dbContext.Set<Issue>().Add(continuationQueued);

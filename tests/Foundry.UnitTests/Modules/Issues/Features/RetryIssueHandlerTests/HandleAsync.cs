@@ -67,7 +67,7 @@ public sealed class HandleAsync : IAsyncDisposable
             detectedAt: DateTimeOffset.UtcNow);
         QueuedIssue queued = QueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow);
+        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow, "generic_failure");
         _dbContext.Set<Issue>().Add(failed);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -93,6 +93,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Guid.NewGuid(),
             "feat/2-issue-2",
             "Non-zero exit code: 1",
+            "generic_failure",
             DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(failed);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -126,6 +127,7 @@ public sealed class HandleAsync : IAsyncDisposable
         RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
             revisionInProgress.WorkerRunId,
             "Non-zero exit code: 2",
+            "generic_failure",
             DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(revisionFailed);
         await _dbContext.SaveChangesAsync(cancellationToken);

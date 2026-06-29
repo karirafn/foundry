@@ -88,9 +88,13 @@ public sealed class ReviewIssue : Issue
         return completed;
     }
 
-    public ContinuableFailedIssue Fail(string failureReason, DateTimeOffset failedAt)
+    public ContinuableFailedIssue Fail(string failureReason, string failureCategory, DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(this, failureReason, failedAt);
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(
+            this,
+            failureReason,
+            failureCategory,
+            failedAt);
         AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
         return failed;
     }

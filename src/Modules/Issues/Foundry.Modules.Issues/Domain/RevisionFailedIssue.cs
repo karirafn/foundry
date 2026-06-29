@@ -24,11 +24,14 @@ public sealed class RevisionFailedIssue : Issue
 
     public string FailureReason { get; private set; } = string.Empty;
 
+    public string FailureCategory { get; private set; } = string.Empty;
+
     public DateTimeOffset FailedAt { get; private set; }
 
     internal static RevisionFailedIssue FromRevisionInProgress(
         RevisionInProgressIssue source,
         string failureReason,
+        string failureCategory,
         DateTimeOffset failedAt)
     {
         RevisionFailedIssue failed = new(source.Id);
@@ -46,6 +49,7 @@ public sealed class RevisionFailedIssue : Issue
         failed.PullRequestUrl = source.PullRequestUrl;
         failed.ReviewComments = source.ReviewComments;
         failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
         return failed;
     }

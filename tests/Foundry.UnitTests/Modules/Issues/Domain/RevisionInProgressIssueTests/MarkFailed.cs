@@ -50,7 +50,11 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        RevisionFailedIssue failed = revisionInProgress.MarkFailed(workerRunId, "Container exited with code 1", failedAt);
+        RevisionFailedIssue failed = revisionInProgress.MarkFailed(
+            workerRunId,
+            "Container exited with code 1",
+            "generic_failure",
+            failedAt);
 
         // Assert
         failed.Id.ShouldBe(revisionInProgress.Id);
@@ -66,7 +70,7 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        revisionInProgress.MarkFailed(workerRunId, "Container exited with code 1", failedAt);
+        revisionInProgress.MarkFailed(workerRunId, "Container exited with code 1", "generic_failure", failedAt);
 
         // Assert
         IssueRevisionFailed domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionFailed>();
@@ -86,7 +90,11 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 1, 14, 30, 0, TimeSpan.Zero);
 
         // Act
-        RevisionFailedIssue failed = revisionInProgress.MarkFailed(workerRunId, failureReason, failedAt);
+        RevisionFailedIssue failed = revisionInProgress.MarkFailed(
+            workerRunId,
+            failureReason,
+            "generic_failure",
+            failedAt);
 
         // Assert
         failed.ShouldSatisfyAllConditions(

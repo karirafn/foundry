@@ -34,6 +34,7 @@ public sealed class FromContinuableFailed
             Guid.NewGuid(),
             "foundry/1/add-feature",
             "Container exited with code 1",
+            "generic_failure",
             DateTimeOffset.UtcNow);
     }
 
@@ -108,6 +109,7 @@ public sealed class FromContinuableFailed
             Guid.NewGuid(),
             "foundry/2/add-feature",
             failureReason,
+            "generic_failure",
             DateTimeOffset.UtcNow);
     }
 }

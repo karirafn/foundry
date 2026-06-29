@@ -248,4 +248,57 @@ public sealed class HandleAsync : IAsyncDisposable
             () => continuableFailed.BranchName.ShouldBe("feat/123-fix"),
             () => continuableFailed.FailureReason.ShouldBe("Non-zero exit code: 1"));
     }
+
+    [Fact]
+    public async Task WhenUsageLimitedEventReceived_FailureCategoryIsPersistedOnFailedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: WorkerRunFailed.UsageLimitedReason,
+            Category: "usage_limited");
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        FailedIssue failed = issue.ShouldBeOfType<FailedIssue>();
+        failed.FailureCategory.ShouldBe("usage_limited");
+    }
+
+    [Fact]
+    public async Task WhenUsageLimitedContinuableFailureEventReceived_FailureCategoryIsPersistedOnContinuableFailedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: WorkerRunFailed.UsageLimitedReason,
+            Category: "usage_limited",
+            BranchName: "feat/123-fix");
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ContinuableFailedIssue continuableFailed = issue.ShouldBeOfType<ContinuableFailedIssue>();
+        continuableFailed.FailureCategory.ShouldBe("usage_limited");
+    }
 }

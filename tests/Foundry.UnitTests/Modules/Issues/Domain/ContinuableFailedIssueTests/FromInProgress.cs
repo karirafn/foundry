@@ -46,6 +46,7 @@ public sealed class FromInProgress
             workerRunId,
             "foundry/1/add-feature",
             "Container exited with code 1",
+            "generic_failure",
             DateTimeOffset.UtcNow);
 
         // Assert
@@ -76,6 +77,7 @@ public sealed class FromInProgress
             workerRunId,
             branchName,
             failureReason,
+            "generic_failure",
             failedAt);
 
         // Assert
@@ -98,6 +100,7 @@ public sealed class FromInProgress
             Guid.NewGuid(),
             "foundry/1/add-feature",
             "Container exited with code 1",
+            "generic_failure",
             DateTimeOffset.UtcNow);
 
         // Assert

@@ -1171,6 +1171,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Guid.NewGuid(),
             "feat/10-issue",
             "Non-zero exit code: 1",
+            "generic_failure",
             DateTimeOffset.UtcNow);
         ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
         _dbContext.Set<Issue>().Add(continuationQueued);
@@ -1199,6 +1200,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Guid.NewGuid(),
             branchName,
             "Non-zero exit code: 1",
+            "generic_failure",
             DateTimeOffset.UtcNow);
         ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
         _dbContext.Set<Issue>().Add(continuationQueued);
