@@ -1,38 +1,22 @@
 import { Component, DestroyRef, Signal, computed, effect, inject, signal } from '@angular/core';
-import { SlicePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
-import { SystemSignalRService } from '../../../core/services/system-signalr.service';
-import {
-  DISPATCH_NOTIFICATION_CATEGORY,
-  IMAGE_BUILD_NOTIFICATION_CATEGORY,
-  SystemNotification,
-} from '../../../core/models/system-notification.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
-import { SettingsService } from '../../../features/settings/settings.service';
-import { ImageBuildStatus } from '../../../features/settings/settings.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { SystemNotificationsComponent } from './components/system-notifications/system-notifications';
+import { ImageBuildBannerComponent } from './components/image-build-banner/image-build-banner';
 
 const USAGE_LIMIT_RESET_MESSAGE = 'Usage limit reset';
 
 const COUNTDOWN_INTERVAL_MS = 1000;
-const IMAGE_BUILD_MESSAGE_SEPARATOR = '|';
-
-interface ParsedImageBuildNotification {
-  status: ImageBuildStatus;
-  logTail: string | null;
-}
 
 @Component({
   selector: 'fd-system-banner',
   standalone: true,
-  imports: [RouterLink, SlicePipe],
+  imports: [SystemNotificationsComponent, ImageBuildBannerComponent],
   templateUrl: './system-banner.html',
   styleUrl: './system-banner.scss',
 })
 export class SystemBannerComponent {
-  private readonly _systemSignalR = inject(SystemSignalRService);
   private readonly _dispatchService = inject(DispatchService);
-  private readonly _settingsService = inject(SettingsService);
   private readonly _toastService = inject(ToastService);
   private readonly _destroyRef = inject(DestroyRef);
 
@@ -41,24 +25,6 @@ export class SystemBannerComponent {
   private _wasCountingDown = false;
 
   private readonly _tickSignal = signal(0);
-
-  readonly generalNotifications: Signal<SystemNotification[]> = computed(() =>
-    this._systemSignalR
-      .notifications()
-      .filter(
-        (n) => n.category !== IMAGE_BUILD_NOTIFICATION_CATEGORY && n.category !== DISPATCH_NOTIFICATION_CATEGORY
-      )
-  );
-
-  readonly imageBuildNotification: Signal<ParsedImageBuildNotification | null> = computed(() => {
-    const notification = this._systemSignalR.notifications().find(
-      (n) => n.category === IMAGE_BUILD_NOTIFICATION_CATEGORY
-    );
-    if (!notification) {
-      return null;
-    }
-    return this._parseImageBuildMessage(notification.message);
-  });
 
   readonly remainingMs: Signal<number | null> = computed(() => {
     this._tickSignal();
@@ -88,13 +54,6 @@ export class SystemBannerComponent {
 
   constructor() {
     effect(() => {
-      const imageBuild = this.imageBuildNotification();
-      if (imageBuild !== null) {
-        this._settingsService.setImageBuildStatus(imageBuild.status, imageBuild.logTail);
-      }
-    });
-
-    effect(() => {
       const current = this.remainingMs();
 
       if (current === null) {
@@ -120,23 +79,6 @@ export class SystemBannerComponent {
     }, COUNTDOWN_INTERVAL_MS);
 
     this._destroyRef.onDestroy(() => clearInterval(intervalId));
-  }
-
-  retryImageBuild(): void {
-    this._settingsService.retryImageBuild();
-  }
-
-  private _parseImageBuildMessage(message: string): ParsedImageBuildNotification {
-    const separatorIndex = message.indexOf(IMAGE_BUILD_MESSAGE_SEPARATOR);
-    if (separatorIndex === -1) {
-      return { status: 'Idle', logTail: null };
-    }
-    const statusPart = message.slice(0, separatorIndex) as ImageBuildStatus;
-    const logPart = message.slice(separatorIndex + 1);
-    return {
-      status: statusPart,
-      logTail: logPart.length > 0 ? logPart : null,
-    };
   }
 
   private _formatCountdown(remainingMs: number): string {
