@@ -292,6 +292,7 @@ Detected by parsing the worker container's JSON output (`--output-format json`):
 The reset time is extracted from the human-readable result text (e.g. `"You've hit your limit · resets 12:10am (UTC)"`): a 12-hour wall-clock time resolves to its next future UTC occurrence, ISO-8601 timestamps are also accepted, and when neither parses a configurable `DefaultCooldownMinutes` fallback is used. The fallback only ever extends an existing pause, never shortens it.
 A detected usage limit always triggers a global dispatch pause via `GlobalSettings.UsageLimitResetsAt` — there is no immediate-requeue path.
 The triggering issue transitions to `FailedIssue` / `ContinuableFailedIssue` with `FailureReason.UsageLimited(resetsAt)`.
+On detection, `WorkerDispatchService` raises the `DispatchPaused` integration event, which is broadcast as a `dispatch` system notification (`isActive: true`) so the dashboard usage-limit banner updates live without a page refresh.
 
 ## Dispatch Pause
 
@@ -301,6 +302,7 @@ Dispatch is paused when either is active.
 Auto-resume clears `UsageLimitResetsAt` and retries all `FailureReason.UsageLimited` issues when `AutoResumeOnUsageReset` is enabled.
 Manual "Resume All" clears both flags and retries usage-limited issues.
 Already-running workers are unaffected — only queued issues are held.
+Both pause and resume broadcast a `dispatch` system notification (`isActive: true` on pause, `isActive: false` on resume); the client treats this as a pure reload trigger and re-syncs banner state from `/api/settings` (the authoritative source) rather than reading any timestamp off the SignalR payload.
 
 ## Container Output Parser
 
