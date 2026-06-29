@@ -60,6 +60,10 @@
   --fd-radius-md: 8px;
   --fd-radius-lg: 12px;
 
+  /* Mobile filter bar height — shared between the bar and issue-list body padding */
+  /* Composed height: padding-top 8 + button 44 + padding-bottom 8 + border 1 ≈ 61px; round to 64px */
+  --fd-filter-bar-height: 64px;
+
   /* Typography */
   --fd-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     Roboto, Helvetica, Arial, sans-serif;

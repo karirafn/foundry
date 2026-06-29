@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES } from './issue.model';
-import { ACTIVE_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
+import { ACTIVE_STATES, RESOLVED_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
@@ -97,6 +97,14 @@ export class IssueService {
   );
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
+
+  readonly activeFilterCount: Signal<number> = computed(() => {
+    const selectedActive = this.selectedActiveStates();
+    const selectedResolved = this.selectedResolvedStates();
+    const deselectedActive = [...ACTIVE_STATES].filter(s => !selectedActive.has(s)).length;
+    const selectedResolvedCount = [...RESOLVED_STATES].filter(s => selectedResolved.has(s)).length;
+    return deselectedActive + selectedResolvedCount;
+  });
 
   constructor() {
     this._signalR.on<IssueSummary>('IssueUpdated', (updated) => this._upsertIssue(updated));

@@ -197,7 +197,7 @@ describe('IssueListComponent', () => {
     expect(heading?.textContent?.trim()).toBe('No active issues');
   });
 
-  it('should render the empty-active hint pointing to the filter rail', () => {
+  it('should render the empty-active hint with layout-neutral copy', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
@@ -206,10 +206,11 @@ describe('IssueListComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert
+    // Assert — copy must not reference "filter rail" (hidden on mobile)
     const el = fixture.nativeElement as HTMLElement;
     const hint = el.querySelector('.issue-list__empty-active-hint');
-    expect(hint?.textContent?.trim()).toContain('filter rail');
+    expect(hint?.textContent?.trim()).not.toContain('filter rail');
+    expect(hint?.textContent?.trim()).toContain('Resolved counts');
   });
 
   it('should not render "No active issues" when active band has issues', () => {
@@ -1553,5 +1554,68 @@ describe('IssueListComponent', () => {
     const emptyMsg = el.querySelector('.issue-list__empty-resolved-heading');
     expect(emptyMsg?.tagName).toBe('P');
     expect(emptyMsg?.textContent?.trim()).toBe('No resolved issues match the selected filters');
+  });
+
+  // Step 4: fd-issue-filter-bar and container-query layout
+  // Cycle 16: fd-issue-filter-bar is present in the DOM alongside the rail aside
+  it('should render fd-issue-filter-bar in the DOM', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert — both the static rail aside and the sticky bar exist in the DOM at all times
+    const el = fixture.nativeElement as HTMLElement;
+    const filterBar = el.querySelector('fd-issue-filter-bar');
+    expect(filterBar).toBeTruthy();
+  });
+
+  it('should render both fd-issue-filter-rail (inside aside) and fd-issue-filter-bar simultaneously in the DOM', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert — CSS toggles visibility; both elements exist in DOM at all times (no *ngIf on viewport)
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('aside.issue-list__rail fd-issue-filter-rail')).toBeTruthy();
+    expect(el.querySelector('fd-issue-filter-bar')).toBeTruthy();
+  });
+
+  it('should place fd-issue-filter-bar inside an element with class issue-list__filter-bar-container', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert — filter bar is wrapped in its container for CSS targeting
+    const el = fixture.nativeElement as HTMLElement;
+    const container = el.querySelector('.issue-list__filter-bar-container');
+    expect(container).toBeTruthy();
+    expect(container?.querySelector('fd-issue-filter-bar')).toBeTruthy();
+  });
+
+  it('should apply issue-list__layout--container-query class to the layout element', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert — layout wrapper carries the container-query anchor class
+    const el = fixture.nativeElement as HTMLElement;
+    const layout = el.querySelector('.issue-list__layout');
+    expect(layout?.classList).toContain('issue-list__layout');
   });
 });

@@ -1892,4 +1892,72 @@ describe('IssueService (resolved paging)', () => {
     req.flush({ items: [], nextCursor: null });
   });
 
+  // activeFilterCount signal
+
+  // Cycle 1: default selection returns 0
+  it('should return 0 for activeFilterCount with the default filter selection', () => {
+    // Arrange — no state changes; service starts with all active states selected and no resolved states
+
+    // Act
+    const count = service.activeFilterCount();
+
+    // Assert
+    expect(count).toBe(0);
+  });
+
+  // Cycle 2: deselecting one active state increments count by 1
+  it('should return 1 for activeFilterCount after deselecting one active state', () => {
+    // Arrange
+    service.toggleState('detected');
+
+    // Act
+    const count = service.activeFilterCount();
+
+    // Assert
+    expect(count).toBe(1);
+  });
+
+  // Cycle 3: selecting a resolved state increments count by 1
+  it('should return 1 for activeFilterCount after selecting one resolved state', () => {
+    // Arrange
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+
+    // Act
+    const count = service.activeFilterCount();
+
+    // Assert
+    expect(count).toBe(1);
+  });
+
+  // Cycle 4: combined deviations from default accumulate
+  it('should sum deselected active states and selected resolved states for activeFilterCount', () => {
+    // Arrange — deselect 2 active, select 2 resolved
+    service.toggleState('detected');
+    service.toggleState('queued');
+    service.toggleState('completed');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+    service.toggleState('unchanged');
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+
+    // Act
+    const count = service.activeFilterCount();
+
+    // Assert — 2 deselected active + 2 selected resolved = 4
+    expect(count).toBe(4);
+  });
+
+  // Cycle 5: re-toggling active state back resets count to 0
+  it('should return 0 for activeFilterCount after re-toggling a deselected active state back on', () => {
+    // Arrange — deselect then re-select
+    service.toggleState('detected');
+    service.toggleState('detected');
+
+    // Act
+    const count = service.activeFilterCount();
+
+    // Assert
+    expect(count).toBe(0);
+  });
+
 });
