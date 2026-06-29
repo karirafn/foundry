@@ -1,7 +1,8 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { merge } from 'rxjs';
+import { Observable, merge } from 'rxjs';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   AuthMode,
   AuthSettings,
@@ -34,10 +35,12 @@ export class SettingsService {
 
   constructor() {
     merge(this._signalR.reconnected, this._signalR.dispatchStateChanged)
-      .pipe(takeUntilDestroyed())
-      .subscribe(() => {
-        this.loadSettings();
-      });
+      .pipe(
+        debounceTime(300),
+        switchMap(() => this._fetchSettings()),
+        takeUntilDestroyed()
+      )
+      .subscribe();
   }
 
   private readonly _settingsSignal: WritableSignal<GlobalSettingsResponse | null> = signal(null);
@@ -120,6 +123,12 @@ export class SettingsService {
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
   loadSettings(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this._fetchSettings().subscribe({ next: resolve, error: resolve });
+    });
+  }
+
+  private _fetchSettings(): Observable<void> {
     this._loadErrorSignal.set(null);
     this._saveErrorSignal.set(null);
     this._switchErrorSignal.set(null);
@@ -140,8 +149,8 @@ export class SettingsService {
     this.switching.set(false);
     this.loading.set(true);
 
-    return new Promise<void>((resolve) => {
-      this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
+    return new Observable<void>((observer) => {
+      const subscription = this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
         next: (response) => {
           this._settingsSignal.set(response);
           this.authSettings.set(this._mapToAuthSettings(response));
@@ -154,15 +163,18 @@ export class SettingsService {
           this._imageBuildLogTailSignal.set(response.lastImageBuildError);
           this._hasUsableImageSignal.set(response.hasUsableImage);
           this.loading.set(false);
-          resolve();
+          observer.next();
+          observer.complete();
         },
         error: (err: HttpErrorResponse) => {
           console.error(err);
           this._loadErrorSignal.set(LOAD_SETTINGS_ERROR);
           this.loading.set(false);
-          resolve();
+          observer.error(err);
         },
       });
+
+      return () => subscription.unsubscribe();
     });
   }
 

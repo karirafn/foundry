@@ -1454,52 +1454,96 @@ describe('SettingsService', () => {
 });
 
 describe('SettingsService — SignalR re-sync', () => {
-  afterEach(() => TestBed.resetTestingModule());
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    TestBed.resetTestingModule();
+  });
 
-  // Cycle: reconnected triggers loadSettings
-  it('should call loadSettings when SystemSignalRService.reconnected emits', () => {
+  // Cycle: reconnected triggers a GET /api/settings after debounce window
+  it('should reload settings when SystemSignalRService.reconnected emits (after debounce)', () => {
     // Arrange
     const mockSignalR = createMockSignalRService();
-    const { service, httpMock } = setupService(mockSignalR);
-    const loadSettingsSpy = vi.spyOn(service, 'loadSettings');
+    const { httpMock } = setupService(mockSignalR);
 
     // Act
     mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
 
-    // Assert
-    expect(loadSettingsSpy).toHaveBeenCalledOnce();
+    // Assert — exactly one GET request fired
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 
-  // Cycle: dispatchStateChanged triggers loadSettings
-  it('should call loadSettings when SystemSignalRService.dispatchStateChanged emits', () => {
+  // Cycle: dispatchStateChanged triggers a GET /api/settings after debounce window
+  it('should reload settings when SystemSignalRService.dispatchStateChanged emits (after debounce)', () => {
     // Arrange
     const mockSignalR = createMockSignalRService();
-    const { service, httpMock } = setupService(mockSignalR);
-    const loadSettingsSpy = vi.spyOn(service, 'loadSettings');
+    const { httpMock } = setupService(mockSignalR);
 
     // Act
     mockSignalR.dispatchStateChanged.next();
+    vi.advanceTimersByTime(300);
 
-    // Assert
-    expect(loadSettingsSpy).toHaveBeenCalledOnce();
+    // Assert — exactly one GET request fired
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 
-  // Cycle: multiple emissions each trigger loadSettings
-  it('should call loadSettings each time reconnected emits', () => {
+  // Cycle: separate emissions (outside debounce window) each trigger a reload
+  it('should reload settings each time reconnected emits outside the debounce window', () => {
     // Arrange
     const mockSignalR = createMockSignalRService();
-    const { service, httpMock } = setupService(mockSignalR);
-    const loadSettingsSpy = vi.spyOn(service, 'loadSettings');
+    const { httpMock } = setupService(mockSignalR);
 
-    // Act
+    // Act — first emission + advance past debounce
     mockSignalR.reconnected.next();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
-    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
 
-    // Assert
-    expect(loadSettingsSpy).toHaveBeenCalledTimes(2);
+    // Second emission + advance past debounce
+    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+
+    // Assert — second GET fires
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: rapid burst of emissions collapses to a single reload (debounce coalescing)
+  it('should coalesce a rapid burst of dispatchStateChanged emissions into a single reload', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { httpMock } = setupService(mockSignalR);
+
+    // Act — fire three emissions rapidly (within the debounce window)
+    mockSignalR.dispatchStateChanged.next();
+    mockSignalR.dispatchStateChanged.next();
+    mockSignalR.dispatchStateChanged.next();
+
+    // No reload should have fired yet (debounce window not elapsed)
+    httpMock.expectNone('/api/settings');
+
+    // Advance past the debounce window
+    vi.advanceTimersByTime(300);
+
+    // Assert — exactly one reload, not three
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: a new trigger cancels the in-flight reload (switchMap)
+  it('should cancel the in-flight reload when a new trigger arrives before the previous response completes', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { httpMock } = setupService(mockSignalR);
+
+    // Act — first emission, advance past debounce, request is in-flight
+    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+    httpMock.expectOne('/api/settings'); // first request pending — do NOT flush
+
+    // Second emission cancels first and starts a new one after debounce
+    mockSignalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+
+    // Assert — only the second request is active; first was cancelled
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 });
