@@ -10,6 +10,7 @@ internal sealed class DispatchPausedBroadcastHandler(
 
     public Task HandleAsync(DispatchPaused @event, CancellationToken cancellationToken)
     {
+        // ResetsAt is intentionally omitted: /api/settings is the single source of truth; clients re-fetch after this notification.
         return broadcaster.SendAsync(
             new SystemNotification(DispatchCategory, IsActive: true, Message: string.Empty),
             cancellationToken);

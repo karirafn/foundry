@@ -726,8 +726,7 @@ internal sealed class WorkerDispatchService(
             {
                 await TryDispatchAsync(
                     integrationEventDispatcher,
-                    [new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value)],
-                    Guid.Empty,
+                    new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value),
                     cancellationToken);
             }
 
@@ -856,6 +855,30 @@ internal sealed class WorkerDispatchService(
 #pragma warning restore CA1031
         {
             logger.LogWarning(ex, "Failed to dispatch integration event for WorkerRun {WorkerRunId}", workerRunId);
+        }
+    }
+
+    /// <summary>
+    /// System-level overload: no worker run is associated with the dispatch, so the failure
+    /// message references only the event type rather than a meaningless empty GUID.
+    /// </summary>
+    private async Task TryDispatchAsync(
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IIntegrationEvent systemEvent,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await integrationEventDispatcher.DispatchAsync([systemEvent], cancellationToken);
+        }
+#pragma warning disable CA1031 // System-level dispatch failures (e.g. DB error in event handler) must not crash the BackgroundService tick; the event type in the warning is sufficient for triage.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to dispatch system integration event {EventType}",
+                systemEvent.GetType().Name);
         }
     }
 
