@@ -4,6 +4,7 @@ using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 
 namespace Foundry.Modules.Workers.Features;
@@ -23,8 +24,8 @@ internal static class GetWorkerRunDetail
                         workerRunId,
                         cancellationToken);
 
-                    return result.Match(
-                        detail => TypedResults.Ok(detail) as IResult,
+                    return result.Match<Results<Ok<WorkerRunDetail>, NotFound>>(
+                        detail => TypedResults.Ok(detail),
                         _ => TypedResults.NotFound());
                 })
                 .WithName("GetWorkerRunDetail")

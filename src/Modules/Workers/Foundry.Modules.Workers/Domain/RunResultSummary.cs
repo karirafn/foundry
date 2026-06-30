@@ -5,6 +5,9 @@ namespace Foundry.Modules.Workers.Domain;
 /// </summary>
 public sealed record RunResultSummary
 {
+    public const int ResultTextMaxLength = 100;
+    public const int SubtypeMaxLength = 50;
+
     public string? ResultText { get; }
     public string? Subtype { get; }
     public bool IsError { get; }

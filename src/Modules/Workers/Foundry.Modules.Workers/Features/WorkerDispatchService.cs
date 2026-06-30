@@ -283,6 +283,8 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 activeRun.ContainerId.Value);
 
+            _lastSeenLogLength.Remove(activeRun.Id);
+            _lastSeenCommitSha.Remove(activeRun.Id);
             await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             return;
         }

@@ -16,7 +16,8 @@ namespace Foundry.WebApi.Migrations
                 table: "worker_runs",
                 type: "TEXT",
                 maxLength: 2147483647,
-                nullable: true);
+                nullable: true,
+                defaultValue: "[]");
 
             migrationBuilder.AddColumn<long>(
                 name: "duration_ms",
@@ -82,7 +83,8 @@ namespace Foundry.WebApi.Migrations
                 type: "TEXT",
                 unicode: false,
                 maxLength: 100,
-                nullable: true);
+                nullable: true,
+                defaultValue: "");
         }
 
         /// <inheritdoc />

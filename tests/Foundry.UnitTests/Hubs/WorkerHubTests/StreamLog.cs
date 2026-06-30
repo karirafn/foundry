@@ -40,6 +40,8 @@ public sealed class StreamLog
     {
         // Arrange
         StubWorkerLogStream stub = new([]);
+
+        // Act
         WorkerHub sut = new(stub);
 
         // Assert

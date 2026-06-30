@@ -29,6 +29,29 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         return MapToDetail(run);
     }
 
+    public async Task<WorkerRunLogResult> GetWorkerRunLogAsync(
+        Guid workerRunId,
+        CancellationToken cancellationToken)
+    {
+        WorkerRunId id = WorkerRunId.From(workerRunId);
+
+        WorkerRun? run = await db.Set<WorkerRun>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+
+        if (run is null)
+        {
+            return new WorkerRunLogResult.NotFound();
+        }
+
+        if (run is not FailedRun { ContainerOutput.Length: > 0 } failedRun)
+        {
+            return new WorkerRunLogResult.NoLog();
+        }
+
+        return new WorkerRunLogResult.LogAvailable(failedRun.ContainerOutput);
+    }
+
     private static WorkerRunDetail MapToDetail(WorkerRun run) =>
         run switch
         {

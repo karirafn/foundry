@@ -53,4 +53,54 @@ public sealed class Create
         // Assert
         first.ShouldNotBe(second);
     }
+
+    [Fact]
+    public void WhenMessageExceedsMaxLength_TruncatesToMaxLength()
+    {
+        // Arrange
+        DateTimeOffset observedAt = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
+        string sha = "abc1234";
+        string longMessage = new('x', CommitMarker.MessageMaxLength + 50);
+
+        // Act
+        CommitMarker marker = CommitMarker.Create(observedAt, sha, longMessage);
+
+        // Assert
+        marker.Message.Length.ShouldBe(CommitMarker.MessageMaxLength);
+    }
+
+    [Fact]
+    public void WhenShaExceedsMaxLength_TruncatesToMaxLength()
+    {
+        // Arrange
+        DateTimeOffset observedAt = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
+        string longSha = new('a', CommitMarker.ShaMaxLength + 10);
+        string message = "feat: add something";
+
+        // Act
+        CommitMarker marker = CommitMarker.Create(observedAt, longSha, message);
+
+        // Assert
+        marker.Sha.Length.ShouldBe(CommitMarker.ShaMaxLength);
+    }
+
+    [Fact]
+    public void WhenShaIsEmpty_ThrowsArgumentException()
+    {
+        // Arrange
+        DateTimeOffset observedAt = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
+
+        // Act / Assert
+        Should.Throw<ArgumentException>(() => CommitMarker.Create(observedAt, string.Empty, "feat: add something"));
+    }
+
+    [Fact]
+    public void WhenMessageIsEmpty_ThrowsArgumentException()
+    {
+        // Arrange
+        DateTimeOffset observedAt = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
+
+        // Act / Assert
+        Should.Throw<ArgumentException>(() => CommitMarker.Create(observedAt, "abc1234", string.Empty));
+    }
 }

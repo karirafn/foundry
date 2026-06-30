@@ -153,8 +153,6 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<CompletedRun>
 {
     private const int PullRequestUrlMaxLength = 2000;
-    private const int ResultTextMaxLength = 100;
-    private const int SubtypeMaxLength = 50;
 
     private static readonly ValueConverter<PullRequestUrl, string> PullRequestUrlConverter = new(
         url => url.Value,
@@ -183,12 +181,12 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
         builder.OwnsOne(r => r.ResultSummary, summary =>
         {
             summary.Property(s => s.ResultText)
-                .HasMaxLength(ResultTextMaxLength)
+                .HasMaxLength(RunResultSummary.ResultTextMaxLength)
                 .IsUnicode(false)
                 .HasColumnName("result_text");
 
             summary.Property(s => s.Subtype)
-                .HasMaxLength(SubtypeMaxLength)
+                .HasMaxLength(RunResultSummary.SubtypeMaxLength)
                 .IsUnicode(false)
                 .HasColumnName("subtype");
 
@@ -202,6 +200,7 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
                 .HasColumnName("num_turns");
 
             summary.Property(s => s.TotalCostUsd)
+                .HasPrecision(18, 6)
                 .HasColumnName("total_cost_usd");
 
             summary.Property(s => s.InputTokens)
@@ -215,9 +214,6 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
 
 public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 {
-    private const int ResultTextMaxLength = 100;
-    private const int SubtypeMaxLength = 50;
-
     private static FailureReason DeserializeReason(string json)
     {
         return JsonSerializer.Deserialize<FailureReason>(json, (JsonSerializerOptions?)null)
@@ -254,12 +250,12 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
         builder.OwnsOne(r => r.ResultSummary, summary =>
         {
             summary.Property(s => s.ResultText)
-                .HasMaxLength(ResultTextMaxLength)
+                .HasMaxLength(RunResultSummary.ResultTextMaxLength)
                 .IsUnicode(false)
                 .HasColumnName("result_text");
 
             summary.Property(s => s.Subtype)
-                .HasMaxLength(SubtypeMaxLength)
+                .HasMaxLength(RunResultSummary.SubtypeMaxLength)
                 .IsUnicode(false)
                 .HasColumnName("subtype");
 
@@ -273,6 +269,7 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
                 .HasColumnName("num_turns");
 
             summary.Property(s => s.TotalCostUsd)
+                .HasPrecision(18, 6)
                 .HasColumnName("total_cost_usd");
 
             summary.Property(s => s.InputTokens)

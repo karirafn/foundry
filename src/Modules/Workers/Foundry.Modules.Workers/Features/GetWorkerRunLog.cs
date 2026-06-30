@@ -1,9 +1,9 @@
-using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Contracts.Queries;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Workers.Features;
 
@@ -15,26 +15,23 @@ internal static class GetWorkerRunLog
         {
             group.MapGet("/{workerRunId:guid}/log", static async (
                     Guid workerRunId,
-                    DbContext db,
+                    IWorkerRunQueries queries,
                     CancellationToken cancellationToken) =>
                 {
-                    WorkerRunId id = WorkerRunId.From(workerRunId);
+                    WorkerRunLogResult logResult = await queries.GetWorkerRunLogAsync(
+                        workerRunId,
+                        cancellationToken);
 
-                    WorkerRun? run = await db.Set<WorkerRun>()
-                        .AsNoTracking()
-                        .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
-
-                    if (run is null)
+                    return logResult switch
                     {
-                        return TypedResults.NotFound() as IResult;
-                    }
-
-                    if (run is not FailedRun { ContainerOutput.Length: > 0 } failedRun)
-                    {
-                        return TypedResults.NoContent();
-                    }
-
-                    return TypedResults.Text(failedRun.ContainerOutput, contentType: "text/plain");
+                        WorkerRunLogResult.NotFound =>
+                            (Results<ContentHttpResult, NoContent, NotFound>)TypedResults.NotFound(),
+                        WorkerRunLogResult.NoLog =>
+                            TypedResults.NoContent(),
+                        WorkerRunLogResult.LogAvailable log =>
+                            TypedResults.Text(log.LogText, contentType: "text/plain"),
+                        _ => TypedResults.NotFound(),
+                    };
                 })
                 .WithName("GetWorkerRunLog")
                 .WithSummary("Gets persisted container log for a failed worker run")

@@ -21,11 +21,26 @@ public sealed record CommitMarker
         Message = message;
     }
 
+    /// <summary>
+    /// Creates a new <see cref="CommitMarker"/> from ingested provider data.
+    /// Validates that <paramref name="sha"/> and <paramref name="message"/> are non-empty,
+    /// and truncates each to its maximum length.
+    /// </summary>
     public static CommitMarker Create(DateTimeOffset observedAt, string sha, string message)
     {
-        return new CommitMarker(observedAt, sha, message);
+        ArgumentException.ThrowIfNullOrEmpty(sha);
+        ArgumentException.ThrowIfNullOrEmpty(message);
+
+        string truncatedSha = sha.Length > ShaMaxLength ? sha[..ShaMaxLength] : sha;
+        string truncatedMessage = message.Length > MessageMaxLength ? message[..MessageMaxLength] : message;
+
+        return new CommitMarker(observedAt, truncatedSha, truncatedMessage);
     }
 
+    /// <summary>
+    /// Reconstructs a <see cref="CommitMarker"/> verbatim from trusted storage (e.g. database deserialization).
+    /// No truncation or validation is applied.
+    /// </summary>
     public static CommitMarker Parse(DateTimeOffset observedAt, string sha, string message)
     {
         return new CommitMarker(observedAt, sha, message);
