@@ -117,7 +117,7 @@ public sealed class HandleAsync : IAsyncDisposable
             detectedAt: Now);
         QueuedIssue queued = QueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Worker exited with code 1", Now);
+        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Worker exited with code 1", Now, "generic_failure");
         _dbContext.Set<Issue>().Add(failed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -141,6 +141,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Guid.NewGuid(),
             "feat/1-fix",
             "Continuable failure",
+            "generic_failure",
             Now);
         _dbContext.Set<Issue>().Add(failed);
         _dbContext.SaveChanges();
@@ -165,6 +166,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Guid.NewGuid(),
             "feat/1-fix",
             "Failure",
+            "generic_failure",
             Now);
         ContinuationQueuedIssue continuationQueued = failed.Retry();
         _dbContext.Set<Issue>().Add(continuationQueued);
@@ -221,6 +223,7 @@ public sealed class HandleAsync : IAsyncDisposable
         RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
             Guid.NewGuid(),
             "Revision failed",
+            "generic_failure",
             Now);
         _dbContext.Set<Issue>().Add(revisionFailed);
         _dbContext.SaveChanges();

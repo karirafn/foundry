@@ -1,31 +1,16 @@
-import { Component, InputSignal, OutputEmitterRef, computed, input, output } from '@angular/core';
+import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { NgClass } from '@angular/common';
-import { IssueSummary, IssueState } from '../issue.model';
+import { IssueSummary, LIVE_STATES } from '../issue.model';
+import { STATE_ARIA_LABELS } from '../state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
+import { TickerService } from '../../../core/services/ticker.service';
 
 const QUEUED_STATES = new Set<string>(['queued', 'detected']);
 
 const WARNING_CLASSES: Record<string, string> = {
   ineligible: 'issue-card__repo-warning--ineligible',
   unreachable: 'issue-card__repo-warning--unreachable',
-};
-
-const STATE_ARIA_LABELS: Record<IssueState, string> = {
-  detected: 'detected',
-  queued: 'queued',
-  blocked: 'blocked',
-  in_progress: 'in progress',
-  review: 'review',
-  unchanged: 'unchanged',
-  failed: 'failed',
-  continuable_failed: 'continuable failed',
-  continuation_queued: 'continuation queued',
-  completed: 'completed',
-  revision_queued: 'revision queued',
-  revision_in_progress: 'revision in progress',
-  revision_failed: 'revision failed',
-  ineligible: 'not eligible for dispatch',
 };
 
 function timeAgo(dateString: string): string {
@@ -60,6 +45,18 @@ function timeAgo(dateString: string): string {
 
   const diffYears = Math.floor(diffMonths / 12);
   return `${diffYears} year${diffYears === 1 ? '' : 's'} ago`;
+}
+
+function silentDuration(lastActivityAt: string): string {
+  const now = Date.now();
+  const then = new Date(lastActivityAt).getTime();
+  const diffMs = now - then;
+  const diffMinutes = Math.floor(diffMs / 60000);
+
+  if (diffMinutes < 1) {
+    return 'silent <1m';
+  }
+  return `silent ${diffMinutes}m`;
 }
 
 @Component({
@@ -117,6 +114,9 @@ function timeAgo(dateString: string): string {
 
       <div class="issue-card__footer">
         <span class="issue-card__timestamp">{{ timestamp() }}</span>
+        @if (_activityLine()) {
+          <span class="issue-card__activity"><span class="sr-only">Active, </span>active · {{ _activityLine() }}</span>
+        }
         @if (issue().url | safeHref; as safeUrl) {
           <a
             class="issue-card__link"
@@ -152,7 +152,20 @@ function timeAgo(dateString: string): string {
 export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
+  readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
   readonly toggle: OutputEmitterRef<void> = output<void>();
+
+  private readonly _ticker = inject(TickerService);
+
+  readonly _activityLine = computed(() => {
+    // Depend on ticker to re-evaluate every ~30s
+    void this._ticker.tick();
+    const at = this.lastActivityAt();
+    if (at === null || !LIVE_STATES.has(this.issue().state)) {
+      return null;
+    }
+    return silentDuration(at);
+  });
 
   readonly _warningClass = computed(() => {
     const status = this.issue().repositoryEligibilityStatus;

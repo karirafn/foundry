@@ -96,7 +96,8 @@ public sealed class Fail
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.WorkerRunId.ShouldBe(active.Id),
             () => domainEvent.IssueId.ShouldBe(issueId),
-            () => domainEvent.ReasonDescription.ShouldBe(reason.ToString()),
+            () => domainEvent.ReasonDescription.ShouldBe(reason.Summary),
+            () => domainEvent.Category.ShouldBe(reason.CategoryToken),
             () => domainEvent.BranchName.ShouldBe("feat/102-some-work"));
     }
 

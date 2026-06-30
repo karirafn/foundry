@@ -3,6 +3,8 @@ using Docker.DotNet;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
+using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
@@ -24,6 +26,9 @@ public static class WorkersModule
         services.Configure<WorkerOptions>(configuration.GetSection("Workers"));
         services.AddSingleton<IValidateOptions<WorkerOptions>, WorkerOptionsValidator>();
 
+        services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
+        services.AddScoped<IWorkerLogStream, WorkerLogStream>();
+
         services.AddSingleton<DockerClient>(_ =>
         {
             using DockerClientConfiguration config = new();
@@ -39,6 +44,7 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
+        services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
 
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageRebuildService>();

@@ -182,6 +182,72 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenNonZeroExitWithValidJsonResultLine_DispatchesEventWithNonZeroExitDescription()
+    {
+        // Arrange
+        SeedActiveRun("container-nonzero-event-description");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 5, FinishedAt: DateTimeOffset.UtcNow);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildServiceWithParser(
+            ValidJsonResultOutput,
+            exitedStatus,
+            integrationEventDispatcher: dispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunFailed failedEvent = dispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.ReasonDescription.ShouldBe("Non-zero exit code: 5");
+    }
+
+    [Fact]
+    public async Task WhenOutputContainsBootstrapSentinel_DispatchesEventWithWorkerBootstrapFailedCategory()
+    {
+        // Arrange
+        SeedActiveRun("container-bootstrap-category");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildServiceWithParser(
+            BootstrapSentinelOutput,
+            exitedStatus,
+            integrationEventDispatcher: dispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunFailed failedEvent = dispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.Category.ShouldBe("worker_bootstrap_failed");
+    }
+
+    [Fact]
+    public async Task WhenNonZeroExitWithValidJsonResultLine_DispatchesEventWithNonZeroExitCategory()
+    {
+        // Arrange
+        SeedActiveRun("container-nonzero-exit-category");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 2, FinishedAt: DateTimeOffset.UtcNow);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildServiceWithParser(
+            ValidJsonResultOutput,
+            exitedStatus,
+            integrationEventDispatcher: dispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunFailed failedEvent = dispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.Category.ShouldBe("non_zero_exit");
+    }
+
+    [Fact]
     public async Task WhenSentinelDetailContainsSecret_SecretIsRedactedBeforeStoringInReason()
     {
         // Arrange

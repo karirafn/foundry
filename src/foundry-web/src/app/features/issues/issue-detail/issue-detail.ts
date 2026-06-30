@@ -1,21 +1,33 @@
 import {
+  ChangeDetectionStrategy,
   Component,
   InputSignal,
   OutputEmitterRef,
+  Signal,
+  WritableSignal,
+  effect,
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { Observable } from 'rxjs';
 import { IssueDetail } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { IssueService } from '../issue.service';
+import { WorkerRunService } from '../../workers/worker-run.service';
+import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
+import { WorkerRunDetail } from '../../workers/worker-run.model';
+import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { providerTerminology } from '../../settings/accounts/provider.util';
+import { getFailureCategoryDisplay } from '../../workers/failure-category';
 
 @Component({
   selector: 'fd-issue-detail',
   standalone: true,
-  imports: [DatePipe, SafeHrefPipe],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [DatePipe, DecimalPipe, SafeHrefPipe, LogViewComponent],
   template: `
     @if (error()) {
       <div class="issue-detail__error" role="alert">
@@ -143,6 +155,83 @@ import { providerTerminology } from '../../settings/accounts/provider.util';
           </div>
         </div>
 
+        @if (_workerRun(); as wr) {
+          <div class="issue-detail__worker-run">
+            @if (wr.failureCategory) {
+              <div class="issue-detail__failure-category">
+                <span
+                  class="badge issue-detail__failure-chip"
+                  [class]="_failureChipClass(wr.failureCategory)"
+                  role="img"
+                  [attr.aria-label]="'Failure category: ' + _failureCategoryLabel(wr.failureCategory)"
+                >{{ _failureCategoryLabel(wr.failureCategory) }}</span>
+                @if (wr.failureSummary) {
+                  <span class="issue-detail__failure-summary">{{ wr.failureSummary }}</span>
+                }
+              </div>
+            }
+
+            @if (wr.resultText) {
+              <div class="issue-detail__result-text">
+                <span class="issue-detail__field-key">Result</span>
+                <p class="issue-detail__result-body">{{ wr.resultText }}</p>
+              </div>
+            }
+
+            @if (wr.durationMs !== null || wr.numTurns !== null || wr.totalCostUsd !== null) {
+              <div class="issue-detail__run-stats" aria-label="Run statistics">
+                @if (wr.durationMs !== null) {
+                  <span class="issue-detail__run-stat">
+                    <span class="sr-only">Duration: </span>{{ _formatDuration(wr.durationMs) }}
+                  </span>
+                }
+                @if (wr.numTurns !== null) {
+                  <span class="issue-detail__run-stat">
+                    <span class="sr-only">Turns: </span>{{ wr.numTurns }}<span class="sr-only"> turns</span><span aria-hidden="true"> turns</span>
+                  </span>
+                }
+                @if (wr.totalCostUsd !== null) {
+                  <span class="issue-detail__run-stat">
+                    <span class="sr-only">Cost: </span>&#36;{{ wr.totalCostUsd.toFixed(4) }}<span class="sr-only"> USD</span>
+                  </span>
+                }
+                @if (wr.inputTokens !== null) {
+                  <span class="issue-detail__run-stat">
+                    <span class="sr-only">Input tokens: </span>{{ wr.inputTokens | number }}<span class="sr-only"> input tokens</span><span aria-hidden="true">↑</span>
+                  </span>
+                }
+                @if (wr.outputTokens !== null) {
+                  <span class="issue-detail__run-stat">
+                    <span class="sr-only">Output tokens: </span>{{ wr.outputTokens | number }}<span class="sr-only"> output tokens</span><span aria-hidden="true">↓</span>
+                  </span>
+                }
+                @if (wr.subtype) {
+                  <span class="issue-detail__run-stat issue-detail__run-stat--subtype">{{ wr.subtype }}</span>
+                }
+                @if (wr.isError) {
+                  <span class="issue-detail__run-stat issue-detail__run-stat--error" role="img" aria-label="Run ended with error">
+                    <span aria-hidden="true">⚠</span>
+                  </span>
+                }
+              </div>
+            }
+
+            @if (wr.state === 'failed' && wr.hasStoredLog) {
+              <fd-log-view
+                mode="static"
+                [lines]="_staticLogLines()"
+                label="Run Log"
+              />
+            } @else if (wr.state === 'running') {
+              <fd-log-view
+                mode="stream"
+                [logStream]="_liveLogStream()"
+                label="Live Log"
+              />
+            }
+          </div>
+        }
+
         @if (d.state === 'ineligible') {
           <div class="issue-detail__actions">
             <button
@@ -187,6 +276,47 @@ export class IssueDetailComponent {
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   protected readonly _issueService = inject(IssueService);
+  private readonly _workerRunService = inject(WorkerRunService);
+  private readonly _workerSignalR = inject(WorkerSignalRService);
+
+  private readonly _workerRunSignal: WritableSignal<WorkerRunDetail | null> = signal(null);
+  protected readonly _workerRun: Signal<WorkerRunDetail | null> = this._workerRunSignal.asReadonly();
+
+  private readonly _staticLogLinesSignal: WritableSignal<string[] | null> = signal(null);
+  protected readonly _staticLogLines: Signal<string[] | null> = this._staticLogLinesSignal.asReadonly();
+
+  private readonly _liveLogStreamSignal: WritableSignal<Observable<string> | null> = signal(null);
+  protected readonly _liveLogStream: Signal<Observable<string> | null> = this._liveLogStreamSignal.asReadonly();
+
+  constructor() {
+    effect(() => {
+      const d = this.detail();
+      const workerRunId = d?.stateDetails?.workerRunId ?? null;
+
+      if (workerRunId === null) {
+        this._workerRunSignal.set(null);
+        this._staticLogLinesSignal.set(null);
+        this._liveLogStreamSignal.set(null);
+        return;
+      }
+
+      this._workerRunService.getDetail(workerRunId).subscribe((wr) => {
+        this._workerRunSignal.set(wr);
+
+        if (wr === null) {
+          return;
+        }
+
+        if (wr.state === 'failed' && wr.hasStoredLog) {
+          this._workerRunService.getLog(workerRunId).subscribe((text) => {
+            this._staticLogLinesSignal.set(text ? text.split('\n') : []);
+          });
+        } else if (wr.state === 'running') {
+          this._liveLogStreamSignal.set(this._workerSignalR.streamLog(workerRunId));
+        }
+      });
+    });
+  }
 
   retryEligibility(id: string): void {
     this._issueService.retryEligibility(id);
@@ -198,5 +328,27 @@ export class IssueDetailComponent {
 
   protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {
     return providerTerminology(providerType);
+  }
+
+  protected _failureCategoryLabel(category: string): string {
+    return getFailureCategoryDisplay(category)?.label ?? category.toUpperCase().replace(/_/g, ' ');
+  }
+
+  protected _failureChipClass(category: string): string {
+    return getFailureCategoryDisplay(category)?.cssClass ?? 'badge--failed';
+  }
+
+  protected _formatDuration(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    }
+    return `${seconds}s`;
   }
 }

@@ -74,7 +74,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-55", "https://github.com/owner/repo/pull/7", DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", failedAt);
+        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", "pr_closed", failedAt);
         await _dbContext.TransitionAsync(review, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 

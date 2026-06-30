@@ -17,13 +17,15 @@ public sealed class CompletedRun : WorkerRun
         int exitCode,
         DateTimeOffset completedAt,
         BranchName? branchName,
-        PullRequestUrl? pullRequestUrl)
+        PullRequestUrl? pullRequestUrl,
+        RunResultSummary? resultSummary)
         : base(id, issueId, createdAt)
     {
         ExitCode = exitCode;
         CompletedAt = completedAt;
         BranchName = branchName;
         PullRequestUrl = pullRequestUrl;
+        ResultSummary = resultSummary;
     }
 
     public int ExitCode { get; private set; }
@@ -34,11 +36,14 @@ public sealed class CompletedRun : WorkerRun
 
     public PullRequestUrl? PullRequestUrl { get; private set; }
 
+    public RunResultSummary? ResultSummary { get; private set; }
+
     internal static CompletedRun FromActive(
         ActiveRun active,
         int exitCode,
         BranchName? branchName,
-        PullRequestUrl? pullRequestUrl)
+        PullRequestUrl? pullRequestUrl,
+        RunResultSummary? resultSummary = null)
     {
         return new CompletedRun(
             active.Id,
@@ -47,6 +52,7 @@ public sealed class CompletedRun : WorkerRun
             exitCode,
             DateTimeOffset.UtcNow,
             branchName,
-            pullRequestUrl);
+            pullRequestUrl,
+            resultSummary);
     }
 }

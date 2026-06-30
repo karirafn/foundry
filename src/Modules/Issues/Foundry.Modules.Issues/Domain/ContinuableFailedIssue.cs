@@ -21,6 +21,8 @@ public sealed class ContinuableFailedIssue : Issue
 
     public string FailureReason { get; private set; } = string.Empty;
 
+    public string FailureCategory { get; private set; } = string.Empty;
+
     public DateTimeOffset FailedAt { get; private set; }
 
     internal static ContinuableFailedIssue FromInProgress(
@@ -28,6 +30,7 @@ public sealed class ContinuableFailedIssue : Issue
         Guid workerRunId,
         string branchName,
         string failureReason,
+        string failureCategory,
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = new(source.Id);
@@ -43,6 +46,7 @@ public sealed class ContinuableFailedIssue : Issue
         failed.WorkerRunId = workerRunId;
         failed.BranchName = branchName;
         failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
         return failed;
     }
@@ -50,6 +54,7 @@ public sealed class ContinuableFailedIssue : Issue
     internal static ContinuableFailedIssue FromReview(
         ReviewIssue source,
         string failureReason,
+        string failureCategory,
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = new(source.Id);
@@ -66,6 +71,7 @@ public sealed class ContinuableFailedIssue : Issue
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;
         failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
         return failed;
     }

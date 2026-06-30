@@ -68,4 +68,28 @@
   &--usage-limited {
     background-color: var(--fd-state-usage-limited);
   }
+
+  &--failure-non-zero-exit {
+    background: transparent;
+    border: 1px solid var(--fd-state-failed);
+    color: var(--fd-text-error);
+  }
+
+  &--failure-timed-out {
+    background: transparent;
+    border: 1px solid var(--fd-text-warning);
+    color: var(--fd-text-warning);
+  }
+
+  &--failure-container-error {
+    background: transparent;
+    border: 1px solid var(--fd-state-failed);
+    color: var(--fd-text-error);
+  }
+
+  &--failure-bootstrap {
+    background: transparent;
+    border: 1px solid var(--fd-state-failed);
+    color: var(--fd-text-error);
+  }
 }

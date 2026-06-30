@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -7,6 +8,7 @@ using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -87,6 +89,11 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 {
     private const int ContainerIdMaxLength = 200;
 
+    private static readonly JsonSerializerOptions CommitMarkersJsonOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
     private static readonly ValueConverter<ContainerId, string> ContainerIdConverter = new(
         id => id.Value,
         value => ContainerId.From(value));
@@ -94,6 +101,20 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
     private static readonly ValueConverter<MonitoredRepositoryId, Guid> MonitoredRepositoryIdConverter = new(
         id => id.Value,
         value => MonitoredRepositoryId.From(value));
+
+    private static readonly ValueConverter<IReadOnlyList<CommitMarker>, string> CommitMarkersConverter = new(
+        markers => JsonSerializer.Serialize(markers, CommitMarkersJsonOptions),
+        json => JsonSerializer.Deserialize<List<CommitMarker>>(json, CommitMarkersJsonOptions)
+            ?? new List<CommitMarker>());
+
+    // Compares by serialized JSON so EF detects mutations to the list contents.
+    private static readonly ValueComparer<IReadOnlyList<CommitMarker>> CommitMarkersComparer = new(
+        (a, b) => JsonSerializer.Serialize(a, CommitMarkersJsonOptions)
+            == JsonSerializer.Serialize(b, CommitMarkersJsonOptions),
+        list => JsonSerializer.Serialize(list, CommitMarkersJsonOptions).GetHashCode(),
+        list => JsonSerializer.Deserialize<List<CommitMarker>>(
+            JsonSerializer.Serialize(list, CommitMarkersJsonOptions),
+            CommitMarkersJsonOptions) ?? new List<CommitMarker>());
 
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
@@ -117,6 +138,15 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         builder.Property(r => r.MonitoredRepositoryId)
             .HasConversion(MonitoredRepositoryIdConverter)
             .HasColumnName("monitored_repository_id");
+
+        builder.Property(r => r.LastActivityAt)
+            .HasColumnName("last_activity_at");
+
+        builder.Property(r => r.CommitMarkers)
+            .HasConversion(CommitMarkersConverter, CommitMarkersComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("commit_markers");
     }
 }
 
@@ -147,6 +177,38 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             .HasMaxLength(PullRequestUrlMaxLength)
             .IsUnicode(false)
             .HasColumnName("pull_request_url");
+
+        builder.OwnsOne(r => r.ResultSummary, summary =>
+        {
+            summary.Property(s => s.ResultText)
+                .HasMaxLength(RunResultSummary.ResultTextMaxLength)
+                .IsUnicode(false)
+                .HasColumnName("result_text");
+
+            summary.Property(s => s.Subtype)
+                .HasMaxLength(RunResultSummary.SubtypeMaxLength)
+                .IsUnicode(false)
+                .HasColumnName("subtype");
+
+            summary.Property(s => s.IsError)
+                .HasColumnName("is_error");
+
+            summary.Property(s => s.DurationMs)
+                .HasColumnName("duration_ms");
+
+            summary.Property(s => s.NumTurns)
+                .HasColumnName("num_turns");
+
+            summary.Property(s => s.TotalCostUsd)
+                .HasPrecision(18, 6)
+                .HasColumnName("total_cost_usd");
+
+            summary.Property(s => s.InputTokens)
+                .HasColumnName("input_tokens");
+
+            summary.Property(s => s.OutputTokens)
+                .HasColumnName("output_tokens");
+        });
     }
 }
 
@@ -184,5 +246,37 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
             .IsUnicode(true)
             .HasColumnType("TEXT")
             .HasColumnName("container_output");
+
+        builder.OwnsOne(r => r.ResultSummary, summary =>
+        {
+            summary.Property(s => s.ResultText)
+                .HasMaxLength(RunResultSummary.ResultTextMaxLength)
+                .IsUnicode(false)
+                .HasColumnName("result_text");
+
+            summary.Property(s => s.Subtype)
+                .HasMaxLength(RunResultSummary.SubtypeMaxLength)
+                .IsUnicode(false)
+                .HasColumnName("subtype");
+
+            summary.Property(s => s.IsError)
+                .HasColumnName("is_error");
+
+            summary.Property(s => s.DurationMs)
+                .HasColumnName("duration_ms");
+
+            summary.Property(s => s.NumTurns)
+                .HasColumnName("num_turns");
+
+            summary.Property(s => s.TotalCostUsd)
+                .HasPrecision(18, 6)
+                .HasColumnName("total_cost_usd");
+
+            summary.Property(s => s.InputTokens)
+                .HasColumnName("input_tokens");
+
+            summary.Property(s => s.OutputTokens)
+                .HasColumnName("output_tokens");
+        });
     }
 }

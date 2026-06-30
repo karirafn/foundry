@@ -55,9 +55,17 @@ public sealed class RevisionInProgressIssue : Issue
         return review;
     }
 
-    public RevisionFailedIssue MarkFailed(Guid workerRunId, string failureReason, DateTimeOffset failedAt)
+    public RevisionFailedIssue MarkFailed(
+        Guid workerRunId,
+        string failureReason,
+        string failureCategory,
+        DateTimeOffset failedAt)
     {
-        RevisionFailedIssue failed = RevisionFailedIssue.FromRevisionInProgress(this, failureReason, failedAt);
+        RevisionFailedIssue failed = RevisionFailedIssue.FromRevisionInProgress(
+            this,
+            failureReason,
+            failureCategory,
+            failedAt);
         AddDomainEvent(new Events.IssueRevisionFailed(Id, MonitoredRepositoryId));
         return failed;
     }

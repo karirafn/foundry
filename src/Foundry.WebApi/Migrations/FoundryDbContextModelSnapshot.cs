@@ -456,6 +456,14 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("failed_at");
 
+                    b.Property<string>("FailureCategory")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_category");
+
                     b.Property<string>("FailureReason")
                         .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()
@@ -587,6 +595,14 @@ namespace Foundry.WebApi.Migrations
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
                         .HasColumnName("failed_at");
+
+                    b.Property<string>("FailureCategory")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_category");
 
                     b.Property<string>("FailureReason")
                         .IsRequired()
@@ -763,6 +779,14 @@ namespace Foundry.WebApi.Migrations
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
                         .HasColumnName("failed_at");
+
+                    b.Property<string>("FailureCategory")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_category");
 
                     b.Property<string>("FailureReason")
                         .IsRequired()
@@ -993,12 +1017,22 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
+                    b.Property<string>("CommitMarkers")
+                        .IsRequired()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("commit_markers");
+
                     b.Property<string>("ContainerId")
                         .IsRequired()
                         .HasMaxLength(200)
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("container_id");
+
+                    b.Property<DateTimeOffset?>("LastActivityAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_activity_at");
 
                     b.Property<Guid>("MonitoredRepositoryId")
                         .HasColumnType("TEXT")
@@ -1143,6 +1177,130 @@ namespace Foundry.WebApi.Migrations
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.CompletedRun", b =>
+                {
+                    b.OwnsOne("Foundry.Modules.Workers.Domain.RunResultSummary", "ResultSummary", b1 =>
+                        {
+                            b1.Property<Guid>("CompletedRunId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("DurationMs")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("duration_ms");
+
+                            b1.Property<int?>("InputTokens")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("input_tokens");
+
+                            b1.Property<bool>("IsError")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("is_error");
+
+                            b1.Property<int>("NumTurns")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("num_turns");
+
+                            b1.Property<int?>("OutputTokens")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("output_tokens");
+
+                            b1.Property<string>("ResultText")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasMaxLength(100)
+                                .IsUnicode(false)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("result_text");
+
+                            b1.Property<string>("Subtype")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasMaxLength(50)
+                                .IsUnicode(false)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("subtype");
+
+                            b1.Property<decimal?>("TotalCostUsd")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("total_cost_usd");
+
+                            b1.HasKey("CompletedRunId");
+
+                            b1.ToTable("worker_runs");
+
+                            b1.WithOwner()
+                                .HasForeignKey("CompletedRunId");
+                        });
+
+                    b.Navigation("ResultSummary");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.FailedRun", b =>
+                {
+                    b.OwnsOne("Foundry.Modules.Workers.Domain.RunResultSummary", "ResultSummary", b1 =>
+                        {
+                            b1.Property<Guid>("FailedRunId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("DurationMs")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("duration_ms");
+
+                            b1.Property<int?>("InputTokens")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("input_tokens");
+
+                            b1.Property<bool>("IsError")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("is_error");
+
+                            b1.Property<int>("NumTurns")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("num_turns");
+
+                            b1.Property<int?>("OutputTokens")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("output_tokens");
+
+                            b1.Property<string>("ResultText")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasMaxLength(100)
+                                .IsUnicode(false)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("result_text");
+
+                            b1.Property<string>("Subtype")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasMaxLength(50)
+                                .IsUnicode(false)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("subtype");
+
+                            b1.Property<decimal?>("TotalCostUsd")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("TEXT")
+                                .HasColumnName("total_cost_usd");
+
+                            b1.HasKey("FailedRunId");
+
+                            b1.ToTable("worker_runs");
+
+                            b1.WithOwner()
+                                .HasForeignKey("FailedRunId");
+                        });
+
+                    b.Navigation("ResultSummary");
                 });
 #pragma warning restore 612, 618
         }

@@ -43,7 +43,11 @@ public sealed class Retry
         ];
         RevisionQueuedIssue revisionQueued = review.Revise(comments);
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(Guid.NewGuid());
-        return revisionInProgress.MarkFailed(Guid.NewGuid(), "Container exited with code 1", DateTimeOffset.UtcNow);
+        return revisionInProgress.MarkFailed(
+            Guid.NewGuid(),
+            "Container exited with code 1",
+            "generic_failure",
+            DateTimeOffset.UtcNow);
     }
 
     [Fact]

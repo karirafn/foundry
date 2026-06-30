@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
+using Foundry.Modules.Workers.Domain;
+
 namespace Foundry.Modules.Workers.Features;
 
 internal sealed partial class ContainerOutputParser : IContainerOutputParser
@@ -70,6 +72,120 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         return new ContainerOutputParseResult.UsageLimited(resetsAt);
     }
 
+    public RunResultSummary? ParseRunResultSummary(string? log)
+    {
+        if (string.IsNullOrWhiteSpace(log))
+        {
+            return null;
+        }
+
+        if (log.Length > MaxLogLength)
+        {
+            log = log[^MaxLogLength..];
+        }
+
+        string? lastJsonLine = ExtractLastJsonLine(log);
+
+        if (lastJsonLine is null || lastJsonLine.Length > MaxJsonLineLength)
+        {
+            return null;
+        }
+
+        JsonNode? node;
+
+        try
+        {
+            node = JsonNode.Parse(lastJsonLine);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        if (node is null)
+        {
+            return null;
+        }
+
+        string? resultText = ReadString(node["result"]);
+        string? subtype = ReadString(node["subtype"]);
+        bool isError = ReadBool(node["is_error"]);
+        long durationMs = ReadLong(node["duration_ms"]);
+        int numTurns = ReadInt(node["num_turns"]);
+        decimal? totalCostUsd = ReadDecimal(node["total_cost_usd"]);
+        int? inputTokens = ReadNullableInt(node["usage"]?["input_tokens"]);
+        int? outputTokens = ReadNullableInt(node["usage"]?["output_tokens"]);
+
+        return RunResultSummary.Create(
+            resultText,
+            subtype,
+            isError,
+            durationMs,
+            numTurns,
+            totalCostUsd,
+            inputTokens,
+            outputTokens);
+    }
+
+    private static bool ReadBool(JsonNode? node)
+    {
+        return node is not null && node.GetValueKind() == JsonValueKind.True;
+    }
+
+    private static long ReadLong(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.Number)
+        {
+            return 0;
+        }
+
+        return node.GetValue<long>();
+    }
+
+    private static int ReadInt(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.Number)
+        {
+            return 0;
+        }
+
+        long value = node.GetValue<long>();
+
+        if (value < int.MinValue || value > int.MaxValue)
+        {
+            return 0;
+        }
+
+        return (int)value;
+    }
+
+    private static int? ReadNullableInt(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        long value = node.GetValue<long>();
+
+        if (value < int.MinValue || value > int.MaxValue)
+        {
+            return null;
+        }
+
+        return (int)value;
+    }
+
+    private static decimal? ReadDecimal(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        return node.GetValue<decimal>();
+    }
+
     private static bool IsUsageLimit(int? apiErrorStatus, string? terminalReason)
     {
         return apiErrorStatus == 429
@@ -122,20 +238,46 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
             if (span[i] == '\n')
             {
                 ReadOnlySpan<char> candidate = span[(i + 1)..].TrimStart();
+                string? jsonLine = StripDockerTimestampAndExtractJson(candidate);
 
-                if (!candidate.IsEmpty && candidate[0] == '{')
+                if (jsonLine is not null)
                 {
-                    return candidate.ToString();
+                    return jsonLine;
                 }
             }
         }
 
         // No newline found — the entire trimmed input might be the JSON line
         ReadOnlySpan<char> trimmed = span.TrimStart();
+        return StripDockerTimestampAndExtractJson(trimmed);
+    }
 
-        if (!trimmed.IsEmpty && trimmed[0] == '{')
+    private static string? StripDockerTimestampAndExtractJson(ReadOnlySpan<char> candidate)
+    {
+        if (candidate.IsEmpty)
         {
-            return trimmed.ToString();
+            return null;
+        }
+
+        if (candidate[0] == '{')
+        {
+            return candidate.ToString();
+        }
+
+        // Strip optional Docker RFC3339Nano timestamp prefix (e.g. "2026-06-29T21:24:05.123456789Z ")
+        string candidateStr = candidate.ToString();
+        System.Text.RegularExpressions.Match match = DockerTimestampPrefixPattern().Match(candidateStr);
+
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        ReadOnlySpan<char> afterTimestamp = candidateStr.AsSpan(match.Length).TrimStart();
+
+        if (!afterTimestamp.IsEmpty && afterTimestamp[0] == '{')
+        {
+            return afterTimestamp.ToString();
         }
 
         return null;
@@ -228,4 +370,12 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();
+
+    // Matches a Docker log timestamp prefix: RFC3339Nano date-time followed by a space.
+    // Example: "2026-06-29T21:24:05.123456789Z " or "2026-06-29T21:24:05Z "
+    [GeneratedRegex(
+        @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) ",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex DockerTimestampPrefixPattern();
 }

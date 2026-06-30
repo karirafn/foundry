@@ -225,6 +225,26 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenExitCodeZeroAndHasCommitsAndNoPrAfterRetries_DispatchesFailedEventWithContainerErrorCategory()
+    {
+        // Arrange
+        SeedActiveRun("container-no-pr-category");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true, prUrl: null);
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunFailed failedEvent = capturingDispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.Category.ShouldBe("container_error");
+    }
+
+    [Fact]
     public async Task WhenHasBranchCommitsReturnsFailure_RunRemainsActive()
     {
         // Arrange
@@ -261,6 +281,13 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(string.Empty));
+
+        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
     }
 
     private sealed class MonitoringStubWorkerOrchestrator(WorkerStatus exitedStatus) : IWorkerOrchestrator

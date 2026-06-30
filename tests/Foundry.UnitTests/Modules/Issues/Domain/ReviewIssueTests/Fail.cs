@@ -43,7 +43,7 @@ public sealed class Fail
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", failedAt);
+        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", "pr_closed", failedAt);
 
         // Assert
         failed.Id.ShouldBe(review.Id);
@@ -58,7 +58,7 @@ public sealed class Fail
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", failedAt);
+        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", "pr_closed", failedAt);
 
         // Assert
         failed.WorkerRunId.ShouldBe(review.WorkerRunId);
@@ -74,7 +74,7 @@ public sealed class Fail
         string failureReason = "PR was closed without merge";
 
         // Act
-        ContinuableFailedIssue failed = review.Fail(failureReason, failedAt);
+        ContinuableFailedIssue failed = review.Fail(failureReason, "pr_closed", failedAt);
 
         // Assert
         failed.ShouldSatisfyAllConditions(
@@ -94,7 +94,7 @@ public sealed class Fail
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        review.Fail("PR was closed without merge", failedAt);
+        review.Fail("PR was closed without merge", "pr_closed", failedAt);
 
         // Assert
         IssueContinuableFailed domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueContinuableFailed>();

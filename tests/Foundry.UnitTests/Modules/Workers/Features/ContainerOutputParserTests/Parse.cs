@@ -392,4 +392,22 @@ public sealed class Parse
         ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
         failed.Detail.Length.ShouldBeLessThanOrEqualTo(500);
     }
+
+    [Fact]
+    public void WhenJsonLineHasDockerTimestampPrefix_ParseStillClassifiesResult()
+    {
+        // Arrange — realistic Docker-timestamped output ending with a usage-limit JSON line
+        string log = """
+            2026-06-29T21:24:01.000000000Z Starting claude...
+            2026-06-29T21:24:02.123456789Z Cloning repository...
+            2026-06-29T21:24:05.123456789Z {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. Resets at 2026-06-29T22:00:00Z.","session_id":"abc","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.ShouldBe(new DateTimeOffset(2026, 6, 29, 22, 0, 0, TimeSpan.Zero));
+    }
 }

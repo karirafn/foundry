@@ -108,6 +108,11 @@
     font-size: 0.75rem;
   }
 
+  &__activity {
+    color: var(--fd-state-live);
+    font-size: 0.75rem;
+  }
+
   &__link {
     color: var(--fd-text-secondary);
     display: flex;

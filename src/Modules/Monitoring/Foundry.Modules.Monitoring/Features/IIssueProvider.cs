@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 
@@ -45,6 +46,11 @@ public interface IIssueProvider
         CancellationToken cancellationToken);
 
     Task<Result<string>> GetPullRequestByBranchAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken);
+
+    Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
         RepositorySlug slug,
         string branchName,
         CancellationToken cancellationToken);

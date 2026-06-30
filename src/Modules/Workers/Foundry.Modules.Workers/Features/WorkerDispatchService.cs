@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
@@ -33,6 +34,11 @@ internal sealed class WorkerDispatchService(
 
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
+
+    // Per-run in-memory tick state for activity and commit detection.
+    // Keyed by WorkerRunId; entries are added on first observation and removed on terminal transition.
+    private readonly Dictionary<WorkerRunId, int> _lastSeenLogLength = [];
+    private readonly Dictionary<WorkerRunId, string> _lastSeenCommitSha = [];
 
     protected override TimeSpan TickInterval => Interval;
 
@@ -155,7 +161,8 @@ internal sealed class WorkerDispatchService(
 
             if (status is null)
             {
-                FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Orphaned after restart"));
+                FailureReason orphanReason = new FailureReason.ContainerError("Orphaned after restart");
+                FailedRun failedRun = activeRun.Fail(orphanReason);
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 runsToRemove.Add(activeRun);
 
@@ -169,7 +176,8 @@ internal sealed class WorkerDispatchService(
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
-                        "Orphaned after restart",
+                        orphanReason.Summary,
+                        Category: orphanReason.CategoryToken,
                         BranchName: resolvedBranchName)],
                     activeRun.Id.Value,
                     cancellationToken);
@@ -250,7 +258,8 @@ internal sealed class WorkerDispatchService(
 
         if (status is null)
         {
-            FailedRun failedRun = activeRun.Fail(new FailureReason.ContainerError("Container not found"));
+            FailureReason containerNotFoundReason = new FailureReason.ContainerError("Container not found");
+            FailedRun failedRun = activeRun.Fail(containerNotFoundReason);
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             string? resolvedBranchName = await ResolveBranchForFailureAsync(
@@ -263,7 +272,8 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    "Container not found",
+                    containerNotFoundReason.Summary,
+                    Category: containerNotFoundReason.CategoryToken,
                     BranchName: resolvedBranchName)],
                 activeRun.Id.Value,
                 cancellationToken);
@@ -273,6 +283,8 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id,
                 activeRun.ContainerId.Value);
 
+            _lastSeenLogLength.Remove(activeRun.Id);
+            _lastSeenCommitSha.Remove(activeRun.Id);
             await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             return;
         }
@@ -290,7 +302,9 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     cancellationToken);
 
-                FailedRun timedOut = activeRun.Fail(new FailureReason.TimedOut(), containerOutput);
+                FailureReason timedOutReason = new FailureReason.TimedOut();
+                RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
+                FailedRun timedOut = activeRun.Fail(timedOutReason, containerOutput, timeoutSummary);
                 await dbContext.TransitionAsync(activeRun, timedOut, domainEventDispatcher, cancellationToken);
 
                 string? resolvedBranchName = await ResolveBranchForFailureAsync(
@@ -303,7 +317,8 @@ internal sealed class WorkerDispatchService(
                     [new WorkerRunFailedEvent(
                         activeRun.Id.Value,
                         activeRun.IssueId.Value,
-                        "Timed out",
+                        timedOutReason.Summary,
+                        Category: timedOutReason.CategoryToken,
                         BranchName: resolvedBranchName)],
                     activeRun.Id.Value,
                     cancellationToken);
@@ -314,7 +329,18 @@ internal sealed class WorkerDispatchService(
                     timeoutMinutes);
 
                 await TryRemoveContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+                _lastSeenLogLength.Remove(activeRun.Id);
+                _lastSeenCommitSha.Remove(activeRun.Id);
+                return;
             }
+
+            await ObserveRunningWorkerAsync(
+                dbContext,
+                orchestrator,
+                domainEventDispatcher,
+                postExitProviderQueries,
+                activeRun,
+                cancellationToken);
 
             return;
         }
@@ -330,6 +356,55 @@ internal sealed class WorkerDispatchService(
             activeRun,
             status,
             cancellationToken);
+    }
+
+    private async Task ObserveRunningWorkerAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IDomainEventDispatcher domainEventDispatcher,
+        IPostExitProviderQueries postExitProviderQueries,
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        string? currentLogs = await TryGetLogsAsync(
+            orchestrator,
+            activeRun.ContainerId.Value,
+            activeRun.Id.Value,
+            cancellationToken);
+
+        int currentLogLength = currentLogs?.Length ?? 0;
+        _lastSeenLogLength.TryGetValue(activeRun.Id, out int lastLogLength);
+
+        if (currentLogLength > lastLogLength)
+        {
+            _lastSeenLogLength[activeRun.Id] = currentLogLength;
+            activeRun.RecordActivity(now);
+        }
+
+        Result<LatestBranchCommit> commitResult = await postExitProviderQueries.GetLatestBranchCommitAsync(
+            activeRun.MonitoredRepositoryId,
+            activeRun.BranchName.Value,
+            cancellationToken);
+
+        if (commitResult is Result<LatestBranchCommit>.Success { Value: LatestBranchCommit latestCommit })
+        {
+            _lastSeenCommitSha.TryGetValue(activeRun.Id, out string? lastSha);
+
+            if (latestCommit.Sha != lastSha)
+            {
+                _lastSeenCommitSha[activeRun.Id] = latestCommit.Sha;
+                activeRun.RecordCommit(CommitMarker.Create(now, latestCommit.Sha, latestCommit.Message));
+            }
+        }
+
+        if (activeRun.DomainEvents.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await domainEventDispatcher.DispatchAsync(activeRun.DomainEvents, cancellationToken);
+            activeRun.ClearDomainEvents();
+        }
     }
 
     private async Task ProcessExitedRunAsync(
@@ -427,10 +502,19 @@ internal sealed class WorkerDispatchService(
 
         if (prUrl is not null)
         {
+            string? prSuccessOutput = await TryGetLogsAsync(
+                orchestrator,
+                activeRun.ContainerId.Value,
+                activeRun.Id.Value,
+                cancellationToken);
+
+            RunResultSummary? prSuccessSummary = containerOutputParser.ParseRunResultSummary(prSuccessOutput);
+
             CompletedRun completed = activeRun.Complete(
                 0,
                 activeRun.BranchName,
-                PullRequestUrl.From(prUrl));
+                PullRequestUrl.From(prUrl),
+                prSuccessSummary);
             await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -469,7 +553,9 @@ internal sealed class WorkerDispatchService(
                 new FailureReason.ContainerError("No pull request found after retries"),
                 cancellationToken);
 
-            FailedRun failedRun = activeRun.Fail(failureReason, containerOutput);
+            RunResultSummary? noPrSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
+
+            FailedRun failedRun = activeRun.Fail(failureReason, containerOutput, noPrSummary);
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -477,7 +563,8 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    "No pull request found after retries",
+                    failureReason.Summary,
+                    Category: failureReason.CategoryToken,
                     BranchName: activeRun.BranchName.Value)],
                 activeRun.Id.Value,
                 cancellationToken);
@@ -511,6 +598,8 @@ internal sealed class WorkerDispatchService(
             containerOutput,
             defaultCooldownMinutes);
 
+        RunResultSummary? noCommitsSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
+
         if (parseResult is ContainerOutputParseResult.UsageLimited)
         {
             FailureReason failureReason = await ResolveFailureReasonAsync(
@@ -520,7 +609,7 @@ internal sealed class WorkerDispatchService(
                 new FailureReason.ContainerError("No commits and usage limited"),
                 cancellationToken);
 
-            FailedRun failedRun = activeRun.Fail(failureReason);
+            FailedRun failedRun = activeRun.Fail(failureReason, containerOutput: null, noCommitsSummary);
             await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -528,7 +617,8 @@ internal sealed class WorkerDispatchService(
                 [new WorkerRunFailedEvent(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
-                    WorkerRunFailedEvent.UsageLimitedReason)],
+                    failureReason.Summary,
+                    Category: failureReason.CategoryToken)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -540,7 +630,7 @@ internal sealed class WorkerDispatchService(
         else
         {
             // Exit code 0 with no commits — unchanged
-            CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null);
+            CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null, noCommitsSummary);
             await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
 
             await TryDispatchAsync(
@@ -600,17 +690,11 @@ internal sealed class WorkerDispatchService(
         // Null branch name when no commits → FailedIssue; non-null → ContinuableFailedIssue
         string? branchNameForEvent = hasCommits ? activeRun.BranchName.Value : null;
 
-        string exitReason = failureReason switch
-        {
-            FailureReason.WorkerBootstrapFailed bootstrapFailed =>
-                $"Worker bootstrap failed: {bootstrapFailed.Detail}",
-            FailureReason.UsageLimited =>
-                WorkerRunFailedEvent.UsageLimitedReason,
-            _ =>
-                $"Non-zero exit code: {exitCode}",
-        };
+        string exitReason = failureReason.Summary;
 
-        FailedRun failedRun = activeRun.Fail(failureReason, containerOutput);
+        RunResultSummary? nonZeroSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
+
+        FailedRun failedRun = activeRun.Fail(failureReason, containerOutput, nonZeroSummary);
         await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
 
         await TryDispatchAsync(
@@ -619,6 +703,7 @@ internal sealed class WorkerDispatchService(
                 activeRun.Id.Value,
                 activeRun.IssueId.Value,
                 exitReason,
+                Category: failureReason.CategoryToken,
                 BranchName: branchNameForEvent)],
             activeRun.Id.Value,
             cancellationToken);

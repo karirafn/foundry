@@ -124,6 +124,13 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             string value = prUrl ?? string.Empty;
             return Task.FromResult(Result<string>.Ok(value));
         }
+
+        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
     }
 
     protected sealed class NullDomainEventDispatcher : IDomainEventDispatcher
@@ -155,6 +162,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     {
         public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
             => new ContainerOutputParseResult.NormalExit();
+
+        public RunResultSummary? ParseRunResultSummary(string? log) => null;
     }
 
     protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)

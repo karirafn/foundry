@@ -188,7 +188,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Usage limit reached", DateTimeOffset.UtcNow);
+        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Usage limit reached", DateTimeOffset.UtcNow, "usage_limited");
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         // Act
@@ -218,6 +218,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
             workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Usage limit reached",
+            failureCategory: "usage_limited",
             failedAt: DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -232,7 +233,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNonUsageLimitedFailedIssueExists_FailureClassificationIsNull()
+    public async Task WhenFailedIssueExists_FailureClassificationEqualsStoredCategory()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -243,7 +244,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow);
+        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow, "generic_failure");
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         // Act
@@ -253,7 +254,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
 
         // Assert
         IssueSummary summary = result.ShouldHaveSingleItem();
-        summary.FailureClassification.ShouldBeNull();
+        summary.FailureClassification.ShouldBe("generic_failure");
     }
 
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries

@@ -63,7 +63,8 @@ public sealed class WhenIssueIsInFailedState : IAsyncDisposable
         FailedIssue failed = inProgress.MarkFailed(
             Guid.NewGuid(),
             "Container exited with non-zero code: 1",
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            "generic_failure");
 
         dbContext.Set<Issue>().Add(failed);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

@@ -225,6 +225,72 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         failedEvent.BranchName.ShouldBe("feat/15-missing-check-fails");
     }
 
+    // ─── Category token assertions ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task WhenOrphanReconcile_DispatchesFailedEventWithContainerErrorCategory()
+    {
+        // Arrange
+        SeedActiveRun("container-orphan-category");
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerDispatchService sut = BuildService(
+            orchestrator: new NullStatusOrchestrator(),
+            integrationEventDispatcher: capturingDispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunFailed failedEvent = capturingDispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.Category.ShouldBe("container_error");
+    }
+
+    [Fact]
+    public async Task WhenTimeout_DispatchesFailedEventWithTimedOutCategory()
+    {
+        // Arrange
+        SeedActiveRun("container-timeout-category");
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerDispatchService sut = BuildService(
+            orchestrator: new RunningStubOrchestrator(),
+            settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
+            integrationEventDispatcher: capturingDispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunFailed failedEvent = capturingDispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.Category.ShouldBe("timed_out");
+    }
+
+    [Fact]
+    public async Task WhenContainerNotFoundDuringMonitoring_DispatchesFailedEventWithContainerErrorCategory()
+    {
+        // Arrange — second tick where _reconciled=true, monitor path hits null status
+        SeedActiveRun("container-missing-category");
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+
+        // Build a sut where reconciliation has already run (_reconciled=true) so the monitor
+        // path fires on the second tick.
+        WorkerDispatchService sut = BuildService(
+            orchestrator: new SecondTickNullStatusOrchestrator(),
+            integrationEventDispatcher: capturingDispatcher);
+
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken); // reconcile tick (status: running)
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken); // monitor tick (status: null)
+
+        // Assert
+        WorkerRunFailed failedEvent = capturingDispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem();
+        failedEvent.Category.ShouldBe("container_error");
+    }
+
     // ─── Stubs ───────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -299,6 +365,51 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
             => Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Returns running status on the first call, null on subsequent calls.
+    /// Used to simulate the container-not-found path on the monitoring tick (after reconciliation).
+    /// </summary>
+    private sealed class SecondTickNullStatusOrchestrator : IWorkerOrchestrator
+    {
+        private int _callCount;
+
+        public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch")));
+
+        public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+        {
+            _callCount++;
+            WorkerStatus? status = _callCount == 1
+                ? new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null)
+                : null;
+            return Task.FromResult(status);
+        }
+
+        public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
+
+        public async IAsyncEnumerable<string> StreamLogsAsync(
+            string containerId,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+
+        public Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
     private sealed class FailingBranchCommitsCheckQueries : IPostExitProviderQueries
     {
         public Task<Result<bool>> HasBranchCommitsAsync(
@@ -318,5 +429,12 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(string.Empty));
+
+        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
     }
 }

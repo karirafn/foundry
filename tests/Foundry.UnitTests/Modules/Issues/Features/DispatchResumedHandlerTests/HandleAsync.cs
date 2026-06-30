@@ -70,7 +70,8 @@ public sealed class HandleAsync : IAsyncDisposable
         FailedIssue failed = inProgress.MarkFailed(
             inProgress.WorkerRunId,
             failureReason,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            "generic_failure");
         _dbContext.Set<Issue>().Add(failed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -97,6 +98,7 @@ public sealed class HandleAsync : IAsyncDisposable
             inProgress.WorkerRunId,
             "feat/issue-branch",
             failureReason,
+            "generic_failure",
             DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuableFailed);
         _dbContext.SaveChanges();

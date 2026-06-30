@@ -883,6 +883,13 @@ public sealed class HandleAsync : IAsyncDisposable
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(string.Empty));
+
+        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

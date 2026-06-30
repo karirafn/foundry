@@ -74,6 +74,7 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
             workerRunId,
             "feat/issue-71",
             "Tests timed out",
+            "generic_failure",
             failedAt);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();

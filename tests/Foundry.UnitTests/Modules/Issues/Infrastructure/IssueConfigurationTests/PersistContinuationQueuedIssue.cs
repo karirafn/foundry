@@ -74,6 +74,7 @@ public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
             workerRunId,
             "feat/issue-72",
             "Container OOM",
+            "generic_failure",
             failedAt);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 

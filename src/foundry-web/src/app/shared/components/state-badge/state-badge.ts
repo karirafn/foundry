@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, input, InputSignal } from '@angular/core';
 import { IssueState } from '../../../features/issues/issue.model';
 import { STATE_LABELS, STATE_ARIA_LABELS, STATE_CSS_CLASSES } from '../../../features/issues/state-display';
+import { getFailureCategoryDisplay } from '../../../features/workers/failure-category';
 
-const USAGE_LIMITED = 'usage_limited';
 const FAILED_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['failed', 'continuable_failed']);
 
 @Component({
@@ -22,23 +22,30 @@ export class StateBadgeComponent {
   readonly state: InputSignal<IssueState> = input.required<IssueState>();
   readonly failureClassification: InputSignal<string | undefined> = input<string | undefined>(undefined);
 
-  private isUsageLimited(): boolean {
-    return this.failureClassification() === USAGE_LIMITED && FAILED_STATES.has(this.state());
+  private failureCategoryDisplay() {
+    const classification = this.failureClassification();
+    if (classification === undefined || !FAILED_STATES.has(this.state())) {
+      return null;
+    }
+    return getFailureCategoryDisplay(classification);
   }
 
   label(): string {
-    return this.isUsageLimited() ? 'USAGE LIMITED' : STATE_LABELS[this.state()];
+    const display = this.failureCategoryDisplay();
+    return display !== null ? display.label : STATE_LABELS[this.state()];
   }
 
   ariaLabel(): string {
-    return this.isUsageLimited()
-      ? 'State: usage limited'
+    const display = this.failureCategoryDisplay();
+    return display !== null
+      ? `State: ${display.label.toLowerCase()}`
       : `State: ${STATE_ARIA_LABELS[this.state()]}`;
   }
 
   badgeClass(): string {
-    return this.isUsageLimited()
-      ? 'badge badge--usage-limited'
+    const display = this.failureCategoryDisplay();
+    return display !== null
+      ? `badge ${display.cssClass}`
       : `badge ${STATE_CSS_CLASSES[this.state()]}`;
   }
 }

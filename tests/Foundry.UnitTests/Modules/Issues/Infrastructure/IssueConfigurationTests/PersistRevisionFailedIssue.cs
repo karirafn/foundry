@@ -91,6 +91,7 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
         RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
             workerRunId,
             "Container exited with code 1",
+            "generic_failure",
             failedAt);
         await _dbContext.TransitionAsync(revisionInProgress, revisionFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();

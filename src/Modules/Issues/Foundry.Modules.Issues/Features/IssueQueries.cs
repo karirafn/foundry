@@ -4,7 +4,6 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -136,7 +135,7 @@ internal sealed class IssueQueries(
                 RepositorySlug: slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
                 DetectedAt: i.DetectedAt,
                 Url: i.Url.Value.ToString(),
-                FailureClassification: ClassifyFailure(i),
+                FailureClassification: GetFailureCategory(i),
                 RepositoryEligibilityStatus: eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status)
                     ? status
                     : null))
@@ -182,28 +181,18 @@ internal sealed class IssueQueries(
             RepositorySlug: repositorySlug,
             DetectedAt: issue.DetectedAt,
             Url: issue.Url.Value.ToString(),
-            FailureClassification: ClassifyFailure(issue),
+            FailureClassification: GetFailureCategory(issue),
             RepositoryEligibilityStatus: eligibilityStatus);
     }
 
-    private static string? ClassifyFailure(Issue issue)
-    {
-        string? failureReason = issue switch
+    private static string? GetFailureCategory(Issue issue) =>
+        issue switch
         {
-            FailedIssue failed => failed.FailureReason,
-            ContinuableFailedIssue continuableFailed => continuableFailed.FailureReason,
+            FailedIssue failed => failed.FailureCategory.Length > 0 ? failed.FailureCategory : null,
+            ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Length > 0 ? continuableFailed.FailureCategory : null,
+            RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Length > 0 ? revisionFailed.FailureCategory : null,
             _ => null,
         };
-
-        if (failureReason is null)
-        {
-            return null;
-        }
-
-        return failureReason.StartsWith(WorkerRunFailed.UsageLimitedReason, StringComparison.OrdinalIgnoreCase)
-            ? "usage_limited"
-            : null;
-    }
 
     public async Task<Result<IssueDetail>> GetIssueDetailAsync(
         IssueId issueId,

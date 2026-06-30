@@ -22,6 +22,8 @@ internal sealed class WorkerRunFailedHandler(
         Issue? issue = await db.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
 
+        string category = @event.Category ?? string.Empty;
+
         if (issue is InProgressIssue inProgress)
         {
             if (@event.BranchName is not null)
@@ -30,6 +32,7 @@ internal sealed class WorkerRunFailedHandler(
                     @event.WorkerRunId,
                     @event.BranchName,
                     @event.ReasonDescription,
+                    category,
                     failedAt);
                 await db.TransitionAsync(inProgress, continuableFailed, domainEventDispatcher, cancellationToken);
             }
@@ -38,7 +41,8 @@ internal sealed class WorkerRunFailedHandler(
                 FailedIssue failed = inProgress.MarkFailed(
                     @event.WorkerRunId,
                     @event.ReasonDescription,
-                    failedAt);
+                    failedAt,
+                    category);
                 await db.TransitionAsync(inProgress, failed, domainEventDispatcher, cancellationToken);
             }
             return;
@@ -51,6 +55,7 @@ internal sealed class WorkerRunFailedHandler(
             RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
                 @event.WorkerRunId,
                 @event.ReasonDescription,
+                category,
                 failedAt);
             await db.TransitionAsync(revisionInProgress, revisionFailed, domainEventDispatcher, cancellationToken);
             return;

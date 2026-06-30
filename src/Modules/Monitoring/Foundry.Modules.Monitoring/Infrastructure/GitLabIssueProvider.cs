@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Shared;
@@ -118,6 +119,14 @@ internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string to
         CancellationToken cancellationToken)
     {
         return httpClient.GetPullRequestByBranchAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
+    }
+
+    public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetLatestBranchCommitAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
     }
 
     private Task<Result<string>> GetDefaultBranchAsync(

@@ -65,6 +65,24 @@ internal sealed class PostExitProviderQueries(
         return await provider.GetPullRequestByBranchAsync(repo.Slug, branchName, cancellationToken);
     }
 
+    public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        MonitoredRepositoryId repositoryId,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        Result<(IIssueProvider Provider, MonitoredRepository Repo)> resolved =
+            await ResolveAsync(repositoryId, cancellationToken);
+
+        if (resolved is not Result<(IIssueProvider, MonitoredRepository)>.Success resolvedSuccess)
+        {
+            Error error = ((Result<(IIssueProvider, MonitoredRepository)>.Failure)resolved).Error;
+            return Result<LatestBranchCommit>.Fail(error);
+        }
+
+        (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
+        return await provider.GetLatestBranchCommitAsync(repo.Slug, branchName, cancellationToken);
+    }
+
     private async Task<Result<(IIssueProvider Provider, MonitoredRepository Repo)>> ResolveAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)

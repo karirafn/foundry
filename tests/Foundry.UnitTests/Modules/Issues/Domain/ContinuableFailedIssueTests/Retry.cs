@@ -35,6 +35,7 @@ public sealed class Retry
             Guid.NewGuid(),
             "foundry/1/add-feature",
             "Container exited with code 1",
+            "generic_failure",
             DateTimeOffset.UtcNow);
     }
 

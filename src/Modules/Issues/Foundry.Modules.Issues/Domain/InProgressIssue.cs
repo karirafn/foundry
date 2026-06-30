@@ -54,9 +54,13 @@ public sealed class InProgressIssue : Issue
         return unchanged;
     }
 
-    public FailedIssue MarkFailed(Guid workerRunId, string failureReason, DateTimeOffset failedAt)
+    public FailedIssue MarkFailed(
+        Guid workerRunId,
+        string failureReason,
+        DateTimeOffset failedAt,
+        string failureCategory)
     {
-        FailedIssue failed = FailedIssue.FromInProgress(this, workerRunId, failureReason, failedAt);
+        FailedIssue failed = FailedIssue.FromInProgress(this, workerRunId, failureReason, failureCategory, failedAt);
         AddDomainEvent(new Events.IssueFailed(Id, MonitoredRepositoryId));
         return failed;
     }
@@ -65,6 +69,7 @@ public sealed class InProgressIssue : Issue
         Guid workerRunId,
         string branchName,
         string failureReason,
+        string failureCategory,
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = ContinuableFailedIssue.FromInProgress(
@@ -72,6 +77,7 @@ public sealed class InProgressIssue : Issue
             workerRunId,
             branchName,
             failureReason,
+            failureCategory,
             failedAt);
         AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
         return failed;

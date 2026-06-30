@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { IssueCardComponent } from './issue-card';
 import { IssueSummary } from '../issue.model';
+import { TickerService } from '../../../core/services/ticker.service';
 
 const mockIssue: IssueSummary = {
   id: 'abc123',
@@ -12,13 +14,19 @@ const mockIssue: IssueSummary = {
   url: 'https://github.com/owner/repo/issues/42',
 };
 
-function createComponent(issue: IssueSummary = mockIssue, expanded = false) {
+function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null) {
   TestBed.configureTestingModule({
     imports: [IssueCardComponent],
+    providers: [
+      { provide: TickerService, useValue: { tick: signal(0) } },
+    ],
   });
   const fixture = TestBed.createComponent(IssueCardComponent);
   fixture.componentRef.setInput('issue', issue);
   fixture.componentRef.setInput('expanded', expanded);
+  if (lastActivityAt !== null) {
+    fixture.componentRef.setInput('lastActivityAt', lastActivityAt);
+  }
   fixture.detectChanges();
   return fixture;
 }
@@ -475,6 +483,63 @@ describe('IssueCardComponent', () => {
     const marker = el.querySelector('.issue-card__repo-warning') as HTMLElement;
     expect(marker?.classList.contains('issue-card__repo-warning--ineligible')).toBe(true);
     expect(marker?.getAttribute('role')).toBeNull();
+  });
+
+  // Cycle 10: activity line for live issues
+  it('should show activity line when issue is in_progress and lastActivityAt is provided', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity');
+    expect(activity).toBeTruthy();
+    expect(activity?.textContent).toContain('active');
+  });
+
+  it('should not show activity line when issue is not in a live state', () => {
+    // Arrange
+    const failedIssue: IssueSummary = { ...mockIssue, state: 'failed' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(failedIssue, false, recentAt);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity');
+    expect(activity).toBeFalsy();
+  });
+
+  it('should render an sr-only text prefix on the activity span (not a no-op aria-label)', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — no aria-label on a roleless span; use sr-only child or issueAriaLabel instead
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.getAttribute('aria-label')).toBeNull();
+  });
+
+  it('should not show activity line when lastActivityAt is null', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+
+    // Act
+    const fixture = createComponent(liveIssue, false, null);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity');
+    expect(activity).toBeFalsy();
   });
 
   // Cycle 8: usage-limited badge
