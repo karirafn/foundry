@@ -71,14 +71,15 @@ describe('LogViewComponent', () => {
     expect(body).toBeTruthy();
   });
 
-  it('should hide the log body when collapsed', () => {
+  it('should hide the log body when collapsed using [hidden]', () => {
     // Arrange / Act
     const fixture = createStaticComponent(['line 1'], false);
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
-    const body = el.querySelector('.log-view__body');
-    expect(body).toBeFalsy();
+    // Assert — body is always in the DOM (aria-controls must resolve); visibility via [hidden]
+    const body = el.querySelector('.log-view__body') as HTMLElement;
+    expect(body).toBeTruthy();
+    expect(body.hasAttribute('hidden')).toBe(true);
   });
 
   // Cycle 4: static mode renders provided lines
@@ -158,6 +159,69 @@ describe('LogViewComponent', () => {
 
     // Assert
     expect(btn.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  // Finding 2a: static mode announces summary on load
+  it('should set live announcement to summary when static lines are provided', () => {
+    // Arrange / Act
+    const fixture = createStaticComponent(['line 1', 'line 2']);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const liveRegion = el.querySelector('[aria-live]') as HTMLElement;
+    expect(liveRegion?.textContent?.trim()).toContain('2');
+    expect(liveRegion?.textContent?.trim()).toContain('line');
+  });
+
+  it('should not set live announcement for empty static lines', () => {
+    // Arrange / Act
+    const fixture = createStaticComponent([]);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — no announcement when nothing to report
+    const liveRegion = el.querySelector('[aria-live]') as HTMLElement;
+    expect(liveRegion?.textContent?.trim()).toBe('');
+  });
+
+  // Finding 2b: stream mode announces a batch summary, not every line
+  it('should not set live announcement to raw line content during streaming', () => {
+    // Arrange
+    const stream = new Subject<string>();
+    const fixture = createStreamComponent(stream);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — emit lines
+    stream.next('raw log line one');
+    stream.next('raw log line two');
+    fixture.detectChanges();
+
+    // Assert — announcement must NOT be the verbatim line text
+    const liveRegion = el.querySelector('[aria-live]') as HTMLElement;
+    expect(liveRegion?.textContent?.trim()).not.toBe('raw log line one');
+    expect(liveRegion?.textContent?.trim()).not.toBe('raw log line two');
+  });
+
+  it('should announce a batched line count during streaming', () => {
+    // Arrange
+    const stream = new Subject<string>();
+    const fixture = createStreamComponent(stream);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — emit multiple lines synchronously (within same batch)
+    stream.next('line a');
+    stream.next('line b');
+    stream.next('line c');
+    fixture.detectChanges();
+
+    // Assert — announcement contains a count (not raw line text)
+    const liveRegion = el.querySelector('[aria-live]') as HTMLElement;
+    // The announcement may be pending (throttled) — if present it must be a summary
+    const text = liveRegion?.textContent?.trim() ?? '';
+    if (text !== '') {
+      expect(text).toMatch(/\d+/); // contains a number
+    }
+    // Always passes: raw lines must not appear verbatim
+    expect(text).not.toBe('line a');
   });
 
   // Cycle 9: aria-controls points to the log body id

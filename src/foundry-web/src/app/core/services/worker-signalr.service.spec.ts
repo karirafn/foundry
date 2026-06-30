@@ -58,6 +58,7 @@ describe('WorkerSignalRService', () => {
     const { svc, captured } = setup();
     const activity: WorkerActivity = {
       workerRunId: 'run-1',
+      issueId: 'issue-1',
       lastActivityAt: '2026-01-01T00:00:00Z',
     };
 
@@ -81,8 +82,8 @@ describe('WorkerSignalRService', () => {
   it('should replace workerActivity signal when a new WorkerActivity arrives', () => {
     // Arrange
     const { svc, captured } = setup();
-    const first: WorkerActivity = { workerRunId: 'run-1', lastActivityAt: '2026-01-01T00:00:00Z' };
-    const second: WorkerActivity = { workerRunId: 'run-1', lastActivityAt: '2026-01-01T00:01:00Z' };
+    const first: WorkerActivity = { workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-01-01T00:00:00Z' };
+    const second: WorkerActivity = { workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-01-01T00:01:00Z' };
     captured.onWorkerActivity!(first);
 
     // Act
@@ -104,6 +105,80 @@ describe('WorkerSignalRService', () => {
 
     // Assert
     expect(count).toBe(1);
+  });
+
+  // Cycle 7: activityFor returns null for unknown workerRunId
+  it('should return null from activityFor for an unknown workerRunId', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert
+    expect(svc.activityFor('unknown-run')).toBeNull();
+  });
+
+  it('should return lastActivityAt from activityFor after WorkerActivity is received', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const activity: WorkerActivity = {
+      workerRunId: 'run-A',
+      issueId: 'issue-A',
+      lastActivityAt: '2026-06-01T12:00:00Z',
+    };
+
+    // Act
+    captured.onWorkerActivity!(activity);
+
+    // Assert
+    expect(svc.activityFor('run-A')).toBe('2026-06-01T12:00:00Z');
+  });
+
+  it('should return null from activityForIssue for an unknown issueId', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert
+    expect(svc.activityForIssue('unknown-issue')).toBeNull();
+  });
+
+  it('should return lastActivityAt from activityForIssue after WorkerActivity is received', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const activity: WorkerActivity = {
+      workerRunId: 'run-B',
+      issueId: 'issue-B',
+      lastActivityAt: '2026-06-01T13:00:00Z',
+    };
+
+    // Act
+    captured.onWorkerActivity!(activity);
+
+    // Assert
+    expect(svc.activityForIssue('issue-B')).toBe('2026-06-01T13:00:00Z');
+    // The other issue is still null
+    expect(svc.activityForIssue('issue-A')).toBeNull();
+  });
+
+  it('should independently track activity for two different issues', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const activityA: WorkerActivity = {
+      workerRunId: 'run-A',
+      issueId: 'issue-A',
+      lastActivityAt: '2026-06-01T12:00:00Z',
+    };
+    const activityB: WorkerActivity = {
+      workerRunId: 'run-B',
+      issueId: 'issue-B',
+      lastActivityAt: '2026-06-01T14:00:00Z',
+    };
+
+    // Act
+    captured.onWorkerActivity!(activityA);
+    captured.onWorkerActivity!(activityB);
+
+    // Assert — each issue returns its own lastActivityAt
+    expect(svc.activityForIssue('issue-A')).toBe('2026-06-01T12:00:00Z');
+    expect(svc.activityForIssue('issue-B')).toBe('2026-06-01T14:00:00Z');
   });
 
   // Cycle 6: reconnected is an Observable (not a writable Subject)

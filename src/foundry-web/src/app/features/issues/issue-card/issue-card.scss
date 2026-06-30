@@ -111,10 +111,6 @@
   &__activity {
     color: var(--fd-state-live);
     font-size: 0.75rem;
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
   }
 
   &__link {

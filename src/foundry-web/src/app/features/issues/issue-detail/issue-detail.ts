@@ -209,8 +209,8 @@ import { getFailureCategoryDisplay } from '../../workers/failure-category';
                   <span class="issue-detail__run-stat issue-detail__run-stat--subtype">{{ wr.subtype }}</span>
                 }
                 @if (wr.isError) {
-                  <span class="issue-detail__run-stat issue-detail__run-stat--error" aria-label="Run ended with error">
-                    <span aria-hidden="true">⚠</span><span class="sr-only">error</span>
+                  <span class="issue-detail__run-stat issue-detail__run-stat--error" role="img" aria-label="Run ended with error">
+                    <span aria-hidden="true">⚠</span>
                   </span>
                 }
               </div>

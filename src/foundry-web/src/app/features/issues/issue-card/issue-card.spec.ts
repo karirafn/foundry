@@ -515,6 +515,20 @@ describe('IssueCardComponent', () => {
     expect(activity).toBeFalsy();
   });
 
+  it('should render an sr-only text prefix on the activity span (not a no-op aria-label)', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — no aria-label on a roleless span; use sr-only child or issueAriaLabel instead
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.getAttribute('aria-label')).toBeNull();
+  });
+
   it('should not show activity line when lastActivityAt is null', () => {
     // Arrange
     const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };

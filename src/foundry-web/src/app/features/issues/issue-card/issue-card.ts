@@ -1,6 +1,7 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { NgClass } from '@angular/common';
-import { IssueSummary, IssueState, LIVE_STATES } from '../issue.model';
+import { IssueSummary, LIVE_STATES } from '../issue.model';
+import { STATE_ARIA_LABELS } from '../state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
@@ -10,23 +11,6 @@ const QUEUED_STATES = new Set<string>(['queued', 'detected']);
 const WARNING_CLASSES: Record<string, string> = {
   ineligible: 'issue-card__repo-warning--ineligible',
   unreachable: 'issue-card__repo-warning--unreachable',
-};
-
-const STATE_ARIA_LABELS: Record<IssueState, string> = {
-  detected: 'detected',
-  queued: 'queued',
-  blocked: 'blocked',
-  in_progress: 'in progress',
-  review: 'review',
-  unchanged: 'unchanged',
-  failed: 'failed',
-  continuable_failed: 'continuable failed',
-  continuation_queued: 'continuation queued',
-  completed: 'completed',
-  revision_queued: 'revision queued',
-  revision_in_progress: 'revision in progress',
-  revision_failed: 'revision failed',
-  ineligible: 'not eligible for dispatch',
 };
 
 function timeAgo(dateString: string): string {
@@ -131,7 +115,7 @@ function silentDuration(lastActivityAt: string): string {
       <div class="issue-card__footer">
         <span class="issue-card__timestamp">{{ timestamp() }}</span>
         @if (_activityLine()) {
-          <span class="issue-card__activity" aria-label="Worker activity status">active · {{ _activityLine() }}</span>
+          <span class="issue-card__activity"><span class="sr-only">Active, </span>active · {{ _activityLine() }}</span>
         }
         @if (issue().url | safeHref; as safeUrl) {
           <a

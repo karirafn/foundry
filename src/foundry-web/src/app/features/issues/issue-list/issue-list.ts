@@ -93,7 +93,7 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
                 <fd-issue-card
                   [issue]="issue"
                   [expanded]="issueService.expandedIssueId() === issue.id"
-                  [lastActivityAt]="isLiveIssue(issue.state) ? (workerSignalR.workerActivity()?.lastActivityAt ?? null) : null"
+                  [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
                   (toggle)="issueService.toggleExpand(issue.id)"
                 />
 

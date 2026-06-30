@@ -593,6 +593,34 @@ describe('IssueListComponent', () => {
     expect(boundarySpan).toBeTruthy();
   });
 
+  // Finding 3: per-run activity isolation — each live card receives its own lastActivityAt
+  it('should pass null lastActivityAt to a live card when no activity has been received for its workerRunId', () => {
+    // Arrange — two live issues with different workerRunIds; no WorkerActivity received yet
+    const liveIssue1: IssueSummary = { ...mockSummary, id: 'live1', state: 'in_progress', issueNumber: 1 };
+    const liveIssue2: IssueSummary = { ...mockSummary, id: 'live2', state: 'in_progress', issueNumber: 2 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [liveIssue1, liveIssue2]);
+    fixture.detectChanges();
+
+    // Assert — no activity cards should not show the activity span
+    const el = fixture.nativeElement as HTMLElement;
+    const activityLines = el.querySelectorAll('.issue-card__activity');
+    expect(activityLines.length).toBe(0);
+  });
+
+  it('should expose activityFor lookup returning null for an unknown workerRunId', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert — service exposes a per-run lookup; unknown run returns null
+    const workerSignalR = TestBed.inject(WorkerSignalRService);
+    expect(workerSignalR.activityFor('unknown-run-id')).toBeNull();
+  });
+
   // Cycle 11: expand/collapse wiring - fd-issue-detail appears when card is expanded
   it('should show fd-issue-detail for the expanded issue after card toggle', () => {
     // Arrange

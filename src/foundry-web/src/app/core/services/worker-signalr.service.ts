@@ -43,6 +43,9 @@ export class WorkerSignalRService {
   private readonly _workerActivitySignal: WritableSignal<WorkerActivity | null> = signal(null);
   readonly workerActivity: Signal<WorkerActivity | null> = this._workerActivitySignal.asReadonly();
 
+  private readonly _activityByRunId = new Map<string, string>();
+  private readonly _activityByIssueId = new Map<string, string>();
+
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
 
@@ -51,6 +54,8 @@ export class WorkerSignalRService {
 
     this._hub.on('WorkerActivity', (activity: WorkerActivity) => {
       this._workerActivitySignal.set(activity);
+      this._activityByRunId.set(activity.workerRunId, activity.lastActivityAt);
+      this._activityByIssueId.set(activity.issueId, activity.lastActivityAt);
     });
 
     this._hub.onReconnected(() => {
@@ -60,6 +65,14 @@ export class WorkerSignalRService {
     this._hub.start().catch(() => {
       console.warn('[WorkerSignalRService] Failed to connect to /hubs/workers');
     });
+  }
+
+  activityFor(workerRunId: string): string | null {
+    return this._activityByRunId.get(workerRunId) ?? null;
+  }
+
+  activityForIssue(issueId: string): string | null {
+    return this._activityByIssueId.get(issueId) ?? null;
   }
 
   streamLog(workerRunId: string): Observable<string> {
