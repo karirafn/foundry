@@ -21,7 +21,7 @@ public abstract class WorkerRunLogResult
     private WorkerRunLogResult() { }
 
     /// <summary>The worker run was not found.</summary>
-    public sealed class NotFound : WorkerRunLogResult;
+    public sealed class RunNotFound : WorkerRunLogResult;
 
     /// <summary>The run exists but has no stored log output (e.g. active or completed without output).</summary>
     public sealed class NoLog : WorkerRunLogResult;

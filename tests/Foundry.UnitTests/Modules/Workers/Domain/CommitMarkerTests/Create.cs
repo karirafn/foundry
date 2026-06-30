@@ -90,8 +90,12 @@ public sealed class Create
         // Arrange
         DateTimeOffset observedAt = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
 
-        // Act / Assert
-        Should.Throw<ArgumentException>(() => CommitMarker.Create(observedAt, string.Empty, "feat: add something"));
+        // Act
+        ArgumentException exception = Should.Throw<ArgumentException>(
+            () => CommitMarker.Create(observedAt, string.Empty, "feat: add something"));
+
+        // Assert
+        exception.ParamName.ShouldBe("sha");
     }
 
     [Fact]
@@ -100,7 +104,11 @@ public sealed class Create
         // Arrange
         DateTimeOffset observedAt = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
 
-        // Act / Assert
-        Should.Throw<ArgumentException>(() => CommitMarker.Create(observedAt, "abc1234", string.Empty));
+        // Act
+        ArgumentException exception = Should.Throw<ArgumentException>(
+            () => CommitMarker.Create(observedAt, "abc1234", string.Empty));
+
+        // Assert
+        exception.ParamName.ShouldBe("message");
     }
 }

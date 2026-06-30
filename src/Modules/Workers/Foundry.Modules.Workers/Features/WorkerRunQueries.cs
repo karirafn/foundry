@@ -41,7 +41,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 
         if (run is null)
         {
-            return new WorkerRunLogResult.NotFound();
+            return new WorkerRunLogResult.RunNotFound();
         }
 
         if (run is not FailedRun { ContainerOutput.Length: > 0 } failedRun)

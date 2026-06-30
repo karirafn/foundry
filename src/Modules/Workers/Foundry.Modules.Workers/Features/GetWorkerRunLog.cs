@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Workers.Contracts.Queries;
 
 using Microsoft.AspNetCore.Builder;
@@ -24,13 +26,14 @@ internal static class GetWorkerRunLog
 
                     return logResult switch
                     {
-                        WorkerRunLogResult.NotFound =>
+                        WorkerRunLogResult.RunNotFound =>
                             (Results<ContentHttpResult, NoContent, NotFound>)TypedResults.NotFound(),
                         WorkerRunLogResult.NoLog =>
                             TypedResults.NoContent(),
                         WorkerRunLogResult.LogAvailable log =>
                             TypedResults.Text(log.LogText, contentType: "text/plain"),
-                        _ => TypedResults.NotFound(),
+                        _ => throw new UnreachableException(
+                            $"Unhandled {nameof(WorkerRunLogResult)} subtype: {logResult.GetType().Name}"),
                     };
                 })
                 .WithName("GetWorkerRunLog")
