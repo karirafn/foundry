@@ -7,6 +7,7 @@ import { IssueListComponent } from './issue-list';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
 import { IssueSummary } from '../issue.model';
 import { GlobalSettingsResponse } from '../../../features/settings/settings.model';
 
@@ -16,6 +17,13 @@ const mockIssueSignalRService = {
   on: () => {},
   onReconnected: () => {},
   connectionStatus: signal<'connected' | 'reconnecting' | 'disconnected'>('disconnected'),
+};
+
+const mockWorkerHub = {
+  on: () => {},
+  onReconnected: () => {},
+  stream: () => ({ subscribe: () => ({ dispose: () => {} }) }),
+  start: () => Promise.resolve(),
 };
 
 const mockSummary: IssueSummary = {
@@ -60,10 +68,12 @@ function setupComponent() {
     imports: [IssueListComponent],
     providers: [
       IssueService,
+      WorkerSignalRService,
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: IssueSignalRService, useValue: mockIssueSignalRService },
       { provide: SystemSignalRService, useValue: mockSystemSignalR },
+      { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
     ],
   });
 

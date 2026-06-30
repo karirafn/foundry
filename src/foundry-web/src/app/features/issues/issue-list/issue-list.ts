@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, inject, viewChild } from '@angular/core';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
+import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { IssueCardComponent } from '../issue-card/issue-card';
 import { IssueCardSkeletonComponent } from '../issue-card/issue-card-skeleton';
 import { IssueDetailComponent } from '../issue-detail/issue-detail';
@@ -9,6 +10,7 @@ import { DispatchControlsComponent } from './dispatch-controls/dispatch-controls
 import { IssueFilterRailComponent } from '../issue-filter-rail/issue-filter-rail';
 import { IssueFilterBarComponent } from '../issue-filter-bar/issue-filter-bar';
 import { SettingsService } from '../../../features/settings/settings.service';
+import { LIVE_STATES } from '../issue.model';
 
 const SKELETON_COUNT = 4;
 const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
@@ -91,6 +93,7 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
                 <fd-issue-card
                   [issue]="issue"
                   [expanded]="issueService.expandedIssueId() === issue.id"
+                  [lastActivityAt]="isLiveIssue(issue.state) ? (workerSignalR.workerActivity()?.lastActivityAt ?? null) : null"
                   (toggle)="issueService.toggleExpand(issue.id)"
                 />
 
@@ -210,6 +213,7 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
 export class IssueListComponent implements OnInit {
   protected readonly issueService = inject(IssueService);
   protected readonly signalR = inject(IssueSignalRService);
+  protected readonly workerSignalR = inject(WorkerSignalRService);
   private readonly _settingsService = inject(SettingsService);
 
   private readonly issueListHeadingEl = viewChild.required<ElementRef<HTMLHeadingElement>>('issueListHeadingEl');
@@ -254,6 +258,10 @@ export class IssueListComponent implements OnInit {
     }
     return '';
   });
+
+  protected isLiveIssue(state: string): boolean {
+    return LIVE_STATES.has(state as never);
+  }
 
   protected retryActiveLoad(): void {
     this.issueService.loadIssues();

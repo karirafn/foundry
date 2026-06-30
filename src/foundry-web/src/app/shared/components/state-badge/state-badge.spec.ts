@@ -295,9 +295,45 @@ describe('StateBadgeComponent', () => {
     expect(el.querySelector('span')?.classList.contains('badge--usage-limited')).toBe(true);
   });
 
-  it('should display "FAILED" when failureClassification is not usage_limited and state is failed', () => {
+  it('should display "NON-ZERO EXIT" when failureClassification is non_zero_exit and state is failed', () => {
     // Arrange / Act
     const fixture = createComponent('failed', 'non_zero_exit');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('NON-ZERO EXIT');
+  });
+
+  it('should display "TIMED OUT" when failureClassification is timed_out and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'timed_out');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('TIMED OUT');
+  });
+
+  it('should display "CONTAINER ERROR" when failureClassification is container_error and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'container_error');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('CONTAINER ERROR');
+  });
+
+  it('should display "BOOTSTRAP FAILED" when failureClassification is worker_bootstrap_failed and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'worker_bootstrap_failed');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('BOOTSTRAP FAILED');
+  });
+
+  it('should display "FAILED" when failureClassification is unknown and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'some_unknown_category');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert

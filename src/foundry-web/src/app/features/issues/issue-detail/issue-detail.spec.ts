@@ -1,14 +1,29 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { of } from 'rxjs';
 import { IssueDetailComponent } from './issue-detail';
 import { IssueDetail, IssueStateDetails } from '../issue.model';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
+import { WorkerRunService } from '../../workers/worker-run.service';
+import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
 
 const mockIssueSignalRService = {
   on: () => {},
   onReconnected: () => {},
+};
+
+const mockWorkerRunService = {
+  getDetail: () => of(null),
+  getLog: () => of(null),
+};
+
+const mockWorkerHub = {
+  on: () => {},
+  onReconnected: () => {},
+  stream: () => ({ subscribe: () => ({ dispose: () => {} }) }),
+  start: () => Promise.resolve(),
 };
 
 const mockStateDetails: IssueStateDetails = {
@@ -46,9 +61,12 @@ function createComponent(
     imports: [IssueDetailComponent],
     providers: [
       IssueService,
+      WorkerSignalRService,
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      { provide: WorkerRunService, useValue: mockWorkerRunService },
+      { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
     ],
   });
   const fixture = TestBed.createComponent(IssueDetailComponent);
@@ -905,5 +923,75 @@ describe('IssueDetailComponent', () => {
     const liveRegion = el.querySelector('.issue-detail__retry-success-announcement');
     expect(liveRegion?.textContent?.trim()).toBe('Retry queued. Issue status is updating.');
     http.verify();
+  });
+
+  // Worker run section: when workerRunId is null, no worker run block renders
+  it('should not render worker run block when workerRunId is null', () => {
+    // Arrange
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const workerRun = el.querySelector('.issue-detail__worker-run');
+    expect(workerRun).toBeFalsy();
+  });
+
+  // Worker run section: failure chip renders when WorkerRunDetail is returned with a failureCategory
+  it('should render failure category chip when worker run service returns a failureCategory', () => {
+    // Arrange
+    const failedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: { ...mockStateDetails, workerRunId: 'run-123' },
+    };
+
+    const mockWorkerRunServiceWithDetail = {
+      getDetail: () => of({
+        workerRunId: 'run-123',
+        issueId: 'issue-1',
+        state: 'failed',
+        failureCategory: 'worker_bootstrap_failed',
+        failureSummary: 'Worker bootstrap failed: container died',
+        resultText: null,
+        subtype: null,
+        isError: null,
+        durationMs: 5000,
+        numTurns: null,
+        totalCostUsd: null,
+        inputTokens: null,
+        outputTokens: null,
+        lastActivityAt: null,
+        commitMarkers: [],
+        hasStoredLog: false,
+      }),
+      getLog: () => of(null),
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        IssueService,
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        { provide: WorkerRunService, useValue: mockWorkerRunServiceWithDetail },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', failedDetail);
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__failure-chip');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent?.trim()).toBe('BOOTSTRAP FAILED');
+    const summary = el.querySelector('.issue-detail__failure-summary');
+    expect(summary?.textContent?.trim()).toBe('Worker bootstrap failed: container died');
   });
 });

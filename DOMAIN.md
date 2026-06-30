@@ -273,7 +273,12 @@ This prevents a continuation retry from attempting to check out a branch that wa
 The captured tail of a failed worker container's stdout/stderr, stored on `FailedRun` as a nullable string.
 Captured by Foundry (not the worker) from the Docker API after the container stops but before removal.
 Best-effort — null when the container is already gone, never started, or the Docker API call fails.
-Displayed in the worker-log-panel as a collapsible section.
+Docker timestamps are enabled (`--timestamps` flag) so each output line carries an RFC 3339 prefix, providing a unified timeline.
+
+Failed-run output is served by `GET /api/workers/runs/{workerRunId}/log` (200 with text body when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
+
+Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines with backlog replay followed by live follow.
+The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and interleaves commit markers by timestamp to give a unified activity timeline.
 
 ## First-Run Wizard
 
