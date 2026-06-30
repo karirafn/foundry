@@ -3,6 +3,7 @@ using Docker.DotNet;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
@@ -24,6 +25,9 @@ public static class WorkersModule
     {
         services.Configure<WorkerOptions>(configuration.GetSection("Workers"));
         services.AddSingleton<IValidateOptions<WorkerOptions>, WorkerOptionsValidator>();
+
+        services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
+        services.AddScoped<IWorkerLogStream, WorkerLogStream>();
 
         services.AddSingleton<DockerClient>(_ =>
         {
