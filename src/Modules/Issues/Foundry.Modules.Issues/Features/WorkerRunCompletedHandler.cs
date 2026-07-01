@@ -26,19 +26,34 @@ internal sealed class WorkerRunCompletedHandler(
             switch (@event.MergeState)
             {
                 case WorkerRunMergeState.Merged:
+                    if (@event.BranchName is null || @event.PullRequestUrl is null)
+                    {
+                        logger.LogError(
+                            "WorkerRunCompleted for issue {IssueId} has MergeState=Merged but BranchName or PullRequestUrl is null; skipping transition.",
+                            @event.IssueId);
+                        return;
+                    }
+
                     CompletedIssue completed = inProgress.MarkCompleted(
-                        @event.WorkerRunId,
-                        @event.BranchName!,
-                        @event.PullRequestUrl!,
+                        @event.BranchName,
+                        @event.PullRequestUrl,
                         DateTimeOffset.UtcNow);
                     await db.TransitionAsync(inProgress, completed, domainEventDispatcher, cancellationToken);
                     break;
 
                 case WorkerRunMergeState.Open:
+                    if (@event.BranchName is null || @event.PullRequestUrl is null)
+                    {
+                        logger.LogError(
+                            "WorkerRunCompleted for issue {IssueId} has MergeState=Open but BranchName or PullRequestUrl is null; skipping transition.",
+                            @event.IssueId);
+                        return;
+                    }
+
                     ReviewIssue review = inProgress.MarkInReview(
                         @event.WorkerRunId,
-                        @event.BranchName!,
-                        @event.PullRequestUrl!,
+                        @event.BranchName,
+                        @event.PullRequestUrl,
                         DateTimeOffset.UtcNow);
                     await db.TransitionAsync(inProgress, review, domainEventDispatcher, cancellationToken);
                     break;

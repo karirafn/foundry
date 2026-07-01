@@ -39,11 +39,9 @@ public sealed class MarkCompleted
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = CreateInProgressIssue(repositoryId);
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
         CompletedIssue completed = inProgress.MarkCompleted(
-            workerRunId,
             "feat/1-add-feature",
             "https://github.com/owner/repo/pull/5",
             DateTimeOffset.UtcNow);
@@ -58,13 +56,12 @@ public sealed class MarkCompleted
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = CreateInProgressIssue(repositoryId);
-        Guid workerRunId = Guid.NewGuid();
         string branchName = "feat/1-add-feature";
         string pullRequestUrl = "https://github.com/owner/repo/pull/5";
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
 
         // Act
-        CompletedIssue completed = inProgress.MarkCompleted(workerRunId, branchName, pullRequestUrl, completedAt);
+        CompletedIssue completed = inProgress.MarkCompleted(branchName, pullRequestUrl, completedAt);
 
         // Assert
         completed.ShouldSatisfyAllConditions(
@@ -84,11 +81,9 @@ public sealed class MarkCompleted
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = CreateInProgressIssue(repositoryId);
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
         inProgress.MarkCompleted(
-            workerRunId,
             "feat/1-add-feature",
             "https://github.com/owner/repo/pull/5",
             DateTimeOffset.UtcNow);

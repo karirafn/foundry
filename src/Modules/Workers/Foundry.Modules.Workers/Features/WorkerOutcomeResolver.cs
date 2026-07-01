@@ -27,6 +27,8 @@ internal sealed class WorkerOutcomeResolver(
 
     private const string MergedMissingUrlCode = "MergeRequest.MissingUrl";
 
+    private const string OpenMrMissingUrlCode = "MergeRequest.OpenMissingUrl";
+
     private const string ClosedMrMessage = "Merge request was closed without being merged";
 
     private const string NoPrAfterRetriesMessage = "No pull request found after retries";
@@ -89,7 +91,7 @@ internal sealed class WorkerOutcomeResolver(
         if (mr.WebUrl is null)
         {
             return new WorkerOutcome.Indeterminate(
-                new Error(MergedMissingUrlCode, "Open MR has no web URL; cannot produce a Review outcome."));
+                new Error(OpenMrMissingUrlCode, "Open MR has no web URL; cannot produce a Review outcome."));
         }
 
         return new WorkerOutcome.Review(run.BranchName, PullRequestUrl.From(mr.WebUrl), summary);

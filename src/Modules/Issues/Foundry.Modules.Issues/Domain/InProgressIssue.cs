@@ -55,7 +55,6 @@ public sealed class InProgressIssue : Issue
     }
 
     public CompletedIssue MarkCompleted(
-        Guid workerRunId,
         string branchName,
         string pullRequestUrl,
         DateTimeOffset completedAt)

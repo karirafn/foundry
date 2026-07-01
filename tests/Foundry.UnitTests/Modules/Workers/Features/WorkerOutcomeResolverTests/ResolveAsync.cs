@@ -163,6 +163,30 @@ public sealed class ResolveAsync
     }
 
     [Fact]
+    public async Task WhenMrIsOpenWithNullUrl_ReturnsIndeterminateWithDistinctOpenMrCode()
+    {
+        // Arrange — Open MR with null WebUrl must use a distinct error code from Merged+null-URL
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch openMrNoUrl = new(MergeRequestPresence.Open, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            mrResults: [Result<MergeRequestByBranch>.Ok(openMrNoUrl)]);
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: null,
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Indeterminate indeterminate = outcome.ShouldBeOfType<WorkerOutcome.Indeterminate>();
+        indeterminate.Error.Code.ShouldBe("MergeRequest.OpenMissingUrl");
+    }
+
+    [Fact]
     public async Task WhenMrQueryReturnsTransientError_ReturnsIndeterminate()
     {
         // Arrange

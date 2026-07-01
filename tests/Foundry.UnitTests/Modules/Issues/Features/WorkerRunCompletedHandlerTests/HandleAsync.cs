@@ -318,6 +318,110 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenInProgressIssueWithMergedStateAndNullBranchName_DoesNotTransition()
+    {
+        // Arrange — a Merged event with null BranchName must not be null-suppressed into MarkCompleted
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: null,
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Merged);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — issue remains InProgress; no transition was attempted
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithMergedStateAndNullPrUrl_DoesNotTransition()
+    {
+        // Arrange — a Merged event with null PullRequestUrl must not be null-suppressed into MarkCompleted
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.Merged);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — issue remains InProgress; no transition was attempted
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithOpenStateAndNullBranchName_DoesNotTransition()
+    {
+        // Arrange — an Open event with null BranchName must not be null-suppressed into MarkInReview
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: null,
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Open);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — issue remains InProgress; no transition was attempted
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithOpenStateAndNullPrUrl_DoesNotTransition()
+    {
+        // Arrange — an Open event with null PullRequestUrl must not be null-suppressed into MarkInReview
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.Open);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — issue remains InProgress; no transition was attempted
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
     public async Task WhenIssueNotInProgress_SilentlyIgnores()
     {
         // Arrange
