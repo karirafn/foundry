@@ -293,7 +293,7 @@ public sealed class GetMergeRequestByBranchAsync
     }
 
     [Fact]
-    public async Task WhenCalled_UsesCorrectEndpointWithoutStateFilter()
+    public async Task WhenCalled_UsesCorrectEndpointWithStateAll()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
@@ -308,11 +308,11 @@ public sealed class GetMergeRequestByBranchAsync
             "glpat_token",
             CancellationToken.None);
 
-        // Assert
+        // Assert — GitLab defaults state=all but we make it explicit for self-documentation
         HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
         request.RequestUri.ShouldNotBeNull();
         request.RequestUri.AbsolutePath.ShouldBe("/api/v4/projects/group%2Fproject/merge_requests");
         request.RequestUri.Query.ShouldContain("source_branch=feat%2Fmy-branch");
-        request.RequestUri.Query.ShouldNotContain("state=");
+        request.RequestUri.Query.ShouldContain("state=all");
     }
 }

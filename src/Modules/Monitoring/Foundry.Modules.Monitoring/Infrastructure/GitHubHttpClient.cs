@@ -679,6 +679,9 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string encodedHead = Uri.EscapeDataString($"{slug.Owner}:{branchName}");
+        // GitHub retains the head.ref metadata on a PR record after the source branch is deleted,
+        // so ?head={owner}:{branch}&state=all returns the merged PR even when the branch is gone.
+        // API version: 2026-03-10 (set in AddGitHubHeaders via X-GitHub-Api-Version header).
         string relativePath = $"repos/{owner}/{repo}/pulls?head={encodedHead}&state=all";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 

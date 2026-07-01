@@ -490,7 +490,9 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
         string encodedBranch = Uri.EscapeDataString(branchName);
-        string relativePath = $"projects/{encodedPath}/merge_requests?source_branch={encodedBranch}";
+        // state=all is the GitLab default but made explicit here for self-documentation: we need
+        // merged MRs returned even after the source branch is deleted.
+        string relativePath = $"projects/{encodedPath}/merge_requests?source_branch={encodedBranch}&state=all";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
