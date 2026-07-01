@@ -6,4 +6,5 @@ public sealed record WorkerRunCompleted(
     Guid WorkerRunId,
     Guid IssueId,
     string? BranchName,
-    string? PullRequestUrl) : IIntegrationEvent;
+    string? PullRequestUrl,
+    WorkerRunMergeState MergeState) : IIntegrationEvent;

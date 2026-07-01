@@ -207,11 +207,12 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
             CancellationToken cancellationToken) =>
             Task.FromResult(Result<bool>.Ok(false));
 
-        public Task<Result<string>> GetPullRequestByBranchAsync(
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             RepositorySlug slug,
             string branchName,
             CancellationToken cancellationToken) =>
-            Task.FromResult(Result<string>.Ok(string.Empty));
+            Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             RepositorySlug slug,

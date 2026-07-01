@@ -1,7 +1,7 @@
 using System.Net;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabIssueProviderTests;
 
-public sealed class GetPullRequestByBranchAsync
+public sealed class GetMergeRequestByBranchAsync
 {
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
     private const string ValidToken = "glpat_token";
@@ -22,12 +22,17 @@ public sealed class GetPullRequestByBranchAsync
         RepositorySlug.Create("group/project").ValueOrThrow();
 
     [Fact]
-    public async Task WhenMergeRequestExists_ReturnsMrUrl()
+    public async Task WhenMergedMrExists_ReturnsPresenceMerged()
     {
         // Arrange
         string mrJson = """
             [
-              { "web_url": "https://gitlab.com/group/project/-/merge_requests/42" }
+              {
+                "iid": 5,
+                "web_url": "https://gitlab.com/group/project/-/merge_requests/5",
+                "state": "merged",
+                "updated_at": "2026-06-01T10:00:00.000Z"
+              }
             ]
             """;
         FakeHandler handler = new(HttpStatusCode.OK, mrJson);
@@ -36,19 +41,19 @@ public sealed class GetPullRequestByBranchAsync
         GitLabIssueProvider sut = new(gitLabHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
-        Result<string> result = await sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
-        success.Value.ShouldBe("https://gitlab.com/group/project/-/merge_requests/42");
+        Result<MergeRequestByBranch>.Success success = result.ShouldBeOfType<Result<MergeRequestByBranch>.Success>();
+        success.Value.Presence.ShouldBe(MergeRequestPresence.Merged);
     }
 
     [Fact]
-    public async Task WhenNoMergeRequestExists_ReturnsEmptyString()
+    public async Task WhenNoMrExists_ReturnsPresenceNone()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
@@ -57,19 +62,19 @@ public sealed class GetPullRequestByBranchAsync
         GitLabIssueProvider sut = new(gitLabHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
-        Result<string> result = await sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
-        success.Value.ShouldBeEmpty();
+        Result<MergeRequestByBranch>.Success success = result.ShouldBeOfType<Result<MergeRequestByBranch>.Success>();
+        success.Value.Presence.ShouldBe(MergeRequestPresence.None);
     }
 
     [Fact]
-    public async Task WhenApiReturnsFails_ReturnsFailure()
+    public async Task WhenApiFails_ReturnsFailure()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
@@ -78,7 +83,7 @@ public sealed class GetPullRequestByBranchAsync
         GitLabIssueProvider sut = new(gitLabHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
-        Result<string> result = await sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);

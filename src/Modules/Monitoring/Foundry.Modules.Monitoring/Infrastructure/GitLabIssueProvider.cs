@@ -113,12 +113,12 @@ internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string to
             cancellationToken);
     }
 
-    public Task<Result<string>> GetPullRequestByBranchAsync(
+    public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         RepositorySlug slug,
         string branchName,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetPullRequestByBranchAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
+        return httpClient.GetMergeRequestByBranchAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
     }
 
     public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(

@@ -23,19 +23,45 @@ internal sealed class WorkerRunCompletedHandler(
 
         if (issue is InProgressIssue inProgress)
         {
-            if (@event.BranchName is not null && @event.PullRequestUrl is not null)
+            switch (@event.MergeState)
             {
-                ReviewIssue review = inProgress.MarkInReview(
-                    @event.WorkerRunId,
-                    @event.BranchName,
-                    @event.PullRequestUrl,
-                    DateTimeOffset.UtcNow);
-                await db.TransitionAsync(inProgress, review, domainEventDispatcher, cancellationToken);
-            }
-            else
-            {
-                UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
-                await db.TransitionAsync(inProgress, unchanged, domainEventDispatcher, cancellationToken);
+                case WorkerRunMergeState.Merged:
+                    if (@event.BranchName is null || @event.PullRequestUrl is null)
+                    {
+                        logger.LogError(
+                            "WorkerRunCompleted for issue {IssueId} has MergeState=Merged but BranchName or PullRequestUrl is null; skipping transition.",
+                            @event.IssueId);
+                        return;
+                    }
+
+                    CompletedIssue completed = inProgress.MarkCompleted(
+                        @event.BranchName,
+                        @event.PullRequestUrl,
+                        DateTimeOffset.UtcNow);
+                    await db.TransitionAsync(inProgress, completed, domainEventDispatcher, cancellationToken);
+                    break;
+
+                case WorkerRunMergeState.Open:
+                    if (@event.BranchName is null || @event.PullRequestUrl is null)
+                    {
+                        logger.LogError(
+                            "WorkerRunCompleted for issue {IssueId} has MergeState=Open but BranchName or PullRequestUrl is null; skipping transition.",
+                            @event.IssueId);
+                        return;
+                    }
+
+                    ReviewIssue review = inProgress.MarkInReview(
+                        @event.WorkerRunId,
+                        @event.BranchName,
+                        @event.PullRequestUrl,
+                        DateTimeOffset.UtcNow);
+                    await db.TransitionAsync(inProgress, review, domainEventDispatcher, cancellationToken);
+                    break;
+
+                default:
+                    UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
+                    await db.TransitionAsync(inProgress, unchanged, domainEventDispatcher, cancellationToken);
+                    break;
             }
 
             return;

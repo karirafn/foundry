@@ -476,7 +476,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<bool>.Ok((dto?.Commits ?? []).Count > 0);
     }
 
-    public async Task<Result<string>> GetPullRequestByBranchAsync(
+    public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string branchName,
@@ -485,12 +485,14 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<string>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<MergeRequestByBranch>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
         string encodedBranch = Uri.EscapeDataString(branchName);
-        string relativePath = $"projects/{encodedPath}/merge_requests?source_branch={encodedBranch}&state=opened";
+        // state=all is the GitLab default but made explicit here for self-documentation: we need
+        // merged MRs returned even after the source branch is deleted.
+        string relativePath = $"projects/{encodedPath}/merge_requests?source_branch={encodedBranch}&state=all";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
@@ -500,15 +502,39 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<string>.Fail(ErrorFromNonSuccess(response));
+            return Result<MergeRequestByBranch>.Fail(ErrorFromNonSuccess(response));
         }
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitLabMergeRequestListItemDto>? dtos =
-            JsonSerializer.Deserialize<List<GitLabMergeRequestListItemDto>>(body, JsonOptions);
+        List<GitLabMergeRequestStateDto>? dtos =
+            JsonSerializer.Deserialize<List<GitLabMergeRequestStateDto>>(body, JsonOptions);
 
-        string mergeRequestUrl = (dtos ?? []).FirstOrDefault()?.WebUrl ?? string.Empty;
-        return Result<string>.Ok(mergeRequestUrl);
+        List<GitLabMergeRequestStateDto> items = dtos ?? [];
+
+        if (items.Count == 0)
+        {
+            return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null));
+        }
+
+        GitLabMergeRequestStateDto? merged = items.FirstOrDefault(
+            dto => string.Equals(dto.State, "merged", StringComparison.OrdinalIgnoreCase));
+
+        GitLabMergeRequestStateDto selected = merged
+            ?? items.MaxBy(dto => dto.UpdatedAt)!;
+
+        if (string.IsNullOrEmpty(selected.State))
+        {
+            return Result<MergeRequestByBranch>.Fail(GitLabErrors.MissingMergeRequestState);
+        }
+
+        MergeRequestPresence presence = selected.State.ToLowerInvariant() switch
+        {
+            "merged" => MergeRequestPresence.Merged,
+            "opened" => MergeRequestPresence.Open,
+            _ => MergeRequestPresence.Closed,
+        };
+
+        return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.WebUrl));
     }
 
     public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
@@ -701,7 +727,14 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         }
 
         int statusCode = (int)response.StatusCode;
-        return GitLabErrors.UnexpectedStatusCode(statusCode);
+        Error error = GitLabErrors.UnexpectedStatusCode(statusCode);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return error with { Kind = ErrorKind.NotFound };
+        }
+
+        return error;
     }
 
     private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
@@ -747,7 +780,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
     private sealed record GitLabCommitListItemDto(string Id, string? Title);
 
-    private sealed record GitLabMergeRequestListItemDto(string WebUrl);
+    private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt);
 
     private sealed record GitLabProtectedBranchDto(
         bool AllowForcePush,
@@ -773,6 +806,10 @@ internal static class GitLabErrors
     public static readonly Error NoBranchCommits = new(
         "GitLab.NoBranchCommits",
         "The branch has no commits.");
+
+    public static readonly Error MissingMergeRequestState = new(
+        "GitLab.MissingMergeRequestState",
+        "A merge request in the response has a missing or empty state field.");
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitLab.UnexpectedStatusCode", $"GitLab API returned unexpected status code {statusCode}.");

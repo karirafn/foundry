@@ -256,17 +256,39 @@ Value object — `Name` is the last segment, `Owner` is everything before it (a 
 A single execution of a worker against an issue — the primary aggregate for the Workers module.
 Modeled as a polymorphic aggregate with state variants: `StartingRun` (container creation requested), `ActiveRun` (container running), `CompletedRun` (exited successfully), `FailedRun` (exited with error, timed out, or failed to start).
 An issue can have multiple runs (e.g. after retry from Failed or Review state).
-Foundry derives each run's outcome after the container exits: exit status from the container, branch commits and PR/MR URL from provider queries.
+Foundry derives each run's outcome via `WorkerOutcomeResolver` — a pure function that consults merge-request state first (see Worker Outcome Detection).
 `ActiveRun` carries the `BranchName` — set at activation from the dispatch payload's pre-created branch name, propagated to `FailedRun` and `CompletedRun`.
 
 ## Worker Outcome Detection
 
-How Foundry establishes what a worker accomplished, performed entirely on the Foundry side after the container exits.
-The worker runs `claude -p <WORKER_PROMPT> --append-system-prompt <SYSTEM_PROMPT> --output-format json`, pushes its branch, and opens a PR.
-After exit, Foundry reads the container exit code and queries the provider: `HasBranchCommitsAsync` decides whether the branch holds recoverable work (driving `FailedIssue` vs `ContinuableFailedIssue`), and `GetPullRequestByBranchAsync` resolves the PR URL.
-Foundry reads the final `claude` JSON line from stdout solely for usage-limit signals (`api_error_status` / `terminal_reason`), which produce the `UsageLimited` failure reason.
-Watchdog paths (timeout, orphaned container, container not found) apply the same `HasBranchCommitsAsync` check as the clean-exit path — routing to `ContinuableFailedIssue` only when the branch has commits, and to `FailedIssue` otherwise.
-This prevents a continuation retry from attempting to check out a branch that was never pushed.
+How Foundry establishes what a worker accomplished, resolved by `WorkerOutcomeResolver` — a pure, side-effect-free function applied after the container exits (and on timeout, orphan-reconcile, and container-not-found paths).
+
+**MR-state-first lookup.**
+The resolver queries `GetMergeRequestByBranchAsync`, keyed on the run's stored `BranchName` (which survives remote branch deletion).
+The resulting presence maps to outcomes:
+
+- `Merged` → `Completed` (transitions `InProgressIssue` → `CompletedIssue`)
+- `Open` → `Review` (transitions `InProgressIssue` → `ReviewIssue`)
+- `Closed` (unmerged) + branch has commits → `ContinuableFailure`; otherwise → `Failure`
+- `None` (no MR found) → fall back to exit-code + branch-commits path (see below)
+
+**NotFound vs transient errors.**
+Provider query failures carry `Error.Kind`.
+Only `ErrorKind.NotFound` is a definitive signal — "branch deleted, no commits reachable".
+Any other failure (`Unknown`, network error, timeout) yields `Indeterminate` — no state transition, the run stays active and is retried on the next tick.
+
+**No-MR fallback.**
+When no MR exists the resolver falls back to exit code and branch commits.
+Exit 0 with commits triggers a bounded MR re-poll (preserving the PR-race retry window); exit 0 with no commits → `Unchanged` or `UsageLimited` (detected via JSON output); non-zero exit → `ContinuableFailure` (commits exist) or `Failure`, with bootstrap-failure and usage-limit classification layered on top.
+
+**Side-effect applier.**
+A single `ApplyOutcomeAsync` performs all side effects in one place: state transition, integration-event dispatch (carrying `WorkerRunMergeState`), usage-limit persistence + dispatch-pause, and container stop-and-remove.
+Every terminal outcome (`Completed`, `Review`, `ContinuableFailure`, `Failure`, `Unchanged`) stops and removes the container — this is an invariant enforced at the applier, not a per-path decision.
+`Indeterminate` → log and return; container left running for the next tick.
+
+**Timeout watchdog.**
+The watchdog ceiling (`StartedAt + timeout_minutes`) is evaluated regardless of whether the container is still running.
+Any unresolved run that exceeds the ceiling is processed through the same resolver → applier pair (exit code null; MR-state still consulted first), so no run can hold a worker slot indefinitely.
 
 ## Container Output
 

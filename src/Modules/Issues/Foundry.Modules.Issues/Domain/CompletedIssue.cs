@@ -36,4 +36,26 @@ public sealed class CompletedIssue : Issue
         completed.CompletedAt = completedAt;
         return completed;
     }
+
+    internal static CompletedIssue FromInProgress(
+        InProgressIssue source,
+        string branchName,
+        string pullRequestUrl,
+        DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = new(source.Id);
+        completed.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Body,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        completed.BranchName = branchName;
+        completed.PullRequestUrl = pullRequestUrl;
+        completed.CompletedAt = completedAt;
+        return completed;
+    }
 }

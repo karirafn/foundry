@@ -27,10 +27,11 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerDisappearsAfterReconciliation_TransitionsToFailedRunWithContainerError()
+    public async Task WhenContainerDisappearsAfterReconciliation_TransitionsToFailedRun()
     {
         // Arrange — seed the run after the first tick so reconciliation does not process it;
-        // on the second tick the monitoring loop finds the container missing
+        // on the second tick the monitoring loop finds the container missing.
+        // Resolver maps null-exit with no MR and no commits → NonZeroExit(-1).
         MonitoringStubWorkerOrchestrator orchestrator = new(status: null);
         WorkerDispatchService sut = BuildService(orchestrator);
 
@@ -47,8 +48,8 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
-        error.Message.ShouldBe("Container not found");
+        FailureReason.NonZeroExit nonZeroExit = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
+        nonZeroExit.ExitCode.ShouldBe(-1);
     }
 
     [Fact]

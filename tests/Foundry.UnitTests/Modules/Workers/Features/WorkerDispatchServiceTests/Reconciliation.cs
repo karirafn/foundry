@@ -16,7 +16,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenFirstTickAndContainerNotFound_TransitionsOrphanedRunToFailedRun()
     {
-        // Arrange
+        // Arrange — resolver maps null-exit with no MR and no commits → NonZeroExit(-1)
         SeedActiveRun("orphaned-container");
         ReconciliationStubWorkerOrchestrator orchestrator = new(status: null);
         WorkerDispatchService sut = BuildService(orchestrator);
@@ -28,8 +28,8 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
-        error.Message.ShouldBe("Orphaned after restart");
+        FailureReason.NonZeroExit nonZeroExit = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
+        nonZeroExit.ExitCode.ShouldBe(-1);
     }
 
     [Fact]
