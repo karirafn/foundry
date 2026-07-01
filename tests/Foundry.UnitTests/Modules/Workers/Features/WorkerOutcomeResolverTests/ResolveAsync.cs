@@ -434,6 +434,32 @@ public sealed class ResolveAsync
     }
 
     [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndUsageLimited_ContainerOutputIsPreserved()
+    {
+        // Arrange
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        DateTimeOffset resetsAt = DateTimeOffset.UtcNow.AddHours(4);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        IContainerOutputParser parser = new UsageLimitedParser(resetsAt);
+        WorkerOutcomeResolver sut = BuildResolver(queries, parser);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: "usage limit output",
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.ContainerOutput.ShouldBe("usage limit output");
+    }
+
+    [Fact]
     public async Task WhenNoMrAndNonZeroExitWithCommits_ReturnsContinuableFailure()
     {
         // Arrange

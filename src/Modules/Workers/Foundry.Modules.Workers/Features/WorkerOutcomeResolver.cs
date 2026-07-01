@@ -252,7 +252,7 @@ internal sealed class WorkerOutcomeResolver(
 
         if (parseResult is ContainerOutputParseResult.UsageLimited usageLimited)
         {
-            return new WorkerOutcome.Failure(new FailureReason.UsageLimited(usageLimited.ResetsAt), null, summary);
+            return new WorkerOutcome.Failure(new FailureReason.UsageLimited(usageLimited.ResetsAt), containerOutput, summary);
         }
 
         // Exit 0 with no commits — the issue is unchanged (nothing to submit)
