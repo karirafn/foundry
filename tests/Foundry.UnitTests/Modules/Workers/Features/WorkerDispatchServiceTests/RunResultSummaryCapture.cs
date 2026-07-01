@@ -34,14 +34,17 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenSuccessWithCommitsAndPrFound_ResultSummarySetOnCompletedRun()
     {
-        // Arrange
+        // Arrange — resolver uses GetMergeRequestByBranchAsync (MR-state-first), so stub the MR
         SeedActiveRun("container-summary-success");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         RunResultSummary summary = RunResultSummary.Create(
             resultText: "Done", subtype: null, isError: false,
             durationMs: 1000, numTurns: 3, totalCostUsd: 0.05m, inputTokens: 100, outputTokens: 50);
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
-        StubPostExitProviderQueries queries = new(hasCommits: true, prUrl: "https://github.com/owner/repo/pull/1");
+        StubPostExitProviderQueries queries = new(
+            hasCommits: true,
+            prUrl: "https://github.com/owner/repo/pull/1",
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/1"));
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "some output");
         WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
 

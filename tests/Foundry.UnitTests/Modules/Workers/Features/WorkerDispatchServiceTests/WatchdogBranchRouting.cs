@@ -4,6 +4,9 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
+using Foundry.WebApi.Persistence;
+
+using Microsoft.EntityFrameworkCore;
 
 using Shouldly;
 
@@ -136,9 +139,9 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenOrphanReconcileAndCommitsCheckFails_DispatchesFailedEventWithBranchName()
+    public async Task WhenOrphanReconcileAndCommitsCheckFails_RunRemainsActive()
     {
-        // Arrange — provider outage: default to current behavior (non-null branch name)
+        // Arrange — transient provider error: resolver returns Indeterminate → no transition, no event
         SeedActiveRun("container-orphan-check-fails", branchName: "feat/12-orphan-check-fails");
         FailingBranchCommitsCheckQueries postExitQueries = new();
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
@@ -150,11 +153,11 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert
-        WorkerRunFailed failedEvent = capturingDispatcher.Captured
-            .OfType<WorkerRunFailed>()
-            .ShouldHaveSingleItem();
-        failedEvent.BranchName.ShouldBe("feat/12-orphan-check-fails");
+        // Assert — run stays active and no failed event is dispatched
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<ActiveRun>();
+        capturingDispatcher.Captured.OfType<WorkerRunFailed>().ShouldBeEmpty();
     }
 
     // ─── Container-not-found path ────────────────────────────────────────────────
@@ -204,9 +207,9 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerNotFoundDuringMonitoringAndCommitsCheckFails_DispatchesFailedEventWithBranchName()
+    public async Task WhenContainerNotFoundDuringMonitoringAndCommitsCheckFails_RunRemainsActive()
     {
-        // Arrange — provider outage: default to current behavior (non-null branch name)
+        // Arrange — transient provider error: resolver returns Indeterminate → no transition, no event
         SeedActiveRun("container-missing-check-fails", branchName: "feat/15-missing-check-fails");
         FailingBranchCommitsCheckQueries postExitQueries = new();
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
@@ -218,19 +221,19 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert
-        WorkerRunFailed failedEvent = capturingDispatcher.Captured
-            .OfType<WorkerRunFailed>()
-            .ShouldHaveSingleItem();
-        failedEvent.BranchName.ShouldBe("feat/15-missing-check-fails");
+        // Assert — run stays active and no failed event is dispatched
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<ActiveRun>();
+        capturingDispatcher.Captured.OfType<WorkerRunFailed>().ShouldBeEmpty();
     }
 
     // ─── Category token assertions ───────────────────────────────────────────────
 
     [Fact]
-    public async Task WhenOrphanReconcile_DispatchesFailedEventWithContainerErrorCategory()
+    public async Task WhenOrphanReconcile_DispatchesFailedEventWithNonZeroExitCategory()
     {
-        // Arrange
+        // Arrange — resolver maps null-exit with no MR and no commits → NonZeroExit(-1)
         SeedActiveRun("container-orphan-category");
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(
@@ -244,7 +247,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         WorkerRunFailed failedEvent = capturingDispatcher.Captured
             .OfType<WorkerRunFailed>()
             .ShouldHaveSingleItem();
-        failedEvent.Category.ShouldBe("container_error");
+        failedEvent.Category.ShouldBe("non_zero_exit");
     }
 
     [Fact]
@@ -269,9 +272,10 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerNotFoundDuringMonitoring_DispatchesFailedEventWithContainerErrorCategory()
+    public async Task WhenContainerNotFoundDuringMonitoring_DispatchesFailedEventWithNonZeroExitCategory()
     {
-        // Arrange — second tick where _reconciled=true, monitor path hits null status
+        // Arrange — second tick where _reconciled=true, monitor path hits null status.
+        // Resolver maps null-exit with no MR and no commits → NonZeroExit(-1).
         SeedActiveRun("container-missing-category");
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
 
@@ -288,7 +292,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         WorkerRunFailed failedEvent = capturingDispatcher.Captured
             .OfType<WorkerRunFailed>()
             .ShouldHaveSingleItem();
-        failedEvent.Category.ShouldBe("container_error");
+        failedEvent.Category.ShouldBe("non_zero_exit");
     }
 
     // ─── Stubs ───────────────────────────────────────────────────────────────────

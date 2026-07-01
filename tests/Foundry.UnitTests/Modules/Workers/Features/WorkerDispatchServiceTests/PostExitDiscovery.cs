@@ -31,12 +31,13 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenExitCodeZeroAndHasCommitsAndPrFound_TransitionsToCompletedRun()
     {
-        // Arrange
+        // Arrange — resolver uses GetMergeRequestByBranchAsync (MR-state-first), so stub the MR
         SeedActiveRun("container-success-pr");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(
             hasCommits: true,
-            prUrl: "https://github.com/owner/repo/pull/42");
+            prUrl: "https://github.com/owner/repo/pull/42",
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/42"));
         WorkerDispatchService sut = BuildService(queries, exitedStatus);
 
         // Act
@@ -51,12 +52,13 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenExitCodeZeroAndHasCommitsAndPrFound_DispatchesCompletedEventWithPrUrl()
     {
-        // Arrange
+        // Arrange — resolver uses GetMergeRequestByBranchAsync (MR-state-first), so stub the MR
         SeedActiveRun("container-success-pr-dispatch");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(
             hasCommits: true,
-            prUrl: "https://github.com/owner/repo/pull/42");
+            prUrl: "https://github.com/owner/repo/pull/42",
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/42"));
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
@@ -129,9 +131,9 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenExitCodeZeroAndHasCommitsAndNoPrAfterRetries_DispatchesFailedEventWithBranchName()
+    public async Task WhenExitCodeZeroAndHasCommitsAndNoPrAfterRetries_DispatchesFailedEventWithNullBranchName()
     {
-        // Arrange
+        // Arrange — resolver returns Failure (no MR after retries); BranchName is null on Failure outcomes
         SeedActiveRun("container-no-pr-dispatch", branchName: "feat/42-my-issue");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true, prUrl: null);
@@ -145,7 +147,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         WorkerRunFailed failedEvent = capturingDispatcher.Captured
             .OfType<WorkerRunFailed>()
             .ShouldHaveSingleItem();
-        failedEvent.BranchName.ShouldBe("feat/42-my-issue");
+        failedEvent.BranchName.ShouldBeNull();
     }
 
     [Fact]

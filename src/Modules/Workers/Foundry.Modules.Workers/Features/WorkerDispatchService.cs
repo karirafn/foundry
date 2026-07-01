@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
@@ -23,14 +25,9 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
-    ILogger<WorkerDispatchService> logger,
-    TimeSpan? prRetryDelay = null) : PeriodicBackgroundService(logger)
+    ILogger<WorkerDispatchService> logger) : PeriodicBackgroundService(logger)
 {
-    private static readonly TimeSpan DefaultPrRetryDelay = TimeSpan.FromSeconds(10);
-
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
-
-    private readonly TimeSpan _prRetryDelay = prRetryDelay ?? DefaultPrRetryDelay;
 
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
@@ -61,6 +58,7 @@ internal sealed class WorkerDispatchService(
             scope.ServiceProvider.GetRequiredService<IPostExitProviderQueries>();
         IContainerOutputParser containerOutputParser =
             scope.ServiceProvider.GetRequiredService<IContainerOutputParser>();
+        WorkerOutcomeResolver resolver = scope.ServiceProvider.GetRequiredService<WorkerOutcomeResolver>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
@@ -75,6 +73,7 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
+                resolver,
                 postExitProviderQueries,
                 containerOutputParser,
                 timeoutMinutes,
@@ -89,6 +88,7 @@ internal sealed class WorkerDispatchService(
             orchestrator,
             integrationEventDispatcher,
             domainEventDispatcher,
+            resolver,
             postExitProviderQueries,
             containerOutputParser,
             timeoutMinutes,
@@ -98,7 +98,11 @@ internal sealed class WorkerDispatchService(
 
         DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
 
-        bool autoResumed = await TryAutoResumeAsync(dbContext, integrationEventDispatcher, pauseState, cancellationToken);
+        bool autoResumed = await TryAutoResumeAsync(
+            dbContext,
+            integrationEventDispatcher,
+            pauseState,
+            cancellationToken);
 
         if (!autoResumed && (pauseState.IsDispatchPaused || pauseState.UsageLimitResetsAt.HasValue))
         {
@@ -144,6 +148,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        WorkerOutcomeResolver resolver,
         IPostExitProviderQueries postExitProviderQueries,
         IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
@@ -161,33 +166,39 @@ internal sealed class WorkerDispatchService(
 
             if (status is null)
             {
-                FailureReason orphanReason = new FailureReason.ContainerError("Orphaned after restart");
-                FailedRun failedRun = activeRun.Fail(orphanReason);
-                await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
-                runsToRemove.Add(activeRun);
-
-                string? resolvedBranchName = await ResolveBranchForFailureAsync(
+                WorkerOutcome outcome = await resolver.ResolveAsync(
                     activeRun,
-                    postExitProviderQueries,
+                    exitCode: null,
+                    containerOutput: null,
+                    defaultCooldownMinutes,
                     cancellationToken);
 
-                await TryDispatchAsync(
+                if (outcome is WorkerOutcome.Indeterminate indeterminate)
+                {
+                    logger.LogWarning(
+                        "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; "
+                        + "state indeterminate: {Error}. Leaving for next tick.",
+                        activeRun.Id,
+                        activeRun.ContainerId.Value,
+                        indeterminate.Error);
+                    continue;
+                }
+
+                runsToRemove.Add(activeRun);
+
+                await ApplyOutcomeAsync(
+                    outcome,
+                    activeRun,
+                    dbContext,
+                    orchestrator,
                     integrationEventDispatcher,
-                    [new WorkerRunFailedEvent(
-                        activeRun.Id.Value,
-                        activeRun.IssueId.Value,
-                        orphanReason.Summary,
-                        Category: orphanReason.CategoryToken,
-                        BranchName: resolvedBranchName)],
-                    activeRun.Id.Value,
+                    domainEventDispatcher,
                     cancellationToken);
 
                 logger.LogWarning(
-                    "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; marking failed.",
+                    "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation.",
                     activeRun.Id,
                     activeRun.ContainerId.Value);
-
-                await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
             }
             else if (!status.IsRunning)
             {
@@ -196,6 +207,7 @@ internal sealed class WorkerDispatchService(
                     orchestrator,
                     integrationEventDispatcher,
                     domainEventDispatcher,
+                    resolver,
                     postExitProviderQueries,
                     containerOutputParser,
                     timeoutMinutes,
@@ -218,6 +230,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        WorkerOutcomeResolver resolver,
         IPostExitProviderQueries postExitProviderQueries,
         IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
@@ -232,6 +245,7 @@ internal sealed class WorkerDispatchService(
                 orchestrator,
                 integrationEventDispatcher,
                 domainEventDispatcher,
+                resolver,
                 postExitProviderQueries,
                 containerOutputParser,
                 timeoutMinutes,
@@ -246,6 +260,7 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
         IDomainEventDispatcher domainEventDispatcher,
+        WorkerOutcomeResolver resolver,
         IPostExitProviderQueries postExitProviderQueries,
         IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
@@ -254,86 +269,90 @@ internal sealed class WorkerDispatchService(
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
     {
-        WorkerStatus? status = knownStatus ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
+        WorkerStatus? status = knownStatus
+            ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
 
         if (status is null)
         {
-            FailureReason containerNotFoundReason = new FailureReason.ContainerError("Container not found");
-            FailedRun failedRun = activeRun.Fail(containerNotFoundReason);
-            await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
-
-            string? resolvedBranchName = await ResolveBranchForFailureAsync(
+            WorkerOutcome outcome = await resolver.ResolveAsync(
                 activeRun,
-                postExitProviderQueries,
+                exitCode: null,
+                containerOutput: null,
+                defaultCooldownMinutes,
                 cancellationToken);
 
-            await TryDispatchAsync(
+            if (outcome is WorkerOutcome.Indeterminate indeterminate)
+            {
+                logger.LogWarning(
+                    "Worker run {WorkerRunId} container {ContainerId} not found; "
+                    + "state indeterminate: {Error}. Leaving for next tick.",
+                    activeRun.Id,
+                    activeRun.ContainerId.Value,
+                    indeterminate.Error);
+                return;
+            }
+
+            await ApplyOutcomeAsync(
+                outcome,
+                activeRun,
+                dbContext,
+                orchestrator,
                 integrationEventDispatcher,
-                [new WorkerRunFailedEvent(
-                    activeRun.Id.Value,
-                    activeRun.IssueId.Value,
-                    containerNotFoundReason.Summary,
-                    Category: containerNotFoundReason.CategoryToken,
-                    BranchName: resolvedBranchName)],
-                activeRun.Id.Value,
+                domainEventDispatcher,
                 cancellationToken);
 
             logger.LogWarning(
-                "Worker run {WorkerRunId} container {ContainerId} not found; marking failed.",
+                "Worker run {WorkerRunId} container {ContainerId} not found; marked as {OutcomeType}.",
                 activeRun.Id,
-                activeRun.ContainerId.Value);
+                activeRun.ContainerId.Value,
+                outcome.GetType().Name);
+            return;
+        }
 
-            _lastSeenLogLength.Remove(activeRun.Id);
-            _lastSeenCommitSha.Remove(activeRun.Id);
-            await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+        // Timeout check runs regardless of IsRunning — an exited container that ran beyond the
+        // timeout ceiling is still a timeout rather than a clean exit.
+        DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(timeoutMinutes);
+        if (DateTimeOffset.UtcNow >= timeout)
+        {
+            await TryStopContainerAsync(
+                orchestrator,
+                activeRun.ContainerId.Value,
+                activeRun.Id.Value,
+                cancellationToken);
+
+            string? containerOutput = await TryGetLogsAsync(
+                orchestrator,
+                activeRun.ContainerId.Value,
+                activeRun.Id.Value,
+                cancellationToken);
+
+            RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
+
+            WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                activeRun,
+                containerOutput,
+                timeoutSummary,
+                postExitProviderQueries,
+                cancellationToken);
+
+            await ApplyOutcomeAsync(
+                timeoutOutcome,
+                activeRun,
+                dbContext,
+                orchestrator,
+                integrationEventDispatcher,
+                domainEventDispatcher,
+                cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
+                activeRun.Id,
+                timeoutMinutes);
             return;
         }
 
         if (status.IsRunning)
         {
-            DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(timeoutMinutes);
-            if (DateTimeOffset.UtcNow >= timeout)
-            {
-                await TryStopContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
-
-                string? containerOutput = await TryGetLogsAsync(
-                    orchestrator,
-                    activeRun.ContainerId.Value,
-                    activeRun.Id.Value,
-                    cancellationToken);
-
-                FailureReason timedOutReason = new FailureReason.TimedOut();
-                RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
-                FailedRun timedOut = activeRun.Fail(timedOutReason, containerOutput, timeoutSummary);
-                await dbContext.TransitionAsync(activeRun, timedOut, domainEventDispatcher, cancellationToken);
-
-                string? resolvedBranchName = await ResolveBranchForFailureAsync(
-                    activeRun,
-                    postExitProviderQueries,
-                    cancellationToken);
-
-                await TryDispatchAsync(
-                    integrationEventDispatcher,
-                    [new WorkerRunFailedEvent(
-                        activeRun.Id.Value,
-                        activeRun.IssueId.Value,
-                        timedOutReason.Summary,
-                        Category: timedOutReason.CategoryToken,
-                        BranchName: resolvedBranchName)],
-                    activeRun.Id.Value,
-                    cancellationToken);
-
-                logger.LogWarning(
-                    "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
-                    activeRun.Id,
-                    timeoutMinutes);
-
-                await TryRemoveContainerAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
-                _lastSeenLogLength.Remove(activeRun.Id);
-                _lastSeenCommitSha.Remove(activeRun.Id);
-                return;
-            }
-
             await ObserveRunningWorkerAsync(
                 dbContext,
                 orchestrator,
@@ -341,21 +360,291 @@ internal sealed class WorkerDispatchService(
                 postExitProviderQueries,
                 activeRun,
                 cancellationToken);
-
             return;
         }
 
-        await ProcessExitedRunAsync(
+        // Container exited cleanly within the timeout window
+        string? exitContainerOutput = await TryGetLogsAsync(
+            orchestrator,
+            activeRun.ContainerId.Value,
+            activeRun.Id.Value,
+            cancellationToken);
+
+        WorkerOutcome exitOutcome = await resolver.ResolveAsync(
+            activeRun,
+            status.ExitCode,
+            exitContainerOutput,
+            defaultCooldownMinutes,
+            cancellationToken);
+
+        if (exitOutcome is WorkerOutcome.Indeterminate exitIndeterminate)
+        {
+            logger.LogWarning(
+                "Worker run {WorkerRunId} exited but state is indeterminate: {Error}. Leaving for next tick.",
+                activeRun.Id,
+                exitIndeterminate.Error);
+            return;
+        }
+
+        await ApplyOutcomeAsync(
+            exitOutcome,
+            activeRun,
             dbContext,
             orchestrator,
             integrationEventDispatcher,
             domainEventDispatcher,
-            postExitProviderQueries,
-            containerOutputParser,
-            defaultCooldownMinutes,
-            activeRun,
-            status,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Applies side effects for a resolved <see cref="WorkerOutcome"/>: state transition,
+    /// integration event dispatch, usage-limit persistence, and container stop+remove.
+    /// <see cref="WorkerOutcome.Indeterminate"/> must be handled by the caller before
+    /// invoking this method.
+    /// </summary>
+    private async Task ApplyOutcomeAsync(
+        WorkerOutcome outcome,
+        ActiveRun activeRun,
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IDomainEventDispatcher domainEventDispatcher,
+        CancellationToken cancellationToken)
+    {
+        switch (outcome)
+        {
+            case WorkerOutcome.Completed completed:
+            {
+                CompletedRun completedRun = activeRun.Complete(
+                    0,
+                    completed.BranchName,
+                    completed.PullRequestUrl,
+                    completed.Summary);
+                await dbContext.TransitionAsync(activeRun, completedRun, domainEventDispatcher, cancellationToken);
+                await TryDispatchAsync(
+                    integrationEventDispatcher,
+                    [new WorkerRunCompletedEvent(
+                        activeRun.Id.Value,
+                        activeRun.IssueId.Value,
+                        completed.BranchName.Value,
+                        completed.PullRequestUrl.Value,
+                        WorkerRunMergeState.Merged)],
+                    activeRun.Id.Value,
+                    cancellationToken);
+                logger.LogInformation(
+                    "Worker run {WorkerRunId} completed (merged, PR: {PrUrl}, branch: {BranchName}).",
+                    activeRun.Id,
+                    completed.PullRequestUrl.Value,
+                    completed.BranchName.Value);
+                break;
+            }
+
+            case WorkerOutcome.Review review:
+            {
+                CompletedRun reviewRun = activeRun.Complete(
+                    0,
+                    review.BranchName,
+                    review.PullRequestUrl,
+                    review.Summary);
+                await dbContext.TransitionAsync(activeRun, reviewRun, domainEventDispatcher, cancellationToken);
+                await TryDispatchAsync(
+                    integrationEventDispatcher,
+                    [new WorkerRunCompletedEvent(
+                        activeRun.Id.Value,
+                        activeRun.IssueId.Value,
+                        review.BranchName.Value,
+                        review.PullRequestUrl.Value,
+                        WorkerRunMergeState.Open)],
+                    activeRun.Id.Value,
+                    cancellationToken);
+                logger.LogInformation(
+                    "Worker run {WorkerRunId} completed with open PR: {PrUrl} (branch: {BranchName}).",
+                    activeRun.Id,
+                    review.PullRequestUrl.Value,
+                    review.BranchName.Value);
+                break;
+            }
+
+            case WorkerOutcome.Unchanged unchanged:
+            {
+                CompletedRun unchangedRun = activeRun.Complete(
+                    0,
+                    unchanged.BranchName,
+                    null,
+                    unchanged.Summary);
+                await dbContext.TransitionAsync(activeRun, unchangedRun, domainEventDispatcher, cancellationToken);
+                await TryDispatchAsync(
+                    integrationEventDispatcher,
+                    [new WorkerRunCompletedEvent(
+                        activeRun.Id.Value,
+                        activeRun.IssueId.Value,
+                        unchanged.BranchName.Value,
+                        null,
+                        WorkerRunMergeState.None)],
+                    activeRun.Id.Value,
+                    cancellationToken);
+                logger.LogInformation(
+                    "Worker run {WorkerRunId} completed with no commits (unchanged, branch: {BranchName}).",
+                    activeRun.Id,
+                    unchanged.BranchName.Value);
+                break;
+            }
+
+            case WorkerOutcome.ContinuableFailure continuable:
+            {
+                FailedRun continuableFailed = activeRun.Fail(
+                    continuable.FailureReason,
+                    continuable.ContainerOutput,
+                    continuable.Summary);
+                await dbContext.TransitionAsync(
+                    activeRun,
+                    continuableFailed,
+                    domainEventDispatcher,
+                    cancellationToken);
+                await PersistUsageLimitIfNeededAsync(
+                    dbContext,
+                    integrationEventDispatcher,
+                    continuable.FailureReason,
+                    cancellationToken);
+                await TryDispatchAsync(
+                    integrationEventDispatcher,
+                    [new WorkerRunFailedEvent(
+                        activeRun.Id.Value,
+                        activeRun.IssueId.Value,
+                        continuable.FailureReason.Summary,
+                        Category: continuable.FailureReason.CategoryToken,
+                        BranchName: continuable.BranchName.Value)],
+                    activeRun.Id.Value,
+                    cancellationToken);
+                logger.LogWarning(
+                    "Worker run {WorkerRunId} failed with commits (reason: {Reason}, branch: {BranchName}).",
+                    activeRun.Id,
+                    continuable.FailureReason.Summary,
+                    continuable.BranchName.Value);
+                break;
+            }
+
+            case WorkerOutcome.Failure failure:
+            {
+                FailedRun failedRun = activeRun.Fail(
+                    failure.FailureReason,
+                    failure.ContainerOutput,
+                    failure.Summary);
+                await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
+                await PersistUsageLimitIfNeededAsync(
+                    dbContext,
+                    integrationEventDispatcher,
+                    failure.FailureReason,
+                    cancellationToken);
+                await TryDispatchAsync(
+                    integrationEventDispatcher,
+                    [new WorkerRunFailedEvent(
+                        activeRun.Id.Value,
+                        activeRun.IssueId.Value,
+                        failure.FailureReason.Summary,
+                        Category: failure.FailureReason.CategoryToken,
+                        BranchName: null)],
+                    activeRun.Id.Value,
+                    cancellationToken);
+                logger.LogWarning(
+                    "Worker run {WorkerRunId} failed (reason: {Reason}).",
+                    activeRun.Id,
+                    failure.FailureReason.Summary);
+                break;
+            }
+
+            default:
+                // WorkerOutcome.Indeterminate must be filtered by the caller before reaching here.
+                throw new UnreachableException($"Unhandled outcome type {outcome.GetType().Name}");
+        }
+
+        _lastSeenLogLength.Remove(activeRun.Id);
+        _lastSeenCommitSha.Remove(activeRun.Id);
+        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="WorkerOutcome"/> for a run that exceeded the timeout ceiling.
+    /// Consults <see cref="IPostExitProviderQueries.HasBranchCommitsAsync"/> to decide between
+    /// <see cref="WorkerOutcome.ContinuableFailure"/> (commits exist or query failed transiently)
+    /// and <see cref="WorkerOutcome.Failure"/> (definitively no commits).
+    /// </summary>
+    private static async Task<WorkerOutcome> BuildTimeoutOutcomeAsync(
+        ActiveRun run,
+        string? containerOutput,
+        RunResultSummary? summary,
+        IPostExitProviderQueries postExitProviderQueries,
+        CancellationToken cancellationToken)
+    {
+        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
+            run.MonitoredRepositoryId,
+            run.BranchName.Value,
+            cancellationToken);
+
+        FailureReason timedOut = new FailureReason.TimedOut();
+
+        if (commitsResult is Result<bool>.Failure commitsFailure)
+        {
+            if (commitsFailure.Error.Kind == ErrorKind.NotFound)
+            {
+                // Branch definitively does not exist — no commits to preserve
+                return new WorkerOutcome.Failure(timedOut, containerOutput, summary);
+            }
+
+            // Transient provider failure — preserve the branch to allow a future retry
+            return new WorkerOutcome.ContinuableFailure(run.BranchName, timedOut, containerOutput, summary);
+        }
+
+        bool hasCommits = ((Result<bool>.Success)commitsResult).Value;
+
+        return hasCommits
+            ? new WorkerOutcome.ContinuableFailure(run.BranchName, timedOut, containerOutput, summary)
+            : new WorkerOutcome.Failure(timedOut, containerOutput, summary);
+    }
+
+    /// <summary>
+    /// When <paramref name="failureReason"/> is <see cref="FailureReason.UsageLimited"/>,
+    /// persists the reset time to <see cref="GlobalSettings"/> (extend-only) and dispatches
+    /// <see cref="DispatchPausedEvent"/> when the value is newly set or extended.
+    /// </summary>
+    private async Task PersistUsageLimitIfNeededAsync(
+        DbContext dbContext,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        FailureReason failureReason,
+        CancellationToken cancellationToken)
+    {
+        if (failureReason is not FailureReason.UsageLimited usageLimited)
+        {
+            return;
+        }
+
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is null)
+        {
+            logger.LogWarning(
+                "Usage limit detected but could not persist reset time — no GlobalSettings row exists.");
+            return;
+        }
+
+        DateTimeOffset? resetsAtBefore = settings.UsageLimitResetsAt;
+        settings.SetUsageLimitResetsAt(usageLimited.ResetsAt);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        bool resetsAtChanged = settings.UsageLimitResetsAt != resetsAtBefore;
+
+        if (resetsAtChanged)
+        {
+            await TryDispatchAsync(
+                integrationEventDispatcher,
+                new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value),
+                cancellationToken);
+        }
+
+        logger.LogWarning(
+            "Usage limit detected; dispatch paused until {ResetsAt}.",
+            usageLimited.ResetsAt);
     }
 
     private async Task ObserveRunningWorkerAsync(
@@ -407,424 +696,6 @@ internal sealed class WorkerDispatchService(
         }
     }
 
-    private async Task ProcessExitedRunAsync(
-        DbContext dbContext,
-        IWorkerOrchestrator orchestrator,
-        IIntegrationEventDispatcher integrationEventDispatcher,
-        IDomainEventDispatcher domainEventDispatcher,
-        IPostExitProviderQueries postExitProviderQueries,
-        IContainerOutputParser containerOutputParser,
-        int defaultCooldownMinutes,
-        ActiveRun activeRun,
-        WorkerStatus status,
-        CancellationToken cancellationToken)
-    {
-        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
-            activeRun.MonitoredRepositoryId,
-            activeRun.BranchName.Value,
-            cancellationToken);
-
-        if (commitsResult is Result<bool>.Failure commitsFailure)
-        {
-            logger.LogWarning(
-                "Failed to check branch commits for run {RunId}: {Error}",
-                activeRun.Id,
-                commitsFailure.Error);
-            return;
-        }
-
-        bool hasCommits = commitsResult is Result<bool>.Success { Value: true };
-
-        if (status.ExitCode == 0 && hasCommits)
-        {
-            await ProcessSuccessWithCommitsAsync(
-                dbContext,
-                orchestrator,
-                integrationEventDispatcher,
-                domainEventDispatcher,
-                postExitProviderQueries,
-                containerOutputParser,
-                defaultCooldownMinutes,
-                activeRun,
-                cancellationToken);
-        }
-        else if (status.ExitCode == 0 && !hasCommits)
-        {
-            await ProcessSuccessWithoutCommitsAsync(
-                dbContext,
-                orchestrator,
-                integrationEventDispatcher,
-                domainEventDispatcher,
-                containerOutputParser,
-                defaultCooldownMinutes,
-                activeRun,
-                cancellationToken);
-        }
-        else
-        {
-            int exitCode = status.ExitCode ?? -1;
-            string? containerOutput = await TryGetLogsAsync(
-                orchestrator,
-                activeRun.ContainerId.Value,
-                activeRun.Id.Value,
-                cancellationToken);
-
-            await ProcessNonZeroExitAsync(
-                dbContext,
-                orchestrator,
-                integrationEventDispatcher,
-                domainEventDispatcher,
-                containerOutputParser,
-                defaultCooldownMinutes,
-                activeRun,
-                exitCode,
-                hasCommits,
-                containerOutput,
-                cancellationToken);
-        }
-    }
-
-    private async Task ProcessSuccessWithCommitsAsync(
-        DbContext dbContext,
-        IWorkerOrchestrator orchestrator,
-        IIntegrationEventDispatcher integrationEventDispatcher,
-        IDomainEventDispatcher domainEventDispatcher,
-        IPostExitProviderQueries postExitProviderQueries,
-        IContainerOutputParser containerOutputParser,
-        int defaultCooldownMinutes,
-        ActiveRun activeRun,
-        CancellationToken cancellationToken)
-    {
-        string? prUrl = await TryGetPullRequestUrlAsync(
-            postExitProviderQueries,
-            activeRun,
-            cancellationToken);
-
-        if (prUrl is not null)
-        {
-            string? prSuccessOutput = await TryGetLogsAsync(
-                orchestrator,
-                activeRun.ContainerId.Value,
-                activeRun.Id.Value,
-                cancellationToken);
-
-            RunResultSummary? prSuccessSummary = containerOutputParser.ParseRunResultSummary(prSuccessOutput);
-
-            CompletedRun completed = activeRun.Complete(
-                0,
-                activeRun.BranchName,
-                PullRequestUrl.From(prUrl),
-                prSuccessSummary);
-            await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
-
-            await TryDispatchAsync(
-                integrationEventDispatcher,
-                [new WorkerRunCompletedEvent(
-                    activeRun.Id.Value,
-                    activeRun.IssueId.Value,
-                    activeRun.BranchName.Value,
-                    prUrl,
-                    WorkerRunMergeState.Open)],
-                activeRun.Id.Value,
-                cancellationToken);
-
-            logger.LogInformation(
-                "Worker run {WorkerRunId} completed with PR {PullRequestUrl} (branch: {BranchName}).",
-                activeRun.Id,
-                prUrl,
-                activeRun.BranchName.Value);
-        }
-        else
-        {
-            // Commits pushed but no PR found after retries — check for usage limit in container output
-            string? containerOutput = await TryGetLogsAsync(
-                orchestrator,
-                activeRun.ContainerId.Value,
-                activeRun.Id.Value,
-                cancellationToken);
-
-            ContainerOutputParseResult parseResult = containerOutputParser.Parse(
-                containerOutput,
-                defaultCooldownMinutes);
-
-            FailureReason failureReason = await ResolveFailureReasonAsync(
-                dbContext,
-                integrationEventDispatcher,
-                parseResult,
-                new FailureReason.ContainerError("No pull request found after retries"),
-                cancellationToken);
-
-            RunResultSummary? noPrSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
-
-            FailedRun failedRun = activeRun.Fail(failureReason, containerOutput, noPrSummary);
-            await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
-
-            await TryDispatchAsync(
-                integrationEventDispatcher,
-                [new WorkerRunFailedEvent(
-                    activeRun.Id.Value,
-                    activeRun.IssueId.Value,
-                    failureReason.Summary,
-                    Category: failureReason.CategoryToken,
-                    BranchName: activeRun.BranchName.Value)],
-                activeRun.Id.Value,
-                cancellationToken);
-
-            logger.LogWarning(
-                "Worker run {WorkerRunId} exited with 0 but no PR found after retries (branch: {BranchName}).",
-                activeRun.Id,
-                activeRun.BranchName.Value);
-        }
-
-        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
-    }
-
-    private async Task ProcessSuccessWithoutCommitsAsync(
-        DbContext dbContext,
-        IWorkerOrchestrator orchestrator,
-        IIntegrationEventDispatcher integrationEventDispatcher,
-        IDomainEventDispatcher domainEventDispatcher,
-        IContainerOutputParser containerOutputParser,
-        int defaultCooldownMinutes,
-        ActiveRun activeRun,
-        CancellationToken cancellationToken)
-    {
-        string? containerOutput = await TryGetLogsAsync(
-            orchestrator,
-            activeRun.ContainerId.Value,
-            activeRun.Id.Value,
-            cancellationToken);
-
-        ContainerOutputParseResult parseResult = containerOutputParser.Parse(
-            containerOutput,
-            defaultCooldownMinutes);
-
-        RunResultSummary? noCommitsSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
-
-        if (parseResult is ContainerOutputParseResult.UsageLimited)
-        {
-            FailureReason failureReason = await ResolveFailureReasonAsync(
-                dbContext,
-                integrationEventDispatcher,
-                parseResult,
-                new FailureReason.ContainerError("No commits and usage limited"),
-                cancellationToken);
-
-            FailedRun failedRun = activeRun.Fail(failureReason, containerOutput: null, noCommitsSummary);
-            await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
-
-            await TryDispatchAsync(
-                integrationEventDispatcher,
-                [new WorkerRunFailedEvent(
-                    activeRun.Id.Value,
-                    activeRun.IssueId.Value,
-                    failureReason.Summary,
-                    Category: failureReason.CategoryToken)],
-                activeRun.Id.Value,
-                cancellationToken);
-
-            logger.LogInformation(
-                "Worker run {WorkerRunId} completed with no commits (usage limited, branch: {BranchName}).",
-                activeRun.Id,
-                activeRun.BranchName.Value);
-        }
-        else
-        {
-            // Exit code 0 with no commits — unchanged
-            CompletedRun completed = activeRun.Complete(0, activeRun.BranchName, null, noCommitsSummary);
-            await dbContext.TransitionAsync(activeRun, completed, domainEventDispatcher, cancellationToken);
-
-            await TryDispatchAsync(
-                integrationEventDispatcher,
-                [new WorkerRunCompletedEvent(
-                    activeRun.Id.Value,
-                    activeRun.IssueId.Value,
-                    activeRun.BranchName.Value,
-                    null,
-                    WorkerRunMergeState.None)],
-                activeRun.Id.Value,
-                cancellationToken);
-
-            logger.LogInformation(
-                "Worker run {WorkerRunId} completed with no commits (branch: {BranchName}).",
-                activeRun.Id,
-                activeRun.BranchName.Value);
-        }
-
-        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
-    }
-
-    private const string HeuristicBootstrapDetail =
-        "stage=unknown (no result line; container terminated before producing output)";
-
-    private async Task ProcessNonZeroExitAsync(
-        DbContext dbContext,
-        IWorkerOrchestrator orchestrator,
-        IIntegrationEventDispatcher integrationEventDispatcher,
-        IDomainEventDispatcher domainEventDispatcher,
-        IContainerOutputParser containerOutputParser,
-        int defaultCooldownMinutes,
-        ActiveRun activeRun,
-        int exitCode,
-        bool hasCommits,
-        string? containerOutput,
-        CancellationToken cancellationToken)
-    {
-        ContainerOutputParseResult parseResult = containerOutputParser.Parse(
-            containerOutput,
-            defaultCooldownMinutes);
-
-        // NoResultLine with non-zero exit means the container terminated before emitting any
-        // result line — treat as a bootstrap failure. ParseFailure means a JSON line was found
-        // but was malformed/oversized (Claude ran and produced output), so NonZeroExit semantics
-        // are preserved.
-        FailureReason fallbackReason = parseResult is ContainerOutputParseResult.NoResultLine
-            ? new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail)
-            : new FailureReason.NonZeroExit(exitCode);
-
-        FailureReason failureReason = await ResolveFailureReasonAsync(
-            dbContext,
-            integrationEventDispatcher,
-            parseResult,
-            fallbackReason,
-            cancellationToken);
-
-        // Null branch name when no commits → FailedIssue; non-null → ContinuableFailedIssue
-        string? branchNameForEvent = hasCommits ? activeRun.BranchName.Value : null;
-
-        string exitReason = failureReason.Summary;
-
-        RunResultSummary? nonZeroSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
-
-        FailedRun failedRun = activeRun.Fail(failureReason, containerOutput, nonZeroSummary);
-        await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
-
-        await TryDispatchAsync(
-            integrationEventDispatcher,
-            [new WorkerRunFailedEvent(
-                activeRun.Id.Value,
-                activeRun.IssueId.Value,
-                exitReason,
-                Category: failureReason.CategoryToken,
-                BranchName: branchNameForEvent)],
-            activeRun.Id.Value,
-            cancellationToken);
-
-        if (failureReason is FailureReason.UsageLimited usageLimitedReason)
-        {
-            logger.LogWarning(
-                "Worker run {WorkerRunId} exited with code {ExitCode} due to usage limit; resets at {ResetsAt}.",
-                activeRun.Id,
-                exitCode,
-                usageLimitedReason.ResetsAt);
-        }
-        else if (failureReason is FailureReason.WorkerBootstrapFailed bootstrapFailed)
-        {
-            logger.LogWarning(
-                "Worker run {WorkerRunId} failed during bootstrap ({Detail}).",
-                activeRun.Id,
-                bootstrapFailed.Detail);
-        }
-        else
-        {
-            logger.LogWarning(
-                "Worker run {WorkerRunId} exited with code {ExitCode} (commits: {HasCommits}).",
-                activeRun.Id,
-                exitCode,
-                hasCommits);
-        }
-
-        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
-    }
-
-    /// <summary>
-    /// Resolves the branch name to include on a <see cref="WorkerRunFailed"/> event for non-clean-exit paths
-    /// (timeout, orphan-reconcile, container-not-found).
-    /// Returns the branch name when the branch has commits so the handler routes to
-    /// <c>ContinuableFailedIssue</c>; returns <c>null</c> when there are no commits so the handler
-    /// routes to <c>FailedIssue</c> instead. On a query failure (e.g. provider outage) falls back to
-    /// the branch name to preserve existing behavior and avoid losing recoverable branches.
-    /// </summary>
-    private async Task<string?> ResolveBranchForFailureAsync(
-        ActiveRun activeRun,
-        IPostExitProviderQueries postExitProviderQueries,
-        CancellationToken cancellationToken)
-    {
-        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
-            activeRun.MonitoredRepositoryId,
-            activeRun.BranchName.Value,
-            cancellationToken);
-
-        if (commitsResult is Result<bool>.Failure commitsFailure)
-        {
-            logger.LogWarning(
-                "Failed to check branch commits for run {RunId} during failure resolution: {Error}; defaulting to branch name.",
-                activeRun.Id,
-                commitsFailure.Error);
-            return activeRun.BranchName.Value;
-        }
-
-        bool hasCommits = commitsResult is Result<bool>.Success { Value: true };
-        return hasCommits ? activeRun.BranchName.Value : null;
-    }
-
-    /// <summary>
-    /// Resolves the failure reason from a container output parse result.
-    /// If the parse result indicates a usage limit, sets <see cref="GlobalSettings.UsageLimitResetsAt"/>
-    /// (extend-only; past times are ignored by <see cref="GlobalSettings.SetUsageLimitResetsAt"/>)
-    /// and dispatches <see cref="DispatchPausedEvent"/> when the reset time is newly persisted or extended.
-    /// Otherwise returns the <paramref name="fallbackReason"/>.
-    /// </summary>
-    private async Task<FailureReason> ResolveFailureReasonAsync(
-        DbContext dbContext,
-        IIntegrationEventDispatcher integrationEventDispatcher,
-        ContainerOutputParseResult parseResult,
-        FailureReason fallbackReason,
-        CancellationToken cancellationToken)
-    {
-        if (parseResult is ContainerOutputParseResult.WorkerBootstrapFailed bootstrapFailed)
-        {
-            string redactedDetail = SecretRedactor.Redact(bootstrapFailed.Detail);
-            return new FailureReason.WorkerBootstrapFailed(redactedDetail);
-        }
-
-        if (parseResult is not ContainerOutputParseResult.UsageLimited usageLimited)
-        {
-            return fallbackReason;
-        }
-
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (settings is null)
-        {
-            logger.LogWarning(
-                "Usage limit detected but could not persist reset time — no GlobalSettings row exists.");
-        }
-        else
-        {
-            DateTimeOffset? resetsAtBefore = settings.UsageLimitResetsAt;
-            settings.SetUsageLimitResetsAt(usageLimited.ResetsAt);
-            await dbContext.SaveChangesAsync(cancellationToken);
-
-            bool resetsAtChanged = settings.UsageLimitResetsAt != resetsAtBefore;
-
-            if (resetsAtChanged)
-            {
-                await TryDispatchAsync(
-                    integrationEventDispatcher,
-                    new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value),
-                    cancellationToken);
-            }
-
-            logger.LogWarning(
-                "Usage limit detected; dispatch paused until {ResetsAt}.",
-                usageLimited.ResetsAt);
-        }
-
-        return new FailureReason.UsageLimited(usageLimited.ResetsAt);
-    }
-
     /// <summary>
     /// When the usage-limit reset time has passed and auto-resume is enabled, calls
     /// <see cref="GlobalSettings.ResumeDispatch"/>, persists, and publishes
@@ -863,34 +734,6 @@ internal sealed class WorkerDispatchService(
         return true;
     }
 
-    private async Task<string?> TryGetPullRequestUrlAsync(
-        IPostExitProviderQueries postExitProviderQueries,
-        ActiveRun activeRun,
-        CancellationToken cancellationToken)
-    {
-        for (int attempt = 0; attempt < PrRetryAttempts; attempt++)
-        {
-            if (attempt > 0)
-            {
-                await Task.Delay(_prRetryDelay, cancellationToken);
-            }
-
-            Result<string> prResult = await postExitProviderQueries.GetPullRequestByBranchAsync(
-                activeRun.MonitoredRepositoryId,
-                activeRun.BranchName.Value,
-                cancellationToken);
-
-            if (prResult is Result<string>.Success { Value: { Length: > 0 } prUrl })
-            {
-                return prUrl;
-            }
-        }
-
-        return null;
-    }
-
-    private const int PrRetryAttempts = 3;
-
     private async Task RemoveUnknownContainersAsync(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
@@ -918,7 +761,7 @@ internal sealed class WorkerDispatchService(
             }
         }
 #pragma warning disable CA1031 // Docker daemon failures during startup must not crash the BackgroundService; the warning log surfaces the issue without blocking reconciliation.
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogWarning(
@@ -938,7 +781,7 @@ internal sealed class WorkerDispatchService(
             await integrationEventDispatcher.DispatchAsync(events, cancellationToken);
         }
 #pragma warning disable CA1031 // Any failure in the handler (e.g. DB error during issue transition) must not crash the BackgroundService tick; the stuck state is visible via the warning log.
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogWarning(ex, "Failed to dispatch integration event for WorkerRun {WorkerRunId}", workerRunId);
@@ -959,7 +802,7 @@ internal sealed class WorkerDispatchService(
             await integrationEventDispatcher.DispatchAsync([systemEvent], cancellationToken);
         }
 #pragma warning disable CA1031 // System-level dispatch failures (e.g. DB error in event handler) must not crash the BackgroundService tick; the event type in the warning is sufficient for triage.
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogWarning(
@@ -980,7 +823,7 @@ internal sealed class WorkerDispatchService(
             await orchestrator.StopAndRemoveAsync(containerId, cancellationToken);
         }
 #pragma warning disable CA1031 // Best-effort container removal after a terminal state transition has already succeeded; Docker exceptions must not crash the BackgroundService tick.
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogWarning(
@@ -1002,34 +845,12 @@ internal sealed class WorkerDispatchService(
             await orchestrator.StopContainerAsync(containerId, cancellationToken);
         }
 #pragma warning disable CA1031 // Best-effort stop before log capture on timeout path; Docker exceptions must not crash the BackgroundService tick or prevent log capture and cleanup.
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogWarning(
                 ex,
                 "Failed to stop container {ContainerId} for WorkerRun {WorkerRunId}.",
-                containerId,
-                workerRunId);
-        }
-    }
-
-    private async Task TryRemoveContainerAsync(
-        IWorkerOrchestrator orchestrator,
-        string containerId,
-        Guid workerRunId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await orchestrator.RemoveContainerAsync(containerId, cancellationToken);
-        }
-#pragma warning disable CA1031 // Best-effort container removal after terminal state transition; Docker exceptions must not crash the BackgroundService tick.
-        catch (Exception ex)
-#pragma warning restore CA1031
-        {
-            logger.LogWarning(
-                ex,
-                "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after timeout.",
                 containerId,
                 workerRunId);
         }
@@ -1055,7 +876,7 @@ internal sealed class WorkerDispatchService(
                 : output;
         }
 #pragma warning disable CA1031 // Best-effort log capture before transition; Docker exceptions must not crash the BackgroundService tick or prevent the failure transition.
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogWarning(
