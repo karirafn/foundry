@@ -664,45 +664,6 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<LatestBranchCommit>.Ok(new LatestBranchCommit(shortSha, firstLine));
     }
 
-    public async Task<Result<string>> GetPullRequestByBranchAsync(
-        Uri apiBaseUrl,
-        RepositorySlug slug,
-        string branchName,
-        string token,
-        CancellationToken cancellationToken)
-    {
-        if (apiBaseUrl.Scheme is not "https")
-        {
-            return Result<string>.Fail(GitHubErrors.InvalidBaseUrl);
-        }
-
-        string owner = Uri.EscapeDataString(slug.Owner);
-        string repo = Uri.EscapeDataString(slug.Name);
-        string encodedHead = Uri.EscapeDataString($"{slug.Owner}:{branchName}");
-        string relativePath = $"repos/{owner}/{repo}/pulls?head={encodedHead}&state=open";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
-
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Result<string>.Fail(ErrorFromNonSuccess(response));
-        }
-
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitHubPullRequestListItemDto>? dtos =
-            JsonSerializer.Deserialize<List<GitHubPullRequestListItemDto>>(body, JsonOptions);
-
-        string pullRequestUrl = (dtos ?? []).FirstOrDefault()?.HtmlUrl ?? string.Empty;
-        return Result<string>.Ok(pullRequestUrl);
-    }
-
     public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -904,8 +865,6 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private sealed record GitHubGitObjectDto(string Sha);
 
     private sealed record GitHubCompareDto(int AheadBy);
-
-    private sealed record GitHubPullRequestListItemDto(string HtmlUrl);
 
     private sealed record GitHubCommitListItemDto(string Sha, GitHubCommitDetailDto? Commit);
 

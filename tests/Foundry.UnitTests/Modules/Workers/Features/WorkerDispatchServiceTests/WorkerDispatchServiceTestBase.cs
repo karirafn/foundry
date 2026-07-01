@@ -92,7 +92,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IGlobalSettingsQueries>(
             _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
         services.AddScoped<IPostExitProviderQueries>(
-            _ => postExitProviderQueries ?? new StubPostExitProviderQueries(hasCommits: false, prUrl: null));
+            _ => postExitProviderQueries ?? new StubPostExitProviderQueries(hasCommits: false));
         services.AddSingleton<IContainerOutputParser>(
             _ => containerOutputParser ?? new NullContainerOutputParser());
 
@@ -116,10 +116,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     /// when no error is scripted.
     /// </para>
     /// <para>
-    /// <paramref name="prUrl"/> — kept for the legacy <see cref="GetPullRequestByBranchAsync"/>
-    /// call; not used by the resolver path.
-    /// </para>
-    /// <para>
     /// <paramref name="mergeRequest"/> — when set, <see cref="GetMergeRequestByBranchAsync"/>
     /// returns this value; otherwise returns <see cref="MergeRequestPresence.None"/>.
     /// </para>
@@ -134,7 +130,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     /// </summary>
     protected sealed class StubPostExitProviderQueries(
         bool hasCommits = false,
-        string? prUrl = null,
         MergeRequestByBranch? mergeRequest = null,
         Error? mergeRequestError = null,
         Error? hasCommitsError = null) : IPostExitProviderQueries
@@ -152,15 +147,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             => hasCommitsError is not null
                 ? Task.FromResult(Result<bool>.Fail(hasCommitsError))
                 : Task.FromResult(Result<bool>.Ok(hasCommits));
-
-        public Task<Result<string>> GetPullRequestByBranchAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-        {
-            string value = prUrl ?? string.Empty;
-            return Task.FromResult(Result<string>.Ok(value));
-        }
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,

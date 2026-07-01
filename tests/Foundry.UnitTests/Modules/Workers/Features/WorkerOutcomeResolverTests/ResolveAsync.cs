@@ -556,12 +556,6 @@ public sealed class ResolveAsync
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
 
-        public Task<Result<string>> GetPullRequestByBranchAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(string.Empty));
-
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,

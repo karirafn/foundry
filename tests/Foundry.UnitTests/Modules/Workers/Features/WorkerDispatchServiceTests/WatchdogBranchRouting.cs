@@ -28,7 +28,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedActiveRun("container-timeout-with-commits", branchName: "feat/7-partial-work");
-        StubPostExitProviderQueries postExitQueries = new(hasCommits: true, prUrl: null);
+        StubPostExitProviderQueries postExitQueries = new(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(
             orchestrator: new RunningStubOrchestrator(),
@@ -51,7 +51,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedActiveRun("container-timeout-no-commits", branchName: "feat/8-no-commits");
-        StubPostExitProviderQueries postExitQueries = new(hasCommits: false, prUrl: null);
+        StubPostExitProviderQueries postExitQueries = new(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(
             orchestrator: new RunningStubOrchestrator(),
@@ -99,7 +99,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     {
         // Arrange — first tick, container not found during reconciliation
         SeedActiveRun("container-orphan-with-commits", branchName: "feat/10-orphan-commits");
-        StubPostExitProviderQueries postExitQueries = new(hasCommits: true, prUrl: null);
+        StubPostExitProviderQueries postExitQueries = new(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
@@ -121,7 +121,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     {
         // Arrange — first tick, container not found during reconciliation
         SeedActiveRun("container-orphan-no-commits", branchName: "feat/11-orphan-no-commits");
-        StubPostExitProviderQueries postExitQueries = new(hasCommits: false, prUrl: null);
+        StubPostExitProviderQueries postExitQueries = new(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
@@ -167,7 +167,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     {
         // Arrange — container returns null status; reconcile + monitor paths both use ResolveBranchForFailureAsync
         SeedActiveRun("container-missing-with-commits", branchName: "feat/13-missing-commits");
-        StubPostExitProviderQueries postExitQueries = new(hasCommits: true, prUrl: null);
+        StubPostExitProviderQueries postExitQueries = new(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
@@ -189,7 +189,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     {
         // Arrange — container returns null status on second tick
         SeedActiveRun("container-missing-no-commits", branchName: "feat/14-missing-no-commits");
-        StubPostExitProviderQueries postExitQueries = new(hasCommits: false, prUrl: null);
+        StubPostExitProviderQueries postExitQueries = new(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
@@ -427,12 +427,6 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
-
-        public Task<Result<string>> GetPullRequestByBranchAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(string.Empty));
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,

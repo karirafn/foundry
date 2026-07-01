@@ -21,9 +21,8 @@ namespace Foundry.IntegrationTests.Modules.Workers.Features.WorkerDispatchServic
 
 /// <summary>
 /// Pre-ship integration test verifying the MR-state-first outcome path wires correctly through
-/// the real module DI. The merged-MR + branch-deleted scenario was unhandled by the old
-/// GetPullRequestByBranchAsync path (deleted branches return empty); WorkerOutcomeResolver's
-/// GetMergeRequestByBranchAsync-first approach resolves it correctly.
+/// the real module DI. WorkerOutcomeResolver's GetMergeRequestByBranchAsync-first approach
+/// correctly resolves the merged-MR + branch-deleted scenario.
 /// </summary>
 public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
 {
@@ -162,12 +161,6 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
             };
             return Task.FromResult(Result<bool>.Fail(error));
         }
-
-        public Task<Result<string>> GetPullRequestByBranchAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(string.Empty));
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,

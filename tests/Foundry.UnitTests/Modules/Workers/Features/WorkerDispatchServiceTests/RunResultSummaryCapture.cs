@@ -43,7 +43,6 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         StubPostExitProviderQueries queries = new(
             hasCommits: true,
-            prUrl: "https://github.com/owner/repo/pull/1",
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/1"));
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "some output");
         WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
@@ -69,7 +68,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             resultText: "Error", subtype: "error", isError: true,
             durationMs: 500, numTurns: 1, totalCostUsd: 0.01m, inputTokens: 50, outputTokens: 10);
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
-        StubPostExitProviderQueries queries = new(hasCommits: false, prUrl: null);
+        StubPostExitProviderQueries queries = new(hasCommits: false);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "error output");
         WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
 
@@ -91,7 +90,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         SeedActiveRun("container-summary-null");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         ScriptedContainerOutputParser parser = new(runResultSummary: null);
-        StubPostExitProviderQueries queries = new(hasCommits: false, prUrl: null);
+        StubPostExitProviderQueries queries = new(hasCommits: false);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "no result line");
         WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
 
@@ -115,7 +114,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             resultText: "Done", subtype: null, isError: false,
             durationMs: 800, numTurns: 2, totalCostUsd: 0.02m, inputTokens: 80, outputTokens: 20);
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
-        StubPostExitProviderQueries queries = new(hasCommits: false, prUrl: null);
+        StubPostExitProviderQueries queries = new(hasCommits: false);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "output");
         WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
 
@@ -141,7 +140,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             durationMs: 700, numTurns: 2, totalCostUsd: 0.02m, inputTokens: 60, outputTokens: 15);
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         // has commits but no PR
-        StubPostExitProviderQueries queries = new(hasCommits: true, prUrl: null);
+        StubPostExitProviderQueries queries = new(hasCommits: true);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "output");
         WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
 

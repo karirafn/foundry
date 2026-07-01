@@ -476,41 +476,6 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<bool>.Ok((dto?.Commits ?? []).Count > 0);
     }
 
-    public async Task<Result<string>> GetPullRequestByBranchAsync(
-        Uri apiBaseUrl,
-        RepositorySlug slug,
-        string branchName,
-        string token,
-        CancellationToken cancellationToken)
-    {
-        if (apiBaseUrl.Scheme is not "https")
-        {
-            return Result<string>.Fail(GitLabErrors.InvalidBaseUrl);
-        }
-
-        string encodedPath = Uri.EscapeDataString(slug.FullPath);
-        string encodedBranch = Uri.EscapeDataString(branchName);
-        string relativePath = $"projects/{encodedPath}/merge_requests?source_branch={encodedBranch}&state=opened";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
-
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        AddCommonHeaders(request, token);
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Result<string>.Fail(ErrorFromNonSuccess(response));
-        }
-
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitLabMergeRequestListItemDto>? dtos =
-            JsonSerializer.Deserialize<List<GitLabMergeRequestListItemDto>>(body, JsonOptions);
-
-        string mergeRequestUrl = (dtos ?? []).FirstOrDefault()?.WebUrl ?? string.Empty;
-        return Result<string>.Ok(mergeRequestUrl);
-    }
-
     public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -807,8 +772,6 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private sealed record GitLabCommitDto(string Id);
 
     private sealed record GitLabCommitListItemDto(string Id, string? Title);
-
-    private sealed record GitLabMergeRequestListItemDto(string WebUrl);
 
     private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt);
 

@@ -162,8 +162,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
 
     private sealed class StubIssueProvider(
         Result<bool>? createBranchResult = null,
-        Result<bool>? hasBranchCommitsResult = null,
-        Result<string>? getPullRequestResult = null) : IIssueProvider
+        Result<bool>? hasBranchCommitsResult = null) : IIssueProvider
     {
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -227,14 +226,6 @@ public sealed class CreateBranchAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(hasBranchCommitsResult ?? Result<bool>.Ok(false));
-        }
-
-        public Task<Result<string>> GetPullRequestByBranchAsync(
-            RepositorySlug slug,
-            string branchName,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult(getPullRequestResult ?? Result<string>.Ok(string.Empty));
         }
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
