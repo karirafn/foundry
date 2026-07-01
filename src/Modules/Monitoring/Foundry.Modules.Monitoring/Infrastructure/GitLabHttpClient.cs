@@ -522,6 +522,11 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         GitLabMergeRequestStateDto selected = merged
             ?? items.MaxBy(dto => dto.UpdatedAt)!;
 
+        if (string.IsNullOrEmpty(selected.State))
+        {
+            return Result<MergeRequestByBranch>.Fail(GitLabErrors.MissingMergeRequestState);
+        }
+
         MergeRequestPresence presence = selected.State.ToLowerInvariant() switch
         {
             "merged" => MergeRequestPresence.Merged,
@@ -801,6 +806,10 @@ internal static class GitLabErrors
     public static readonly Error NoBranchCommits = new(
         "GitLab.NoBranchCommits",
         "The branch has no commits.");
+
+    public static readonly Error MissingMergeRequestState = new(
+        "GitLab.MissingMergeRequestState",
+        "A merge request in the response has a missing or empty state field.");
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitLab.UnexpectedStatusCode", $"GitLab API returned unexpected status code {statusCode}.");

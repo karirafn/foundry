@@ -293,6 +293,38 @@ public sealed class GetMergeRequestByBranchAsync
     }
 
     [Fact]
+    public async Task WhenMrStateFieldIsAbsent_ReturnsFailure()
+    {
+        // Arrange — JSON omits the "state" field; System.Text.Json sets State to null at runtime,
+        // which would cause NullReferenceException on .ToLowerInvariant() without a null guard.
+        string json = """
+            [
+              {
+                "iid": 5,
+                "web_url": "https://gitlab.com/group/project/-/merge_requests/5",
+                "updated_at": "2026-06-01T10:00:00.000Z"
+              }
+            ]
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "feat/my-branch",
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<MergeRequestByBranch>.Failure failure = result.ShouldBeOfType<Result<MergeRequestByBranch>.Failure>();
+        failure.Error.Code.ShouldBe("GitLab.MissingMergeRequestState");
+    }
+
+    [Fact]
     public async Task WhenCalled_UsesCorrectEndpointWithStateAll()
     {
         // Arrange
