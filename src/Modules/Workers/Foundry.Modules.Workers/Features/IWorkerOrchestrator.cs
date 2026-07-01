@@ -5,6 +5,8 @@ namespace Foundry.Modules.Workers.Features;
 
 internal interface IWorkerOrchestrator
 {
+    Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken);
+
     Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken);
 
     Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken);

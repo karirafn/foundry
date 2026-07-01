@@ -917,6 +917,9 @@ public sealed class HandleAsync : IAsyncDisposable
             return Task.FromResult(result);
         }
 
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 

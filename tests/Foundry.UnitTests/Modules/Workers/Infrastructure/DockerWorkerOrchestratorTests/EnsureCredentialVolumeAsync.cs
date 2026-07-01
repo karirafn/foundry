@@ -1,12 +1,8 @@
-using System.Text;
-
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Infrastructure;
-using Foundry.Shared;
 
 using Microsoft.Extensions.Options;
 
@@ -16,7 +12,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Infrastructure.DockerWorkerOrchestratorTests;
 
-public sealed class GetLogsAsync
+public sealed class EnsureCredentialVolumeAsync
 {
     private static WorkerOptions DefaultOptions() => new()
     {
@@ -26,110 +22,75 @@ public sealed class GetLogsAsync
         PidsLimit = 256,
     };
 
-    private static DockerWorkerOrchestrator BuildSut(IContainerOperations containerOps) =>
-        new(containerOps, new NullVolumeOperations(), Options.Create(DefaultOptions()));
-
     [Fact]
-    public async Task WhenOutputContainsHttpsUrlWithUserinfo_UserinfoRedacted()
+    public async Task WhenVolumeDoesNotExist_CreatesVolumeWithCorrectName()
     {
         // Arrange
-        string raw = "Cloning into '/workspace'...\nhttps://glpat-MySecretToken@gitlab.example.com/owner/repo.git";
-        FixedLogsStub stub = new(raw);
-        DockerWorkerOrchestrator sut = BuildSut(stub);
+        SpyVolumeOperations spy = new();
+        DockerWorkerOrchestrator sut = new(new NullContainerOperations(), spy, Options.Create(DefaultOptions()));
 
         // Act
-        string? result = await sut.GetLogsAsync("container-1", 500, CancellationToken.None);
+        await sut.EnsureCredentialVolumeAsync(CancellationToken.None);
 
         // Assert
-        result.ShouldNotBeNull();
-        result.ShouldNotContain("glpat-MySecretToken");
-        result.ShouldContain("https://***@gitlab.example.com");
+        VolumesCreateParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.Name.ShouldBe("foundry-claude-credentials");
     }
 
     [Fact]
-    public async Task WhenOutputContainsKnownTokenShape_TokenRedacted()
+    public async Task WhenVolumeDoesNotExist_CreatesVolumeWithManagedLabel()
     {
         // Arrange
-        string raw = "error: Authentication failed for token ghp_abc123DefXyz";
-        FixedLogsStub stub = new(raw);
-        DockerWorkerOrchestrator sut = BuildSut(stub);
+        SpyVolumeOperations spy = new();
+        DockerWorkerOrchestrator sut = new(new NullContainerOperations(), spy, Options.Create(DefaultOptions()));
 
         // Act
-        string? result = await sut.GetLogsAsync("container-2", 500, CancellationToken.None);
+        await sut.EnsureCredentialVolumeAsync(CancellationToken.None);
 
         // Assert
-        result.ShouldNotBeNull();
-        result.ShouldNotContain("ghp_abc123DefXyz");
-        result.ShouldContain("***");
+        VolumesCreateParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.Labels.ShouldNotBeNull();
+        captured.Labels["foundry.managed"].ShouldBe("true");
     }
 
-    [Fact]
-    public async Task WhenOutputIsClean_PassesThroughUnchanged()
+    private sealed class SpyVolumeOperations : IVolumeOperations
     {
-        // Arrange
-        string raw = "Cloning into '/workspace'...\nDone.";
-        FixedLogsStub stub = new(raw);
-        DockerWorkerOrchestrator sut = BuildSut(stub);
+        public VolumesCreateParameters? LastCreateParameters { get; private set; }
 
-        // Act
-        string? result = await sut.GetLogsAsync("container-3", 500, CancellationToken.None);
-
-        // Assert
-        result.ShouldBe(raw);
-    }
-
-    [Fact]
-    public async Task WhenSecretNearTruncationBoundary_SecretRedactedBeforeTruncation()
-    {
-        // Arrange — put secret at position 65500 (within the 65536-byte window)
-        // If truncation happened before redaction, the secret could survive.
-        string prefix = new('a', 65_500);
-        string raw = prefix + " ghp_SecretNearBoundary extra padding to exceed 65536";
-        FixedLogsStub stub = new(raw);
-        DockerWorkerOrchestrator sut = BuildSut(stub);
-
-        // Act
-        string? result = await sut.GetLogsAsync("container-4", 500, CancellationToken.None);
-
-        // Assert
-        result.ShouldNotBeNull();
-        result.ShouldNotContain("ghp_SecretNearBoundary");
-    }
-
-    [Fact]
-    public async Task WhenSecretPrefixStraddlesByteWindow_ValueIsRedacted()
-    {
-        // Arrange — token sits at the very start of the output, followed by >65_519 bytes
-        // of padding. The old code seeks to (total_bytes - 65_536), which puts the read
-        // cursor at byte 1 — cutting off the 'g' in "ghp_" so the tail string begins with
-        // "hp_StraddleToken..." and the ghp_\S+ regex never matches, leaking the value.
-        // The fix must redact the FULL buffer first, then keep the tail.
-        string suffix = new('b', 65_520);                    // 65_520 padding bytes after token
-        string raw = "ghp_StraddleToken" + suffix;           // total = 65_537 chars; window start = byte 1
-        FixedLogsStub stub = new(raw);
-        DockerWorkerOrchestrator sut = BuildSut(stub);
-
-        // Act
-        string? result = await sut.GetLogsAsync("container-5", 500, CancellationToken.None);
-
-        // Assert
-        result.ShouldNotBeNull();
-        result.ShouldNotContain("StraddleToken");
-    }
-
-    private sealed class FixedLogsStub(string logContent) : IContainerOperations
-    {
-        public Task<MultiplexedStream> GetContainerLogsAsync(
-            string id,
-            bool tty,
-            ContainerLogsParameters parameters,
+        public Task<VolumeResponse> CreateAsync(
+            VolumesCreateParameters parameters,
             CancellationToken cancellationToken)
-            => Task.FromResult(new MultiplexedStream(new MemoryStream(Encoding.UTF8.GetBytes(logContent)), false));
+        {
+            LastCreateParameters = parameters;
+            return Task.FromResult(new VolumeResponse { Name = parameters.Name });
+        }
 
+        public Task<VolumeResponse> InspectAsync(string name, CancellationToken cancellationToken)
+            => Task.FromResult(new VolumeResponse { Name = name });
+
+        public Task<VolumesListResponse> ListAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesListResponse());
+
+        public Task<VolumesListResponse> ListAsync(
+            VolumesListParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesListResponse());
+
+        public Task<VolumesPruneResponse> PruneAsync(
+            VolumesPruneParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesPruneResponse());
+
+        public Task RemoveAsync(string name, bool? force, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    private sealed class NullContainerOperations : IContainerOperations
+    {
         public Task<CreateContainerResponse> CreateContainerAsync(
             CreateContainerParameters parameters,
             CancellationToken cancellationToken)
-            => Task.FromResult(new CreateContainerResponse { ID = "stub-id" });
+            => Task.FromResult(new CreateContainerResponse { ID = "null-container" });
 
         public Task<bool> StartContainerAsync(
             string id,
@@ -158,6 +119,13 @@ public sealed class GetLogsAsync
             ContainersListParameters parameters,
             CancellationToken cancellationToken)
             => Task.FromResult<IList<ContainerListResponse>>([]);
+
+        public Task<MultiplexedStream> GetContainerLogsAsync(
+            string id,
+            bool tty,
+            ContainerLogsParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new MultiplexedStream(Stream.Null, false));
 
         public Task<MultiplexedStream> AttachContainerAsync(
             string id,
@@ -265,32 +233,5 @@ public sealed class GetLogsAsync
             string id,
             CancellationToken cancellationToken)
             => Task.FromResult(new ContainerWaitResponse());
-    }
-
-    private sealed class NullVolumeOperations : IVolumeOperations
-    {
-        public Task<VolumeResponse> CreateAsync(
-            VolumesCreateParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new VolumeResponse { Name = parameters.Name });
-
-        public Task<VolumeResponse> InspectAsync(string name, CancellationToken cancellationToken)
-            => Task.FromResult(new VolumeResponse { Name = name });
-
-        public Task<VolumesListResponse> ListAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new VolumesListResponse());
-
-        public Task<VolumesListResponse> ListAsync(
-            VolumesListParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new VolumesListResponse());
-
-        public Task<VolumesPruneResponse> PruneAsync(
-            VolumesPruneParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new VolumesPruneResponse());
-
-        public Task RemoveAsync(string name, bool? force, CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 }

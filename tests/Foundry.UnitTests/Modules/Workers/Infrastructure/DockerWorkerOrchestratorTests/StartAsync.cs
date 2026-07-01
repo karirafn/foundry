@@ -33,7 +33,8 @@ public sealed class StartAsync
         string image = "test-image:latest",
         IReadOnlyList<BindMount>? bindMounts = null,
         IReadOnlyList<string>? securityOptions = null,
-        IReadOnlyList<string>? devices = null) =>
+        IReadOnlyList<string>? devices = null,
+        IReadOnlyList<VolumeMount>? volumeMounts = null) =>
         new(
             Image: image,
             EnvironmentVariables: new Dictionary<string, string>(),
@@ -43,6 +44,7 @@ public sealed class StartAsync
         {
             SecurityOptions = securityOptions ?? [],
             Devices = devices ?? [],
+            VolumeMounts = volumeMounts ?? [],
         };
 
     [Fact]
@@ -51,7 +53,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, Options.Create(options));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(options));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -67,7 +69,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, Options.Create(options));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(options));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -83,7 +85,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, Options.Create(options));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(options));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -103,7 +105,7 @@ public sealed class StartAsync
             new BindMount("/host/data", "/container/data", ReadOnly: false),
             new BindMount("/host/config", "/container/config", ReadOnly: true),
         ];
-        DockerWorkerOrchestrator sut = new(spy, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(bindMounts: bindMounts), CancellationToken.None);
@@ -120,7 +122,7 @@ public sealed class StartAsync
     {
         // Arrange
         SpyContainerOperations spy = new("created-container-abc");
-        DockerWorkerOrchestrator sut = new(spy, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -137,7 +139,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         IReadOnlyList<string> securityOptions = ["seccomp=unconfined", "apparmor=unconfined"];
-        DockerWorkerOrchestrator sut = new(spy, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(securityOptions: securityOptions), CancellationToken.None);
@@ -155,7 +157,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         IReadOnlyList<string> devices = ["/dev/fuse"];
-        DockerWorkerOrchestrator sut = new(spy, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(devices: devices), CancellationToken.None);
@@ -176,7 +178,7 @@ public sealed class StartAsync
     {
         // Arrange
         SpyContainerOperations spy = new();
-        DockerWorkerOrchestrator sut = new(spy, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -188,6 +190,47 @@ public sealed class StartAsync
     }
 
     [Fact]
+    public async Task WhenSpecHasVolumeMounts_SetsHostConfigMountsWithVolumeType()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        IReadOnlyList<VolumeMount> volumeMounts =
+        [
+            new VolumeMount("foundry-claude-credentials", "/home/node/.claude", ReadOnly: false),
+        ];
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+
+        // Act
+        await sut.StartAsync(MinimalSpec(volumeMounts: volumeMounts), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        IList<Docker.DotNet.Models.Mount> mounts = captured.HostConfig.Mounts.ShouldNotBeNull();
+        mounts.Count.ShouldBe(1);
+        Docker.DotNet.Models.Mount mount = mounts[0];
+        mount.ShouldSatisfyAllConditions(
+            () => mount.Type.ShouldBe("volume"),
+            () => mount.Source.ShouldBe("foundry-claude-credentials"),
+            () => mount.Target.ShouldBe("/home/node/.claude"),
+            () => mount.ReadOnly.ShouldBeFalse());
+    }
+
+    [Fact]
+    public async Task WhenSpecHasNoVolumeMounts_HostConfigMountsIsNull()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+
+        // Act
+        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.HostConfig.Mounts.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenDockerApiExceptionContainsCredential_ErrorMessageIsRedacted()
     {
         // Arrange
@@ -195,7 +238,7 @@ public sealed class StartAsync
         ThrowingContainerOperations throwing = new(new DockerApiException(
             HttpStatusCode.InternalServerError,
             rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -214,7 +257,7 @@ public sealed class StartAsync
         ThrowingContainerOperations throwing = new(new DockerApiException(
             HttpStatusCode.Unauthorized,
             rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -247,7 +290,7 @@ public sealed class StartAsync
         ThrowingContainerOperations throwing = new(new DockerApiException(
             HttpStatusCode.InternalServerError,
             rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -255,6 +298,33 @@ public sealed class StartAsync
         // Assert
         Result<ContainerId>.Failure failure = result.ShouldBeOfType<Result<ContainerId>.Failure>();
         failure.Error.Message.ShouldNotContain("s3cr3t");
+    }
+
+    private sealed class NullVolumeOperations : IVolumeOperations
+    {
+        public Task<VolumeResponse> CreateAsync(
+            VolumesCreateParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumeResponse { Name = parameters.Name });
+
+        public Task<VolumeResponse> InspectAsync(string name, CancellationToken cancellationToken)
+            => Task.FromResult(new VolumeResponse { Name = name });
+
+        public Task<VolumesListResponse> ListAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesListResponse());
+
+        public Task<VolumesListResponse> ListAsync(
+            VolumesListParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesListResponse());
+
+        public Task<VolumesPruneResponse> PruneAsync(
+            VolumesPruneParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesPruneResponse());
+
+        public Task RemoveAsync(string name, bool? force, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class ThrowingContainerOperations(DockerApiException exception) : IContainerOperations

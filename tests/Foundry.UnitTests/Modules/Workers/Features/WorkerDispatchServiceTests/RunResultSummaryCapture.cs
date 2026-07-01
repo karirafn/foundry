@@ -201,6 +201,9 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in summary tests")));
 
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 

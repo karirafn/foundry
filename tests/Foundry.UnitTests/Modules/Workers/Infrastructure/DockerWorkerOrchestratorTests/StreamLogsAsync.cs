@@ -27,7 +27,7 @@ public sealed class StreamLogsAsync
     };
 
     private static DockerWorkerOrchestrator BuildSut(IContainerOperations containerOps) =>
-        new(containerOps, Options.Create(DefaultOptions()));
+        new(containerOps, new NullVolumeOperations(), Options.Create(DefaultOptions()));
 
     private static MemoryStream BuildRawStream(string content) =>
         new(Encoding.UTF8.GetBytes(content));
@@ -245,5 +245,32 @@ public sealed class StreamLogsAsync
             string id,
             CancellationToken cancellationToken)
             => Task.FromResult(new ContainerWaitResponse());
+    }
+
+    private sealed class NullVolumeOperations : IVolumeOperations
+    {
+        public Task<VolumeResponse> CreateAsync(
+            VolumesCreateParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumeResponse { Name = parameters.Name });
+
+        public Task<VolumeResponse> InspectAsync(string name, CancellationToken cancellationToken)
+            => Task.FromResult(new VolumeResponse { Name = name });
+
+        public Task<VolumesListResponse> ListAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesListResponse());
+
+        public Task<VolumesListResponse> ListAsync(
+            VolumesListParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesListResponse());
+
+        public Task<VolumesPruneResponse> PruneAsync(
+            VolumesPruneParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesPruneResponse());
+
+        public Task RemoveAsync(string name, bool? force, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

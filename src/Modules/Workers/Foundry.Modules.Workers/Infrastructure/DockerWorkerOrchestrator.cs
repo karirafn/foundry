@@ -15,9 +15,12 @@ namespace Foundry.Modules.Workers.Infrastructure;
 
 internal sealed class DockerWorkerOrchestrator(
     IContainerOperations containerOperations,
+    IVolumeOperations volumeOperations,
     IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
 {
     private const string WorkerRunLabelKey = "foundry.worker-run-id";
+    private const string CredentialVolumeName = "foundry-claude-credentials";
+    private const string ManagedLabelKey = "foundry.managed";
     private const long BytesPerMegabyte = 1024L * 1024L;
     private const long NanoCpusPerCpu = 1_000_000_000L;
     private const int DockerErrorMessageMaxLength = 500;
@@ -37,6 +40,29 @@ internal sealed class DockerWorkerOrchestrator(
             PathInContainer = devicePath,
             CgroupPermissions = "rwm",
         };
+
+    internal static Mount MapVolumeMount(VolumeMount mount) =>
+        new()
+        {
+            Type = "volume",
+            Source = mount.VolumeName,
+            Target = mount.ContainerPath,
+            ReadOnly = mount.ReadOnly,
+        };
+
+    public async Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+    {
+        await volumeOperations.CreateAsync(
+            new VolumesCreateParameters
+            {
+                Name = CredentialVolumeName,
+                Labels = new Dictionary<string, string>
+                {
+                    [ManagedLabelKey] = "true",
+                },
+            },
+            cancellationToken);
+    }
 
     public async Task<Result<ContainerId>> StartAsync(
         WorkerContainerSpec spec,
@@ -61,6 +87,9 @@ internal sealed class DockerWorkerOrchestrator(
                         : null,
                     Devices = spec.Devices.Count > 0
                         ? [.. spec.Devices.Select(MapDevice)]
+                        : null,
+                    Mounts = spec.VolumeMounts.Count > 0
+                        ? [.. spec.VolumeMounts.Select(MapVolumeMount)]
                         : null,
                 },
             };

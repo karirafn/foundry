@@ -100,6 +100,9 @@ public sealed class TerminalContainerCleanup : WorkerDispatchServiceTestBase
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test", "No dispatch")));
 
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
         {
             StopAsyncCallCount++;

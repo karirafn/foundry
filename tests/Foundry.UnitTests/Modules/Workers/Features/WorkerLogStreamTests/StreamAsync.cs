@@ -51,6 +51,9 @@ public sealed class StreamAsync : IAsyncDisposable
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

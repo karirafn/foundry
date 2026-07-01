@@ -277,6 +277,9 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Ok(ContainerId.From("default-container")));
 
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
