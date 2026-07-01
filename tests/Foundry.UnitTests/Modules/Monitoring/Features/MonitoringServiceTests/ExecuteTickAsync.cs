@@ -279,6 +279,15 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
                 return Task.FromResult(Result<string>.Ok(string.Empty));
             }
 
+            public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult(
+                    Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+            }
+
             public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
                 RepositorySlug slug,
                 string branchName,

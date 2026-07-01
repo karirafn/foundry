@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Features.PostExitProviderQueriesTests;
 
-public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
+public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
@@ -24,7 +24,7 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
 
     private StubIssueProvider _stubProvider = new();
 
-    public GetPullRequestByBranchAsync()
+    public GetMergeRequestByBranchAsync()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -68,54 +68,59 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
         MonitoredRepositoryId nonExistentId = MonitoredRepositoryId.New();
 
         // Act
-        Result<string> result = await _sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             nonExistentId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<string>.Failure failure = result.ShouldBeOfType<Result<string>.Failure>();
+        Result<MergeRequestByBranch>.Failure failure = result.ShouldBeOfType<Result<MergeRequestByBranch>.Failure>();
         failure.Error.Code.ShouldBe("PostExitProviderQueries.RepositoryNotFound");
     }
 
     [Fact]
-    public async Task WhenPullRequestExists_ReturnsPrUrl()
+    public async Task WhenProviderReturnsMerged_ReturnsMergedResult()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
+        MergeRequestByBranch mergeRequest = new(MergeRequestPresence.Merged, "https://github.com/owner/repo/pull/42");
         _stubProvider = new StubIssueProvider(
-            getPullRequestResult: Result<string>.Ok("https://github.com/owner/repo/pull/42"));
+            getMergeRequestResult: Result<MergeRequestByBranch>.Ok(mergeRequest));
 
         // Act
-        Result<string> result = await _sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             repoId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
-        success.Value.ShouldBe("https://github.com/owner/repo/pull/42");
+        Result<MergeRequestByBranch>.Success success = result.ShouldBeOfType<Result<MergeRequestByBranch>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.Presence.ShouldBe(MergeRequestPresence.Merged),
+            () => success.Value.WebUrl.ShouldBe("https://github.com/owner/repo/pull/42"));
     }
 
     [Fact]
-    public async Task WhenNoPullRequestExists_ReturnsEmptyString()
+    public async Task WhenProviderFails_ReturnsFailure()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
-        _stubProvider = new StubIssueProvider(getPullRequestResult: Result<string>.Ok(string.Empty));
+        Error providerError = new("Provider.Unreachable", "Provider is unreachable");
+        _stubProvider = new StubIssueProvider(
+            getMergeRequestResult: Result<MergeRequestByBranch>.Fail(providerError));
 
         // Act
-        Result<string> result = await _sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             repoId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
-        success.Value.ShouldBeEmpty();
+        result.IsFailure.ShouldBeTrue();
+        Result<MergeRequestByBranch>.Failure failure = result.ShouldBeOfType<Result<MergeRequestByBranch>.Failure>();
+        failure.Error.Code.ShouldBe("Provider.Unreachable");
     }
 
     private sealed class StubProviderFactory(Func<StubIssueProvider> providerFactory) : IIssueProviderFactory
@@ -124,7 +129,7 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
     }
 
     private sealed class StubIssueProvider(
-        Result<string>? getPullRequestResult = null) : IIssueProvider
+        Result<MergeRequestByBranch>? getMergeRequestResult = null) : IIssueProvider
     {
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -195,7 +200,7 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
             string branchName,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(getPullRequestResult ?? Result<string>.Ok(string.Empty));
+            return Task.FromResult(Result<string>.Ok(string.Empty));
         }
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
@@ -204,7 +209,8 @@ public sealed class GetPullRequestByBranchAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(
-                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+                getMergeRequestResult
+                ?? Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
         }
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(

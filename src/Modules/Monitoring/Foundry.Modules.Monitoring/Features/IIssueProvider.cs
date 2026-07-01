@@ -50,6 +50,11 @@ public interface IIssueProvider
         string branchName,
         CancellationToken cancellationToken);
 
+    Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken);
+
     Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
         RepositorySlug slug,
         string branchName,

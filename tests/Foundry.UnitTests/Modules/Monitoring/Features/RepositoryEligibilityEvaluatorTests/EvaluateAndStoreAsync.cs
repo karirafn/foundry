@@ -177,6 +177,13 @@ public sealed class EvaluateAndStoreAsync
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(string.Empty));
 
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             RepositorySlug slug,
             string branchName,
@@ -239,6 +246,13 @@ public sealed class EvaluateAndStoreAsync
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(string.Empty));
+
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             RepositorySlug slug,

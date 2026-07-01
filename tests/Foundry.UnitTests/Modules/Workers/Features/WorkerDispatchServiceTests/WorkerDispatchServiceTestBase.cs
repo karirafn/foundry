@@ -125,6 +125,13 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             return Task.FromResult(Result<string>.Ok(value));
         }
 
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,

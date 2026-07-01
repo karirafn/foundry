@@ -315,6 +315,13 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(string.Empty));
 
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
@@ -348,6 +355,13 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(string.Empty));
 
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
@@ -374,6 +388,13 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(string.Empty));
+
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             MonitoredRepositoryId repositoryId,
