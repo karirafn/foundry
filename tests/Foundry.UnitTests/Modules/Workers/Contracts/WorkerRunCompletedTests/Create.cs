@@ -19,7 +19,7 @@ public sealed class Create
         string pullRequestUrl = "https://github.com/owner/repo/pull/7";
 
         // Act
-        WorkerRunCompleted @event = new(workerRunId, issueId, branchName, pullRequestUrl);
+        WorkerRunCompleted @event = new(workerRunId, issueId, branchName, pullRequestUrl, WorkerRunMergeState.Open);
 
         // Assert
         @event.ShouldBeAssignableTo<IIntegrationEvent>();
@@ -27,7 +27,8 @@ public sealed class Create
             () => @event.WorkerRunId.ShouldBe(workerRunId),
             () => @event.IssueId.ShouldBe(issueId),
             () => @event.BranchName.ShouldBe(branchName),
-            () => @event.PullRequestUrl.ShouldBe(pullRequestUrl));
+            () => @event.PullRequestUrl.ShouldBe(pullRequestUrl),
+            () => @event.MergeState.ShouldBe(WorkerRunMergeState.Open));
     }
 
     [Fact]
@@ -38,11 +39,12 @@ public sealed class Create
         Guid issueId = Guid.NewGuid();
 
         // Act
-        WorkerRunCompleted @event = new(workerRunId, issueId, null, null);
+        WorkerRunCompleted @event = new(workerRunId, issueId, null, null, WorkerRunMergeState.None);
 
         // Assert
         @event.ShouldSatisfyAllConditions(
             () => @event.BranchName.ShouldBeNull(),
-            () => @event.PullRequestUrl.ShouldBeNull());
+            () => @event.PullRequestUrl.ShouldBeNull(),
+            () => @event.MergeState.ShouldBe(WorkerRunMergeState.None));
     }
 }

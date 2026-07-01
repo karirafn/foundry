@@ -523,7 +523,8 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     activeRun.BranchName.Value,
-                    prUrl)],
+                    prUrl,
+                    WorkerRunMergeState.Open)],
                 activeRun.Id.Value,
                 cancellationToken);
 
@@ -639,7 +640,8 @@ internal sealed class WorkerDispatchService(
                     activeRun.Id.Value,
                     activeRun.IssueId.Value,
                     activeRun.BranchName.Value,
-                    null)],
+                    null,
+                    WorkerRunMergeState.None)],
                 activeRun.Id.Value,
                 cancellationToken);
 
