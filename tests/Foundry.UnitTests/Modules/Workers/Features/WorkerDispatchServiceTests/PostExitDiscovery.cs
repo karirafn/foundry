@@ -129,9 +129,9 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenExitCodeZeroAndHasCommitsAndNoPrAfterRetries_DispatchesFailedEventWithNullBranchName()
+    public async Task WhenExitCodeZeroAndHasCommitsAndNoPrAfterRetries_DispatchesFailedEventWithBranchName()
     {
-        // Arrange — resolver returns Failure (no MR after retries); BranchName is null on Failure outcomes
+        // Arrange — resolver returns ContinuableFailure (no MR after retries); branch is preserved on ContinuableFailure
         SeedActiveRun("container-no-pr-dispatch", branchName: "feat/42-my-issue");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
@@ -145,7 +145,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         WorkerRunFailed failedEvent = capturingDispatcher.Captured
             .OfType<WorkerRunFailed>()
             .ShouldHaveSingleItem();
-        failedEvent.BranchName.ShouldBeNull();
+        failedEvent.BranchName.ShouldBe("feat/42-my-issue");
     }
 
     [Fact]

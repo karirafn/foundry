@@ -48,13 +48,8 @@ internal sealed class WorkerOutcomeResolver(
 
         if (mrResult is Result<MergeRequestByBranch>.Failure mrFailure)
         {
-            // NotFound means "no MR" — fall through to step 5b
-            if (mrFailure.Error.Kind == ErrorKind.NotFound)
-            {
-                return await ResolveNoMrAsync(run, exitCode, containerOutput, defaultCooldownMinutes, cancellationToken);
-            }
-
-            // Transient/unknown error — caller retries
+            // All MR-LIST failures (including NotFound) are transient — a 404 means repo-not-found
+            // (auth/repo error), not "no MR". The provider returns 200 [] for "no MR on this branch".
             return new WorkerOutcome.Indeterminate(mrFailure.Error);
         }
 
@@ -222,13 +217,24 @@ internal sealed class WorkerOutcomeResolver(
                 run.BranchName.Value,
                 cancellationToken);
 
-            if (mrResult is Result<MergeRequestByBranch>.Success { Value: { Presence: not MergeRequestPresence.None, WebUrl: { } webUrl } })
+            if (mrResult is Result<MergeRequestByBranch>.Success { Value: { Presence: not MergeRequestPresence.None } mr })
             {
-                return new WorkerOutcome.Review(run.BranchName, PullRequestUrl.From(webUrl), summary);
+                // Delegate to the same presence switch as ResolveAsync — a Merged MR must complete,
+                // a Closed MR must go through the commit-check path, only Open yields Review.
+                return mr.Presence switch
+                {
+                    MergeRequestPresence.Merged => ResolveMerged(run, mr, summary),
+                    MergeRequestPresence.Open => ResolveOpen(run, mr, summary),
+                    MergeRequestPresence.Closed => await ResolveClosedAsync(run, containerOutput, summary, cancellationToken),
+                    _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
+                };
             }
         }
 
-        return new WorkerOutcome.Failure(
+        // Branch was pushed but no MR appeared after retries; preserve the branch so the run is
+        // continuable — a ContinuableFailure retains BranchName whereas Failure would abandon it.
+        return new WorkerOutcome.ContinuableFailure(
+            run.BranchName,
             new FailureReason.ContainerError(NoPrAfterRetriesMessage),
             containerOutput,
             summary);

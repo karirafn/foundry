@@ -186,9 +186,9 @@ public sealed class ResolveAsync
     }
 
     [Fact]
-    public async Task WhenMrQueryReturnsNotFoundError_FallsThroughToNoMrPath()
+    public async Task WhenMrQueryReturnsNotFoundError_ReturnsIndeterminate()
     {
-        // Arrange — NotFound on MR query means "no MR", falls through to exit-0 + no-commits → Unchanged
+        // Arrange — NotFound on the MR-LIST endpoint means repo-not-found (auth/repo error), not "no MR"
         ActiveRun run = CreateActiveRun();
         Error notFoundError = new Error("Provider.NotFound", "Not found") { Kind = ErrorKind.NotFound };
         IPostExitProviderQueries queries = new ScriptedProviderQueries(
@@ -205,7 +205,7 @@ public sealed class ResolveAsync
             TestContext.Current.CancellationToken);
 
         // Assert
-        outcome.ShouldBeOfType<WorkerOutcome.Unchanged>();
+        outcome.ShouldBeOfType<WorkerOutcome.Indeterminate>();
     }
 
     // -------------------------------------------------------------------------
@@ -242,9 +242,9 @@ public sealed class ResolveAsync
     }
 
     [Fact]
-    public async Task WhenNoMrAndExitZeroWithCommitsAndNoMrAfterRetries_ReturnsFailure()
+    public async Task WhenNoMrAndExitZeroWithCommitsAndNoMrAfterRetries_ReturnsContinuableFailureWithBranchName()
     {
-        // Arrange — all queries return None (no PR found after retries)
+        // Arrange — all queries return None (no PR found after retries); branch is preserved as ContinuableFailure
         ActiveRun run = CreateActiveRun();
         MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
         IPostExitProviderQueries queries = new ScriptedProviderQueries(
@@ -261,8 +261,103 @@ public sealed class ResolveAsync
             TestContext.Current.CancellationToken);
 
         // Assert
-        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
-        failure.FailureReason.ShouldBeOfType<FailureReason.ContainerError>();
+        WorkerOutcome.ContinuableFailure failure = outcome.ShouldBeOfType<WorkerOutcome.ContinuableFailure>();
+        failure.ShouldSatisfyAllConditions(
+            () => failure.FailureReason.ShouldBeOfType<FailureReason.ContainerError>(),
+            () => failure.BranchName.Value.ShouldBe(DefaultBranchName));
+    }
+
+    [Fact]
+    public async Task WhenRepollFindsMergedMr_ReturnsCompleted()
+    {
+        // Arrange — first query returns None, repoll discovers a Merged MR → Completed, not Review
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        MergeRequestByBranch mergedMr = new(MergeRequestPresence.Merged, PrUrl);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            mrResults:
+            [
+                Result<MergeRequestByBranch>.Ok(noneMr),
+                Result<MergeRequestByBranch>.Ok(mergedMr),
+            ]);
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: null,
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Completed completed = outcome.ShouldBeOfType<WorkerOutcome.Completed>();
+        completed.PullRequestUrl.Value.ShouldBe(PrUrl);
+    }
+
+    [Fact]
+    public async Task WhenRepollFindsClosedMrAndBranchHasCommits_ReturnsContinuableFailure()
+    {
+        // Arrange — first query returns None; commits=true triggers repoll; repoll finds Closed MR;
+        // second commits check (inside ResolveClosedAsync) also returns true → ContinuableFailure
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        MergeRequestByBranch closedMr = new(MergeRequestPresence.Closed, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            mrResults:
+            [
+                Result<MergeRequestByBranch>.Ok(noneMr),
+                Result<MergeRequestByBranch>.Ok(closedMr),
+            ]);
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: null,
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.ContinuableFailure failure = outcome.ShouldBeOfType<WorkerOutcome.ContinuableFailure>();
+        failure.BranchName.Value.ShouldBe(DefaultBranchName);
+    }
+
+    [Fact]
+    public async Task WhenRepollFindsClosedMrAndBranchHasNoCommits_ReturnsFailure()
+    {
+        // Arrange — first query returns None; commits=true triggers repoll; repoll finds Closed MR;
+        // second commits check (inside ResolveClosedAsync) returns false → Failure
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        MergeRequestByBranch closedMr = new(MergeRequestPresence.Closed, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            mrResults:
+            [
+                Result<MergeRequestByBranch>.Ok(noneMr),
+                Result<MergeRequestByBranch>.Ok(closedMr),
+            ],
+            commitsResults:
+            [
+                Result<bool>.Ok(true),   // first call: in ResolveNoMrAsync → triggers repoll
+                Result<bool>.Ok(false),  // second call: in ResolveClosedAsync → no commits → Failure
+            ]);
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: null,
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Failure>();
     }
 
     [Fact]
@@ -513,24 +608,28 @@ public sealed class ResolveAsync
 
     /// <summary>
     /// Scripted provider stub. MR queries consume from <paramref name="mrResults"/> in order,
-    /// then repeat <paramref name="fallbackMrResult"/> indefinitely. Commits always return
-    /// <paramref name="commitsResult"/>.
+    /// then repeat <paramref name="fallbackMrResult"/> indefinitely. Commits consume from
+    /// <paramref name="commitsResults"/> in order, then repeat <paramref name="commitsResult"/>
+    /// indefinitely.
     /// </summary>
     private sealed class ScriptedProviderQueries : IPostExitProviderQueries
     {
         private readonly Queue<Result<MergeRequestByBranch>> _mrResultQueue;
         private readonly Result<MergeRequestByBranch> _fallbackMrResult;
+        private readonly Queue<Result<bool>> _commitsResultQueue;
         private readonly Result<bool> _commitsResult;
 
         public ScriptedProviderQueries(
             Result<bool> commitsResult,
             Result<MergeRequestByBranch>? fallbackMrResult = null,
-            Result<MergeRequestByBranch>[]? mrResults = null)
+            Result<MergeRequestByBranch>[]? mrResults = null,
+            Result<bool>[]? commitsResults = null)
         {
             _commitsResult = commitsResult;
             _fallbackMrResult = fallbackMrResult
                 ?? Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null));
             _mrResultQueue = new Queue<Result<MergeRequestByBranch>>(mrResults ?? []);
+            _commitsResultQueue = new Queue<Result<bool>>(commitsResults ?? []);
         }
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
@@ -548,7 +647,12 @@ public sealed class ResolveAsync
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(_commitsResult);
+        {
+            Result<bool> result = _commitsResultQueue.Count > 0
+                ? _commitsResultQueue.Dequeue()
+                : _commitsResult;
+            return Task.FromResult(result);
+        }
 
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
