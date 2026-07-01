@@ -511,6 +511,60 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<string>.Ok(mergeRequestUrl);
     }
 
+    public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<MergeRequestByBranch>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"projects/{encodedPath}/merge_requests?source_branch={encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<MergeRequestByBranch>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitLabMergeRequestStateDto>? dtos =
+            JsonSerializer.Deserialize<List<GitLabMergeRequestStateDto>>(body, JsonOptions);
+
+        List<GitLabMergeRequestStateDto> items = dtos ?? [];
+
+        if (items.Count == 0)
+        {
+            return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null));
+        }
+
+        GitLabMergeRequestStateDto? merged = items.FirstOrDefault(
+            dto => string.Equals(dto.State, "merged", StringComparison.OrdinalIgnoreCase));
+
+        GitLabMergeRequestStateDto selected = merged
+            ?? items.MaxBy(dto => dto.UpdatedAt)!;
+
+        MergeRequestPresence presence = selected.State.ToLowerInvariant() switch
+        {
+            "merged" => MergeRequestPresence.Merged,
+            "opened" => MergeRequestPresence.Open,
+            _ => MergeRequestPresence.Closed,
+        };
+
+        return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.WebUrl));
+    }
+
     public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -701,7 +755,14 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         }
 
         int statusCode = (int)response.StatusCode;
-        return GitLabErrors.UnexpectedStatusCode(statusCode);
+        Error error = GitLabErrors.UnexpectedStatusCode(statusCode);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return error with { Kind = ErrorKind.NotFound };
+        }
+
+        return error;
     }
 
     private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
@@ -748,6 +809,8 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private sealed record GitLabCommitListItemDto(string Id, string? Title);
 
     private sealed record GitLabMergeRequestListItemDto(string WebUrl);
+
+    private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt);
 
     private sealed record GitLabProtectedBranchDto(
         bool AllowForcePush,

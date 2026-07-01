@@ -703,6 +703,67 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<string>.Ok(pullRequestUrl);
     }
 
+    public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<MergeRequestByBranch>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string encodedHead = Uri.EscapeDataString($"{slug.Owner}:{branchName}");
+        string relativePath = $"repos/{owner}/{repo}/pulls?head={encodedHead}&state=all";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddGitHubHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<MergeRequestByBranch>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitHubPullRequestStateDto>? dtos =
+            JsonSerializer.Deserialize<List<GitHubPullRequestStateDto>>(body, JsonOptions);
+
+        List<GitHubPullRequestStateDto> items = dtos ?? [];
+
+        if (items.Count == 0)
+        {
+            return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null));
+        }
+
+        GitHubPullRequestStateDto? merged = items.FirstOrDefault(dto => dto.MergedAt is not null);
+
+        GitHubPullRequestStateDto selected = merged
+            ?? items.MaxBy(dto => dto.UpdatedAt)!;
+
+        MergeRequestPresence presence = selected.MergedAt is not null
+            ? MergeRequestPresence.Merged
+            : string.Equals(selected.State, "open", StringComparison.OrdinalIgnoreCase)
+                ? MergeRequestPresence.Open
+                : MergeRequestPresence.Closed;
+
+        return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.HtmlUrl));
+    }
+
+    private static void AddGitHubHeaders(HttpRequestMessage request, string token)
+    {
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+    }
+
     private static Uri EnsureTrailingSlash(Uri uri)
     {
         string uriString = uri.ToString();
@@ -786,7 +847,14 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         int statusCode = (int)response.StatusCode;
-        return GitHubErrors.UnexpectedStatusCode(statusCode);
+        Error error = GitHubErrors.UnexpectedStatusCode(statusCode);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return error with { Kind = ErrorKind.NotFound };
+        }
+
+        return error;
     }
 
     private sealed record GitHubRepositoryInfoDto(string DefaultBranch);
@@ -842,6 +910,12 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private sealed record GitHubCommitListItemDto(string Sha, GitHubCommitDetailDto? Commit);
 
     private sealed record GitHubCommitDetailDto(string Message);
+
+    private sealed record GitHubPullRequestStateDto(
+        string HtmlUrl,
+        string State,
+        string? MergedAt,
+        DateTimeOffset UpdatedAt);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
