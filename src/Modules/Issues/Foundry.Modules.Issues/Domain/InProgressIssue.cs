@@ -54,6 +54,17 @@ public sealed class InProgressIssue : Issue
         return unchanged;
     }
 
+    public CompletedIssue MarkCompleted(
+        Guid workerRunId,
+        string branchName,
+        string pullRequestUrl,
+        DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = CompletedIssue.FromInProgress(this, branchName, pullRequestUrl, completedAt);
+        AddDomainEvent(new Events.IssueCompleted(Id, MonitoredRepositoryId));
+        return completed;
+    }
+
     public FailedIssue MarkFailed(
         Guid workerRunId,
         string failureReason,
