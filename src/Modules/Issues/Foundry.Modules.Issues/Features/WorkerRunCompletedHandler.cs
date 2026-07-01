@@ -23,19 +23,30 @@ internal sealed class WorkerRunCompletedHandler(
 
         if (issue is InProgressIssue inProgress)
         {
-            if (@event.BranchName is not null && @event.PullRequestUrl is not null)
+            switch (@event.MergeState)
             {
-                ReviewIssue review = inProgress.MarkInReview(
-                    @event.WorkerRunId,
-                    @event.BranchName,
-                    @event.PullRequestUrl,
-                    DateTimeOffset.UtcNow);
-                await db.TransitionAsync(inProgress, review, domainEventDispatcher, cancellationToken);
-            }
-            else
-            {
-                UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
-                await db.TransitionAsync(inProgress, unchanged, domainEventDispatcher, cancellationToken);
+                case WorkerRunMergeState.Merged:
+                    CompletedIssue completed = inProgress.MarkCompleted(
+                        @event.WorkerRunId,
+                        @event.BranchName!,
+                        @event.PullRequestUrl!,
+                        DateTimeOffset.UtcNow);
+                    await db.TransitionAsync(inProgress, completed, domainEventDispatcher, cancellationToken);
+                    break;
+
+                case WorkerRunMergeState.Open:
+                    ReviewIssue review = inProgress.MarkInReview(
+                        @event.WorkerRunId,
+                        @event.BranchName!,
+                        @event.PullRequestUrl!,
+                        DateTimeOffset.UtcNow);
+                    await db.TransitionAsync(inProgress, review, domainEventDispatcher, cancellationToken);
+                    break;
+
+                default:
+                    UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
+                    await db.TransitionAsync(inProgress, unchanged, domainEventDispatcher, cancellationToken);
+                    break;
             }
 
             return;
