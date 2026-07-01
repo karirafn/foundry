@@ -309,50 +309,51 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        // Timeout check runs regardless of IsRunning — an exited container that ran beyond the
-        // timeout ceiling is still a timeout rather than a clean exit.
         DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(timeoutMinutes);
-        if (DateTimeOffset.UtcNow >= timeout)
-        {
-            await TryStopContainerAsync(
-                orchestrator,
-                activeRun.ContainerId.Value,
-                activeRun.Id.Value,
-                cancellationToken);
-
-            string? containerOutput = await TryGetLogsAsync(
-                orchestrator,
-                activeRun.ContainerId.Value,
-                activeRun.Id.Value,
-                cancellationToken);
-
-            RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
-
-            WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
-                activeRun,
-                containerOutput,
-                timeoutSummary,
-                postExitProviderQueries,
-                cancellationToken);
-
-            await ApplyOutcomeAsync(
-                timeoutOutcome,
-                activeRun,
-                dbContext,
-                orchestrator,
-                integrationEventDispatcher,
-                domainEventDispatcher,
-                cancellationToken);
-
-            logger.LogWarning(
-                "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
-                activeRun.Id,
-                timeoutMinutes);
-            return;
-        }
 
         if (status.IsRunning)
         {
+            // Timeout applies only to still-running containers — an exited container's MR state
+            // must be consulted first regardless of wall-clock time.
+            if (DateTimeOffset.UtcNow >= timeout)
+            {
+                await TryStopContainerAsync(
+                    orchestrator,
+                    activeRun.ContainerId.Value,
+                    activeRun.Id.Value,
+                    cancellationToken);
+
+                string? containerOutput = await TryGetLogsAsync(
+                    orchestrator,
+                    activeRun.ContainerId.Value,
+                    activeRun.Id.Value,
+                    cancellationToken);
+
+                RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
+
+                WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                    activeRun,
+                    containerOutput,
+                    timeoutSummary,
+                    postExitProviderQueries,
+                    cancellationToken);
+
+                await ApplyOutcomeAsync(
+                    timeoutOutcome,
+                    activeRun,
+                    dbContext,
+                    orchestrator,
+                    integrationEventDispatcher,
+                    domainEventDispatcher,
+                    cancellationToken);
+
+                logger.LogWarning(
+                    "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
+                    activeRun.Id,
+                    timeoutMinutes);
+                return;
+            }
+
             await ObserveRunningWorkerAsync(
                 dbContext,
                 orchestrator,
@@ -363,7 +364,8 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        // Container exited cleanly within the timeout window
+        // Container has exited — always resolve via MR-state-first so a merged PR produces
+        // Completed even when the wall-clock timeout has passed.
         string? exitContainerOutput = await TryGetLogsAsync(
             orchestrator,
             activeRun.ContainerId.Value,
@@ -379,6 +381,36 @@ internal sealed class WorkerDispatchService(
 
         if (exitOutcome is WorkerOutcome.Indeterminate exitIndeterminate)
         {
+            // Resolver could not determine the outcome (transient provider error).
+            // If the run has also exceeded the timeout ceiling, force a timeout outcome so
+            // the slot is not held indefinitely; otherwise leave for the next tick.
+            if (DateTimeOffset.UtcNow >= timeout)
+            {
+                RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(exitContainerOutput);
+                WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                    activeRun,
+                    exitContainerOutput,
+                    timeoutSummary,
+                    postExitProviderQueries,
+                    cancellationToken);
+
+                await ApplyOutcomeAsync(
+                    timeoutOutcome,
+                    activeRun,
+                    dbContext,
+                    orchestrator,
+                    integrationEventDispatcher,
+                    domainEventDispatcher,
+                    cancellationToken);
+
+                logger.LogWarning(
+                    "Worker run {WorkerRunId} exited but state is indeterminate and timeout has elapsed; "
+                    + "forcing timeout outcome: {Error}.",
+                    activeRun.Id,
+                    exitIndeterminate.Error);
+                return;
+            }
+
             logger.LogWarning(
                 "Worker run {WorkerRunId} exited but state is indeterminate: {Error}. Leaving for next tick.",
                 activeRun.Id,
