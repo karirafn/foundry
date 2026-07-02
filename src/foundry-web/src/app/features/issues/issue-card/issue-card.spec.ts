@@ -575,8 +575,8 @@ describe('IssueCardComponent', () => {
     expect(activity).toBeFalsy();
   });
 
-  // Cycle 12: tier label — revision tier
-  it('should render a tier chip labeled "revision" for revision_queued state', () => {
+  // Cycle 12: tier chip — removed (redundant with fd-state-badge)
+  it('should NOT render a tier chip for revision_queued state', () => {
     // Arrange
     const revisionQueued: IssueSummary = { ...mockIssue, state: 'revision_queued' };
 
@@ -584,13 +584,12 @@ describe('IssueCardComponent', () => {
     const fixture = createComponent(revisionQueued);
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
+    // Assert — tier chip removed; state conveyed by fd-state-badge alone
     const tierChip = el.querySelector('.issue-card__tier-chip');
-    expect(tierChip?.textContent?.trim()).toContain('revision');
+    expect(tierChip).toBeFalsy();
   });
 
-  // Cycle 12b: tier label — continuation tier
-  it('should render a tier chip labeled "continuation" for continuation_queued state', () => {
+  it('should NOT render a tier chip for continuation_queued state', () => {
     // Arrange
     const contQueued: IssueSummary = { ...mockIssue, state: 'continuation_queued' };
 
@@ -598,13 +597,12 @@ describe('IssueCardComponent', () => {
     const fixture = createComponent(contQueued);
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
+    // Assert — tier chip removed; state conveyed by fd-state-badge alone
     const tierChip = el.querySelector('.issue-card__tier-chip');
-    expect(tierChip?.textContent?.trim()).toContain('continuation');
+    expect(tierChip).toBeFalsy();
   });
 
-  // Cycle 12c: tier label — fresh tier
-  it('should render a tier chip labeled "fresh" for queued state', () => {
+  it('should NOT render a tier chip for queued state', () => {
     // Arrange
     const freshQueued: IssueSummary = { ...mockIssue, state: 'queued' };
 
@@ -612,12 +610,11 @@ describe('IssueCardComponent', () => {
     const fixture = createComponent(freshQueued);
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
+    // Assert — tier chip removed; state conveyed by fd-state-badge alone
     const tierChip = el.querySelector('.issue-card__tier-chip');
-    expect(tierChip?.textContent?.trim()).toContain('fresh');
+    expect(tierChip).toBeFalsy();
   });
 
-  // Cycle 12d: tier chip absent for non-queued states
   it('should NOT render a tier chip for non-queued states', () => {
     // Arrange
     const inProgress: IssueSummary = { ...mockIssue, state: 'in_progress' };
@@ -690,21 +687,6 @@ describe('IssueCardComponent', () => {
     expect(marker).toBeTruthy();
     // Inline style must not set a px font-size; rem is applied by the stylesheet.
     expect(marker?.style?.fontSize).not.toMatch(/px$/);
-  });
-
-  // Cycle 13e: WCAG H2 — tier chip uses rem, not px
-  it('should have a tier chip element that exists in the DOM for queued states (rem font-size verified via CSS)', () => {
-    // Arrange
-    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
-
-    // Act
-    const fixture = createComponent(queuedIssue);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const chip = el.querySelector('.issue-card__tier-chip') as HTMLElement;
-    expect(chip).toBeTruthy();
-    expect(chip?.style?.fontSize).not.toMatch(/px$/);
   });
 
   // Cycle 13c: "Next up" included in aria-label when isNextUp is true

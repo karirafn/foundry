@@ -72,54 +72,6 @@
     white-space: nowrap;
   }
 
-  &__tier-chip {
-    align-items: center;
-    // H1: --fd-text-tertiary (#6e7681) gives 3.77:1 vs card bg #161b22
-    border: 1px solid var(--fd-text-tertiary);
-    border-radius: 9999px;
-    color: var(--fd-text-secondary);
-    display: inline-flex;
-    // H2 + L1: rem (scales with user pref); raised to 0.6875rem + weight 600 to match caption
-    font-size: 0.6875rem;
-    font-weight: 600;
-    gap: 4px;
-    letter-spacing: 0.03em;
-    padding: 2px 6px;
-    white-space: nowrap;
-
-    &--revision_queued {
-      // H1: mix with card bg, not transparent → 3.29:1 at 90%
-      border-color: color-mix(in srgb, var(--fd-state-in-progress) 90%, var(--fd-bg-card));
-
-      .issue-card__tier-dot {
-        background: var(--fd-state-in-progress);
-      }
-    }
-
-    &--continuation_queued {
-      // H1: mix with card bg, not transparent → 3.03:1 at 90%
-      border-color: color-mix(in srgb, var(--fd-state-queued) 90%, var(--fd-bg-card));
-
-      .issue-card__tier-dot {
-        background: var(--fd-state-queued);
-      }
-    }
-
-    &--queued {
-      .issue-card__tier-dot {
-        background: var(--fd-text-tertiary);
-      }
-    }
-  }
-
-  &__tier-dot {
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-    height: 5px;
-    width: 5px;
-  }
-
   &__repo-warning {
     align-items: center;
     border: 1px solid var(--fd-border-default);

@@ -1,7 +1,7 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { IssueSummary, LIVE_STATES } from '../issue.model';
-import { STATE_ARIA_LABELS, QUEUE_TIER_LABELS } from '../state-display';
+import { STATE_ARIA_LABELS } from '../state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
@@ -80,12 +80,6 @@ function silentDuration(lastActivityAt: string): string {
         <div class="issue-card__badge">
           @if (isNextUp()) {
             <span class="issue-card__next-up" aria-hidden="true">Next up</span>
-          }
-          @if (tierLabel()) {
-            <span class="issue-card__tier-chip issue-card__tier-chip--{{ issue().state }}" aria-hidden="true">
-              <span class="issue-card__tier-dot" aria-hidden="true"></span>
-              {{ tierLabel() }}
-            </span>
           }
           <fd-state-badge [state]="issue().state" [failureClassification]="issue().failureClassification" />
           @if (repoWarningLabel()) {
@@ -182,20 +176,14 @@ export class IssueCardComponent {
     return status ? (WARNING_CLASSES[status] ?? '') : '';
   });
 
-  readonly tierLabel = computed((): string | null => {
-    return QUEUE_TIER_LABELS[this.issue().state] ?? null;
-  });
-
   issueAriaLabel(): string {
     const issue = this.issue();
     const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
-    const tier = this.tierLabel();
     const nextUp = this.isNextUp() ? 'Next up. ' : '';
     const base = `${nextUp}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
-    const tierPart = tier ? ` Tier: ${tier}.` : '';
     const warning = this.repoWarningLabel();
     const warningPart = warning ? ` ${warning}` : '';
-    return `${base}${tierPart}${warningPart}`;
+    return `${base}${warningPart}`;
   }
 
   repoWarningLabel(): string | null {

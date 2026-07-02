@@ -1889,8 +1889,8 @@ describe('IssueListComponent', () => {
     expect(sibling).toBeFalsy();
   });
 
-  // QueueGroup-5: tier chips render for queued cards
-  it('should render tier chips on queued issue cards', () => {
+  // QueueGroup-5: tier chips removed — state is conveyed by fd-state-badge alone
+  it('should NOT render tier chips on queued issue cards', () => {
     // Arrange — one fresh, one revision queued
     const fresh: IssueSummary = { ...mockSummary, id: 'q-fresh', state: 'queued' };
     const revision: IssueSummary = { ...mockSummary, id: 'q-rev', state: 'revision_queued', issueNumber: 2 };
@@ -1904,6 +1904,6 @@ describe('IssueListComponent', () => {
     // Assert
     const el = fixture.nativeElement as HTMLElement;
     const tierChips = el.querySelectorAll('.issue-card__tier-chip');
-    expect(tierChips.length).toBe(2);
+    expect(tierChips.length).toBe(0);
   });
 });
