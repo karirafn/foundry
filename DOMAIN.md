@@ -19,9 +19,16 @@ Workers clone the repo, implement the issue, push a branch, and open a PR. Found
 ## Worker Authentication
 
 How a worker container authenticates with the Anthropic API (Claude Code).
-Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use, stored encrypted in DB) and OAuth token (`CLAUDE_CODE_OAUTH_TOKEN`, Max/Pro/Team/Enterprise plan, auto-detected from Claude Code's `~/.claude/.credentials.json`).
+Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use, stored encrypted in DB) and OAuth (Max/Pro/Team/Enterprise plan, managed via a shared Docker volume).
 Exactly one method is configured per Foundry instance — selected via auth mode in Global Settings.
-OAuth mode auto-scans known credential paths across platforms (Linux, macOS, Windows), validates the token, and auto-refreshes using the stored refresh token.
+
+OAuth mode delegates the full credential lifecycle to the genuine Claude Code CLI.
+A one-time `claude /login` seeds a Foundry-managed, shared, writable Docker volume; each worker mounts that volume at its Claude config dir (`CLAUDE_CONFIG_DIR` → `/home/node/.claude`) and the CLI reads and auto-refreshes `.credentials.json` directly.
+Foundry stores no token and injects none — the CLI is solely responsible for access-token refresh (silent, persists to the shared volume) and for detecting refresh-token expiry.
+When a worker exits with an auth failure, Foundry classifies the run as `AuthInvalid` and raises an **auth-invalid pause**: dispatch pauses, the affected issue is retried automatically on resume, and resume requires a manual `claude /login` to re-seed the volume.
+There is deliberately no auto-resume timer for auth-invalid — Foundry cannot detect a successful re-login server-side.
+Settings and the setup wizard report only what local data proves (credential file present / approximate expiry / re-login needed), never an unverified "valid" status.
+The OAuth credential sits in plaintext in the volume, consistent with how the genuine CLI stores it, and bounded by the Docker-socket trust boundary Foundry already operates within.
 Distinct from provider authentication (Account / PAT), which authenticates git operations against GitHub or GitLab.
 
 ## Provider
@@ -49,7 +56,7 @@ Multiple accounts can exist per provider. A Monitored Repository references a sp
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, prompt templates), authentication mode (API key or OAuth), and usage limit controls (`AutoResumeOnUsageReset`, `DefaultCooldownMinutes`, `UsageLimitResetsAt`, `IsDispatchPaused`).
+Includes worker settings (max concurrent, timeout, prompt templates), authentication mode (API key or OAuth), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `DefaultCooldownMinutes`, `UsageLimitResetsAt`) and the auth-invalid pause (`IsAuthInvalidPaused`) — both pause dispatch until explicitly resumed, but only the usage-limit pause supports auto-resume. `IsDispatchPaused` is the separate manual operator pause.
 DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.
 Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`.
 
