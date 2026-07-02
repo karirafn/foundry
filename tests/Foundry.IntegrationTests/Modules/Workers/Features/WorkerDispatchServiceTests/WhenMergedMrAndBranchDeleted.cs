@@ -97,6 +97,9 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
         private static readonly WorkerStatus ExitedStatus =
             new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
 
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public Task<Result<ContainerId>> StartAsync(
             WorkerContainerSpec spec,
             CancellationToken cancellationToken)
