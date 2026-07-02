@@ -139,10 +139,14 @@ start_rootless_dockerd() {
 }
 
 # Required environment variables
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
-    echo "Either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN is required" >&2
+# Valid auth: EITHER ANTHROPIC_API_KEY (API-key mode) OR a credential file at
+# $CLAUDE_CONFIG_DIR/.credentials.json (OAuth volume mode, written by claude /login).
+_cred_file="${CLAUDE_CONFIG_DIR:-}/.credentials.json"
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "${CLAUDE_CONFIG_DIR:-}" || ! -f "$_cred_file" ]]; then
+    echo "Authentication required: set ANTHROPIC_API_KEY (API-key mode) or mount a credentials file at \$CLAUDE_CONFIG_DIR/.credentials.json (OAuth mode)" >&2
     exit 1
 fi
+unset _cred_file
 : "${CLONE_URL:?CLONE_URL is required}"
 : "${GIT_PAT:?GIT_PAT is required}"
 : "${WORKER_PROMPT:?WORKER_PROMPT is required}"

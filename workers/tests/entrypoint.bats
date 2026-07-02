@@ -509,3 +509,103 @@ EOF
     recorded_docker_host="$(cat "$docker_host_file")"
     [ -z "$recorded_docker_host" ]
 }
+
+# ---------------------------------------------------------------------------
+# Auth-precondition tests (Step 4: credential-volume OAuth model)
+# ---------------------------------------------------------------------------
+
+# Helper: set all required env vars except any auth credential
+set_required_env_no_auth() {
+    unset ANTHROPIC_API_KEY
+    unset CLAUDE_CODE_OAUTH_TOKEN
+    export CLONE_URL="https://github.com/example/repo"
+    export GIT_PAT="test-pat"
+    export WORKER_PROMPT="test-prompt"
+    export SYSTEM_PROMPT="test-system"
+    export ISSUE_NUMBER="1"
+    export CLAUDE_SETTINGS_JSON=""
+}
+
+@test "auth: ANTHROPIC_API_KEY alone is sufficient — entrypoint reaches claude" {
+    make_fake_claude
+    make_fake_git
+
+    set_required_env_no_auth
+    export ANTHROPIC_API_KEY="test-api-key"
+    # Ensure no credential file exists in the default CLAUDE_CONFIG_DIR
+    unset CLAUDE_CONFIG_DIR
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "auth: credential file at CLAUDE_CONFIG_DIR/.credentials.json is sufficient — entrypoint reaches claude" {
+    make_fake_claude
+    make_fake_git
+
+    set_required_env_no_auth
+    local cred_dir="$BATS_TEST_TMPDIR/claude-config"
+    mkdir -p "$cred_dir"
+    printf '{"token":"fake"}' > "$cred_dir/.credentials.json"
+    export CLAUDE_CONFIG_DIR="$cred_dir"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "auth: neither ANTHROPIC_API_KEY nor credential file — entrypoint exits non-zero" {
+    make_fake_git
+
+    set_required_env_no_auth
+    local cred_dir="$BATS_TEST_TMPDIR/claude-config-empty"
+    mkdir -p "$cred_dir"
+    # No .credentials.json created
+    export CLAUDE_CONFIG_DIR="$cred_dir"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+}
+
+@test "auth: neither ANTHROPIC_API_KEY nor credential file — error message is clear" {
+    make_fake_git
+
+    set_required_env_no_auth
+    local cred_dir="$BATS_TEST_TMPDIR/claude-config-empty2"
+    mkdir -p "$cred_dir"
+    export CLAUDE_CONFIG_DIR="$cred_dir"
+
+    run bash "$ENTRYPOINT"
+
+    [[ "$output" == *"ANTHROPIC_API_KEY"* ]] || [[ "$output" == *"credentials"* ]]
+}
+
+@test "auth: CLAUDE_CODE_OAUTH_TOKEN alone (no credential file, no API key) — entrypoint exits non-zero" {
+    make_fake_git
+
+    set_required_env_no_auth
+    export CLAUDE_CODE_OAUTH_TOKEN="old-oauth-token"
+    local cred_dir="$BATS_TEST_TMPDIR/claude-config-token-only"
+    mkdir -p "$cred_dir"
+    export CLAUDE_CONFIG_DIR="$cred_dir"
+
+    run bash "$ENTRYPOINT"
+
+    # CLAUDE_CODE_OAUTH_TOKEN is no longer a valid auth mechanism
+    [ "$status" -ne 0 ]
+}
+
+@test "auth: CLAUDE_CONFIG_DIR unset and no ANTHROPIC_API_KEY — entrypoint exits non-zero" {
+    make_fake_git
+
+    set_required_env_no_auth
+    unset CLAUDE_CONFIG_DIR
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+}
