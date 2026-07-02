@@ -48,7 +48,10 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 
             case AuthMode.OAuth oauth:
                 writer.WriteString(TypeProperty, OAuthType);
-                writer.WriteString(SubscriptionTypeProperty, oauth.SubscriptionType);
+                if (oauth.SubscriptionType is not null)
+                {
+                    writer.WriteString(SubscriptionTypeProperty, oauth.SubscriptionType);
+                }
                 break;
         }
 
@@ -67,9 +70,9 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
         // Legacy blobs may contain access_token, refresh_token, expires_at — these are
         // intentionally ignored. System.Text.Json skips unknown properties, so only
         // subscription_type is read from the element.
-        string subscriptionType = root.TryGetProperty(SubscriptionTypeProperty, out JsonElement sub)
-            ? sub.GetString() ?? string.Empty
-            : string.Empty;
+        string? subscriptionType = root.TryGetProperty(SubscriptionTypeProperty, out JsonElement sub)
+            ? sub.GetString()
+            : null;
         return new AuthMode.OAuth(subscriptionType);
     }
 }

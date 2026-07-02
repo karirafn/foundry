@@ -4,8 +4,6 @@ using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -56,9 +54,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private WorkerCapacityAvailableHandler BuildHandler(
         IRepositoryEligibilityQuery? repositoryEligibilityQuery = null,
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
-        IIntegrationEventDispatcher? integrationEventDispatcher = null,
-        IAuthValidator? authValidator = null,
-        ISystemNotificationBroadcaster? systemNotificationBroadcaster = null)
+        IIntegrationEventDispatcher? integrationEventDispatcher = null)
     {
         return new WorkerCapacityAvailableHandler(
             _dbContext,
@@ -70,8 +66,6 @@ public sealed class HandleAsync : IAsyncDisposable
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             _domainEventDispatcher,
-            authValidator ?? new StubAuthValidator(AuthValidationResult.Valid()),
-            systemNotificationBroadcaster ?? new NullSystemNotificationBroadcaster(),
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
@@ -538,75 +532,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<ContinuationQueuedIssue>();
-    }
-
-    // Auth invalid: no issues claimed regardless of eligibility
-    [Fact]
-    public async Task WhenAuthIsInvalid_DoesNotClaimAnyIssue()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedQueuedIssue(repositoryId);
-
-        WorkerCapacityAvailableHandler sut = BuildHandler(
-            authValidator: new StubAuthValidator(AuthValidationResult.Invalid("API key is invalid")));
-
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dbContext.ChangeTracker.Clear();
-        Issue? issue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repositoryId,
-                TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
-    }
-
-    [Fact]
-    public async Task WhenAuthIsInvalid_SendsActiveSystemNotificationWithErrorMessage()
-    {
-        // Arrange
-        CapturingSystemNotificationBroadcaster broadcaster = new();
-        WorkerCapacityAvailableHandler sut = BuildHandler(
-            authValidator: new StubAuthValidator(AuthValidationResult.Invalid("API key is invalid")),
-            systemNotificationBroadcaster: broadcaster);
-
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        SystemNotification notification = broadcaster.SentNotifications.ShouldHaveSingleItem();
-        notification.ShouldSatisfyAllConditions(
-            () => notification.Category.ShouldBe("claude-auth"),
-            () => notification.IsActive.ShouldBeTrue(),
-            () => notification.Message.ShouldBe("API key is invalid"));
-    }
-
-    [Fact]
-    public async Task WhenAuthIsValid_SendsClearSystemNotification()
-    {
-        // Arrange
-        CapturingSystemNotificationBroadcaster broadcaster = new();
-        WorkerCapacityAvailableHandler sut = BuildHandler(
-            authValidator: new StubAuthValidator(AuthValidationResult.Valid()),
-            systemNotificationBroadcaster: broadcaster);
-
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        SystemNotification notification = broadcaster.SentNotifications.ShouldHaveSingleItem();
-        notification.ShouldSatisfyAllConditions(
-            () => notification.Category.ShouldBe("claude-auth"),
-            () => notification.IsActive.ShouldBeFalse(),
-            () => notification.Message.ShouldBe(""));
     }
 
     [Fact]
@@ -1364,28 +1289,4 @@ public sealed class HandleAsync : IAsyncDisposable
         }
     }
 
-    private sealed class StubAuthValidator(AuthValidationResult result) : IAuthValidator
-    {
-        public Task<AuthValidationResult> ValidateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(result);
-    }
-
-    private sealed class NullSystemNotificationBroadcaster : ISystemNotificationBroadcaster
-    {
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-    }
-
-    private sealed class CapturingSystemNotificationBroadcaster : ISystemNotificationBroadcaster
-    {
-        private readonly List<SystemNotification> _notifications = [];
-
-        public IReadOnlyList<SystemNotification> SentNotifications => _notifications;
-
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
-        {
-            _notifications.Add(notification);
-            return Task.CompletedTask;
-        }
-    }
 }

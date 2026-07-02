@@ -10,6 +10,6 @@ public abstract record AuthMode
     // and is unambiguous in this namespace context despite the conflict with
     // Microsoft.AspNetCore.Authentication.OAuth namespace.
 #pragma warning disable CA1724
-    public sealed record OAuth(string SubscriptionType) : AuthMode;
+    public sealed record OAuth(string? SubscriptionType) : AuthMode;
 #pragma warning restore CA1724
 }

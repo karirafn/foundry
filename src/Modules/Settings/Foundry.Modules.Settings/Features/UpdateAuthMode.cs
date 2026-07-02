@@ -1,6 +1,5 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
-using Foundry.Modules.Settings.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
@@ -18,14 +17,7 @@ internal static class UpdateAuthMode
 
     internal sealed record Command(string Mode, string? ApiKey) : ICommand<Response>;
 
-    internal sealed record Response(
-        string AuthMode,
-        int MaxConcurrent,
-        int TimeoutMinutes,
-        bool AccessTokenPresent,
-        bool RefreshTokenPresent,
-        DateTimeOffset? ExpiresAt,
-        string? SubscriptionType);
+    internal sealed record Response(string AuthMode, int MaxConcurrent, int TimeoutMinutes);
 
     internal sealed class Validator : ICommandValidator<Command>
     {
@@ -52,8 +44,7 @@ internal static class UpdateAuthMode
         }
     }
 
-    internal sealed class Handler(DbContext dbContext, IOAuthCredentialScanner scanner)
-        : ICommandHandler<Command, Response>
+    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, Response>
     {
         public async Task<Result<Response>> HandleAsync(Command command, CancellationToken cancellationToken)
         {
@@ -65,41 +56,15 @@ internal static class UpdateAuthMode
                 return Result<Response>.Fail(SettingsErrors.NotFound);
             }
 
-            AuthMode mode;
-
-            if (command.Mode == ApiKeyMode)
-            {
-                mode = new AuthMode.ApiKey(command.ApiKey!);
-            }
-            else
-            {
-                Result<OAuthCredentials> scanResult = await scanner.ScanAsync(cancellationToken);
-                if (scanResult is Result<OAuthCredentials>.Failure failure)
-                {
-                    return Result<Response>.Fail(failure.Error);
-                }
-
-                if (scanResult is not Result<OAuthCredentials>.Success success)
-                {
-                    return Result<Response>.Fail(SettingsErrors.OAuthCredentialsNotFound);
-                }
-
-                OAuthCredentials credentials = success.Value;
-                mode = new AuthMode.OAuth(credentials.SubscriptionType);
-            }
+            AuthMode mode = command.Mode == ApiKeyMode
+                ? new AuthMode.ApiKey(command.ApiKey!)
+                : new AuthMode.OAuth(SubscriptionType: null);
 
             settings.SetAuthMode(mode);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             GlobalSettingsSummary summary = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
-            return new Response(
-                summary.AuthMode,
-                summary.MaxConcurrent,
-                summary.TimeoutMinutes,
-                AccessTokenPresent: false,
-                RefreshTokenPresent: false,
-                summary.ExpiresAt,
-                summary.SubscriptionType);
+            return new Response(summary.AuthMode, summary.MaxConcurrent, summary.TimeoutMinutes);
         }
     }
 
