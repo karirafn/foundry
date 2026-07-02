@@ -2,6 +2,8 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -259,6 +261,25 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
+
+        public Task<Result<ContainerId>> StartLoginContainerAsync(
+            LoginContainerSpec spec,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Ok(ContainerId.From("fake-login-container")));
+
+        public Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<Result<AccountIdentity>> GetAuthStatusAsync(
+            string containerId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+
+        public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<ContainerId>>([]);
+
+        public Task SeedOnboardingAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     internal sealed class TimeoutStubWorkerOrchestrator(
@@ -341,5 +362,24 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
             _callOrder.Add("remove_container");
             return Task.CompletedTask;
         }
+
+        public Task<Result<ContainerId>> StartLoginContainerAsync(
+            LoginContainerSpec spec,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Ok(ContainerId.From("fake-login-container")));
+
+        public Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<Result<AccountIdentity>> GetAuthStatusAsync(
+            string containerId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+
+        public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<ContainerId>>([]);
+
+        public Task SeedOnboardingAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

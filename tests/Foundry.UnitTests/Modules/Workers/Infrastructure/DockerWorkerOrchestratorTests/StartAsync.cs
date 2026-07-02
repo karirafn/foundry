@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.Options;
 
@@ -53,7 +54,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(options));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(options));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -69,7 +70,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(options));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(options));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -85,7 +86,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(options));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(options));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -105,7 +106,7 @@ public sealed class StartAsync
             new BindMount("/host/data", "/container/data", ReadOnly: false),
             new BindMount("/host/config", "/container/config", ReadOnly: true),
         ];
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(bindMounts: bindMounts), CancellationToken.None);
@@ -122,7 +123,7 @@ public sealed class StartAsync
     {
         // Arrange
         SpyContainerOperations spy = new("created-container-abc");
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -139,7 +140,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         IReadOnlyList<string> securityOptions = ["seccomp=unconfined", "apparmor=unconfined"];
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(securityOptions: securityOptions), CancellationToken.None);
@@ -157,7 +158,7 @@ public sealed class StartAsync
         // Arrange
         SpyContainerOperations spy = new();
         IReadOnlyList<string> devices = ["/dev/fuse"];
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(devices: devices), CancellationToken.None);
@@ -178,7 +179,7 @@ public sealed class StartAsync
     {
         // Arrange
         SpyContainerOperations spy = new();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -198,7 +199,7 @@ public sealed class StartAsync
         [
             new VolumeMount("foundry-claude-credentials", "/home/node/.claude", ReadOnly: false),
         ];
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(volumeMounts: volumeMounts), CancellationToken.None);
@@ -220,7 +221,7 @@ public sealed class StartAsync
     {
         // Arrange
         SpyContainerOperations spy = new();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -238,7 +239,7 @@ public sealed class StartAsync
         ThrowingContainerOperations throwing = new(new DockerApiException(
             HttpStatusCode.InternalServerError,
             rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -257,7 +258,7 @@ public sealed class StartAsync
         ThrowingContainerOperations throwing = new(new DockerApiException(
             HttpStatusCode.Unauthorized,
             rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -290,7 +291,7 @@ public sealed class StartAsync
         ThrowingContainerOperations throwing = new(new DockerApiException(
             HttpStatusCode.InternalServerError,
             rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);

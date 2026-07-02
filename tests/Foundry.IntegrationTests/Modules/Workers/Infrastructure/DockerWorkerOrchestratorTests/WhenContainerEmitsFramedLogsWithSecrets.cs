@@ -92,6 +92,7 @@ public sealed class WhenContainerEmitsFramedLogsWithSecrets : IAsyncLifetime
         _sut = new DockerWorkerOrchestrator(
             _dockerClient.Containers,
             _dockerClient.Volumes,
+            _dockerClient.Exec,
             Options.Create(options));
     }
 

@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.Options;
 
@@ -27,7 +28,7 @@ public sealed class GetLogsAsync
     };
 
     private static DockerWorkerOrchestrator BuildSut(IContainerOperations containerOps) =>
-        new(containerOps, new NullVolumeOperations(), Options.Create(DefaultOptions()));
+        new(containerOps, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
     [Fact]
     public async Task WhenOutputContainsHttpsUrlWithUserinfo_UserinfoRedacted()

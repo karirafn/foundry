@@ -1,12 +1,15 @@
 using System.Globalization;
 using System.IO.Pipelines;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Options;
@@ -16,9 +19,11 @@ namespace Foundry.Modules.Workers.Infrastructure;
 internal sealed class DockerWorkerOrchestrator(
     IContainerOperations containerOperations,
     IVolumeOperations volumeOperations,
+    IExecOperations execOperations,
     IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
 {
     private const string WorkerRunLabelKey = "foundry.worker-run-id";
+    private const string LoginLabelKey = "foundry.login";
     private const string ManagedLabelKey = "foundry.managed";
     private const long BytesPerMegabyte = 1024L * 1024L;
     private const long NanoCpusPerCpu = 1_000_000_000L;
@@ -322,5 +327,260 @@ internal sealed class DockerWorkerOrchestrator(
         {
             // Container already gone — treat as successful removal.
         }
+    }
+
+    public async Task<Result<ContainerId>> StartLoginContainerAsync(
+        LoginContainerSpec spec,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string fifoPath = LoginExecCommand.FifoPath;
+            string bootstrapCmd =
+                $"mkfifo {fifoPath}; sleep {spec.TimeoutSeconds} > {fifoPath} & exec claude auth login --claudeai < {fifoPath}";
+
+            CreateContainerParameters createParams = new()
+            {
+                Image = WorkerImageNames.LoginImageName,
+                Cmd = ["sh", "-c", bootstrapCmd],
+                Env = [$"{CredentialVolume.ConfigDirEnvVar}={CredentialVolume.ContainerPath}"],
+                Tty = false,
+                AttachStdout = true,
+                AttachStderr = true,
+                WorkingDir = OnboardingSeed.DefaultWorkDir,
+                Labels = new Dictionary<string, string>
+                {
+                    [LoginLabelKey] = "true",
+                    [ManagedLabelKey] = "true",
+                },
+                HostConfig = new HostConfig
+                {
+                    Mounts =
+                    [
+                        new Mount
+                        {
+                            Type = "volume",
+                            Source = CredentialVolume.VolumeName,
+                            Target = CredentialVolume.ContainerPath,
+                            ReadOnly = false,
+                        },
+                    ],
+                },
+            };
+
+            CreateContainerResponse response = await containerOperations.CreateContainerAsync(
+                createParams,
+                cancellationToken);
+
+            await containerOperations.StartContainerAsync(
+                response.ID,
+                new ContainerStartParameters(),
+                cancellationToken);
+
+            return Result<ContainerId>.Ok(ContainerId.From(response.ID));
+        }
+        catch (DockerApiException ex)
+        {
+            string redacted = SecretRedactor.Redact(ex.Message);
+            string message = redacted.Length > DockerErrorMessageMaxLength
+                ? redacted[..DockerErrorMessageMaxLength]
+                : redacted;
+            return Result<ContainerId>.Fail(new Error("Docker.LoginStartFailed", message));
+        }
+    }
+
+    public async Task DeliverLoginCodeAsync(
+        string containerId,
+        string code,
+        CancellationToken cancellationToken)
+    {
+        LoginExecCommand cmd = LoginExecCommand.ForCode(code);
+
+        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
+            containerId,
+            new ContainerExecCreateParameters
+            {
+                Cmd = [.. cmd.Argv],
+                Env = [.. cmd.Env],
+                AttachStdout = true,
+                AttachStderr = true,
+            },
+            cancellationToken);
+
+        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
+            execResponse.ID,
+            false,
+            cancellationToken);
+
+        await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
+    }
+
+    public async Task<Result<AccountIdentity>> GetAuthStatusAsync(
+        string containerId,
+        CancellationToken cancellationToken)
+    {
+        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
+            containerId,
+            new ContainerExecCreateParameters
+            {
+                Cmd = ["claude", "auth", "status", "--json"],
+                AttachStdout = true,
+                AttachStderr = false,
+            },
+            cancellationToken);
+
+        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
+            execResponse.ID,
+            false,
+            cancellationToken);
+
+        using MemoryStream stdoutStream = new();
+        await stream.CopyOutputToAsync(Stream.Null, stdoutStream, Stream.Null, cancellationToken);
+
+        stdoutStream.Seek(0, SeekOrigin.Begin);
+        using StreamReader reader = new(stdoutStream, Encoding.UTF8);
+        string json = await reader.ReadToEndAsync(cancellationToken);
+
+        return AccountIdentity.Parse(json);
+    }
+
+    public async Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(
+        CancellationToken cancellationToken)
+    {
+        ContainersListParameters parameters = new()
+        {
+            All = true,
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool>
+                {
+                    [LoginLabelKey] = true,
+                },
+            },
+        };
+
+        IList<ContainerListResponse> containers = await containerOperations.ListContainersAsync(
+            parameters,
+            cancellationToken);
+
+        List<ContainerId> results = [];
+
+        foreach (ContainerListResponse container in containers)
+        {
+            results.Add(ContainerId.From(container.ID));
+        }
+
+        return results;
+    }
+
+    public async Task SeedOnboardingAsync(CancellationToken cancellationToken)
+    {
+        // Use a short-lived helper container to read, merge, and write .claude.json
+        // onto the credential volume without copying the volume to the host.
+        string helperImage = WorkerImageNames.LoginImageName;
+        string configPath = $"{CredentialVolume.ContainerPath}/.claude.json";
+
+        // Start a minimal helper container that sleeps long enough to exec into.
+        CreateContainerParameters createParams = new()
+        {
+            Image = helperImage,
+            Cmd = ["sh", "-c", "sleep 30"],
+            HostConfig = new HostConfig
+            {
+                Mounts =
+                [
+                    new Mount
+                    {
+                        Type = "volume",
+                        Source = CredentialVolume.VolumeName,
+                        Target = CredentialVolume.ContainerPath,
+                        ReadOnly = false,
+                    },
+                ],
+            },
+        };
+
+        CreateContainerResponse response = await containerOperations.CreateContainerAsync(
+            createParams,
+            cancellationToken);
+
+        string helperId = response.ID;
+
+        try
+        {
+            await containerOperations.StartContainerAsync(
+                helperId,
+                new ContainerStartParameters(),
+                cancellationToken);
+
+            // Read existing .claude.json (tolerate absence).
+            string? existingJson = await ReadFileFromContainerAsync(helperId, configPath, cancellationToken);
+
+            // Compute the merged JSON in C# — OnboardingSeed.Merge is the single source of truth.
+            string mergedJson = OnboardingSeed.Merge(existingJson, OnboardingSeed.DefaultWorkDir);
+
+            // Write the merged content back via printf (code in env J — no shell injection).
+            await WriteFileToContainerAsync(helperId, configPath, mergedJson, cancellationToken);
+        }
+        finally
+        {
+            await StopAndRemoveAsync(helperId, cancellationToken);
+        }
+    }
+
+    private async Task<string?> ReadFileFromContainerAsync(
+        string containerId,
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
+            containerId,
+            new ContainerExecCreateParameters
+            {
+                Cmd = ["cat", filePath],
+                AttachStdout = true,
+                AttachStderr = false,
+            },
+            cancellationToken);
+
+        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
+            execResponse.ID,
+            false,
+            cancellationToken);
+
+        using MemoryStream stdoutStream = new();
+        await stream.CopyOutputToAsync(Stream.Null, stdoutStream, Stream.Null, cancellationToken);
+
+        stdoutStream.Seek(0, SeekOrigin.Begin);
+        using StreamReader reader = new(stdoutStream, Encoding.UTF8);
+        string content = await reader.ReadToEndAsync(cancellationToken);
+
+        return string.IsNullOrWhiteSpace(content) ? null : content;
+    }
+
+    private async Task WriteFileToContainerAsync(
+        string containerId,
+        string filePath,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        // Pass content via env J — never interpolated — to avoid shell injection.
+        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
+            containerId,
+            new ContainerExecCreateParameters
+            {
+                Cmd = ["sh", "-c", $"printf '%s' \"$J\" > {filePath}"],
+                Env = [$"J={content}"],
+                AttachStdout = false,
+                AttachStderr = false,
+            },
+            cancellationToken);
+
+        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
+            execResponse.ID,
+            false,
+            cancellationToken);
+
+        await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
     }
 }

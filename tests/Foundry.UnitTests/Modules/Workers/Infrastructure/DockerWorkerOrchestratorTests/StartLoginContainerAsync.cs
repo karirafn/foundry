@@ -1,8 +1,12 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Shared;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.Options;
@@ -13,7 +17,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Infrastructure.DockerWorkerOrchestratorTests;
 
-public sealed class EnsureCredentialVolumeAsync
+public sealed class StartLoginContainerAsync
 {
     private static WorkerOptions DefaultOptions() => new()
     {
@@ -23,48 +27,170 @@ public sealed class EnsureCredentialVolumeAsync
         PidsLimit = 256,
     };
 
+    private static DockerWorkerOrchestrator BuildSut(
+        SpyContainerOperations containerOps,
+        FakeExecOperations? execOps = null) =>
+        new(containerOps, new NullVolumeOperations(), execOps ?? new FakeExecOperations(), Options.Create(DefaultOptions()));
+
     [Fact]
-    public async Task WhenVolumeDoesNotExist_CreatesVolumeWithCorrectName()
+    public async Task WhenStarted_UsesLoginImageName()
     {
         // Arrange
-        SpyVolumeOperations spy = new();
-        DockerWorkerOrchestrator sut = new(new NullContainerOperations(), spy, new NullExecOperations(), Options.Create(DefaultOptions()));
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = BuildSut(spy);
 
         // Act
-        await sut.EnsureCredentialVolumeAsync(CancellationToken.None);
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
 
         // Assert
-        VolumesCreateParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
-        captured.Name.ShouldBe("foundry-claude-credentials");
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.Image.ShouldBe(WorkerImageNames.LoginImageName);
     }
 
     [Fact]
-    public async Task WhenVolumeDoesNotExist_CreatesVolumeWithManagedLabel()
+    public async Task WhenStarted_SetsTtyFalse()
     {
         // Arrange
-        SpyVolumeOperations spy = new();
-        DockerWorkerOrchestrator sut = new(new NullContainerOperations(), spy, new NullExecOperations(), Options.Create(DefaultOptions()));
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = BuildSut(spy);
 
         // Act
-        await sut.EnsureCredentialVolumeAsync(CancellationToken.None);
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
 
         // Assert
-        VolumesCreateParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
-        captured.Labels.ShouldNotBeNull();
-        captured.Labels["foundry.managed"].ShouldBe("true");
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.Tty.ShouldBeFalse();
     }
 
-    private sealed class SpyVolumeOperations : IVolumeOperations
+    [Fact]
+    public async Task WhenStarted_SetsWorkingDirToHomeNode()
     {
-        public VolumesCreateParameters? LastCreateParameters { get; private set; }
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = BuildSut(spy);
 
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.WorkingDir.ShouldBe(OnboardingSeed.DefaultWorkDir);
+    }
+
+    [Fact]
+    public async Task WhenStarted_SetsClaudeConfigDirEnv()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = BuildSut(spy);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        string expectedEnv = $"{WorkerVolumeNames.ClaudeConfigDirEnvVar}={WorkerVolumeNames.ClaudeConfigContainerPath}";
+        captured.Env.ShouldContain(expectedEnv);
+    }
+
+    [Fact]
+    public async Task WhenStarted_MountsCredentialVolume()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = BuildSut(spy);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        IList<Mount> mounts = captured.HostConfig.Mounts.ShouldNotBeNull();
+        mounts.ShouldContain(m =>
+            m.Type == "volume"
+            && m.Source == WorkerVolumeNames.CredentialVolumeName
+            && m.Target == WorkerVolumeNames.ClaudeConfigContainerPath
+            && !m.ReadOnly);
+    }
+
+    [Fact]
+    public async Task WhenStarted_SetsLoginLabel()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = BuildSut(spy);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.Labels.ShouldContainKey("foundry.login");
+        captured.Labels["foundry.login"].ShouldBe("true");
+    }
+
+    [Fact]
+    public async Task WhenStarted_SetsAttachStdoutAndStderr()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = BuildSut(spy);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        captured.ShouldSatisfyAllConditions(
+            () => captured.AttachStdout.ShouldBeTrue(),
+            () => captured.AttachStderr.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task WhenStarted_CmdContainsFifoBootstrap()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerWorkerOrchestrator sut = BuildSut(spy);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        string cmdStr = string.Join(" ", captured.Cmd);
+        cmdStr.ShouldSatisfyAllConditions(
+            () => cmdStr.ShouldContain("mkfifo"),
+            () => cmdStr.ShouldContain(LoginExecCommand.FifoPath),
+            () => cmdStr.ShouldContain("sleep 600"),
+            () => cmdStr.ShouldContain("exec claude auth login --claudeai"),
+            () => cmdStr.ShouldContain($"< {LoginExecCommand.FifoPath}"));
+    }
+
+    [Fact]
+    public async Task WhenStarted_ReturnsContainerIdOnSuccess()
+    {
+        // Arrange
+        SpyContainerOperations spy = new("login-container-xyz");
+        DockerWorkerOrchestrator sut = BuildSut(spy);
+
+        // Act
+        Result<ContainerId> result = await sut.StartLoginContainerAsync(
+            new LoginContainerSpec(TimeoutSeconds: 600),
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ContainerId>.Success success = result.ShouldBeOfType<Result<ContainerId>.Success>();
+        success.Value.Value.ShouldBe("login-container-xyz");
+    }
+
+    private sealed class NullVolumeOperations : IVolumeOperations
+    {
         public Task<VolumeResponse> CreateAsync(
             VolumesCreateParameters parameters,
             CancellationToken cancellationToken)
-        {
-            LastCreateParameters = parameters;
-            return Task.FromResult(new VolumeResponse { Name = parameters.Name });
-        }
+            => Task.FromResult(new VolumeResponse { Name = parameters.Name });
 
         public Task<VolumeResponse> InspectAsync(string name, CancellationToken cancellationToken)
             => Task.FromResult(new VolumeResponse { Name = name });
@@ -86,12 +212,17 @@ public sealed class EnsureCredentialVolumeAsync
             => Task.CompletedTask;
     }
 
-    private sealed class NullContainerOperations : IContainerOperations
+    private sealed class SpyContainerOperations(string containerId = "spy-container-id") : IContainerOperations
     {
+        public CreateContainerParameters? LastCreateParameters { get; private set; }
+
         public Task<CreateContainerResponse> CreateContainerAsync(
             CreateContainerParameters parameters,
             CancellationToken cancellationToken)
-            => Task.FromResult(new CreateContainerResponse { ID = "null-container" });
+        {
+            LastCreateParameters = parameters;
+            return Task.FromResult(new CreateContainerResponse { ID = containerId });
+        }
 
         public Task<bool> StartContainerAsync(
             string id,
