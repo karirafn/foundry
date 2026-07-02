@@ -156,6 +156,32 @@
     margin: 0;
   }
 
+  &__ineligible-queue-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+    margin-block: var(--fd-spacing-md);
+  }
+
+  &__ineligible-queue-hr {
+    flex: 1;
+    border: none;
+    border-top: 1px solid var(--fd-border-warning);
+    margin: 0;
+    opacity: 0.5;
+  }
+
+  &__ineligible-queue-caption {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--fd-text-warning);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    margin: 0;
+    line-height: inherit;
+  }
+
   &__resolved-section {
     margin-top: var(--fd-spacing-lg);
   }

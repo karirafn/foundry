@@ -13,6 +13,8 @@ public sealed class QueuedIssue : Issue
     {
     }
 
+    public const int TierRank = 2;
+
     internal static QueuedIssue FromDetected(DetectedIssue detected)
     {
         QueuedIssue queued = new(detected.Id);
@@ -76,5 +78,4 @@ public sealed class QueuedIssue : Issue
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
         return inProgress;
     }
-
 }

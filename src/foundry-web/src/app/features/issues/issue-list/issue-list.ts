@@ -16,6 +16,7 @@ const SKELETON_COUNT = 4;
 const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
 const EMPTY_RESOLVED_MESSAGE = 'No resolved issues match the selected filters';
 const RESOLVED_HEADING_ID = 'resolved-band-heading';
+const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
 
 @Component({
   selector: 'fd-issue-list',
@@ -89,11 +90,29 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
                 <span class="sr-only">End of in-progress issues. Other issues follow.</span>
                 <hr class="issue-list__separator" aria-hidden="true" />
               }
+              @if (ineligibleQueueStartIndex() >= 0 && idx === ineligibleQueueStartIndex()) {
+                <!-- H3: caption changed from h3 to p — no heading hierarchy skip (h1 → h3).
+                     M1: role="group" + aria-labelledby makes the label effective on the container.
+                     M2: guidance text is nested inside the labelled <p> so screen readers hear
+                         exactly one boundary announcement — no duplicate sibling sr-only span. -->
+                <div
+                  role="group"
+                  class="issue-list__ineligible-queue-divider"
+                  [attr.aria-labelledby]="ineligibleQueueHeadingId"
+                >
+                  <hr class="issue-list__ineligible-queue-hr" aria-hidden="true" />
+                  <p
+                    [id]="ineligibleQueueHeadingId"
+                    class="issue-list__ineligible-queue-caption"
+                  >Not dispatchable<span class="sr-only"> — queued issues from repositories that are currently not dispatchable follow. Check repository settings to make them eligible.</span></p>
+                </div>
+              }
               <div class="issue-list__item">
                 <fd-issue-card
                   [issue]="issue"
                   [expanded]="issueService.expandedIssueId() === issue.id"
                   [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
+                  [isNextUp]="issueService.nextUpIssueId() === issue.id"
                   (toggle)="issueService.toggleExpand(issue.id)"
                 />
 
@@ -223,6 +242,17 @@ export class IssueListComponent implements OnInit {
   protected readonly emptyActiveHint = EMPTY_ACTIVE_MESSAGE;
   protected readonly emptyResolvedMessage = EMPTY_RESOLVED_MESSAGE;
   protected readonly resolvedHeadingId = RESOLVED_HEADING_ID;
+  protected readonly ineligibleQueueHeadingId = INELIGIBLE_QUEUE_HEADING_ID;
+
+  /** Index in activeBandIssues() where ineligible queued issues begin, or -1 if none. */
+  protected readonly ineligibleQueueStartIndex = computed(() => {
+    const ineligibleIds = new Set(this.issueService.ineligibleQueuedIssues().map(i => i.id));
+    if (ineligibleIds.size === 0) {
+      return -1;
+    }
+    const band = this.issueService.activeBandIssues();
+    return band.findIndex(i => ineligibleIds.has(i.id));
+  });
 
   private _preLoadResolvedCount = 0;
 

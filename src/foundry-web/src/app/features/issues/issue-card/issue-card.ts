@@ -6,7 +6,7 @@ import { StateBadgeComponent } from '../../../shared/components/state-badge/stat
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
 
-const QUEUED_STATES = new Set<string>(['queued', 'detected']);
+const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
 
 const WARNING_CLASSES: Record<string, string> = {
   ineligible: 'issue-card__repo-warning--ineligible',
@@ -78,6 +78,9 @@ function silentDuration(lastActivityAt: string): string {
         <span class="issue-card__separator" aria-hidden="true">·</span>
         <span class="issue-card__slug">{{ issue().repositorySlug }}</span>
         <div class="issue-card__badge">
+          @if (isNextUp()) {
+            <span class="issue-card__next-up" aria-hidden="true">Next up</span>
+          }
           <fd-state-badge [state]="issue().state" [failureClassification]="issue().failureClassification" />
           @if (repoWarningLabel()) {
             <span
@@ -153,6 +156,7 @@ export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
+  readonly isNextUp: InputSignal<boolean> = input<boolean>(false);
   readonly toggle: OutputEmitterRef<void> = output<void>();
 
   private readonly _ticker = inject(TickerService);
@@ -175,14 +179,16 @@ export class IssueCardComponent {
   issueAriaLabel(): string {
     const issue = this.issue();
     const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
-    const base = `Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
+    const nextUp = this.isNextUp() ? 'Next up. ' : '';
+    const base = `${nextUp}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
     const warning = this.repoWarningLabel();
-    return warning ? `${base}. ${warning}` : base;
+    const warningPart = warning ? ` ${warning}` : '';
+    return `${base}${warningPart}`;
   }
 
   repoWarningLabel(): string | null {
     const issue = this.issue();
-    if (!QUEUED_STATES.has(issue.state)) {
+    if (!REPO_WARNING_STATES.has(issue.state)) {
       return null;
     }
     const status = issue.repositoryEligibilityStatus;

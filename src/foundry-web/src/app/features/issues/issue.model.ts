@@ -50,6 +50,13 @@ export interface IssueDetail extends IssueSummary {
   stateDetails: IssueStateDetails | null;
 }
 
-// 'queued' is intentionally absent — it uses the same separator logic as detected and is not
-// operationally active. 'continuation_queued' is included because work is about to be re-dispatched.
-export const LIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress', 'continuation_queued']);
+// Live states: issues with an active worker running (in progress or under revision).
+// continuation_queued is intentionally excluded: it is a queued tier, not an active worker state.
+export const LIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress']);
+
+// The three queued tiers dispatched in Dispatch Order: revision > continuation > fresh.
+export const QUEUED_TIER_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
+  'revision_queued',
+  'continuation_queued',
+  'queued',
+]);

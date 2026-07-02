@@ -5,6 +5,7 @@ namespace Foundry.Modules.Issues.Domain;
 public sealed class ContinuationQueuedIssue : Issue
 {
     public const int FailureReasonMaxLength = 500;
+    public const int TierRank = 1;
 
     // Private parameterless constructor for EF Core materialization.
     private ContinuationQueuedIssue()

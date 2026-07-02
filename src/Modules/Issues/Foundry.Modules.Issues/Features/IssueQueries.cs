@@ -396,12 +396,103 @@ internal sealed class IssueQueries(
             query = query.Where(i => i.MonitoredRepositoryId == repositoryId);
         }
 
+        // No SQL ordering: queued issues require in-memory DispatchOrderKey ordering,
+        // and non-queued use DetectedAt DESC. Both partitions are ordered in-memory below.
         List<Issue> issues = await query
-            .OrderByDescending(i => i.DetectedAt)
             .ToListAsync(cancellationToken);
 
-        return await EnrichAsync(issues, cancellationToken);
+        return await EnrichAndOrderActiveAsync(issues, cancellationToken);
     }
+
+    private async Task<IReadOnlyList<IssueSummary>> EnrichAndOrderActiveAsync(
+        List<Issue> issues,
+        CancellationToken cancellationToken)
+    {
+        if (issues.Count == 0)
+        {
+            return [];
+        }
+
+        HashSet<MonitoredRepositoryId> repositoryIds = issues
+            .Select(i => i.MonitoredRepositoryId)
+            .ToHashSet();
+
+        HashSet<Guid> repositoryGuids = repositoryIds
+            .Select(id => id.Value)
+            .ToHashSet();
+
+        IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
+            repositoryIds,
+            cancellationToken);
+
+        IReadOnlyList<EligibleRepository> eligibleRepositories = await eligibilityQuery.GetEligibleRepositoriesAsync(
+            repositoryGuids,
+            cancellationToken);
+
+        IReadOnlyDictionary<Guid, string> eligibilityStatuses = await eligibilityQuery.GetEligibilityStatusesAsync(
+            repositoryGuids,
+            cancellationToken);
+
+        // Build a position lookup: repoId → Position for eligible repos only.
+        Dictionary<Guid, int> positionByRepo = eligibleRepositories
+            .ToDictionary(r => r.Id, r => r.Position);
+
+        List<Issue> queuedIssues = issues
+            .Where(IsQueuedVariant)
+            .ToList();
+
+        List<Issue> nonQueuedIssues = issues
+            .Where(i => !IsQueuedVariant(i))
+            .OrderByDescending(i => i.DetectedAt)
+            .ToList();
+
+        // Partition queued issues once — single TryGetValue lookup per issue avoids
+        // ContainsKey + indexer double-lookup.
+        // For ineligible issues (IsEligible = false), pos defaults to 0 here, but Position is
+        // not consumed for them — ineligible issues pass int.MaxValue as the sentinel position
+        // to DispatchOrderKey.For, ensuring they sort after all eligible queued issues.
+        List<(Issue Issue, bool IsEligible, int Position)> queuedWithPosition = queuedIssues
+            .Select(i => (
+                Issue: i,
+                IsEligible: positionByRepo.TryGetValue(i.MonitoredRepositoryId.Value, out int pos),
+                Position: pos))
+            .ToList();
+
+        // Eligible-repo queued issues (real position from eligibility query).
+        List<Issue> eligibleQueued = queuedWithPosition
+            .Where(t => t.IsEligible)
+            .OrderBy(t => DispatchOrderKey.For(t.Issue, t.Position))
+            .Select(t => t.Issue)
+            .ToList();
+
+        // Ineligible-repo queued issues: sentinel position so they sort among themselves
+        // by DetectedAt then Id, consistently after all eligible queued issues.
+        List<Issue> ineligibleQueued = queuedWithPosition
+            .Where(t => !t.IsEligible)
+            .OrderBy(t => DispatchOrderKey.For(t.Issue, int.MaxValue))
+            .Select(t => t.Issue)
+            .ToList();
+
+        List<Issue> orderedIssues = [..eligibleQueued, ..ineligibleQueued, ..nonQueuedIssues];
+
+        return orderedIssues
+            .Select(i => new IssueSummary(
+                Id: i.Id.Value,
+                IssueNumber: i.IssueNumber,
+                Title: i.Title,
+                State: GetStateDiscriminator(i),
+                RepositorySlug: slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
+                DetectedAt: i.DetectedAt,
+                Url: i.Url.Value.ToString(),
+                FailureClassification: GetFailureCategory(i),
+                RepositoryEligibilityStatus: eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status)
+                    ? status
+                    : null))
+            .ToList();
+    }
+
+    private static bool IsQueuedVariant(Issue issue) =>
+        issue is QueuedIssue or RevisionQueuedIssue or ContinuationQueuedIssue;
 
     private static Expression<Func<Issue, bool>> BuildTypeOrPredicate(IReadOnlyCollection<string> stateNames)
     {

@@ -1064,6 +1064,52 @@ public sealed class HandleAsync : IAsyncDisposable
         lowPriorityIssue.ShouldBeOfType<ContinuationQueuedIssue>();
     }
 
+    // AC8: IssueId tiebreak — when tier, Position, and DetectedAt are all identical,
+    // the issue with the lower IssueId (ordinal) is claimed.
+    [Fact]
+    public async Task WhenTwoQueuedIssuesHaveSameTierPositionAndDetectedAt_ClaimsIssueWithLowerIssueId()
+    {
+        // Arrange
+        DateTimeOffset sameTime = DateTimeOffset.UtcNow;
+        MonitoredRepositoryId repoAId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId repoBId = MonitoredRepositoryId.New();
+
+        // Seed both issues with exactly the same DetectedAt; both repos share the same Position.
+        QueuedIssue issueA = SeedQueuedIssueAtTime(repoAId, issueNumber: 1, detectedAt: sameTime);
+        QueuedIssue issueB = SeedQueuedIssueAtTime(repoBId, issueNumber: 2, detectedAt: sameTime);
+
+        // Determine which IssueId is lower by the same ordering used by DispatchOrderKey.
+        bool issueAHasLowerId = issueA.Id.CompareTo(issueB.Id) < 0;
+        MonitoredRepositoryId expectedWinnerRepoId = issueAHasLowerId ? repoAId : repoBId;
+        MonitoredRepositoryId expectedLoserRepoId = issueAHasLowerId ? repoBId : repoAId;
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories:
+                [
+                    new EligibleRepository(repoAId.Value, Position: 0),
+                    new EligibleRepository(repoBId.Value, Position: 0),
+                ]));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — the issue with the lower IssueId is claimed
+        _dbContext.ChangeTracker.Clear();
+        Issue? winnerIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == expectedWinnerRepoId,
+                TestContext.Current.CancellationToken);
+        Issue? loserIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == expectedLoserRepoId,
+                TestContext.Current.CancellationToken);
+        winnerIssue.ShouldBeOfType<InProgressIssue>();
+        loserIssue.ShouldBeOfType<QueuedIssue>();
+    }
+
     // Guards the TryGetValue refactoring: a candidate whose repo id is absent from the
     // eligible dictionary must be excluded without throwing, even when eligible repos exist.
     [Fact]

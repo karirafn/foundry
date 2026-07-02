@@ -51,59 +51,47 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        // Claim priority: revision queued first (addressing review feedback takes precedence),
-        // then continuation queued (resuming interrupted work), then fresh queued issues.
-        // Within each tier, order by (Position, DetectedAt) — lower position = higher priority,
-        // ties broken by oldest DetectedAt.
-        RevisionQueuedIssue? revisionQueued =
-            await PickHighestPriorityAsync<RevisionQueuedIssue>(positionByRepoId, cancellationToken);
+        Issue? winner = await PickByMinDispatchOrderKeyAsync(positionByRepoId, cancellationToken);
 
-        if (revisionQueued is not null)
+        if (winner is null)
         {
-            await ClaimRevisionQueuedAsync(revisionQueued, @event.WorkerRunId, cancellationToken);
             return;
         }
 
-        ContinuationQueuedIssue? continuationQueued =
-            await PickHighestPriorityAsync<ContinuationQueuedIssue>(positionByRepoId, cancellationToken);
-
-        if (continuationQueued is not null)
+        switch (winner)
         {
-            await ClaimContinuationQueuedAsync(continuationQueued, @event.WorkerRunId, cancellationToken);
-            return;
-        }
-
-        QueuedIssue? queued =
-            await PickHighestPriorityAsync<QueuedIssue>(positionByRepoId, cancellationToken);
-
-        if (queued is not null)
-        {
-            await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
+            case RevisionQueuedIssue revisionQueued:
+                await ClaimRevisionQueuedAsync(revisionQueued, @event.WorkerRunId, cancellationToken);
+                break;
+            case ContinuationQueuedIssue continuationQueued:
+                await ClaimContinuationQueuedAsync(continuationQueued, @event.WorkerRunId, cancellationToken);
+                break;
+            case QueuedIssue queued:
+                await ClaimQueuedAsync(queued, @event.WorkerRunId, cancellationToken);
+                break;
         }
     }
 
     /// <summary>
-    /// Loads candidates of type <typeparamref name="T"/> whose repository id appears in
-    /// <paramref name="positionByRepoId"/>, then returns the one with the lowest (Position, DetectedAt).
-    /// Pre-filtering at the database level avoids loading the entire table on each dispatch event.
+    /// Loads all queued candidates from eligible repositories across all tiers, then returns
+    /// the candidate with the minimum <see cref="DispatchOrderKey"/>. The key orders by
+    /// TierRank → Position → DetectedAt → IssueId, which preserves the tier precedence
+    /// (revision → continuation → fresh) while also breaking ties by repository position,
+    /// DetectedAt, and finally IssueId.
     /// </summary>
-    private async Task<T?> PickHighestPriorityAsync<T>(
+    private async Task<Issue?> PickByMinDispatchOrderKeyAsync(
         Dictionary<MonitoredRepositoryId, int> positionByRepoId,
         CancellationToken cancellationToken)
-        where T : Issue
     {
         Dictionary<MonitoredRepositoryId, int>.KeyCollection eligibleIds = positionByRepoId.Keys;
 
-        List<T> candidates = await db.Set<T>()
+        List<Issue> candidates = await db.Set<Issue>()
+            .Where(i => i is RevisionQueuedIssue || i is ContinuationQueuedIssue || i is QueuedIssue)
             .Where(i => eligibleIds.Contains(i.MonitoredRepositoryId))
             .ToListAsync(cancellationToken);
 
         return candidates
-            .Select(i => (Issue: i, Position: positionByRepoId[i.MonitoredRepositoryId]))
-            .OrderBy(x => x.Position)
-            .ThenBy(x => x.Issue.DetectedAt)
-            .Select(x => x.Issue)
-            .FirstOrDefault();
+            .MinBy(i => DispatchOrderKey.For(i, positionByRepoId[i.MonitoredRepositoryId]));
     }
 
     private async Task<Dictionary<MonitoredRepositoryId, int>> ResolveEligibleRepositoryPositionsAsync(

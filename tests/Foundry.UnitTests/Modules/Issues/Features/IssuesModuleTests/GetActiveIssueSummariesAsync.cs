@@ -207,7 +207,7 @@ public sealed class GetActiveIssueSummariesAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenMultipleActiveIssues_OrderedByDetectedAtDescending()
+    public async Task WhenMultipleNonQueuedActiveIssues_OrderedByDetectedAtDescending()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();

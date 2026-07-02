@@ -81,12 +81,24 @@ Carries a Repository Eligibility status, re-evaluated on each poll cycle.
 
 ## Repository Priority
 
-The global dispatch order over monitored repositories.
-Each Monitored Repository holds a 0-based, contiguous, unique `Position` integer — lower value means higher priority.
-When a worker slot opens and multiple eligible repositories have queued issues in the same claim tier, the lowest-Position repository's issue is claimed first; ties within the same position are broken by oldest `DetectedAt`.
-Tier precedence (revision → continuation → fresh) is unchanged — Repository Priority orders only within a tier.
-Affects dispatch only; polling is independent of position.
+The relative ordering of monitored repositories, expressed as a 0-based, contiguous, unique `Position` integer on each Monitored Repository — lower value means higher priority.
+`Position` is one component of Dispatch Order and therefore affects both dispatch and the dashboard's queued-issue list.
 New repositories append at the end (highest existing Position + 1); deleting a repository renumbers survivors contiguously.
+Polling is independent of position.
+
+## Dispatch Order
+
+The total order that governs which queued issue is claimed next and how queued issues are ranked in the dashboard.
+Defined as the four-tuple `(TierRank, Position, DetectedAt, Id)`, evaluated in that precedence — the issue with the lexicographically smallest key is claimed first (and displayed first).
+
+- **TierRank** — a property of the queued state variant that encodes dispatch-priority class: revision (0) < continuation (1) < fresh (2). Lower rank is claimed first; this is the primary ordering criterion.
+- **Position** — the `EligibleRepository.Position` of the repository that owns the issue, supplied externally into the key. Lower position is preferred within a tier.
+- **DetectedAt** — oldest first within the same repository and tier.
+- **Id** — guarantees a deterministic total order when all other fields are equal.
+
+A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`WorkerCapacityAvailableHandler`, min-by-key claim selection) and the dashboard list query (`GetActiveIssueSummariesAsync`, in-memory sort of the queued subset), so display order and dispatch order cannot drift.
+
+The dashboard partitions queued issues into two groups before applying the key: eligible-repository issues (real `Position`) rank above ineligible-repository issues (sentinel `int.MaxValue` position), each retaining its `RepositoryEligibilityStatus` for display.
 
 ## Repository Eligibility
 

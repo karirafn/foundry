@@ -56,6 +56,22 @@
     gap: var(--fd-spacing-xs);
   }
 
+  &__next-up {
+    align-items: center;
+    background: color-mix(in srgb, var(--fd-state-completed) 12%, var(--fd-bg-card));
+    // H1: border mixed with card bg (not transparent) → ≥3:1 vs #161b22 (3.25:1 at 90%)
+    border: 1px solid color-mix(in srgb, var(--fd-state-completed) 90%, var(--fd-bg-card));
+    border-radius: 9999px;
+    color: var(--fd-text-success);
+    display: inline-flex;
+    // H2: rem instead of px so text scales with user font-size preference
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    padding: 2px 7px;
+    white-space: nowrap;
+  }
+
   &__repo-warning {
     align-items: center;
     border: 1px solid var(--fd-border-default);
