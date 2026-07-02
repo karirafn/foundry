@@ -37,10 +37,16 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
             containerOutputParser: outputParser);
     }
 
-    private void SeedGlobalSettings()
+    private void SeedGlobalSettings(bool authInvalidPause = false)
     {
         using FoundryDbContext db = CreateDbContext();
         GlobalSettings settings = GlobalSettings.Create();
+
+        if (authInvalidPause)
+        {
+            settings.PauseForAuthInvalid();
+        }
+
         db.Set<GlobalSettings>().Add(settings);
         db.SaveChanges();
     }
@@ -128,6 +134,26 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         dispatcher.Captured
             .OfType<DispatchPausedForAuthInvalid>()
             .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenAuthInvalidPauseAlreadySet_DoesNotDispatchDispatchPausedForAuthInvalidAgain()
+    {
+        // Arrange — GlobalSettings already has AuthInvalidPause = true (repeat auth-invalid exit)
+        SeedGlobalSettings(authInvalidPause: true);
+        SeedActiveRun("container-auth-invalid-idempotent");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildServiceWithParser(
+            AuthInvalidOutput,
+            exitedStatus,
+            integrationEventDispatcher: dispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.Captured.OfType<DispatchPausedForAuthInvalid>().ShouldBeEmpty();
     }
 
     [Fact]

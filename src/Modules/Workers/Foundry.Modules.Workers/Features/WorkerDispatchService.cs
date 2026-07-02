@@ -766,13 +766,17 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
+        bool wasAlreadyPaused = settings.AuthInvalidPause;
         settings.PauseForAuthInvalid();
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        await TryDispatchAsync(
-            integrationEventDispatcher,
-            new DispatchPausedForAuthInvalidEvent(),
-            cancellationToken);
+        if (!wasAlreadyPaused)
+        {
+            await TryDispatchAsync(
+                integrationEventDispatcher,
+                new DispatchPausedForAuthInvalidEvent(),
+                cancellationToken);
+        }
 
         logger.LogWarning("Auth-invalid exit detected; dispatch paused until credentials are refreshed.");
     }

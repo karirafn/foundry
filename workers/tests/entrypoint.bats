@@ -609,3 +609,49 @@ set_required_env_no_auth() {
 
     [ "$status" -ne 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# OAuth settings-write: atomic mv -f replaces a stale read-only settings.json
+# ---------------------------------------------------------------------------
+
+@test "oauth settings-write: CLAUDE_SETTINGS_JSON overwrites a pre-existing chmod 444 settings.json" {
+    make_fake_claude
+    make_fake_git
+
+    # The entrypoint writes to ~/.claude/settings.json. Redirect HOME to a temp
+    # dir so ~/.claude resolves to our controlled directory (matching the
+    # production container layout where CLAUDE_CONFIG_DIR == ~/.claude).
+    local fake_home="$BATS_TEST_TMPDIR/oauth-home"
+    local cred_dir="$fake_home/.claude"
+    mkdir -p "$cred_dir"
+
+    # Pre-create a read-only settings.json — simulating the shared credential
+    # volume after a previous worker run (the re-run breakage scenario).
+    printf '{"old":"value"}' > "$cred_dir/settings.json"
+    chmod 444 "$cred_dir/settings.json"
+
+    # Provide a credential file so the auth check passes.
+    printf '{"token":"fake"}' > "$cred_dir/.credentials.json"
+
+    export HOME="$fake_home"
+    export CLAUDE_CONFIG_DIR="$cred_dir"
+    export CLAUDE_SETTINGS_JSON='{"new":"value"}'
+    # Unset API key so only the credential-file auth path is active.
+    unset ANTHROPIC_API_KEY
+
+    export CLONE_URL="https://github.com/example/repo"
+    export GIT_PAT="test-pat"
+    export WORKER_PROMPT="test-prompt"
+    export SYSTEM_PROMPT="test-system"
+    export ISSUE_NUMBER="1"
+
+    run bash "$ENTRYPOINT"
+
+    # The entrypoint must succeed — the atomic mv -f must not be blocked by the 444 mode.
+    [ "$status" -eq 0 ]
+
+    # The settings.json must contain the new content written by this run.
+    local written_content
+    written_content="$(cat "$cred_dir/settings.json")"
+    [[ "$written_content" == *'"new"'* ]]
+}

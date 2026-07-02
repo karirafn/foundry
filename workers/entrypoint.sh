@@ -158,8 +158,14 @@ if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
         echo "ERROR: ~/.claude is not writable by $(whoami). Rebuild the worker image: docker build -t foundry-worker:local workers/" >&2
         exit 1
     fi
-    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > ~/.claude/settings.json
-    chmod 444 ~/.claude/settings.json
+    # Write via a temp file and atomically replace any pre-existing read-only settings.json.
+    # mv -f replaces a 444 file owned by the same user (node owns the dir, so replacement is
+    # permitted), fixing both re-run breakage and any concurrent-worker write race (last writer
+    # wins with identical content). settings.json is regenerated fresh on every container start.
+    settings_tmp="$(mktemp)"
+    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > "$settings_tmp"
+    chmod 444 "$settings_tmp"
+    mv -f "$settings_tmp" ~/.claude/settings.json
 fi
 
 # Authenticate the clone via GIT_ASKPASS so the token never appears in the
