@@ -134,12 +134,13 @@ const COOLDOWN_MINUTES_MAX = 1440;
             />
 
             @if (_showSwitchAccountConfirm()) {
-              <div class="general-settings__switch-confirm" role="dialog" aria-label="Confirm account switch">
+              <div class="general-settings__switch-confirm" role="group" aria-label="Confirm account switch">
                 <p class="general-settings__switch-confirm-text">
                   Switching account pauses dispatch and waits for in-flight workers to finish. Continue?
                 </p>
                 <div class="general-settings__switch-confirm-actions">
                   <button
+                    #switchConfirmBtn
                     class="general-settings__switch-confirm-btn"
                     type="button"
                     (click)="onConfirmSwitchAccount()"
@@ -147,32 +148,39 @@ const COOLDOWN_MINUTES_MAX = 1440;
                   <button
                     class="general-settings__switch-cancel-btn"
                     type="button"
-                    (click)="_showSwitchAccountConfirm.set(false)"
+                    (click)="onCancelSwitchAccount()"
                   >Cancel</button>
                 </div>
               </div>
-            } @else if (_switchAccountDraining()) {
-              <div class="general-settings__drain-gate" role="status">
+            }
+            <div
+              class="general-settings__drain-gate"
+              role="status"
+              [attr.aria-hidden]="!_switchAccountDraining() || null"
+            >
+              @if (_switchAccountDraining()) {
                 Dispatch is paused. Wait for running workers to finish (watch the Issues board), then log in to the new account below.
-              </div>
 
-              @if (dispatchService.pauseResumeError()) {
-                <div role="alert" class="general-settings__switch-error">{{ dispatchService.pauseResumeError() }}</div>
-              }
+                @if (dispatchService.pauseResumeError()) {
+                  <div role="alert" class="general-settings__switch-error">{{ dispatchService.pauseResumeError() }}</div>
+                }
 
-              @if (_showResumeAfterSwitch()) {
-                <button
-                  class="general-settings__resume-btn"
-                  type="button"
-                  [disabled]="dispatchService.resuming()"
-                  (click)="dispatchService.resumeDispatch()"
-                >{{ dispatchService.resuming() ? 'Resuming...' : 'Resume dispatch' }}</button>
+                @if (_showResumeAfterSwitch()) {
+                  <button
+                    class="general-settings__resume-btn"
+                    type="button"
+                    [disabled]="dispatchService.resuming()"
+                    (click)="dispatchService.resumeDispatch()"
+                  >{{ dispatchService.resuming() ? 'Resuming...' : 'Resume dispatch' }}</button>
+                }
               }
-            } @else if (_oauthStatus() === 'Present') {
+            </div>
+            @if (!_showSwitchAccountConfirm() && !_switchAccountDraining() && _oauthStatus() === 'Present') {
               <button
+                #switchAccountBtn
                 class="general-settings__switch-account-btn"
                 type="button"
-                (click)="_showSwitchAccountConfirm.set(true)"
+                (click)="onSwitchAccountClick()"
               >Switch account</button>
             }
           </div>
@@ -464,6 +472,8 @@ export class SettingsGeneralComponent {
   private readonly _injector = inject(Injector);
 
   @ViewChild('authHeading') private readonly _authHeading?: ElementRef<HTMLHeadingElement>;
+  @ViewChild('switchAccountBtn') private readonly _switchAccountBtn?: ElementRef<HTMLButtonElement>;
+  @ViewChild('switchConfirmBtn') private readonly _switchConfirmBtn?: ElementRef<HTMLButtonElement>;
 
   protected readonly MAX_CONCURRENT_MIN = MAX_CONCURRENT_MIN;
   protected readonly MAX_CONCURRENT_MAX = MAX_CONCURRENT_MAX;
@@ -602,6 +612,20 @@ export class SettingsGeneralComponent {
     }
     runInInjectionContext(this._injector, () =>
       afterNextRender(() => this._authHeading?.nativeElement.focus())
+    );
+  }
+
+  onSwitchAccountClick(): void {
+    this._showSwitchAccountConfirm.set(true);
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => this._switchConfirmBtn?.nativeElement.focus())
+    );
+  }
+
+  onCancelSwitchAccount(): void {
+    this._showSwitchAccountConfirm.set(false);
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => this._switchAccountBtn?.nativeElement.focus())
     );
   }
 

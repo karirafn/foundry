@@ -401,5 +401,61 @@ describe('OAuthPanelComponent', () => {
       // Assert
       expect(liveRegion).toBeTruthy();
     });
+
+    it('should set the copy announcement to a fallback message when clipboard write rejects', async () => {
+      // Arrange — define clipboard if not available in the test environment
+      const clipboardMock = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
+      Object.defineProperty(navigator, 'clipboard', { value: clipboardMock, configurable: true, writable: true });
+      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+
+      // Act
+      fixture.componentInstance.onCopy();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const liveRegion = el.querySelector('.oauth-panel__copy-announcement');
+      expect(liveRegion?.textContent).toContain('Copy failed');
+    });
+  });
+
+  // U4 — Refresh button visibility
+  describe('refresh button visibility', () => {
+    it('should NOT show the refresh button while loginCommandLoading is true', () => {
+      // Arrange
+      const fixture = setup({ status: 'NotConfigured', loginCommandLoading: true });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const refreshBtn = el.querySelector('.oauth-panel__refresh-btn');
+
+      // Assert
+      expect(refreshBtn).toBeFalsy();
+    });
+
+    it('should show the refresh button once a login command is available', () => {
+      // Arrange
+      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const refreshBtn = el.querySelector('.oauth-panel__refresh-btn');
+
+      // Assert
+      expect(refreshBtn).toBeTruthy();
+    });
+
+    it('should show the refresh button when there is a login command error', () => {
+      // Arrange
+      const fixture = setup({ status: 'NotConfigured', loginCommandError: 'Fetch failed' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const refreshBtn = el.querySelector('.oauth-panel__refresh-btn');
+
+      // Assert
+      expect(refreshBtn).toBeTruthy();
+    });
   });
 });

@@ -22,7 +22,7 @@
     margin: 0 0 var(--fd-spacing-xs) 0;
 
     &:focus-visible {
-      outline: none;
+      @include focus-ring;
     }
   }
 

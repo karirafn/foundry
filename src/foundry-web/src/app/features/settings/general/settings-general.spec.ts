@@ -418,7 +418,7 @@ describe('SettingsGeneralComponent', () => {
     expect(switchBtn).toBeFalsy();
   });
 
-  it('should show confirm dialog when "Switch account" is clicked', () => {
+  it('should show confirm group when "Switch account" is clicked', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -432,9 +432,55 @@ describe('SettingsGeneralComponent', () => {
     switchBtn.click();
     fixture.detectChanges();
 
-    // Assert
-    const dialog = el.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain('Switching account pauses dispatch');
+    // Assert — uses role="group", not role="dialog"
+    const group = el.querySelector('[role="group"][aria-label="Confirm account switch"]');
+    expect(group?.textContent).toContain('Switching account pauses dispatch');
+  });
+
+  it('should use role="group" (not role="dialog") for the inline confirm', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Assert — no dialog role
+    expect(el.querySelector('[role="dialog"]')).toBeFalsy();
+    expect(el.querySelector('[role="group"]')).toBeTruthy();
+  });
+
+  it('should return focus to the switch-account button when Cancel is clicked', async () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Act
+    const cancelBtn = el.querySelector('.general-settings__switch-cancel-btn') as HTMLButtonElement;
+    cancelBtn.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — switch account button re-rendered and focused
+    const restoredBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    expect(document.activeElement).toBe(restoredBtn);
+
+    document.body.removeChild(fixture.nativeElement);
   });
 
   it('should call pauseDispatch and fetch login command when confirm button is clicked', () => {
@@ -488,6 +534,21 @@ describe('SettingsGeneralComponent', () => {
     // Assert
     const drainGate = el.querySelector('.general-settings__drain-gate');
     expect(drainGate?.textContent).toContain('Dispatch is paused');
+  });
+
+  it('should keep the drain-gate role="status" wrapper in the DOM when OAuth mode is active', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    // Assert — the live-region wrapper must always be present (empty when not draining)
+    const el = fixture.nativeElement as HTMLElement;
+    const drainStatus = el.querySelector('.general-settings__drain-gate[role="status"]');
+    expect(drainStatus).toBeTruthy();
+    expect(drainStatus?.textContent?.trim()).toBe('');
   });
 
   it('should render the "Worker Prompts" section title', () => {

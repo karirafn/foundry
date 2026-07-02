@@ -103,12 +103,19 @@ const COPY_RESET_MS = 2000;
             aria-live="polite"
             aria-atomic="true"
           >{{ _copyAnnouncement() }}</span>
+          <button
+            class="oauth-panel__refresh-btn"
+            type="button"
+            (click)="refresh.emit()"
+          >I've logged in — refresh</button>
         }
-        <button
-          class="oauth-panel__refresh-btn"
-          type="button"
-          (click)="refresh.emit()"
-        >I've logged in — refresh</button>
+        @if (loginCommandError()) {
+          <button
+            class="oauth-panel__refresh-btn"
+            type="button"
+            (click)="refresh.emit()"
+          >I've logged in — refresh</button>
+        }
       </div>
     </ng-template>
   `,
@@ -147,7 +154,7 @@ export class OAuthPanelComponent {
         }, COPY_RESET_MS);
       },
       () => {
-        // Clipboard write failed — keep the raw command visible, no label change
+        this._copyAnnouncementSignal.set('Copy failed — select the command text manually.');
       }
     );
   }
