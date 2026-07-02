@@ -2,7 +2,7 @@ import { DestroyRef, Injectable, Signal, WritableSignal, computed, inject, signa
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { IssueDetail, IssueState, IssueSummary, LIVE_STATES } from './issue.model';
+import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, QUEUED_TIER_STATES } from './issue.model';
 import { ACTIVE_STATES, RESOLVED_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
 
 interface IssueCountsResponse {
@@ -81,14 +81,36 @@ export class IssueService {
     const byDate = (a: IssueSummary, b: IssueSummary): number =>
       new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
     const all = this.issues();
+    // Live issues sorted by recency; queued issues preserve server dispatch order; rest by recency.
     const live = [...all].filter(i => LIVE_STATES.has(i.state)).sort(byDate);
-    const other = [...all].filter(i => !LIVE_STATES.has(i.state)).sort(byDate);
-    return [...live, ...other];
+    const queued = all.filter(i => QUEUED_TIER_STATES.has(i.state));
+    const other = [...all].filter(i => !LIVE_STATES.has(i.state) && !QUEUED_TIER_STATES.has(i.state)).sort(byDate);
+    return [...live, ...queued, ...other];
   });
 
   readonly liveIssueCount: Signal<number> = computed(() =>
     this.issues().filter(i => LIVE_STATES.has(i.state)).length
   );
+
+  readonly eligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
+    this.sortedIssues().filter(i =>
+      QUEUED_TIER_STATES.has(i.state) &&
+      i.repositoryEligibilityStatus !== 'ineligible' &&
+      i.repositoryEligibilityStatus !== 'unreachable'
+    )
+  );
+
+  readonly ineligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
+    this.sortedIssues().filter(i =>
+      QUEUED_TIER_STATES.has(i.state) &&
+      (i.repositoryEligibilityStatus === 'ineligible' || i.repositoryEligibilityStatus === 'unreachable')
+    )
+  );
+
+  readonly nextUpIssueId: Signal<string | null> = computed(() => {
+    const first = this.eligibleQueuedIssues()[0];
+    return first?.id ?? null;
+  });
 
   readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
     this.sortedIssues().filter(i =>

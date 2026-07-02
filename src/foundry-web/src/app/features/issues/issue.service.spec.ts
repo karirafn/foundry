@@ -1961,3 +1961,152 @@ describe('IssueService (resolved paging)', () => {
   });
 
 });
+
+// Step 7 — Dispatch-order queue grouping (issue #261)
+describe('IssueService (dispatch-order queue grouping)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  const baseIssue: IssueSummary = {
+    id: 'base-1',
+    issueNumber: 1,
+    title: 'Base issue',
+    state: 'queued',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/1',
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Cycle Q1: continuation_queued is NOT a live state — belongs in queue group
+  it('should NOT treat continuation_queued as a live state in liveIssueCount', () => {
+    // Arrange
+    const continuationIssue: IssueSummary = { ...baseIssue, id: 'cont-1', state: 'continuation_queued' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([continuationIssue]);
+
+    // Assert — continuation_queued must not inflate live count
+    expect(service.liveIssueCount()).toBe(0);
+  });
+
+  // Cycle Q2: queued group preserves server order (no date re-sort)
+  it('should preserve server order for queued issues in sortedIssues (no date re-sort)', () => {
+    // Arrange — server delivers older-date queued issue first (which represents higher dispatch priority)
+    const firstInQueue: IssueSummary = { ...baseIssue, id: 'first', state: 'queued', detectedAt: '2026-01-01T00:00:00Z' };
+    const secondInQueue: IssueSummary = { ...baseIssue, id: 'second', state: 'revision_queued', detectedAt: '2026-06-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([firstInQueue, secondInQueue]);
+
+    // Assert — server order preserved (first stays first despite older date)
+    const queueIssues = service.sortedIssues().filter(i =>
+      i.state === 'queued' || i.state === 'revision_queued' || i.state === 'continuation_queued'
+    );
+    expect(queueIssues[0].id).toBe('first');
+    expect(queueIssues[1].id).toBe('second');
+  });
+
+  // Cycle Q3: eligibleQueuedIssues — queued issues from eligible repos, server order
+  it('should return eligible queued issues in server order via eligibleQueuedIssues', () => {
+    // Arrange — eligible repo issues (no repositoryEligibilityStatus or status = eligible)
+    const eligible1: IssueSummary = { ...baseIssue, id: 'elig-1', state: 'queued', repositoryEligibilityStatus: null };
+    const eligible2: IssueSummary = { ...baseIssue, id: 'elig-2', state: 'revision_queued', repositoryEligibilityStatus: 'eligible' };
+    const ineligible: IssueSummary = { ...baseIssue, id: 'inelig-1', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([eligible1, eligible2, ineligible]);
+
+    // Assert — only eligible issues, in server order
+    expect(service.eligibleQueuedIssues()[0].id).toBe('elig-1');
+    expect(service.eligibleQueuedIssues()[1].id).toBe('elig-2');
+    expect(service.eligibleQueuedIssues().length).toBe(2);
+  });
+
+  // Cycle Q4: ineligibleQueuedIssues — queued issues from ineligible/unreachable repos
+  it('should return ineligible/unreachable queued issues via ineligibleQueuedIssues', () => {
+    // Arrange
+    const eligible: IssueSummary = { ...baseIssue, id: 'elig-1', state: 'queued', repositoryEligibilityStatus: null };
+    const ineligible: IssueSummary = { ...baseIssue, id: 'inelig-1', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+    const unreachable: IssueSummary = { ...baseIssue, id: 'unreach-1', state: 'queued', repositoryEligibilityStatus: 'unreachable' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([eligible, ineligible, unreachable]);
+
+    // Assert — only ineligible/unreachable queued issues
+    expect(service.ineligibleQueuedIssues().length).toBe(2);
+    expect(service.ineligibleQueuedIssues().map(i => i.id)).toContain('inelig-1');
+    expect(service.ineligibleQueuedIssues().map(i => i.id)).toContain('unreach-1');
+  });
+
+  // Cycle Q5: nextUpIssueId — first eligible queued issue id
+  it('should return the id of the first eligible queued issue as nextUpIssueId', () => {
+    // Arrange — server order: eligible issue first
+    const eligible1: IssueSummary = { ...baseIssue, id: 'first-elig', state: 'queued', repositoryEligibilityStatus: null };
+    const eligible2: IssueSummary = { ...baseIssue, id: 'second-elig', state: 'queued', repositoryEligibilityStatus: null };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([eligible1, eligible2]);
+
+    // Assert
+    expect(service.nextUpIssueId()).toBe('first-elig');
+  });
+
+  // Cycle Q6: nextUpIssueId — null when no eligible queued issues exist
+  it('should return null for nextUpIssueId when there are no eligible queued issues', () => {
+    // Arrange — all queued issues are ineligible
+    const ineligible: IssueSummary = { ...baseIssue, id: 'inelig-1', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([ineligible]);
+
+    // Assert
+    expect(service.nextUpIssueId()).toBeNull();
+  });
+
+  // Cycle Q7: nextUpIssueId — null when no queued issues at all
+  it('should return null for nextUpIssueId when there are no queued issues', () => {
+    // Arrange — only live issues
+    const live: IssueSummary = { ...baseIssue, id: 'live-1', state: 'in_progress' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([live]);
+
+    // Assert
+    expect(service.nextUpIssueId()).toBeNull();
+  });
+
+  // Cycle Q8: continuation_queued treated as a queued-tier state (in eligibleQueuedIssues)
+  it('should include continuation_queued in eligibleQueuedIssues when repo is eligible', () => {
+    // Arrange
+    const contQueued: IssueSummary = { ...baseIssue, id: 'cont-1', state: 'continuation_queued', repositoryEligibilityStatus: null };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([contQueued]);
+
+    // Assert
+    expect(service.eligibleQueuedIssues().some(i => i.id === 'cont-1')).toBe(true);
+  });
+});

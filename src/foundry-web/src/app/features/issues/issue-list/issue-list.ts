@@ -16,6 +16,7 @@ const SKELETON_COUNT = 4;
 const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
 const EMPTY_RESOLVED_MESSAGE = 'No resolved issues match the selected filters';
 const RESOLVED_HEADING_ID = 'resolved-band-heading';
+const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
 
 @Component({
   selector: 'fd-issue-list',
@@ -89,11 +90,22 @@ const RESOLVED_HEADING_ID = 'resolved-band-heading';
                 <span class="sr-only">End of in-progress issues. Other issues follow.</span>
                 <hr class="issue-list__separator" aria-hidden="true" />
               }
+              @if (ineligibleQueueStartIndex() >= 0 && idx === ineligibleQueueStartIndex()) {
+                <div class="issue-list__ineligible-queue-divider" [attr.aria-labelledby]="ineligibleQueueHeadingId">
+                  <hr class="issue-list__ineligible-queue-hr" aria-hidden="true" />
+                  <h3
+                    [id]="ineligibleQueueHeadingId"
+                    class="issue-list__ineligible-queue-caption"
+                  >Not dispatchable</h3>
+                </div>
+                <span class="sr-only">Queued issues from repositories that are currently not dispatchable follow.</span>
+              }
               <div class="issue-list__item">
                 <fd-issue-card
                   [issue]="issue"
                   [expanded]="issueService.expandedIssueId() === issue.id"
                   [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
+                  [isNextUp]="issueService.nextUpIssueId() === issue.id"
                   (toggle)="issueService.toggleExpand(issue.id)"
                 />
 
@@ -223,6 +235,17 @@ export class IssueListComponent implements OnInit {
   protected readonly emptyActiveHint = EMPTY_ACTIVE_MESSAGE;
   protected readonly emptyResolvedMessage = EMPTY_RESOLVED_MESSAGE;
   protected readonly resolvedHeadingId = RESOLVED_HEADING_ID;
+  protected readonly ineligibleQueueHeadingId = INELIGIBLE_QUEUE_HEADING_ID;
+
+  /** Index in activeBandIssues() where ineligible queued issues begin, or -1 if none. */
+  protected readonly ineligibleQueueStartIndex = computed(() => {
+    const ineligibleIds = new Set(this.issueService.ineligibleQueuedIssues().map(i => i.id));
+    if (ineligibleIds.size === 0) {
+      return -1;
+    }
+    const band = this.issueService.activeBandIssues();
+    return band.findIndex(i => ineligibleIds.has(i.id));
+  });
 
   private _preLoadResolvedCount = 0;
 

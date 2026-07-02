@@ -1,5 +1,12 @@
 import { IssueState } from './issue.model';
 
+/** Tier labels for queued-tier states, displayed as muted chips on queued issue cards. */
+export const QUEUE_TIER_LABELS: Partial<Record<IssueState, string>> = {
+  revision_queued: 'revision',
+  continuation_queued: 'continuation',
+  queued: 'fresh',
+};
+
 export const STATE_LABELS: Record<IssueState, string> = {
   detected: 'DETECTED',
   queued: 'QUEUED',

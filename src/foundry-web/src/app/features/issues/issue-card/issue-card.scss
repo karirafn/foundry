@@ -56,6 +56,64 @@
     gap: var(--fd-spacing-xs);
   }
 
+  &__next-up {
+    align-items: center;
+    background: color-mix(in srgb, var(--fd-state-completed) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--fd-state-completed) 50%, transparent);
+    border-radius: 9999px;
+    color: var(--fd-text-success);
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    padding: 2px 7px;
+    white-space: nowrap;
+  }
+
+  &__tier-chip {
+    align-items: center;
+    border: 1px solid var(--fd-border-default);
+    border-radius: 9999px;
+    color: var(--fd-text-secondary);
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 500;
+    gap: 4px;
+    letter-spacing: 0.03em;
+    padding: 2px 6px;
+    white-space: nowrap;
+
+    &--revision_queued {
+      border-color: color-mix(in srgb, var(--fd-state-in-progress) 40%, transparent);
+
+      .issue-card__tier-dot {
+        background: var(--fd-state-in-progress);
+      }
+    }
+
+    &--continuation_queued {
+      border-color: color-mix(in srgb, var(--fd-state-queued) 40%, transparent);
+
+      .issue-card__tier-dot {
+        background: var(--fd-state-queued);
+      }
+    }
+
+    &--queued {
+      .issue-card__tier-dot {
+        background: var(--fd-text-tertiary);
+      }
+    }
+  }
+
+  &__tier-dot {
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    height: 5px;
+    width: 5px;
+  }
+
   &__repo-warning {
     align-items: center;
     border: 1px solid var(--fd-border-default);

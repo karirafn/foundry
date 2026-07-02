@@ -508,8 +508,8 @@ describe('IssueListComponent', () => {
     expect(separator?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('should sort continuation_queued above the separator alongside other live states', () => {
-    // Arrange — continuation_queued is operationally equivalent to queued and must appear above the separator
+  it('should NOT render a separator for continuation_queued — it is a queued tier, not a live state', () => {
+    // Arrange — continuation_queued is a queued tier (not live); no live issues means no separator
     const continuationQueued: IssueSummary = { ...mockSummary, id: 'cont-queued', state: 'continuation_queued' };
     const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'detected', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
@@ -519,10 +519,10 @@ describe('IssueListComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert — separator must appear, meaning continuation_queued is treated as live
+    // Assert — no separator because continuation_queued is not a live state
     const el = fixture.nativeElement as HTMLElement;
     const separator = el.querySelector('hr.issue-list__separator');
-    expect(separator).toBeTruthy();
+    expect(separator).toBeFalsy();
   });
 
   it('should not render an hr separator when all issues are in-progress', () => {
@@ -1660,5 +1660,113 @@ describe('IssueListComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const layout = el.querySelector('.issue-list__layout');
     expect(layout?.classList).toContain('issue-list__layout');
+  });
+
+  // Dispatch-order queue grouping tests (issue #261)
+
+  // QueueGroup-1: "Next up" marker on first eligible queued issue
+  it('should render "Next up" marker on the first eligible queued issue', () => {
+    // Arrange
+    const queuedEligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-elig-1',
+      state: 'queued',
+      repositoryEligibilityStatus: null,
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [queuedEligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const nextUp = el.querySelector('.issue-card__next-up');
+    expect(nextUp?.textContent?.trim()).toContain('Next up');
+  });
+
+  // QueueGroup-2: No "Next up" when all queued issues are ineligible
+  it('should NOT render "Next up" marker when all queued issues are ineligible', () => {
+    // Arrange
+    const queuedIneligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-inelig-1',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [queuedIneligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const nextUp = el.querySelector('.issue-card__next-up');
+    expect(nextUp).toBeFalsy();
+  });
+
+  // QueueGroup-3: ineligible-partition divider rendered when there are ineligible queued issues
+  it('should render the ineligible-queued partition divider when there are ineligible queued issues', () => {
+    // Arrange
+    const ineligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-inelig-1',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [ineligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const divider = el.querySelector('.issue-list__ineligible-queue-divider');
+    expect(divider).toBeTruthy();
+  });
+
+  // QueueGroup-4: no ineligible partition divider when all queued issues are eligible
+  it('should NOT render the ineligible-queue partition divider when all queued issues are eligible', () => {
+    // Arrange
+    const eligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-elig-1',
+      state: 'queued',
+      repositoryEligibilityStatus: null,
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [eligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const divider = el.querySelector('.issue-list__ineligible-queue-divider');
+    expect(divider).toBeFalsy();
+  });
+
+  // QueueGroup-5: tier chips render for queued cards
+  it('should render tier chips on queued issue cards', () => {
+    // Arrange — one fresh, one revision queued
+    const fresh: IssueSummary = { ...mockSummary, id: 'q-fresh', state: 'queued' };
+    const revision: IssueSummary = { ...mockSummary, id: 'q-rev', state: 'revision_queued', issueNumber: 2 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [fresh, revision]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const tierChips = el.querySelectorAll('.issue-card__tier-chip');
+    expect(tierChips.length).toBe(2);
   });
 });

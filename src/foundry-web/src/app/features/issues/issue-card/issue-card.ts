@@ -1,12 +1,12 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { IssueSummary, LIVE_STATES } from '../issue.model';
-import { STATE_ARIA_LABELS } from '../state-display';
+import { STATE_ARIA_LABELS, QUEUE_TIER_LABELS } from '../state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
 
-const QUEUED_STATES = new Set<string>(['queued', 'detected']);
+const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
 
 const WARNING_CLASSES: Record<string, string> = {
   ineligible: 'issue-card__repo-warning--ineligible',
@@ -78,6 +78,15 @@ function silentDuration(lastActivityAt: string): string {
         <span class="issue-card__separator" aria-hidden="true">·</span>
         <span class="issue-card__slug">{{ issue().repositorySlug }}</span>
         <div class="issue-card__badge">
+          @if (isNextUp()) {
+            <span class="issue-card__next-up" aria-hidden="true">Next up</span>
+          }
+          @if (tierLabel()) {
+            <span class="issue-card__tier-chip issue-card__tier-chip--{{ issue().state }}" aria-hidden="true">
+              <span class="issue-card__tier-dot" aria-hidden="true"></span>
+              {{ tierLabel() }}
+            </span>
+          }
           <fd-state-badge [state]="issue().state" [failureClassification]="issue().failureClassification" />
           @if (repoWarningLabel()) {
             <span
@@ -153,6 +162,7 @@ export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
+  readonly isNextUp: InputSignal<boolean> = input<boolean>(false);
   readonly toggle: OutputEmitterRef<void> = output<void>();
 
   private readonly _ticker = inject(TickerService);
@@ -172,17 +182,25 @@ export class IssueCardComponent {
     return status ? (WARNING_CLASSES[status] ?? '') : '';
   });
 
+  readonly tierLabel = computed((): string | null => {
+    return QUEUE_TIER_LABELS[this.issue().state] ?? null;
+  });
+
   issueAriaLabel(): string {
     const issue = this.issue();
     const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
-    const base = `Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
+    const tier = this.tierLabel();
+    const nextUp = this.isNextUp() ? 'Next up. ' : '';
+    const base = `${nextUp}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
+    const tierPart = tier ? ` Tier: ${tier}.` : '';
     const warning = this.repoWarningLabel();
-    return warning ? `${base}. ${warning}` : base;
+    const warningPart = warning ? ` ${warning}` : '';
+    return `${base}${tierPart}${warningPart}`;
   }
 
   repoWarningLabel(): string | null {
     const issue = this.issue();
-    if (!QUEUED_STATES.has(issue.state)) {
+    if (!REPO_WARNING_STATES.has(issue.state)) {
       return null;
     }
     const status = issue.repositoryEligibilityStatus;
