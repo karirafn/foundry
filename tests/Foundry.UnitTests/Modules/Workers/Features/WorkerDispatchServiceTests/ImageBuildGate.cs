@@ -93,6 +93,9 @@ public sealed class ImageBuildGate : WorkerDispatchServiceTestBase
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
+
+        public Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
+            => Task.FromResult<string?>("ApiKey");
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator

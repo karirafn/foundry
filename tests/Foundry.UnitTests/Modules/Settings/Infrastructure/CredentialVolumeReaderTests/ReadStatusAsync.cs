@@ -14,6 +14,8 @@ namespace Foundry.UnitTests.Modules.Settings.Infrastructure.CredentialVolumeRead
 
 public sealed class ReadStatusAsync : IAsyncDisposable
 {
+    // _tempDir serves as both the Docker volumes root (injected into the reader) and the
+    // mountpoint for tests that exercise the credential-reading code path.
     private readonly string _tempDir;
 
     public ReadStatusAsync()
@@ -31,12 +33,15 @@ public sealed class ReadStatusAsync : IAsyncDisposable
         }
     }
 
+    private CredentialVolumeReader BuildSut(StubVolumeOperations volumeOps) =>
+        new(volumeOps, NullLogger<CredentialVolumeReader>.Instance, dockerVolumesRoot: _tempDir);
+
     [Fact]
     public async Task WhenVolumeNotFound_ReturnsPresentFalse()
     {
         // Arrange
         StubVolumeOperations volumeOps = new(throwDockerApiException: true);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -50,7 +55,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     {
         // Arrange
         StubVolumeOperations volumeOps = new(throwDockerApiException: true);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -66,7 +71,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     {
         // Arrange
         StubVolumeOperations volumeOps = new(mountpoint: string.Empty);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -80,7 +85,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     {
         // Arrange — empty temp dir, no .credentials.json
         StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -97,7 +102,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
         string json = BuildCredentialJson(expiresAt: "2027-01-01T00:00:00Z", subscriptionType: "pro");
         await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
         StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -114,7 +119,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
         string json = BuildCredentialJson(expiresAt: "2027-06-15T12:00:00Z", subscriptionType: "pro");
         await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
         StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -134,7 +139,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
         string json = BuildCredentialJsonWithEpoch(epochMs, "pro");
         await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
         StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -151,7 +156,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
         string json = BuildCredentialJson(expiresAt: "2027-01-01T00:00:00Z", subscriptionType: "max");
         await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
         StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -167,7 +172,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
         string credFile = Path.Combine(_tempDir, ".credentials.json");
         await File.WriteAllTextAsync(credFile, "{ not valid json }}}", TestContext.Current.CancellationToken);
         StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
@@ -180,13 +185,57 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenMountpointIsOutsideDockerVolumesRoot_ReturnsPresentFalse()
+    {
+        // Arrange — mountpoint path does not start with the configured Docker volumes root (_tempDir)
+        string outsidePath = Path.Combine(Path.GetTempPath(), "attacker-controlled-" + Path.GetRandomFileName());
+        StubVolumeOperations volumeOps = new(mountpoint: outsidePath);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
+
+        // Act
+        CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Present.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenMountpointIsOutsideDockerVolumesRoot_DoesNotReadFile()
+    {
+        // Arrange — a credentials file exists in a separate dir, but the mountpoint is outside the root
+        string outsideDir = Path.Combine(Path.GetTempPath(), "attacker-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(outsideDir);
+        try
+        {
+            string credFile = Path.Combine(outsideDir, ".credentials.json");
+            string json = BuildCredentialJson(expiresAt: "2027-01-01T00:00:00Z", subscriptionType: "pro");
+            await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
+            StubVolumeOperations volumeOps = new(mountpoint: outsideDir);
+            CredentialVolumeReader sut = BuildSut(volumeOps);
+
+            // Act
+            CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
+
+            // Assert — file must not be read because mountpoint is outside allowed root
+            result.ShouldSatisfyAllConditions(
+                () => result.Present.ShouldBeFalse(),
+                () => result.ExpiresAt.ShouldBeNull(),
+                () => result.SubscriptionType.ShouldBeNull());
+        }
+        finally
+        {
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task WhenCredentialFileHasNoClaudeAiOauthSection_ReturnsPresentTrueWithNullFields()
     {
         // Arrange
         string credFile = Path.Combine(_tempDir, ".credentials.json");
         await File.WriteAllTextAsync(credFile, """{ "other": {} }""", TestContext.Current.CancellationToken);
         StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
-        CredentialVolumeReader sut = new(volumeOps, NullLogger<CredentialVolumeReader>.Instance);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
         CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);

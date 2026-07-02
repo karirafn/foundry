@@ -1054,6 +1054,17 @@ public sealed class HandleAsync : IAsyncDisposable
         public static StubGlobalSettingsQueries ForOAuth() =>
             new(authVar: null, settingsExist: true);
 
+        public Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
+        {
+            if (!settingsExist)
+            {
+                return Task.FromResult<string?>(null);
+            }
+
+            string? mode = authVar is not null ? "ApiKey" : "OAuth";
+            return Task.FromResult<string?>(mode);
+        }
+
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         {
             if (!settingsExist)

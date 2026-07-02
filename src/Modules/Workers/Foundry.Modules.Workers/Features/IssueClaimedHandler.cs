@@ -4,7 +4,6 @@ using System.Globalization;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
@@ -137,24 +136,19 @@ internal sealed class IssueClaimedHandler(
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
-        (string Key, string Value)? authVar = await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
+        string? authMode = await settingsQueries.GetAuthModeAsync(cancellationToken);
 
-        bool isOAuthMode = false;
-
-        if (authVar is null)
+        if (authMode is null)
         {
-            // OAuth mode returns null from GetAuthEnvironmentVariableAsync; no-settings also returns null.
-            // Distinguish by checking whether settings exist at all.
-            GlobalSettingsSummary? settings = await settingsQueries.GetSettingsAsync(cancellationToken);
-
-            if (settings is null)
-            {
-                return Result<WorkerContainerSpec>.Fail(
-                    new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
-            }
-
-            isOAuthMode = true;
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
         }
+
+        bool isOAuthMode = authMode == "OAuth";
+
+        (string Key, string Value)? authVar = isOAuthMode
+            ? null
+            : await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
 
         Dictionary<string, string> envVars = new()
         {

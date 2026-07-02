@@ -90,12 +90,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    public void ClearAuthInvalidPause()
-    {
-        AuthInvalidPause = false;
-        UpdatedAt = DateTimeOffset.UtcNow;
-    }
-
     public void SetUsageLimitResetsAt(DateTimeOffset resetsAt)
     {
         if (resetsAt <= DateTimeOffset.UtcNow)

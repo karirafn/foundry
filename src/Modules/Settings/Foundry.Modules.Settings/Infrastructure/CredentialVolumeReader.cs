@@ -4,6 +4,7 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 
 using Foundry.Modules.Settings.Features;
+using Foundry.Modules.Workers.Contracts;
 
 using Microsoft.Extensions.Logging;
 
@@ -11,20 +12,35 @@ namespace Foundry.Modules.Settings.Infrastructure;
 
 internal sealed class CredentialVolumeReader(
     IVolumeOperations volumeOperations,
-    ILogger<CredentialVolumeReader> logger) : ICredentialVolumeReader
+    ILogger<CredentialVolumeReader> logger,
+    string? dockerVolumesRoot = null) : ICredentialVolumeReader
 {
-    private const string VolumeName = "foundry-claude-credentials";
+    internal const string DefaultDockerVolumesRoot = "/var/lib/docker/volumes/";
     private const string CredentialsFileName = ".credentials.json";
+
+    private readonly string _dockerVolumesRoot = dockerVolumesRoot ?? DefaultDockerVolumesRoot;
 
     public async Task<CredentialVolumeStatus> ReadStatusAsync(CancellationToken cancellationToken)
     {
         try
         {
-            VolumeResponse volume = await volumeOperations.InspectAsync(VolumeName, cancellationToken);
+            VolumeResponse volume = await volumeOperations.InspectAsync(
+                WorkerVolumeNames.CredentialVolumeName,
+                cancellationToken);
             string mountpoint = volume.Mountpoint;
 
             if (string.IsNullOrEmpty(mountpoint))
             {
+                return new CredentialVolumeStatus(Present: false, ExpiresAt: null, SubscriptionType: null);
+            }
+
+            // Defense-in-depth: reject mountpoints not under the expected Docker volumes root to
+            // prevent a compromised/misbehaving daemon from redirecting reads to arbitrary paths.
+            if (!mountpoint.StartsWith(_dockerVolumesRoot, StringComparison.Ordinal))
+            {
+                logger.LogWarning(
+                    "Credential volume mountpoint {Mountpoint} is outside expected root; treating as absent.",
+                    mountpoint);
                 return new CredentialVolumeStatus(Present: false, ExpiresAt: null, SubscriptionType: null);
             }
 
@@ -39,12 +55,18 @@ internal sealed class CredentialVolumeReader(
         }
         catch (DockerApiException ex)
         {
-            logger.LogDebug(ex, "Volume {VolumeName} not found or Docker unavailable", VolumeName);
+            logger.LogDebug(
+                ex,
+                "Volume {VolumeName} not found or Docker unavailable",
+                WorkerVolumeNames.CredentialVolumeName);
             return new CredentialVolumeStatus(Present: false, ExpiresAt: null, SubscriptionType: null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogDebug(ex, "Failed to read credential volume {VolumeName}", VolumeName);
+            logger.LogDebug(
+                ex,
+                "Failed to read credential volume {VolumeName}",
+                WorkerVolumeNames.CredentialVolumeName);
             return new CredentialVolumeStatus(Present: false, ExpiresAt: null, SubscriptionType: null);
         }
     }

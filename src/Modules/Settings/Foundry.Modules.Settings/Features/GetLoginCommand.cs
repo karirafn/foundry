@@ -49,7 +49,8 @@ internal static class GetLoginCommand
                 })
                 .WithName("GetLoginCommand")
                 .WithSummary("Gets the ready-to-run docker command to seed the OAuth credential volume")
-                .Produces<OAuthLoginCommand>();
+                .Produces<OAuthLoginCommand>()
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }
 }
