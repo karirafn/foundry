@@ -57,7 +57,7 @@ internal static class UpdateWorkerImageConfiguration
                     cancellationToken);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
         }
     }
 

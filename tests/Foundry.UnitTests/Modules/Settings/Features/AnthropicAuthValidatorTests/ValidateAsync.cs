@@ -12,6 +12,48 @@ namespace Foundry.UnitTests.Modules.Settings.Features.AnthropicAuthValidatorTest
 
 public sealed class ValidateAsync
 {
+    private static readonly GlobalSettingsSummary ApiKeySettings = new(
+        "ApiKey", 1, 120,
+        OAuthStatus: GlobalSettingsMapper.OAuthStatusNotConfigured,
+        ExpiresAt: null,
+        SubscriptionType: null,
+        SystemPromptTemplate: null,
+        WorkerPromptTemplate: null,
+        UsageLimitResetsAt: null,
+        IsDispatchPaused: false,
+        AutoResumeOnUsageReset: true,
+        DefaultCooldownMinutes: 60,
+        InstallDotnet: false,
+        InstallAngular: false,
+        InstallGlab: false,
+        InstallGh: false,
+        InstallChromium: false,
+        InstallDocker: false,
+        ImageBuildStatus: ImageBuildStatus.Idle,
+        LastImageBuildError: null,
+        HasUsableImage: false);
+
+    private static readonly GlobalSettingsSummary OAuthSettings = new(
+        "OAuth", 1, 120,
+        OAuthStatus: GlobalSettingsMapper.OAuthStatusPresent,
+        ExpiresAt: null,
+        SubscriptionType: "pro",
+        SystemPromptTemplate: null,
+        WorkerPromptTemplate: null,
+        UsageLimitResetsAt: null,
+        IsDispatchPaused: false,
+        AutoResumeOnUsageReset: true,
+        DefaultCooldownMinutes: 60,
+        InstallDotnet: false,
+        InstallAngular: false,
+        InstallGlab: false,
+        InstallGh: false,
+        InstallChromium: false,
+        InstallDocker: false,
+        ImageBuildStatus: ImageBuildStatus.Idle,
+        LastImageBuildError: null,
+        HasUsableImage: false);
+
     private static AnthropicAuthValidator BuildSut(
         FakeAnthropicApiHandler? handler = null,
         FakeGlobalSettingsQueries? queries = null)
@@ -50,7 +92,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = ApiKeySettings,
             AuthEnvVar = ("ANTHROPIC_API_KEY", string.Empty),
         };
         AnthropicAuthValidator sut = BuildSut(queries: queries);
@@ -67,12 +109,10 @@ public sealed class ValidateAsync
     [Fact]
     public async Task WhenOAuthConfigured_ReturnsValid()
     {
-        // Arrange — OAuth validity is determined by the shared credential volume, not stored token fields.
-        // ExpiresAt and token presence are no longer stored (step 2 change). Step 6 will introduce
-        // volume-derived credential status.
+        // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("OAuth", 1, 120, false, false, null, "pro", null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = OAuthSettings,
         };
         AnthropicAuthValidator sut = BuildSut(queries: queries);
 
@@ -92,7 +132,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = ApiKeySettings,
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-valid-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.OK);
@@ -114,7 +154,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = ApiKeySettings,
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-bad-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.Unauthorized);
@@ -135,7 +175,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = ApiKeySettings,
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-forbidden-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.Forbidden);
@@ -156,7 +196,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = ApiKeySettings,
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.InternalServerError);
@@ -177,7 +217,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = ApiKeySettings,
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(HttpStatusCode.TooManyRequests);
@@ -198,7 +238,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = ApiKeySettings,
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(throwNetworkError: true);
@@ -219,7 +259,7 @@ public sealed class ValidateAsync
         // Arrange
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("ApiKey", 1, 120, false, false, null, null, null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = ApiKeySettings,
             AuthEnvVar = ("ANTHROPIC_API_KEY", "sk-any-key"),
         };
         FakeAnthropicApiHandler handler = new(throwTimeoutError: true);

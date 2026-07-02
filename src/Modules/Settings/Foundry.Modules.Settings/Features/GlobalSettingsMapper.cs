@@ -5,7 +5,11 @@ namespace Foundry.Modules.Settings.Features;
 
 internal static class GlobalSettingsMapper
 {
-    internal static GlobalSettingsSummary ToSummary(GlobalSettings settings)
+    internal const string OAuthStatusNotConfigured = "NotConfigured";
+    internal const string OAuthStatusPresent = "Present";
+    internal const string OAuthStatusReLoginNeeded = "ReLoginNeeded";
+
+    internal static GlobalSettingsSummary ToSummary(GlobalSettings settings, CredentialVolumeStatus? credentialStatus)
     {
         string authModeName = settings.AuthMode switch
         {
@@ -25,19 +29,17 @@ internal static class GlobalSettingsMapper
             ? failed.ErrorTail
             : null;
 
-        // TEMPORARY: AccessTokenPresent, RefreshTokenPresent, and ExpiresAt are emitted as
-        // false/null for OAuth mode. Step 6 replaces these with volume-derived status fields.
-        string? subscriptionType = settings.AuthMode is AuthMode.OAuth oauth
-            ? oauth.SubscriptionType
-            : null;
+        string oauthStatus = ComputeOAuthStatus(settings, credentialStatus);
+        DateTimeOffset? expiresAt = credentialStatus?.ExpiresAt;
+        string? subscriptionType = credentialStatus?.SubscriptionType
+            ?? (settings.AuthMode is AuthMode.OAuth oauth ? oauth.SubscriptionType : null);
 
         return new GlobalSettingsSummary(
             authModeName,
             settings.MaxConcurrent,
             settings.TimeoutMinutes,
-            AccessTokenPresent: false,
-            RefreshTokenPresent: false,
-            ExpiresAt: null,
+            oauthStatus,
+            expiresAt,
             subscriptionType,
             settings.SystemPromptTemplate,
             settings.WorkerPromptTemplate,
@@ -54,5 +56,25 @@ internal static class GlobalSettingsMapper
             status,
             lastError,
             settings.LastImageBuiltAt is not null);
+    }
+
+    private static string ComputeOAuthStatus(GlobalSettings settings, CredentialVolumeStatus? credentialStatus)
+    {
+        if (settings.AuthMode is not AuthMode.OAuth)
+        {
+            return OAuthStatusNotConfigured;
+        }
+
+        if (settings.AuthInvalidPause)
+        {
+            return OAuthStatusReLoginNeeded;
+        }
+
+        if (credentialStatus is null || !credentialStatus.Present)
+        {
+            return OAuthStatusReLoginNeeded;
+        }
+
+        return OAuthStatusPresent;
     }
 }

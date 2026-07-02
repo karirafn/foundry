@@ -54,7 +54,7 @@ internal static class UpdateDispatchSettings
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
         }
     }
 

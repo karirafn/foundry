@@ -91,13 +91,13 @@ internal static class UpdateAuthMode
             settings.SetAuthMode(mode);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            GlobalSettingsSummary summary = GlobalSettingsMapper.ToSummary(settings);
+            GlobalSettingsSummary summary = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
             return new Response(
                 summary.AuthMode,
                 summary.MaxConcurrent,
                 summary.TimeoutMinutes,
-                summary.AccessTokenPresent,
-                summary.RefreshTokenPresent,
+                AccessTokenPresent: false,
+                RefreshTokenPresent: false,
                 summary.ExpiresAt,
                 summary.SubscriptionType);
         }

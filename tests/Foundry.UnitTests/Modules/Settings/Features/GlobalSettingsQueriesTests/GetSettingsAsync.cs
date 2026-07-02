@@ -53,7 +53,7 @@ public sealed class GetSettingsAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenApiKeySettings_ReturnsApiKeyAuthMode()
+    public async Task WhenApiKeySettings_ReturnsApiKeyAuthModeWithNotConfiguredOAuthStatus()
     {
         // Arrange
         await using (FoundryDbContext seedDb = CreateDbContext())
@@ -74,16 +74,17 @@ public sealed class GetSettingsAsync : IAsyncDisposable
         GlobalSettingsSummary summary = result.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("ApiKey"),
-            () => summary.AccessTokenPresent.ShouldBeFalse(),
-            () => summary.RefreshTokenPresent.ShouldBeFalse(),
+            () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured),
             () => summary.ExpiresAt.ShouldBeNull(),
             () => summary.SubscriptionType.ShouldBeNull());
     }
 
     [Fact]
-    public async Task WhenOAuthSettings_ReturnsOAuthAuthModeWithSubscriptionType()
+    public async Task WhenOAuthSettings_ReturnsOAuthAuthModeWithReLoginNeededStatus()
     {
         // Arrange
+        // GlobalSettingsQueries.GetSettingsAsync has no access to ICredentialVolumeReader
+        // so OAuth mode without a credential reader always returns ReLoginNeeded.
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
@@ -102,8 +103,7 @@ public sealed class GetSettingsAsync : IAsyncDisposable
         GlobalSettingsSummary summary = result.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("OAuth"),
-            () => summary.AccessTokenPresent.ShouldBeFalse(),
-            () => summary.RefreshTokenPresent.ShouldBeFalse(),
+            () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded),
             () => summary.ExpiresAt.ShouldBeNull(),
             () => summary.SubscriptionType.ShouldBe("pro"));
     }

@@ -40,7 +40,7 @@ internal static class RetryImageBuild
                 [new WorkerImageConfigurationChanged()],
                 cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
         }
     }
 

@@ -68,7 +68,7 @@ internal static class UpdatePromptTemplates
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
         }
     }
 

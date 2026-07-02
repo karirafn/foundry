@@ -14,7 +14,9 @@ internal static class GetSettings
 {
     internal sealed record Query : IQuery<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext) : IQueryHandler<Query, GlobalSettingsSummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        ICredentialVolumeReader credentialVolumeReader) : IQueryHandler<Query, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
             Query query,
@@ -29,7 +31,9 @@ internal static class GetSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            CredentialVolumeStatus credentialStatus = await credentialVolumeReader.ReadStatusAsync(cancellationToken);
+
+            return GlobalSettingsMapper.ToSummary(settings, credentialStatus);
         }
     }
 

@@ -3,10 +3,12 @@ using System.Net.Http.Json;
 
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Features;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Shouldly;
 
@@ -21,7 +23,12 @@ public sealed class WhenSettingsExist : IAsyncDisposable
 
     public WhenSettingsExist()
     {
-        _factory = new FoundryWebAppFactory();
+        _factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<ICredentialVolumeReader>();
+            services.AddScoped<ICredentialVolumeReader>(_ =>
+                new StubCredentialVolumeReader(new CredentialVolumeStatus(false, null, null)));
+        });
         _client = _factory.CreateClient();
     }
 
@@ -61,8 +68,7 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.MaxConcurrent.ShouldBe(1),
             () => summary.TimeoutMinutes.ShouldBe(120),
-            () => summary.AccessTokenPresent.ShouldBeFalse(),
-            () => summary.RefreshTokenPresent.ShouldBeFalse(),
+            () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured),
             () => summary.ExpiresAt.ShouldBeNull(),
             () => summary.SubscriptionType.ShouldBeNull());
     }
@@ -132,5 +138,11 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.SystemPromptTemplate.ShouldBeNull(),
             () => summary.WorkerPromptTemplate.ShouldBeNull());
+    }
+
+    private sealed class StubCredentialVolumeReader(CredentialVolumeStatus status) : ICredentialVolumeReader
+    {
+        public Task<CredentialVolumeStatus> ReadStatusAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(status);
     }
 }

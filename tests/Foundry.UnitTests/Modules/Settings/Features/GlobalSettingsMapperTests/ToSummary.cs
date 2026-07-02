@@ -23,7 +23,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -49,7 +49,7 @@ public sealed class ToSummary
             InstallDocker: false));
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.InstallDotnet.ShouldBeTrue();
@@ -69,7 +69,7 @@ public sealed class ToSummary
             InstallDocker: true));
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -88,7 +88,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
@@ -102,7 +102,7 @@ public sealed class ToSummary
         settings.BeginImageBuild();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.ImageBuildStatus.ShouldBe(ImageBuildStatus.Building);
@@ -117,7 +117,7 @@ public sealed class ToSummary
         settings.FailImageBuild("Something went wrong");
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -132,7 +132,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.LastImageBuildError.ShouldBeNull();
@@ -149,7 +149,7 @@ public sealed class ToSummary
         settings.CompleteImageBuild();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -164,7 +164,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.HasUsableImage.ShouldBeFalse();
@@ -179,7 +179,7 @@ public sealed class ToSummary
         settings.CompleteImageBuild();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.HasUsableImage.ShouldBeTrue();
@@ -196,9 +196,128 @@ public sealed class ToSummary
         settings.FailImageBuild("new error");
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
 
         // Assert
         result.HasUsableImage.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenApiKeyMode_OAuthStatusIsNotConfigured()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.ApiKey("my-key"));
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured);
+    }
+
+    [Fact]
+    public void WhenOAuthModeAndCredentialPresent_OAuthStatusIsPresent()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("pro"));
+        CredentialVolumeStatus credentialStatus = new(Present: true, ExpiresAt: null, SubscriptionType: "pro");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusPresent);
+    }
+
+    [Fact]
+    public void WhenOAuthModeAndCredentialAbsent_OAuthStatusIsReLoginNeeded()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("pro"));
+        CredentialVolumeStatus credentialStatus = new(Present: false, ExpiresAt: null, SubscriptionType: null);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded);
+    }
+
+    [Fact]
+    public void WhenOAuthModeAndAuthInvalidPause_OAuthStatusIsReLoginNeeded()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("pro"));
+        settings.PauseForAuthInvalid();
+        CredentialVolumeStatus credentialStatus = new(Present: true, ExpiresAt: null, SubscriptionType: "pro");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded);
+    }
+
+    [Fact]
+    public void WhenOAuthModeAndCredentialNull_OAuthStatusIsReLoginNeeded()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("pro"));
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded);
+    }
+
+    [Fact]
+    public void WhenCredentialPresentWithExpiry_ExpiresAtIsSet()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("pro"));
+        DateTimeOffset expiry = new(2027, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        CredentialVolumeStatus credentialStatus = new(Present: true, ExpiresAt: expiry, SubscriptionType: "pro");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus);
+
+        // Assert
+        result.ExpiresAt.ShouldBe(expiry);
+    }
+
+    [Fact]
+    public void WhenCredentialPresentWithSubscriptionType_SubscriptionTypeIsFromVolume()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("pro"));
+        CredentialVolumeStatus credentialStatus = new(Present: true, ExpiresAt: null, SubscriptionType: "max");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus);
+
+        // Assert
+        result.SubscriptionType.ShouldBe("max");
+    }
+
+    [Fact]
+    public void WhenCredentialAbsent_SubscriptionTypeFallsBackToStored()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("pro"));
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+
+        // Assert
+        result.SubscriptionType.ShouldBe("pro");
     }
 }

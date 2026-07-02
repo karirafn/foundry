@@ -37,7 +37,7 @@ internal static class ResumeDispatch
 
             await integrationEventDispatcher.DispatchAsync([new DispatchResumed()], cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
         }
     }
 

@@ -17,6 +17,7 @@ public static class SettingsModule
         services.AddScoped<IGlobalSettingsQueries, GlobalSettingsQueries>();
         services.AddSingleton<IFileSystem, PhysicalFileSystem>();
         services.AddScoped<IOAuthCredentialScanner, FileSystemOAuthCredentialScanner>();
+        services.AddScoped<ICredentialVolumeReader, CredentialVolumeReader>();
         services.AddHostedService<SettingsSeeder>();
 
         services.AddHttpClient<AnthropicAuthValidator>(client =>
