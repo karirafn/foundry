@@ -314,6 +314,25 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenApiKeyModeButNoEnvVarConfigured_CreatesFailedRunWithNoAuthError()
+    {
+        // Arrange — auth mode says "ApiKey" but GetAuthEnvironmentVariableAsync returns null
+        IssueClaimedHandler sut = BuildHandler(
+            settingsQueries: StubGlobalSettingsQueries.ForApiKeyModeWithNoEnvVar());
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        error.Message.ShouldContain("authentication");
+    }
+
+    [Fact]
     public async Task WhenNoCustomMountsConfigured_BindMountsIsEmpty()
     {
         // Arrange
@@ -1048,11 +1067,19 @@ public sealed class HandleAsync : IAsyncDisposable
         string? systemPromptTemplate = null,
         string? workerPromptTemplate = null,
         bool installsDocker = false,
-        bool settingsExist = true) : IGlobalSettingsQueries
+        bool settingsExist = true,
+        string? authModeOverride = null) : IGlobalSettingsQueries
     {
         /// <summary>Creates a stub configured for OAuth mode: no auth env var, but settings exist.</summary>
         public static StubGlobalSettingsQueries ForOAuth() =>
             new(authVar: null, settingsExist: true);
+
+        /// <summary>
+        /// Creates a stub where auth mode reports ApiKey but the env-var query returns null —
+        /// simulates a mis-configured API-key credential.
+        /// </summary>
+        public static StubGlobalSettingsQueries ForApiKeyModeWithNoEnvVar() =>
+            new(authVar: null, settingsExist: true, authModeOverride: "ApiKey");
 
         public Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
         {
@@ -1061,7 +1088,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 return Task.FromResult<string?>(null);
             }
 
-            string? mode = authVar is not null ? "ApiKey" : "OAuth";
+            string? mode = authModeOverride ?? (authVar is not null ? "ApiKey" : "OAuth");
             return Task.FromResult<string?>(mode);
         }
 

@@ -150,6 +150,12 @@ internal sealed class IssueClaimedHandler(
             ? null
             : await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
 
+        if (!isOAuthMode && authVar is null)
+        {
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
+        }
+
         Dictionary<string, string> envVars = new()
         {
             ["GIT_PAT"] = gitPat,

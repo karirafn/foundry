@@ -14,14 +14,16 @@ namespace Foundry.UnitTests.Modules.Settings.Infrastructure.CredentialVolumeRead
 
 public sealed class ReadStatusAsync : IAsyncDisposable
 {
-    // _tempDir serves as both the Docker volumes root (injected into the reader) and the
-    // mountpoint for tests that exercise the credential-reading code path.
+    // _tempDir is the Docker volumes root injected into the reader (mirrors /var/lib/docker/volumes/).
+    // _mountDir is a subdirectory that acts as the volume mountpoint (mirrors the _data path under the root).
     private readonly string _tempDir;
+    private readonly string _mountDir;
 
     public ReadStatusAsync()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(_tempDir);
+        _mountDir = Path.Combine(_tempDir, "vol-data");
+        Directory.CreateDirectory(_mountDir);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -34,7 +36,7 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     }
 
     private CredentialVolumeReader BuildSut(StubVolumeOperations volumeOps) =>
-        new(volumeOps, NullLogger<CredentialVolumeReader>.Instance, dockerVolumesRoot: _tempDir);
+        new(volumeOps, NullLogger<CredentialVolumeReader>.Instance, dockerVolumesRoot: _tempDir + Path.DirectorySeparatorChar);
 
     [Fact]
     public async Task WhenVolumeNotFound_ReturnsPresentFalse()
@@ -83,8 +85,8 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     [Fact]
     public async Task WhenCredentialFileAbsent_ReturnsPresentFalse()
     {
-        // Arrange — empty temp dir, no .credentials.json
-        StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
+        // Arrange — mountpoint directory exists but contains no .credentials.json
+        StubVolumeOperations volumeOps = new(mountpoint: _mountDir);
         CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
@@ -98,10 +100,10 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     public async Task WhenCredentialFilePresent_ReturnsPresentTrue()
     {
         // Arrange
-        string credFile = Path.Combine(_tempDir, ".credentials.json");
+        string credFile = Path.Combine(_mountDir, ".credentials.json");
         string json = BuildCredentialJson(expiresAt: "2027-01-01T00:00:00Z", subscriptionType: "pro");
         await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
-        StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
+        StubVolumeOperations volumeOps = new(mountpoint: _mountDir);
         CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
@@ -115,10 +117,10 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     public async Task WhenCredentialFileHasExpiresAt_ReturnsExpiresAt()
     {
         // Arrange
-        string credFile = Path.Combine(_tempDir, ".credentials.json");
+        string credFile = Path.Combine(_mountDir, ".credentials.json");
         string json = BuildCredentialJson(expiresAt: "2027-06-15T12:00:00Z", subscriptionType: "pro");
         await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
-        StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
+        StubVolumeOperations volumeOps = new(mountpoint: _mountDir);
         CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
@@ -135,10 +137,10 @@ public sealed class ReadStatusAsync : IAsyncDisposable
         // Arrange
         DateTimeOffset expiry = new(2027, 1, 1, 0, 0, 0, TimeSpan.Zero);
         long epochMs = expiry.ToUnixTimeMilliseconds();
-        string credFile = Path.Combine(_tempDir, ".credentials.json");
+        string credFile = Path.Combine(_mountDir, ".credentials.json");
         string json = BuildCredentialJsonWithEpoch(epochMs, "pro");
         await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
-        StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
+        StubVolumeOperations volumeOps = new(mountpoint: _mountDir);
         CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
@@ -152,10 +154,10 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     public async Task WhenCredentialFileHasSubscriptionType_ReturnsSubscriptionType()
     {
         // Arrange
-        string credFile = Path.Combine(_tempDir, ".credentials.json");
+        string credFile = Path.Combine(_mountDir, ".credentials.json");
         string json = BuildCredentialJson(expiresAt: "2027-01-01T00:00:00Z", subscriptionType: "max");
         await File.WriteAllTextAsync(credFile, json, TestContext.Current.CancellationToken);
-        StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
+        StubVolumeOperations volumeOps = new(mountpoint: _mountDir);
         CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
@@ -169,9 +171,9 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     public async Task WhenCredentialFileIsMalformedJson_ReturnsPresentTrueWithNullFields()
     {
         // Arrange
-        string credFile = Path.Combine(_tempDir, ".credentials.json");
+        string credFile = Path.Combine(_mountDir, ".credentials.json");
         await File.WriteAllTextAsync(credFile, "{ not valid json }}}", TestContext.Current.CancellationToken);
-        StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
+        StubVolumeOperations volumeOps = new(mountpoint: _mountDir);
         CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
@@ -229,12 +231,27 @@ public sealed class ReadStatusAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenMountpointSharesPrefixWithRootButIsNotUnderIt_ReturnsPresentFalse()
+    {
+        // Arrange — _tempDir is e.g. /tmp/abc123; mountpoint is /tmp/abc123suffix (shares prefix, not a child)
+        string siblingPath = _tempDir + "suffix";
+        StubVolumeOperations volumeOps = new(mountpoint: siblingPath);
+        CredentialVolumeReader sut = BuildSut(volumeOps);
+
+        // Act
+        CredentialVolumeStatus result = await sut.ReadStatusAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Present.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task WhenCredentialFileHasNoClaudeAiOauthSection_ReturnsPresentTrueWithNullFields()
     {
         // Arrange
-        string credFile = Path.Combine(_tempDir, ".credentials.json");
+        string credFile = Path.Combine(_mountDir, ".credentials.json");
         await File.WriteAllTextAsync(credFile, """{ "other": {} }""", TestContext.Current.CancellationToken);
-        StubVolumeOperations volumeOps = new(mountpoint: _tempDir);
+        StubVolumeOperations volumeOps = new(mountpoint: _mountDir);
         CredentialVolumeReader sut = BuildSut(volumeOps);
 
         // Act
