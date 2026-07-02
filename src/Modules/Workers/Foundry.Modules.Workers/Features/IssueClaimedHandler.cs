@@ -4,6 +4,7 @@ using System.Globalization;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
@@ -27,6 +28,9 @@ internal sealed class IssueClaimedHandler(
     private const string SeccompUnconfined = "seccomp=unconfined";
     private const string ApparmorUnconfined = "apparmor=unconfined";
     private const string FuseDevicePath = "/dev/fuse";
+    private const string CredentialVolumeName = "foundry-claude-credentials";
+    private const string ClaudeConfigContainerPath = "/home/node/.claude";
+    private const string ClaudeConfigDirEnvVar = "CLAUDE_CONFIG_DIR";
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
@@ -138,10 +142,21 @@ internal sealed class IssueClaimedHandler(
 
         (string Key, string Value)? authVar = await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
 
+        bool isOAuthMode = false;
+
         if (authVar is null)
         {
-            return Result<WorkerContainerSpec>.Fail(
-                new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
+            // OAuth mode returns null from GetAuthEnvironmentVariableAsync; no-settings also returns null.
+            // Distinguish by checking whether settings exist at all.
+            GlobalSettingsSummary? settings = await settingsQueries.GetSettingsAsync(cancellationToken);
+
+            if (settings is null)
+            {
+                return Result<WorkerContainerSpec>.Fail(
+                    new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
+            }
+
+            isOAuthMode = true;
         }
 
         Dictionary<string, string> envVars = new()
@@ -153,8 +168,20 @@ internal sealed class IssueClaimedHandler(
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),
-            [authVar.Value.Key] = authVar.Value.Value,
         };
+
+        List<VolumeMount> volumeMounts = [];
+
+        if (isOAuthMode)
+        {
+            await orchestrator.EnsureCredentialVolumeAsync(cancellationToken);
+            volumeMounts.Add(new VolumeMount(CredentialVolumeName, ClaudeConfigContainerPath));
+            envVars[ClaudeConfigDirEnvVar] = ClaudeConfigContainerPath;
+        }
+        else
+        {
+            envVars[authVar!.Value.Key] = authVar.Value.Value;
+        }
 
         switch (claimed.Provider)
         {
@@ -189,7 +216,10 @@ internal sealed class IssueClaimedHandler(
             envVars,
             bindMounts,
             labels,
-            ["/entrypoint.sh"]);
+            ["/entrypoint.sh"])
+        {
+            VolumeMounts = volumeMounts,
+        };
 
         return installsDocker
             ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec))
