@@ -9,7 +9,7 @@ import {
   GlobalSettingsResponse,
   ImageBuildStatus,
   OAuthCredentialInfo,
-  OAuthScanResponse,
+  OAuthLoginCommand,
   UpdatePromptTemplatesRequest,
   WorkerImageFlags,
   WorkerLimits,
@@ -20,11 +20,11 @@ import { SystemSignalRService } from '../../core/services/system-signalr.service
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
-const SWITCH_OAUTH_ERROR = 'Failed to switch to OAuth mode';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
+const FETCH_LOGIN_COMMAND_ERROR = 'Failed to load the login command';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -122,6 +122,15 @@ export class SettingsService {
   private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
+  private readonly _loginCommandSignal: WritableSignal<string | null> = signal(null);
+  readonly loginCommand: Signal<string | null> = this._loginCommandSignal.asReadonly();
+
+  private readonly _loginCommandLoadingSignal: WritableSignal<boolean> = signal(false);
+  readonly loginCommandLoading: Signal<boolean> = this._loginCommandLoadingSignal.asReadonly();
+
+  private readonly _loginCommandErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly loginCommandError: Signal<string | null> = this._loginCommandErrorSignal.asReadonly();
+
   loadSettings(): Promise<void> {
     return new Promise<void>((resolve) => {
       this._fetchSettings().subscribe({ next: resolve, error: resolve });
@@ -200,6 +209,43 @@ export class SettingsService {
     });
   }
 
+  markOAuthConfigured(): void {
+    this._saveErrorSignal.set(null);
+    this.saveSuccess.set(false);
+    this.saving.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/auth', { mode: 'oauth' }).subscribe({
+      next: (response) => {
+        this.authSettings.set(this._mapToAuthSettings(response));
+        this.saving.set(false);
+        this.saveSuccess.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveErrorSignal.set(SAVE_SETTINGS_ERROR);
+        this.saving.set(false);
+        this.saveSuccess.set(false);
+      },
+    });
+  }
+
+  fetchLoginCommand(): void {
+    this._loginCommandErrorSignal.set(null);
+    this._loginCommandLoadingSignal.set(true);
+
+    this._http.get<OAuthLoginCommand>('/api/settings/oauth/login-command').subscribe({
+      next: (response) => {
+        this._loginCommandSignal.set(response.command);
+        this._loginCommandLoadingSignal.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._loginCommandErrorSignal.set(FETCH_LOGIN_COMMAND_ERROR);
+        this._loginCommandLoadingSignal.set(false);
+      },
+    });
+  }
+
   updateWorkerLimits(maxConcurrent: number, timeoutMinutes: number): void {
     this._saveLimitsErrorSignal.set(null);
     this._saveLimitsSuccessSignal.set(false);
@@ -255,33 +301,6 @@ export class SettingsService {
         console.error(err);
         this._saveDispatchErrorSignal.set(SAVE_DISPATCH_ERROR);
         this._savingDispatchSignal.set(false);
-      },
-    });
-  }
-
-  scanOAuthCredentials(): void {
-    this._switchErrorSignal.set(null);
-    this.switching.set(true);
-
-    this._http.get<OAuthScanResponse>('/api/settings/oauth/scan').subscribe({
-      next: () => {
-        this._http.put<GlobalSettingsResponse>('/api/settings/auth', { mode: 'oauth' }).subscribe({
-          next: (response) => {
-            this.authSettings.set(this._mapToAuthSettings(response));
-            this.switching.set(false);
-            this.saveSuccess.set(true);
-          },
-          error: (err: HttpErrorResponse) => {
-            console.error(err);
-            this._switchErrorSignal.set(SWITCH_OAUTH_ERROR);
-            this.switching.set(false);
-          },
-        });
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._switchErrorSignal.set(SWITCH_OAUTH_ERROR);
-        this.switching.set(false);
       },
     });
   }
@@ -352,11 +371,9 @@ export class SettingsService {
     let oauth: OAuthCredentialInfo | null = null;
     if (isOAuth) {
       oauth = {
-        accessTokenPresent: response.accessTokenPresent,
-        refreshTokenPresent: response.refreshTokenPresent,
+        status: response.oAuthStatus,
         expiresAt: response.expiresAt,
         subscriptionType: response.subscriptionType,
-        status: this._resolveOAuthStatus(response),
       };
     }
 
@@ -365,15 +382,5 @@ export class SettingsService {
       apiKeyConfigured: false,
       oauth,
     };
-  }
-
-  private _resolveOAuthStatus(response: GlobalSettingsResponse): 'valid' | 'expired' | 'missing' {
-    if (!response.accessTokenPresent) {
-      return 'missing';
-    }
-    if (response.expiresAt !== null && new Date(response.expiresAt) < new Date()) {
-      return 'expired';
-    }
-    return 'valid';
   }
 }

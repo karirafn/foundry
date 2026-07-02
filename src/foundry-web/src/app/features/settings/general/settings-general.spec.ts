@@ -22,34 +22,44 @@ const IMAGE_FLAGS_DEFAULTS = {
   hasUsableImage: false,
 };
 
-const API_KEY_RESPONSE = {
-  authMode: 'ApiKey',
-  maxConcurrent: 3,
-  timeoutMinutes: 60,
-  accessTokenPresent: false,
-  refreshTokenPresent: false,
-  expiresAt: null,
-  subscriptionType: null,
+const BASE_RESPONSE = {
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
   defaultCooldownMinutes: 60,
   ...IMAGE_FLAGS_DEFAULTS,
+  systemPromptTemplate: null,
+  workerPromptTemplate: null,
+};
+
+const API_KEY_RESPONSE = {
+  authMode: 'ApiKey',
+  oAuthStatus: 'NotConfigured',
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  expiresAt: null,
+  subscriptionType: null,
+  ...BASE_RESPONSE,
 };
 
 const OAUTH_RESPONSE = {
   authMode: 'OAuth',
+  oAuthStatus: 'Present',
   maxConcurrent: 3,
   timeoutMinutes: 60,
-  accessTokenPresent: true,
-  refreshTokenPresent: true,
   expiresAt: '2027-01-01T00:00:00Z',
   subscriptionType: 'pro',
-  usageLimitResetsAt: null,
-  isDispatchPaused: false,
-  autoResumeOnUsageReset: true,
-  defaultCooldownMinutes: 60,
-  ...IMAGE_FLAGS_DEFAULTS,
+  ...BASE_RESPONSE,
+};
+
+const OAUTH_NOT_CONFIGURED_RESPONSE = {
+  authMode: 'OAuth',
+  oAuthStatus: 'NotConfigured',
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  expiresAt: null,
+  subscriptionType: null,
+  ...BASE_RESPONSE,
 };
 
 function setup() {
@@ -162,7 +172,7 @@ describe('SettingsGeneralComponent', () => {
     expect(input).toBeFalsy();
   });
 
-  it('should render OAuth credential status when mode is oauth', () => {
+  it('should render fd-oauth-panel when mode is oauth', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -172,10 +182,10 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const credGrid = el.querySelector('.general-settings__oauth-grid');
+    const panel = el.querySelector('fd-oauth-panel');
 
     // Assert
-    expect(credGrid).toBeTruthy();
+    expect(panel).toBeTruthy();
   });
 
   it('should wrap the radio group in a fieldset with screen-reader legend', () => {
@@ -371,7 +381,7 @@ describe('SettingsGeneralComponent', () => {
     req.flush(API_KEY_RESPONSE);
   });
 
-  it('should call scanOAuthCredentials when Scan & Apply OAuth Credentials is clicked', () => {
+  it('should show "Switch account" button when OAuth mode is active and status is Present', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -381,14 +391,103 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const scanBtn = el.querySelector('.general-settings__scan-btn') as HTMLButtonElement;
-    scanBtn.click();
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn');
 
     // Assert
-    const req = httpMock.expectOne('/api/settings/oauth/scan');
-    expect(req.request.method).toBe('GET');
-    req.flush({ accessTokenPresent: true, refreshTokenPresent: true, expiresAt: null, subscriptionType: null });
-    httpMock.expectOne('/api/settings/auth').flush(OAUTH_RESPONSE);
+    expect(switchBtn).toBeTruthy();
+  });
+
+  it('should not show "Switch account" button when OAuth status is NotConfigured', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    fixture.detectChanges();
+
+    // The component needs to be in OAuth mode to show the panel, but since oAuthStatus is NotConfigured,
+    // the switch button should not show. Also fetch login command.
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn');
+
+    // Assert
+    expect(switchBtn).toBeFalsy();
+  });
+
+  it('should show confirm dialog when "Switch account" is clicked', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Assert
+    const dialog = el.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Switching account pauses dispatch');
+  });
+
+  it('should call pauseDispatch and fetch login command when confirm button is clicked', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Act
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+
+    // Assert
+    const pauseReq = httpMock.expectOne('/api/settings/dispatch/pause');
+    expect(pauseReq.request.method).toBe('POST');
+    const commandReq = httpMock.expectOne('/api/settings/oauth/login-command');
+    expect(commandReq.request.method).toBe('GET');
+    pauseReq.flush(OAUTH_RESPONSE);
+    commandReq.flush({ command: 'docker run -it' });
+  });
+
+  it('should show drain gate message after confirming account switch', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Act
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
+    fixture.detectChanges();
+
+    // Assert
+    const drainGate = el.querySelector('.general-settings__drain-gate');
+    expect(drainGate?.textContent).toContain('Dispatch is paused');
   });
 
   it('should render the "Worker Prompts" section title', () => {

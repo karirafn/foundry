@@ -19,11 +19,9 @@ const mockOAuthSettings: AuthSettings = {
   mode: 'oauth',
   apiKeyConfigured: false,
   oauth: {
-    accessTokenPresent: true,
-    refreshTokenPresent: true,
+    status: 'Present',
     expiresAt: '2027-01-01T00:00:00Z',
     subscriptionType: 'pro',
-    status: 'valid',
   },
 };
 
@@ -58,10 +56,9 @@ function setupService(signalROverride?: ReturnType<typeof createMockSignalRServi
 function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     authMode: 'ApiKey',
+    oAuthStatus: 'NotConfigured',
     maxConcurrent: 3,
     timeoutMinutes: 60,
-    accessTokenPresent: false,
-    refreshTokenPresent: false,
     expiresAt: null,
     subscriptionType: null,
     systemPromptTemplate: null,
@@ -119,15 +116,7 @@ describe('SettingsService', () => {
     // Act
     service.loadSettings();
     const req = httpMock.expectOne('/api/settings');
-    req.flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    req.flush(buildSettingsResponse({ authMode: 'ApiKey', oAuthStatus: 'NotConfigured' }));
 
     // Assert
     const settings = service.authSettings();
@@ -146,29 +135,13 @@ describe('SettingsService', () => {
 
     // Assert — before flush
     expect(service.loading()).toBe(true);
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 
   it('should set loading to false after loadSettings succeeds', () => {
     // Arrange
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
 
     // Assert
     expect(service.loading()).toBe(false);
@@ -206,28 +179,53 @@ describe('SettingsService', () => {
     expect(service.loadError()).toBe('Failed to load settings');
   });
 
-  // Cycle 5: loadSettings maps OAuth mode
-  it('should map OAuth authMode to oauth mode string', () => {
+  // Cycle 5: loadSettings maps OAuth mode — maps oAuthStatus straight through
+  it('should map OAuth authMode to oauth mode string with oAuthStatus passed through', () => {
     // Arrange
     // (service initialized by test setup)
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush({
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
       authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
+      oAuthStatus: 'Present',
       expiresAt: '2027-01-01T00:00:00Z',
       subscriptionType: 'pro',
-    });
+    }));
 
     // Assert
     const settings = service.authSettings();
     expect(settings!.mode).toBe('oauth');
     expect(settings!.oauth).not.toBeNull();
-    expect(settings!.oauth!.accessTokenPresent).toBe(true);
+    expect(settings!.oauth!.status).toBe('Present');
+    expect(settings!.oauth!.expiresAt).toBe('2027-01-01T00:00:00Z');
+    expect(settings!.oauth!.subscriptionType).toBe('pro');
+  });
+
+  it('should map oAuthStatus ReLoginNeeded straight through', () => {
+    // Arrange
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+      authMode: 'OAuth',
+      oAuthStatus: 'ReLoginNeeded',
+    }));
+
+    // Assert
+    const settings = service.authSettings();
+    expect(settings!.oauth!.status).toBe('ReLoginNeeded');
+  });
+
+  it('should map oAuthStatus NotConfigured straight through', () => {
+    // Arrange
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+      authMode: 'OAuth',
+      oAuthStatus: 'NotConfigured',
+    }));
+
+    // Assert
+    const settings = service.authSettings();
+    expect(settings!.oauth!.status).toBe('NotConfigured');
   });
 
   // Cycle 6: updateAuthMode calls PUT /api/settings/auth
@@ -242,15 +240,7 @@ describe('SettingsService', () => {
     // Assert
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ mode: 'api_key', apiKey: 'my-api-key' });
-    req.flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    req.flush(buildSettingsResponse());
   });
 
   it('should set saving to true while updateAuthMode is in flight', () => {
@@ -262,29 +252,13 @@ describe('SettingsService', () => {
 
     // Assert — before flush
     expect(service.saving()).toBe(true);
-    httpMock.expectOne('/api/settings/auth').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse());
   });
 
   it('should set saving to false and saveSuccess to true after updateAuthMode succeeds', () => {
     // Arrange
     service.updateAuthMode('api_key', 'my-api-key');
-    httpMock.expectOne('/api/settings/auth').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse());
 
     // Assert
     expect(service.saving()).toBe(false);
@@ -329,173 +303,40 @@ describe('SettingsService', () => {
 
     // Assert
     expect(req.request.body).toEqual({ mode: 'oauth' });
-    req.flush({
-      authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
+    req.flush(buildSettingsResponse({ authMode: 'OAuth', oAuthStatus: 'Present' }));
   });
 
-  // Cycle 8: scanOAuthCredentials calls GET /api/settings/oauth/scan and applies result
-  it('should GET /api/settings/oauth/scan when scanOAuthCredentials is called', () => {
+  // markOAuthConfigured: calls PUT /api/settings/auth with { mode: 'oauth' }
+  it('should PUT to /api/settings/auth with mode oauth when markOAuthConfigured is called', () => {
     // Arrange
     // (service initialized by test setup)
 
     // Act
-    service.scanOAuthCredentials();
-    const req = httpMock.expectOne('/api/settings/oauth/scan');
+    service.markOAuthConfigured();
+    const req = httpMock.expectOne('/api/settings/auth');
 
     // Assert
-    expect(req.request.method).toBe('GET');
-    req.flush({
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-    httpMock.expectOne('/api/settings/auth').flush({
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ mode: 'oauth' });
+    req.flush(buildSettingsResponse({ authMode: 'OAuth', oAuthStatus: 'NotConfigured' }));
+  });
+
+  it('should update authSettings after markOAuthConfigured succeeds', () => {
+    // Arrange
+    service.markOAuthConfigured();
+    httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse({
       authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-  });
-
-  it('should set switching to true while scanOAuthCredentials is in flight', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    service.scanOAuthCredentials();
-
-    // Assert — before flush
-    expect(service.switching()).toBe(true);
-    httpMock.expectOne('/api/settings/oauth/scan').flush({
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-    httpMock.expectOne('/api/settings/auth').flush({
-      authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-  });
-
-  it('should PUT to /api/settings/auth with oauth mode after scan succeeds', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    service.scanOAuthCredentials();
-    httpMock.expectOne('/api/settings/oauth/scan').flush({
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-    const putReq = httpMock.expectOne('/api/settings/auth');
+      oAuthStatus: 'Present',
+    }));
 
     // Assert
-    expect(putReq.request.method).toBe('PUT');
-    expect(putReq.request.body).toEqual({ mode: 'oauth' });
-    putReq.flush({
-      authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-  });
-
-  it('should update authSettings and set saveSuccess after scanOAuthCredentials succeeds', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    service.scanOAuthCredentials();
-    httpMock.expectOne('/api/settings/oauth/scan').flush({
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-    httpMock.expectOne('/api/settings/auth').flush({
-      authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-
-    // Assert
-    expect(service.switching()).toBe(false);
-    expect(service.saveSuccess()).toBe(true);
-    expect(service.authSettings()!.mode).toBe('oauth');
-  });
-
-  it('should set switchError when scanOAuthCredentials scan fails', () => {
-    // Arrange
-    service.scanOAuthCredentials();
-    httpMock.expectOne('/api/settings/oauth/scan').flush('Not Found', {
-      status: 404,
-      statusText: 'Not Found',
-    });
-
-    // Assert
-    expect(service.switchError()).not.toBeNull();
-    expect(service.switching()).toBe(false);
-  });
-
-  it('should set switchError to a fixed user-facing string when scan fails', () => {
-    // Arrange
-    service.scanOAuthCredentials();
-    httpMock.expectOne('/api/settings/oauth/scan').flush('Not Found', {
-      status: 404,
-      statusText: 'Not Found',
-    });
-
-    // Assert
-    expect(service.switchError()).toBe('Failed to switch to OAuth mode');
-  });
-
-  it('should set switchError when updateAuthMode call fails after scan', () => {
-    // Arrange
-    service.scanOAuthCredentials();
-    httpMock.expectOne('/api/settings/oauth/scan').flush({
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
-      expiresAt: '2027-01-01T00:00:00Z',
-      subscriptionType: 'pro',
-    });
-    httpMock.expectOne('/api/settings/auth').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
-
-    // Assert
-    expect(service.switchError()).toBe('Failed to switch to OAuth mode');
-    expect(service.switching()).toBe(false);
+    const settings = service.authSettings();
+    expect(settings!.mode).toBe('oauth');
+    expect(settings!.oauth!.status).toBe('Present');
   });
 
   // Cycle 8b: loadSettings resets stale signals
-  it('should reset saveSuccess, saveError, switchError, saving, and switching when loadSettings is called', () => {
+  it('should reset saveSuccess, saveError, saving, and switching when loadSettings is called', () => {
     // Arrange — put signals into a dirty state
     service.saveSuccess.set(true);
     service.saving.set(true);
@@ -513,15 +354,7 @@ describe('SettingsService', () => {
     expect(service.saveError()).toBeNull();
     expect(service.switchError()).toBeNull();
 
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 
   // Cycle 10: loadSettings populates workerLimits signal
@@ -531,15 +364,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 5,
-      timeoutMinutes: 90,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ maxConcurrent: 5, timeoutMinutes: 90 }));
 
     // Assert
     const limits = service.workerLimits();
@@ -571,15 +396,7 @@ describe('SettingsService', () => {
     // Assert
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ maxConcurrent: 3, timeoutMinutes: 120 });
-    req.flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 120,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    req.flush(buildSettingsResponse({ maxConcurrent: 3, timeoutMinutes: 120 }));
   });
 
   it('should set savingLimits to true while updateWorkerLimits is in flight', () => {
@@ -591,29 +408,13 @@ describe('SettingsService', () => {
 
     // Assert — before flush
     expect(service.savingLimits()).toBe(true);
-    httpMock.expectOne('/api/settings/limits').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 120,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings/limits').flush(buildSettingsResponse({ maxConcurrent: 3, timeoutMinutes: 120 }));
   });
 
   it('should update workerLimits and set saveLimitsSuccess to true after updateWorkerLimits succeeds', () => {
     // Arrange
     service.updateWorkerLimits(3, 120);
-    httpMock.expectOne('/api/settings/limits').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 120,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings/limits').flush(buildSettingsResponse({ maxConcurrent: 3, timeoutMinutes: 120 }));
 
     // Assert
     expect(service.savingLimits()).toBe(false);
@@ -667,29 +468,13 @@ describe('SettingsService', () => {
     expect(service.saveLimitsError()).toBeNull();
     expect(service.saveLimitsSuccess()).toBe(false);
     expect(service.savingLimits()).toBe(true);
-    httpMock.expectOne('/api/settings/limits').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 2,
-      timeoutMinutes: 90,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings/limits').flush(buildSettingsResponse({ maxConcurrent: 2, timeoutMinutes: 90 }));
   });
 
   it('should reset limits signals in loadSettings', () => {
     // Arrange — put signals into dirty state via public API
     service.updateWorkerLimits(1, 60);
-    httpMock.expectOne('/api/settings/limits').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 1,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings/limits').flush(buildSettingsResponse({ maxConcurrent: 1, timeoutMinutes: 60 }));
     // saveLimitsSuccess is now true; force an error state for saveLimitsError
     service.updateWorkerLimits(99999, 60);
     httpMock.expectOne('/api/settings/limits').flush('Bad Request', {
@@ -705,47 +490,24 @@ describe('SettingsService', () => {
     expect(service.savingLimits()).toBe(false);
     expect(service.saveLimitsError()).toBeNull();
 
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 1,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ maxConcurrent: 1, timeoutMinutes: 60 }));
   });
 
   // Cycle 9: updateAuthMode updates authSettings on success
   it('should update authSettings signal after updateAuthMode succeeds', () => {
     // Arrange — first load settings
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-      systemPromptTemplate: null,
-      workerPromptTemplate: null,
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ authMode: 'ApiKey', oAuthStatus: 'NotConfigured' }));
     expect(service.authSettings()!.mode).toBe('api_key');
 
     // Act — switch to oauth
     service.updateAuthMode('oauth');
-    httpMock.expectOne('/api/settings/auth').flush({
+    httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse({
       authMode: 'OAuth',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: true,
-      refreshTokenPresent: true,
+      oAuthStatus: 'Present',
       expiresAt: '2027-01-01T00:00:00Z',
       subscriptionType: 'pro',
-      systemPromptTemplate: null,
-      workerPromptTemplate: null,
-    });
+    }));
 
     // Assert
     expect(service.authSettings()!.mode).toBe('oauth');
@@ -770,17 +532,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-      systemPromptTemplate: 'You are a helpful assistant.',
-      workerPromptTemplate: null,
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ systemPromptTemplate: 'You are a helpful assistant.' }));
 
     // Assert
     expect(service.systemPromptTemplate()).toBe('You are a helpful assistant.');
@@ -793,17 +545,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-      systemPromptTemplate: null,
-      workerPromptTemplate: 'Fix the issue.',
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ workerPromptTemplate: 'Fix the issue.' }));
 
     // Assert
     expect(service.systemPromptTemplate()).toBeNull();
@@ -822,17 +564,7 @@ describe('SettingsService', () => {
     // Assert
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
-    req.flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-      systemPromptTemplate: 'sys',
-      workerPromptTemplate: 'worker',
-    });
+    req.flush(buildSettingsResponse({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' }));
   });
 
   it('should set savingPrompts to true while updatePromptTemplates is in flight', () => {
@@ -844,33 +576,16 @@ describe('SettingsService', () => {
 
     // Assert — before flush
     expect(service.savingPrompts()).toBe(true);
-    httpMock.expectOne('/api/settings/prompts').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-      systemPromptTemplate: 'sys',
-      workerPromptTemplate: null,
-    });
+    httpMock.expectOne('/api/settings/prompts').flush(buildSettingsResponse({ systemPromptTemplate: 'sys' }));
   });
 
   it('should update prompt template signals and set savePromptsSuccess to true after updatePromptTemplates succeeds', () => {
     // Arrange
     service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
-    httpMock.expectOne('/api/settings/prompts').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
+    httpMock.expectOne('/api/settings/prompts').flush(buildSettingsResponse({
       systemPromptTemplate: 'sys',
       workerPromptTemplate: 'worker',
-    });
+    }));
 
     // Assert
     expect(service.savingPrompts()).toBe(false);
@@ -923,33 +638,16 @@ describe('SettingsService', () => {
     expect(service.savePromptsError()).toBeNull();
     expect(service.savePromptsSuccess()).toBe(false);
     expect(service.savingPrompts()).toBe(true);
-    httpMock.expectOne('/api/settings/prompts').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-      systemPromptTemplate: 'good',
-      workerPromptTemplate: null,
-    });
+    httpMock.expectOne('/api/settings/prompts').flush(buildSettingsResponse({ systemPromptTemplate: 'good' }));
   });
 
   it('should reset prompt signals in loadSettings', () => {
     // Arrange — put signals into dirty state
     service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
-    httpMock.expectOne('/api/settings/prompts').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
+    httpMock.expectOne('/api/settings/prompts').flush(buildSettingsResponse({
       systemPromptTemplate: 'sys',
       workerPromptTemplate: 'worker',
-    });
+    }));
     expect(service.savePromptsSuccess()).toBe(true);
 
     // Act
@@ -960,17 +658,7 @@ describe('SettingsService', () => {
     expect(service.savingPrompts()).toBe(false);
     expect(service.savePromptsError()).toBeNull();
 
-    httpMock.expectOne('/api/settings').flush({
-      authMode: 'ApiKey',
-      maxConcurrent: 3,
-      timeoutMinutes: 60,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      expiresAt: null,
-      subscriptionType: null,
-      systemPromptTemplate: null,
-      workerPromptTemplate: null,
-    });
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 
   // Dispatch integration: loadSettings calls dispatchService.updateFromSettings
@@ -1450,6 +1138,67 @@ describe('SettingsService', () => {
     expect(service.saveImageFlagsError()).toBeNull();
 
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Login command signals: initial state
+  it('should start with null loginCommand, false loginCommandLoading, and null loginCommandError', () => {
+    // Arrange / Act — (no action — testing initial state)
+
+    // Assert
+    expect(service.loginCommand()).toBeNull();
+    expect(service.loginCommandLoading()).toBe(false);
+    expect(service.loginCommandError()).toBeNull();
+  });
+
+  // fetchLoginCommand: GETs /api/settings/oauth/login-command
+  it('should GET /api/settings/oauth/login-command when fetchLoginCommand is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.fetchLoginCommand();
+    const req = httpMock.expectOne('/api/settings/oauth/login-command');
+
+    // Assert
+    expect(req.request.method).toBe('GET');
+    req.flush({ command: 'docker run -it --rm claude /login' });
+  });
+
+  it('should set loginCommandLoading to true while fetchLoginCommand is in flight', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.fetchLoginCommand();
+
+    // Assert — before flush
+    expect(service.loginCommandLoading()).toBe(true);
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it --rm claude /login' });
+  });
+
+  it('should set loginCommand and clear loginCommandLoading after fetchLoginCommand succeeds', () => {
+    // Arrange
+    service.fetchLoginCommand();
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it --rm claude /login' });
+
+    // Assert
+    expect(service.loginCommand()).toBe('docker run -it --rm claude /login');
+    expect(service.loginCommandLoading()).toBe(false);
+    expect(service.loginCommandError()).toBeNull();
+  });
+
+  it('should set loginCommandError when fetchLoginCommand fails', () => {
+    // Arrange
+    service.fetchLoginCommand();
+    httpMock.expectOne('/api/settings/oauth/login-command').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert
+    expect(service.loginCommandError()).not.toBeNull();
+    expect(service.loginCommandLoading()).toBe(false);
+    expect(service.loginCommand()).toBeNull();
   });
 });
 

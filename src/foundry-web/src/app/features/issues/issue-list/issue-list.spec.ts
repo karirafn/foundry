@@ -38,10 +38,9 @@ const mockSummary: IssueSummary = {
 
 const mockSettingsResponse: GlobalSettingsResponse = {
   authMode: 'ApiKey',
+  oAuthStatus: 'NotConfigured',
   maxConcurrent: 3,
   timeoutMinutes: 30,
-  accessTokenPresent: false,
-  refreshTokenPresent: false,
   expiresAt: null,
   subscriptionType: null,
   systemPromptTemplate: null,

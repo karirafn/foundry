@@ -1,5 +1,7 @@
 export type AuthMode = 'api_key' | 'oauth';
 
+export type OAuthStatus = 'NotConfigured' | 'Present' | 'ReLoginNeeded';
+
 export type ImageBuildStatus = 'Idle' | 'Building' | 'Failed';
 
 export interface WorkerImageFlags {
@@ -11,19 +13,14 @@ export interface WorkerImageFlags {
   installDocker: boolean;
 }
 
-export interface OAuthScanResponse {
-  accessTokenPresent: boolean;
-  refreshTokenPresent: boolean;
-  expiresAt: string | null;
-  subscriptionType: string | null;
+export interface OAuthLoginCommand {
+  command: string;
 }
 
 export interface OAuthCredentialInfo {
-  accessTokenPresent: boolean;
-  refreshTokenPresent: boolean;
+  status: OAuthStatus;
   expiresAt: string | null;
   subscriptionType: string | null;
-  status: 'valid' | 'expired' | 'missing';
 }
 
 export interface AuthSettings {
@@ -44,10 +41,9 @@ export interface WorkerLimits {
 
 export interface GlobalSettingsResponse {
   authMode: string;
+  oAuthStatus: OAuthStatus;
   maxConcurrent: number;
   timeoutMinutes: number;
-  accessTokenPresent: boolean;
-  refreshTokenPresent: boolean;
   expiresAt: string | null;
   subscriptionType: string | null;
   systemPromptTemplate: string | null;

@@ -7,35 +7,52 @@ import { SystemSignalRService } from '../../../core/services/system-signalr.serv
 
 const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
 
-const OAUTH_SCAN_RESPONSE = {
-  accessTokenPresent: true,
-  refreshTokenPresent: true,
-  expiresAt: '2026-12-31T00:00:00Z',
-  subscriptionType: 'max_5x',
-};
-
 const OAUTH_SETTINGS_RESPONSE = {
   authMode: 'OAuth',
-  accessTokenPresent: true,
-  refreshTokenPresent: true,
+  oAuthStatus: 'Present',
   expiresAt: '2026-12-31T00:00:00Z',
   subscriptionType: 'max_5x',
   maxConcurrent: 3,
   timeoutMinutes: 60,
   systemPromptTemplate: null,
   workerPromptTemplate: null,
+  usageLimitResetsAt: null,
+  isDispatchPaused: false,
+  autoResumeOnUsageReset: true,
+  defaultCooldownMinutes: 60,
+  installDotnet: false,
+  installAngular: false,
+  installGlab: false,
+  installGh: false,
+  installChromium: false,
+  installDocker: false,
+  imageBuildStatus: 'Idle',
+  lastImageBuildError: null,
+  hasUsableImage: false,
 };
 
 const API_KEY_SETTINGS_RESPONSE = {
   authMode: 'ApiKey',
-  accessTokenPresent: false,
-  refreshTokenPresent: false,
+  oAuthStatus: 'NotConfigured',
   expiresAt: null,
   subscriptionType: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
   systemPromptTemplate: null,
   workerPromptTemplate: null,
+  usageLimitResetsAt: null,
+  isDispatchPaused: false,
+  autoResumeOnUsageReset: true,
+  defaultCooldownMinutes: 60,
+  installDotnet: false,
+  installAngular: false,
+  installGlab: false,
+  installGh: false,
+  installChromium: false,
+  installDocker: false,
+  imageBuildStatus: 'Idle',
+  lastImageBuildError: null,
+  hasUsableImage: false,
 };
 
 function setup() {
@@ -291,71 +308,48 @@ describe('SetupAuthStepComponent', () => {
     httpMock.expectNone('/api/settings/auth');
   });
 
-  // Cycle 11: selecting OAuth shows scan instructions and scan button
-  it('should show OAuth scan instructions and scan button when OAuth mode is selected', () => {
-    // Arrange
-    const { fixture } = setup();
-    fixture.detectChanges();
-
-    // Act
-    const el = fixture.nativeElement as HTMLElement;
-    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
-    radios[1].click();
-    fixture.detectChanges();
-
-    // Assert
-    const setupBox = el.querySelector('.setup-auth-step__oauth-setup');
-    const scanButton = el.querySelector('.setup-auth-step__scan-btn');
-    expect(setupBox).toBeTruthy();
-    expect(scanButton?.textContent?.trim()).toContain('Scan & Apply OAuth Credentials');
-  });
-
-  // Cycle 12: Next button disabled until OAuth scan completes with valid status
-  it('should keep Next button disabled when OAuth mode selected but scan not yet done', () => {
-    // Arrange
-    const { fixture } = setup();
-    fixture.detectChanges();
-
-    // Act
-    const el = fixture.nativeElement as HTMLElement;
-    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
-    radios[1].click();
-    fixture.detectChanges();
-
-    // Assert
-    const nextButton = el.querySelector('button[class*="next-btn"]') as HTMLButtonElement;
-    expect(nextButton.disabled).toBe(true);
-  });
-
-  // Cycle 13: OAuth scan success with valid status shows credential grid and enables Next
-  it('should show credential grid and enable Next after OAuth scan returns valid status', () => {
+  // Cycle 11: selecting OAuth shows fd-oauth-panel and fetches login command
+  it('should show fd-oauth-panel when OAuth mode is selected', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
 
+    // Act
     const el = fixture.nativeElement as HTMLElement;
     const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
     radios[1].click();
     fixture.detectChanges();
 
-    // Act
-    const scanButton = el.querySelector('.setup-auth-step__scan-btn') as HTMLButtonElement;
-    scanButton.click();
+    // Assert
+    const panel = el.querySelector('fd-oauth-panel');
+    expect(panel).toBeTruthy();
+
+    // Cleanup — fetchLoginCommand fires
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
+  });
+
+  // Cycle 12: Next button enabled immediately after selecting OAuth mode
+  it('should enable Next button when OAuth mode is selected', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
     fixture.detectChanges();
 
-    httpMock.expectOne('/api/settings/oauth/scan').flush(OAUTH_SCAN_RESPONSE);
-    httpMock.expectOne('/api/settings/auth').flush(OAUTH_SETTINGS_RESPONSE);
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[1].click();
     fixture.detectChanges();
 
     // Assert
-    const grid = el.querySelector('.setup-auth-step__oauth-grid');
     const nextButton = el.querySelector('button[class*="next-btn"]') as HTMLButtonElement;
-    expect(grid).toBeTruthy();
     expect(nextButton.disabled).toBe(false);
+
+    // Cleanup
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
   });
 
-  // Cycle 14: OAuth scan failure shows error message and Next stays disabled
-  it('should show an error message and keep Next disabled when OAuth scan fails', () => {
+  // Cycle 13: shows non-blocking warning note when OAuth status is not Present
+  it('should show the not-logged-in note when OAuth status is NotConfigured', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -365,50 +359,45 @@ describe('SetupAuthStepComponent', () => {
     radios[1].click();
     fixture.detectChanges();
 
-    // Act
-    const scanButton = el.querySelector('.setup-auth-step__scan-btn') as HTMLButtonElement;
-    scanButton.click();
+    // Flush login command
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
     fixture.detectChanges();
 
-    httpMock.expectOne('/api/settings/oauth/scan').flush('Scan Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
+    // Assert
+    const note = el.querySelector('[role="note"]');
+    expect(note?.textContent).toContain("You haven't logged in yet");
+  });
+
+  // Cycle 14: no warning note when OAuth status is Present
+  it('should not show the not-logged-in note when OAuth status is Present', () => {
+    // Arrange
+    const { fixture, component, httpMock } = setup();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[1].click();
+    fixture.detectChanges();
+
+    // Flush login command — simulate that after switching to OAuth, status becomes Present
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
+
+    // Simulate settings loaded with Present status
+    const service = component['_settingsService'];
+    service.authSettings.set({
+      mode: 'oauth',
+      apiKeyConfigured: false,
+      oauth: { status: 'Present', expiresAt: null, subscriptionType: null },
     });
     fixture.detectChanges();
 
     // Assert
-    const errorEl = el.querySelector('[role="alert"]');
-    const nextButton = el.querySelector('button[class*="next-btn"]') as HTMLButtonElement;
-    expect(errorEl?.textContent?.trim()).toBeTruthy();
-    expect(nextButton.disabled).toBe(true);
+    const note = el.querySelector('[role="note"]');
+    expect(note).toBeFalsy();
   });
 
-  // Cycle 15: scan button disabled while scanning
-  it('should disable the scan button while scanning', () => {
-    // Arrange
-    const { fixture, httpMock } = setup();
-    fixture.detectChanges();
-
-    const el = fixture.nativeElement as HTMLElement;
-    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
-    radios[1].click();
-    fixture.detectChanges();
-
-    // Act
-    const scanButton = el.querySelector('.setup-auth-step__scan-btn') as HTMLButtonElement;
-    scanButton.click();
-    fixture.detectChanges();
-
-    // Assert
-    expect(scanButton.disabled).toBe(true);
-
-    // Cleanup
-    httpMock.expectOne('/api/settings/oauth/scan').flush(OAUTH_SCAN_RESPONSE);
-    httpMock.expectOne('/api/settings/auth').flush(OAUTH_SETTINGS_RESPONSE);
-  });
-
-  // Cycle 16: emits complete after successful OAuth scan and clicking Next
-  it('should emit complete after successful OAuth scan and clicking Next', () => {
+  // Cycle 15: emits complete on Next click in OAuth mode (no gating on status)
+  it('should emit complete after clicking Next in OAuth mode', () => {
     // Arrange
     const { fixture, component, httpMock } = setup();
     fixture.detectChanges();
@@ -421,12 +410,7 @@ describe('SetupAuthStepComponent', () => {
     radios[1].click();
     fixture.detectChanges();
 
-    const scanButton = el.querySelector('.setup-auth-step__scan-btn') as HTMLButtonElement;
-    scanButton.click();
-    fixture.detectChanges();
-
-    httpMock.expectOne('/api/settings/oauth/scan').flush(OAUTH_SCAN_RESPONSE);
-    httpMock.expectOne('/api/settings/auth').flush(OAUTH_SETTINGS_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
     fixture.detectChanges();
 
     // Act
@@ -437,35 +421,5 @@ describe('SetupAuthStepComponent', () => {
     // Assert
     expect(emitted).toBe(true);
   });
-
-  // Cycle 17: OAuth scan with expired status keeps Next disabled
-  it('should keep Next disabled after OAuth scan returns expired status', () => {
-    // Arrange
-    const { fixture, httpMock } = setup();
-    fixture.detectChanges();
-
-    const el = fixture.nativeElement as HTMLElement;
-    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
-    radios[1].click();
-    fixture.detectChanges();
-
-    // Act
-    const scanButton = el.querySelector('.setup-auth-step__scan-btn') as HTMLButtonElement;
-    scanButton.click();
-    fixture.detectChanges();
-
-    httpMock.expectOne('/api/settings/oauth/scan').flush({
-      ...OAUTH_SCAN_RESPONSE,
-      expiresAt: '2020-01-01T00:00:00Z',
-    });
-    httpMock.expectOne('/api/settings/auth').flush({
-      ...OAUTH_SETTINGS_RESPONSE,
-      expiresAt: '2020-01-01T00:00:00Z',
-    });
-    fixture.detectChanges();
-
-    // Assert
-    const nextButton = el.querySelector('button[class*="next-btn"]') as HTMLButtonElement;
-    expect(nextButton.disabled).toBe(true);
-  });
 });
+
