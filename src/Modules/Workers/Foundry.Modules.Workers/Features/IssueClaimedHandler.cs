@@ -28,9 +28,6 @@ internal sealed class IssueClaimedHandler(
     private const string SeccompUnconfined = "seccomp=unconfined";
     private const string ApparmorUnconfined = "apparmor=unconfined";
     private const string FuseDevicePath = "/dev/fuse";
-    private const string CredentialVolumeName = "foundry-claude-credentials";
-    private const string ClaudeConfigContainerPath = "/home/node/.claude";
-    private const string ClaudeConfigDirEnvVar = "CLAUDE_CONFIG_DIR";
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
@@ -175,8 +172,8 @@ internal sealed class IssueClaimedHandler(
         if (isOAuthMode)
         {
             await orchestrator.EnsureCredentialVolumeAsync(cancellationToken);
-            volumeMounts.Add(new VolumeMount(CredentialVolumeName, ClaudeConfigContainerPath));
-            envVars[ClaudeConfigDirEnvVar] = ClaudeConfigContainerPath;
+            volumeMounts.Add(new VolumeMount(CredentialVolume.VolumeName, CredentialVolume.ContainerPath));
+            envVars[CredentialVolume.ConfigDirEnvVar] = CredentialVolume.ContainerPath;
         }
         else
         {

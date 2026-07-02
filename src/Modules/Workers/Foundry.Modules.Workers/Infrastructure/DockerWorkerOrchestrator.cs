@@ -19,7 +19,6 @@ internal sealed class DockerWorkerOrchestrator(
     IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
 {
     private const string WorkerRunLabelKey = "foundry.worker-run-id";
-    private const string CredentialVolumeName = "foundry-claude-credentials";
     private const string ManagedLabelKey = "foundry.managed";
     private const long BytesPerMegabyte = 1024L * 1024L;
     private const long NanoCpusPerCpu = 1_000_000_000L;
@@ -55,7 +54,7 @@ internal sealed class DockerWorkerOrchestrator(
         await volumeOperations.CreateAsync(
             new VolumesCreateParameters
             {
-                Name = CredentialVolumeName,
+                Name = CredentialVolume.VolumeName,
                 Labels = new Dictionary<string, string>
                 {
                     [ManagedLabelKey] = "true",

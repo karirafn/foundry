@@ -4,6 +4,7 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 
 using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Workers.Contracts;
 
 using Foundry.Shared;
 
@@ -27,8 +28,13 @@ internal sealed class WorkerImageRebuildService(
     internal const string ImageBuildCategory = "image-build";
     internal const string BuildingMessage = "Building|";
     internal const string BaseDockerfile = "Dockerfile.base";
-    internal const string BaseImageTag = "foundry-claude-base:local";
-    internal const string LoginImageName = "foundry-claude-login:local";
+    internal const string LoginDockerfile = "Dockerfile.login";
+
+    // These constants are promoted to WorkerImageNames in Contracts so the Settings module
+    // can compose the login command without a cross-module circular dependency.
+    internal const string BaseImageTag = WorkerImageNames.BaseImageTag;
+    internal const string LoginImageName = WorkerImageNames.LoginImageName;
+
     private const int LogTailLines = 200;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
@@ -186,6 +192,40 @@ internal sealed class WorkerImageRebuildService(
                 if (workerProgress.HasError)
                 {
                     errorTail = TruncateTail(workerProgress.LastError);
+                }
+                else
+                {
+                    // Worker image succeeded — rewind tar stream and build the login image.
+                    // The login image must exist for the guided `docker run` login command to work.
+                    // A login-image build failure fails the whole rebuild so the command is never broken.
+                    tarStream.Seek(0, SeekOrigin.Begin);
+
+                    Dictionary<string, string> loginBuildArgs = new()
+                    {
+                        ["BASE_IMAGE"] = BaseImageTag,
+                    };
+
+                    ImageBuildParameters loginParameters = new()
+                    {
+                        Tags = [LoginImageName],
+                        BuildArgs = loginBuildArgs,
+                        Dockerfile = LoginDockerfile,
+                    };
+
+                    BuildProgress loginProgress = new(logger);
+
+                    await imageOperations.BuildImageFromDockerfileAsync(
+                        loginParameters,
+                        tarStream,
+                        authConfigs: null,
+                        headers: null,
+                        loginProgress,
+                        cancellationToken);
+
+                    if (loginProgress.HasError)
+                    {
+                        errorTail = TruncateTail(loginProgress.LastError);
+                    }
                 }
             }
         }

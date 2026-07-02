@@ -18,6 +18,7 @@ public static class SettingsModule
         services.AddHostedService<SettingsSeeder>();
 
         services.AddQueryHandler<GetSettings.Query, GlobalSettingsSummary, GetSettings.Handler>();
+        services.AddQueryHandler<GetLoginCommand.Query, OAuthLoginCommand, GetLoginCommand.Handler>();
         services.AddCommandHandler<UpdateAuthMode.Command, UpdateAuthMode.Response, UpdateAuthMode.Handler, UpdateAuthMode.Validator>();
         services.AddCommandHandler<UpdateWorkerLimits.Command, GlobalSettingsSummary, UpdateWorkerLimits.Handler, UpdateWorkerLimits.Validator>();
         services.AddCommandHandler<UpdatePromptTemplates.Command, GlobalSettingsSummary, UpdatePromptTemplates.Handler, UpdatePromptTemplates.Validator>();
