@@ -26,6 +26,9 @@ internal sealed class WorkerImageRebuildService(
 {
     internal const string ImageBuildCategory = "image-build";
     internal const string BuildingMessage = "Building|";
+    internal const string BaseDockerfile = "Dockerfile.base";
+    internal const string BaseImageTag = "foundry-claude-base:local";
+    internal const string LoginImageName = "foundry-claude-login:local";
     private const int LogTailLines = 200;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
@@ -131,26 +134,59 @@ internal sealed class WorkerImageRebuildService(
                 cancellationToken);
             tarStream.Seek(0, SeekOrigin.Begin);
 
-            ImageBuildParameters buildParameters = new()
+            // Build the shared base image first; the worker image depends on it.
+            ImageBuildParameters baseParameters = new()
             {
-                Tags = [_options.Image],
-                BuildArgs = new Dictionary<string, string>(buildArgs),
-                Dockerfile = "Dockerfile",
+                Tags = [BaseImageTag],
+                BuildArgs = new Dictionary<string, string>(),
+                Dockerfile = BaseDockerfile,
             };
 
-            BuildProgress progress = new(logger);
+            BuildProgress baseProgress = new(logger);
 
             await imageOperations.BuildImageFromDockerfileAsync(
-                buildParameters,
+                baseParameters,
                 tarStream,
                 authConfigs: null,
                 headers: null,
-                progress,
+                baseProgress,
                 cancellationToken);
 
-            if (progress.HasError)
+            if (baseProgress.HasError)
             {
-                errorTail = TruncateTail(progress.LastError);
+                errorTail = TruncateTail(baseProgress.LastError);
+            }
+            else
+            {
+                // Base image succeeded — rewind tar stream and build the worker image.
+                tarStream.Seek(0, SeekOrigin.Begin);
+
+                Dictionary<string, string> workerBuildArgs = new(buildArgs)
+                {
+                    ["BASE_IMAGE"] = BaseImageTag,
+                };
+
+                ImageBuildParameters workerParameters = new()
+                {
+                    Tags = [_options.Image],
+                    BuildArgs = workerBuildArgs,
+                    Dockerfile = "Dockerfile",
+                };
+
+                BuildProgress workerProgress = new(logger);
+
+                await imageOperations.BuildImageFromDockerfileAsync(
+                    workerParameters,
+                    tarStream,
+                    authConfigs: null,
+                    headers: null,
+                    workerProgress,
+                    cancellationToken);
+
+                if (workerProgress.HasError)
+                {
+                    errorTail = TruncateTail(workerProgress.LastError);
+                }
             }
         }
         catch (OperationCanceledException)
