@@ -113,6 +113,10 @@ jobs:
           sudo chown "$(id -u):$(id -g)" /workspace
           bats workers/tests/entrypoint.bats
 
+      - name: Build base image
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: docker build -f workers/Dockerfile.base -t foundry-claude-base:local workers/
+
       - name: Build worker image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: docker build --build-arg INSTALL_DOCKER=true -t foundry-worker:ci workers/
