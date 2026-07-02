@@ -91,14 +91,21 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
                 <hr class="issue-list__separator" aria-hidden="true" />
               }
               @if (ineligibleQueueStartIndex() >= 0 && idx === ineligibleQueueStartIndex()) {
-                <div class="issue-list__ineligible-queue-divider" [attr.aria-labelledby]="ineligibleQueueHeadingId">
+                <!-- H3: caption changed from h3 to p — no heading hierarchy skip (h1 → h3).
+                     M1: role="group" + aria-labelledby makes the label effective on the container.
+                     M2: sr-only span includes actionable hint about repository settings. -->
+                <div
+                  role="group"
+                  class="issue-list__ineligible-queue-divider"
+                  [attr.aria-labelledby]="ineligibleQueueHeadingId"
+                >
                   <hr class="issue-list__ineligible-queue-hr" aria-hidden="true" />
-                  <h3
+                  <p
                     [id]="ineligibleQueueHeadingId"
                     class="issue-list__ineligible-queue-caption"
-                  >Not dispatchable</h3>
+                  >Not dispatchable</p>
                 </div>
-                <span class="sr-only">Queued issues from repositories that are currently not dispatchable follow.</span>
+                <span class="sr-only">Queued issues from repositories that are currently not dispatchable follow. Check repository settings to make them eligible.</span>
               }
               <div class="issue-list__item">
                 <fd-issue-card

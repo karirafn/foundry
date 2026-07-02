@@ -1752,6 +1752,120 @@ describe('IssueListComponent', () => {
     expect(divider).toBeFalsy();
   });
 
+  // WCAG H3/M1: ineligible-queue divider caption is a paragraph (not h3) — no heading skip
+  it('should render the ineligible-queue caption as a paragraph element, not a heading', () => {
+    // Arrange
+    const ineligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-inelig-1',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [ineligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — must be a <p>, not an <h3> or any heading
+    const el = fixture.nativeElement as HTMLElement;
+    const caption = el.querySelector('.issue-list__ineligible-queue-caption');
+    expect(caption).toBeTruthy();
+    expect(caption?.tagName).toBe('P');
+  });
+
+  it('should NOT render any h3 element for the ineligible-queue caption', () => {
+    // Arrange
+    const ineligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-inelig-2',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [ineligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — no h3 anywhere in the active area
+    const el = fixture.nativeElement as HTMLElement;
+    const h3 = el.querySelector('h3');
+    expect(h3).toBeFalsy();
+  });
+
+  // WCAG M1: divider div has role="group" so aria-labelledby takes effect
+  it('should give the ineligible-queue-divider div role="group"', () => {
+    // Arrange
+    const ineligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-inelig-3',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [ineligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const divider = el.querySelector('.issue-list__ineligible-queue-divider');
+    expect(divider?.getAttribute('role')).toBe('group');
+  });
+
+  // WCAG M1: aria-labelledby still present on the group
+  it('should keep aria-labelledby on the ineligible-queue-divider group', () => {
+    // Arrange
+    const ineligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-inelig-4',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [ineligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const divider = el.querySelector('.issue-list__ineligible-queue-divider');
+    expect(divider?.getAttribute('aria-labelledby')).toBeTruthy();
+  });
+
+  // WCAG M2: sr-only boundary span includes actionable hint for users
+  it('should include a hint about checking repository settings in the sr-only boundary announcement', () => {
+    // Arrange
+    const ineligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-inelig-5',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [ineligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — the sr-only span that announces the boundary must include guidance
+    const el = fixture.nativeElement as HTMLElement;
+    const srSpans = Array.from(el.querySelectorAll('.sr-only'));
+    const boundarySpan = srSpans.find((s) =>
+      s.textContent?.includes('not dispatchable') || s.textContent?.includes('not eligible')
+    );
+    expect(boundarySpan).toBeTruthy();
+    expect(boundarySpan?.textContent).toMatch(/check repository settings/i);
+  });
+
   // QueueGroup-5: tier chips render for queued cards
   it('should render tier chips on queued issue cards', () => {
     // Arrange — one fresh, one revision queued

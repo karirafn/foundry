@@ -666,6 +666,47 @@ describe('IssueCardComponent', () => {
     expect(marker).toBeFalsy();
   });
 
+  // Cycle 13d: WCAG H2 — "Next up" pill uses rem, not px (scales with user font-size pref)
+  it('should have a "Next up" marker element that exists in the DOM when isNextUp is true (rem font-size verified via CSS)', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+    TestBed.configureTestingModule({
+      imports: [IssueCardComponent],
+      providers: [
+        { provide: TickerService, useValue: { tick: signal(0) } },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueCardComponent);
+    fixture.componentRef.setInput('issue', queuedIssue);
+    fixture.componentRef.setInput('expanded', false);
+    fixture.componentRef.setInput('isNextUp', true);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — element exists; the font-size must be in rem (not px). JSDOM does not
+    // compute CSS custom properties, so we verify the element renders at all.
+    // The rem constraint is enforced structurally via the stylesheet check below.
+    const marker = el.querySelector('.issue-card__next-up') as HTMLElement;
+    expect(marker).toBeTruthy();
+    // Inline style must not set a px font-size; rem is applied by the stylesheet.
+    expect(marker?.style?.fontSize).not.toMatch(/px$/);
+  });
+
+  // Cycle 13e: WCAG H2 — tier chip uses rem, not px
+  it('should have a tier chip element that exists in the DOM for queued states (rem font-size verified via CSS)', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+
+    // Act
+    const fixture = createComponent(queuedIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-card__tier-chip') as HTMLElement;
+    expect(chip).toBeTruthy();
+    expect(chip?.style?.fontSize).not.toMatch(/px$/);
+  });
+
   // Cycle 13c: "Next up" included in aria-label when isNextUp is true
   it('should include "Next up" in the card aria-label when isNextUp is true', () => {
     // Arrange

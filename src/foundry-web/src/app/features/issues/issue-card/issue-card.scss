@@ -58,12 +58,14 @@
 
   &__next-up {
     align-items: center;
-    background: color-mix(in srgb, var(--fd-state-completed) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--fd-state-completed) 50%, transparent);
+    background: color-mix(in srgb, var(--fd-state-completed) 12%, var(--fd-bg-card));
+    // H1: border mixed with card bg (not transparent) → ≥3:1 vs #161b22 (3.25:1 at 90%)
+    border: 1px solid color-mix(in srgb, var(--fd-state-completed) 90%, var(--fd-bg-card));
     border-radius: 9999px;
     color: var(--fd-text-success);
     display: inline-flex;
-    font-size: 10px;
+    // H2: rem instead of px so text scales with user font-size preference
+    font-size: 0.625rem;
     font-weight: 600;
     letter-spacing: 0.03em;
     padding: 2px 7px;
@@ -72,19 +74,22 @@
 
   &__tier-chip {
     align-items: center;
-    border: 1px solid var(--fd-border-default);
+    // H1: --fd-text-tertiary (#6e7681) gives 3.77:1 vs card bg #161b22
+    border: 1px solid var(--fd-text-tertiary);
     border-radius: 9999px;
     color: var(--fd-text-secondary);
     display: inline-flex;
-    font-size: 10px;
-    font-weight: 500;
+    // H2 + L1: rem (scales with user pref); raised to 0.6875rem + weight 600 to match caption
+    font-size: 0.6875rem;
+    font-weight: 600;
     gap: 4px;
     letter-spacing: 0.03em;
     padding: 2px 6px;
     white-space: nowrap;
 
     &--revision_queued {
-      border-color: color-mix(in srgb, var(--fd-state-in-progress) 40%, transparent);
+      // H1: mix with card bg, not transparent → 3.29:1 at 90%
+      border-color: color-mix(in srgb, var(--fd-state-in-progress) 90%, var(--fd-bg-card));
 
       .issue-card__tier-dot {
         background: var(--fd-state-in-progress);
@@ -92,7 +97,8 @@
     }
 
     &--continuation_queued {
-      border-color: color-mix(in srgb, var(--fd-state-queued) 40%, transparent);
+      // H1: mix with card bg, not transparent → 3.03:1 at 90%
+      border-color: color-mix(in srgb, var(--fd-state-queued) 90%, var(--fd-bg-card));
 
       .issue-card__tier-dot {
         background: var(--fd-state-queued);
