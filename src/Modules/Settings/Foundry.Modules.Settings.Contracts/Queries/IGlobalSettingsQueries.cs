@@ -3,7 +3,8 @@ namespace Foundry.Modules.Settings.Contracts.Queries;
 public sealed record DispatchPauseState(
     DateTimeOffset? UsageLimitResetsAt,
     bool IsDispatchPaused,
-    bool AutoResumeOnUsageReset);
+    bool AutoResumeOnUsageReset,
+    bool AuthInvalidPause = false);
 
 public interface IGlobalSettingsQueries
 {

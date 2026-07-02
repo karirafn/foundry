@@ -273,6 +273,11 @@ internal sealed class WorkerOutcomeResolver(
             return new FailureReason.UsageLimited(usageLimited.ResetsAt);
         }
 
+        if (parseResult is ContainerOutputParseResult.AuthInvalid)
+        {
+            return new FailureReason.AuthInvalid();
+        }
+
         // NoResultLine with non-zero exit = bootstrap failure (no result line produced)
         if (parseResult is ContainerOutputParseResult.NoResultLine)
         {

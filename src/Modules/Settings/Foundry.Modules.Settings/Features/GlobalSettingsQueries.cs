@@ -82,7 +82,8 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .Select(s => new DispatchPauseState(
                 s.UsageLimitResetsAt,
                 s.IsDispatchPaused,
-                s.AutoResumeOnUsageReset))
+                s.AutoResumeOnUsageReset,
+                s.AuthInvalidPause))
             .FirstOrDefaultAsync(cancellationToken)
             ?? new DispatchPauseState(null, false, true);
     }
