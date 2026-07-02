@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
@@ -14,6 +15,7 @@ namespace Foundry.Modules.Workers.Features.Login;
 internal sealed class LoginSessionService(
     IWorkerOrchestrator orchestrator,
     ILoginSuccessCommitter successCommitter,
+    ILoginSessionBroadcaster broadcaster,
     ILogger<LoginSessionService>? logger = null) : ILoginSessionState
 {
     internal const string LoginSuccessSignal = "Login successful.";
@@ -45,6 +47,8 @@ internal sealed class LoginSessionService(
         LoginSession session = LoginSession.Create(containerId);
         _activeSession = session;
 
+        await TransitionAndBroadcastAsync(session, LoginPhase.Starting.Instance, cancellationToken);
+
         await ScanForUrlAsync(session, cancellationToken);
 
         // If the log stream exhausted without a URL, the session never transitioned
@@ -75,7 +79,7 @@ internal sealed class LoginSessionService(
 
         LoginSession session = _activeSession;
 
-        session.Transition(LoginPhase.SigningIn.Instance);
+        await TransitionAndBroadcastAsync(session, LoginPhase.SigningIn.Instance, cancellationToken);
 
         try
         {
@@ -109,7 +113,10 @@ internal sealed class LoginSessionService(
 
             await successCommitter.CommitAsync(identitySuccess.Value, cancellationToken);
 
-            session.Transition(new LoginPhase.Succeeded(identitySuccess.Value));
+            await TransitionAndBroadcastAsync(
+                session,
+                new LoginPhase.Succeeded(identitySuccess.Value),
+                cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -132,11 +139,66 @@ internal sealed class LoginSessionService(
 
             if (url is not null)
             {
-                session.Transition(new LoginPhase.WaitingForAuthorization(url));
+                await TransitionAndBroadcastAsync(
+                    session,
+                    new LoginPhase.WaitingForAuthorization(url),
+                    cancellationToken);
                 return;
             }
         }
     }
+
+    private async Task TransitionAndBroadcastAsync(
+        LoginSession session,
+        LoginPhase next,
+        CancellationToken cancellationToken)
+    {
+        session.Transition(next);
+
+        LoginSessionUpdate update = BuildUpdate(session.SessionId, next);
+
+        try
+        {
+            await broadcaster.BroadcastAsync(update, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger?.LogWarning(ex, "Failed to broadcast login session update for phase {Phase}.", next.GetType().Name);
+        }
+    }
+
+    private static LoginSessionUpdate BuildUpdate(Guid sessionId, LoginPhase phase)
+    {
+        string phaseDiscriminator = phase switch
+        {
+            LoginPhase.Starting => LoginPhaseDiscriminator.Starting,
+            LoginPhase.WaitingForAuthorization => LoginPhaseDiscriminator.WaitingForAuthorization,
+            LoginPhase.SigningIn => LoginPhaseDiscriminator.SigningIn,
+            LoginPhase.Succeeded => LoginPhaseDiscriminator.Succeeded,
+            LoginPhase.Failed => LoginPhaseDiscriminator.Failed,
+            _ => LoginPhaseDiscriminator.Failed,
+        };
+
+        string? authorizationUrl = phase is LoginPhase.WaitingForAuthorization waiting
+            ? waiting.Url
+            : null;
+
+        (string? failureReason, string? failureMessage) = phase is LoginPhase.Failed failed
+            ? MapFailureReason(failed.Reason)
+            : (null, null);
+
+        return new LoginSessionUpdate(sessionId, phaseDiscriminator, authorizationUrl, failureReason, failureMessage);
+    }
+
+    private static (string Reason, string? Message) MapFailureReason(LoginFailureReason reason) =>
+        reason switch
+        {
+            LoginFailureReason.InvalidCode r => (LoginFailureDiscriminator.InvalidCode, r.Message),
+            LoginFailureReason.UrlTimeout r => (LoginFailureDiscriminator.UrlTimeout, r.Message),
+            LoginFailureReason.CodeTimeout r => (LoginFailureDiscriminator.CodeTimeout, r.Message),
+            LoginFailureReason.Unknown r => (LoginFailureDiscriminator.Unknown, r.Message),
+            _ => (LoginFailureDiscriminator.Unknown, null),
+        };
 
     /// <summary>
     /// Waits for the login success signal in the log stream and checks the container exit code.
@@ -166,7 +228,7 @@ internal sealed class LoginSessionService(
         LoginFailureReason reason,
         CancellationToken cancellationToken)
     {
-        session.Transition(new LoginPhase.Failed(reason));
+        await TransitionAndBroadcastAsync(session, new LoginPhase.Failed(reason), cancellationToken);
         await TeardownContainerAsync(session.ContainerId, cancellationToken);
         _activeSession = null;
     }

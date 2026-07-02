@@ -17,7 +17,7 @@ public sealed class StartAsync
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
         FakeWorkerOrchestrator orchestrator = new([logLine]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
@@ -35,7 +35,7 @@ public sealed class StartAsync
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
         FakeWorkerOrchestrator orchestrator = new([logLine]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
@@ -49,7 +49,7 @@ public sealed class StartAsync
     {
         // Arrange
         FakeWorkerOrchestrator orchestrator = new([]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
@@ -64,7 +64,7 @@ public sealed class StartAsync
     {
         // Arrange
         FakeWorkerOrchestrator orchestrator = new([]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
@@ -81,7 +81,7 @@ public sealed class StartAsync
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
         FakeWorkerOrchestrator orchestrator = new([logLine]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
         LoginSession first = await sut.StartAsync(TestContext.Current.CancellationToken);

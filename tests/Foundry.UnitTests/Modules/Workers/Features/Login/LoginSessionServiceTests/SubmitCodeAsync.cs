@@ -16,7 +16,8 @@ public sealed class SubmitCodeAsync
     {
         return new LoginSessionService(
             orchestrator,
-            committer ?? new FakeLoginSuccessCommitter());
+            committer ?? new FakeLoginSuccessCommitter(),
+            NullLoginSessionBroadcaster.Instance);
     }
 
     [Fact]

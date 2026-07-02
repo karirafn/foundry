@@ -15,7 +15,7 @@ public sealed class IsLoginActive
     {
         // Arrange
         FakeWorkerOrchestrator orchestrator = new([]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
         bool result = ((ILoginSessionState)sut).IsLoginActive;
@@ -30,7 +30,7 @@ public sealed class IsLoginActive
         // Arrange
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
         await sut.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
@@ -46,7 +46,7 @@ public sealed class IsLoginActive
         // Arrange — use a URL so StartAsync transitions to WaitingForAuthorization (active)
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
 
         // Act — simulate a terminal transition (e.g. code timeout)
@@ -62,7 +62,7 @@ public sealed class IsLoginActive
         // Arrange
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
-        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
 
         // Act — simulate successful login completion

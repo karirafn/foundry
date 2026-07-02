@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -106,6 +107,7 @@ public sealed class AddWorkersModule
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
 
         // Act
         services.AddWorkersModule(configuration);
@@ -125,6 +127,7 @@ public sealed class AddWorkersModule
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
 
         // Act
         services.AddWorkersModule(configuration);
@@ -242,6 +245,7 @@ public sealed class AddWorkersModule
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
 
         // Act
         services.AddWorkersModule(configuration);
@@ -259,6 +263,7 @@ public sealed class AddWorkersModule
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
 
         // Act
         services.AddWorkersModule(configuration);
@@ -278,6 +283,7 @@ public sealed class AddWorkersModule
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
 
         // Act
         services.AddWorkersModule(configuration);

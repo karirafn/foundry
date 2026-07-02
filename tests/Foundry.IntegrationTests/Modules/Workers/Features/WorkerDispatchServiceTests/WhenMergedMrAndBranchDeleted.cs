@@ -76,7 +76,8 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
         await SeedActiveRunAsync();
 
         IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
-        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance);
+        ILoginSessionState loginSessionState = _factory.Services.GetRequiredService<ILoginSessionState>();
+        using WorkerDispatchService sut = new(scopeFactory, loginSessionState, NullLogger<WorkerDispatchService>.Instance);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

@@ -7,6 +7,7 @@ using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -26,6 +27,7 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
+    ILoginSessionState loginSessionState,
     ILogger<WorkerDispatchService> logger) : PeriodicBackgroundService(logger)
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
@@ -45,6 +47,12 @@ internal sealed class WorkerDispatchService(
 
     internal async Task ExecuteTickAsync(CancellationToken cancellationToken)
     {
+        if (loginSessionState.IsLoginActive)
+        {
+            logger.LogDebug("Dispatch skipped: an interactive OAuth login session is active.");
+            return;
+        }
+
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
