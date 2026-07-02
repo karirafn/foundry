@@ -1840,8 +1840,8 @@ describe('IssueListComponent', () => {
     expect(divider?.getAttribute('aria-labelledby')).toBeTruthy();
   });
 
-  // WCAG M2: sr-only boundary span includes actionable hint for users
-  it('should include a hint about checking repository settings in the sr-only boundary announcement', () => {
+  // WCAG M2: guidance text lives inside the labelled caption element (single announcement source)
+  it('should include the repository-settings guidance inside the ineligible-queue caption element', () => {
     // Arrange
     const ineligible: IssueSummary = {
       ...mockSummary,
@@ -1856,14 +1856,37 @@ describe('IssueListComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert — the sr-only span that announces the boundary must include guidance
+    // Assert — guidance text is nested inside the labelled <p> caption (not a sibling span)
+    const el = fixture.nativeElement as HTMLElement;
+    const caption = el.querySelector('.issue-list__ineligible-queue-caption');
+    expect(caption?.textContent).toMatch(/check repository settings/i);
+  });
+
+  // WCAG M2: no duplicate standalone sr-only sibling span outside the group
+  it('should NOT have a standalone sr-only span outside the group announcing ineligible-queue guidance', () => {
+    // Arrange
+    const ineligible: IssueSummary = {
+      ...mockSummary,
+      id: 'q-inelig-6',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [ineligible]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — no standalone sr-only sibling span carries the repository-settings guidance text
     const el = fixture.nativeElement as HTMLElement;
     const srSpans = Array.from(el.querySelectorAll('.sr-only'));
-    const boundarySpan = srSpans.find((s) =>
-      s.textContent?.includes('not dispatchable') || s.textContent?.includes('not eligible')
+    const sibling = srSpans.find(
+      (s) =>
+        s.closest('.issue-list__ineligible-queue-divider') === null &&
+        s.textContent?.match(/check repository settings/i),
     );
-    expect(boundarySpan).toBeTruthy();
-    expect(boundarySpan?.textContent).toMatch(/check repository settings/i);
+    expect(sibling).toBeFalsy();
   });
 
   // QueueGroup-5: tier chips render for queued cards
