@@ -11,9 +11,6 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
     private const string ApiKeyType = "api_key";
     private const string OAuthType = "oauth";
     private const string KeyProperty = "encrypted_key";
-    private const string AccessTokenProperty = "access_token";
-    private const string RefreshTokenProperty = "refresh_token";
-    private const string ExpiresAtProperty = "expires_at";
     private const string SubscriptionTypeProperty = "subscription_type";
 
     public override AuthMode Read(
@@ -51,9 +48,6 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 
             case AuthMode.OAuth oauth:
                 writer.WriteString(TypeProperty, OAuthType);
-                writer.WriteString(AccessTokenProperty, oauth.AccessToken);
-                writer.WriteString(RefreshTokenProperty, oauth.RefreshToken);
-                writer.WriteString(ExpiresAtProperty, oauth.ExpiresAt);
                 writer.WriteString(SubscriptionTypeProperty, oauth.SubscriptionType);
                 break;
         }
@@ -70,13 +64,12 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 
     private static AuthMode.OAuth ReadOAuth(JsonElement root)
     {
-        string accessToken = root.GetProperty(AccessTokenProperty).GetString()
-            ?? string.Empty;
-        string refreshToken = root.GetProperty(RefreshTokenProperty).GetString()
-            ?? string.Empty;
-        DateTimeOffset expiresAt = root.GetProperty(ExpiresAtProperty).GetDateTimeOffset();
-        string subscriptionType = root.GetProperty(SubscriptionTypeProperty).GetString()
-            ?? string.Empty;
-        return new AuthMode.OAuth(accessToken, refreshToken, expiresAt, subscriptionType);
+        // Legacy blobs may contain access_token, refresh_token, expires_at — these are
+        // intentionally ignored. System.Text.Json skips unknown properties, so only
+        // subscription_type is read from the element.
+        string subscriptionType = root.TryGetProperty(SubscriptionTypeProperty, out JsonElement sub)
+            ? sub.GetString() ?? string.Empty
+            : string.Empty;
+        return new AuthMode.OAuth(subscriptionType);
     }
 }

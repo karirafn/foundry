@@ -27,7 +27,7 @@ public sealed class SetAuthMode
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        AuthMode.OAuth oauthMode = new("access", "refresh", DateTimeOffset.UtcNow.AddHours(1), "pro");
+        AuthMode.OAuth oauthMode = new("pro");
 
         // Act
         settings.SetAuthMode(oauthMode);

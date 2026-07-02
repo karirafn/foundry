@@ -65,54 +65,14 @@ public sealed class ValidateAsync
     }
 
     [Fact]
-    public async Task WhenOAuthExpired_ReturnsInvalid()
+    public async Task WhenOAuthConfigured_ReturnsValid()
     {
-        // Arrange
-        DateTimeOffset expiredAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        // Arrange — OAuth validity is determined by the shared credential volume, not stored token fields.
+        // ExpiresAt and token presence are no longer stored (step 2 change). Step 6 will introduce
+        // volume-derived credential status.
         FakeGlobalSettingsQueries queries = new()
         {
-            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, expiredAt, "pro", null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
-        };
-        AnthropicAuthValidator sut = BuildSut(queries: queries);
-
-        // Act
-        AuthValidationResult result = await sut.ValidateAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldSatisfyAllConditions(
-            () => result.IsValid.ShouldBeFalse(),
-            () => result.ErrorMessage.ShouldBe(
-                "OAuth token expired — run `claude setup-token` to generate a new one"));
-    }
-
-    [Fact]
-    public async Task WhenOAuthExpiresAtIsNull_ReturnsInvalid()
-    {
-        // Arrange
-        FakeGlobalSettingsQueries queries = new()
-        {
-            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, null, "pro", null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
-        };
-        AnthropicAuthValidator sut = BuildSut(queries: queries);
-
-        // Act
-        AuthValidationResult result = await sut.ValidateAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldSatisfyAllConditions(
-            () => result.IsValid.ShouldBeFalse(),
-            () => result.ErrorMessage.ShouldBe(
-                "OAuth token expired — run `claude setup-token` to generate a new one"));
-    }
-
-    [Fact]
-    public async Task WhenOAuthValid_ReturnsValid()
-    {
-        // Arrange
-        DateTimeOffset futureExpiry = DateTimeOffset.UtcNow.AddDays(30);
-        FakeGlobalSettingsQueries queries = new()
-        {
-            Settings = new GlobalSettingsSummary("OAuth", 1, 120, true, true, futureExpiry, "pro", null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
+            Settings = new GlobalSettingsSummary("OAuth", 1, 120, false, false, null, "pro", null, null, null, false, true, 60, false, false, false, false, false, false, ImageBuildStatus.Idle, null, false),
         };
         AnthropicAuthValidator sut = BuildSut(queries: queries);
 

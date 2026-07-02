@@ -63,12 +63,11 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOAuthSettingsPersisted_CanBeReloadedWithAllProperties()
+    public async Task WhenOAuthSettingsPersisted_CanBeReloadedWithSubscriptionType()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        DateTimeOffset expiresAt = new DateTimeOffset(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
-        AuthMode.OAuth oauthMode = new("access-token", "refresh-token", expiresAt, "pro");
+        AuthMode.OAuth oauthMode = new("pro");
         settings.SetAuthMode(oauthMode);
 
         _dbContext.Set<GlobalSettings>().Add(settings);
@@ -83,11 +82,7 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
         // Assert
         GlobalSettings reloaded = result.ShouldNotBeNull();
         AuthMode.OAuth reloadedOauth = reloaded.AuthMode.ShouldBeOfType<AuthMode.OAuth>();
-        reloadedOauth.ShouldSatisfyAllConditions(
-            () => reloadedOauth.AccessToken.ShouldBe("access-token"),
-            () => reloadedOauth.RefreshToken.ShouldBe("refresh-token"),
-            () => reloadedOauth.ExpiresAt.ShouldBe(expiresAt),
-            () => reloadedOauth.SubscriptionType.ShouldBe("pro"));
+        reloadedOauth.SubscriptionType.ShouldBe("pro");
     }
 
     [Fact]

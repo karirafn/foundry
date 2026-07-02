@@ -81,14 +81,13 @@ public sealed class GetSettingsAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOAuthSettings_ReturnsOAuthAuthMode()
+    public async Task WhenOAuthSettings_ReturnsOAuthAuthModeWithSubscriptionType()
     {
         // Arrange
-        DateTimeOffset expiresAt = new(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.SetAuthMode(new AuthMode.OAuth("access-token", "refresh-token", expiresAt, "pro"));
+            settings.SetAuthMode(new AuthMode.OAuth("pro"));
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -103,9 +102,9 @@ public sealed class GetSettingsAsync : IAsyncDisposable
         GlobalSettingsSummary summary = result.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("OAuth"),
-            () => summary.AccessTokenPresent.ShouldBeTrue(),
-            () => summary.RefreshTokenPresent.ShouldBeTrue(),
-            () => summary.ExpiresAt.ShouldBe(expiresAt),
+            () => summary.AccessTokenPresent.ShouldBeFalse(),
+            () => summary.RefreshTokenPresent.ShouldBeFalse(),
+            () => summary.ExpiresAt.ShouldBeNull(),
             () => summary.SubscriptionType.ShouldBe("pro"));
     }
 

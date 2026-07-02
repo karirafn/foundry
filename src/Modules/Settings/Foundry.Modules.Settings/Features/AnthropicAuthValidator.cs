@@ -18,22 +18,16 @@ internal sealed class AnthropicAuthValidator(
 
         return settings?.AuthMode switch
         {
-            "OAuth" => ValidateOAuth(settings),
+            "OAuth" => ValidateOAuth(),
             "ApiKey" => await ValidateApiKeyAsync(cancellationToken),
             _ => AuthValidationResult.Invalid("Configure Claude authentication in Settings"),
         };
     }
 
-    private static AuthValidationResult ValidateOAuth(GlobalSettingsSummary settings)
-    {
-        if (settings.ExpiresAt is not DateTimeOffset expiresAt || expiresAt <= DateTimeOffset.UtcNow)
-        {
-            return AuthValidationResult.Invalid(
-                "OAuth token expired — run `claude setup-token` to generate a new one");
-        }
-
-        return AuthValidationResult.Valid();
-    }
+    // TEMPORARY: OAuth validity check uses only the presence of configured OAuth mode.
+    // ExpiresAt and token presence are no longer stored (step 2). Step 6 will replace
+    // this with a volume-derived credential status check.
+    private static AuthValidationResult ValidateOAuth() => AuthValidationResult.Valid();
 
     private async Task<AuthValidationResult> ValidateApiKeyAsync(CancellationToken cancellationToken)
     {

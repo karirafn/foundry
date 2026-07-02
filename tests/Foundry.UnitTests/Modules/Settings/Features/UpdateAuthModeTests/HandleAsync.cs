@@ -83,7 +83,6 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenSwitchingToOAuthMode_ScansCredentialsAndUpdatesAuthMode()
     {
         // Arrange
-        DateTimeOffset expiresAt = new(2027, 1, 1, 0, 0, 0, TimeSpan.Zero);
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
@@ -92,7 +91,7 @@ public sealed class HandleAsync : IAsyncDisposable
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        OAuthCredentials credentials = new("my-access", "my-refresh", expiresAt, "max");
+        OAuthCredentials credentials = new("my-access", "my-refresh", DateTimeOffset.UtcNow.AddHours(1), "max");
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateAuthMode.Handler sut = new(dbContext, SuccessfulScanner(credentials));
 
@@ -108,9 +107,9 @@ public sealed class HandleAsync : IAsyncDisposable
             result.ShouldBeOfType<Result<UpdateAuthMode.Response>.Success>();
         success.Value.ShouldSatisfyAllConditions(
             () => success.Value.AuthMode.ShouldBe("OAuth"),
-            () => success.Value.AccessTokenPresent.ShouldBeTrue(),
-            () => success.Value.RefreshTokenPresent.ShouldBeTrue(),
-            () => success.Value.ExpiresAt.ShouldBe(expiresAt),
+            () => success.Value.AccessTokenPresent.ShouldBeFalse(),
+            () => success.Value.RefreshTokenPresent.ShouldBeFalse(),
+            () => success.Value.ExpiresAt.ShouldBeNull(),
             () => success.Value.SubscriptionType.ShouldBe("max"));
     }
 
@@ -168,7 +167,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings seed = GlobalSettings.Create();
-            seed.SetAuthMode(new AuthMode.OAuth("old-token", "old-refresh", DateTimeOffset.UtcNow, "pro"));
+            seed.SetAuthMode(new AuthMode.OAuth("pro"));
             seedDb.Set<GlobalSettings>().Add(seed);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

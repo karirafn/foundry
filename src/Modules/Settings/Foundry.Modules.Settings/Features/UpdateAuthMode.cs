@@ -85,11 +85,7 @@ internal static class UpdateAuthMode
                 }
 
                 OAuthCredentials credentials = success.Value;
-                mode = new AuthMode.OAuth(
-                    credentials.AccessToken,
-                    credentials.RefreshToken,
-                    credentials.ExpiresAt,
-                    credentials.SubscriptionType);
+                mode = new AuthMode.OAuth(credentials.SubscriptionType);
             }
 
             settings.SetAuthMode(mode);

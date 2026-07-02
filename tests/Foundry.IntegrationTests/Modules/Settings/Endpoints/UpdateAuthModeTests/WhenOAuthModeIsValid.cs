@@ -99,10 +99,10 @@ public sealed class WhenOAuthModeIsValid : IAsyncDisposable
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("OAuth"),
-            () => summary.AccessTokenPresent.ShouldBeTrue(),
-            () => summary.RefreshTokenPresent.ShouldBeTrue(),
+            () => summary.AccessTokenPresent.ShouldBeFalse(),
+            () => summary.RefreshTokenPresent.ShouldBeFalse(),
             () => summary.SubscriptionType.ShouldBe("pro"),
-            () => summary.ExpiresAt.ShouldBe(CredentialsExpiry));
+            () => summary.ExpiresAt.ShouldBeNull());
     }
 
     [Fact]

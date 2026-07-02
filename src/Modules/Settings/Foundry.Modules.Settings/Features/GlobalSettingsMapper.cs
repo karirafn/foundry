@@ -7,8 +7,6 @@ internal static class GlobalSettingsMapper
 {
     internal static GlobalSettingsSummary ToSummary(GlobalSettings settings)
     {
-        AuthMode.OAuth? oauth = settings.AuthMode is AuthMode.OAuth o ? o : null;
-
         string authModeName = settings.AuthMode switch
         {
             AuthMode.ApiKey => "ApiKey",
@@ -27,14 +25,20 @@ internal static class GlobalSettingsMapper
             ? failed.ErrorTail
             : null;
 
+        // TEMPORARY: AccessTokenPresent, RefreshTokenPresent, and ExpiresAt are emitted as
+        // false/null for OAuth mode. Step 6 replaces these with volume-derived status fields.
+        string? subscriptionType = settings.AuthMode is AuthMode.OAuth oauth
+            ? oauth.SubscriptionType
+            : null;
+
         return new GlobalSettingsSummary(
             authModeName,
             settings.MaxConcurrent,
             settings.TimeoutMinutes,
-            oauth is not null && oauth.AccessToken.Length > 0,
-            oauth is not null && oauth.RefreshToken.Length > 0,
-            oauth?.ExpiresAt,
-            oauth?.SubscriptionType,
+            AccessTokenPresent: false,
+            RefreshTokenPresent: false,
+            ExpiresAt: null,
+            subscriptionType,
             settings.SystemPromptTemplate,
             settings.WorkerPromptTemplate,
             settings.UsageLimitResetsAt,
