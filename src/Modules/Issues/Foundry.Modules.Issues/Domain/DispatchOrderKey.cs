@@ -10,7 +10,7 @@ public readonly record struct DispatchOrderKey(
     int TierRank,
     int Position,
     DateTimeOffset DetectedAt,
-    IssueId Id) : IComparable<DispatchOrderKey>
+    IssueId Id) : IComparable<DispatchOrderKey>, IComparable
 {
     /// <summary>
     /// Builds a <see cref="DispatchOrderKey"/> from a queued issue and its repository position.
@@ -56,5 +56,15 @@ public readonly record struct DispatchOrderKey(
         }
 
         return Id.CompareTo(other.Id);
+    }
+
+    int IComparable.CompareTo(object? obj)
+    {
+        if (obj is not DispatchOrderKey other)
+        {
+            throw new ArgumentException($"Object must be of type {nameof(DispatchOrderKey)}.", nameof(obj));
+        }
+
+        return CompareTo(other);
     }
 }

@@ -448,6 +448,9 @@ internal sealed class IssueQueries(
 
         // Partition queued issues once — single TryGetValue lookup per issue avoids
         // ContainsKey + indexer double-lookup.
+        // For ineligible issues (IsEligible = false), pos defaults to 0 here, but Position is
+        // not consumed for them — ineligible issues pass int.MaxValue as the sentinel position
+        // to DispatchOrderKey.For, ensuring they sort after all eligible queued issues.
         List<(Issue Issue, bool IsEligible, int Position)> queuedWithPosition = queuedIssues
             .Select(i => (
                 Issue: i,

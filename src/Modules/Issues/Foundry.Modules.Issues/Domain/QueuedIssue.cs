@@ -13,7 +13,7 @@ public sealed class QueuedIssue : Issue
     {
     }
 
-    public static int TierRank => 2;
+    public const int TierRank = 2;
 
     internal static QueuedIssue FromDetected(DetectedIssue detected)
     {
