@@ -1,3 +1,5 @@
+using Foundry.Modules.Workers.Infrastructure;
+
 namespace Foundry.Modules.Workers.Features.Login;
 
 /// <summary>

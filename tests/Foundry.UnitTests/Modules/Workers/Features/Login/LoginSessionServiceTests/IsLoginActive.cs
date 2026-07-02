@@ -1,4 +1,5 @@
 using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Workers.Infrastructure;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -65,7 +66,7 @@ public sealed class IsLoginActive
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
 
         // Act — simulate successful login completion
-        session.Transition(new LoginPhase.Succeeded(new AccountIdentity("user@example.com")));
+        session.Transition(new LoginPhase.Succeeded(new AccountIdentity("user@example.com", "Example Org", "pro")));
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
