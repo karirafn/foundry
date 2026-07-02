@@ -50,4 +50,18 @@ public sealed class ResumeDispatch
         // Assert
         settings.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
     }
+
+    [Fact]
+    public void WhenCalled_ClearsAuthInvalidPause()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.PauseForAuthInvalid();
+
+        // Act
+        settings.ResumeDispatch();
+
+        // Assert
+        settings.AuthInvalidPause.ShouldBeFalse();
+    }
 }

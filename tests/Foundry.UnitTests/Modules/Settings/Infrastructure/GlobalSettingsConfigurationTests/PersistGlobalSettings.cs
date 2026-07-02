@@ -116,6 +116,27 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAuthInvalidPausePersisted_CanBeReloaded()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.PauseForAuthInvalid();
+
+        _dbContext.Set<GlobalSettings>().Add(settings);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        GlobalSettings? result = await _dbContext
+            .Set<GlobalSettings>()
+            .FindAsync([settings.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        GlobalSettings reloaded = result.ShouldNotBeNull();
+        reloaded.AuthInvalidPause.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task WhenApiKeySettingsPersisted_AuthModeColumnIsEncrypted()
     {
         // Arrange

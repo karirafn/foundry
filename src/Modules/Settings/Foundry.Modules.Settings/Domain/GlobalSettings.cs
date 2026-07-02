@@ -58,6 +58,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public DateTimeOffset? LastImageBuiltAt { get; private set; }
 
+    public bool AuthInvalidPause { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -78,6 +80,19 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         IsDispatchPaused = false;
         UsageLimitResetsAt = null;
+        AuthInvalidPause = false;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void PauseForAuthInvalid()
+    {
+        AuthInvalidPause = true;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void ClearAuthInvalidPause()
+    {
+        AuthInvalidPause = false;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

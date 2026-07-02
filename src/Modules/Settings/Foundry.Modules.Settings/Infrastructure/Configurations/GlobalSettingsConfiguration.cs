@@ -69,6 +69,9 @@ internal sealed class GlobalSettingsConfiguration(
         builder.Property(s => s.DefaultCooldownMinutes)
             .HasColumnName("default_cooldown_minutes");
 
+        builder.Property(s => s.AuthInvalidPause)
+            .HasColumnName("auth_invalid_pause");
+
         ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
             config => SerializeWorkerImageConfiguration(config),
             json => DeserializeWorkerImageConfiguration(json));
