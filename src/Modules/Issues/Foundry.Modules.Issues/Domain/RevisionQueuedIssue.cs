@@ -14,6 +14,8 @@ public sealed class RevisionQueuedIssue : Issue
     {
     }
 
+    public static int TierRank => 0;
+
     public string BranchName { get; private set; } = string.Empty;
 
     public string PullRequestUrl { get; private set; } = string.Empty;

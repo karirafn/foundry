@@ -15,6 +15,8 @@ public sealed class ContinuationQueuedIssue : Issue
     {
     }
 
+    public static int TierRank => 1;
+
     public string BranchName { get; private set; } = string.Empty;
 
     public string FailureReason { get; private set; } = string.Empty;
