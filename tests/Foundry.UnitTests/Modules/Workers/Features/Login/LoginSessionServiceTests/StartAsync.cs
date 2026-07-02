@@ -17,7 +17,7 @@ public sealed class StartAsync
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
         FakeWorkerOrchestrator orchestrator = new([logLine]);
-        LoginSessionService sut = new(orchestrator);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
 
         // Act
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
@@ -35,7 +35,7 @@ public sealed class StartAsync
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
         FakeWorkerOrchestrator orchestrator = new([logLine]);
-        LoginSessionService sut = new(orchestrator);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
 
         // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
@@ -45,17 +45,32 @@ public sealed class StartAsync
     }
 
     [Fact]
-    public async Task WhenNoUrlEmitted_SessionIsInStartingPhase()
+    public async Task WhenNoUrlEmitted_TransitionsToFailed_WithUrlTimeout()
     {
         // Arrange
         FakeWorkerOrchestrator orchestrator = new([]);
-        LoginSessionService sut = new(orchestrator);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
 
         // Act
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        session.Phase.ShouldBeOfType<LoginPhase.Starting>();
+        LoginPhase.Failed failed = session.Phase.ShouldBeOfType<LoginPhase.Failed>();
+        failed.Reason.ShouldBeOfType<LoginFailureReason.UrlTimeout>();
+    }
+
+    [Fact]
+    public async Task WhenNoUrlEmitted_IsLoginActiveBecomesFalse()
+    {
+        // Arrange
+        FakeWorkerOrchestrator orchestrator = new([]);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
+
+        // Act
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
     }
 
     [Fact]
@@ -66,7 +81,7 @@ public sealed class StartAsync
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
         FakeWorkerOrchestrator orchestrator = new([logLine]);
-        LoginSessionService sut = new(orchestrator);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
 
         // Act
         LoginSession first = await sut.StartAsync(TestContext.Current.CancellationToken);

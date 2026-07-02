@@ -15,7 +15,7 @@ public sealed class IsLoginActive
     {
         // Arrange
         FakeWorkerOrchestrator orchestrator = new([]);
-        LoginSessionService sut = new(orchestrator);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
 
         // Act
         bool result = ((ILoginSessionState)sut).IsLoginActive;
@@ -30,7 +30,7 @@ public sealed class IsLoginActive
         // Arrange
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
-        LoginSessionService sut = new(orchestrator);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
         await sut.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
@@ -43,14 +43,14 @@ public sealed class IsLoginActive
     [Fact]
     public async Task WhenSessionTransitionedToFailed_ReturnsFalse()
     {
-        // Arrange — no URL in log stream means session stays in Starting (not active after stream ends)
-        // We test terminal-state clearing via direct Transition on the session
-        FakeWorkerOrchestrator orchestrator = new([]);
-        LoginSessionService sut = new(orchestrator);
+        // Arrange — use a URL so StartAsync transitions to WaitingForAuthorization (active)
+        string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
+        FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
 
-        // Act — simulate a terminal transition (e.g. timeout)
-        session.Transition(new LoginPhase.Failed("Timed out waiting for URL"));
+        // Act — simulate a terminal transition (e.g. code timeout)
+        session.Transition(new LoginPhase.Failed(new LoginFailureReason.CodeTimeout("Timed out waiting for code")));
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
@@ -62,7 +62,7 @@ public sealed class IsLoginActive
         // Arrange
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
-        LoginSessionService sut = new(orchestrator);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter());
         LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
 
         // Act — simulate successful login completion

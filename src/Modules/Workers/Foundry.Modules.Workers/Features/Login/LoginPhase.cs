@@ -33,8 +33,8 @@ internal abstract record LoginPhase
     /// <summary>Login succeeded and the account identity was captured.</summary>
     internal sealed record Succeeded(AccountIdentity Identity) : LoginPhase;
 
-    /// <summary>Login failed (bad code, timeout, or container non-zero exit).</summary>
-    internal sealed record Failed(string Message) : LoginPhase;
+    /// <summary>Login failed with a typed reason (bad code, timeout, or container non-zero exit).</summary>
+    internal sealed record Failed(LoginFailureReason Reason) : LoginPhase;
 
     /// <summary>
     /// Returns <c>true</c> for phases where the login session is still active

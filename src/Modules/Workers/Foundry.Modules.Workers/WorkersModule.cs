@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
 
@@ -48,6 +49,11 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<DispatchPausedForAuthInvalid, DispatchPausedForAuthInvalidBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
+
+        services.AddSingleton<ILoginSuccessCommitter, LoginSuccessCommitter>();
+        services.AddSingleton<LoginSessionService>();
+        services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
+        services.AddHostedService<LoginContainerReaper>();
 
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddHostedService<WorkerDispatchService>();
