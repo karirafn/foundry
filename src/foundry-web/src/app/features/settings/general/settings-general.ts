@@ -156,7 +156,6 @@ const COOLDOWN_MINUTES_MAX = 1440;
             <div
               class="general-settings__drain-gate"
               role="status"
-              [attr.aria-hidden]="!_switchAccountDraining() || null"
             >
               @if (_switchAccountDraining()) {
                 Dispatch is paused. Wait for running workers to finish (watch the Issues board), then log in to the new account below.
@@ -625,7 +624,10 @@ export class SettingsGeneralComponent {
   onCancelSwitchAccount(): void {
     this._showSwitchAccountConfirm.set(false);
     runInInjectionContext(this._injector, () =>
-      afterNextRender(() => this._switchAccountBtn?.nativeElement.focus())
+      afterNextRender(() => {
+        const target = this._switchAccountBtn?.nativeElement ?? this._authHeading?.nativeElement;
+        target?.focus();
+      })
     );
   }
 
