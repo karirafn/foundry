@@ -160,10 +160,6 @@ const COOLDOWN_MINUTES_MAX = 1440;
               @if (_switchAccountDraining()) {
                 Dispatch is paused. Wait for running workers to finish (watch the Issues board), then log in to the new account below.
 
-                @if (dispatchService.pauseResumeError()) {
-                  <div role="alert" class="general-settings__switch-error">{{ dispatchService.pauseResumeError() }}</div>
-                }
-
                 @if (_showResumeAfterSwitch()) {
                   <button
                     class="general-settings__resume-btn"
@@ -174,6 +170,7 @@ const COOLDOWN_MINUTES_MAX = 1440;
                 }
               }
             </div>
+            <div role="alert" class="general-settings__switch-error">{{ (_switchAccountDraining() && dispatchService.pauseResumeError()) ? dispatchService.pauseResumeError() : '' }}</div>
             @if (!_showSwitchAccountConfirm() && !_switchAccountDraining() && _oauthStatus() === 'Present') {
               <button
                 #switchAccountBtn
@@ -643,6 +640,9 @@ export class SettingsGeneralComponent {
     this._switchAccountDraining.set(true);
     this.dispatchService.pauseDispatch();
     this.settingsService.fetchLoginCommand();
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => this._authHeading?.nativeElement.focus())
+    );
   }
 
   saveApiKey(): void {

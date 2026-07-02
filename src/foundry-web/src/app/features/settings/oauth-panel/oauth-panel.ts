@@ -155,6 +155,7 @@ export class OAuthPanelComponent {
       },
       () => {
         this._copyAnnouncementSignal.set('Copy failed — select the command text manually.');
+        setTimeout(() => this._copyAnnouncementSignal.set(''), COPY_RESET_MS);
       }
     );
   }

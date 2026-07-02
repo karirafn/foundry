@@ -510,6 +510,38 @@ describe('SettingsGeneralComponent', () => {
     commandReq.flush({ command: 'docker run -it' });
   });
 
+  it('should move focus to the auth heading after confirming account switch', async () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Act
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
+    fixture.detectChanges();
+
+    // Assert — focus moves to the auth heading, not lost to body
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication')) as HTMLElement;
+    expect(document.activeElement).toBe(authHeading);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
   it('should show drain gate message after confirming account switch', () => {
     // Arrange
     const { httpMock } = setup();
@@ -549,6 +581,38 @@ describe('SettingsGeneralComponent', () => {
     const drainStatus = el.querySelector('.general-settings__drain-gate[role="status"]');
     expect(drainStatus).toBeTruthy();
     expect(drainStatus?.textContent?.trim()).toBe('');
+  });
+
+  it('should render the switch-error role="alert" as a sibling of drain-gate, not nested inside it', () => {
+    // Arrange — switch account and fail the pause request to trigger a pauseResumeError
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    // Fail the pause so pauseResumeError signal is set
+    httpMock.expectOne('/api/settings/dispatch/pause').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
+    fixture.detectChanges();
+
+    // Assert — role="alert" must NOT be a descendant of role="status"
+    const drainGate = el.querySelector('.general-settings__drain-gate[role="status"]');
+    const alertInsideDrainGate = drainGate?.querySelector('[role="alert"]');
+    expect(alertInsideDrainGate).toBeFalsy();
+
+    // Assert — a sibling role="alert" for the error should exist outside the drain-gate
+    const oauthSection = el.querySelector('.general-settings__oauth-section');
+    const siblingAlert = oauthSection?.querySelector('.general-settings__switch-error[role="alert"]');
+    expect(siblingAlert).toBeTruthy();
   });
 
   it('should render the "Worker Prompts" section title', () => {

@@ -418,6 +418,30 @@ describe('OAuthPanelComponent', () => {
       const liveRegion = el.querySelector('.oauth-panel__copy-announcement');
       expect(liveRegion?.textContent).toContain('Copy failed');
     });
+
+    it('should clear the copy-failure announcement after COPY_RESET_MS', async () => {
+      // Arrange
+      vi.useFakeTimers();
+      const clipboardMock = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
+      Object.defineProperty(navigator, 'clipboard', { value: clipboardMock, configurable: true, writable: true });
+      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+
+      // Act — trigger failure
+      fixture.componentInstance.onCopy();
+      await Promise.resolve(); // flush the rejected promise microtask
+      fixture.detectChanges();
+
+      // Advance past the reset delay
+      vi.advanceTimersByTime(2001);
+      fixture.detectChanges();
+
+      // Assert — announcement has been cleared
+      const el = fixture.nativeElement as HTMLElement;
+      const liveRegion = el.querySelector('.oauth-panel__copy-announcement');
+      expect(liveRegion?.textContent?.trim()).toBe('');
+
+      vi.useRealTimers();
+    });
   });
 
   // U4 — Refresh button visibility
