@@ -878,11 +878,12 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(false));
 
-        public Task<Result<string>> GetPullRequestByBranchAsync(
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(string.Empty));
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             MonitoredRepositoryId repositoryId,

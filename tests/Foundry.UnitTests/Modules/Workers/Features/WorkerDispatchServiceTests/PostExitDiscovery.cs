@@ -31,12 +31,12 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenExitCodeZeroAndHasCommitsAndPrFound_TransitionsToCompletedRun()
     {
-        // Arrange
+        // Arrange — resolver uses GetMergeRequestByBranchAsync (MR-state-first), so stub the MR
         SeedActiveRun("container-success-pr");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(
             hasCommits: true,
-            prUrl: "https://github.com/owner/repo/pull/42");
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/42"));
         WorkerDispatchService sut = BuildService(queries, exitedStatus);
 
         // Act
@@ -51,12 +51,12 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenExitCodeZeroAndHasCommitsAndPrFound_DispatchesCompletedEventWithPrUrl()
     {
-        // Arrange
+        // Arrange — resolver uses GetMergeRequestByBranchAsync (MR-state-first), so stub the MR
         SeedActiveRun("container-success-pr-dispatch");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(
             hasCommits: true,
-            prUrl: "https://github.com/owner/repo/pull/42");
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/42"));
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
@@ -78,7 +78,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-success-no-commits");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false);
         WorkerDispatchService sut = BuildService(queries, exitedStatus);
 
         // Act
@@ -96,7 +96,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-no-commits-dispatch");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
@@ -116,7 +116,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-success-no-pr");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
         WorkerDispatchService sut = BuildService(queries, exitedStatus);
 
         // Act
@@ -131,10 +131,10 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenExitCodeZeroAndHasCommitsAndNoPrAfterRetries_DispatchesFailedEventWithBranchName()
     {
-        // Arrange
+        // Arrange — resolver returns ContinuableFailure (no MR after retries); branch is preserved on ContinuableFailure
         SeedActiveRun("container-no-pr-dispatch", branchName: "feat/42-my-issue");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
@@ -154,7 +154,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-nonzero-with-commits");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
         WorkerDispatchService sut = BuildService(queries, exitedStatus);
 
         // Act
@@ -172,7 +172,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-nonzero-commits-dispatch", branchName: "feat/10-partial-work");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
@@ -192,7 +192,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-nonzero-no-commits");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false);
         WorkerDispatchService sut = BuildService(queries, exitedStatus);
 
         // Act
@@ -210,7 +210,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-nonzero-nocommits-dispatch");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
@@ -230,7 +230,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-no-pr-category");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
-        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true, prUrl: null);
+        IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
@@ -276,11 +276,12 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
 
-        public Task<Result<string>> GetPullRequestByBranchAsync(
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<string>.Ok(string.Empty));
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
             MonitoredRepositoryId repositoryId,

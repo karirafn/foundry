@@ -1,7 +1,7 @@
 using System.Net;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubIssueProviderTests;
 
-public sealed class GetPullRequestByBranchAsync
+public sealed class GetMergeRequestByBranchAsync
 {
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
     private const string ValidToken = "ghp_token";
@@ -21,41 +21,40 @@ public sealed class GetPullRequestByBranchAsync
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static GitHubIssueProvider BuildSut(SequentialFakeHandler handler)
-    {
-        HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient);
-        return new GitHubIssueProvider(gitHubHttpClient, ValidToken, ValidBaseUrl);
-    }
-
     [Fact]
-    public async Task WhenPullRequestExists_ReturnsPrUrl()
+    public async Task WhenMergedPrExists_ReturnsPresenceMerged()
     {
         // Arrange
-        string pullsJson = """
+        string prJson = """
             [
-              { "html_url": "https://github.com/owner/repo/pull/42", "number": 42 }
+              {
+                "html_url": "https://github.com/owner/repo/pull/42",
+                "state": "closed",
+                "merged_at": "2026-06-01T10:00:00Z",
+                "updated_at": "2026-06-01T10:00:00Z",
+                "head": { "ref": "feat/my-branch" }
+              }
             ]
             """;
-        FakeHandler handler = new(HttpStatusCode.OK, pullsJson);
+        FakeHandler handler = new(HttpStatusCode.OK, prJson);
         using HttpClient httpClient = new(handler);
         GitHubHttpClient gitHubHttpClient = new(httpClient);
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
-        Result<string> result = await sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
-        success.Value.ShouldBe("https://github.com/owner/repo/pull/42");
+        Result<MergeRequestByBranch>.Success success = result.ShouldBeOfType<Result<MergeRequestByBranch>.Success>();
+        success.Value.Presence.ShouldBe(MergeRequestPresence.Merged);
     }
 
     [Fact]
-    public async Task WhenNoPullRequestExists_ReturnsEmptyString()
+    public async Task WhenNoPrExists_ReturnsPresenceNone()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
@@ -64,19 +63,19 @@ public sealed class GetPullRequestByBranchAsync
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
-        Result<string> result = await sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
-        success.Value.ShouldBeEmpty();
+        Result<MergeRequestByBranch>.Success success = result.ShouldBeOfType<Result<MergeRequestByBranch>.Success>();
+        success.Value.Presence.ShouldBe(MergeRequestPresence.None);
     }
 
     [Fact]
-    public async Task WhenApiReturnsFails_ReturnsFailure()
+    public async Task WhenApiFails_ReturnsFailure()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
@@ -85,7 +84,7 @@ public sealed class GetPullRequestByBranchAsync
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
-        Result<string> result = await sut.GetPullRequestByBranchAsync(
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);

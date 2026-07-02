@@ -17,6 +17,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 
+#pragma warning disable CA1001 // WorkerDispatchServiceTestBase implements IAsyncDisposable for connection cleanup.
+
 public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
@@ -90,19 +92,47 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IGlobalSettingsQueries>(
             _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
         services.AddScoped<IPostExitProviderQueries>(
-            _ => postExitProviderQueries ?? new StubPostExitProviderQueries(hasCommits: false, prUrl: null));
+            _ => postExitProviderQueries ?? new StubPostExitProviderQueries(hasCommits: false));
         services.AddSingleton<IContainerOutputParser>(
             _ => containerOutputParser ?? new NullContainerOutputParser());
+
+        // Register WorkerOutcomeResolver with zero PR retry delay so unit tests do not sleep.
+        services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
+            sp.GetRequiredService<IPostExitProviderQueries>(),
+            sp.GetRequiredService<IContainerOutputParser>(),
+            prRetryDelay: TimeSpan.Zero));
 
         ServiceProvider sp = services.BuildServiceProvider();
 
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<WorkerDispatchService>.Instance,
-            prRetryDelay: TimeSpan.Zero);
+            NullLogger<WorkerDispatchService>.Instance);
     }
 
-    protected sealed class StubPostExitProviderQueries(bool hasCommits, string? prUrl) : IPostExitProviderQueries
+    /// <summary>
+    /// Scriptable stub for <see cref="IPostExitProviderQueries"/>.
+    /// <para>
+    /// <paramref name="hasCommits"/> — result for <see cref="HasBranchCommitsAsync"/>
+    /// when no error is scripted.
+    /// </para>
+    /// <para>
+    /// <paramref name="mergeRequest"/> — when set, <see cref="GetMergeRequestByBranchAsync"/>
+    /// returns this value; otherwise returns <see cref="MergeRequestPresence.None"/>.
+    /// </para>
+    /// <para>
+    /// <paramref name="mergeRequestError"/> — when set, <see cref="GetMergeRequestByBranchAsync"/>
+    /// returns this failure instead.
+    /// </para>
+    /// <para>
+    /// <paramref name="hasCommitsError"/> — when set, <see cref="HasBranchCommitsAsync"/> returns
+    /// this failure (use <see cref="ErrorKind.NotFound"/> to signal a deleted branch).
+    /// </para>
+    /// </summary>
+    protected sealed class StubPostExitProviderQueries(
+        bool hasCommits = false,
+        MergeRequestByBranch? mergeRequest = null,
+        Error? mergeRequestError = null,
+        Error? hasCommitsError = null) : IPostExitProviderQueries
     {
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
@@ -114,15 +144,23 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(hasCommits));
+            => hasCommitsError is not null
+                ? Task.FromResult(Result<bool>.Fail(hasCommitsError))
+                : Task.FromResult(Result<bool>.Ok(hasCommits));
 
-        public Task<Result<string>> GetPullRequestByBranchAsync(
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
         {
-            string value = prUrl ?? string.Empty;
-            return Task.FromResult(Result<string>.Ok(value));
+            if (mergeRequestError is not null)
+            {
+                return Task.FromResult(Result<MergeRequestByBranch>.Fail(mergeRequestError));
+            }
+
+            MergeRequestByBranch result = mergeRequest
+                ?? new MergeRequestByBranch(MergeRequestPresence.None, null);
+            return Task.FromResult(Result<MergeRequestByBranch>.Ok(result));
         }
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(

@@ -76,7 +76,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenInProgressIssueWithPrUrl_TransitionsToReviewIssue()
+    public async Task WhenInProgressIssueWithOpenState_TransitionsToReviewIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -86,7 +86,8 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: inProgress.WorkerRunId,
             IssueId: inProgress.Id.Value,
             BranchName: "feat/issue-1-fix",
-            PullRequestUrl: "https://github.com/owner/repo/pull/10");
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Open);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -105,7 +106,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenInProgressIssueWithoutPrUrl_TransitionsToUnchangedIssue()
+    public async Task WhenInProgressIssueWithNoneState_TransitionsToUnchangedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -115,7 +116,8 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: inProgress.WorkerRunId,
             IssueId: inProgress.Id.Value,
             BranchName: null,
-            PullRequestUrl: null);
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.None);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -131,7 +133,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenInProgressIssueWithBranchNameButNoPrUrl_TransitionsToUnchangedIssue()
+    public async Task WhenInProgressIssueWithBranchButNoneState_TransitionsToUnchangedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -141,7 +143,8 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: inProgress.WorkerRunId,
             IssueId: inProgress.Id.Value,
             BranchName: "feat/issue-1-fix",
-            PullRequestUrl: null);
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.None);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -154,6 +157,59 @@ public sealed class HandleAsync : IAsyncDisposable
                 TestContext.Current.CancellationToken);
         UnchangedIssue unchanged = issue.ShouldBeOfType<UnchangedIssue>();
         unchanged.WorkerRunId.ShouldBe(inProgress.WorkerRunId);
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithMergedState_TransitionsToCompletedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Merged);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        CompletedIssue completed = issue.ShouldBeOfType<CompletedIssue>();
+        completed.ShouldSatisfyAllConditions(
+            () => completed.BranchName.ShouldBe("feat/issue-1-fix"),
+            () => completed.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"),
+            () => completed.CompletedAt.ShouldBeGreaterThan(DateTimeOffset.MinValue));
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithMergedState_DispatchesIssueCompletedEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Merged);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueCompleted>()
+            .ShouldHaveSingleItem();
     }
 
     private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId)
@@ -212,7 +268,8 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: revisionInProgress.WorkerRunId,
             IssueId: revisionInProgress.Id.Value,
             BranchName: revisionInProgress.BranchName,
-            PullRequestUrl: revisionInProgress.PullRequestUrl);
+            PullRequestUrl: revisionInProgress.PullRequestUrl,
+            MergeState: WorkerRunMergeState.Open);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -241,7 +298,8 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: revisionInProgress.WorkerRunId,
             IssueId: revisionInProgress.Id.Value,
             BranchName: null,
-            PullRequestUrl: null);
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.None);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -260,6 +318,110 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenInProgressIssueWithMergedStateAndNullBranchName_DoesNotTransition()
+    {
+        // Arrange — a Merged event with null BranchName must not be null-suppressed into MarkCompleted
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: null,
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Merged);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — issue remains InProgress; no transition was attempted
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithMergedStateAndNullPrUrl_DoesNotTransition()
+    {
+        // Arrange — a Merged event with null PullRequestUrl must not be null-suppressed into MarkCompleted
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.Merged);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — issue remains InProgress; no transition was attempted
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithOpenStateAndNullBranchName_DoesNotTransition()
+    {
+        // Arrange — an Open event with null BranchName must not be null-suppressed into MarkInReview
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: null,
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Open);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — issue remains InProgress; no transition was attempted
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithOpenStateAndNullPrUrl_DoesNotTransition()
+    {
+        // Arrange — an Open event with null PullRequestUrl must not be null-suppressed into MarkInReview
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.Open);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — issue remains InProgress; no transition was attempted
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
     public async Task WhenIssueNotInProgress_SilentlyIgnores()
     {
         // Arrange
@@ -270,7 +432,8 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: Guid.NewGuid(),
             IssueId: queued.Id.Value,
             BranchName: "feat/something",
-            PullRequestUrl: "https://github.com/owner/repo/pull/5");
+            PullRequestUrl: "https://github.com/owner/repo/pull/5",
+            MergeState: WorkerRunMergeState.Open);
 
         // Act
         Task act = _sut.HandleAsync(@event, CancellationToken.None);
@@ -286,7 +449,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenInProgressIssueWithPrUrlCompletes_DispatchesIssueInReviewEvent()
+    public async Task WhenInProgressIssueWithOpenState_DispatchesIssueInReviewEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -296,7 +459,8 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: inProgress.WorkerRunId,
             IssueId: inProgress.Id.Value,
             BranchName: "feat/issue-1-fix",
-            PullRequestUrl: "https://github.com/owner/repo/pull/10");
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Open);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);

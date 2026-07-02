@@ -47,7 +47,7 @@ internal sealed class PostExitProviderQueries(
         return await provider.HasBranchCommitsAsync(repo.Slug, branchName, cancellationToken);
     }
 
-    public async Task<Result<string>> GetPullRequestByBranchAsync(
+    public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         MonitoredRepositoryId repositoryId,
         string branchName,
         CancellationToken cancellationToken)
@@ -58,11 +58,11 @@ internal sealed class PostExitProviderQueries(
         if (resolved is not Result<(IIssueProvider, MonitoredRepository)>.Success resolvedSuccess)
         {
             Error error = ((Result<(IIssueProvider, MonitoredRepository)>.Failure)resolved).Error;
-            return Result<string>.Fail(error);
+            return Result<MergeRequestByBranch>.Fail(error);
         }
 
         (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
-        return await provider.GetPullRequestByBranchAsync(repo.Slug, branchName, cancellationToken);
+        return await provider.GetMergeRequestByBranchAsync(repo.Slug, branchName, cancellationToken);
     }
 
     public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
