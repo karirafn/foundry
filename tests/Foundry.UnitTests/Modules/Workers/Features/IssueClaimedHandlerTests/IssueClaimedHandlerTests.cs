@@ -1127,6 +1127,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 OAuthStatus: "Present",
                 ExpiresAt: null,
                 SubscriptionType: "pro",
+                OAuthAccountEmail: null,
+                OAuthAccountOrgName: null,
                 SystemPromptTemplate: null,
                 WorkerPromptTemplate: null,
                 UsageLimitResetsAt: null,

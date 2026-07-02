@@ -41,6 +41,8 @@ internal static class GlobalSettingsMapper
             oauthStatus,
             expiresAt,
             subscriptionType,
+            settings.OAuthAccountEmail,
+            settings.OAuthAccountOrgName,
             settings.SystemPromptTemplate,
             settings.WorkerPromptTemplate,
             settings.UsageLimitResetsAt,

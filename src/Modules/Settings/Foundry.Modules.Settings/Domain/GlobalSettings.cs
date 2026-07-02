@@ -60,6 +60,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public bool AuthInvalidPause { get; private set; }
 
+    public string? OAuthAccountEmail { get; private set; }
+
+    public string? OAuthAccountOrgName { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -123,6 +127,14 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public void SetAuthMode(AuthMode mode)
     {
         AuthMode = mode;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void SetOAuthAccountIdentity(string? email, string? orgName, string? subscriptionType)
+    {
+        OAuthAccountEmail = email;
+        OAuthAccountOrgName = orgName;
+        AuthMode = new AuthMode.OAuth(subscriptionType);
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

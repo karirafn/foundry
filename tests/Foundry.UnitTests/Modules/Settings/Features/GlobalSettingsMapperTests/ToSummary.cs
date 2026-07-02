@@ -320,4 +320,58 @@ public sealed class ToSummary
         // Assert
         result.SubscriptionType.ShouldBe("pro");
     }
+
+    [Fact]
+    public void WhenAccountIdentityNotSet_OAuthAccountEmailIsNull()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+
+        // Assert
+        result.OAuthAccountEmail.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenAccountIdentityNotSet_OAuthAccountOrgNameIsNull()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+
+        // Assert
+        result.OAuthAccountOrgName.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenAccountIdentitySet_OAuthAccountEmailIsMapped()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+
+        // Assert
+        result.OAuthAccountEmail.ShouldBe("user@example.com");
+    }
+
+    [Fact]
+    public void WhenAccountIdentitySet_OAuthAccountOrgNameIsMapped()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+
+        // Assert
+        result.OAuthAccountOrgName.ShouldBe("MyOrg");
+    }
 }

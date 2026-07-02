@@ -158,4 +158,49 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
         nonNull.ShouldNotContain("api_key");
         nonNull.ShouldNotContain("my-plaintext-key");
     }
+
+    [Fact]
+    public async Task WhenOAuthAccountIdentityPersisted_CanBeReloadedWithAllIdentityFields()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+
+        _dbContext.Set<GlobalSettings>().Add(settings);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        GlobalSettings? result = await _dbContext
+            .Set<GlobalSettings>()
+            .FindAsync([settings.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        GlobalSettings reloaded = result.ShouldNotBeNull();
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.OAuthAccountEmail.ShouldBe("user@example.com"),
+            () => reloaded.OAuthAccountOrgName.ShouldBe("MyOrg"));
+    }
+
+    [Fact]
+    public async Task WhenNoAccountIdentitySet_OAuthAccountFieldsAreNull()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+
+        _dbContext.Set<GlobalSettings>().Add(settings);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        GlobalSettings? result = await _dbContext
+            .Set<GlobalSettings>()
+            .FindAsync([settings.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        GlobalSettings reloaded = result.ShouldNotBeNull();
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.OAuthAccountEmail.ShouldBeNull(),
+            () => reloaded.OAuthAccountOrgName.ShouldBeNull());
+    }
 }

@@ -7,6 +7,8 @@ public sealed record GlobalSettingsSummary(
     string OAuthStatus,
     DateTimeOffset? ExpiresAt,
     string? SubscriptionType,
+    string? OAuthAccountEmail,
+    string? OAuthAccountOrgName,
     string? SystemPromptTemplate,
     string? WorkerPromptTemplate,
     DateTimeOffset? UsageLimitResetsAt,

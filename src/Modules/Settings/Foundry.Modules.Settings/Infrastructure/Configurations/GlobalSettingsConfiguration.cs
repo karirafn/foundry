@@ -72,6 +72,12 @@ internal sealed class GlobalSettingsConfiguration(
         builder.Property(s => s.AuthInvalidPause)
             .HasColumnName("auth_invalid_pause");
 
+        builder.Property(s => s.OAuthAccountEmail)
+            .HasColumnName("oauth_account_email");
+
+        builder.Property(s => s.OAuthAccountOrgName)
+            .HasColumnName("oauth_account_org_name");
+
         ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
             config => SerializeWorkerImageConfiguration(config),
             json => DeserializeWorkerImageConfiguration(json));
