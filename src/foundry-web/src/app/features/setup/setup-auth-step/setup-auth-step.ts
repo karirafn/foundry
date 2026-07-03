@@ -95,7 +95,7 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
             <div role="alert" class="setup-auth-step__error">{{ (!_settingsService.loginPhase() && _settingsService.startLoginError()) ? _settingsService.startLoginError() : '' }}</div>
 
             @if (_oauthStatus() !== 'Present' && !_settingsService.loginPhase()) {
-              <div role="note" class="setup-auth-step__oauth-note">
+              <div class="setup-auth-step__oauth-note">
                 You haven't logged in yet. You can finish setup now, but workers won't run until you sign in.
               </div>
             }

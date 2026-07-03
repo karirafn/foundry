@@ -371,16 +371,19 @@ describe('LoginFlowComponent', () => {
       expect(emitted).toBe(true);
     });
 
-    it('should have role="alert" on Failed block', () => {
+    it('should announce failure heading in the persistent role="status" live region (not via @if-mounted alert)', () => {
       // Arrange
       const fixture = setup({ phase: 'Failed', error: 'Unknown' });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const alertEl = el.querySelector('[role="alert"]');
+      const statusEl = el.querySelector('[role="status"][aria-live="polite"]');
 
-      // Assert
-      expect(alertEl).toBeTruthy();
+      // Assert — live region text contains the failure heading so SR users hear it
+      expect(statusEl?.textContent).toContain('Sign-in failed');
+      // The @if-mounted failed div must NOT carry role="alert"
+      const failedDiv = el.querySelector('.login-flow__phase--failed');
+      expect(failedDiv?.getAttribute('role')).not.toBe('alert');
     });
 
     it('should show InvalidCode error copy', () => {
@@ -514,6 +517,18 @@ describe('LoginFlowComponent', () => {
 
       // Assert
       expect(statusEl?.textContent?.trim()).toBe('Signed in.');
+    });
+
+    it('should announce the failure heading in the live region for Failed phase', () => {
+      // Arrange
+      const fixture = setup({ phase: 'Failed', error: 'InvalidCode' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('[role="status"][aria-live="polite"]');
+
+      // Assert — liveText returns the error heading so SR users are informed
+      expect(statusEl?.textContent).toContain("That code didn't work");
     });
   });
 

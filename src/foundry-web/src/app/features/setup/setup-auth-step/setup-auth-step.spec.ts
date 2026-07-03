@@ -357,8 +357,8 @@ describe('SetupAuthStepComponent', () => {
     radios[1].click();
     fixture.detectChanges();
 
-    // Assert
-    const note = el.querySelector('[role="note"]');
+    // Assert — role="note" is not a valid ARIA role; query by class instead
+    const note = el.querySelector('.setup-auth-step__oauth-note');
     expect(note?.textContent).toContain("You haven't logged in yet");
   });
 
@@ -383,8 +383,23 @@ describe('SetupAuthStepComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const note = el.querySelector('[role="note"]');
+    const note = el.querySelector('.setup-auth-step__oauth-note');
     expect(note).toBeFalsy();
+  });
+
+  // N3: role="note" is not a valid ARIA role
+  it('should not render any element with role="note" (invalid ARIA role)', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[1].click();
+    fixture.detectChanges();
+
+    // Assert — no element carries the invalid role="note" attribute
+    expect(el.querySelector('[role="note"]')).toBeFalsy();
   });
 
   // Cycle 15: emits complete on Next click in OAuth mode (no gating on status)

@@ -557,6 +557,39 @@ describe('SettingsGeneralComponent', () => {
     document.body.removeChild(fixture.nativeElement);
   });
 
+  it('should announce drain text via text binding in the persistent role="status" element (not via @if content insertion)', () => {
+    // Arrange — enter draining state
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — the role="status" drain-gate element is present even before draining (empty)
+    const drainGate = el.querySelector('.general-settings__drain-gate[role="status"]') as HTMLElement;
+    expect(drainGate).toBeTruthy();
+    expect(drainGate.textContent?.trim()).toBe('');
+
+    // Act — trigger drain by confirming account switch
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Assert — same persistent element now has content (text binding changed, element was not re-mounted)
+    const drainGateAfter = el.querySelector('.general-settings__drain-gate[role="status"]') as HTMLElement;
+    expect(drainGateAfter).toBe(drainGate); // same DOM node
+    expect(drainGateAfter.textContent).toContain('Dispatch is paused');
+  });
+
   it('should show drain gate message after confirming account switch', () => {
     // Arrange
     const { httpMock } = setup();
@@ -707,9 +740,13 @@ describe('SettingsGeneralComponent', () => {
     (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('Failed');
     fixture.detectChanges();
 
-    // Assert — Resume button appears in drain gate
+    // Assert — Resume button is visible and is NOT nested inside the drain-gate live region
     const resumeBtn = el.querySelector('.general-settings__resume-btn');
     expect(resumeBtn).toBeTruthy();
+
+    const drainGate = el.querySelector('.general-settings__drain-gate[role="status"]');
+    const resumeInsideDrainGate = drainGate?.querySelector('.general-settings__resume-btn');
+    expect(resumeInsideDrainGate).toBeFalsy();
   });
 
   it('should reset drain-gate state when startLogin POST fails while draining (Finding 6)', () => {

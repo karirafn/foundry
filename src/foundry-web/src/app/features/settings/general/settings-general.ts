@@ -145,23 +145,19 @@ const COOLDOWN_MINUTES_MAX = 1440;
             <!-- Drain gate renders before the login flow (inside fd-oauth-panel below). -->
             <!-- Note: fully separating Present card / drain / login-flow would require -->
             <!-- splitting fd-oauth-panel — deferred as a follow-up refactor. -->
+            <!-- Persistent live region — text binding drives announcements, never @if-mounted. -->
             <div
               class="general-settings__drain-gate"
               role="status"
-            >
-              @if (_switchAccountDraining()) {
-                Dispatch is paused. Wait for running workers to finish (watch the Issues board), then log in to the new account below.
-
-                @if (_showResumeAfterSwitch()) {
-                  <button
-                    class="general-settings__resume-btn"
-                    type="button"
-                    [disabled]="dispatchService.resuming()"
-                    (click)="dispatchService.resumeDispatch()"
-                  >{{ dispatchService.resuming() ? 'Resuming...' : 'Resume dispatch' }}</button>
-                }
-              }
-            </div>
+            >{{ _drainGateText() }}</div>
+            @if (_showResumeAfterSwitch()) {
+              <button
+                class="general-settings__resume-btn"
+                type="button"
+                [disabled]="dispatchService.resuming()"
+                (click)="dispatchService.resumeDispatch()"
+              >{{ dispatchService.resuming() ? 'Resuming...' : 'Resume dispatch' }}</button>
+            }
             <div role="alert" class="general-settings__switch-error">{{ (_switchAccountDraining() && dispatchService.pauseResumeError()) ? dispatchService.pauseResumeError() : '' }}</div>
             <fd-oauth-panel
               [status]="_oauthStatus()"
@@ -527,6 +523,12 @@ export class SettingsGeneralComponent {
       this._installDockerValue() !== saved.installDocker
     );
   });
+
+  protected readonly _drainGateText: Signal<string> = computed(() =>
+    this._switchAccountDraining()
+      ? 'Dispatch is paused. Wait for running workers to finish (watch the Issues board), then log in to the new account below.'
+      : ''
+  );
 
   protected readonly _imageBuildingText: Signal<string> = computed(() =>
     this.settingsService.imageBuildStatus() === 'Building' ? 'Building worker image…' : ''

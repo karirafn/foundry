@@ -45,7 +45,7 @@ function failedCopy(error: LoginError | null): FailedCopy {
   }
 }
 
-function liveText(phase: LoginPhase, accountEmail: string | null): string {
+function liveText(phase: LoginPhase, error: LoginError | null, accountEmail: string | null): string {
   switch (phase) {
     case 'Starting':
       return 'Starting sign-in…';
@@ -55,6 +55,8 @@ function liveText(phase: LoginPhase, accountEmail: string | null): string {
       return 'Signing you in…';
     case 'Succeeded':
       return accountEmail ? `Signed in as ${accountEmail}.` : 'Signed in.';
+    case 'Failed':
+      return failedCopy(error).heading;
     default:
       return '';
   }
@@ -130,7 +132,7 @@ function liveText(phase: LoginPhase, accountEmail: string | null): string {
     }
 
     @if (phase() === 'Failed') {
-      <div class="login-flow__phase login-flow__phase--failed" role="alert">
+      <div class="login-flow__phase login-flow__phase--failed">
         <p class="login-flow__error-heading">{{ _failedCopy().heading }}</p>
         <p class="login-flow__error-body">{{ _failedCopy().body }}</p>
         <button
@@ -164,7 +166,7 @@ export class LoginFlowComponent {
 
   protected readonly _canSubmit = computed(() => this._codeValueSignal().trim().length > 0);
 
-  protected readonly _liveText = computed(() => liveText(this.phase(), this.accountEmail()));
+  protected readonly _liveText = computed(() => liveText(this.phase(), this.error(), this.accountEmail()));
 
   protected readonly _failedCopy = computed(() => failedCopy(this.error()));
 
