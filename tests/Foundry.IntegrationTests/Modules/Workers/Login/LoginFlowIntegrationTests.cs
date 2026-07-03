@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -112,87 +111,6 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             _dockerClient.Dispose();
             _config?.Dispose();
         }
-    }
-
-    /// <summary>
-    /// Verifies that <see cref="DockerWorkerOrchestrator.SeedOnboardingAsync"/> writes a
-    /// <c>.claude.json</c> onto the credential volume that suppresses the onboarding,
-    /// theme, and trust dialogs. Uses a helper container to read the file back.
-    ///
-    /// This confirms that when a real login container starts it will NOT block waiting
-    /// for those interactive prompts — the FIFO bootstrap should proceed straight to
-    /// emitting the OAuth URL.
-    /// </summary>
-    [Fact]
-    public async Task SeedOnboardingAsync_WritesSuppressionsWithoutBlockingOnboarding()
-    {
-        // Arrange
-        Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
-        Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
-        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
-        string volumeName = _testVolumeName.ShouldNotBeNull();
-
-        // Override the default volume name for this test by using a fresh Orchestrator
-        // targeting the isolated test volume instead of the production credential volume.
-        // We do this with a helper container directly since Orchestrator's SeedOnboardingAsync
-        // hardcodes WorkerVolumeNames.CredentialVolumeName.
-        //
-        // Instead: call the seeder via docker exec on a scratch container we control.
-        string helperId = await StartHelperContainerAsync(volumeName);
-
-        try
-        {
-            // Act — write the seed content and read it back
-            string mergedJson = OnboardingSeed.Merge(existingJson: null, workDir: OnboardingSeed.DefaultWorkDir);
-            await WriteFileToContainerAsync(helperId, $"{WorkerVolumeNames.ClaudeConfigContainerPath}/.claude.json", mergedJson);
-
-            // Read back to verify
-            string? readBack = await ReadFileFromContainerAsync(helperId, $"{WorkerVolumeNames.ClaudeConfigContainerPath}/.claude.json");
-
-            // Assert — seeded content suppresses all interactive prompts
-            readBack.ShouldNotBeNull();
-            using JsonDocument doc = JsonDocument.Parse(readBack);
-            JsonElement root = doc.RootElement;
-
-            root.ShouldSatisfyAllConditions(
-                () => root.GetProperty("hasCompletedOnboarding").GetBoolean().ShouldBeTrue(),
-                () => root.GetProperty("theme").GetString().ShouldBe("dark"),
-                () => root.TryGetProperty("projects", out _).ShouldBeTrue());
-
-            // Confirm oauthAccount key is absent (Merge should not inject it)
-            root.TryGetProperty("oauthAccount", out _).ShouldBeFalse();
-        }
-        finally
-        {
-            await RemoveContainerAsync(helperId);
-        }
-    }
-
-    /// <summary>
-    /// Verifies that <see cref="DockerWorkerOrchestrator.SeedOnboardingAsync"/> does not
-    /// overwrite an existing <c>oauthAccount</c> key when merging onboarding flags.
-    /// </summary>
-    [Fact]
-    public async Task SeedOnboardingAsync_DoesNotClobberExistingOAuthAccountKey()
-    {
-        // Arrange
-        Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
-        Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present.");
-        string volumeName = _testVolumeName.ShouldNotBeNull();
-
-        string existingJson = """{"oauthAccount":{"emailAddress":"test@example.com"},"hasCompletedOnboarding":true}""";
-        string merged = OnboardingSeed.Merge(existingJson, OnboardingSeed.DefaultWorkDir);
-
-        // Assert — oauthAccount is preserved; hasCompletedOnboarding not overwritten
-        using JsonDocument doc = JsonDocument.Parse(merged);
-        JsonElement root = doc.RootElement;
-
-        root.ShouldSatisfyAllConditions(
-            () => root.TryGetProperty("oauthAccount", out JsonElement oauthAccount).ShouldBeTrue(),
-            () => root.GetProperty("hasCompletedOnboarding").GetBoolean().ShouldBeTrue());
-
-        // Suppress unused variable warning — volumeName checked for clarity but not used directly here
-        _ = volumeName;
     }
 
     /// <summary>

@@ -25,7 +25,8 @@ internal static class StartLogin
                 await HandleAsync(service, cancellationToken))
                 .WithName("StartOAuthLogin")
                 .WithSummary("Starts an OAuth login session (non-blocking; result delivered via SignalR)")
-                .Produces<Response>(StatusCodes.Status202Accepted);
+                .Produces<Response>(StatusCodes.Status202Accepted)
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
 
         internal static async Task<Accepted<Response>> HandleAsync(

@@ -8,7 +8,7 @@ namespace Foundry.Modules.Workers.Features.Login;
 /// The code is passed as environment variable <c>C</c> — never interpolated into the
 /// command string — so shell metacharacters in the code cannot cause injection.
 /// </remarks>
-internal sealed record LoginExecCommand(IReadOnlyList<string> Argv, IReadOnlyList<string> Env)
+internal sealed record LoginExecCommand
 {
     /// <summary>Path to the FIFO inside the login container that receives the OAuth code.</summary>
     internal const string FifoPath = "/tmp/ci";
@@ -21,6 +21,15 @@ internal sealed record LoginExecCommand(IReadOnlyList<string> Argv, IReadOnlyLis
     internal const string SleepPidPath = "/tmp/ci.pid";
 
     private const string EnvVarName = "C";
+
+    private LoginExecCommand(IReadOnlyList<string> argv, IReadOnlyList<string> env)
+    {
+        Argv = argv;
+        Env = env;
+    }
+
+    internal IReadOnlyList<string> Argv { get; }
+    internal IReadOnlyList<string> Env { get; }
 
     /// <summary>
     /// Creates the exec command that writes <paramref name="code"/> into the container FIFO,

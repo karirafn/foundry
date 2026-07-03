@@ -47,12 +47,7 @@ internal static class SubmitLoginCode
 
             return submitResult.Match<Results<Ok, BadRequest<string>, UnprocessableEntity<string>>>(
                 () => TypedResults.Ok(),
-                error => error.Code switch
-                {
-                    LoginErrors.NoActiveSessionCode => TypedResults.UnprocessableEntity(error.Message),
-                    LoginErrors.NotAcceptingCodeCode => TypedResults.UnprocessableEntity(error.Message),
-                    _ => TypedResults.UnprocessableEntity(error.Message),
-                });
+                error => TypedResults.UnprocessableEntity(error.Message));
         }
     }
 }

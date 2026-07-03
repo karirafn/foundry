@@ -15,7 +15,7 @@ internal static partial class AuthorizationUrlExtractor
     /// </summary>
     internal static string? Extract(string line)
     {
-        System.Text.RegularExpressions.Match match = OAuthUrlRegex().Match(line);
+        Match match = OAuthUrlRegex().Match(line);
         return match.Success ? match.Value : null;
     }
 }
