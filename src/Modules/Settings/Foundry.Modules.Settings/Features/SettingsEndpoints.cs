@@ -12,7 +12,6 @@ internal static class SettingsEndpoints
             .WithTags("Settings");
 
         GetSettings.Endpoint.Map(group);
-        GetLoginCommand.Endpoint.Map(group);
         UpdateAuthMode.Endpoint.Map(group);
         UpdateWorkerLimits.Endpoint.Map(group);
         UpdatePromptTemplates.Endpoint.Map(group);
