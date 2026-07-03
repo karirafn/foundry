@@ -29,6 +29,7 @@ internal sealed class DockerWorkerOrchestrator(
     private const long NanoCpusPerCpu = 1_000_000_000L;
     private const int DockerErrorMessageMaxLength = 500;
     private const int ContainerOutputMaxBytes = 65_536;
+    private const int AuthStatusOutputMaxBytes = 16_384;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
@@ -443,7 +444,12 @@ internal sealed class DockerWorkerOrchestrator(
 
         stdoutStream.Seek(0, SeekOrigin.Begin);
         using StreamReader reader = new(stdoutStream, Encoding.UTF8);
-        string json = await reader.ReadToEndAsync(cancellationToken);
+
+        // Read only up to AuthStatusOutputMaxBytes to prevent unbounded memory consumption
+        // from a misbehaving or compromised container writing excessive output.
+        char[] buffer = new char[AuthStatusOutputMaxBytes];
+        int charsRead = await reader.ReadAsync(buffer, cancellationToken);
+        string json = new(buffer, 0, charsRead);
 
         return AccountIdentity.Parse(json);
     }

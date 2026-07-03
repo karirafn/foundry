@@ -199,6 +199,10 @@ internal sealed class LoginSessionService(
     /// </summary>
     internal void TriggerSessionTimeoutForTest() => _sessionTimeoutCts?.Cancel();
 
+    // Maximum length of a single log line accepted for URL extraction and broadcast.
+    // Lines longer than this are skipped — a legitimate OAuth URL is never this long.
+    private const int MaxUrlLineLengthChars = 8_192;
+
     /// <summary>
     /// The current session phase, or <c>null</c> when no session exists.
     /// Exposed for test observation only.
@@ -320,6 +324,14 @@ internal sealed class LoginSessionService(
                 .StreamLogsAsync(session.ContainerId, urlTimeoutCts.Token)
                 .ConfigureAwait(false))
             {
+                // Skip oversized lines — a legitimate OAuth URL is never 8 KB long.
+                // This prevents a misbehaving container from injecting a huge string into
+                // the WaitingForAuthorization phase and over the SignalR broadcast.
+                if (line.Length > MaxUrlLineLengthChars)
+                {
+                    continue;
+                }
+
                 string? url = AuthorizationUrlExtractor.Extract(line);
 
                 if (url is not null)

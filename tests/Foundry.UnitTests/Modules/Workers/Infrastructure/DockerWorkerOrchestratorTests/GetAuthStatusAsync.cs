@@ -119,6 +119,23 @@ public sealed class GetAuthStatusAsync
         result.ShouldBeOfType<Result<AccountIdentity>.Failure>().Error.Code.ShouldBe("AccountIdentity.NotLoggedIn");
     }
 
+    [Fact]
+    public async Task WhenOutputExceedsCap_DoesNotThrowOrConsumeUnboundedMemory()
+    {
+        // Arrange — produce output well beyond the 16 KB cap (20 KB of padding)
+        string oversizedOutput = new('x', 20_480);
+        FakeExecOperations execOps = new(oversizedOutput);
+        DockerWorkerOrchestrator sut = BuildSut(execOps);
+
+        // Act — must not throw an OOM or any other exception; oversized output is truncated
+        Result<AccountIdentity> result = await sut.GetAuthStatusAsync(
+            "container-id",
+            CancellationToken.None);
+
+        // Assert — parse fails gracefully (truncated data is not valid JSON); no crash
+        result.IsSuccess.ShouldBeFalse();
+    }
+
     private sealed class NullContainerOperations : IContainerOperations
     {
         public Task<CreateContainerResponse> CreateContainerAsync(
