@@ -241,6 +241,40 @@ public sealed class SubmitCodeAsync
         committer.CommitCallCount.ShouldBe(0);
     }
 
+    /// <summary>
+    /// Regression test: the login container may still be running when the success signal appears
+    /// (observed in production — container lived 14+ seconds after "Login successful.").
+    /// GetStatusAsync returns ExitCode == null while running, so the old exit-code gate
+    /// produced a false-negative (InvalidCode). The success signal alone must be sufficient.
+    /// </summary>
+    [Fact]
+    public async Task WhenSuccessSignalAppearsAndContainerStillRunning_TransitionsToSucceeded()
+    {
+        // Arrange
+        string url = "https://claude.ai/oauth/authorize?code=true";
+        string logLine = $"If the browser didn't open, visit: {url}";
+
+        // Container remains running — GetStatusAsync returns ExitCode == null.
+        // Do NOT call WithExitedContainer() — default FakeWorkerOrchestrator state is running.
+        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+
+        AccountIdentity expectedIdentity = new("alice@example.com", "Acme Corp", "pro");
+        orchestrator.WithAuthStatusIdentity(expectedIdentity);
+
+        FakeLoginSuccessCommitter committer = new();
+        LoginSessionService sut = CreateService(orchestrator, committer);
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
+
+        // Act
+        await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
+
+        // Assert — success signal is authoritative; running container must not block success
+        committer.CommitCallCount.ShouldBe(1);
+        committer.CommittedIdentity.ShouldBe(expectedIdentity);
+        ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
+    }
+
     [Fact]
     public async Task WhenNoActiveSession_SubmitCodeAsync_ReturnsNoActiveSessionError()
     {

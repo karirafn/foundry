@@ -466,15 +466,17 @@ internal sealed class LoginSessionService(
 
     /// <summary>
     /// Waits for the login success signal or "Invalid code" rejection in the log stream.
-    /// Returns <c>true</c> when login succeeded (success signal seen AND container exit 0).
+    /// Returns <c>true</c> immediately when the success signal ("Login successful.") is seen —
+    /// the container may still be running at this point, so exit code is not consulted.
+    /// The authoritative credential validation happens downstream in
+    /// <see cref="Infrastructure.IWorkerOrchestrator.GetCredentialVolumeAuthStatusAsync"/>.
     /// Returns <c>false</c> when an "Invalid code" rejection is detected (CLI re-prompts;
     /// the stream is cancelled via <paramref name="cancellationToken"/> which is the self-owned
     /// sign-in CTS so the scan is bounded by <see cref="LoginSessionOptions.SignInTimeout"/>.
+    /// Returns <c>false</c> when the stream ends without either signal.
     /// </summary>
     private async Task<bool> WaitForLoginSuccessAsync(string containerId, CancellationToken cancellationToken)
     {
-        bool successSeen = false;
-
         await foreach (string line in orchestrator
             .StreamLogsAsync(containerId, cancellationToken)
             .ConfigureAwait(false))
@@ -488,20 +490,15 @@ internal sealed class LoginSessionService(
 
             if (line.Contains(LoginSuccessSignal, StringComparison.Ordinal))
             {
-                successSeen = true;
-                break;
+                // Success signal is authoritative — the container may still be running at this
+                // point (observed in production: container lived 14+ seconds after signal).
+                // Do not gate on exit code; GetCredentialVolumeAuthStatusAsync validates the
+                // persisted credential after this returns.
+                return true;
             }
         }
 
-        if (!successSeen)
-        {
-            return false;
-        }
-
-        WorkerStatus? status = await orchestrator.GetStatusAsync(containerId, cancellationToken);
-
-        // Treat unknown status conservatively as failure
-        return status?.ExitCode is 0;
+        return false;
     }
 
     private async Task FailSessionAsync(
