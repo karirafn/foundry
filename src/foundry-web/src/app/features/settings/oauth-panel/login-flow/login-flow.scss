@@ -3,6 +3,11 @@
   outline-offset: 2px;
 }
 
+:host {
+  display: block;
+  position: relative;
+}
+
 .login-flow {
   &__sr-live {
     position: absolute;

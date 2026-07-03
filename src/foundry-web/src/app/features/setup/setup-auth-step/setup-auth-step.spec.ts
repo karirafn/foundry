@@ -409,5 +409,85 @@ describe('SetupAuthStepComponent', () => {
     // Assert
     expect(emitted).toBe(true);
   });
+
+  // Finding 4: focus moves to auth heading on Succeeded phase
+  it('should move focus to the auth heading when login phase becomes Succeeded', async () => {
+    // Arrange
+    const { fixture } = setup();
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[1].click();
+    fixture.detectChanges();
+
+    const service = fixture.componentInstance['_settingsService'];
+
+    // Act — simulate Succeeded phase
+    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('Succeeded');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — focus moves to auth heading
+    const authHeading = el.querySelector('.setup-auth-step__title[tabindex="-1"]') as HTMLElement;
+    expect(authHeading).toBeTruthy();
+    expect(document.activeElement).toBe(authHeading);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  // Finding 5: Cancel returns focus to login button or auth heading
+  it('should return focus to the Log in button on Cancel when in OAuth mode', async () => {
+    // Arrange
+    const { fixture } = setup();
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[1].click();
+    fixture.detectChanges();
+
+    // Act — cancel login
+    fixture.componentInstance.cancelLogin();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — focus returns to Log in button (visible when NotConfigured)
+    const loginBtn = el.querySelector('.oauth-panel__login-btn') as HTMLButtonElement;
+    expect(loginBtn).toBeTruthy();
+    expect(document.activeElement).toBe(loginBtn);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  // Finding 9: startLoginError rendered in OAuth section
+  it('should show startLoginError when loginPhase is null and error is non-null in OAuth mode', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[1].click();
+    fixture.detectChanges();
+
+    const service = fixture.componentInstance['_settingsService'];
+
+    // Act — simulate startLogin POST failure
+    service.startLogin();
+    TestBed.inject(HttpTestingController).expectOne('/api/settings/oauth/login/start').flush(
+      'Server Error',
+      { status: 500, statusText: 'Internal Server Error' }
+    );
+    fixture.detectChanges();
+
+    // Assert — error displayed in role="alert"
+    const alerts = Array.from(el.querySelectorAll('[role="alert"]')) as HTMLElement[];
+    const errorAlert = alerts.find(a => a.textContent?.includes('Failed to start login'));
+    expect(errorAlert).toBeTruthy();
+  });
 });
 

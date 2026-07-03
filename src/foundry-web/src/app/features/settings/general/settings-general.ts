@@ -122,21 +122,6 @@ const COOLDOWN_MINUTES_MAX = 1440;
 
         @if (_selectedMode() === 'oauth') {
           <div class="general-settings__oauth-section">
-            <fd-oauth-panel
-              [status]="_oauthStatus()"
-              [expiresAt]="settingsService.authSettings()?.oauth?.expiresAt ?? null"
-              [subscriptionType]="settingsService.authSettings()?.oauth?.subscriptionType ?? null"
-              [accountEmail]="settingsService.settings()?.oAuthAccountEmail ?? null"
-              [accountOrgName]="settingsService.settings()?.oAuthAccountOrgName ?? null"
-              [loginPhase]="settingsService.loginPhase()"
-              [loginUrl]="settingsService.loginUrl()"
-              [loginError]="settingsService.loginError()"
-              [codeSubmitting]="settingsService.codeSubmitting()"
-              (startLogin)="onStartLogin()"
-              (submitCode)="settingsService.submitLoginCode($event)"
-              (cancel)="onCancelLogin()"
-            />
-
             @if (_showSwitchAccountConfirm()) {
               <div class="general-settings__switch-confirm" role="group" aria-label="Confirm account switch">
                 <p class="general-settings__switch-confirm-text">
@@ -157,6 +142,9 @@ const COOLDOWN_MINUTES_MAX = 1440;
                 </div>
               </div>
             }
+            <!-- Drain gate renders before the login flow (inside fd-oauth-panel below). -->
+            <!-- Note: fully separating Present card / drain / login-flow would require -->
+            <!-- splitting fd-oauth-panel — deferred as a follow-up refactor. -->
             <div
               class="general-settings__drain-gate"
               role="status"
@@ -175,6 +163,20 @@ const COOLDOWN_MINUTES_MAX = 1440;
               }
             </div>
             <div role="alert" class="general-settings__switch-error">{{ (_switchAccountDraining() && dispatchService.pauseResumeError()) ? dispatchService.pauseResumeError() : '' }}</div>
+            <fd-oauth-panel
+              [status]="_oauthStatus()"
+              [expiresAt]="settingsService.authSettings()?.oauth?.expiresAt ?? null"
+              [subscriptionType]="settingsService.authSettings()?.oauth?.subscriptionType ?? null"
+              [accountEmail]="settingsService.settings()?.oAuthAccountEmail ?? null"
+              [accountOrgName]="settingsService.settings()?.oAuthAccountOrgName ?? null"
+              [loginPhase]="settingsService.loginPhase()"
+              [loginUrl]="settingsService.loginUrl()"
+              [loginError]="settingsService.loginError()"
+              (startLogin)="onStartLogin()"
+              (submitCode)="settingsService.submitLoginCode($event)"
+              (cancel)="onCancelLogin()"
+            />
+            <div role="alert" class="general-settings__start-login-error">{{ (!settingsService.loginPhase() && settingsService.startLoginError()) ? settingsService.startLoginError() : '' }}</div>
           </div>
         }
       </section>
@@ -587,10 +589,31 @@ export class SettingsGeneralComponent {
       }
     });
 
-    // Reset the drain UI when login succeeds (Succeeded phase + status returns to Present).
+    // Manage drain-gate state in response to login phase transitions.
     effect(() => {
       const phase = this.settingsService.loginPhase();
-      if (phase === 'Succeeded' && this._switchAccountDraining()) {
+      if (phase === null && this._switchAccountDraining()) {
+        // Login succeeded (phase cleared after reload) — tear down drain UI.
+        this._switchAccountDraining.set(false);
+        this._showResumeAfterSwitch.set(false);
+      }
+      if (phase === 'Failed' && this._switchAccountDraining()) {
+        // Login failed while draining — surface Resume so the operator can recover.
+        this._showResumeAfterSwitch.set(true);
+      }
+      if (phase === 'Succeeded') {
+        // Move focus to auth heading on Succeeded regardless of drain state (Finding 4).
+        runInInjectionContext(this._injector, () =>
+          afterNextRender(() => this._authHeading?.nativeElement.focus())
+        );
+      }
+    });
+
+    // If startLogin POST itself fails while draining, reset drain state so the
+    // operator is not stranded (they can retry or close from the error message).
+    effect(() => {
+      const error = this.settingsService.startLoginError();
+      if (error !== null && this._switchAccountDraining()) {
         this._switchAccountDraining.set(false);
         this._showResumeAfterSwitch.set(false);
       }

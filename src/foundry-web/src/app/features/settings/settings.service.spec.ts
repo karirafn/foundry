@@ -1311,6 +1311,35 @@ describe('SettingsService — SignalR login session', () => {
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 
+  // Finding 1: loginPhase cleared after Succeeded settings reload
+  it('should clear loginPhase to null after the settings reload completes on Succeeded', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    service.startLogin();
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 's1' }, { status: 202, statusText: 'Accepted' });
+
+    // Act — SignalR Succeeded
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 's1',
+      phase: 'Succeeded',
+      url: null,
+      failure: null,
+      message: null,
+    });
+
+    // loginPhase is set to Succeeded before the reload
+    expect(service.loginPhase()).toBe('Succeeded');
+
+    // Flush the settings reload
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+      authMode: 'OAuth',
+      oAuthStatus: 'Present',
+    }));
+
+    // Assert — phase cleared to null after reload
+    expect(service.loginPhase()).toBeNull();
+  });
+
   // Cycle: SignalR SigningIn clears codeSubmitting (because server confirmed it)
   it('should clear codeSubmitting when SignalR pushes SigningIn', () => {
     // Arrange

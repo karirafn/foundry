@@ -11,7 +11,6 @@ function setup(inputs: {
   loginPhase?: LoginPhase | null;
   loginUrl?: string | null;
   loginError?: LoginError | null;
-  codeSubmitting?: boolean;
 }): ComponentFixture<OAuthPanelComponent> {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -26,7 +25,6 @@ function setup(inputs: {
   fixture.componentRef.setInput('loginPhase', inputs.loginPhase ?? null);
   fixture.componentRef.setInput('loginUrl', inputs.loginUrl ?? null);
   fixture.componentRef.setInput('loginError', inputs.loginError ?? null);
-  fixture.componentRef.setInput('codeSubmitting', inputs.codeSubmitting ?? false);
   fixture.detectChanges();
   return fixture;
 }

@@ -1,4 +1,18 @@
-import { Component, ChangeDetectionStrategy, WritableSignal, computed, effect, inject, output, signal } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  ElementRef,
+  Injector,
+  ViewChild,
+  WritableSignal,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  output,
+  runInInjectionContext,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../settings/settings.service';
 import { AuthMode } from '../../settings/settings.model';
@@ -10,7 +24,7 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
   imports: [FormsModule, OAuthPanelComponent],
   template: `
     <div class="setup-auth-step">
-      <h2 class="setup-auth-step__title">Worker Authentication</h2>
+      <h2 class="setup-auth-step__title" #authHeading tabindex="-1">Worker Authentication</h2>
       <p class="setup-auth-step__description">
         Configure how worker containers authenticate with Claude.
       </p>
@@ -73,11 +87,12 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
               [loginPhase]="_settingsService.loginPhase()"
               [loginUrl]="_settingsService.loginUrl()"
               [loginError]="_settingsService.loginError()"
-              [codeSubmitting]="_settingsService.codeSubmitting()"
               (startLogin)="_settingsService.startLogin()"
               (submitCode)="_settingsService.submitLoginCode($event)"
-              (cancel)="_settingsService.cancelLogin()"
+              (cancel)="cancelLogin()"
             />
+
+            <div role="alert" class="setup-auth-step__error">{{ (!_settingsService.loginPhase() && _settingsService.startLoginError()) ? _settingsService.startLoginError() : '' }}</div>
 
             @if (_oauthStatus() !== 'Present' && !_settingsService.loginPhase()) {
               <div role="note" class="setup-auth-step__oauth-note">
@@ -100,6 +115,10 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
 })
 export class SetupAuthStepComponent {
   protected readonly _settingsService = inject(SettingsService);
+  private readonly _injector = inject(Injector);
+  private readonly _elementRef = inject(ElementRef);
+
+  @ViewChild('authHeading') private readonly _authHeading?: ElementRef<HTMLHeadingElement>;
 
   readonly complete = output<void>();
 
@@ -134,10 +153,36 @@ export class SetupAuthStepComponent {
         this.complete.emit();
       }
     });
+
+    // Move focus to auth heading on Succeeded (Finding 4).
+    effect(() => {
+      const phase = this._settingsService.loginPhase();
+      if (phase === 'Succeeded') {
+        runInInjectionContext(this._injector, () =>
+          afterNextRender(() => this._authHeading?.nativeElement.focus())
+        );
+      }
+    });
   }
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
+  }
+
+  cancelLogin(): void {
+    this._settingsService.cancelLogin();
+    // Return focus to the entry "Log in" button; fallback to the step heading.
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => {
+        const host = this._elementRef.nativeElement as HTMLElement;
+        const entryBtn = host.querySelector<HTMLButtonElement>('.oauth-panel__login-btn');
+        if (entryBtn) {
+          entryBtn.focus();
+        } else {
+          this._authHeading?.nativeElement.focus();
+        }
+      })
+    );
   }
 
   onNext(): void {

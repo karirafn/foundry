@@ -56,12 +56,11 @@ export class SettingsService {
         }
 
         if (update.phase === 'Succeeded') {
-          this._fetchSettings().subscribe();
-        }
-
-        if (update.phase === 'Failed' || update.phase === 'Succeeded') {
-          // Terminal states — mark login as idle after Succeeded or Failed signal
-          // (phase stays visible until cancelLogin or next startLogin)
+          this._fetchSettings().subscribe(() => {
+            // Clear the phase only after settings reload confirms the new credential
+            // is in place; this prevents a race where the panel re-reads stale status.
+            this._loginPhaseSignal.set(null);
+          });
         }
       });
   }

@@ -45,7 +45,7 @@ function failedCopy(error: LoginError | null): FailedCopy {
   }
 }
 
-function liveText(phase: LoginPhase): string {
+function liveText(phase: LoginPhase, accountEmail: string | null): string {
   switch (phase) {
     case 'Starting':
       return 'Starting sign-in…';
@@ -53,6 +53,8 @@ function liveText(phase: LoginPhase): string {
       return 'Sign-in link ready. Paste your code.';
     case 'SigningIn':
       return 'Signing you in…';
+    case 'Succeeded':
+      return accountEmail ? `Signed in as ${accountEmail}.` : 'Signed in.';
     default:
       return '';
   }
@@ -91,7 +93,7 @@ function liveText(phase: LoginPhase): string {
           class="login-flow__code-input"
           type="text"
           aria-label="Authorization code"
-          [attr.aria-describedby]="'login-flow-code-hint'"
+          aria-describedby="login-flow-code-hint"
           placeholder="Paste your code"
           autocomplete="off"
           spellcheck="false"
@@ -146,7 +148,7 @@ export class LoginFlowComponent {
   readonly phase = input.required<LoginPhase>();
   readonly url = input<string | null>(null);
   readonly error = input<LoginError | null>(null);
-  readonly submitting = input<boolean>(false);
+  readonly accountEmail = input<string | null>(null);
 
   readonly submitCode = output<string>();
   readonly retry = output<void>();
@@ -162,7 +164,7 @@ export class LoginFlowComponent {
 
   protected readonly _canSubmit = computed(() => this._codeValueSignal().trim().length > 0);
 
-  protected readonly _liveText = computed(() => liveText(this.phase()));
+  protected readonly _liveText = computed(() => liveText(this.phase(), this.accountEmail()));
 
   protected readonly _failedCopy = computed(() => failedCopy(this.error()));
 

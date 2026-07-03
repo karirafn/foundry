@@ -674,13 +674,120 @@ describe('SettingsGeneralComponent', () => {
     let drainGate = el.querySelector('.general-settings__drain-gate');
     expect(drainGate?.textContent).toContain('Dispatch is paused');
 
-    // Act — simulate Succeeded signal via private writable (test-only cast)
-    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('Succeeded');
+    // Act — simulate the service clearing loginPhase to null after settings reload (Finding 1 fix)
+    (service as unknown as { _loginPhaseSignal: { set: (v: string | null) => void } })._loginPhaseSignal.set(null);
     fixture.detectChanges();
 
     // Assert — drain gate resets
     drainGate = el.querySelector('.general-settings__drain-gate');
     expect(drainGate?.textContent?.trim()).toBe('');
+  });
+
+  it('should show Resume button when login fails while switch-account drain is active (Finding 2)', () => {
+    // Arrange — enter draining state
+    const { httpMock, service } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Act — simulate Failed phase while still draining
+    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('Failed');
+    fixture.detectChanges();
+
+    // Assert — Resume button appears in drain gate
+    const resumeBtn = el.querySelector('.general-settings__resume-btn');
+    expect(resumeBtn).toBeTruthy();
+  });
+
+  it('should reset drain-gate state when startLogin POST fails while draining (Finding 6)', () => {
+    // Arrange — enter draining state
+    const { httpMock, service } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+
+    // Fail the login start POST
+    httpMock.expectOne('/api/settings/oauth/login/start').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — drain gate is cleared (not stranded)
+    const drainGate = el.querySelector('.general-settings__drain-gate');
+    expect(drainGate?.textContent?.trim()).toBe('');
+  });
+
+  it('should move focus to auth heading when login phase becomes Succeeded (Finding 4)', async () => {
+    // Arrange
+    const { httpMock, service } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    // Act — simulate Succeeded phase
+    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('Succeeded');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — focus moves to auth heading
+    const el = fixture.nativeElement as HTMLElement;
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication')) as HTMLElement;
+    expect(document.activeElement).toBe(authHeading);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  it('should show startLoginError in a role="alert" when loginPhase is null and error is set', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    fixture.detectChanges();
+
+    // Act — startLogin fails (POST 500)
+    const service = TestBed.inject(SettingsService);
+    service.startLogin();
+    httpMock.expectOne('/api/settings/oauth/login/start').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — startLoginError displayed
+    const el = fixture.nativeElement as HTMLElement;
+    const alerts = Array.from(el.querySelectorAll('[role="alert"]')) as HTMLElement[];
+    const startLoginAlert = alerts.find(a => a.textContent?.includes('Failed to start login'));
+    expect(startLoginAlert).toBeTruthy();
   });
 
   it('should focus the entry login button on cancel when login flow is not in drain state', async () => {

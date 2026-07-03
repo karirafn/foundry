@@ -95,7 +95,7 @@ import { LoginFlowComponent } from './login-flow/login-flow';
           [phase]="loginPhase()!"
           [url]="loginUrl()"
           [error]="loginError()"
-          [submitting]="codeSubmitting()"
+          [accountEmail]="accountEmail()"
           (submitCode)="onSubmitCode($event)"
           (retry)="startLogin.emit()"
           (cancel)="onCancel()"
@@ -114,7 +114,6 @@ export class OAuthPanelComponent {
   readonly loginPhase = input<LoginPhase | null>(null);
   readonly loginUrl = input<string | null>(null);
   readonly loginError = input<LoginError | null>(null);
-  readonly codeSubmitting = input<boolean>(false);
 
   readonly startLogin = output<void>();
   readonly submitCode = output<string>();

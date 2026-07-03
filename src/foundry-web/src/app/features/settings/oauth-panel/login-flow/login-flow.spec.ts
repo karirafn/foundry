@@ -6,7 +6,7 @@ function setup(inputs: {
   phase: LoginPhase;
   url?: string | null;
   error?: LoginError | null;
-  submitting?: boolean;
+  accountEmail?: string | null;
 }): ComponentFixture<LoginFlowComponent> {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -16,7 +16,7 @@ function setup(inputs: {
   fixture.componentRef.setInput('phase', inputs.phase);
   fixture.componentRef.setInput('url', inputs.url ?? null);
   fixture.componentRef.setInput('error', inputs.error ?? null);
-  fixture.componentRef.setInput('submitting', inputs.submitting ?? false);
+  fixture.componentRef.setInput('accountEmail', inputs.accountEmail ?? null);
   fixture.detectChanges();
   return fixture;
 }
@@ -490,6 +490,30 @@ describe('LoginFlowComponent', () => {
 
       // Assert
       expect(statusEl?.textContent).toContain('Signing you in');
+    });
+
+    it('should announce "Signed in as {email}." in Succeeded phase when accountEmail is provided', () => {
+      // Arrange
+      const fixture = setup({ phase: 'Succeeded', accountEmail: 'user@example.com' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('[role="status"][aria-live="polite"]');
+
+      // Assert
+      expect(statusEl?.textContent).toContain('Signed in as user@example.com.');
+    });
+
+    it('should announce "Signed in." in Succeeded phase when accountEmail is null', () => {
+      // Arrange
+      const fixture = setup({ phase: 'Succeeded', accountEmail: null });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('[role="status"][aria-live="polite"]');
+
+      // Assert
+      expect(statusEl?.textContent?.trim()).toBe('Signed in.');
     });
   });
 
