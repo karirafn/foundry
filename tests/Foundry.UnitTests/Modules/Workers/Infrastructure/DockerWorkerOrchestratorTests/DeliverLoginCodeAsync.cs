@@ -56,7 +56,7 @@ public sealed class DeliverLoginCodeAsync
         await sut.DeliverLoginCodeAsync("container-id", "auth-code-abc", CancellationToken.None);
 
         // Assert — argv uses env-var delivery (ForCode), not stdin (ForStdin)
-        LoginExecCommand expectedCmd = LoginExecCommand.ForCode("auth-code-abc");
+        LoginExecCommand expectedCmd = LoginExecCommand.ForCode();
         ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
         captured.Cmd.ShouldBe(expectedCmd.Argv);
     }

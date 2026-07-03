@@ -39,7 +39,7 @@ internal sealed record LoginExecCommand
     /// and can proceed. The code is passed via <c>Env = ["C=&lt;code&gt;"]</c> on the exec
     /// parameters — it is never interpolated into the shell command string.
     /// </summary>
-    internal static LoginExecCommand ForCode(string code) =>
+    internal static LoginExecCommand ForCode() =>
         new(
         [
             "sh",

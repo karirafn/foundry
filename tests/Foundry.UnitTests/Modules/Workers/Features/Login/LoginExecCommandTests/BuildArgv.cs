@@ -13,7 +13,7 @@ public sealed class BuildArgv
     {
         // Arrange
         // Act
-        LoginExecCommand command = LoginExecCommand.ForCode("any-code");
+        LoginExecCommand command = LoginExecCommand.ForCode();
 
         // Assert — argv writes the $C env var into the FIFO, then kills the sleep PID
         command.Argv.ShouldBe(
@@ -31,7 +31,7 @@ public sealed class BuildArgv
         const string code = "super-secret-oauth-code";
 
         // Act
-        LoginExecCommand command = LoginExecCommand.ForCode(code);
+        LoginExecCommand command = LoginExecCommand.ForCode();
 
         // Assert — the code value is NOT interpolated into argv (it travels via the C env var)
         string joined = string.Join(" ", command.Argv);
@@ -45,7 +45,7 @@ public sealed class BuildArgv
         const string codeWithMeta = @"abc$'"";&|";
 
         // Act
-        LoginExecCommand command = LoginExecCommand.ForCode(codeWithMeta);
+        LoginExecCommand command = LoginExecCommand.ForCode();
 
         // Assert — shell metacharacters in the code stay in the env var, not in argv
         string joined = string.Join(" ", command.Argv);

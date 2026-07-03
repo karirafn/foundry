@@ -399,7 +399,7 @@ internal sealed class DockerWorkerOrchestrator(
         string code,
         CancellationToken cancellationToken)
     {
-        LoginExecCommand cmd = LoginExecCommand.ForCode(code);
+        LoginExecCommand cmd = LoginExecCommand.ForCode();
 
         ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
             containerId,
