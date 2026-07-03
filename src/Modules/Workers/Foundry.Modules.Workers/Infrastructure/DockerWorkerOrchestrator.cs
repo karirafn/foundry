@@ -489,7 +489,7 @@ internal sealed class DockerWorkerOrchestrator(
 
     public async Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
     {
-        string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
+        string helperId = await StartCredentialHelperContainerAsync(readOnly: true, cancellationToken);
 
         try
         {
@@ -507,7 +507,7 @@ internal sealed class DockerWorkerOrchestrator(
         // onto the credential volume without copying the volume to the host.
         string configPath = $"{CredentialVolume.ContainerPath}/.claude.json";
 
-        string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
+        string helperId = await StartCredentialHelperContainerAsync(readOnly: false, cancellationToken);
 
         try
         {
@@ -531,7 +531,7 @@ internal sealed class DockerWorkerOrchestrator(
     /// for exec operations. The caller is responsible for stopping and removing it via
     /// <see cref="StopAndRemoveAsync"/> in a <c>finally</c> block.
     /// </summary>
-    private async Task<string> StartCredentialHelperContainerAsync(CancellationToken cancellationToken)
+    private async Task<string> StartCredentialHelperContainerAsync(bool readOnly, CancellationToken cancellationToken)
     {
         CreateContainerParameters createParams = new()
         {
@@ -547,7 +547,7 @@ internal sealed class DockerWorkerOrchestrator(
                         Type = "volume",
                         Source = CredentialVolume.VolumeName,
                         Target = CredentialVolume.ContainerPath,
-                        ReadOnly = false,
+                        ReadOnly = readOnly,
                     },
                 ],
             },

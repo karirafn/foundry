@@ -1,6 +1,7 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
@@ -128,6 +129,27 @@ public sealed class SeedOnboardingAsync
         containerOps.RemoveCalled.ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task WhenStarted_MountsCredentialVolumeReadWrite()
+    {
+        // Arrange
+        RecordingExecOperations execOps = new(readStdout: "");
+        RecordingContainerOperations containerOps = new();
+        DockerWorkerOrchestrator sut = BuildSut(containerOps, execOps);
+
+        // Act
+        await sut.SeedOnboardingAsync(CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = containerOps.LastCreateParameters.ShouldNotBeNull();
+        IList<Mount> mounts = captured.HostConfig.Mounts.ShouldNotBeNull();
+        mounts.ShouldContain(m =>
+            m.Type == "volume"
+            && m.Source == WorkerVolumeNames.CredentialVolumeName
+            && m.Target == WorkerVolumeNames.ClaudeConfigContainerPath
+            && !m.ReadOnly);
+    }
+
     /// <summary>
     /// Records all exec calls in order. Returns <paramref name="readStdout"/> for the first
     /// exec (the cat read) and empty for subsequent execs (the write).
@@ -182,11 +204,15 @@ public sealed class SeedOnboardingAsync
 
         public bool StopCalled { get; private set; }
         public bool RemoveCalled { get; private set; }
+        public CreateContainerParameters? LastCreateParameters { get; private set; }
 
         public Task<CreateContainerResponse> CreateContainerAsync(
             CreateContainerParameters parameters,
             CancellationToken cancellationToken)
-            => Task.FromResult(new CreateContainerResponse { ID = HelperId });
+        {
+            LastCreateParameters = parameters;
+            return Task.FromResult(new CreateContainerResponse { ID = HelperId });
+        }
 
         public Task<bool> StartContainerAsync(string id, ContainerStartParameters parameters, CancellationToken cancellationToken)
             => Task.FromResult(true);
