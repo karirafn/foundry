@@ -33,8 +33,10 @@ The container's entrypoint bootstraps a named FIFO at `/tmp/ci`, writes the FIFO
 Foundry streams the container's stdout/stderr log lines and extracts the `https://…/oauth/…` authorization URL (the `visit:` line emitted by the CLI) — the URL is broadcast to the dashboard via SignalR as a `LoginSessionUpdate`.
 The operator opens the URL, authorizes, and pastes the code into the dashboard.
 Foundry delivers the code into the FIFO via `docker exec` (`printf '%s\n' "$C" > /tmp/ci`), then kills the sleep-holder process (read from `/tmp/ci.pid`) so the FIFO writer closes and the CLI receives EOF on stdin and proceeds to token exchange.
-The service then polls the log stream for the `Login successful.` signal and reads the container's exit code (0 = success, non-zero = bad/expired code).
-On success the login container has already exited — its entrypoint runs `exec claude auth login`, so the CLI is PID 1 and the container stops the moment login completes — so Foundry cannot `docker exec` into it; instead it captures the authenticated account's email, org name, and subscription type by running `claude auth status --json` in a fresh short-lived helper container that mounts the same credential volume read-only, then tears the helper down.
+The service scans the log stream for the `Login successful.` signal, which is authoritative — an `Invalid code` line, or the stream closing without the success signal, is treated as failure.
+It deliberately does not gate on the container exit code: the CLI may still be running when the success signal appears (observed in practice living seconds longer), so an exit-code check races the signal and misreports success as failure.
+Because the login container's lifecycle at that moment is therefore unreliable (it may or may not have exited), Foundry captures the authenticated account's email, org name, and subscription type without depending on it — by running `claude auth status --json` in a fresh short-lived helper container that mounts the same credential volume read-only, then tears the helper down.
+This volume read is also the real confirmation that login persisted a valid credential.
 On an invalid code the session transitions to `Failed(InvalidCode)` and is broadcast to the dashboard for re-prompt — the operator may start a new session.
 
 **Onboarding seed.**
