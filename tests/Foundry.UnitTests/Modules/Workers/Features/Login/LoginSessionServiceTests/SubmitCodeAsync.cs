@@ -222,30 +222,49 @@ public sealed class SubmitCodeAsync
     }
 
     [Fact]
-    public async Task WhenSessionNotInWaitingForAuthorization_SubmitCodeAsync_ReturnsNotAcceptingCodeError()
+    public async Task WhenSessionInSigningInPhase_SubmitCodeAsync_ReturnsNotAcceptingCodeError()
     {
-        // Arrange — start but do NOT wait for URL (session stays in Starting)
-        FakeWorkerOrchestrator orchestrator = new([]);
+        // Arrange — reach WaitingForAuthorization, then move to SigningIn by submitting a code.
+        // A second submit while in SigningIn must deterministically return NotAcceptingCode.
+        string url = "https://claude.ai/oauth/authorize?code=true";
+        string logLine = $"If the browser didn't open, visit: {url}";
+
+        // Use a blocking-stream orchestrator so the log scan for the second code delivery
+        // does not race to completion — the session stays in SigningIn throughout.
+        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        orchestrator.WithBlockingStreamAfterLines();
         LoginSessionService sut = CreateService(orchestrator);
+
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
-        // Act — session is in Starting phase (or transitioning); not WaitingForAuthorization
-        // We need to check the phase BEFORE the background task moves it to Failed (UrlTimeout).
-        // Using ActiveSessionPhaseForTest to check current phase.
-        // Since the fake has no log lines and returns empty stream immediately,
-        // the background task will quickly move to Starting then UrlTimeout failure.
-        // For this test: use a blocking fake that never yields any lines, keeping session in Starting.
-        FakeWorkerOrchestrator blockingOrchestrator = new(["not-a-url-line"]);
-        LoginSessionService sut2 = CreateService(blockingOrchestrator);
-        await sut2.StartAsync(TestContext.Current.CancellationToken);
-        // Don't wait for background — session is transiently in Starting phase
-        // Submit while in Starting phase (not WaitingForAuthorization)
+        // Deliver first code — transitions to SigningIn; the WaitForLoginSuccessAsync
+        // log scan will block indefinitely (no "Login successful." or "Invalid code").
+        // We do NOT await SubmitCodeAsync to keep the session in SigningIn.
+        Task<Result> firstSubmit = sut.SubmitCodeAsync("first-code", TestContext.Current.CancellationToken);
 
-        // Act
-        Result submitResult = await sut2.SubmitCodeAsync("any-code", TestContext.Current.CancellationToken);
+        // Wait a brief moment for the state machine to advance past WaitingForAuthorization
+        await Task.Delay(50, TestContext.Current.CancellationToken);
 
-        // Assert — either NoActiveSession (if background already cleaned up) or NotAcceptingCode
-        // The key is: it doesn't return Ok
+        // Act — second submit while in SigningIn
+        Result submitResult = await sut.SubmitCodeAsync("second-code", TestContext.Current.CancellationToken);
+
+        // Assert — second submit is rejected with NotAcceptingCode
         submitResult.IsFailure.ShouldBeTrue();
+        Result.Failure failure = submitResult.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe(LoginErrors.NotAcceptingCodeCode);
+
+        // Cleanup — cancel the first submit (it's blocked waiting for the log stream).
+        // TriggerSessionTimeoutForTest cancels the session CTS which propagates cancellation
+        // into the first SubmitCodeAsync; ignore the resulting OperationCanceledException.
+        sut.TriggerSessionTimeoutForTest();
+        try
+        {
+            await firstSubmit;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected — the session-timeout CTS fired while the stream scan was in progress.
+        }
     }
 }
