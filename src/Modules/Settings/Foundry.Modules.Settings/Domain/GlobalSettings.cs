@@ -16,6 +16,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MaxDefaultCooldownMinutes = 1440;
     internal const int DefaultCooldownMinutesValue = 60;
     internal const int MaxUsageLimitResetDays = 7;
+    internal const int MaxOAuthAccountEmailLength = 254;
+    internal const int MaxOAuthAccountOrgNameLength = 200;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
     {

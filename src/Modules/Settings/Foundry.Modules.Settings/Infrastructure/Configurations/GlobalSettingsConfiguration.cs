@@ -73,9 +73,11 @@ internal sealed class GlobalSettingsConfiguration(
             .HasColumnName("auth_invalid_pause");
 
         builder.Property(s => s.OAuthAccountEmail)
+            .HasMaxLength(GlobalSettings.MaxOAuthAccountEmailLength)
             .HasColumnName("oauth_account_email");
 
         builder.Property(s => s.OAuthAccountOrgName)
+            .HasMaxLength(GlobalSettings.MaxOAuthAccountOrgNameLength)
             .HasColumnName("oauth_account_org_name");
 
         ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(

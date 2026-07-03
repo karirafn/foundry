@@ -4,6 +4,7 @@ using Foundry.WebApi.Persistence;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 using Shouldly;
 
@@ -202,5 +203,31 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.OAuthAccountEmail.ShouldBeNull(),
             () => reloaded.OAuthAccountOrgName.ShouldBeNull());
+    }
+
+    [Fact]
+    public void OAuthAccountEmail_HasMaxLength_MatchingDomainConstant()
+    {
+        // Arrange
+        IEntityType entityType = _dbContext.Model.FindEntityType(typeof(GlobalSettings))!;
+
+        // Act
+        IProperty property = entityType.FindProperty(nameof(GlobalSettings.OAuthAccountEmail))!;
+
+        // Assert
+        property.GetMaxLength().ShouldBe(GlobalSettings.MaxOAuthAccountEmailLength);
+    }
+
+    [Fact]
+    public void OAuthAccountOrgName_HasMaxLength_MatchingDomainConstant()
+    {
+        // Arrange
+        IEntityType entityType = _dbContext.Model.FindEntityType(typeof(GlobalSettings))!;
+
+        // Act
+        IProperty property = entityType.FindProperty(nameof(GlobalSettings.OAuthAccountOrgName))!;
+
+        // Assert
+        property.GetMaxLength().ShouldBe(GlobalSettings.MaxOAuthAccountOrgNameLength);
     }
 }
