@@ -34,7 +34,7 @@ Foundry streams the container's stdout/stderr log lines and extracts the `https:
 The operator opens the URL, authorizes, and pastes the code into the dashboard.
 Foundry delivers the code into the FIFO via `docker exec` (`printf '%s\n' "$C" > /tmp/ci`), then kills the sleep-holder process (read from `/tmp/ci.pid`) so the FIFO writer closes and the CLI receives EOF on stdin and proceeds to token exchange.
 The service then polls the log stream for the `Login successful.` signal and reads the container's exit code (0 = success, non-zero = bad/expired code).
-On success, Foundry runs `claude auth status --json` via `docker exec` on the still-running container to capture the authenticated account's email, org name, and subscription type before tearing the container down.
+On success the login container has already exited — its entrypoint runs `exec claude auth login`, so the CLI is PID 1 and the container stops the moment login completes — so Foundry cannot `docker exec` into it; instead it captures the authenticated account's email, org name, and subscription type by running `claude auth status --json` in a fresh short-lived helper container that mounts the same credential volume read-only, then tears the helper down.
 On an invalid code the session transitions to `Failed(InvalidCode)` and is broadcast to the dashboard for re-prompt — the operator may start a new session.
 
 **Onboarding seed.**
@@ -44,12 +44,12 @@ Before starting `claude auth login --claudeai`, the entrypoint idempotently merg
 At most one login session is active at a time — `LoginSessionService` (singleton, in-memory, Workers module) enforces this.
 Dispatch is transiently suppressed while a session is active via `ILoginSessionState.IsLoginActive` (checked by `WorkerDispatchService`); no pause record is persisted.
 Session state is not persisted: a Foundry restart mid-login leaves the in-memory session gone, and `LoginContainerReaper` (an `IHostedLifecycleService`) stops and removes any orphaned `foundry.login` containers on startup.
-A session times out if no URL is captured within the URL timeout, or if no code is submitted within the session timeout; both surface as typed `LoginFailureReason` variants (`UrlTimeout`, `CodeTimeout`).
+A session times out if no URL is captured within the URL timeout, if no code is submitted within the session timeout, or if login confirmation is not seen within the sign-in timeout after the code is delivered; these surface as typed `LoginFailureReason` variants (`UrlTimeout`, `CodeTimeout`).
 
 **Auth-invalid pause.**
 When a worker exits with an auth failure, Foundry classifies the run as `AuthInvalid` and raises an **auth-invalid pause**: dispatch pauses, the affected issue is retried automatically on resume, and resume is triggered automatically by a successful in-app login (which calls `GlobalSettings.ResumeDispatch()` and publishes `DispatchResumed`).
 There is deliberately no auto-resume timer for auth-invalid — Foundry cannot detect a successful re-login without an explicit in-app login session completing.
-Settings and the setup wizard report only what local data proves (credential file present / approximate expiry / re-login needed), never an unverified "valid" status.
+Settings and the setup wizard derive OAuth status from persisted state — a committed account identity (set by a successful in-app login) reads as signed-in, an auth-invalid pause reads as re-login-needed — rather than from a live credential-volume read; token expiry is not currently surfaced, and they never assert an unverified "valid" status.
 The OAuth credential sits in plaintext in the volume, consistent with how the genuine CLI stores it, and bounded by the Docker-socket trust boundary Foundry already operates within.
 Distinct from provider authentication (Account / PAT), which authenticates git operations against GitHub or GitLab.
 

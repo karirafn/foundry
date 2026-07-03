@@ -45,7 +45,7 @@ Foundry streams the container stdout/stderr and extracts the authorization URL f
 The operator opens the URL, authorizes in the browser, and pastes the code into the dashboard.
 Foundry delivers the code via `docker exec` (`printf '%s\n' "$C" > /tmp/ci; kill $(cat /tmp/ci.pid)`) — the code is passed as environment variable `C`, never interpolated, so shell metacharacters cannot cause injection; the sleep-holder kill forces EOF on stdin so the CLI proceeds to token exchange without waiting.
 Foundry polls the log stream for `Login successful.` and reads the container exit code (0 = success, non-zero = bad or expired code).
-On success, Foundry runs `claude auth status --json` via `docker exec` to capture the authenticated account identity (email, org name, subscription type) before tearing the container down.
+On success the login container has already exited (its entrypoint `exec`s the CLI as PID 1, so the container stops when login completes), so Foundry captures the authenticated account identity (email, org name, subscription type) by running `claude auth status --json` in a fresh short-lived helper container that mounts the credential volume, rather than exec-ing into the stopped login container. See ADR 0027.
 
 ### CLI output coupling
 
