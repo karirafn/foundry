@@ -397,7 +397,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn');
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn');
 
     // Assert
     expect(switchBtn).toBeTruthy();
@@ -413,7 +413,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn');
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn');
 
     // Assert
     expect(switchBtn).toBeFalsy();
@@ -429,7 +429,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
     switchBtn.click();
     fixture.detectChanges();
 
@@ -447,7 +447,7 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
     switchBtn.click();
     fixture.detectChanges();
 
@@ -456,7 +456,7 @@ describe('SettingsGeneralComponent', () => {
     expect(el.querySelector('[role="group"]')).toBeTruthy();
   });
 
-  it('should return focus to the switch-account button when Cancel is clicked', async () => {
+  it('should return focus to the auth heading when Cancel is clicked', async () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -466,7 +466,7 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
     switchBtn.click();
     fixture.detectChanges();
 
@@ -477,9 +477,10 @@ describe('SettingsGeneralComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // Assert — switch account button re-rendered and focused
-    const restoredBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
-    expect(document.activeElement).toBe(restoredBtn);
+    // Assert — focus returns to auth heading (switch button is inside child panel, not accessible from host ViewChild)
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication')) as HTMLElement;
+    expect(document.activeElement).toBe(authHeading);
 
     document.body.removeChild(fixture.nativeElement);
   });
@@ -493,7 +494,7 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
     switchBtn.click();
     fixture.detectChanges();
 
@@ -518,7 +519,7 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
     switchBtn.click();
     fixture.detectChanges();
 
@@ -548,7 +549,7 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
     switchBtn.click();
     fixture.detectChanges();
 
@@ -588,7 +589,7 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const switchBtn = el.querySelector('.general-settings__switch-account-btn') as HTMLButtonElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
     switchBtn.click();
     fixture.detectChanges();
 

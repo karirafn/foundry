@@ -1,15 +1,12 @@
-import { Component, ChangeDetectionStrategy, Signal, WritableSignal, input, output, signal } from '@angular/core';
-import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { OAuthStatus } from '../settings.model';
-
-const COPY_LABEL = 'Copy';
-const COPIED_LABEL = 'Copied';
-const COPY_RESET_MS = 2000;
+import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { LoginError, LoginPhase, OAuthStatus } from '../settings.model';
+import { LoginFlowComponent } from './login-flow/login-flow';
 
 @Component({
   selector: 'fd-oauth-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, NgTemplateOutlet],
+  imports: [DatePipe, LoginFlowComponent],
   template: `
     <div class="oauth-panel">
       <div class="oauth-panel__header">
@@ -29,11 +26,21 @@ const COPY_RESET_MS = 2000;
         <div class="oauth-panel__present">
           <div class="oauth-panel__rows">
             <div class="oauth-panel__row">
-              <span class="oauth-panel__row-label">Active account</span>
-              <span class="oauth-panel__row-value">{{ subscriptionType() ?? 'Claude account' }}</span>
+              <span class="oauth-panel__row-label">Account</span>
+              <span class="oauth-panel__row-value">{{ accountEmail() ?? 'Claude account' }}</span>
+            </div>
+            @if (accountOrgName()) {
+              <div class="oauth-panel__row">
+                <span class="oauth-panel__row-label">Organization</span>
+                <span class="oauth-panel__row-value">{{ accountOrgName() }}</span>
+              </div>
+            }
+            <div class="oauth-panel__row">
+              <span class="oauth-panel__row-label">Plan</span>
+              <span class="oauth-panel__row-value">{{ subscriptionType() ?? '—' }}</span>
             </div>
             <div class="oauth-panel__row">
-              <span class="oauth-panel__row-label">Access token expires</span>
+              <span class="oauth-panel__row-label">Token expires</span>
               <span class="oauth-panel__expires-value">
                 @if (expiresAt()) {
                   {{ expiresAt() | date:'medium' }}
@@ -44,80 +51,57 @@ const COPY_RESET_MS = 2000;
             </div>
           </div>
           <p class="oauth-panel__hint">
-            Claude Code refreshes this token automatically — Foundry never stores it.
+            Refreshes automatically — Foundry never stores it.
           </p>
+
+          @if (!loginPhase()) {
+            <button
+              class="oauth-panel__switch-btn"
+              type="button"
+              (click)="startLogin.emit()"
+            >Switch account</button>
+          }
         </div>
       }
 
-      @if (status() === 'ReLoginNeeded') {
-        <div class="oauth-panel__relogin">
+      @if (status() === 'ReLoginNeeded' && !loginPhase()) {
+        <div class="oauth-panel__entry">
           <p class="oauth-panel__message">
-            Your credential needs a refresh. Run the login command below to sign in again.
+            Your saved credential expired. Sign in again to resume workers.
           </p>
-          <ng-container *ngTemplateOutlet="loginCommandBlock" />
+          <button
+            class="oauth-panel__login-btn"
+            type="button"
+            (click)="startLogin.emit()"
+          >Log in again</button>
         </div>
       }
 
-      @if (status() === 'NotConfigured') {
-        <div class="oauth-panel__not-configured">
+      @if (status() === 'NotConfigured' && !loginPhase()) {
+        <div class="oauth-panel__entry">
           <p class="oauth-panel__message">
-            No credential found yet. Run this command in your terminal to sign in:
+            No account is signed in yet. Workers stay paused until you sign in.
           </p>
-          <ng-container *ngTemplateOutlet="loginCommandBlock" />
+          <button
+            class="oauth-panel__login-btn"
+            type="button"
+            (click)="startLogin.emit()"
+          >Log in</button>
         </div>
+      }
+
+      @if (loginPhase()) {
+        <fd-oauth-login-flow
+          [phase]="loginPhase()!"
+          [url]="loginUrl()"
+          [error]="loginError()"
+          [submitting]="codeSubmitting()"
+          (submitCode)="onSubmitCode($event)"
+          (retry)="startLogin.emit()"
+          (cancel)="onCancel()"
+        />
       }
     </div>
-
-    <ng-template #loginCommandBlock>
-      <div class="oauth-panel__command-block">
-        @if (loginCommandLoading()) {
-          <div role="status" aria-live="polite" class="oauth-panel__loading">
-            <span class="oauth-panel__spinner" aria-hidden="true"></span>
-            Preparing login command…
-          </div>
-        } @else if (loginCommandError()) {
-          <div role="alert" class="oauth-panel__command-error">
-            Couldn't load the login command.
-            <button
-              class="oauth-panel__retry-command-btn"
-              type="button"
-              (click)="fetchCommand.emit()"
-            >Retry</button>
-          </div>
-        } @else if (loginCommand()) {
-          <div class="oauth-panel__command-wrapper">
-            <pre
-              class="oauth-panel__command-pre"
-              tabindex="0"
-              aria-label="OAuth login command"
-            >{{ loginCommand() }}</pre>
-            <button
-              class="oauth-panel__copy-btn"
-              type="button"
-              aria-label="Copy login command"
-              (click)="onCopy()"
-            >{{ _copyLabel() }}</button>
-          </div>
-          <span
-            class="oauth-panel__copy-announcement"
-            aria-live="polite"
-            aria-atomic="true"
-          >{{ _copyAnnouncement() }}</span>
-          <button
-            class="oauth-panel__refresh-btn"
-            type="button"
-            (click)="refresh.emit()"
-          >I've logged in — refresh</button>
-        }
-        @if (loginCommandError()) {
-          <button
-            class="oauth-panel__refresh-btn"
-            type="button"
-            (click)="refresh.emit()"
-          >I've logged in — refresh</button>
-        }
-      </div>
-    </ng-template>
   `,
   styleUrl: './oauth-panel.scss',
 })
@@ -125,38 +109,22 @@ export class OAuthPanelComponent {
   readonly status = input.required<OAuthStatus>();
   readonly expiresAt = input<string | null>(null);
   readonly subscriptionType = input<string | null>(null);
-  readonly loginCommand = input<string | null>(null);
-  readonly loginCommandLoading = input<boolean>(false);
-  readonly loginCommandError = input<string | null>(null);
+  readonly accountEmail = input<string | null>(null);
+  readonly accountOrgName = input<string | null>(null);
+  readonly loginPhase = input<LoginPhase | null>(null);
+  readonly loginUrl = input<string | null>(null);
+  readonly loginError = input<LoginError | null>(null);
+  readonly codeSubmitting = input<boolean>(false);
 
-  readonly refresh = output<void>();
-  readonly fetchCommand = output<void>();
+  readonly startLogin = output<void>();
+  readonly submitCode = output<string>();
+  readonly cancel = output<void>();
 
-  private readonly _copyLabelSignal: WritableSignal<string> = signal(COPY_LABEL);
-  protected readonly _copyLabel: Signal<string> = this._copyLabelSignal.asReadonly();
+  onSubmitCode(code: string): void {
+    this.submitCode.emit(code);
+  }
 
-  private readonly _copyAnnouncementSignal: WritableSignal<string> = signal('');
-  protected readonly _copyAnnouncement: Signal<string> = this._copyAnnouncementSignal.asReadonly();
-
-  onCopy(): void {
-    const command = this.loginCommand();
-    if (!command) {
-      return;
-    }
-
-    navigator.clipboard.writeText(command).then(
-      () => {
-        this._copyLabelSignal.set(COPIED_LABEL);
-        this._copyAnnouncementSignal.set('Command copied to clipboard');
-        setTimeout(() => {
-          this._copyLabelSignal.set(COPY_LABEL);
-          this._copyAnnouncementSignal.set('');
-        }, COPY_RESET_MS);
-      },
-      () => {
-        this._copyAnnouncementSignal.set('Copy failed — select the command text manually.');
-        setTimeout(() => this._copyAnnouncementSignal.set(''), COPY_RESET_MS);
-      }
-    );
+  onCancel(): void {
+    this.cancel.emit();
   }
 }

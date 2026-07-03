@@ -1,14 +1,17 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
 import { OAuthPanelComponent } from './oauth-panel';
+import { LoginError, LoginPhase } from '../settings.model';
 
 function setup(inputs: {
   status: 'NotConfigured' | 'Present' | 'ReLoginNeeded';
   expiresAt?: string | null;
   subscriptionType?: string | null;
-  loginCommand?: string | null;
-  loginCommandLoading?: boolean;
-  loginCommandError?: string | null;
+  accountEmail?: string | null;
+  accountOrgName?: string | null;
+  loginPhase?: LoginPhase | null;
+  loginUrl?: string | null;
+  loginError?: LoginError | null;
+  codeSubmitting?: boolean;
 }): ComponentFixture<OAuthPanelComponent> {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -18,19 +21,22 @@ function setup(inputs: {
   fixture.componentRef.setInput('status', inputs.status);
   fixture.componentRef.setInput('expiresAt', inputs.expiresAt ?? null);
   fixture.componentRef.setInput('subscriptionType', inputs.subscriptionType ?? null);
-  fixture.componentRef.setInput('loginCommand', inputs.loginCommand ?? null);
-  fixture.componentRef.setInput('loginCommandLoading', inputs.loginCommandLoading ?? false);
-  fixture.componentRef.setInput('loginCommandError', inputs.loginCommandError ?? null);
+  fixture.componentRef.setInput('accountEmail', inputs.accountEmail ?? null);
+  fixture.componentRef.setInput('accountOrgName', inputs.accountOrgName ?? null);
+  fixture.componentRef.setInput('loginPhase', inputs.loginPhase ?? null);
+  fixture.componentRef.setInput('loginUrl', inputs.loginUrl ?? null);
+  fixture.componentRef.setInput('loginError', inputs.loginError ?? null);
+  fixture.componentRef.setInput('codeSubmitting', inputs.codeSubmitting ?? false);
   fixture.detectChanges();
   return fixture;
 }
 
 describe('OAuthPanelComponent', () => {
-  // Present state
-  describe('when status is Present', () => {
-    it('should show "Signed in" badge text', () => {
+  // Badge
+  describe('badge', () => {
+    it('should show "Signed in" badge when status is Present', () => {
       // Arrange
-      const fixture = setup({ status: 'Present', expiresAt: '2027-01-01T00:00:00Z', subscriptionType: 'pro' });
+      const fixture = setup({ status: 'Present' });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
@@ -46,26 +52,75 @@ describe('OAuthPanelComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const badge = el.querySelector('.oauth-panel__badge--success');
 
       // Assert
-      expect(badge).toBeTruthy();
+      expect(el.querySelector('.oauth-panel__badge--success')).toBeTruthy();
     });
 
-    it('should show subscriptionType when provided', () => {
+    it('should show "Re-login needed" badge when status is ReLoginNeeded', () => {
       // Arrange
-      const fixture = setup({ status: 'Present', subscriptionType: 'pro' });
+      const fixture = setup({ status: 'ReLoginNeeded' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const badge = el.querySelector('.oauth-panel__badge');
+
+      // Assert
+      expect(badge?.textContent?.trim()).toContain('Re-login needed');
+    });
+
+    it('should apply warning modifier to badge when status is ReLoginNeeded', () => {
+      // Arrange
+      const fixture = setup({ status: 'ReLoginNeeded' });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
-      expect(el.textContent).toContain('pro');
+      expect(el.querySelector('.oauth-panel__badge--warning')).toBeTruthy();
     });
 
-    it('should show "Claude account" when subscriptionType is null', () => {
+    it('should show "Not configured" badge when status is NotConfigured', () => {
       // Arrange
-      const fixture = setup({ status: 'Present', subscriptionType: null });
+      const fixture = setup({ status: 'NotConfigured' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const badge = el.querySelector('.oauth-panel__badge');
+
+      // Assert
+      expect(badge?.textContent?.trim()).toContain('Not configured');
+    });
+
+    it('should apply error modifier to badge when status is NotConfigured', () => {
+      // Arrange
+      const fixture = setup({ status: 'NotConfigured' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.oauth-panel__badge--error')).toBeTruthy();
+    });
+  });
+
+  // Present card
+  describe('Present card', () => {
+    it('should show account email row', () => {
+      // Arrange
+      const fixture = setup({ status: 'Present', accountEmail: 'user@example.com' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.textContent).toContain('Account');
+      expect(el.textContent).toContain('user@example.com');
+    });
+
+    it('should show "Claude account" fallback when accountEmail is null', () => {
+      // Arrange
+      const fixture = setup({ status: 'Present', accountEmail: null });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
@@ -74,7 +129,42 @@ describe('OAuthPanelComponent', () => {
       expect(el.textContent).toContain('Claude account');
     });
 
-    it('should show expires hint', () => {
+    it('should show Organization row when accountOrgName is set', () => {
+      // Arrange
+      const fixture = setup({ status: 'Present', accountOrgName: 'Acme Corp' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.textContent).toContain('Organization');
+      expect(el.textContent).toContain('Acme Corp');
+    });
+
+    it('should NOT show Organization row when accountOrgName is null', () => {
+      // Arrange
+      const fixture = setup({ status: 'Present', accountOrgName: null });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.textContent).not.toContain('Organization');
+    });
+
+    it('should show Plan row with subscriptionType', () => {
+      // Arrange
+      const fixture = setup({ status: 'Present', subscriptionType: 'pro' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.textContent).toContain('Plan');
+      expect(el.textContent).toContain('pro');
+    });
+
+    it('should show Token expires row', () => {
       // Arrange
       const fixture = setup({ status: 'Present', expiresAt: '2027-01-01T00:00:00Z' });
 
@@ -82,7 +172,7 @@ describe('OAuthPanelComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
-      expect(el.textContent).toContain('Access token expires');
+      expect(el.textContent).toContain('Token expires');
     });
 
     it('should show "—" when expiresAt is null', () => {
@@ -105,381 +195,187 @@ describe('OAuthPanelComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
-      expect(el.textContent).toContain('Claude Code refreshes this token automatically');
+      expect(el.textContent).toContain('Refreshes automatically');
     });
 
-    it('should NOT show the login command block when status is Present', () => {
+    it('should show "Switch account" button when status is Present and loginPhase is null', () => {
       // Arrange
-      const fixture = setup({ status: 'Present', loginCommand: 'docker run -it' });
+      const fixture = setup({ status: 'Present', loginPhase: null });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const commandBlock = el.querySelector('.oauth-panel__command-block');
+      const switchBtn = el.querySelector('.oauth-panel__switch-btn');
 
       // Assert
-      expect(commandBlock).toBeFalsy();
+      expect(switchBtn).toBeTruthy();
+      expect(switchBtn?.textContent?.trim()).toBe('Switch account');
     });
 
-    it('should NOT render the word "valid" anywhere', () => {
+    it('should emit startLogin when Switch account is clicked', () => {
       // Arrange
-      const fixture = setup({ status: 'Present' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Assert
-      expect(el.textContent?.toLowerCase()).not.toContain('valid');
-    });
-  });
-
-  // ReLoginNeeded state
-  describe('when status is ReLoginNeeded', () => {
-    it('should show "Re-login needed" badge text', () => {
-      // Arrange
-      const fixture = setup({ status: 'ReLoginNeeded' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const badge = el.querySelector('.oauth-panel__badge');
-
-      // Assert
-      expect(badge?.textContent?.trim()).toContain('Re-login needed');
-    });
-
-    it('should apply warning modifier to badge when status is ReLoginNeeded', () => {
-      // Arrange
-      const fixture = setup({ status: 'ReLoginNeeded' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const badge = el.querySelector('.oauth-panel__badge--warning');
-
-      // Assert
-      expect(badge).toBeTruthy();
-    });
-
-    it('should show credential refresh message', () => {
-      // Arrange
-      const fixture = setup({ status: 'ReLoginNeeded' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Assert
-      expect(el.textContent).toContain('Your credential needs a refresh');
-    });
-
-    it('should show the login command block when status is ReLoginNeeded', () => {
-      // Arrange
-      const fixture = setup({ status: 'ReLoginNeeded', loginCommand: 'docker run -it --rm claude /login' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const commandBlock = el.querySelector('.oauth-panel__command-block');
-
-      // Assert
-      expect(commandBlock).toBeTruthy();
-    });
-
-    it('should render the login command in a pre element', () => {
-      // Arrange
-      const fixture = setup({ status: 'ReLoginNeeded', loginCommand: 'docker run -it --rm claude /login' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const pre = el.querySelector('pre[aria-label="OAuth login command"]');
-
-      // Assert
-      expect(pre).toBeTruthy();
-      expect(pre?.textContent).toContain('docker run -it --rm claude /login');
-    });
-
-    it('should render the Copy button with aria-label "Copy login command"', () => {
-      // Arrange
-      const fixture = setup({ status: 'ReLoginNeeded', loginCommand: 'docker run -it --rm claude /login' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const copyBtn = el.querySelector('button[aria-label="Copy login command"]');
-
-      // Assert
-      expect(copyBtn).toBeTruthy();
-    });
-
-    it('should render the refresh button', () => {
-      // Arrange
-      const fixture = setup({ status: 'ReLoginNeeded', loginCommand: 'docker run -it --rm claude /login' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const refreshBtn = el.querySelector('.oauth-panel__refresh-btn');
-
-      // Assert
-      expect(refreshBtn).toBeTruthy();
-      expect(refreshBtn?.textContent).toContain("I've logged in");
-    });
-  });
-
-  // NotConfigured state
-  describe('when status is NotConfigured', () => {
-    it('should show "Not configured" badge text', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const badge = el.querySelector('.oauth-panel__badge');
-
-      // Assert
-      expect(badge?.textContent?.trim()).toContain('Not configured');
-    });
-
-    it('should apply error modifier to badge when status is NotConfigured', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const badge = el.querySelector('.oauth-panel__badge--error');
-
-      // Assert
-      expect(badge).toBeTruthy();
-    });
-
-    it('should show guidance to run the login command', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Assert
-      expect(el.textContent).toContain('Run this command in your terminal to sign in');
-    });
-
-    it('should show the login command block when status is NotConfigured', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it --rm claude /login' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const commandBlock = el.querySelector('.oauth-panel__command-block');
-
-      // Assert
-      expect(commandBlock).toBeTruthy();
-    });
-  });
-
-  // Loading state
-  describe('login command loading', () => {
-    it('should show loading spinner and message when loginCommandLoading is true', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommandLoading: true });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const status = el.querySelector('[role="status"]');
-
-      // Assert
-      expect(status?.textContent).toContain('Preparing login command');
-    });
-
-    it('should set aria-live="polite" on the loading status region', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommandLoading: true });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const statusEl = el.querySelector('[role="status"][aria-live="polite"]');
-
-      // Assert
-      expect(statusEl).toBeTruthy();
-    });
-  });
-
-  // Error state
-  describe('login command error', () => {
-    it('should show error message with role="alert" when loginCommandError is set', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommandError: 'Fetch failed' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const alert = el.querySelector('[role="alert"]');
-
-      // Assert
-      expect(alert?.textContent).toContain("Couldn't load the login command");
-    });
-
-    it('should show a Retry affordance when loginCommandError is set', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommandError: 'Fetch failed' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const retryBtn = el.querySelector('.oauth-panel__retry-command-btn');
-
-      // Assert
-      expect(retryBtn).toBeTruthy();
-    });
-  });
-
-  // Refresh output
-  describe('refresh output', () => {
-    it('should emit refresh when the "I\'ve logged in" button is clicked', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+      const fixture = setup({ status: 'Present', loginPhase: null });
       let emitted = false;
-      fixture.componentInstance.refresh.subscribe(() => (emitted = true));
+      fixture.componentInstance.startLogin.subscribe(() => (emitted = true));
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const refreshBtn = el.querySelector('.oauth-panel__refresh-btn') as HTMLButtonElement;
-      refreshBtn.click();
-
-      // Assert
-      expect(emitted).toBe(true);
-    });
-
-    it('should emit fetchCommand when the Retry button is clicked', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommandError: 'err' });
-      let emitted = false;
-      fixture.componentInstance.fetchCommand.subscribe(() => (emitted = true));
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const retryBtn = el.querySelector('.oauth-panel__retry-command-btn') as HTMLButtonElement;
-      retryBtn.click();
+      const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+      switchBtn.click();
 
       // Assert
       expect(emitted).toBe(true);
     });
   });
 
-  // Copy button
-  describe('copy button', () => {
-    it('should show "Copy" label initially', () => {
+  // NotConfigured entry
+  describe('NotConfigured entry', () => {
+    it('should show entry message for NotConfigured', () => {
       // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+      const fixture = setup({ status: 'NotConfigured', loginPhase: null });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const copyBtn = el.querySelector('button[aria-label="Copy login command"]') as HTMLButtonElement;
 
       // Assert
-      expect(copyBtn?.textContent?.trim()).toContain('Copy');
+      expect(el.textContent).toContain('No account is signed in yet');
+    });
+
+    it('should show "Log in" button in NotConfigured state when loginPhase is null', () => {
+      // Arrange
+      const fixture = setup({ status: 'NotConfigured', loginPhase: null });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const logInBtn = el.querySelector('.oauth-panel__login-btn');
+
+      // Assert
+      expect(logInBtn).toBeTruthy();
+      expect(logInBtn?.textContent?.trim()).toBe('Log in');
+    });
+
+    it('should emit startLogin when Log in button is clicked', () => {
+      // Arrange
+      const fixture = setup({ status: 'NotConfigured', loginPhase: null });
+      let emitted = false;
+      fixture.componentInstance.startLogin.subscribe(() => (emitted = true));
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const logInBtn = el.querySelector('.oauth-panel__login-btn') as HTMLButtonElement;
+      logInBtn.click();
+
+      // Assert
+      expect(emitted).toBe(true);
     });
   });
 
-  // Accessibility: pre element
-  describe('pre element accessibility', () => {
-    it('should have tabindex="0" and aria-label on the pre element', () => {
+  // ReLoginNeeded entry
+  describe('ReLoginNeeded entry', () => {
+    it('should show entry message for ReLoginNeeded', () => {
       // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+      const fixture = setup({ status: 'ReLoginNeeded', loginPhase: null });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const pre = el.querySelector('pre');
 
       // Assert
-      expect(pre?.getAttribute('tabindex')).toBe('0');
-      expect(pre?.getAttribute('aria-label')).toBe('OAuth login command');
+      expect(el.textContent).toContain('Your saved credential expired');
+    });
+
+    it('should show "Log in again" button in ReLoginNeeded state when loginPhase is null', () => {
+      // Arrange
+      const fixture = setup({ status: 'ReLoginNeeded', loginPhase: null });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const logInBtn = el.querySelector('.oauth-panel__login-btn');
+
+      // Assert
+      expect(logInBtn).toBeTruthy();
+      expect(logInBtn?.textContent?.trim()).toBe('Log in again');
     });
   });
 
-  // aria-live region for copy success
-  describe('copy success announcement', () => {
-    it('should have an aria-live="polite" region for copy success announcements', () => {
+  // Login flow embedding
+  describe('login flow embedding', () => {
+    it('should show fd-oauth-login-flow when loginPhase is Starting', () => {
       // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+      const fixture = setup({ status: 'NotConfigured', loginPhase: 'Starting' });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const liveRegion = el.querySelector('.oauth-panel__copy-announcement[aria-live="polite"]');
+      const loginFlow = el.querySelector('fd-oauth-login-flow');
 
       // Assert
-      expect(liveRegion).toBeTruthy();
+      expect(loginFlow).toBeTruthy();
     });
 
-    it('should set the copy announcement to a fallback message when clipboard write rejects', async () => {
-      // Arrange — define clipboard if not available in the test environment
-      const clipboardMock = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
-      Object.defineProperty(navigator, 'clipboard', { value: clipboardMock, configurable: true, writable: true });
-      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+    it('should show fd-oauth-login-flow when loginPhase is WaitingForAuthorization', () => {
+      // Arrange
+      const fixture = setup({
+        status: 'NotConfigured',
+        loginPhase: 'WaitingForAuthorization',
+        loginUrl: 'https://claude.ai/oauth',
+      });
 
       // Act
-      fixture.componentInstance.onCopy();
-      await fixture.whenStable();
-      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const loginFlow = el.querySelector('fd-oauth-login-flow');
 
       // Assert
-      const el = fixture.nativeElement as HTMLElement;
-      const liveRegion = el.querySelector('.oauth-panel__copy-announcement');
-      expect(liveRegion?.textContent).toContain('Copy failed');
+      expect(loginFlow).toBeTruthy();
     });
 
-    it('should clear the copy-failure announcement after COPY_RESET_MS', async () => {
+    it('should NOT show login entry button when loginPhase is active', () => {
       // Arrange
-      vi.useFakeTimers();
-      const clipboardMock = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
-      Object.defineProperty(navigator, 'clipboard', { value: clipboardMock, configurable: true, writable: true });
-      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+      const fixture = setup({ status: 'NotConfigured', loginPhase: 'Starting' });
 
-      // Act — trigger failure
-      fixture.componentInstance.onCopy();
-      await Promise.resolve(); // flush the rejected promise microtask
-      fixture.detectChanges();
-
-      // Advance past the reset delay
-      vi.advanceTimersByTime(2001);
-      fixture.detectChanges();
-
-      // Assert — announcement has been cleared
+      // Act
       const el = fixture.nativeElement as HTMLElement;
-      const liveRegion = el.querySelector('.oauth-panel__copy-announcement');
-      expect(liveRegion?.textContent?.trim()).toBe('');
+      const logInBtn = el.querySelector('.oauth-panel__login-btn');
 
-      vi.useRealTimers();
+      // Assert
+      expect(logInBtn).toBeFalsy();
+    });
+
+    it('should emit submitCode when login flow emits submitCode', () => {
+      // Arrange
+      const fixture = setup({ status: 'NotConfigured', loginPhase: 'WaitingForAuthorization', loginUrl: 'https://claude.ai' });
+      let emittedCode: string | undefined;
+      fixture.componentInstance.submitCode.subscribe((code: string) => (emittedCode = code));
+
+      // Act — manually call the handler as child component interaction is tested in child spec
+      fixture.componentInstance.onSubmitCode('test-code');
+
+      // Assert
+      expect(emittedCode).toBe('test-code');
     });
   });
 
-  // U4 — Refresh button visibility
-  describe('refresh button visibility', () => {
-    it('should NOT show the refresh button while loginCommandLoading is true', () => {
+  // No command block (old copy-paste path removed)
+  describe('no legacy command block', () => {
+    it('should NOT render the command-pre element', () => {
       // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommandLoading: true });
+      const fixture = setup({ status: 'NotConfigured' });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const refreshBtn = el.querySelector('.oauth-panel__refresh-btn');
 
       // Assert
-      expect(refreshBtn).toBeFalsy();
+      expect(el.querySelector('.oauth-panel__command-pre')).toBeFalsy();
     });
 
-    it('should show the refresh button once a login command is available', () => {
+    it('should NOT render a Copy button', () => {
       // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommand: 'docker run -it' });
+      const fixture = setup({ status: 'NotConfigured' });
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const refreshBtn = el.querySelector('.oauth-panel__refresh-btn');
+      const buttons = el.querySelectorAll('button');
+      const copyBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Copy');
 
       // Assert
-      expect(refreshBtn).toBeTruthy();
-    });
-
-    it('should show the refresh button when there is a login command error', () => {
-      // Arrange
-      const fixture = setup({ status: 'NotConfigured', loginCommandError: 'Fetch failed' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const refreshBtn = el.querySelector('.oauth-panel__refresh-btn');
-
-      // Assert
-      expect(refreshBtn).toBeTruthy();
+      expect(copyBtn).toBeFalsy();
     });
   });
 });

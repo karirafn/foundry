@@ -68,12 +68,20 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
               [status]="_oauthStatus()"
               [expiresAt]="_settingsService.authSettings()?.oauth?.expiresAt ?? null"
               [subscriptionType]="_settingsService.authSettings()?.oauth?.subscriptionType ?? null"
-              (refresh)="onOAuthRefresh()"
+              [accountEmail]="_settingsService.settings()?.oAuthAccountEmail ?? null"
+              [accountOrgName]="_settingsService.settings()?.oAuthAccountOrgName ?? null"
+              [loginPhase]="_settingsService.loginPhase()"
+              [loginUrl]="_settingsService.loginUrl()"
+              [loginError]="_settingsService.loginError()"
+              [codeSubmitting]="_settingsService.codeSubmitting()"
+              (startLogin)="_settingsService.startLogin()"
+              (submitCode)="_settingsService.submitLoginCode($event)"
+              (cancel)="_settingsService.cancelLogin()"
             />
 
-            @if (_oauthStatus() !== 'Present') {
+            @if (_oauthStatus() !== 'Present' && !_settingsService.loginPhase()) {
               <div role="note" class="setup-auth-step__oauth-note">
-                You haven't logged in yet. You can finish setup now, but workers won't run until you complete the login command above.
+                You haven't logged in yet. You can finish setup now, but workers won't run until you sign in.
               </div>
             }
           </div>
@@ -130,10 +138,6 @@ export class SetupAuthStepComponent {
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
-  }
-
-  onOAuthRefresh(): void {
-    this._settingsService.loadSettings();
   }
 
   onNext(): void {

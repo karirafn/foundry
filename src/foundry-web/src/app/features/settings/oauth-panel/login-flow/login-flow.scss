@@ -1,0 +1,194 @@
+@mixin focus-ring {
+  outline: 2px solid var(--fd-text-link);
+  outline-offset: 2px;
+}
+
+.login-flow {
+  &__sr-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  &__phase {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__phase--starting,
+  &__phase--signing-in {
+    align-items: flex-start;
+    color: var(--fd-text-secondary);
+    flex-direction: row;
+    font-size: 0.875rem;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__spinner {
+    animation: lf-spin 1s linear infinite;
+    border: 2px solid var(--fd-border-default);
+    border-radius: 50%;
+    border-top-color: var(--fd-text-link);
+    display: inline-block;
+    flex-shrink: 0;
+    height: 14px;
+    margin-block-start: 0.125rem;
+    width: 14px;
+  }
+
+  @keyframes lf-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  &__step-label {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  &__url-link {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-link);
+    display: block;
+    font-family: var(--fd-font-mono);
+    font-size: 0.8125rem;
+    overflow-x: auto;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    text-decoration: none;
+    white-space: pre-wrap;
+    word-break: break-all;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__code-input {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    width: 100%;
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__code-hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__submit-btn {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px solid var(--fd-text-link);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-link);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+    transition: background 0.15s ease;
+
+    &:not(:disabled):hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__cancel-btn {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      color: var(--fd-text-primary);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__phase--failed {
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__error-heading {
+    color: var(--fd-text-error);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__error-body {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  &__retry-btn {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px solid var(--fd-text-link);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-link);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}

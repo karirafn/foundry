@@ -126,7 +126,15 @@ const COOLDOWN_MINUTES_MAX = 1440;
               [status]="_oauthStatus()"
               [expiresAt]="settingsService.authSettings()?.oauth?.expiresAt ?? null"
               [subscriptionType]="settingsService.authSettings()?.oauth?.subscriptionType ?? null"
-              (refresh)="onOAuthRefresh()"
+              [accountEmail]="settingsService.settings()?.oAuthAccountEmail ?? null"
+              [accountOrgName]="settingsService.settings()?.oAuthAccountOrgName ?? null"
+              [loginPhase]="settingsService.loginPhase()"
+              [loginUrl]="settingsService.loginUrl()"
+              [loginError]="settingsService.loginError()"
+              [codeSubmitting]="settingsService.codeSubmitting()"
+              (startLogin)="onStartLogin()"
+              (submitCode)="settingsService.submitLoginCode($event)"
+              (cancel)="settingsService.cancelLogin()"
             />
 
             @if (_showSwitchAccountConfirm()) {
@@ -167,14 +175,6 @@ const COOLDOWN_MINUTES_MAX = 1440;
               }
             </div>
             <div role="alert" class="general-settings__switch-error">{{ (_switchAccountDraining() && dispatchService.pauseResumeError()) ? dispatchService.pauseResumeError() : '' }}</div>
-            @if (!_showSwitchAccountConfirm() && !_switchAccountDraining() && _oauthStatus() === 'Present') {
-              <button
-                #switchAccountBtn
-                class="general-settings__switch-account-btn"
-                type="button"
-                (click)="onSwitchAccountClick()"
-              >Switch account</button>
-            }
           </div>
         }
       </section>
@@ -464,7 +464,6 @@ export class SettingsGeneralComponent {
   private readonly _injector = inject(Injector);
 
   @ViewChild('authHeading') private readonly _authHeading?: ElementRef<HTMLHeadingElement>;
-  @ViewChild('switchAccountBtn') private readonly _switchAccountBtn?: ElementRef<HTMLButtonElement>;
   @ViewChild('switchConfirmBtn') private readonly _switchConfirmBtn?: ElementRef<HTMLButtonElement>;
 
   protected readonly MAX_CONCURRENT_MIN = MAX_CONCURRENT_MIN;
@@ -601,28 +600,22 @@ export class SettingsGeneralComponent {
     );
   }
 
-  onSwitchAccountClick(): void {
-    this._showSwitchAccountConfirm.set(true);
-    runInInjectionContext(this._injector, () =>
-      afterNextRender(() => this._switchConfirmBtn?.nativeElement.focus())
-    );
+  onStartLogin(): void {
+    if (this._oauthStatus() === 'Present') {
+      this._showSwitchAccountConfirm.set(true);
+      runInInjectionContext(this._injector, () =>
+        afterNextRender(() => this._switchConfirmBtn?.nativeElement.focus())
+      );
+    } else {
+      this.settingsService.startLogin();
+    }
   }
 
   onCancelSwitchAccount(): void {
     this._showSwitchAccountConfirm.set(false);
     runInInjectionContext(this._injector, () =>
-      afterNextRender(() => {
-        const target = this._switchAccountBtn?.nativeElement ?? this._authHeading?.nativeElement;
-        target?.focus();
-      })
+      afterNextRender(() => this._authHeading?.nativeElement.focus())
     );
-  }
-
-  onOAuthRefresh(): void {
-    this.settingsService.loadSettings();
-    if (this._switchAccountDraining()) {
-      this._showResumeAfterSwitch.set(true);
-    }
   }
 
   onConfirmSwitchAccount(): void {
