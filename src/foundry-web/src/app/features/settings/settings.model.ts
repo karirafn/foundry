@@ -11,9 +11,9 @@ export type LoginError = 'InvalidCode' | 'UrlTimeout' | 'CodeTimeout' | 'Unknown
 export interface LoginSessionUpdate {
   sessionId: string;
   phase: LoginPhase;
-  url: string | null;
-  failure: LoginError | null;
-  message: string | null;
+  authorizationUrl: string | null;
+  failureReason: LoginError | null;
+  failureMessage: string | null;
 }
 
 export interface WorkerImageFlags {

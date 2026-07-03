@@ -1240,9 +1240,9 @@ describe('SettingsService — SignalR login session', () => {
     mockSignalR.loginSessionUpdate.next({
       sessionId: 'session-1',
       phase: 'WaitingForAuthorization',
-      url: 'https://claude.ai/oauth/authorize?q=abc',
-      failure: null,
-      message: null,
+      authorizationUrl: 'https://claude.ai/oauth/authorize?q=abc',
+      failureReason: null,
+      failureMessage: null,
     });
 
     // Assert
@@ -1260,9 +1260,9 @@ describe('SettingsService — SignalR login session', () => {
     mockSignalR.loginSessionUpdate.next({
       sessionId: 'session-1',
       phase: 'Failed',
-      url: null,
-      failure: 'InvalidCode',
-      message: null,
+      authorizationUrl: null,
+      failureReason: 'InvalidCode',
+      failureMessage: null,
     });
 
     // Assert
@@ -1278,9 +1278,9 @@ describe('SettingsService — SignalR login session', () => {
     mockSignalR.loginSessionUpdate.next({
       sessionId: 's1',
       phase: 'Failed',
-      url: null,
-      failure: 'InvalidCode',
-      message: null,
+      authorizationUrl: null,
+      failureReason: 'InvalidCode',
+      failureMessage: null,
     });
     expect(service.loginError()).toBe('InvalidCode');
 
@@ -1302,9 +1302,9 @@ describe('SettingsService — SignalR login session', () => {
     mockSignalR.loginSessionUpdate.next({
       sessionId: 'session-1',
       phase: 'Succeeded',
-      url: null,
-      failure: null,
-      message: null,
+      authorizationUrl: null,
+      failureReason: null,
+      failureMessage: null,
     });
 
     // Assert — settings reload is triggered
@@ -1322,9 +1322,9 @@ describe('SettingsService — SignalR login session', () => {
     mockSignalR.loginSessionUpdate.next({
       sessionId: 's1',
       phase: 'Succeeded',
-      url: null,
-      failure: null,
-      message: null,
+      authorizationUrl: null,
+      failureReason: null,
+      failureMessage: null,
     });
 
     // loginPhase is set to Succeeded before the reload
@@ -1353,9 +1353,9 @@ describe('SettingsService — SignalR login session', () => {
     mockSignalR.loginSessionUpdate.next({
       sessionId: 'session-1',
       phase: 'SigningIn',
-      url: null,
-      failure: null,
-      message: null,
+      authorizationUrl: null,
+      failureReason: null,
+      failureMessage: null,
     });
 
     // Assert
@@ -1371,9 +1371,9 @@ describe('SettingsService — SignalR login session', () => {
     mockSignalR.loginSessionUpdate.next({
       sessionId: 's1',
       phase: 'WaitingForAuthorization',
-      url: 'https://claude.ai',
-      failure: null,
-      message: null,
+      authorizationUrl: 'https://claude.ai',
+      failureReason: null,
+      failureMessage: null,
     });
 
     // Act
@@ -1395,9 +1395,9 @@ describe('SettingsService — SignalR login session', () => {
     mockSignalR.loginSessionUpdate.next({
       sessionId: 's1',
       phase: 'WaitingForAuthorization',
-      url: 'https://claude.ai/oauth/authorize?q=1',
-      failure: null,
-      message: null,
+      authorizationUrl: 'https://claude.ai/oauth/authorize?q=1',
+      failureReason: null,
+      failureMessage: null,
     });
     expect(service.loginPhase()).toBe('WaitingForAuthorization');
     expect(service.loginUrl()).toBe('https://claude.ai/oauth/authorize?q=1');

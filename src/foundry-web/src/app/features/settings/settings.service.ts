@@ -48,8 +48,8 @@ export class SettingsService {
       .pipe(takeUntilDestroyed())
       .subscribe((update: LoginSessionUpdate) => {
         this._loginPhaseSignal.set(update.phase);
-        this._loginUrlSignal.set(update.url);
-        this._loginErrorSignal.set(update.failure);
+        this._loginUrlSignal.set(update.authorizationUrl);
+        this._loginErrorSignal.set(update.failureReason);
 
         if (update.phase === 'SigningIn' || update.phase === 'Succeeded' || update.phase === 'Failed') {
           this._codeSubmittingSignal.set(false);

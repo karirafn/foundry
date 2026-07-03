@@ -233,9 +233,9 @@ describe('SystemSignalRService', () => {
     const update: LoginSessionUpdate = {
       sessionId: 'session-1',
       phase: 'WaitingForAuthorization',
-      url: 'https://claude.ai/oauth/authorize?code=abc',
-      failure: null,
-      message: null,
+      authorizationUrl: 'https://claude.ai/oauth/authorize?code=abc',
+      failureReason: null,
+      failureMessage: null,
     };
     let received: LoginSessionUpdate | null = null;
     svc.loginSessionUpdate.subscribe((u) => (received = u));
@@ -262,8 +262,8 @@ describe('SystemSignalRService', () => {
     const { svc, captured } = setup();
     const updates: LoginSessionUpdate[] = [];
     svc.loginSessionUpdate.subscribe((u) => updates.push(u));
-    const first: LoginSessionUpdate = { sessionId: 'session-1', phase: 'Starting', url: null, failure: null, message: null };
-    const second: LoginSessionUpdate = { sessionId: 'session-1', phase: 'WaitingForAuthorization', url: 'https://claude.ai', failure: null, message: null };
+    const first: LoginSessionUpdate = { sessionId: 'session-1', phase: 'Starting', authorizationUrl: null, failureReason: null, failureMessage: null };
+    const second: LoginSessionUpdate = { sessionId: 'session-1', phase: 'WaitingForAuthorization', authorizationUrl: 'https://claude.ai', failureReason: null, failureMessage: null };
 
     // Act
     captured.onLoginSessionUpdated!(first);
