@@ -29,5 +29,43 @@ Settings and the setup wizard report only what local data proves (credential fil
 - The OAuth credential sits in plaintext in the Docker volume, consistent with how the genuine CLI stores it locally.
   This is a downgrade from the DB-encrypted API key, accepted because: the volume is scoped to the Docker socket trust boundary Foundry already operates within, and no alternative exists that lets the genuine CLI manage refresh without reading a plaintext credential.
 - Auth-invalid resume is manual-only — there is no server-side signal Foundry can poll to detect a successful re-login.
-  Operators must run `claude /login` (or equivalent) against the shared volume and then manually resume dispatch.
+  Operators must run an in-app login session (see Phase 2 below) to re-seed the volume; Foundry then auto-resumes dispatch.
 - Closure of the genuine-CLI OAuth path (e.g., Anthropic deprecating the shared-volume pattern) is a product escalation, not a code fallback — there is no automated recovery path Foundry can implement within ToS constraints.
+
+## Phase 2 — In-App Interactive Login
+
+Phase 1 left the credential-seeding step as a manual `docker run` command outside Foundry.
+Phase 2 brings the full OAuth login flow inside the Foundry dashboard, removing the manual step entirely.
+
+### Mechanism
+
+Foundry starts a dedicated `foundry-claude-login` container via the Docker API (`Tty: false`, credential volume mounted).
+The container entrypoint bootstraps a named FIFO at `/tmp/ci`, records the FIFO writer's sleep-holder PID in `/tmp/ci.pid`, then invokes `claude auth login --claudeai` with the FIFO bound to stdin.
+Foundry streams the container stdout/stderr and extracts the authorization URL from the `visit:` line; the URL is pushed to the dashboard over SignalR.
+The operator opens the URL, authorizes in the browser, and pastes the code into the dashboard.
+Foundry delivers the code via `docker exec` (`printf '%s\n' "$C" > /tmp/ci; kill $(cat /tmp/ci.pid)`) — the code is passed as environment variable `C`, never interpolated, so shell metacharacters cannot cause injection; the sleep-holder kill forces EOF on stdin so the CLI proceeds to token exchange without waiting.
+Foundry polls the log stream for `Login successful.` and reads the container exit code (0 = success, non-zero = bad or expired code).
+On success, Foundry runs `claude auth status --json` via `docker exec` to capture the authenticated account identity (email, org name, subscription type) before tearing the container down.
+
+### CLI output coupling
+
+The flow depends on specific output strings emitted by `claude` CLI 2.1.187:
+
+| Signal | Source | Used for |
+|---|---|---|
+| URL containing `/oauth/` | stdout `visit:` line | Authorization URL extraction (regex match) |
+| `Login successful.` | stdout | Success detection (log stream scan) |
+| Non-zero exit code | container exit | Bad/expired code detection (fallback to exit code) |
+
+The onboarding seed (`hasCompletedOnboarding`, `hasTrustDialogAccepted`, `theme`) also depends on `.claude.json` key names stable across CLI versions.
+The CI integration test (`LoginIntegrationTests`) is the safety net for CLI version drift — it runs against the actual CLI image and will fail if any of these strings or behaviors change.
+
+### Onboarding seed
+
+Before invoking `claude auth login --claudeai`, the entrypoint merges onboarding-gate flags into the volume's `.claude.json` using set-if-absent semantics, so existing credentials and `oauthAccount` data are never overwritten.
+
+### Dispatch pause
+
+Dispatch is transiently suppressed via `ILoginSessionState.IsLoginActive` while a session is active.
+This is not persisted — a Foundry restart mid-login drops the in-memory session, and `LoginContainerReaper` reaps any orphaned login containers on startup.
+A successful login auto-resumes any active auth-invalid pause by calling `GlobalSettings.ResumeDispatch()` and publishing `DispatchResumed`.
