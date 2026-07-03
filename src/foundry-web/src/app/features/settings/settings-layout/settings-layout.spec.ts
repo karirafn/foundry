@@ -17,7 +17,6 @@ const SETTINGS_RESPONSE = {
   timeoutMinutes: 60,
   accessTokenPresent: false,
   refreshTokenPresent: false,
-  expiresAt: null,
   subscriptionType: null,
 };
 

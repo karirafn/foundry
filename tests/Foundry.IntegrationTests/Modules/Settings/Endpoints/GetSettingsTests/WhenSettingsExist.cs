@@ -63,7 +63,6 @@ public sealed class WhenSettingsExist : IAsyncDisposable
             () => summary.MaxConcurrent.ShouldBe(1),
             () => summary.TimeoutMinutes.ShouldBe(120),
             () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured),
-            () => summary.ExpiresAt.ShouldBeNull(),
             () => summary.SubscriptionType.ShouldBeNull());
     }
 

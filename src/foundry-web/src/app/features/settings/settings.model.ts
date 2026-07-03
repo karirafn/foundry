@@ -27,7 +27,6 @@ export interface WorkerImageFlags {
 
 export interface OAuthCredentialInfo {
   status: OAuthStatus;
-  expiresAt: string | null;
   subscriptionType: string | null;
 }
 
@@ -54,7 +53,6 @@ export interface GlobalSettingsResponse {
   oAuthAccountOrgName: string | null;
   maxConcurrent: number;
   timeoutMinutes: number;
-  expiresAt: string | null;
   subscriptionType: string | null;
   systemPromptTemplate: string | null;
   workerPromptTemplate: string | null;

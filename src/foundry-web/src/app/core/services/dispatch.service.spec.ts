@@ -12,7 +12,6 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     oAuthAccountOrgName: null,
     maxConcurrent: 3,
     timeoutMinutes: 60,
-    expiresAt: null,
     subscriptionType: null,
     systemPromptTemplate: null,
     workerPromptTemplate: null,

@@ -5,7 +5,6 @@ public sealed record GlobalSettingsSummary(
     int MaxConcurrent,
     int TimeoutMinutes,
     string OAuthStatus,
-    DateTimeOffset? ExpiresAt,
     string? SubscriptionType,
     string? OAuthAccountEmail,
     string? OAuthAccountOrgName,

@@ -161,7 +161,6 @@ const COOLDOWN_MINUTES_MAX = 1440;
             <div role="alert" class="general-settings__switch-error">{{ (_switchAccountDraining() && dispatchService.pauseResumeError()) ? dispatchService.pauseResumeError() : '' }}</div>
             <fd-oauth-panel
               [status]="_oauthStatus()"
-              [expiresAt]="settingsService.authSettings()?.oauth?.expiresAt ?? null"
               [subscriptionType]="settingsService.authSettings()?.oauth?.subscriptionType ?? null"
               [accountEmail]="settingsService.settings()?.oAuthAccountEmail ?? null"
               [accountOrgName]="settingsService.settings()?.oAuthAccountOrgName ?? null"

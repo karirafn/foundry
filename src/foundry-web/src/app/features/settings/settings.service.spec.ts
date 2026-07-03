@@ -46,7 +46,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     oAuthAccountOrgName: null,
     maxConcurrent: 3,
     timeoutMinutes: 60,
-    expiresAt: null,
     subscriptionType: null,
     systemPromptTemplate: null,
     workerPromptTemplate: null,
@@ -176,7 +175,6 @@ describe('SettingsService', () => {
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
       authMode: 'OAuth',
       oAuthStatus: 'Present',
-      expiresAt: '2027-01-01T00:00:00Z',
       subscriptionType: 'pro',
     }));
 
@@ -185,7 +183,6 @@ describe('SettingsService', () => {
     expect(settings!.mode).toBe('oauth');
     expect(settings!.oauth).not.toBeNull();
     expect(settings!.oauth!.status).toBe('Present');
-    expect(settings!.oauth!.expiresAt).toBe('2027-01-01T00:00:00Z');
     expect(settings!.oauth!.subscriptionType).toBe('pro');
   });
 
@@ -492,7 +489,6 @@ describe('SettingsService', () => {
     httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse({
       authMode: 'OAuth',
       oAuthStatus: 'Present',
-      expiresAt: '2027-01-01T00:00:00Z',
       subscriptionType: 'pro',
     }));
 

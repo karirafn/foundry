@@ -75,7 +75,6 @@ public sealed class GetSettingsAsync : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("ApiKey"),
             () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured),
-            () => summary.ExpiresAt.ShouldBeNull(),
             () => summary.SubscriptionType.ShouldBeNull());
     }
 
@@ -102,7 +101,6 @@ public sealed class GetSettingsAsync : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("OAuth"),
             () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded),
-            () => summary.ExpiresAt.ShouldBeNull(),
             () => summary.SubscriptionType.ShouldBe("pro"));
     }
 

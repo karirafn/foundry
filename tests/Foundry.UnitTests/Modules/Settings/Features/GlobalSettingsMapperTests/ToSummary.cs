@@ -259,19 +259,6 @@ public sealed class ToSummary
         result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded);
     }
 
-    [Fact]
-    public void WhenOAuthMode_ExpiresAtIsNull()
-    {
-        // Arrange — expiry tracking is out of scope; always null
-        GlobalSettings settings = CreateDefaultSettings();
-        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
-
-        // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
-
-        // Assert
-        result.ExpiresAt.ShouldBeNull();
-    }
 
     [Fact]
     public void WhenOAuthModeWithSubscriptionType_SubscriptionTypeIsFromStoredAuthMode()

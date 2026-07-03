@@ -4,7 +4,6 @@ import { LoginError, LoginPhase } from '../settings.model';
 
 function setup(inputs: {
   status: 'NotConfigured' | 'Present' | 'ReLoginNeeded';
-  expiresAt?: string | null;
   subscriptionType?: string | null;
   accountEmail?: string | null;
   accountOrgName?: string | null;
@@ -18,7 +17,6 @@ function setup(inputs: {
   });
   const fixture = TestBed.createComponent(OAuthPanelComponent);
   fixture.componentRef.setInput('status', inputs.status);
-  fixture.componentRef.setInput('expiresAt', inputs.expiresAt ?? null);
   fixture.componentRef.setInput('subscriptionType', inputs.subscriptionType ?? null);
   fixture.componentRef.setInput('accountEmail', inputs.accountEmail ?? null);
   fixture.componentRef.setInput('accountOrgName', inputs.accountOrgName ?? null);
@@ -160,29 +158,6 @@ describe('OAuthPanelComponent', () => {
       // Assert
       expect(el.textContent).toContain('Plan');
       expect(el.textContent).toContain('pro');
-    });
-
-    it('should show Token expires row', () => {
-      // Arrange
-      const fixture = setup({ status: 'Present', expiresAt: '2027-01-01T00:00:00Z' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Assert
-      expect(el.textContent).toContain('Token expires');
-    });
-
-    it('should show "—" when expiresAt is null', () => {
-      // Arrange
-      const fixture = setup({ status: 'Present', expiresAt: null });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const expiresRow = el.querySelector('.oauth-panel__expires-value');
-
-      // Assert
-      expect(expiresRow?.textContent?.trim()).toBe('—');
     });
 
     it('should show the auto-refresh hint', () => {

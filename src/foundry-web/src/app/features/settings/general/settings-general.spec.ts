@@ -39,7 +39,6 @@ const API_KEY_RESPONSE = {
   oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
-  expiresAt: null,
   subscriptionType: null,
   ...BASE_RESPONSE,
 };
@@ -51,7 +50,6 @@ const OAUTH_RESPONSE = {
   oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
-  expiresAt: '2027-01-01T00:00:00Z',
   subscriptionType: 'pro',
   ...BASE_RESPONSE,
 };
@@ -63,7 +61,6 @@ const OAUTH_NOT_CONFIGURED_RESPONSE = {
   oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
-  expiresAt: null,
   subscriptionType: null,
   ...BASE_RESPONSE,
 };
@@ -75,7 +72,6 @@ const OAUTH_RELOGIN_NEEDED_RESPONSE = {
   oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
-  expiresAt: null,
   subscriptionType: null,
   ...BASE_RESPONSE,
 };

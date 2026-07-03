@@ -427,7 +427,6 @@ export class SettingsService {
     if (isOAuth) {
       oauth = {
         status: response.oAuthStatus,
-        expiresAt: response.expiresAt,
         subscriptionType: response.subscriptionType,
       };
     }

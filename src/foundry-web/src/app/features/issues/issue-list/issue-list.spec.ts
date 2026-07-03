@@ -43,7 +43,6 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 30,
-  expiresAt: null,
   subscriptionType: null,
   systemPromptTemplate: null,
   workerPromptTemplate: null,

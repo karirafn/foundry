@@ -37,7 +37,6 @@ internal static class GlobalSettingsMapper
             settings.MaxConcurrent,
             settings.TimeoutMinutes,
             oauthStatus,
-            null,
             subscriptionType,
             settings.OAuthAccountEmail,
             settings.OAuthAccountOrgName,

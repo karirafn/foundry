@@ -1128,7 +1128,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 MaxConcurrent: 3,
                 TimeoutMinutes: 120,
                 OAuthStatus: "Present",
-                ExpiresAt: null,
                 SubscriptionType: "pro",
                 OAuthAccountEmail: null,
                 OAuthAccountOrgName: null,

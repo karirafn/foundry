@@ -15,7 +15,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     timeoutMinutes: 60,
     accessTokenPresent: false,
     refreshTokenPresent: false,
-    expiresAt: null,
     subscriptionType: null,
     systemPromptTemplate: null,
     workerPromptTemplate: null,

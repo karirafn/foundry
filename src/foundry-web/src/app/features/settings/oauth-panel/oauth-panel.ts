@@ -1,12 +1,11 @@
 import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { LoginError, LoginPhase, OAuthStatus } from '../settings.model';
 import { LoginFlowComponent } from './login-flow/login-flow';
 
 @Component({
   selector: 'fd-oauth-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, LoginFlowComponent],
+  imports: [LoginFlowComponent],
   template: `
     <div class="oauth-panel">
       <div class="oauth-panel__header">
@@ -38,16 +37,6 @@ import { LoginFlowComponent } from './login-flow/login-flow';
             <div class="oauth-panel__row">
               <span class="oauth-panel__row-label">Plan</span>
               <span class="oauth-panel__row-value">{{ subscriptionType() ?? '—' }}</span>
-            </div>
-            <div class="oauth-panel__row">
-              <span class="oauth-panel__row-label">Token expires</span>
-              <span class="oauth-panel__expires-value">
-                @if (expiresAt()) {
-                  {{ expiresAt() | date:'medium' }}
-                } @else {
-                  —
-                }
-              </span>
             </div>
           </div>
           <p class="oauth-panel__hint">
@@ -107,7 +96,6 @@ import { LoginFlowComponent } from './login-flow/login-flow';
 })
 export class OAuthPanelComponent {
   readonly status = input.required<OAuthStatus>();
-  readonly expiresAt = input<string | null>(null);
   readonly subscriptionType = input<string | null>(null);
   readonly accountEmail = input<string | null>(null);
   readonly accountOrgName = input<string | null>(null);

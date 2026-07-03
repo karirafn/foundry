@@ -80,7 +80,6 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
           <div class="setup-auth-step__oauth-section">
             <fd-oauth-panel
               [status]="_oauthStatus()"
-              [expiresAt]="_settingsService.authSettings()?.oauth?.expiresAt ?? null"
               [subscriptionType]="_settingsService.authSettings()?.oauth?.subscriptionType ?? null"
               [accountEmail]="_settingsService.settings()?.oAuthAccountEmail ?? null"
               [accountOrgName]="_settingsService.settings()?.oAuthAccountOrgName ?? null"

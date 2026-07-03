@@ -66,7 +66,6 @@ public sealed class HandleAsync : IAsyncDisposable
             () => success.Value.MaxConcurrent.ShouldBe(GlobalSettings.DefaultMaxConcurrent),
             () => success.Value.TimeoutMinutes.ShouldBe(GlobalSettings.DefaultTimeoutMinutes),
             () => success.Value.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured),
-            () => success.Value.ExpiresAt.ShouldBeNull(),
             () => success.Value.SubscriptionType.ShouldBeNull());
     }
 
@@ -95,7 +94,6 @@ public sealed class HandleAsync : IAsyncDisposable
         success.Value.ShouldSatisfyAllConditions(
             () => success.Value.AuthMode.ShouldBe("OAuth"),
             () => success.Value.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusPresent),
-            () => success.Value.ExpiresAt.ShouldBeNull(),
             () => success.Value.SubscriptionType.ShouldBe("pro"));
     }
 

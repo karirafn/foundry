@@ -12,7 +12,6 @@ const OAUTH_SETTINGS_RESPONSE = {
   oAuthStatus: 'Present',
   oAuthAccountEmail: null,
   oAuthAccountOrgName: null,
-  expiresAt: '2026-12-31T00:00:00Z',
   subscriptionType: 'max_5x',
   maxConcurrent: 3,
   timeoutMinutes: 60,
@@ -38,7 +37,6 @@ const API_KEY_SETTINGS_RESPONSE = {
   oAuthStatus: 'NotConfigured',
   oAuthAccountEmail: null,
   oAuthAccountOrgName: null,
-  expiresAt: null,
   subscriptionType: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
@@ -378,7 +376,7 @@ describe('SetupAuthStepComponent', () => {
     service.authSettings.set({
       mode: 'oauth',
       apiKeyConfigured: false,
-      oauth: { status: 'Present', expiresAt: null, subscriptionType: null },
+      oauth: { status: 'Present', subscriptionType: null },
     });
     fixture.detectChanges();
 
