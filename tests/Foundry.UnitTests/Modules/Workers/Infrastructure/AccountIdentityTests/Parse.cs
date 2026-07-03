@@ -102,4 +102,92 @@ public sealed class Parse
         // Assert
         result.IsFailure.ShouldBeTrue();
     }
+
+    [Fact]
+    public void WhenEmailExceedsCap_TruncatesToCap()
+    {
+        // Arrange
+        string oversizedEmail = new string('a', AccountIdentity.MaxEmailLength + 100);
+        string json = $$"""
+            {
+                "loggedIn": true,
+                "email": "{{oversizedEmail}}",
+                "orgName": "Example Org",
+                "subscriptionType": "team"
+            }
+            """;
+
+        // Act
+        Result<AccountIdentity> result = AccountIdentity.Parse(json);
+
+        // Assert
+        AccountIdentity identity = result.ShouldBeOfType<Result<AccountIdentity>.Success>().Value;
+        identity.Email.Length.ShouldBe(AccountIdentity.MaxEmailLength);
+    }
+
+    [Fact]
+    public void WhenOrgNameExceedsCap_TruncatesToCap()
+    {
+        // Arrange
+        string oversizedOrgName = new string('a', AccountIdentity.MaxOrgNameLength + 100);
+        string json = $$"""
+            {
+                "loggedIn": true,
+                "email": "user@example.com",
+                "orgName": "{{oversizedOrgName}}",
+                "subscriptionType": "team"
+            }
+            """;
+
+        // Act
+        Result<AccountIdentity> result = AccountIdentity.Parse(json);
+
+        // Assert
+        AccountIdentity identity = result.ShouldBeOfType<Result<AccountIdentity>.Success>().Value;
+        identity.OrgName.Length.ShouldBe(AccountIdentity.MaxOrgNameLength);
+    }
+
+    [Fact]
+    public void WhenSubscriptionTypeExceedsCap_TruncatesToCap()
+    {
+        // Arrange
+        string oversizedType = new string('a', AccountIdentity.MaxSubscriptionTypeLength + 100);
+        string json = $$"""
+            {
+                "loggedIn": true,
+                "email": "user@example.com",
+                "orgName": "Example Org",
+                "subscriptionType": "{{oversizedType}}"
+            }
+            """;
+
+        // Act
+        Result<AccountIdentity> result = AccountIdentity.Parse(json);
+
+        // Assert
+        AccountIdentity identity = result.ShouldBeOfType<Result<AccountIdentity>.Success>().Value;
+        identity.SubscriptionType.Length.ShouldBe(AccountIdentity.MaxSubscriptionTypeLength);
+    }
+
+    [Fact]
+    public void WhenEmailAtExactCap_IsAcceptedUnchanged()
+    {
+        // Arrange
+        string exactEmail = new string('a', AccountIdentity.MaxEmailLength);
+        string json = $$"""
+            {
+                "loggedIn": true,
+                "email": "{{exactEmail}}",
+                "orgName": "Example Org",
+                "subscriptionType": "team"
+            }
+            """;
+
+        // Act
+        Result<AccountIdentity> result = AccountIdentity.Parse(json);
+
+        // Assert
+        AccountIdentity identity = result.ShouldBeOfType<Result<AccountIdentity>.Success>().Value;
+        identity.Email.Length.ShouldBe(AccountIdentity.MaxEmailLength);
+    }
 }

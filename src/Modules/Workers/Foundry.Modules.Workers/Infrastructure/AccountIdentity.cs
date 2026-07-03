@@ -11,6 +11,10 @@ namespace Foundry.Modules.Workers.Infrastructure;
 /// </summary>
 internal sealed record AccountIdentity(string Email, string OrgName, string SubscriptionType)
 {
+    internal const int MaxEmailLength = 256;
+    internal const int MaxOrgNameLength = 512;
+    internal const int MaxSubscriptionTypeLength = 64;
+
     private static readonly Error NotLoggedIn = new(
         "AccountIdentity.NotLoggedIn",
         "The auth status response indicates the user is not logged in.");
@@ -26,6 +30,7 @@ internal sealed record AccountIdentity(string Email, string OrgName, string Subs
     /// <summary>
     /// Parses the JSON output of <c>claude auth status --json</c>.
     /// Returns a failure when the JSON is invalid or <c>loggedIn</c> is <c>false</c>.
+    /// Fields exceeding their length cap are silently truncated.
     /// </summary>
     internal static Result<AccountIdentity> Parse(string json)
     {
@@ -60,10 +65,15 @@ internal sealed record AccountIdentity(string Email, string OrgName, string Subs
             return Result<AccountIdentity>.Fail(NotLoggedIn);
         }
 
-        string email = root["email"]?.GetValue<string>() ?? string.Empty;
-        string orgName = root["orgName"]?.GetValue<string>() ?? string.Empty;
-        string subscriptionType = root["subscriptionType"]?.GetValue<string>() ?? string.Empty;
+        string email = Truncate(root["email"]?.GetValue<string>() ?? string.Empty, MaxEmailLength);
+        string orgName = Truncate(root["orgName"]?.GetValue<string>() ?? string.Empty, MaxOrgNameLength);
+        string subscriptionType = Truncate(
+            root["subscriptionType"]?.GetValue<string>() ?? string.Empty,
+            MaxSubscriptionTypeLength);
 
         return new AccountIdentity(email, orgName, subscriptionType);
     }
+
+    private static string Truncate(string value, int maxLength)
+        => value.Length > maxLength ? value[..maxLength] : value;
 }
