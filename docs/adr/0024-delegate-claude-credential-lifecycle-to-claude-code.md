@@ -58,7 +58,9 @@ The flow depends on specific output strings emitted by `claude` CLI 2.1.187:
 | Non-zero exit code | container exit | Bad/expired code detection (fallback to exit code) |
 
 The onboarding seed (`hasCompletedOnboarding`, `hasTrustDialogAccepted`, `theme`) also depends on `.claude.json` key names stable across CLI versions.
-The CI integration test (`LoginIntegrationTests`) is the safety net for CLI version drift — it runs against the actual CLI image and will fail if any of these strings or behaviors change.
+The CI integration test (`LoginIntegrationTests`) is the safety net for CLI version drift — it runs in the dedicated `login-integration` CI job and will fail if any of these strings or behaviors change.
+The `login-integration` job triggers on changes to `workers/Dockerfile.base`, `workers/Dockerfile.login`, or the login source/test paths, and on manual `workflow_dispatch`.
+The per-PR `api` job does not build the login image, so these tests self-skip there (image absent) and only execute in the dedicated job.
 
 ### Onboarding seed
 
