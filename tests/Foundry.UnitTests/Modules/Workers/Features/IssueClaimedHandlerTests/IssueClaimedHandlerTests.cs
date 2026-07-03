@@ -1076,6 +1076,9 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
 
+
+        public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
         public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ContainerId>>([]);
 

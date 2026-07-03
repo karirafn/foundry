@@ -75,6 +75,42 @@ public sealed class SubmitCodeAsync
         committer.CommittedIdentity.ShouldBe(expectedIdentity);
     }
 
+    /// <summary>
+    /// Regression test for the bug where SubmitCodeAsync called GetAuthStatusAsync on the
+    /// now-stopped login container (Docker throws "container is not running" on exec against a
+    /// stopped container). Identity must be read from the credential volume via
+    /// GetCredentialVolumeAuthStatusAsync, which is lifecycle-independent.
+    /// </summary>
+    [Fact]
+    public async Task WhenLoginSucceeds_IdentityReadFromCredentialVolume_NotFromStoppedLoginContainer()
+    {
+        // Arrange
+        string url = "https://claude.ai/oauth/authorize?code=true";
+        string logLine = $"If the browser didn't open, visit: {url}";
+
+        // Login container exits with code 0 — it is stopped when GetAuthStatusAsync is called on it.
+        // The faithful fake throws on exec-against-stopped-container, so if the production code
+        // still calls GetAuthStatusAsync(containerId, ...) the test would fail with Unknown failure.
+        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        orchestrator.WithExitedContainer(exitCode: 0);
+
+        AccountIdentity expectedIdentity = new("carol@example.com", "Acme Ltd", "pro");
+        orchestrator.WithAuthStatusIdentity(expectedIdentity);
+
+        FakeLoginSuccessCommitter committer = new();
+        LoginSessionService sut = CreateService(orchestrator, committer);
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
+
+        // Act
+        await sut.SubmitCodeAsync("valid-code", TestContext.Current.CancellationToken);
+
+        // Assert — volume method was called (not exec on the stopped login container)
+        orchestrator.GetCredentialVolumeAuthStatusCallCount.ShouldBe(1);
+        committer.CommitCallCount.ShouldBe(1);
+        committer.CommittedIdentity.ShouldBe(expectedIdentity);
+    }
+
     [Fact]
     public async Task WhenCodeSubmitted_DeliversCodeToOrchestrator()
     {

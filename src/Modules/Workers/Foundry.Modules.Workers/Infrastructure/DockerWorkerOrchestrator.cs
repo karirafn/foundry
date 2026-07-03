@@ -487,18 +487,57 @@ internal sealed class DockerWorkerOrchestrator(
         return results;
     }
 
+    public async Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
+    {
+        string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
+
+        try
+        {
+            return await GetAuthStatusAsync(helperId, cancellationToken);
+        }
+        finally
+        {
+            await StopAndRemoveAsync(helperId, cancellationToken);
+        }
+    }
+
     public async Task SeedOnboardingAsync(CancellationToken cancellationToken)
     {
         // Use a short-lived helper container to read, merge, and write .claude.json
         // onto the credential volume without copying the volume to the host.
-        string helperImage = WorkerImageNames.LoginImageName;
         string configPath = $"{CredentialVolume.ContainerPath}/.claude.json";
 
-        // Start a minimal helper container that sleeps long enough to exec into.
+        string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
+
+        try
+        {
+            // Read existing .claude.json (tolerate absence).
+            string? existingJson = await ReadFileFromContainerAsync(helperId, configPath, cancellationToken);
+
+            // Compute the merged JSON in C# — OnboardingSeed.Merge is the single source of truth.
+            string mergedJson = OnboardingSeed.Merge(existingJson, OnboardingSeed.DefaultWorkDir);
+
+            // Write the merged content back via printf (code in env J — no shell injection).
+            await WriteFileToContainerAsync(helperId, configPath, mergedJson, cancellationToken);
+        }
+        finally
+        {
+            await StopAndRemoveAsync(helperId, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Starts a minimal helper container that mounts the credential volume and sleeps long enough
+    /// for exec operations. The caller is responsible for stopping and removing it via
+    /// <see cref="StopAndRemoveAsync"/> in a <c>finally</c> block.
+    /// </summary>
+    private async Task<string> StartCredentialHelperContainerAsync(CancellationToken cancellationToken)
+    {
         CreateContainerParameters createParams = new()
         {
-            Image = helperImage,
+            Image = WorkerImageNames.LoginImageName,
             Cmd = ["sh", "-c", "sleep 30"],
+            Env = [$"{CredentialVolume.ConfigDirEnvVar}={CredentialVolume.ContainerPath}"],
             HostConfig = new HostConfig
             {
                 Mounts =
@@ -518,28 +557,12 @@ internal sealed class DockerWorkerOrchestrator(
             createParams,
             cancellationToken);
 
-        string helperId = response.ID;
+        await containerOperations.StartContainerAsync(
+            response.ID,
+            new ContainerStartParameters(),
+            cancellationToken);
 
-        try
-        {
-            await containerOperations.StartContainerAsync(
-                helperId,
-                new ContainerStartParameters(),
-                cancellationToken);
-
-            // Read existing .claude.json (tolerate absence).
-            string? existingJson = await ReadFileFromContainerAsync(helperId, configPath, cancellationToken);
-
-            // Compute the merged JSON in C# — OnboardingSeed.Merge is the single source of truth.
-            string mergedJson = OnboardingSeed.Merge(existingJson, OnboardingSeed.DefaultWorkDir);
-
-            // Write the merged content back via printf (code in env J — no shell injection).
-            await WriteFileToContainerAsync(helperId, configPath, mergedJson, cancellationToken);
-        }
-        finally
-        {
-            await StopAndRemoveAsync(helperId, cancellationToken);
-        }
+        return response.ID;
     }
 
     private async Task<string?> ReadFileFromContainerAsync(

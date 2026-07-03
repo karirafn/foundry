@@ -127,9 +127,12 @@ internal sealed class LoginSessionService(
                 return Result.Ok();
             }
 
-            // Capture identity BEFORE teardown — the container must still be up for auth status exec
+            // Read identity from the credential volume via a fresh helper container.
+            // The login container has already exited by the time WaitForLoginSuccessAsync returns —
+            // the CLI writes credentials to the volume before exiting, so we mount the same volume
+            // in a short-lived helper and exec auth status there rather than on the stopped login container.
             Result<AccountIdentity> identityResult =
-                await orchestrator.GetAuthStatusAsync(session.ContainerId, cancellationToken);
+                await orchestrator.GetCredentialVolumeAuthStatusAsync(cancellationToken);
 
             if (identityResult is not Result<AccountIdentity>.Success identitySuccess)
             {

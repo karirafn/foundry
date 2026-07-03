@@ -33,6 +33,7 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
     public int DeliverLoginCodeCallCount { get; private set; }
     public int StopContainerCallCount { get; private set; }
     public int RemoveContainerCallCount { get; private set; }
+    public int GetCredentialVolumeAuthStatusCallCount { get; private set; }
     public string? LastDeliveredCode { get; private set; }
 
     /// <summary>Scripts <see cref="GetStatusAsync"/> to return a container that exited with the given code.</summary>
@@ -151,7 +152,22 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
     }
 
     public Task<Result<AccountIdentity>> GetAuthStatusAsync(string containerId, CancellationToken cancellationToken)
-        => Task.FromResult(_authStatusResult);
+    {
+        // Faithfully model Docker's "container is not running" error — docker exec on a stopped
+        // container throws, so callers must not exec against the login container after it exits.
+        if (!_containerStatus.IsRunning)
+        {
+            throw new InvalidOperationException("container is not running");
+        }
+
+        return Task.FromResult(_authStatusResult);
+    }
+
+    public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
+    {
+        GetCredentialVolumeAuthStatusCallCount++;
+        return Task.FromResult(_authStatusResult);
+    }
 
     public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
         => Task.FromResult(_loginContainerIds);
