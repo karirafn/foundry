@@ -1,12 +1,13 @@
 namespace Foundry.Modules.Workers.Features.Login;
 
 /// <summary>
-/// Builds the <c>docker exec</c> argv and environment for delivering the OAuth code
-/// into the login container's FIFO via <c>printf</c>.
+/// Builds the <c>docker exec</c> argv for delivering the OAuth code
+/// into the login container's FIFO.
 /// </summary>
 /// <remarks>
-/// The code is passed as environment variable <c>C</c> — never interpolated into the
-/// command string — so shell metacharacters in the code cannot cause injection.
+/// The code is written to the exec's STDIN stream — it never appears in the exec
+/// process's argv or environment variables and is therefore not visible via
+/// <c>docker inspect</c> or the Docker API's <c>GET /exec/{id}/json</c> endpoint.
 /// </remarks>
 internal sealed record LoginExecCommand
 {
@@ -20,32 +21,23 @@ internal sealed record LoginExecCommand
     /// </summary>
     internal const string SleepPidPath = "/tmp/ci.pid";
 
-    private const string EnvVarName = "C";
-
-    private LoginExecCommand(IReadOnlyList<string> argv, IReadOnlyList<string> env)
+    private LoginExecCommand(IReadOnlyList<string> argv)
     {
         Argv = argv;
-        Env = env;
     }
 
     internal IReadOnlyList<string> Argv { get; }
-    internal IReadOnlyList<string> Env { get; }
 
     /// <summary>
-    /// Creates the exec command that writes <paramref name="code"/> into the container FIFO,
-    /// then kills the bootstrap sleep process so the CLI receives EOF on stdin and can proceed.
+    /// Creates the exec command argv that reads from STDIN, writes into the container FIFO,
+    /// then kills the bootstrap sleep process so the CLI receives EOF and can proceed.
+    /// The code must be written to the exec's STDIN by the caller.
     /// </summary>
-    internal static LoginExecCommand ForCode(string code)
-    {
-        IReadOnlyList<string> argv =
+    internal static LoginExecCommand ForStdin() =>
+        new(
         [
             "sh",
             "-c",
-            $"printf '%s\\n' \"${EnvVarName}\" > {FifoPath}; kill $(cat {SleepPidPath} 2>/dev/null) 2>/dev/null || true",
-        ];
-
-        IReadOnlyList<string> env = [$"{EnvVarName}={code}"];
-
-        return new LoginExecCommand(argv, env);
-    }
+            $"cat > {FifoPath}; kill $(cat {SleepPidPath} 2>/dev/null) 2>/dev/null || true",
+        ]);
 }

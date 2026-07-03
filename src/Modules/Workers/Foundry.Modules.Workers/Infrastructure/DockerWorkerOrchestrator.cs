@@ -399,14 +399,14 @@ internal sealed class DockerWorkerOrchestrator(
         string code,
         CancellationToken cancellationToken)
     {
-        LoginExecCommand cmd = LoginExecCommand.ForCode(code);
+        LoginExecCommand cmd = LoginExecCommand.ForStdin();
 
         ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
             containerId,
             new ContainerExecCreateParameters
             {
                 Cmd = [.. cmd.Argv],
-                Env = [.. cmd.Env],
+                AttachStdin = true,
                 AttachStdout = true,
                 AttachStderr = true,
             },
@@ -416,6 +416,12 @@ internal sealed class DockerWorkerOrchestrator(
             execResponse.ID,
             false,
             cancellationToken);
+
+        // Write the code to the exec's STDIN so it never appears in env or argv
+        // (not visible via docker inspect / GET /exec/{id}/json during the delivery window).
+        byte[] codeBytes = System.Text.Encoding.UTF8.GetBytes(code + "\n");
+        await stream.WriteAsync(codeBytes, 0, codeBytes.Length, cancellationToken);
+        stream.CloseWrite();
 
         await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
     }

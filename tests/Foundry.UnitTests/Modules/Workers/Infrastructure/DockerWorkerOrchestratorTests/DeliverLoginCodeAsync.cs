@@ -24,7 +24,7 @@ public sealed class DeliverLoginCodeAsync
         PidsLimit = 256,
     };
 
-    private static DockerWorkerOrchestrator BuildSut(FakeExecOperations execOps) =>
+    private static DockerWorkerOrchestrator BuildSut(CapturingExecOperations execOps) =>
         new(
             new NullContainerOperations(),
             new NullVolumeOperations(),
@@ -35,7 +35,7 @@ public sealed class DeliverLoginCodeAsync
     public async Task WhenCodeDelivered_ExecCreatedInCorrectContainer()
     {
         // Arrange
-        FakeExecOperations execOps = new();
+        CapturingExecOperations execOps = new();
         DockerWorkerOrchestrator sut = BuildSut(execOps);
 
         // Act
@@ -49,32 +49,154 @@ public sealed class DeliverLoginCodeAsync
     public async Task WhenCodeDelivered_ExecArgvMatchesLoginExecCommand()
     {
         // Arrange
-        FakeExecOperations execOps = new();
+        CapturingExecOperations execOps = new();
         DockerWorkerOrchestrator sut = BuildSut(execOps);
 
         // Act
         await sut.DeliverLoginCodeAsync("container-id", "auth-code-abc", CancellationToken.None);
 
-        // Assert
-        LoginExecCommand expectedCmd = LoginExecCommand.ForCode("auth-code-abc");
+        // Assert — argv uses stdin delivery (cat > fifo), not printf/env
+        LoginExecCommand expectedCmd = LoginExecCommand.ForStdin();
         ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
         captured.Cmd.ShouldBe(expectedCmd.Argv);
     }
 
     [Fact]
-    public async Task WhenCodeDelivered_ExecEnvContainsCodeVariable()
+    public async Task WhenCodeDelivered_AttachStdinIsTrue()
     {
         // Arrange
-        FakeExecOperations execOps = new();
+        CapturingExecOperations execOps = new();
         DockerWorkerOrchestrator sut = BuildSut(execOps);
 
         // Act
         await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
 
-        // Assert
-        LoginExecCommand expectedCmd = LoginExecCommand.ForCode("secret-code");
+        // Assert — exec must be created with AttachStdin so the code can be written to STDIN
         ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
-        captured.Env.ShouldBe(expectedCmd.Env);
+        captured.AttachStdin.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenCodeDelivered_CodeWrittenToStdin()
+    {
+        // Arrange
+        CapturingExecOperations execOps = new();
+        DockerWorkerOrchestrator sut = BuildSut(execOps);
+
+        // Act
+        await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
+
+        // Assert — the code bytes were written to the exec's STDIN stream (not the env)
+        string written = System.Text.Encoding.UTF8.GetString(execOps.WrittenStdinBytes.ToArray()).TrimEnd('\n');
+        written.ShouldBe("secret-code");
+    }
+
+    [Fact]
+    public async Task WhenCodeDelivered_CodeNotInEnvOrArgv()
+    {
+        // Arrange
+        CapturingExecOperations execOps = new();
+        DockerWorkerOrchestrator sut = BuildSut(execOps);
+
+        // Act
+        await sut.DeliverLoginCodeAsync("container-id", "top-secret-code", CancellationToken.None);
+
+        // Assert — code must not appear in env or argv (visible via docker inspect)
+        ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
+        string allArgs = string.Join(" ", captured.Cmd);
+        allArgs.ShouldNotContain("top-secret-code");
+        foreach (string env in captured.Env ?? [])
+        {
+            env.ShouldNotContain("top-secret-code");
+        }
+    }
+
+    /// <summary>
+    /// Captures exec create parameters and stdin writes for assertion.
+    /// </summary>
+    private sealed class CapturingExecOperations : IExecOperations
+    {
+        private const string FakeExecId = "fake-exec-id";
+
+        public ContainerExecCreateParameters? LastCreateParameters { get; private set; }
+        public string? LastContainerId { get; private set; }
+        public List<byte> WrittenStdinBytes { get; } = [];
+
+        public Task<ContainerExecCreateResponse> ExecCreateContainerAsync(
+            string id,
+            ContainerExecCreateParameters parameters,
+            CancellationToken cancellationToken)
+        {
+            LastContainerId = id;
+            LastCreateParameters = parameters;
+            return Task.FromResult(new ContainerExecCreateResponse { ID = FakeExecId });
+        }
+
+        public Task<MultiplexedStream> StartAndAttachContainerExecAsync(
+            string id,
+            bool tty,
+            CancellationToken cancellationToken)
+        {
+            // Return a multiplexed stream backed by a capture stream for stdin
+            CapturingStream captureStream = new(WrittenStdinBytes);
+            return Task.FromResult(new MultiplexedStream(captureStream, tty));
+        }
+
+        public Task<ContainerExecInspectResponse> InspectContainerExecAsync(
+            string id,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerExecInspectResponse { ExecID = id, Running = false });
+
+        public Task ResizeContainerExecTtyAsync(
+            string id,
+            ContainerResizeParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task StartContainerExecAsync(string id, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<MultiplexedStream> StartWithConfigContainerExecAsync(
+            string id,
+            ContainerExecStartParameters eConfig,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new MultiplexedStream(Stream.Null, false));
+    }
+
+    /// <summary>
+    /// Captures all bytes written to it (simulates the exec stdin channel).
+    /// Also supports reading (returns 0 bytes — simulates closed stdout/stderr from exec).
+    /// </summary>
+    private sealed class CapturingStream(List<byte> captured) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+
+        // Return 0 to signal EOF on stdout/stderr (no output from the exec command itself).
+        public override int Read(byte[] buffer, int offset, int count) => 0;
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            for (int i = offset; i < offset + count; i++)
+            {
+                captured.Add(buffer[i]);
+            }
+        }
     }
 
     private sealed class NullContainerOperations : IContainerOperations
