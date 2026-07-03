@@ -1,6 +1,20 @@
 export type AuthMode = 'api_key' | 'oauth';
 
+export type OAuthStatus = 'NotConfigured' | 'Present' | 'ReLoginNeeded';
+
 export type ImageBuildStatus = 'Idle' | 'Building' | 'Failed';
+
+export type LoginPhase = 'Starting' | 'WaitingForAuthorization' | 'SigningIn' | 'Succeeded' | 'Failed';
+
+export type LoginError = 'InvalidCode' | 'UrlTimeout' | 'CodeTimeout' | 'Unknown';
+
+export interface LoginSessionUpdate {
+  sessionId: string;
+  phase: LoginPhase;
+  authorizationUrl: string | null;
+  failureReason: LoginError | null;
+  failureMessage: string | null;
+}
 
 export interface WorkerImageFlags {
   installDotnet: boolean;
@@ -11,19 +25,9 @@ export interface WorkerImageFlags {
   installDocker: boolean;
 }
 
-export interface OAuthScanResponse {
-  accessTokenPresent: boolean;
-  refreshTokenPresent: boolean;
-  expiresAt: string | null;
-  subscriptionType: string | null;
-}
-
 export interface OAuthCredentialInfo {
-  accessTokenPresent: boolean;
-  refreshTokenPresent: boolean;
-  expiresAt: string | null;
+  status: OAuthStatus;
   subscriptionType: string | null;
-  status: 'valid' | 'expired' | 'missing';
 }
 
 export interface AuthSettings {
@@ -44,11 +48,11 @@ export interface WorkerLimits {
 
 export interface GlobalSettingsResponse {
   authMode: string;
+  oAuthStatus: OAuthStatus;
+  oAuthAccountEmail: string | null;
+  oAuthAccountOrgName: string | null;
   maxConcurrent: number;
   timeoutMinutes: number;
-  accessTokenPresent: boolean;
-  refreshTokenPresent: boolean;
-  expiresAt: string | null;
   subscriptionType: string | null;
   systemPromptTemplate: string | null;
   workerPromptTemplate: string | null;

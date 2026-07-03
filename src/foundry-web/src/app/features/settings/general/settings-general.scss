@@ -22,7 +22,7 @@
     margin: 0 0 var(--fd-spacing-xs) 0;
 
     &:focus-visible {
-      outline: none;
+      @include focus-ring;
     }
   }
 
@@ -200,68 +200,104 @@
     &:not(:disabled):hover { background: var(--fd-bg-error-subtle); }
   }
 
-  &__oauth-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: var(--fd-spacing-md);
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-muted);
+  &__switch-confirm {
+    background: var(--fd-bg-card);
+    border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-sm);
     padding: var(--fd-spacing-md);
   }
 
-  &__oauth-field-label {
-    color: var(--fd-text-tertiary);
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  &__oauth-field-value {
-    color: var(--fd-text-primary);
-    font-size: 0.875rem;
-  }
-
-  &__oauth-status {
-    font-weight: 500;
-    text-transform: capitalize;
-
-    &--valid {
-      color: var(--fd-text-success);
-    }
-
-    &--expired {
-      color: var(--fd-text-warning);
-    }
-
-    &--missing {
-      color: var(--fd-text-error);
-    }
-  }
-
-  &__oauth-setup {
-    background: var(--fd-bg-error-subtle);
-    border: 1px solid var(--fd-state-failed);
-    border-radius: var(--fd-radius-sm);
-    padding: var(--fd-spacing-md);
-  }
-
-  &__oauth-setup-instructions {
+  &__switch-confirm-text {
     color: var(--fd-text-secondary);
     font-size: 0.875rem;
     margin: 0 0 var(--fd-spacing-sm) 0;
   }
 
-  &__oauth-setup-command {
-    background: var(--fd-bg-page);
+  &__switch-confirm-actions {
+    display: flex;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__switch-confirm-btn {
+    background: transparent;
+    border: 1px solid var(--fd-text-link);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-link);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    &:hover { background: var(--fd-bg-card-hover); }
+    &:focus-visible { @include focus-ring; }
+  }
+
+  &__switch-cancel-btn {
+    background: transparent;
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-primary);
-    display: inline-block;
-    font-family: var(--fd-font-mono);
+    color: var(--fd-text-secondary);
+    cursor: pointer;
     font-size: 0.875rem;
+    min-height: 44px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    &:hover { background: var(--fd-bg-card-hover); }
+    &:focus-visible { @include focus-ring; }
+  }
+
+  &__drain-gate {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    padding: var(--fd-spacing-md);
+
+    &--empty {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+  }
+
+  &__switch-error {
+    color: var(--fd-text-error);
+    font-size: 0.875rem;
+  }
+
+  &__switch-account-btn,
+  &__resume-btn {
+    align-self: flex-start;
+    background: transparent;
+    border-radius: var(--fd-radius-sm);
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+
+    &:disabled { cursor: not-allowed; opacity: 0.5; }
+    &:focus-visible { @include focus-ring; }
+  }
+
+  &__switch-account-btn {
+    border: 1px solid var(--fd-border-default);
+    color: var(--fd-text-secondary);
+
+    &:not(:disabled):hover {
+      background: var(--fd-bg-card-hover);
+      color: var(--fd-text-primary);
+    }
+  }
+
+  &__resume-btn {
+    border: 1px solid var(--fd-text-link);
+    color: var(--fd-text-link);
+    font-weight: 500;
+    transition: background 0.15s ease;
+
+    &:not(:disabled):hover { background: var(--fd-bg-card-hover); }
   }
 
   &__api-key-form,

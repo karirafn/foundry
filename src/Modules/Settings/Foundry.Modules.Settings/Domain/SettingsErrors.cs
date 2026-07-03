@@ -6,7 +6,6 @@ internal static class SettingsErrors
 {
     internal const string NotFoundCode = "Settings.NotFound";
     internal const string InvalidAuthModeCode = "Settings.InvalidAuthMode";
-    internal const string OAuthCredentialsNotFoundCode = "Settings.OAuthCredentialsNotFound";
     internal const string InvalidMaxConcurrentCode = "Settings.InvalidMaxConcurrent";
     internal const string InvalidTimeoutCode = "Settings.InvalidTimeout";
     internal const string InvalidPromptTemplateCode = "Settings.InvalidPromptTemplate";
@@ -17,9 +16,6 @@ internal static class SettingsErrors
 
     internal static readonly Error InvalidAuthMode =
         new(InvalidAuthModeCode, "The specified authentication mode is not valid.");
-
-    internal static readonly Error OAuthCredentialsNotFound =
-        new(OAuthCredentialsNotFoundCode, "No OAuth credentials file was found. Run 'claude setup-token' to create one.");
 
     internal static readonly Error InvalidPromptTemplate =
         new(InvalidPromptTemplateCode, "Prompt templates must not be empty. Provide a value or omit the field to use the default.");

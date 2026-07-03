@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -113,6 +114,10 @@ jobs:
           sudo chown "$(id -u):$(id -g)" /workspace
           bats workers/tests/entrypoint.bats
 
+      - name: Build base image
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: docker build -f workers/Dockerfile.base -t foundry-claude-base:local workers/
+
       - name: Build worker image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: docker build --build-arg INSTALL_DOCKER=true -t foundry-worker:ci workers/
@@ -157,3 +162,47 @@ jobs:
               [ "$mode" = "700" ] || { echo "XDG_RUNTIME_DIR mode is $mode, expected 700"; exit 1; }
               echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR} — created, writable, mode 700"
             '
+
+  login-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Detect changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        id: changes
+        with:
+          filters: |
+            login:
+              - 'workers/Dockerfile.base'
+              - 'workers/Dockerfile.login'
+              - 'tests/Foundry.IntegrationTests/Modules/Workers/Login/**'
+              - 'src/Modules/Workers/Foundry.Modules.Workers/Features/Login/**'
+              - 'src/Modules/Workers/Foundry.Modules.Workers/Infrastructure/DockerWorkerOrchestrator.cs'
+
+      - name: Setup .NET
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.login == 'true'
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.login == 'true'
+        run: dotnet restore
+
+      - name: Build
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.login == 'true'
+        run: dotnet build --no-restore
+
+      - name: Build base image
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.login == 'true'
+        run: docker build -f workers/Dockerfile.base -t foundry-claude-base:local workers/
+
+      - name: Build login image
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.login == 'true'
+        run: docker build -f workers/Dockerfile.login -t foundry-claude-login:local workers/
+
+      - name: Run login integration tests
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.login == 'true'
+        run: dotnet test tests/Foundry.IntegrationTests --no-build --filter "FullyQualifiedName~Login.LoginFlowIntegrationTests"

@@ -2,8 +2,6 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -19,28 +17,10 @@ internal sealed class WorkerCapacityAvailableHandler(
     IIntegrationEventDispatcher integrationEventDispatcher,
     IRepositoryEligibilityQuery repositoryEligibilityQuery,
     IDomainEventDispatcher domainEventDispatcher,
-    IAuthValidator authValidator,
-    ISystemNotificationBroadcaster systemNotificationBroadcaster,
     ILogger<WorkerCapacityAvailableHandler> logger) : IIntegrationEventHandler<WorkerCapacityAvailable>
 {
-    private const string ClaudeAuthCategory = "claude-auth";
-
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
     {
-        AuthValidationResult authResult = await authValidator.ValidateAsync(cancellationToken);
-
-        if (!authResult.IsValid)
-        {
-            await systemNotificationBroadcaster.SendAsync(
-                new SystemNotification(ClaudeAuthCategory, true, authResult.ErrorMessage ?? string.Empty),
-                cancellationToken);
-            return;
-        }
-
-        await systemNotificationBroadcaster.SendAsync(
-            new SystemNotification(ClaudeAuthCategory, false, ""),
-            cancellationToken);
-
         // Resolve eligible repositories (with position) once across all tiers to avoid blocking
         // dispatch when the oldest candidate belongs to an ineligible repository.
         Dictionary<MonitoredRepositoryId, int> positionByRepoId =

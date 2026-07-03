@@ -410,4 +410,83 @@ public sealed class Parse
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
         limited.ResetsAt.ShouldBe(new DateTimeOffset(2026, 6, 29, 22, 0, 0, TimeSpan.Zero));
     }
+
+    [Fact]
+    public void WhenApiErrorStatus401_ReturnsAuthInvalid()
+    {
+        // Arrange
+        // Shape assumed: api_error_status == 401 as the primary signal.
+        // No real fixture was found; predicate mirrors the 429 pattern (api_error_status field).
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":0,"result":"Authentication error.","session_id":"abc","terminal_reason":"error","api_error_status":401}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AuthInvalid>();
+    }
+
+    [Fact]
+    public void WhenErrorTypeIsAuthenticationError_ReturnsAuthInvalid()
+    {
+        // Arrange
+        // Secondary guard: error.type == "authentication_error" (shape assumed — no real fixture found).
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":0,"result":"Authentication error.","session_id":"abc","terminal_reason":"error","error":{"type":"authentication_error","message":"Invalid API key"}}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AuthInvalid>();
+    }
+
+    [Fact]
+    public void WhenApiErrorStatus401AndTerminalReasonIsBlockingLimit_UsageLimitedWins()
+    {
+        // Arrange
+        // Precedence: usage-limit check runs first; 429/blocking_limit wins over 401
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":0,"result":"Limit hit. Resets at 2026-06-18T15:00:00Z.","session_id":"abc","terminal_reason":"blocking_limit","api_error_status":401}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+    }
+
+    [Fact]
+    public void WhenNormalExitJson_StillReturnsNormalExit_NotAuthInvalid()
+    {
+        // Arrange — regression: normal exit must not be classified as auth-invalid
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"duration_ms":1234,"num_turns":5,"result":"All done.","session_id":"abc","terminal_reason":"stop_reason"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenApiErrorStatus429_StillReturnsUsageLimited_NotAuthInvalid()
+    {
+        // Arrange — regression: usage-limited must not be reclassified as auth-invalid
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":1,"result":"Usage limit hit.","session_id":"abc","terminal_reason":"blocking_limit","api_error_status":429}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+    }
 }

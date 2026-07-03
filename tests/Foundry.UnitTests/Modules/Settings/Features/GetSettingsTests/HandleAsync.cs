@@ -65,21 +65,18 @@ public sealed class HandleAsync : IAsyncDisposable
             () => success.Value.AuthMode.ShouldBe("ApiKey"),
             () => success.Value.MaxConcurrent.ShouldBe(GlobalSettings.DefaultMaxConcurrent),
             () => success.Value.TimeoutMinutes.ShouldBe(GlobalSettings.DefaultTimeoutMinutes),
-            () => success.Value.AccessTokenPresent.ShouldBeFalse(),
-            () => success.Value.RefreshTokenPresent.ShouldBeFalse(),
-            () => success.Value.ExpiresAt.ShouldBeNull(),
+            () => success.Value.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured),
             () => success.Value.SubscriptionType.ShouldBeNull());
     }
 
     [Fact]
-    public async Task WhenSettingsExistWithOAuthMode_ReturnsSettingsSummaryWithOAuthDetails()
+    public async Task WhenOAuthModeAndCommittedAccountPresent_ReturnsPresent()
     {
         // Arrange
-        DateTimeOffset expiresAt = new(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.SetAuthMode(new AuthMode.OAuth("access-token", "refresh-token", expiresAt, "pro"));
+            settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -96,10 +93,59 @@ public sealed class HandleAsync : IAsyncDisposable
         Result<GlobalSettingsSummary>.Success success = result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
         success.Value.ShouldSatisfyAllConditions(
             () => success.Value.AuthMode.ShouldBe("OAuth"),
-            () => success.Value.AccessTokenPresent.ShouldBeTrue(),
-            () => success.Value.RefreshTokenPresent.ShouldBeTrue(),
-            () => success.Value.ExpiresAt.ShouldBe(expiresAt),
+            () => success.Value.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusPresent),
             () => success.Value.SubscriptionType.ShouldBe("pro"));
+    }
+
+    [Fact]
+    public async Task WhenOAuthModeAndNoCommittedAccount_ReturnsReLoginNeeded()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            settings.SetAuthMode(new AuthMode.OAuth("pro"));
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        GetSettings.Handler sut = new(dbContext);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            new GetSettings.Query(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<GlobalSettingsSummary>.Success success = result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
+        success.Value.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded);
+    }
+
+    [Fact]
+    public async Task WhenOAuthModeAndAuthInvalidPauseSet_ReturnsReLoginNeeded()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+            settings.PauseForAuthInvalid();
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        GetSettings.Handler sut = new(dbContext);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            new GetSettings.Query(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<GlobalSettingsSummary>.Success success = result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
+        success.Value.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded);
     }
 
     [Fact]

@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.Options;
 
@@ -27,7 +28,7 @@ public sealed class GetLogsAsync
     };
 
     private static DockerWorkerOrchestrator BuildSut(IContainerOperations containerOps) =>
-        new(containerOps, Options.Create(DefaultOptions()));
+        new(containerOps, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
 
     [Fact]
     public async Task WhenOutputContainsHttpsUrlWithUserinfo_UserinfoRedacted()
@@ -265,5 +266,32 @@ public sealed class GetLogsAsync
             string id,
             CancellationToken cancellationToken)
             => Task.FromResult(new ContainerWaitResponse());
+    }
+
+    private sealed class NullVolumeOperations : IVolumeOperations
+    {
+        public Task<VolumeResponse> CreateAsync(
+            VolumesCreateParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumeResponse { Name = parameters.Name });
+
+        public Task<VolumeResponse> InspectAsync(string name, CancellationToken cancellationToken)
+            => Task.FromResult(new VolumeResponse { Name = name });
+
+        public Task<VolumesListResponse> ListAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesListResponse());
+
+        public Task<VolumesListResponse> ListAsync(
+            VolumesListParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesListResponse());
+
+        public Task<VolumesPruneResponse> PruneAsync(
+            VolumesPruneParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new VolumesPruneResponse());
+
+        public Task RemoveAsync(string name, bool? force, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

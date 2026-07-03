@@ -6,7 +6,7 @@ import { SettingsService } from './features/settings/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
 import { SystemSignalRService } from './core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 
 function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -15,7 +15,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     timeoutMinutes: 60,
     accessTokenPresent: false,
     refreshTokenPresent: false,
-    expiresAt: null,
     subscriptionType: null,
     systemPromptTemplate: null,
     workerPromptTemplate: null,

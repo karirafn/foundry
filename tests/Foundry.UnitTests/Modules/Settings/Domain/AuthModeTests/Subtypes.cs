@@ -23,24 +23,17 @@ public sealed class Subtypes
     }
 
     [Fact]
-    public void WhenOAuthCreated_StoresAllFields()
+    public void WhenOAuthCreated_StoresSubscriptionType()
     {
         // Arrange
-        const string accessToken = "access-token";
-        const string refreshToken = "refresh-token";
-        DateTimeOffset expiresAt = DateTimeOffset.UtcNow.AddHours(1);
         const string subscriptionType = "pro";
 
         // Act
-        AuthMode mode = new AuthMode.OAuth(accessToken, refreshToken, expiresAt, subscriptionType);
+        AuthMode mode = new AuthMode.OAuth(subscriptionType);
 
         // Assert
         AuthMode.OAuth oauth = mode.ShouldBeOfType<AuthMode.OAuth>();
-        oauth.ShouldSatisfyAllConditions(
-            () => oauth.AccessToken.ShouldBe(accessToken),
-            () => oauth.RefreshToken.ShouldBe(refreshToken),
-            () => oauth.ExpiresAt.ShouldBe(expiresAt),
-            () => oauth.SubscriptionType.ShouldBe(subscriptionType));
+        oauth.SubscriptionType.ShouldBe(subscriptionType);
     }
 
     [Fact]
@@ -57,7 +50,7 @@ public sealed class Subtypes
     public void OAuth_IsAuthMode()
     {
         // Arrange & Act
-        AuthMode mode = new AuthMode.OAuth("access", "refresh", DateTimeOffset.UtcNow, "pro");
+        AuthMode mode = new AuthMode.OAuth("pro");
 
         // Assert
         mode.ShouldBeAssignableTo<AuthMode>();

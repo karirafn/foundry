@@ -79,14 +79,13 @@ public sealed class GetAuthEnvironmentVariableAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOAuthMode_ReturnsClaudeCodeOAuthTokenVariable()
+    public async Task WhenOAuthMode_ReturnsNull()
     {
-        // Arrange
+        // Arrange — OAuth credentials are sourced from the shared volume; no env var is injected.
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.SetAuthMode(
-                new AuthMode.OAuth("my-access-token", "my-refresh-token", DateTimeOffset.UtcNow, "pro"));
+            settings.SetAuthMode(new AuthMode.OAuth("pro"));
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -99,9 +98,6 @@ public sealed class GetAuthEnvironmentVariableAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        (string Key, string Value) pair = result.ShouldNotBeNull();
-        pair.ShouldSatisfyAllConditions(
-            () => pair.Key.ShouldBe("CLAUDE_CODE_OAUTH_TOKEN"),
-            () => pair.Value.ShouldBe("my-access-token"));
+        result.ShouldBeNull();
     }
 }

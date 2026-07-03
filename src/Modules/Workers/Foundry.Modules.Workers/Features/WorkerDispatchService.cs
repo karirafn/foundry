@@ -7,10 +7,12 @@ using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
+using DispatchPausedForAuthInvalidEvent = Foundry.Modules.Workers.Contracts.DispatchPausedForAuthInvalid;
 using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.DispatchResumed;
 
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
@@ -25,6 +27,7 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
+    ILoginSessionState loginSessionState,
     ILogger<WorkerDispatchService> logger) : PeriodicBackgroundService(logger)
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
@@ -44,6 +47,12 @@ internal sealed class WorkerDispatchService(
 
     internal async Task ExecuteTickAsync(CancellationToken cancellationToken)
     {
+        if (loginSessionState.IsLoginActive)
+        {
+            logger.LogDebug("Dispatch skipped: an interactive OAuth login session is active.");
+            return;
+        }
+
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -104,12 +113,13 @@ internal sealed class WorkerDispatchService(
             pauseState,
             cancellationToken);
 
-        if (!autoResumed && (pauseState.IsDispatchPaused || pauseState.UsageLimitResetsAt.HasValue))
+        if (!autoResumed && (pauseState.IsDispatchPaused || pauseState.UsageLimitResetsAt.HasValue || pauseState.AuthInvalidPause))
         {
             logger.LogDebug(
-                "Dispatch skipped: dispatch is paused (IsDispatchPaused={IsDispatchPaused}, UsageLimitResetsAt={UsageLimitResetsAt}).",
+                "Dispatch skipped: dispatch is paused (IsDispatchPaused={IsDispatchPaused}, UsageLimitResetsAt={UsageLimitResetsAt}, AuthInvalidPause={AuthInvalidPause}).",
                 pauseState.IsDispatchPaused,
-                pauseState.UsageLimitResetsAt);
+                pauseState.UsageLimitResetsAt,
+                pauseState.AuthInvalidPause);
             return;
         }
 
@@ -538,6 +548,11 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     continuable.FailureReason,
                     cancellationToken);
+                await PersistAuthInvalidIfNeededAsync(
+                    dbContext,
+                    integrationEventDispatcher,
+                    continuable.FailureReason,
+                    cancellationToken);
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunFailedEvent(
@@ -564,6 +579,11 @@ internal sealed class WorkerDispatchService(
                     failure.Summary);
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 await PersistUsageLimitIfNeededAsync(
+                    dbContext,
+                    integrationEventDispatcher,
+                    failure.FailureReason,
+                    cancellationToken);
+                await PersistAuthInvalidIfNeededAsync(
                     dbContext,
                     integrationEventDispatcher,
                     failure.FailureReason,
@@ -726,6 +746,47 @@ internal sealed class WorkerDispatchService(
             await domainEventDispatcher.DispatchAsync(activeRun.DomainEvents, cancellationToken);
             activeRun.ClearDomainEvents();
         }
+    }
+
+    /// <summary>
+    /// When <paramref name="failureReason"/> is <see cref="FailureReason.AuthInvalid"/>,
+    /// sets <see cref="GlobalSettings.AuthInvalidPause"/>, persists it, and dispatches
+    /// <see cref="DispatchPausedForAuthInvalidEvent"/>.
+    /// </summary>
+    private async Task PersistAuthInvalidIfNeededAsync(
+        DbContext dbContext,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        FailureReason failureReason,
+        CancellationToken cancellationToken)
+    {
+        if (failureReason is not FailureReason.AuthInvalid)
+        {
+            return;
+        }
+
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is null)
+        {
+            logger.LogWarning(
+                "Auth-invalid exit detected but could not persist pause — no GlobalSettings row exists.");
+            return;
+        }
+
+        bool wasAlreadyPaused = settings.AuthInvalidPause;
+        settings.PauseForAuthInvalid();
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (!wasAlreadyPaused)
+        {
+            await TryDispatchAsync(
+                integrationEventDispatcher,
+                new DispatchPausedForAuthInvalidEvent(),
+                cancellationToken);
+        }
+
+        logger.LogWarning("Auth-invalid exit detected; dispatch paused until credentials are refreshed.");
     }
 
     /// <summary>

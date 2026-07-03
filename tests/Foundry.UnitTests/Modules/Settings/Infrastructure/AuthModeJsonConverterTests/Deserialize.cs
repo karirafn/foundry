@@ -37,19 +37,29 @@ public sealed class Deserialize
     public void WhenOAuthJsonDeserialised_ReturnsOAuthAuthMode()
     {
         // Arrange
-        DateTimeOffset expiresAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        string json = @$"{{""type"":""oauth"",""access_token"":""at"",""refresh_token"":""rt"",""expires_at"":""{expiresAt:O}"",""subscription_type"":""pro""}}";
+        string json = @"{""type"":""oauth"",""subscription_type"":""pro""}";
 
         // Act
         AuthMode? result = JsonSerializer.Deserialize<AuthMode>(json, _options);
 
         // Assert
         AuthMode.OAuth oauth = result.ShouldBeOfType<AuthMode.OAuth>();
-        oauth.ShouldSatisfyAllConditions(
-            () => oauth.AccessToken.ShouldBe("at"),
-            () => oauth.RefreshToken.ShouldBe("rt"),
-            () => oauth.ExpiresAt.ShouldBe(expiresAt),
-            () => oauth.SubscriptionType.ShouldBe("pro"));
+        oauth.SubscriptionType.ShouldBe("pro");
+    }
+
+    [Fact]
+    public void WhenOAuthJsonHasLegacyTokenFields_DeserializesSuccessfully()
+    {
+        // Arrange — legacy blob with access_token, refresh_token, expires_at fields that were
+        // stored by a prior version. These fields are now ignored; only subscription_type is read.
+        string json = @"{""type"":""oauth"",""access_token"":""at"",""refresh_token"":""rt"",""expires_at"":""2026-01-01T00:00:00+00:00"",""subscription_type"":""pro""}";
+
+        // Act
+        AuthMode? result = JsonSerializer.Deserialize<AuthMode>(json, _options);
+
+        // Assert
+        AuthMode.OAuth oauth = result.ShouldBeOfType<AuthMode.OAuth>();
+        oauth.SubscriptionType.ShouldBe("pro");
     }
 
     [Fact]
@@ -81,11 +91,10 @@ public sealed class Deserialize
     }
 
     [Fact]
-    public void WhenOAuthAuthModeRoundTripped_PreservesAllData()
+    public void WhenOAuthAuthModeRoundTripped_PreservesSubscriptionType()
     {
         // Arrange
-        DateTimeOffset expiresAt = DateTimeOffset.UtcNow;
-        AuthMode original = new AuthMode.OAuth("access", "refresh", expiresAt, "free");
+        AuthMode original = new AuthMode.OAuth("free");
 
         // Act
         string json = JsonSerializer.Serialize(original, _options);
@@ -93,10 +102,6 @@ public sealed class Deserialize
 
         // Assert
         AuthMode.OAuth oauth = result.ShouldBeOfType<AuthMode.OAuth>();
-        oauth.ShouldSatisfyAllConditions(
-            () => oauth.AccessToken.ShouldBe("access"),
-            () => oauth.RefreshToken.ShouldBe("refresh"),
-            () => oauth.ExpiresAt.ShouldBe(expiresAt),
-            () => oauth.SubscriptionType.ShouldBe("free"));
+        oauth.SubscriptionType.ShouldBe("free");
     }
 }

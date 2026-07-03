@@ -1,6 +1,5 @@
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Settings.Features;
-using Foundry.Modules.Settings.Infrastructure;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -12,12 +11,6 @@ using Shouldly;
 using Xunit;
 
 namespace Foundry.UnitTests.Modules.Settings.Features.UpdateAuthModeTests;
-
-internal sealed class FakeOAuthCredentialScanner(Result<OAuthCredentials> result) : IOAuthCredentialScanner
-{
-    public Task<Result<OAuthCredentials>> ScanAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(result);
-}
 
 public sealed class HandleAsync : IAsyncDisposable
 {
@@ -45,12 +38,6 @@ public sealed class HandleAsync : IAsyncDisposable
         return new FoundryDbContext(options);
     }
 
-    private static FakeOAuthCredentialScanner SuccessfulScanner(OAuthCredentials credentials) =>
-        new(Result<OAuthCredentials>.Ok(credentials));
-
-    private static FakeOAuthCredentialScanner FailingScanner() =>
-        new(Result<OAuthCredentials>.Fail(SettingsErrors.OAuthCredentialsNotFound));
-
     [Fact]
     public async Task WhenSwitchingToApiKeyMode_UpdatesAuthModeAndReturnsSummary()
     {
@@ -63,8 +50,7 @@ public sealed class HandleAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAuthMode.Handler sut = new(dbContext, SuccessfulScanner(
-            new OAuthCredentials("at", "rt", DateTimeOffset.UtcNow.AddHours(1), "pro")));
+        UpdateAuthMode.Handler sut = new(dbContext);
 
         UpdateAuthMode.Command command = new("api_key", "sk-ant-abc123");
 
@@ -80,10 +66,9 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenSwitchingToOAuthMode_ScansCredentialsAndUpdatesAuthMode()
+    public async Task WhenSwitchingToOAuthMode_SetsConfiguredMarkerWithNoScan()
     {
         // Arrange
-        DateTimeOffset expiresAt = new(2027, 1, 1, 0, 0, 0, TimeSpan.Zero);
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
@@ -92,9 +77,8 @@ public sealed class HandleAsync : IAsyncDisposable
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        OAuthCredentials credentials = new("my-access", "my-refresh", expiresAt, "max");
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAuthMode.Handler sut = new(dbContext, SuccessfulScanner(credentials));
+        UpdateAuthMode.Handler sut = new(dbContext);
 
         UpdateAuthMode.Command command = new("oauth", null);
 
@@ -106,16 +90,11 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         Result<UpdateAuthMode.Response>.Success success =
             result.ShouldBeOfType<Result<UpdateAuthMode.Response>.Success>();
-        success.Value.ShouldSatisfyAllConditions(
-            () => success.Value.AuthMode.ShouldBe("OAuth"),
-            () => success.Value.AccessTokenPresent.ShouldBeTrue(),
-            () => success.Value.RefreshTokenPresent.ShouldBeTrue(),
-            () => success.Value.ExpiresAt.ShouldBe(expiresAt),
-            () => success.Value.SubscriptionType.ShouldBe("max"));
+        success.Value.AuthMode.ShouldBe("OAuth");
     }
 
     [Fact]
-    public async Task WhenSwitchingToOAuthModeButScanFails_ReturnsOAuthCredentialsNotFoundError()
+    public async Task WhenSwitchingToOAuthMode_PersistsOAuthMarkerWithoutSubscriptionType()
     {
         // Arrange
         await using (FoundryDbContext seedDb = CreateDbContext())
@@ -125,20 +104,19 @@ public sealed class HandleAsync : IAsyncDisposable
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAuthMode.Handler sut = new(dbContext, FailingScanner());
-
-        UpdateAuthMode.Command command = new("oauth", null);
-
-        // Act
-        Result<UpdateAuthMode.Response> result = await sut.HandleAsync(
-            command,
-            TestContext.Current.CancellationToken);
+        await using (FoundryDbContext dbContext = CreateDbContext())
+        {
+            UpdateAuthMode.Handler sut = new(dbContext);
+            UpdateAuthMode.Command command = new("oauth", null);
+            await sut.HandleAsync(command, TestContext.Current.CancellationToken);
+        }
 
         // Assert
-        Result<UpdateAuthMode.Response>.Failure failure =
-            result.ShouldBeOfType<Result<UpdateAuthMode.Response>.Failure>();
-        failure.Error.Code.ShouldBe(SettingsErrors.OAuthCredentialsNotFoundCode);
+        await using FoundryDbContext assertDb = CreateDbContext();
+        GlobalSettings persisted = (await assertDb.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken))!;
+        AuthMode.OAuth oauth = persisted.AuthMode.ShouldBeOfType<AuthMode.OAuth>();
+        oauth.SubscriptionType.ShouldBeNull();
     }
 
     [Fact]
@@ -146,7 +124,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAuthMode.Handler sut = new(dbContext, FailingScanner());
+        UpdateAuthMode.Handler sut = new(dbContext);
 
         UpdateAuthMode.Command command = new("api_key", "sk-ant-abc123");
 
@@ -168,14 +146,14 @@ public sealed class HandleAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings seed = GlobalSettings.Create();
-            seed.SetAuthMode(new AuthMode.OAuth("old-token", "old-refresh", DateTimeOffset.UtcNow, "pro"));
+            seed.SetAuthMode(new AuthMode.OAuth(SubscriptionType: null));
             seedDb.Set<GlobalSettings>().Add(seed);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateAuthMode.Handler sut = new(dbContext, FailingScanner());
+            UpdateAuthMode.Handler sut = new(dbContext);
             UpdateAuthMode.Command command = new("api_key", "sk-ant-new-key");
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }

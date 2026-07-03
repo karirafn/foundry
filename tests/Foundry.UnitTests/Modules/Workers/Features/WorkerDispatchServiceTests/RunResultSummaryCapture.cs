@@ -3,6 +3,8 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -201,6 +203,9 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test.NoDispatch", "No dispatch in summary tests")));
 
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
@@ -226,6 +231,28 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             => Task.CompletedTask;
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<Result<ContainerId>> StartLoginContainerAsync(
+            LoginContainerSpec spec,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Ok(ContainerId.From("fake-login-container")));
+
+        public Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<Result<AccountIdentity>> GetAuthStatusAsync(
+            string containerId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+
+
+        public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+        public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<ContainerId>>([]);
+
+        public Task SeedOnboardingAsync(CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 }

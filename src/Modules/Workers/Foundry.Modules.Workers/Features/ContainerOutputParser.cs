@@ -62,14 +62,19 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         string? terminalReason = ReadString(node["terminal_reason"]);
         int? apiErrorStatus = ReadApiErrorStatus(node);
 
-        if (!IsUsageLimit(apiErrorStatus, terminalReason))
+        if (IsUsageLimit(apiErrorStatus, terminalReason))
         {
-            return new ContainerOutputParseResult.NormalExit();
+            DateTimeOffset resetsAt = ParseResetTime(ReadString(node["result"]), defaultCooldownMinutes);
+
+            return new ContainerOutputParseResult.UsageLimited(resetsAt);
         }
 
-        DateTimeOffset resetsAt = ParseResetTime(ReadString(node["result"]), defaultCooldownMinutes);
+        if (IsAuthInvalid(apiErrorStatus, node))
+        {
+            return new ContainerOutputParseResult.AuthInvalid();
+        }
 
-        return new ContainerOutputParseResult.UsageLimited(resetsAt);
+        return new ContainerOutputParseResult.NormalExit();
     }
 
     public RunResultSummary? ParseRunResultSummary(string? log)
@@ -190,6 +195,20 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     {
         return apiErrorStatus == 429
             || (terminalReason is not null && UsageLimitReasons.Contains(terminalReason));
+    }
+
+    private static bool IsAuthInvalid(int? apiErrorStatus, JsonNode node)
+    {
+        if (apiErrorStatus == 401)
+        {
+            return true;
+        }
+
+        // Secondary guard: error.type == "authentication_error" (shape assumed — no real fixture found)
+        string? errorType = ReadString(node["error"]?["type"]);
+
+        return errorType is not null
+            && string.Equals(errorType, "authentication_error", StringComparison.Ordinal);
     }
 
     private static string? ReadString(JsonNode? node)

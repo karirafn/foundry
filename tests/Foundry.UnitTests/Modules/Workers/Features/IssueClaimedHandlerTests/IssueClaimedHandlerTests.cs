@@ -7,6 +7,8 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -184,13 +186,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOAuthTokenConfigured_ContainerSpecHasOAuthTokenEnvVar()
+    public async Task WhenOAuthModeConfigured_ContainerSpecHasCredentialVolumeMount()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(("CLAUDE_CODE_OAUTH_TOKEN", "test-oauth-token")));
+            settingsQueries: StubGlobalSettingsQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -199,9 +201,99 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.ShouldSatisfyAllConditions(
-            () => spec.EnvironmentVariables["CLAUDE_CODE_OAUTH_TOKEN"].ShouldBe("test-oauth-token"),
-            () => spec.EnvironmentVariables.ShouldNotContainKey("ANTHROPIC_API_KEY"));
+        spec.VolumeMounts.ShouldContain(m =>
+            m.VolumeName == "foundry-claude-credentials" && m.ContainerPath == "/home/node/.claude");
+    }
+
+    [Fact]
+    public async Task WhenOAuthModeConfigured_ContainerSpecHasClaudeConfigDirEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-dir");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: StubGlobalSettingsQueries.ForOAuth());
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["CLAUDE_CONFIG_DIR"].ShouldBe("/home/node/.claude");
+    }
+
+    [Fact]
+    public async Task WhenOAuthModeConfigured_ContainerSpecHasNoOAuthTokenEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-no-token");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: StubGlobalSettingsQueries.ForOAuth());
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldNotContainKey("CLAUDE_CODE_OAUTH_TOKEN");
+    }
+
+    [Fact]
+    public async Task WhenOAuthModeConfigured_EnsureCredentialVolumeAsyncIsCalled()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-vol");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: StubGlobalSettingsQueries.ForOAuth());
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.EnsureCredentialVolumeCallCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenApiKeyModeConfigured_EnsureCredentialVolumeIsNotCalled()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-apikey");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.EnsureCredentialVolumeCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenApiKeyModeConfigured_ContainerSpecHasNoVolumeMounts()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-apikey-vol");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.VolumeMounts.ShouldBeEmpty();
     }
 
     [Fact]
@@ -209,7 +301,26 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         IssueClaimedHandler sut = BuildHandler(
-            settingsQueries: new StubGlobalSettingsQueries(null));
+            settingsQueries: new StubGlobalSettingsQueries(authVar: null, settingsExist: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        error.Message.ShouldContain("authentication");
+    }
+
+    [Fact]
+    public async Task WhenApiKeyModeButNoEnvVarConfigured_CreatesFailedRunWithNoAuthError()
+    {
+        // Arrange — auth mode says "ApiKey" but GetAuthEnvironmentVariableAsync returns null
+        IssueClaimedHandler sut = BuildHandler(
+            settingsQueries: StubGlobalSettingsQueries.ForApiKeyModeWithNoEnvVar());
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -901,6 +1012,8 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public WorkerContainerSpec? LastSpec { get; private set; }
 
+        public int EnsureCredentialVolumeCallCount { get; private set; }
+
         public StubWorkerOrchestrator(bool succeeds, string? containerId = null, string? errorMessage = null)
         {
             _succeeds = succeeds;
@@ -915,6 +1028,12 @@ public sealed class HandleAsync : IAsyncDisposable
                 ? Result<ContainerId>.Ok(ContainerId.From(_containerId ?? "default-container"))
                 : Result<ContainerId>.Fail(new Error("Orchestrator.StartFailed", _errorMessage ?? "Start failed"));
             return Task.FromResult(result);
+        }
+
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+        {
+            EnsureCredentialVolumeCallCount++;
+            return Task.CompletedTask;
         }
 
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
@@ -943,16 +1062,92 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
+
+        public Task<Result<ContainerId>> StartLoginContainerAsync(
+            LoginContainerSpec spec,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<ContainerId>.Ok(ContainerId.From("fake-login-container")));
+
+        public Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<Result<AccountIdentity>> GetAuthStatusAsync(
+            string containerId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+
+
+        public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+        public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<ContainerId>>([]);
+
+        public Task SeedOnboardingAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class StubGlobalSettingsQueries(
         (string Key, string Value)? authVar,
         string? systemPromptTemplate = null,
         string? workerPromptTemplate = null,
-        bool installsDocker = false) : IGlobalSettingsQueries
+        bool installsDocker = false,
+        bool settingsExist = true,
+        string? authModeOverride = null) : IGlobalSettingsQueries
     {
+        /// <summary>Creates a stub configured for OAuth mode: no auth env var, but settings exist.</summary>
+        public static StubGlobalSettingsQueries ForOAuth() =>
+            new(authVar: null, settingsExist: true);
+
+        /// <summary>
+        /// Creates a stub where auth mode reports ApiKey but the env-var query returns null —
+        /// simulates a mis-configured API-key credential.
+        /// </summary>
+        public static StubGlobalSettingsQueries ForApiKeyModeWithNoEnvVar() =>
+            new(authVar: null, settingsExist: true, authModeOverride: "ApiKey");
+
+        public Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
+        {
+            if (!settingsExist)
+            {
+                return Task.FromResult<string?>(null);
+            }
+
+            string? mode = authModeOverride ?? (authVar is not null ? "ApiKey" : "OAuth");
+            return Task.FromResult<string?>(mode);
+        }
+
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<GlobalSettingsSummary?>(null);
+        {
+            if (!settingsExist)
+            {
+                return Task.FromResult<GlobalSettingsSummary?>(null);
+            }
+
+            GlobalSettingsSummary summary = new(
+                "OAuth",
+                MaxConcurrent: 3,
+                TimeoutMinutes: 120,
+                OAuthStatus: "Present",
+                SubscriptionType: "pro",
+                OAuthAccountEmail: null,
+                OAuthAccountOrgName: null,
+                SystemPromptTemplate: null,
+                WorkerPromptTemplate: null,
+                UsageLimitResetsAt: null,
+                IsDispatchPaused: false,
+                AutoResumeOnUsageReset: true,
+                DefaultCooldownMinutes: 60,
+                InstallDotnet: false,
+                InstallAngular: false,
+                InstallGlab: false,
+                InstallGh: false,
+                InstallChromium: false,
+                InstallDocker: false,
+                ImageBuildStatus: ImageBuildStatus.Idle,
+                LastImageBuildError: null,
+                HasUsableImage: false);
+            return Task.FromResult<GlobalSettingsSummary?>(summary);
+        }
 
         public Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(CancellationToken cancellationToken)
             => Task.FromResult(authVar);

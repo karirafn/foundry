@@ -69,6 +69,17 @@ internal sealed class GlobalSettingsConfiguration(
         builder.Property(s => s.DefaultCooldownMinutes)
             .HasColumnName("default_cooldown_minutes");
 
+        builder.Property(s => s.AuthInvalidPause)
+            .HasColumnName("auth_invalid_pause");
+
+        builder.Property(s => s.OAuthAccountEmail)
+            .HasMaxLength(GlobalSettings.MaxOAuthAccountEmailLength)
+            .HasColumnName("oauth_account_email");
+
+        builder.Property(s => s.OAuthAccountOrgName)
+            .HasMaxLength(GlobalSettings.MaxOAuthAccountOrgNameLength)
+            .HasColumnName("oauth_account_org_name");
+
         ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
             config => SerializeWorkerImageConfiguration(config),
             json => DeserializeWorkerImageConfiguration(json));

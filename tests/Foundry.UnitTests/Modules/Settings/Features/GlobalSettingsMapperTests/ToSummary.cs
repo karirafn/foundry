@@ -201,4 +201,130 @@ public sealed class ToSummary
         // Assert
         result.HasUsableImage.ShouldBeTrue();
     }
+
+    [Fact]
+    public void WhenApiKeyMode_OAuthStatusIsNotConfigured()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.ApiKey("my-key"));
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured);
+    }
+
+    [Fact]
+    public void WhenOAuthModeAndCommittedAccountPresent_OAuthStatusIsPresent()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusPresent);
+    }
+
+    [Fact]
+    public void WhenOAuthModeAndAuthInvalidPause_OAuthStatusIsReLoginNeeded()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+        settings.PauseForAuthInvalid();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded);
+    }
+
+    [Fact]
+    public void WhenOAuthModeAndNoCommittedAccount_OAuthStatusIsReLoginNeeded()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("pro"));
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded);
+    }
+
+
+    [Fact]
+    public void WhenOAuthModeWithSubscriptionType_SubscriptionTypeIsFromStoredAuthMode()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetAuthMode(new AuthMode.OAuth("max"));
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.SubscriptionType.ShouldBe("max");
+    }
+
+    [Fact]
+    public void WhenAccountIdentityNotSet_OAuthAccountEmailIsNull()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.OAuthAccountEmail.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenAccountIdentityNotSet_OAuthAccountOrgNameIsNull()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.OAuthAccountOrgName.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenAccountIdentitySet_OAuthAccountEmailIsMapped()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.OAuthAccountEmail.ShouldBe("user@example.com");
+    }
+
+    [Fact]
+    public void WhenAccountIdentitySet_OAuthAccountOrgNameIsMapped()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.OAuthAccountOrgName.ShouldBe("MyOrg");
+    }
 }

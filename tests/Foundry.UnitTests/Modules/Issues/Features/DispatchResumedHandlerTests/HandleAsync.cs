@@ -251,4 +251,46 @@ public sealed class HandleAsync : IAsyncDisposable
         usageLimitedIssue.ShouldBeOfType<QueuedIssue>();
         nonUsageLimitedIssue.ShouldBeOfType<FailedIssue>();
     }
+
+    [Fact]
+    public async Task WhenFailedIssueIsAuthInvalid_TransitionsToQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedFailedIssue(repositoryId, WorkerRunFailed.AuthInvalidReason);
+
+        DispatchResumed @event = new();
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<QueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenContinuableFailedIssueIsAuthInvalid_TransitionsToContinuationQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedContinuableFailedIssue(repositoryId, WorkerRunFailed.AuthInvalidReason);
+
+        DispatchResumed @event = new();
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<ContinuationQueuedIssue>();
+    }
 }

@@ -248,6 +248,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<bool>("AuthInvalidPause")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("auth_invalid_pause");
+
                     b.Property<string>("AuthMode")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -281,6 +285,16 @@ namespace Foundry.WebApi.Migrations
                     b.Property<int>("MaxConcurrent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_concurrent");
+
+                    b.Property<string>("OAuthAccountEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("oauth_account_email");
+
+                    b.Property<string>("OAuthAccountOrgName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("oauth_account_org_name");
 
                     b.Property<string>("SystemPromptTemplate")
                         .HasMaxLength(32768)
@@ -1227,6 +1241,7 @@ namespace Foundry.WebApi.Migrations
 
                             b1.Property<decimal?>("TotalCostUsd")
                                 .ValueGeneratedOnUpdateSometimes()
+                                .HasPrecision(18, 6)
                                 .HasColumnType("TEXT")
                                 .HasColumnName("total_cost_usd");
 
@@ -1289,6 +1304,7 @@ namespace Foundry.WebApi.Migrations
 
                             b1.Property<decimal?>("TotalCostUsd")
                                 .ValueGeneratedOnUpdateSometimes()
+                                .HasPrecision(18, 6)
                                 .HasColumnType("TEXT")
                                 .HasColumnName("total_cost_usd");
 

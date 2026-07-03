@@ -136,9 +136,21 @@ internal sealed class IssueClaimedHandler(
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
-        (string Key, string Value)? authVar = await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
+        string? authMode = await settingsQueries.GetAuthModeAsync(cancellationToken);
 
-        if (authVar is null)
+        if (authMode is null)
+        {
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
+        }
+
+        bool isOAuthMode = authMode == "OAuth";
+
+        (string Key, string Value)? authVar = isOAuthMode
+            ? null
+            : await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
+
+        if (!isOAuthMode && authVar is null)
         {
             return Result<WorkerContainerSpec>.Fail(
                 new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
@@ -153,8 +165,20 @@ internal sealed class IssueClaimedHandler(
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),
-            [authVar.Value.Key] = authVar.Value.Value,
         };
+
+        List<VolumeMount> volumeMounts = [];
+
+        if (isOAuthMode)
+        {
+            await orchestrator.EnsureCredentialVolumeAsync(cancellationToken);
+            volumeMounts.Add(new VolumeMount(CredentialVolume.VolumeName, CredentialVolume.ContainerPath));
+            envVars[CredentialVolume.ConfigDirEnvVar] = CredentialVolume.ContainerPath;
+        }
+        else
+        {
+            envVars[authVar!.Value.Key] = authVar.Value.Value;
+        }
 
         switch (claimed.Provider)
         {
@@ -189,7 +213,10 @@ internal sealed class IssueClaimedHandler(
             envVars,
             bindMounts,
             labels,
-            ["/entrypoint.sh"]);
+            ["/entrypoint.sh"])
+        {
+            VolumeMounts = volumeMounts,
+        };
 
         return installsDocker
             ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec))

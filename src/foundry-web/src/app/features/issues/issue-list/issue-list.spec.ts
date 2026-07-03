@@ -11,7 +11,7 @@ import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services
 import { IssueSummary } from '../issue.model';
 import { GlobalSettingsResponse } from '../../../features/settings/settings.model';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -38,11 +38,11 @@ const mockSummary: IssueSummary = {
 
 const mockSettingsResponse: GlobalSettingsResponse = {
   authMode: 'ApiKey',
+  oAuthStatus: 'NotConfigured',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 30,
-  accessTokenPresent: false,
-  refreshTokenPresent: false,
-  expiresAt: null,
   subscriptionType: null,
   systemPromptTemplate: null,
   workerPromptTemplate: null,

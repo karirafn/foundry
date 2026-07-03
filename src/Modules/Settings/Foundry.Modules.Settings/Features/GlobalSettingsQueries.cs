@@ -35,7 +35,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return settings.AuthMode switch
         {
             AuthMode.ApiKey apiKey => ("ANTHROPIC_API_KEY", apiKey.Key),
-            AuthMode.OAuth oauth => ("CLAUDE_CODE_OAUTH_TOKEN", oauth.AccessToken),
+            AuthMode.OAuth => null,
             _ => null,
         };
     }
@@ -79,7 +79,8 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .Select(s => new DispatchPauseState(
                 s.UsageLimitResetsAt,
                 s.IsDispatchPaused,
-                s.AutoResumeOnUsageReset))
+                s.AutoResumeOnUsageReset,
+                s.AuthInvalidPause))
             .FirstOrDefaultAsync(cancellationToken)
             ?? new DispatchPauseState(null, false, true);
     }
@@ -122,5 +123,25 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .FirstOrDefaultAsync(cancellationToken);
 
         return settings?.WorkerImageConfiguration.InstallDocker ?? false;
+    }
+
+    public async Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
+    {
+        // AuthMode uses a ValueConverter (decrypt + JSON) that cannot be projected into SQL.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is null)
+        {
+            return null;
+        }
+
+        return settings.AuthMode switch
+        {
+            AuthMode.ApiKey => "ApiKey",
+            AuthMode.OAuth => "OAuth",
+            _ => null,
+        };
     }
 }

@@ -8,14 +8,16 @@ import {
   WritableSignal,
   afterNextRender,
   computed,
+  effect,
   inject,
   runInInjectionContext,
   signal,
-  effect,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
-import { AuthMode, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../settings.model';
+import { DispatchService } from '../../../core/services/dispatch.service';
+import { AuthMode, OAuthStatus, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../settings.model';
+import { OAuthPanelComponent } from '../oauth-panel/oauth-panel';
 
 const MAX_CONCURRENT_MIN = 1;
 const MAX_CONCURRENT_MAX = 20;
@@ -27,7 +29,7 @@ const COOLDOWN_MINUTES_MAX = 1440;
 @Component({
   selector: 'fd-settings-general',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, OAuthPanelComponent],
   template: `
     <div class="general-settings">
       <section class="general-settings__section">
@@ -120,58 +122,57 @@ const COOLDOWN_MINUTES_MAX = 1440;
 
         @if (_selectedMode() === 'oauth') {
           <div class="general-settings__oauth-section">
-            @if (settingsService.authSettings()?.oauth; as oauthInfo) {
-              <div class="general-settings__oauth-grid">
-                <div class="general-settings__oauth-field">
-                  <span class="general-settings__oauth-field-label">Access Token</span>
-                  <span class="general-settings__oauth-field-value">
-                    {{ oauthInfo.accessTokenPresent ? 'Present' : 'Not present' }}
-                  </span>
-                </div>
-                <div class="general-settings__oauth-field">
-                  <span class="general-settings__oauth-field-label">Refresh Token</span>
-                  <span class="general-settings__oauth-field-value">
-                    {{ oauthInfo.refreshTokenPresent ? 'Present' : 'Not present' }}
-                  </span>
-                </div>
-                @if (oauthInfo.expiresAt) {
-                  <div class="general-settings__oauth-field">
-                    <span class="general-settings__oauth-field-label">Expires At</span>
-                    <span class="general-settings__oauth-field-value">{{ oauthInfo.expiresAt }}</span>
-                  </div>
-                }
-                @if (oauthInfo.subscriptionType) {
-                  <div class="general-settings__oauth-field">
-                    <span class="general-settings__oauth-field-label">Subscription</span>
-                    <span class="general-settings__oauth-field-value">{{ oauthInfo.subscriptionType }}</span>
-                  </div>
-                }
-                <div class="general-settings__oauth-field">
-                  <span class="general-settings__oauth-field-label">Status</span>
-                  <span class="general-settings__oauth-field-value general-settings__oauth-status general-settings__oauth-status--{{ oauthInfo.status }}">
-                    {{ oauthInfo.status }}
-                  </span>
-                </div>
-              </div>
-            } @else {
-              <div class="general-settings__oauth-setup">
-                <p class="general-settings__oauth-setup-instructions">
-                  No OAuth credentials found. Run the following command to authenticate:
+            @if (_showSwitchAccountConfirm()) {
+              <div class="general-settings__switch-confirm" role="group" aria-label="Confirm account switch">
+                <p class="general-settings__switch-confirm-text">
+                  Signing in will pause dispatch and wait for in-flight workers to finish. Continue?
                 </p>
-                <code class="general-settings__oauth-setup-command">claude setup-token</code>
+                <div class="general-settings__switch-confirm-actions">
+                  <button
+                    #switchConfirmBtn
+                    class="general-settings__switch-confirm-btn"
+                    type="button"
+                    (click)="onConfirmSwitchAccount()"
+                  >Continue</button>
+                  <button
+                    class="general-settings__switch-cancel-btn"
+                    type="button"
+                    (click)="onCancelSwitchAccount()"
+                  >Cancel</button>
+                </div>
               </div>
             }
-
-            <div class="general-settings__switch-error" role="alert">{{ settingsService.switchError() ?? '' }}</div>
-
-            <div class="general-settings__save-success" role="status">{{ settingsService.saveSuccess() ? 'OAuth credentials applied successfully' : '' }}</div>
-
-            <button
-              class="general-settings__scan-btn"
-              type="button"
-              [disabled]="settingsService.switching()"
-              (click)="switchToOAuth()"
-            >{{ settingsService.switching() ? 'Scanning...' : 'Scan & Apply OAuth Credentials' }}</button>
+            <!-- Drain gate renders before the login flow (inside fd-oauth-panel below). -->
+            <!-- Note: fully separating Present card / drain / login-flow would require -->
+            <!-- splitting fd-oauth-panel — deferred as a follow-up refactor. -->
+            <!-- Persistent live region — text binding drives announcements, never @if-mounted. -->
+            <div
+              class="general-settings__drain-gate"
+              [class.general-settings__drain-gate--empty]="!_drainGateText()"
+              role="status"
+            >{{ _drainGateText() }}</div>
+            @if (_showResumeAfterSwitch()) {
+              <button
+                class="general-settings__resume-btn"
+                type="button"
+                [disabled]="dispatchService.resuming()"
+                (click)="dispatchService.resumeDispatch()"
+              >{{ dispatchService.resuming() ? 'Resuming...' : 'Resume dispatch' }}</button>
+            }
+            <div role="alert" class="general-settings__switch-error">{{ (_switchAccountDraining() && dispatchService.pauseResumeError()) ? dispatchService.pauseResumeError() : '' }}</div>
+            <fd-oauth-panel
+              [status]="_oauthStatus()"
+              [subscriptionType]="settingsService.authSettings()?.oauth?.subscriptionType ?? null"
+              [accountEmail]="settingsService.settings()?.oAuthAccountEmail ?? null"
+              [accountOrgName]="settingsService.settings()?.oAuthAccountOrgName ?? null"
+              [loginPhase]="settingsService.loginPhase()"
+              [loginUrl]="settingsService.loginUrl()"
+              [loginError]="settingsService.loginError()"
+              (startLogin)="onStartLogin()"
+              (submitCode)="settingsService.submitLoginCode($event)"
+              (cancel)="onCancelLogin()"
+            />
+            <div role="alert" class="general-settings__start-login-error">{{ (!settingsService.loginPhase() && settingsService.startLoginError()) ? settingsService.startLoginError() : '' }}</div>
           </div>
         }
       </section>
@@ -457,9 +458,12 @@ const COOLDOWN_MINUTES_MAX = 1440;
 })
 export class SettingsGeneralComponent {
   protected readonly settingsService = inject(SettingsService);
+  protected readonly dispatchService = inject(DispatchService);
   private readonly _injector = inject(Injector);
+  private readonly _elementRef = inject(ElementRef);
 
   @ViewChild('authHeading') private readonly _authHeading?: ElementRef<HTMLHeadingElement>;
+  @ViewChild('switchConfirmBtn') private readonly _switchConfirmBtn?: ElementRef<HTMLButtonElement>;
 
   protected readonly MAX_CONCURRENT_MIN = MAX_CONCURRENT_MIN;
   protected readonly MAX_CONCURRENT_MAX = MAX_CONCURRENT_MAX;
@@ -472,6 +476,14 @@ export class SettingsGeneralComponent {
   protected readonly _showApiKey: WritableSignal<boolean> = signal(false);
   protected _apiKeyValue = '';
   private _modeInitialized = false;
+
+  protected readonly _showSwitchAccountConfirm: WritableSignal<boolean> = signal(false);
+  protected readonly _switchAccountDraining: WritableSignal<boolean> = signal(false);
+  protected readonly _showResumeAfterSwitch: WritableSignal<boolean> = signal(false);
+
+  protected readonly _oauthStatus: Signal<OAuthStatus> = computed(
+    () => this.settingsService.authSettings()?.oauth?.status ?? 'NotConfigured'
+  );
 
   protected readonly _maxConcurrentValue: WritableSignal<number> = signal(MAX_CONCURRENT_MIN);
   protected readonly _timeoutMinutesValue: WritableSignal<number> = signal(TIMEOUT_MINUTES_MIN);
@@ -511,6 +523,12 @@ export class SettingsGeneralComponent {
       this._installDockerValue() !== saved.installDocker
     );
   });
+
+  protected readonly _drainGateText: Signal<string> = computed(() =>
+    this._switchAccountDraining()
+      ? 'Dispatch is paused. Wait for running workers to finish (watch the Issues board), then log in to the new account below.'
+      : ''
+  );
 
   protected readonly _imageBuildingText: Signal<string> = computed(() =>
     this.settingsService.imageBuildStatus() === 'Building' ? 'Building worker image…' : ''
@@ -572,10 +590,95 @@ export class SettingsGeneralComponent {
         this._installDockerValue.set(flags.installDocker);
       }
     });
+
+    // Manage drain-gate state in response to login phase transitions.
+    effect(() => {
+      const phase = this.settingsService.loginPhase();
+      if (phase === null && this._switchAccountDraining()) {
+        // Login succeeded (phase cleared after reload) — tear down drain UI.
+        this._switchAccountDraining.set(false);
+        this._showResumeAfterSwitch.set(false);
+      }
+      if (phase === 'Failed' && this._switchAccountDraining()) {
+        // Login failed while draining — surface Resume so the operator can recover.
+        this._showResumeAfterSwitch.set(true);
+      }
+      if (phase === 'Succeeded') {
+        // Move focus to auth heading on Succeeded regardless of drain state (Finding 4).
+        runInInjectionContext(this._injector, () =>
+          afterNextRender(() => this._authHeading?.nativeElement.focus())
+        );
+      }
+    });
+
+    // If startLogin POST itself fails while draining, reset drain state so the
+    // operator is not stranded (they can retry or close from the error message).
+    effect(() => {
+      const error = this.settingsService.startLoginError();
+      if (error !== null && this._switchAccountDraining()) {
+        this._switchAccountDraining.set(false);
+        this._showResumeAfterSwitch.set(false);
+      }
+    });
   }
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
+    if (mode === 'oauth') {
+      const currentMode = this.settingsService.authSettings()?.mode;
+      if (currentMode !== 'oauth') {
+        this.settingsService.markOAuthConfigured();
+      }
+    }
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => this._authHeading?.nativeElement.focus())
+    );
+  }
+
+  onStartLogin(): void {
+    // Both "Switch account" (Present) and "Log in again" (ReLoginNeeded) go through
+    // the confirm → pause → drain-gate flow before starting the login flow.
+    const status = this._oauthStatus();
+    if (status === 'Present' || status === 'ReLoginNeeded') {
+      this._showSwitchAccountConfirm.set(true);
+      runInInjectionContext(this._injector, () =>
+        afterNextRender(() => this._switchConfirmBtn?.nativeElement.focus())
+      );
+    } else {
+      this.settingsService.startLogin();
+    }
+  }
+
+  onCancelSwitchAccount(): void {
+    this._showSwitchAccountConfirm.set(false);
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => this._authHeading?.nativeElement.focus())
+    );
+  }
+
+  onCancelLogin(): void {
+    this.settingsService.cancelLogin();
+    // Return focus to the entry login button (visible when not draining), else auth heading.
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => {
+        const host = this._elementRef.nativeElement as HTMLElement;
+        const entryBtn = host.querySelector<HTMLButtonElement>(
+          '.oauth-panel__login-btn, .oauth-panel__switch-btn'
+        );
+        if (entryBtn) {
+          entryBtn.focus();
+        } else {
+          this._authHeading?.nativeElement.focus();
+        }
+      })
+    );
+  }
+
+  onConfirmSwitchAccount(): void {
+    this._showSwitchAccountConfirm.set(false);
+    this._switchAccountDraining.set(true);
+    this.dispatchService.pauseDispatch();
+    this.settingsService.startLogin();
     runInInjectionContext(this._injector, () =>
       afterNextRender(() => this._authHeading?.nativeElement.focus())
     );
@@ -583,10 +686,6 @@ export class SettingsGeneralComponent {
 
   saveApiKey(): void {
     this.settingsService.updateAuthMode('api_key', this._apiKeyValue);
-  }
-
-  switchToOAuth(): void {
-    this.settingsService.scanOAuthCredentials();
   }
 
   isLimitsFormValid(): boolean {

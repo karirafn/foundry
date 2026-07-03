@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
 
@@ -36,6 +37,8 @@ public static class WorkersModule
         });
         services.AddSingleton<IImageOperations>(sp => sp.GetRequiredService<DockerClient>().Images);
         services.AddSingleton<IContainerOperations>(sp => sp.GetRequiredService<DockerClient>().Containers);
+        services.AddSingleton<IVolumeOperations>(sp => sp.GetRequiredService<DockerClient>().Volumes);
+        services.AddSingleton<IExecOperations>(sp => sp.GetRequiredService<DockerClient>().Exec);
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
@@ -43,8 +46,14 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
+        services.AddIntegrationEventHandler<DispatchPausedForAuthInvalid, DispatchPausedForAuthInvalidBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
+
+        services.AddSingleton<ILoginSuccessCommitter, LoginSuccessCommitter>();
+        services.AddSingleton<LoginSessionService>();
+        services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
+        services.AddHostedService<LoginContainerReaper>();
 
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddHostedService<WorkerDispatchService>();
@@ -56,6 +65,7 @@ public static class WorkersModule
     public static IEndpointRouteBuilder MapWorkersEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapWorkerEndpoints();
+        app.MapLoginEndpoints();
         return app;
     }
 }

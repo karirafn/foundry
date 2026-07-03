@@ -8,7 +8,7 @@ import { SettingsGeneralComponent } from './settings-general';
 import { SettingsService } from '../settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 
 const IMAGE_FLAGS_DEFAULTS = {
   installDotnet: false,
@@ -22,34 +22,58 @@ const IMAGE_FLAGS_DEFAULTS = {
   hasUsableImage: false,
 };
 
-const API_KEY_RESPONSE = {
-  authMode: 'ApiKey',
-  maxConcurrent: 3,
-  timeoutMinutes: 60,
-  accessTokenPresent: false,
-  refreshTokenPresent: false,
-  expiresAt: null,
-  subscriptionType: null,
+const BASE_RESPONSE = {
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
   defaultCooldownMinutes: 60,
   ...IMAGE_FLAGS_DEFAULTS,
+  systemPromptTemplate: null,
+  workerPromptTemplate: null,
+};
+
+const API_KEY_RESPONSE = {
+  authMode: 'ApiKey',
+  oAuthStatus: 'NotConfigured',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  subscriptionType: null,
+  ...BASE_RESPONSE,
 };
 
 const OAUTH_RESPONSE = {
   authMode: 'OAuth',
+  oAuthStatus: 'Present',
+  oAuthAccountEmail: 'user@example.com',
+  oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
-  accessTokenPresent: true,
-  refreshTokenPresent: true,
-  expiresAt: '2027-01-01T00:00:00Z',
   subscriptionType: 'pro',
-  usageLimitResetsAt: null,
-  isDispatchPaused: false,
-  autoResumeOnUsageReset: true,
-  defaultCooldownMinutes: 60,
-  ...IMAGE_FLAGS_DEFAULTS,
+  ...BASE_RESPONSE,
+};
+
+const OAUTH_NOT_CONFIGURED_RESPONSE = {
+  authMode: 'OAuth',
+  oAuthStatus: 'NotConfigured',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  subscriptionType: null,
+  ...BASE_RESPONSE,
+};
+
+const OAUTH_RELOGIN_NEEDED_RESPONSE = {
+  authMode: 'OAuth',
+  oAuthStatus: 'ReLoginNeeded',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  subscriptionType: null,
+  ...BASE_RESPONSE,
 };
 
 function setup() {
@@ -162,7 +186,7 @@ describe('SettingsGeneralComponent', () => {
     expect(input).toBeFalsy();
   });
 
-  it('should render OAuth credential status when mode is oauth', () => {
+  it('should render fd-oauth-panel when mode is oauth', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -172,10 +196,10 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const credGrid = el.querySelector('.general-settings__oauth-grid');
+    const panel = el.querySelector('fd-oauth-panel');
 
     // Assert
-    expect(credGrid).toBeTruthy();
+    expect(panel).toBeTruthy();
   });
 
   it('should wrap the radio group in a fieldset with screen-reader legend', () => {
@@ -371,7 +395,7 @@ describe('SettingsGeneralComponent', () => {
     req.flush(API_KEY_RESPONSE);
   });
 
-  it('should call scanOAuthCredentials when Scan & Apply OAuth Credentials is clicked', () => {
+  it('should show "Switch account" button when OAuth mode is active and status is Present', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -381,14 +405,470 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const scanBtn = el.querySelector('.general-settings__scan-btn') as HTMLButtonElement;
-    scanBtn.click();
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn');
 
     // Assert
-    const req = httpMock.expectOne('/api/settings/oauth/scan');
-    expect(req.request.method).toBe('GET');
-    req.flush({ accessTokenPresent: true, refreshTokenPresent: true, expiresAt: null, subscriptionType: null });
-    httpMock.expectOne('/api/settings/auth').flush(OAUTH_RESPONSE);
+    expect(switchBtn).toBeTruthy();
+  });
+
+  it('should not show "Switch account" button when OAuth status is NotConfigured', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn');
+
+    // Assert
+    expect(switchBtn).toBeFalsy();
+  });
+
+  it('should show confirm group when "Switch account" is clicked', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Assert — uses role="group", not role="dialog"
+    const group = el.querySelector('[role="group"][aria-label="Confirm account switch"]');
+    expect(group?.textContent).toContain('Signing in will pause dispatch');
+  });
+
+  it('should use role="group" (not role="dialog") for the inline confirm', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Assert — no dialog role
+    expect(el.querySelector('[role="dialog"]')).toBeFalsy();
+    expect(el.querySelector('[role="group"]')).toBeTruthy();
+  });
+
+  it('should return focus to the auth heading when Cancel is clicked', async () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Act
+    const cancelBtn = el.querySelector('.general-settings__switch-cancel-btn') as HTMLButtonElement;
+    cancelBtn.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — focus returns to auth heading (switch button is inside child panel, not accessible from host ViewChild)
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication')) as HTMLElement;
+    expect(document.activeElement).toBe(authHeading);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  it('should call pauseDispatch and startLogin when confirm button is clicked', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Act
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+
+    // Assert — pauseDispatch fires and startLogin fires
+    const pauseReq = httpMock.expectOne('/api/settings/dispatch/pause');
+    expect(pauseReq.request.method).toBe('POST');
+    pauseReq.flush(OAUTH_RESPONSE);
+
+    const loginReq = httpMock.expectOne('/api/settings/oauth/login/start');
+    expect(loginReq.request.method).toBe('POST');
+    loginReq.flush({ sessionId: 'test-session' });
+  });
+
+  it('should move focus to the auth heading after confirming account switch', async () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Act
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Assert — focus moves to the auth heading, not lost to body
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication')) as HTMLElement;
+    expect(document.activeElement).toBe(authHeading);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  it('should announce drain text via text binding in the persistent role="status" element (not via @if content insertion)', () => {
+    // Arrange — enter draining state
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — the role="status" drain-gate element is present even before draining (empty)
+    const drainGate = el.querySelector('.general-settings__drain-gate[role="status"]') as HTMLElement;
+    expect(drainGate).toBeTruthy();
+    expect(drainGate.textContent?.trim()).toBe('');
+
+    // Act — trigger drain by confirming account switch
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Assert — same persistent element now has content (text binding changed, element was not re-mounted)
+    const drainGateAfter = el.querySelector('.general-settings__drain-gate[role="status"]') as HTMLElement;
+    expect(drainGateAfter).toBe(drainGate); // same DOM node
+    expect(drainGateAfter.textContent).toContain('Dispatch is paused');
+  });
+
+  it('should show drain gate message after confirming account switch', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Act
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Assert
+    const drainGate = el.querySelector('.general-settings__drain-gate');
+    expect(drainGate?.textContent).toContain('Dispatch is paused');
+  });
+
+  it('should keep the drain-gate role="status" wrapper in the DOM when OAuth mode is active', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    // Assert — the live-region wrapper must always be present (empty when not draining)
+    const el = fixture.nativeElement as HTMLElement;
+    const drainStatus = el.querySelector('.general-settings__drain-gate[role="status"]');
+    expect(drainStatus).toBeTruthy();
+    expect(drainStatus?.textContent?.trim()).toBe('');
+  });
+
+  it('should render the switch-error role="alert" as a sibling of drain-gate, not nested inside it', () => {
+    // Arrange — switch account and fail the pause request to trigger a pauseResumeError
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    // Fail the pause so pauseResumeError signal is set
+    httpMock.expectOne('/api/settings/dispatch/pause').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Assert — role="alert" must NOT be a descendant of role="status"
+    const drainGate = el.querySelector('.general-settings__drain-gate[role="status"]');
+    const alertInsideDrainGate = drainGate?.querySelector('[role="alert"]');
+    expect(alertInsideDrainGate).toBeFalsy();
+
+    // Assert — a sibling role="alert" for the error should exist outside the drain-gate
+    const oauthSection = el.querySelector('.general-settings__oauth-section');
+    const siblingAlert = oauthSection?.querySelector('.general-settings__switch-error[role="alert"]');
+    expect(siblingAlert).toBeTruthy();
+  });
+
+  it('should show confirm dialog when "Log in again" is clicked (ReLoginNeeded status)', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RELOGIN_NEEDED_RESPONSE);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const loginAgainBtn = el.querySelector('.oauth-panel__login-btn') as HTMLButtonElement;
+    loginAgainBtn.click();
+    fixture.detectChanges();
+
+    // Assert — confirm group appears (same drain flow as Switch account)
+    const group = el.querySelector('[role="group"][aria-label="Confirm account switch"]');
+    expect(group).toBeTruthy();
+    expect(group?.textContent).toContain('Signing in will pause dispatch');
+  });
+
+  it('should reset drain-gate state when login phase becomes Succeeded', () => {
+    // Arrange — enter draining state via switch account
+    const { httpMock, service } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Verify draining
+    let drainGate = el.querySelector('.general-settings__drain-gate');
+    expect(drainGate?.textContent).toContain('Dispatch is paused');
+
+    // Act — simulate the service clearing loginPhase to null after settings reload (Finding 1 fix)
+    (service as unknown as { _loginPhaseSignal: { set: (v: string | null) => void } })._loginPhaseSignal.set(null);
+    fixture.detectChanges();
+
+    // Assert — drain gate resets
+    drainGate = el.querySelector('.general-settings__drain-gate');
+    expect(drainGate?.textContent?.trim()).toBe('');
+  });
+
+  it('should show Resume button when login fails while switch-account drain is active (Finding 2)', () => {
+    // Arrange — enter draining state
+    const { httpMock, service } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Act — simulate Failed phase while still draining
+    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('Failed');
+    fixture.detectChanges();
+
+    // Assert — Resume button is visible and is NOT nested inside the drain-gate live region
+    const resumeBtn = el.querySelector('.general-settings__resume-btn');
+    expect(resumeBtn).toBeTruthy();
+
+    const drainGate = el.querySelector('.general-settings__drain-gate[role="status"]');
+    const resumeInsideDrainGate = drainGate?.querySelector('.general-settings__resume-btn');
+    expect(resumeInsideDrainGate).toBeFalsy();
+  });
+
+  it('should reset drain-gate state when startLogin POST fails while draining (Finding 6)', () => {
+    // Arrange — enter draining state
+    const { httpMock, service } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+
+    // Fail the login start POST
+    httpMock.expectOne('/api/settings/oauth/login/start').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — drain gate is cleared (not stranded)
+    const drainGate = el.querySelector('.general-settings__drain-gate');
+    expect(drainGate?.textContent?.trim()).toBe('');
+  });
+
+  it('should move focus to auth heading when login phase becomes Succeeded (Finding 4)', async () => {
+    // Arrange
+    const { httpMock, service } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    // Act — simulate Succeeded phase
+    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('Succeeded');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — focus moves to auth heading
+    const el = fixture.nativeElement as HTMLElement;
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication')) as HTMLElement;
+    expect(document.activeElement).toBe(authHeading);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  it('should show startLoginError in a role="alert" when loginPhase is null and error is set', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    fixture.detectChanges();
+
+    // Act — startLogin fails (POST 500)
+    const service = TestBed.inject(SettingsService);
+    service.startLogin();
+    httpMock.expectOne('/api/settings/oauth/login/start').flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    // Assert — startLoginError displayed
+    const el = fixture.nativeElement as HTMLElement;
+    const alerts = Array.from(el.querySelectorAll('[role="alert"]')) as HTMLElement[];
+    const startLoginAlert = alerts.find(a => a.textContent?.includes('Failed to start login'));
+    expect(startLoginAlert).toBeTruthy();
+  });
+
+  it('should focus the entry login button on cancel when login flow is not in drain state', async () => {
+    // Arrange — Not-Configured state, no drain gate, login button is visible
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — cancel login from an active phase (simulate by calling onCancelLogin directly)
+    fixture.componentInstance.onCancelLogin();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — focus goes to the Log in entry button (visible when not draining)
+    const loginBtn = el.querySelector('.oauth-panel__login-btn') as HTMLButtonElement;
+    expect(loginBtn).toBeTruthy();
+    expect(document.activeElement).toBe(loginBtn);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  it('should focus auth heading on cancel when no entry login button is reachable', async () => {
+    // Arrange — OAuth not yet selected (api_key mode, so no oauth-panel__login-btn or switch-btn visible)
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — cancel login; no oauth panel rendered so no entry button exists
+    fixture.componentInstance.onCancelLogin();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — falls back to auth heading
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication')) as HTMLElement;
+    expect(document.activeElement).toBe(authHeading);
+
+    document.body.removeChild(fixture.nativeElement);
   });
 
   it('should render the "Worker Prompts" section title', () => {

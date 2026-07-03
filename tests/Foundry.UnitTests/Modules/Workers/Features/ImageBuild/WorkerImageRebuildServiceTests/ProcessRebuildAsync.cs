@@ -251,18 +251,19 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
                 InstallDocker: false);
             SeedGlobalSettings(config);
 
-            SpyImageOperations spyImages = new();
+            SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
-                spyImages,
+                sequenced,
                 contextPath: contextDir);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert
-            spyImages.LastParameters.ShouldNotBeNull();
-            spyImages.LastParameters!.BuildArgs.ShouldContainKey("INSTALL_DOTNET");
-            spyImages.LastParameters!.BuildArgs["INSTALL_DOTNET"].ShouldBe("true");
+            // Assert — worker build (index 1) receives INSTALL_DOTNET from config
+            sequenced.AllParameters.Count.ShouldBe(3);
+            ImageBuildParameters workerParams = sequenced.AllParameters[1];
+            workerParams.BuildArgs.ShouldContainKey("INSTALL_DOTNET");
+            workerParams.BuildArgs["INSTALL_DOTNET"].ShouldBe("true");
         }
         finally
         {
@@ -283,6 +284,307 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             ErrorReportingImageOperations errorImages = new("Build failed: layer error");
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    // Two-build wiring tests
+
+    [Fact]
+    public async Task WhenBuildSucceeds_BuildsBaseImageBeforeWorkerImage()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — base image (Dockerfile.base) must be first; login image must be last
+            sequenced.AllParameters.Count.ShouldBe(3);
+            sequenced.AllParameters[0].Dockerfile.ShouldBe(WorkerImageRebuildService.BaseDockerfile);
+            sequenced.AllParameters[1].Dockerfile.ShouldBe("Dockerfile");
+            sequenced.AllParameters[2].Dockerfile.ShouldBe(WorkerImageRebuildService.LoginDockerfile);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBaseBuildFails_DoesNotBuildWorkerImage()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new(failOnFirstCall: true);
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — only the base build was attempted; worker build was skipped
+            sequenced.AllParameters.Count.ShouldBe(1);
+            sequenced.AllParameters[0].Dockerfile.ShouldBe(WorkerImageRebuildService.BaseDockerfile);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBaseBuildFails_SetsStatusToFailed()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new(failOnFirstCall: true);
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceeds_PassesBaseImageTagAsWorkerBuildArg()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — worker build (index 1) receives BASE_IMAGE arg pointing at the base tag
+            sequenced.AllParameters.Count.ShouldBe(3);
+            ImageBuildParameters workerParams = sequenced.AllParameters[1];
+            workerParams.BuildArgs.ShouldContainKey("BASE_IMAGE");
+            workerParams.BuildArgs["BASE_IMAGE"].ShouldBe(WorkerImageRebuildService.BaseImageTag);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    // Login image build tests
+
+    [Fact]
+    public async Task WhenBuildSucceeds_BuildsLoginImageAfterWorkerImage()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — login image (Dockerfile.login) must follow the worker image build
+            sequenced.AllParameters.Count.ShouldBe(3);
+            sequenced.AllParameters[2].Dockerfile.ShouldBe(WorkerImageRebuildService.LoginDockerfile);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceeds_TagsLoginImageWithLoginImageName()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — login image tag must match the constant used by the login-command query
+            sequenced.AllParameters.Count.ShouldBe(3);
+            ImageBuildParameters loginParams = sequenced.AllParameters[2];
+            loginParams.Tags.ShouldContain(WorkerImageRebuildService.LoginImageName);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceeds_PassesBaseImageTagToLoginBuild()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — login image build receives BASE_IMAGE build arg
+            sequenced.AllParameters.Count.ShouldBe(3);
+            ImageBuildParameters loginParams = sequenced.AllParameters[2];
+            loginParams.BuildArgs.ShouldContainKey("BASE_IMAGE");
+            loginParams.BuildArgs["BASE_IMAGE"].ShouldBe(WorkerImageRebuildService.BaseImageTag);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenWorkerBuildFails_DoesNotBuildLoginImage()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            // failOnSecondCall: base succeeds, worker fails, login must be skipped
+            SequencedImageOperations sequenced = new(failOnSecondCall: true);
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — only base + worker builds were attempted; login was skipped
+            sequenced.AllParameters.Count.ShouldBe(2);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenWorkerBuildFails_SetsStatusToFailed()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new(failOnSecondCall: true);
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenLoginBuildFails_SetsStatusToFailed()
+    {
+        // Arrange — a broken login image leaves the guided command non-functional,
+        // so we fail the entire rebuild rather than succeeding silently.
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            SequencedImageOperations sequenced = new(failOnThirdCall: true);
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
                 contextPath: contextDir);
 
             // Act
@@ -842,6 +1144,68 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             IProgress<JSONMessage> progress,
             CancellationToken cancellationToken)
             => Task.FromCanceled(cts.Token);
+
+#pragma warning disable CS0618 // Required for interface compliance
+        public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(new MemoryStream("{}"u8.ToArray()));
+#pragma warning restore CS0618
+
+        public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
+        public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult(new ImageInspectResponse());
+        public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
+        public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task LoadImageAsync(ImageLoadParameters parameters, Stream imageStream, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Stream> SaveImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task<Stream> SaveImagesAsync(string[] names, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task PushImageAsync(string name, ImagePushParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ImagesPruneResponse> PruneImagesAsync(ImagesPruneParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new ImagesPruneResponse());
+        public Task<CommitContainerChangesResponse> CommitContainerChangesAsync(CommitContainerChangesParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new CommitContainerChangesResponse());
+        public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
+    }
+
+    /// <summary>
+    /// Records all build calls in sequence. Optionally reports an error on a specific call to
+    /// simulate base, worker, or login image build failures.
+    /// </summary>
+    private sealed class SequencedImageOperations(
+        bool failOnFirstCall = false,
+        bool failOnSecondCall = false,
+        bool failOnThirdCall = false) : IImageOperations
+    {
+        private readonly List<ImageBuildParameters> _allParameters = [];
+
+        public IReadOnlyList<ImageBuildParameters> AllParameters => _allParameters;
+
+        public Task BuildImageFromDockerfileAsync(
+            ImageBuildParameters parameters,
+            Stream contents,
+            IEnumerable<AuthConfig> authConfigs,
+            IDictionary<string, string> headers,
+            IProgress<JSONMessage> progress,
+            CancellationToken cancellationToken)
+        {
+            int callIndex = _allParameters.Count;
+            _allParameters.Add(parameters);
+
+            bool shouldFail = (failOnFirstCall && callIndex == 0)
+                || (failOnSecondCall && callIndex == 1)
+                || (failOnThirdCall && callIndex == 2);
+
+            if (shouldFail)
+            {
+                progress.Report(new JSONMessage
+                {
+                    Error = new JSONError { Message = $"build {callIndex + 1} failed" },
+                });
+            }
+
+            return Task.CompletedTask;
+        }
 
 #pragma warning disable CS0618 // Required for interface compliance
         public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)

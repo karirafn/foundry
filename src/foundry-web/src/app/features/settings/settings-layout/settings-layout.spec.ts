@@ -9,7 +9,7 @@ import { SettingsService } from '../settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { SETTINGS_ROUTES } from '../settings.routes';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 
 const SETTINGS_RESPONSE = {
   authMode: 'ApiKey',
@@ -17,7 +17,6 @@ const SETTINGS_RESPONSE = {
   timeoutMinutes: 60,
   accessTokenPresent: false,
   refreshTokenPresent: false,
-  expiresAt: null,
   subscriptionType: null,
 };
 

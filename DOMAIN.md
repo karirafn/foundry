@@ -19,9 +19,40 @@ Workers clone the repo, implement the issue, push a branch, and open a PR. Found
 ## Worker Authentication
 
 How a worker container authenticates with the Anthropic API (Claude Code).
-Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use, stored encrypted in DB) and OAuth token (`CLAUDE_CODE_OAUTH_TOKEN`, Max/Pro/Team/Enterprise plan, auto-detected from Claude Code's `~/.claude/.credentials.json`).
+Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use, stored encrypted in DB) and OAuth (Max/Pro/Team/Enterprise plan, managed via a shared Docker volume).
 Exactly one method is configured per Foundry instance — selected via auth mode in Global Settings.
-OAuth mode auto-scans known credential paths across platforms (Linux, macOS, Windows), validates the token, and auto-refreshes using the stored refresh token.
+
+OAuth mode delegates the full credential lifecycle to the genuine Claude Code CLI.
+Each worker mounts a Foundry-managed, shared, writable Docker volume at its Claude config dir (`CLAUDE_CONFIG_DIR` → `/home/node/.claude`) and the CLI reads, uses, and auto-refreshes `.credentials.json` in place.
+Foundry stores no token and injects none — the CLI is solely responsible for access-token refresh (silent, persisted to the shared volume) and for detecting refresh-token expiry.
+
+**In-app interactive login.**
+Operators seed the credential volume from within the Foundry dashboard via an interactive OAuth flow, without running any Docker command manually.
+Foundry starts a dedicated login container (`foundry-claude-login` image) using the Docker API with `Tty: false`.
+The container's entrypoint bootstraps a named FIFO at `/tmp/ci`, writes the FIFO's writer sleep-holder PID to `/tmp/ci.pid`, then starts `claude auth login --claudeai` with the FIFO wired to stdin so the process blocks waiting for the authorization code.
+Foundry streams the container's stdout/stderr log lines and extracts the `https://…/oauth/…` authorization URL (the `visit:` line emitted by the CLI) — the URL is broadcast to the dashboard via SignalR as a `LoginSessionUpdate`.
+The operator opens the URL, authorizes, and pastes the code into the dashboard.
+Foundry delivers the code into the FIFO via `docker exec` (`printf '%s\n' "$C" > /tmp/ci`), then kills the sleep-holder process (read from `/tmp/ci.pid`) so the FIFO writer closes and the CLI receives EOF on stdin and proceeds to token exchange.
+The service scans the log stream for the `Login successful.` signal, which is authoritative — an `Invalid code` line, or the stream closing without the success signal, is treated as failure.
+It deliberately does not gate on the container exit code: the CLI may still be running when the success signal appears (observed in practice living seconds longer), so an exit-code check races the signal and misreports success as failure.
+Because the login container's lifecycle at that moment is therefore unreliable (it may or may not have exited), Foundry captures the authenticated account's email, org name, and subscription type without depending on it — by running `claude auth status --json` in a fresh short-lived helper container that mounts the same credential volume read-only, then tears the helper down.
+This volume read is also the real confirmation that login persisted a valid credential.
+On an invalid code the session transitions to `Failed(InvalidCode)` and is broadcast to the dashboard for re-prompt — the operator may start a new session.
+
+**Onboarding seed.**
+Before starting `claude auth login --claudeai`, the entrypoint idempotently merges onboarding-gate flags into the volume's `.claude.json` (`hasCompletedOnboarding`, `hasTrustDialogAccepted`, `theme`), setting each key only when absent, so existing credentials and account data are never overwritten.
+
+**Session lifecycle.**
+At most one login session is active at a time — `LoginSessionService` (singleton, in-memory, Workers module) enforces this.
+Dispatch is transiently suppressed while a session is active via `ILoginSessionState.IsLoginActive` (checked by `WorkerDispatchService`); no pause record is persisted.
+Session state is not persisted: a Foundry restart mid-login leaves the in-memory session gone, and `LoginContainerReaper` (an `IHostedLifecycleService`) stops and removes any orphaned `foundry.login` containers on startup.
+A session times out if no URL is captured within the URL timeout, if no code is submitted within the session timeout, or if login confirmation is not seen within the sign-in timeout after the code is delivered; these surface as typed `LoginFailureReason` variants (`UrlTimeout`, `CodeTimeout`).
+
+**Auth-invalid pause.**
+When a worker exits with an auth failure, Foundry classifies the run as `AuthInvalid` and raises an **auth-invalid pause**: dispatch pauses, the affected issue is retried automatically on resume, and resume is triggered automatically by a successful in-app login (which calls `GlobalSettings.ResumeDispatch()` and publishes `DispatchResumed`).
+There is deliberately no auto-resume timer for auth-invalid — Foundry cannot detect a successful re-login without an explicit in-app login session completing.
+Settings and the setup wizard derive OAuth status from persisted state — a committed account identity (set by a successful in-app login) reads as signed-in, an auth-invalid pause reads as re-login-needed — rather than from a live credential-volume read; token expiry is deliberately not surfaced (the CLI auto-refreshes it in place, so a captured value would be stale and misleading), and they never assert an unverified "valid" status.
+The OAuth credential sits in plaintext in the volume, consistent with how the genuine CLI stores it, and bounded by the Docker-socket trust boundary Foundry already operates within.
 Distinct from provider authentication (Account / PAT), which authenticates git operations against GitHub or GitLab.
 
 ## Provider
@@ -49,7 +80,7 @@ Multiple accounts can exist per provider. A Monitored Repository references a sp
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, prompt templates), authentication mode (API key or OAuth), and usage limit controls (`AutoResumeOnUsageReset`, `DefaultCooldownMinutes`, `UsageLimitResetsAt`, `IsDispatchPaused`).
+Includes worker settings (max concurrent, timeout, prompt templates), authentication mode (API key or OAuth), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `DefaultCooldownMinutes`, `UsageLimitResetsAt`) and the auth-invalid pause (`IsAuthInvalidPaused`) — both pause dispatch until explicitly resumed, but only the usage-limit pause supports auto-resume. `IsDispatchPaused` is the separate manual operator pause.
 DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.
 Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`.
 

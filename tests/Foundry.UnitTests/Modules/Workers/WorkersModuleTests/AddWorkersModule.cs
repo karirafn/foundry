@@ -4,8 +4,10 @@ using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -105,6 +107,7 @@ public sealed class AddWorkersModule
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
 
         // Act
         services.AddWorkersModule(configuration);
@@ -124,6 +127,7 @@ public sealed class AddWorkersModule
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
 
         // Act
         services.AddWorkersModule(configuration);
@@ -164,6 +168,22 @@ public sealed class AddWorkersModule
         // Assert
         IContainerOperations containerOperations = provider.GetRequiredService<IContainerOperations>();
         containerOperations.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersIExecOperations()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IExecOperations execOperations = provider.GetRequiredService<IExecOperations>();
+        execOperations.ShouldNotBeNull();
     }
 
     [Fact]
@@ -216,5 +236,61 @@ public sealed class AddWorkersModule
         IEnumerable<IIntegrationEventHandler<DispatchResumed>> handlers =
             provider.GetServices<IIntegrationEventHandler<DispatchResumed>>();
         handlers.ShouldContain(h => h is DispatchResumedBroadcastHandler);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersLoginSessionServiceAsSingleton()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddLogging();
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        LoginSessionService service = provider.GetRequiredService<LoginSessionService>();
+        service.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersILoginSessionStatePointingToLoginSessionService()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddLogging();
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        ILoginSessionState state = provider.GetRequiredService<ILoginSessionState>();
+        state.ShouldBeOfType<LoginSessionService>();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersLoginContainerReaperAsHostedService()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddLogging();
+        services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
+        hostedServices.ShouldContain(s => s is LoginContainerReaper);
     }
 }

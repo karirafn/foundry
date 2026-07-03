@@ -139,10 +139,14 @@ start_rootless_dockerd() {
 }
 
 # Required environment variables
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
-    echo "Either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN is required" >&2
+# Valid auth: EITHER ANTHROPIC_API_KEY (API-key mode) OR a credential file at
+# $CLAUDE_CONFIG_DIR/.credentials.json (OAuth volume mode, written by claude /login).
+_cred_file="${CLAUDE_CONFIG_DIR:-}/.credentials.json"
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "${CLAUDE_CONFIG_DIR:-}" || ! -f "$_cred_file" ]]; then
+    echo "Authentication required: set ANTHROPIC_API_KEY (API-key mode) or mount a credentials file at \$CLAUDE_CONFIG_DIR/.credentials.json (OAuth mode)" >&2
     exit 1
 fi
+unset _cred_file
 : "${CLONE_URL:?CLONE_URL is required}"
 : "${GIT_PAT:?GIT_PAT is required}"
 : "${WORKER_PROMPT:?WORKER_PROMPT is required}"
@@ -154,8 +158,14 @@ if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
         echo "ERROR: ~/.claude is not writable by $(whoami). Rebuild the worker image: docker build -t foundry-worker:local workers/" >&2
         exit 1
     fi
-    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > ~/.claude/settings.json
-    chmod 444 ~/.claude/settings.json
+    # Write via a temp file and atomically replace any pre-existing read-only settings.json.
+    # mv -f replaces a 444 file owned by the same user (node owns the dir, so replacement is
+    # permitted), fixing both re-run breakage and any concurrent-worker write race (last writer
+    # wins with identical content). settings.json is regenerated fresh on every container start.
+    settings_tmp="$(mktemp)"
+    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > "$settings_tmp"
+    chmod 444 "$settings_tmp"
+    mv -f "$settings_tmp" ~/.claude/settings.json
 fi
 
 # Authenticate the clone via GIT_ASKPASS so the token never appears in the

@@ -4,6 +4,7 @@ using Foundry.WebApi.Persistence;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 using Shouldly;
 
@@ -63,12 +64,11 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOAuthSettingsPersisted_CanBeReloadedWithAllProperties()
+    public async Task WhenOAuthSettingsPersisted_CanBeReloadedWithSubscriptionType()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        DateTimeOffset expiresAt = new DateTimeOffset(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
-        AuthMode.OAuth oauthMode = new("access-token", "refresh-token", expiresAt, "pro");
+        AuthMode.OAuth oauthMode = new("pro");
         settings.SetAuthMode(oauthMode);
 
         _dbContext.Set<GlobalSettings>().Add(settings);
@@ -83,11 +83,7 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
         // Assert
         GlobalSettings reloaded = result.ShouldNotBeNull();
         AuthMode.OAuth reloadedOauth = reloaded.AuthMode.ShouldBeOfType<AuthMode.OAuth>();
-        reloadedOauth.ShouldSatisfyAllConditions(
-            () => reloadedOauth.AccessToken.ShouldBe("access-token"),
-            () => reloadedOauth.RefreshToken.ShouldBe("refresh-token"),
-            () => reloadedOauth.ExpiresAt.ShouldBe(expiresAt),
-            () => reloadedOauth.SubscriptionType.ShouldBe("pro"));
+        reloadedOauth.SubscriptionType.ShouldBe("pro");
     }
 
     [Fact]
@@ -121,6 +117,27 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAuthInvalidPausePersisted_CanBeReloaded()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.PauseForAuthInvalid();
+
+        _dbContext.Set<GlobalSettings>().Add(settings);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        GlobalSettings? result = await _dbContext
+            .Set<GlobalSettings>()
+            .FindAsync([settings.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        GlobalSettings reloaded = result.ShouldNotBeNull();
+        reloaded.AuthInvalidPause.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task WhenApiKeySettingsPersisted_AuthModeColumnIsEncrypted()
     {
         // Arrange
@@ -141,5 +158,76 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
         string nonNull = rawValue.ShouldNotBeNull();
         nonNull.ShouldNotContain("api_key");
         nonNull.ShouldNotContain("my-plaintext-key");
+    }
+
+    [Fact]
+    public async Task WhenOAuthAccountIdentityPersisted_CanBeReloadedWithAllIdentityFields()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
+
+        _dbContext.Set<GlobalSettings>().Add(settings);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        GlobalSettings? result = await _dbContext
+            .Set<GlobalSettings>()
+            .FindAsync([settings.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        GlobalSettings reloaded = result.ShouldNotBeNull();
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.OAuthAccountEmail.ShouldBe("user@example.com"),
+            () => reloaded.OAuthAccountOrgName.ShouldBe("MyOrg"));
+    }
+
+    [Fact]
+    public async Task WhenNoAccountIdentitySet_OAuthAccountFieldsAreNull()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+
+        _dbContext.Set<GlobalSettings>().Add(settings);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        GlobalSettings? result = await _dbContext
+            .Set<GlobalSettings>()
+            .FindAsync([settings.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        GlobalSettings reloaded = result.ShouldNotBeNull();
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.OAuthAccountEmail.ShouldBeNull(),
+            () => reloaded.OAuthAccountOrgName.ShouldBeNull());
+    }
+
+    [Fact]
+    public void OAuthAccountEmail_HasMaxLength_MatchingDomainConstant()
+    {
+        // Arrange
+        IEntityType entityType = _dbContext.Model.FindEntityType(typeof(GlobalSettings))!;
+
+        // Act
+        IProperty property = entityType.FindProperty(nameof(GlobalSettings.OAuthAccountEmail))!;
+
+        // Assert
+        property.GetMaxLength().ShouldBe(GlobalSettings.MaxOAuthAccountEmailLength);
+    }
+
+    [Fact]
+    public void OAuthAccountOrgName_HasMaxLength_MatchingDomainConstant()
+    {
+        // Arrange
+        IEntityType entityType = _dbContext.Model.FindEntityType(typeof(GlobalSettings))!;
+
+        // Act
+        IProperty property = entityType.FindProperty(nameof(GlobalSettings.OAuthAccountOrgName))!;
+
+        // Assert
+        property.GetMaxLength().ShouldBe(GlobalSettings.MaxOAuthAccountOrgNameLength);
     }
 }

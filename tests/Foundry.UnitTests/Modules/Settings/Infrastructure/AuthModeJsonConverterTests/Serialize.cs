@@ -49,8 +49,7 @@ public sealed class Serialize
     public void WhenOAuthAuthModeSerialised_ContainsTypeDiscriminator()
     {
         // Arrange
-        DateTimeOffset expiresAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        AuthMode authMode = new AuthMode.OAuth("access-token", "refresh-token", expiresAt, "pro");
+        AuthMode authMode = new AuthMode.OAuth("pro");
 
         // Act
         string json = JsonSerializer.Serialize(authMode, _options);
@@ -60,19 +59,31 @@ public sealed class Serialize
     }
 
     [Fact]
-    public void WhenOAuthAuthModeSerialised_ContainsAllFields()
+    public void WhenOAuthAuthModeSerialised_ContainsSubscriptionType()
     {
         // Arrange
-        DateTimeOffset expiresAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        AuthMode authMode = new AuthMode.OAuth("access-token", "refresh-token", expiresAt, "pro");
+        AuthMode authMode = new AuthMode.OAuth("pro");
+
+        // Act
+        string json = JsonSerializer.Serialize(authMode, _options);
+
+        // Assert
+        json.ShouldContain(@"""subscription_type"":""pro""");
+    }
+
+    [Fact]
+    public void WhenOAuthAuthModeSerialised_DoesNotContainTokenFields()
+    {
+        // Arrange
+        AuthMode authMode = new AuthMode.OAuth("pro");
 
         // Act
         string json = JsonSerializer.Serialize(authMode, _options);
 
         // Assert
         json.ShouldSatisfyAllConditions(
-            () => json.ShouldContain(@"""access_token"":""access-token"""),
-            () => json.ShouldContain(@"""refresh_token"":""refresh-token"""),
-            () => json.ShouldContain(@"""subscription_type"":""pro"""));
+            () => json.ShouldNotContain("access_token"),
+            () => json.ShouldNotContain("refresh_token"),
+            () => json.ShouldNotContain("expires_at"));
     }
 }

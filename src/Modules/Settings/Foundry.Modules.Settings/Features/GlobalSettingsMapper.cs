@@ -5,10 +5,12 @@ namespace Foundry.Modules.Settings.Features;
 
 internal static class GlobalSettingsMapper
 {
+    internal const string OAuthStatusNotConfigured = "NotConfigured";
+    internal const string OAuthStatusPresent = "Present";
+    internal const string OAuthStatusReLoginNeeded = "ReLoginNeeded";
+
     internal static GlobalSettingsSummary ToSummary(GlobalSettings settings)
     {
-        AuthMode.OAuth? oauth = settings.AuthMode is AuthMode.OAuth o ? o : null;
-
         string authModeName = settings.AuthMode switch
         {
             AuthMode.ApiKey => "ApiKey",
@@ -27,14 +29,17 @@ internal static class GlobalSettingsMapper
             ? failed.ErrorTail
             : null;
 
+        string oauthStatus = ComputeOAuthStatus(settings);
+        string? subscriptionType = settings.AuthMode is AuthMode.OAuth oauth ? oauth.SubscriptionType : null;
+
         return new GlobalSettingsSummary(
             authModeName,
             settings.MaxConcurrent,
             settings.TimeoutMinutes,
-            oauth is not null && oauth.AccessToken.Length > 0,
-            oauth is not null && oauth.RefreshToken.Length > 0,
-            oauth?.ExpiresAt,
-            oauth?.SubscriptionType,
+            oauthStatus,
+            subscriptionType,
+            settings.OAuthAccountEmail,
+            settings.OAuthAccountOrgName,
             settings.SystemPromptTemplate,
             settings.WorkerPromptTemplate,
             settings.UsageLimitResetsAt,
@@ -50,5 +55,22 @@ internal static class GlobalSettingsMapper
             status,
             lastError,
             settings.LastImageBuiltAt is not null);
+    }
+
+    private static string ComputeOAuthStatus(GlobalSettings settings)
+    {
+        if (settings.AuthMode is not AuthMode.OAuth)
+        {
+            return OAuthStatusNotConfigured;
+        }
+
+        if (settings.AuthInvalidPause)
+        {
+            return OAuthStatusReLoginNeeded;
+        }
+
+        return string.IsNullOrEmpty(settings.OAuthAccountEmail)
+            ? OAuthStatusReLoginNeeded
+            : OAuthStatusPresent;
     }
 }

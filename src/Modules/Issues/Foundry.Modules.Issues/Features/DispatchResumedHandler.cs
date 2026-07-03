@@ -16,11 +16,15 @@ internal sealed class DispatchResumedHandler(
     public async Task HandleAsync(DispatchResumed @event, CancellationToken cancellationToken)
     {
         List<FailedIssue> failedIssues = await db.Set<FailedIssue>()
-            .Where(i => EF.Functions.Like(i.FailureReason, WorkerRunFailed.UsageLimitedReason + "%"))
+            .Where(i =>
+                EF.Functions.Like(i.FailureReason, WorkerRunFailed.UsageLimitedReason + "%")
+                || i.FailureReason == WorkerRunFailed.AuthInvalidReason)
             .ToListAsync(cancellationToken);
 
         List<ContinuableFailedIssue> continuableFailedIssues = await db.Set<ContinuableFailedIssue>()
-            .Where(i => EF.Functions.Like(i.FailureReason, WorkerRunFailed.UsageLimitedReason + "%"))
+            .Where(i =>
+                EF.Functions.Like(i.FailureReason, WorkerRunFailed.UsageLimitedReason + "%")
+                || i.FailureReason == WorkerRunFailed.AuthInvalidReason)
             .ToListAsync(cancellationToken);
 
         foreach (FailedIssue failed in failedIssues)
@@ -29,8 +33,9 @@ internal sealed class DispatchResumedHandler(
             await db.TransitionAsync(failed, queued, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(
-                "Dispatch resumed: re-queued usage-limited issue #{IssueNumber} (was FailedIssue).",
-                failed.IssueNumber);
+                "Dispatch resumed: re-queued issue #{IssueNumber} (reason: {FailureReason}, was FailedIssue).",
+                failed.IssueNumber,
+                failed.FailureReason);
         }
 
         foreach (ContinuableFailedIssue continuableFailed in continuableFailedIssues)
@@ -39,8 +44,9 @@ internal sealed class DispatchResumedHandler(
             await db.TransitionAsync(continuableFailed, continuationQueued, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(
-                "Dispatch resumed: re-queued usage-limited issue #{IssueNumber} (was ContinuableFailedIssue).",
-                continuableFailed.IssueNumber);
+                "Dispatch resumed: re-queued issue #{IssueNumber} (reason: {FailureReason}, was ContinuableFailedIssue).",
+                continuableFailed.IssueNumber,
+                continuableFailed.FailureReason);
         }
     }
 }

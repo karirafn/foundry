@@ -15,4 +15,6 @@ internal abstract record ContainerOutputParseResult
     internal sealed record WorkerBootstrapFailed(string Detail) : ContainerOutputParseResult;
 
     internal sealed record NoResultLine : ContainerOutputParseResult;
+
+    internal sealed record AuthInvalid : ContainerOutputParseResult;
 }

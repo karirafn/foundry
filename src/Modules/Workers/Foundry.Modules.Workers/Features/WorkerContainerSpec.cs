@@ -10,4 +10,6 @@ internal sealed record WorkerContainerSpec(
     public IReadOnlyList<string> SecurityOptions { get; init; } = [];
 
     public IReadOnlyList<string> Devices { get; init; } = [];
+
+    public IReadOnlyList<VolumeMount> VolumeMounts { get; init; } = [];
 }

@@ -10,4 +10,6 @@ public sealed record WorkerRunFailed(
     string? BranchName = null) : IIntegrationEvent
 {
     public const string UsageLimitedReason = "Usage limit reached";
+
+    public const string AuthInvalidReason = "Worker authentication failed";
 }

@@ -16,6 +16,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MaxDefaultCooldownMinutes = 1440;
     internal const int DefaultCooldownMinutesValue = 60;
     internal const int MaxUsageLimitResetDays = 7;
+    internal const int MaxOAuthAccountEmailLength = 254;
+    internal const int MaxOAuthAccountOrgNameLength = 200;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
     {
@@ -58,6 +60,12 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public DateTimeOffset? LastImageBuiltAt { get; private set; }
 
+    public bool AuthInvalidPause { get; private set; }
+
+    public string? OAuthAccountEmail { get; private set; }
+
+    public string? OAuthAccountOrgName { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -78,6 +86,13 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         IsDispatchPaused = false;
         UsageLimitResetsAt = null;
+        AuthInvalidPause = false;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void PauseForAuthInvalid()
+    {
+        AuthInvalidPause = true;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -114,6 +129,21 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public void SetAuthMode(AuthMode mode)
     {
         AuthMode = mode;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void SetOAuthAccountIdentity(string? email, string? orgName, string? subscriptionType)
+    {
+        // Clamp at the domain caps to enforce the invariant regardless of caller.
+        // SQLite does not enforce HasMaxLength, so a field exceeding the cap would persist
+        // but fail a future migration to a stricter database engine.
+        OAuthAccountEmail = email is not null && email.Length > MaxOAuthAccountEmailLength
+            ? email[..MaxOAuthAccountEmailLength]
+            : email;
+        OAuthAccountOrgName = orgName is not null && orgName.Length > MaxOAuthAccountOrgNameLength
+            ? orgName[..MaxOAuthAccountOrgNameLength]
+            : orgName;
+        AuthMode = new AuthMode.OAuth(subscriptionType);
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

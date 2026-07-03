@@ -7,6 +7,7 @@ using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -72,7 +73,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IGlobalSettingsQueries? settingsQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null,
-        IContainerOutputParser? containerOutputParser = null)
+        IContainerOutputParser? containerOutputParser = null,
+        ILoginSessionState? loginSessionState = null)
     {
         SqliteConnection connection = _connection;
 
@@ -102,10 +104,14 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             sp.GetRequiredService<IContainerOutputParser>(),
             prRetryDelay: TimeSpan.Zero));
 
+        ILoginSessionState resolvedLoginSessionState = loginSessionState ?? new NullLoginSessionState();
+        services.AddSingleton<ILoginSessionState>(_ => resolvedLoginSessionState);
+
         ServiceProvider sp = services.BuildServiceProvider();
 
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
+            resolvedLoginSessionState,
             NullLogger<WorkerDispatchService>.Instance);
     }
 
@@ -204,6 +210,11 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
     }
 
+    protected sealed class NullLoginSessionState : ILoginSessionState
+    {
+        public bool IsLoginActive => false;
+    }
+
     protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)
         : IGlobalSettingsQueries
     {
@@ -234,5 +245,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
+
+        public Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
+            => Task.FromResult<string?>("ApiKey");
     }
 }

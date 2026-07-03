@@ -1,15 +1,30 @@
-import { Component, ChangeDetectionStrategy, WritableSignal, computed, effect, inject, output, signal } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  ElementRef,
+  Injector,
+  ViewChild,
+  WritableSignal,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  output,
+  runInInjectionContext,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../settings/settings.service';
 import { AuthMode } from '../../settings/settings.model';
+import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
 
 @Component({
   selector: 'fd-setup-auth-step',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, OAuthPanelComponent],
   template: `
     <div class="setup-auth-step">
-      <h2 class="setup-auth-step__title">Worker Authentication</h2>
+      <h2 class="setup-auth-step__title" #authHeading tabindex="-1">Worker Authentication</h2>
       <p class="setup-auth-step__description">
         Configure how worker containers authenticate with Claude.
       </p>
@@ -63,56 +78,26 @@ import { AuthMode } from '../../settings/settings.model';
 
         @if (_selectedMode() === 'oauth') {
           <div class="setup-auth-step__oauth-section">
-            @if (_settingsService.authSettings()?.oauth; as oauthInfo) {
-              <div class="setup-auth-step__oauth-grid">
-                <div class="setup-auth-step__oauth-field">
-                  <span class="setup-auth-step__oauth-field-label">Access Token</span>
-                  <span class="setup-auth-step__oauth-field-value">
-                    {{ oauthInfo.accessTokenPresent ? 'Present' : 'Not present' }}
-                  </span>
-                </div>
-                <div class="setup-auth-step__oauth-field">
-                  <span class="setup-auth-step__oauth-field-label">Refresh Token</span>
-                  <span class="setup-auth-step__oauth-field-value">
-                    {{ oauthInfo.refreshTokenPresent ? 'Present' : 'Not present' }}
-                  </span>
-                </div>
-                @if (oauthInfo.expiresAt) {
-                  <div class="setup-auth-step__oauth-field">
-                    <span class="setup-auth-step__oauth-field-label">Expires At</span>
-                    <span class="setup-auth-step__oauth-field-value">{{ oauthInfo.expiresAt }}</span>
-                  </div>
-                }
-                @if (oauthInfo.subscriptionType) {
-                  <div class="setup-auth-step__oauth-field">
-                    <span class="setup-auth-step__oauth-field-label">Subscription</span>
-                    <span class="setup-auth-step__oauth-field-value">{{ oauthInfo.subscriptionType }}</span>
-                  </div>
-                }
-                <div class="setup-auth-step__oauth-field">
-                  <span class="setup-auth-step__oauth-field-label">Status</span>
-                  <span class="setup-auth-step__oauth-field-value setup-auth-step__oauth-status setup-auth-step__oauth-status--{{ oauthInfo.status }}">
-                    {{ oauthInfo.status }}
-                  </span>
-                </div>
-              </div>
-            } @else {
-              <div class="setup-auth-step__oauth-setup">
-                <p class="setup-auth-step__oauth-setup-instructions">
-                  Run the following command to authenticate, then scan for credentials:
-                </p>
-                <code class="setup-auth-step__oauth-setup-command">claude setup-token</code>
+            <fd-oauth-panel
+              [status]="_oauthStatus()"
+              [subscriptionType]="_settingsService.authSettings()?.oauth?.subscriptionType ?? null"
+              [accountEmail]="_settingsService.settings()?.oAuthAccountEmail ?? null"
+              [accountOrgName]="_settingsService.settings()?.oAuthAccountOrgName ?? null"
+              [loginPhase]="_settingsService.loginPhase()"
+              [loginUrl]="_settingsService.loginUrl()"
+              [loginError]="_settingsService.loginError()"
+              (startLogin)="_settingsService.startLogin()"
+              (submitCode)="_settingsService.submitLoginCode($event)"
+              (cancel)="cancelLogin()"
+            />
+
+            <div role="alert" class="setup-auth-step__error">{{ (!_settingsService.loginPhase() && _settingsService.startLoginError()) ? _settingsService.startLoginError() : '' }}</div>
+
+            @if (_oauthStatus() !== 'Present' && !_settingsService.loginPhase()) {
+              <div class="setup-auth-step__oauth-note">
+                You haven't logged in yet. You can finish setup now, but workers won't run until you sign in.
               </div>
             }
-
-            <div class="setup-auth-step__error" role="alert">{{ _settingsService.switchError() ?? '' }}</div>
-
-            <button
-              class="setup-auth-step__scan-btn"
-              type="button"
-              [disabled]="_settingsService.switching()"
-              (click)="onScanOAuth()"
-            >{{ _settingsService.switching() ? 'Scanning...' : 'Scan & Apply OAuth Credentials' }}</button>
           </div>
         }
 
@@ -129,6 +114,10 @@ import { AuthMode } from '../../settings/settings.model';
 })
 export class SetupAuthStepComponent {
   protected readonly _settingsService = inject(SettingsService);
+  private readonly _injector = inject(Injector);
+  private readonly _elementRef = inject(ElementRef);
+
+  @ViewChild('authHeading') private readonly _authHeading?: ElementRef<HTMLHeadingElement>;
 
   readonly complete = output<void>();
 
@@ -136,6 +125,10 @@ export class SetupAuthStepComponent {
   protected readonly _apiKeyValue: WritableSignal<string> = signal('');
 
   private readonly _hasSaved: WritableSignal<boolean> = signal(false);
+
+  protected readonly _oauthStatus = computed(
+    () => this._settingsService.authSettings()?.oauth?.status ?? 'NotConfigured' as const
+  );
 
   protected readonly _isNextDisabled = computed(() => {
     const mode = this._selectedMode();
@@ -145,8 +138,8 @@ export class SetupAuthStepComponent {
     if (mode === 'api_key') {
       return !this._apiKeyValue() || this._settingsService.saving();
     }
-    const oauthStatus = this._settingsService.authSettings()?.oauth?.status;
-    return oauthStatus !== 'valid' || this._settingsService.switching();
+    // OAuth: Next is enabled once OAuth mode is selected/configured
+    return false;
   });
 
   constructor() {
@@ -159,14 +152,36 @@ export class SetupAuthStepComponent {
         this.complete.emit();
       }
     });
+
+    // Move focus to auth heading on Succeeded (Finding 4).
+    effect(() => {
+      const phase = this._settingsService.loginPhase();
+      if (phase === 'Succeeded') {
+        runInInjectionContext(this._injector, () =>
+          afterNextRender(() => this._authHeading?.nativeElement.focus())
+        );
+      }
+    });
   }
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
   }
 
-  onScanOAuth(): void {
-    this._settingsService.scanOAuthCredentials();
+  cancelLogin(): void {
+    this._settingsService.cancelLogin();
+    // Return focus to the entry "Log in" button; fallback to the step heading.
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => {
+        const host = this._elementRef.nativeElement as HTMLElement;
+        const entryBtn = host.querySelector<HTMLButtonElement>('.oauth-panel__login-btn');
+        if (entryBtn) {
+          entryBtn.focus();
+        } else {
+          this._authHeading?.nativeElement.focus();
+        }
+      })
+    );
   }
 
   onNext(): void {

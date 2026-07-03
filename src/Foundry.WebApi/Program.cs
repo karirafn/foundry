@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Features.Login;
 using Foundry.ServiceDefaults;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -34,6 +35,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
 builder.Services.AddSingleton<ISystemNotificationBroadcaster, SignalRSystemNotificationBroadcaster>();
+builder.Services.AddSingleton<ILoginSessionBroadcaster, SignalRLoginSessionBroadcaster>();
 builder.Services.AddScoped<IWorkerActivityBroadcaster, SignalRWorkerActivityBroadcaster>();
 
 builder.Services.AddCors(options =>

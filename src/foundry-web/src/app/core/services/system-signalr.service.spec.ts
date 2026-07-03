@@ -1,16 +1,24 @@
 import { TestBed } from '@angular/core/testing';
 import { SystemSignalRService, SYSTEM_HUB_FACTORY, SystemHub } from './system-signalr.service';
 import { DISPATCH_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
+import { LoginSessionUpdate } from '../../features/settings/settings.model';
 
 interface CapturedHubCallbacks {
   onSystemNotificationReceived: ((notification: SystemNotification) => void) | null;
+  onLoginSessionUpdated: ((update: LoginSessionUpdate) => void) | null;
   onReconnected: (() => void) | null;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildMockHub(captured: CapturedHubCallbacks): SystemHub {
   return {
-    on: (_method: string, cb: (notification: SystemNotification) => void) => {
-      captured.onSystemNotificationReceived = cb;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    on: (method: string, cb: (...args: any[]) => void) => {
+      if (method === 'SystemNotificationReceived') {
+        captured.onSystemNotificationReceived = cb as (notification: SystemNotification) => void;
+      } else if (method === 'LoginSessionUpdated') {
+        captured.onLoginSessionUpdated = cb as (update: LoginSessionUpdate) => void;
+      }
     },
     onReconnected: (cb: () => void) => {
       captured.onReconnected = cb;
@@ -22,7 +30,11 @@ function buildMockHub(captured: CapturedHubCallbacks): SystemHub {
 function setup() {
   TestBed.resetTestingModule();
 
-  const captured: CapturedHubCallbacks = { onSystemNotificationReceived: null, onReconnected: null };
+  const captured: CapturedHubCallbacks = {
+    onSystemNotificationReceived: null,
+    onLoginSessionUpdated: null,
+    onReconnected: null,
+  };
   const mockHubFactory = () => buildMockHub(captured);
 
   TestBed.configureTestingModule({
@@ -203,5 +215,63 @@ describe('SystemSignalRService', () => {
 
     // Assert — Observable does not expose next(), so callers cannot emit spurious events
     expect((svc.dispatchStateChanged as unknown as { next?: unknown }).next).toBeUndefined();
+  });
+
+  // Cycle 12: LoginSessionUpdated handler is registered on the hub
+  it('should register a LoginSessionUpdated handler on the hub', () => {
+    // Arrange / Act
+    const { captured } = setup();
+
+    // Assert
+    expect(captured.onLoginSessionUpdated).not.toBeNull();
+  });
+
+  // Cycle 13: receiving a LoginSessionUpdated message emits on loginSessionUpdate
+  it('should emit on loginSessionUpdate when a LoginSessionUpdated message arrives', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const update: LoginSessionUpdate = {
+      sessionId: 'session-1',
+      phase: 'WaitingForAuthorization',
+      authorizationUrl: 'https://claude.ai/oauth/authorize?code=abc',
+      failureReason: null,
+      failureMessage: null,
+    };
+    let received: LoginSessionUpdate | null = null;
+    svc.loginSessionUpdate.subscribe((u) => (received = u));
+
+    // Act
+    captured.onLoginSessionUpdated!(update);
+
+    // Assert
+    expect(received).toEqual(update);
+  });
+
+  // Cycle 14: loginSessionUpdate is an Observable, not a writable Subject
+  it('should expose loginSessionUpdate as an Observable (no next() method)', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert
+    expect((svc.loginSessionUpdate as unknown as { next?: unknown }).next).toBeUndefined();
+  });
+
+  // Cycle 15: separate LoginSessionUpdated messages each emit independently
+  it('should emit each LoginSessionUpdated message independently', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const updates: LoginSessionUpdate[] = [];
+    svc.loginSessionUpdate.subscribe((u) => updates.push(u));
+    const first: LoginSessionUpdate = { sessionId: 'session-1', phase: 'Starting', authorizationUrl: null, failureReason: null, failureMessage: null };
+    const second: LoginSessionUpdate = { sessionId: 'session-1', phase: 'WaitingForAuthorization', authorizationUrl: 'https://claude.ai', failureReason: null, failureMessage: null };
+
+    // Act
+    captured.onLoginSessionUpdated!(first);
+    captured.onLoginSessionUpdated!(second);
+
+    // Assert
+    expect(updates.length).toBe(2);
+    expect(updates[0].phase).toBe('Starting');
+    expect(updates[1].phase).toBe('WaitingForAuthorization');
   });
 });

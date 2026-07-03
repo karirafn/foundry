@@ -53,7 +53,7 @@ public sealed class GetSettingsAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenApiKeySettings_ReturnsApiKeyAuthMode()
+    public async Task WhenApiKeySettings_ReturnsApiKeyAuthModeWithNotConfiguredOAuthStatus()
     {
         // Arrange
         await using (FoundryDbContext seedDb = CreateDbContext())
@@ -74,21 +74,18 @@ public sealed class GetSettingsAsync : IAsyncDisposable
         GlobalSettingsSummary summary = result.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("ApiKey"),
-            () => summary.AccessTokenPresent.ShouldBeFalse(),
-            () => summary.RefreshTokenPresent.ShouldBeFalse(),
-            () => summary.ExpiresAt.ShouldBeNull(),
+            () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured),
             () => summary.SubscriptionType.ShouldBeNull());
     }
 
     [Fact]
-    public async Task WhenOAuthSettings_ReturnsOAuthAuthMode()
+    public async Task WhenOAuthSettings_ReturnsOAuthAuthModeWithReLoginNeededStatus()
     {
-        // Arrange
-        DateTimeOffset expiresAt = new(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
+        // Arrange — OAuth mode without a committed account email returns ReLoginNeeded.
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.SetAuthMode(new AuthMode.OAuth("access-token", "refresh-token", expiresAt, "pro"));
+            settings.SetAuthMode(new AuthMode.OAuth("pro"));
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -103,9 +100,7 @@ public sealed class GetSettingsAsync : IAsyncDisposable
         GlobalSettingsSummary summary = result.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("OAuth"),
-            () => summary.AccessTokenPresent.ShouldBeTrue(),
-            () => summary.RefreshTokenPresent.ShouldBeTrue(),
-            () => summary.ExpiresAt.ShouldBe(expiresAt),
+            () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded),
             () => summary.SubscriptionType.ShouldBe("pro"));
     }
 
