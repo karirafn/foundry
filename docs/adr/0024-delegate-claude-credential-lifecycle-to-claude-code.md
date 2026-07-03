@@ -14,7 +14,7 @@ A one-time `claude /login` seeds the volume; each worker mounts it at `CLAUDE_CO
 Foundry stores no token and injects none — the CLI owns access-token refresh (silent, persisted to the shared volume) and signals refresh-token expiry through a non-zero auth-failure exit.
 An auth-failure worker exit triggers an **auth-invalid pause**: dispatch pauses, the affected issue re-queues on resume, and resume requires a manual `claude /login` to re-seed the volume.
 There is deliberately no auto-resume timer — Foundry cannot detect a successful re-login server-side.
-Settings and the setup wizard report only what local data proves (credential file present / approximate expiry / re-login needed).
+Settings and the setup wizard report only what local data proves (credential file present / re-login needed).
 
 ## Considered Options
 

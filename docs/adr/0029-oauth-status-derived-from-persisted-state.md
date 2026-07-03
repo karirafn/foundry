@@ -36,6 +36,6 @@ The one case it handles that the DB-derived approach does not — a credential s
 ## Consequences
 
 - Status is fast, cross-platform, and needs no Docker access for display.
-- Token expiry is not currently surfaced (the old reader parsed it from the volume); the "Token expires" row shows "—" until expiry is captured at login-commit and persisted. Tracked as a follow-up.
+- Token expiry is deliberately not surfaced: the CLI auto-refreshes the access token in place on the volume, so any value captured at login-commit would be stale within hours and misleading. The "Token expires" UI row and the contract's `ExpiresAt` field were removed rather than populated.
 - A credential seeded out-of-band (no in-app login) reads as `ReLoginNeeded` until an in-app login commits an identity. Accepted: in-app login is the intended path.
-- `ComputeOAuthStatus` intentionally does not treat a past `ExpiresAt` as `ReLoginNeeded`; the credential auto-refreshes on the volume, and the authoritative re-login trigger is the auth-invalid pause raised by a real worker auth failure.
+- `ComputeOAuthStatus` intentionally ignores token expiry entirely; the credential auto-refreshes on the volume, and the authoritative re-login trigger is the auth-invalid pause raised by a real worker auth failure.
