@@ -126,11 +126,7 @@ const COOLDOWN_MINUTES_MAX = 1440;
               [status]="_oauthStatus()"
               [expiresAt]="settingsService.authSettings()?.oauth?.expiresAt ?? null"
               [subscriptionType]="settingsService.authSettings()?.oauth?.subscriptionType ?? null"
-              [loginCommand]="settingsService.loginCommand()"
-              [loginCommandLoading]="settingsService.loginCommandLoading()"
-              [loginCommandError]="settingsService.loginCommandError()"
               (refresh)="onOAuthRefresh()"
-              (fetchCommand)="settingsService.fetchLoginCommand()"
             />
 
             @if (_showSwitchAccountConfirm()) {
@@ -544,9 +540,6 @@ export class SettingsGeneralComponent {
       if (settings !== null && !this._modeInitialized) {
         this._modeInitialized = true;
         this._selectedMode.set(settings.mode);
-        if (settings.mode === 'oauth' && settings.oauth?.status !== 'Present') {
-          this.settingsService.fetchLoginCommand();
-        }
       }
     });
 
@@ -602,9 +595,6 @@ export class SettingsGeneralComponent {
       if (currentMode !== 'oauth') {
         this.settingsService.markOAuthConfigured();
       }
-      if (this._oauthStatus() !== 'Present') {
-        this.settingsService.fetchLoginCommand();
-      }
     }
     runInInjectionContext(this._injector, () =>
       afterNextRender(() => this._authHeading?.nativeElement.focus())
@@ -639,7 +629,6 @@ export class SettingsGeneralComponent {
     this._showSwitchAccountConfirm.set(false);
     this._switchAccountDraining.set(true);
     this.dispatchService.pauseDispatch();
-    this.settingsService.fetchLoginCommand();
     runInInjectionContext(this._injector, () =>
       afterNextRender(() => this._authHeading?.nativeElement.focus())
     );

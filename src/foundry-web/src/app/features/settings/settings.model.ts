@@ -4,6 +4,18 @@ export type OAuthStatus = 'NotConfigured' | 'Present' | 'ReLoginNeeded';
 
 export type ImageBuildStatus = 'Idle' | 'Building' | 'Failed';
 
+export type LoginPhase = 'Starting' | 'WaitingForAuthorization' | 'SigningIn' | 'Succeeded' | 'Failed';
+
+export type LoginError = 'InvalidCode' | 'UrlTimeout' | 'CodeTimeout' | 'Unknown';
+
+export interface LoginSessionUpdate {
+  sessionId: string;
+  phase: LoginPhase;
+  url: string | null;
+  failure: LoginError | null;
+  message: string | null;
+}
+
 export interface WorkerImageFlags {
   installDotnet: boolean;
   installAngular: boolean;
@@ -11,10 +23,6 @@ export interface WorkerImageFlags {
   installGh: boolean;
   installChromium: boolean;
   installDocker: boolean;
-}
-
-export interface OAuthLoginCommand {
-  command: string;
 }
 
 export interface OAuthCredentialInfo {
@@ -42,6 +50,8 @@ export interface WorkerLimits {
 export interface GlobalSettingsResponse {
   authMode: string;
   oAuthStatus: OAuthStatus;
+  oAuthAccountEmail: string | null;
+  oAuthAccountOrgName: string | null;
   maxConcurrent: number;
   timeoutMinutes: number;
   expiresAt: string | null;

@@ -8,8 +8,10 @@ import {
   AuthSettings,
   GlobalSettingsResponse,
   ImageBuildStatus,
+  LoginError,
+  LoginPhase,
+  LoginSessionUpdate,
   OAuthCredentialInfo,
-  OAuthLoginCommand,
   UpdatePromptTemplatesRequest,
   WorkerImageFlags,
   WorkerLimits,
@@ -24,7 +26,7 @@ const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
-const FETCH_LOGIN_COMMAND_ERROR = 'Failed to load the login command';
+const START_LOGIN_ERROR = 'Failed to start login';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -41,6 +43,27 @@ export class SettingsService {
         takeUntilDestroyed()
       )
       .subscribe();
+
+    this._signalR.loginSessionUpdate
+      .pipe(takeUntilDestroyed())
+      .subscribe((update: LoginSessionUpdate) => {
+        this._loginPhaseSignal.set(update.phase);
+        this._loginUrlSignal.set(update.url);
+        this._loginErrorSignal.set(update.failure);
+
+        if (update.phase === 'SigningIn' || update.phase === 'Succeeded' || update.phase === 'Failed') {
+          this._codeSubmittingSignal.set(false);
+        }
+
+        if (update.phase === 'Succeeded') {
+          this._fetchSettings().subscribe();
+        }
+
+        if (update.phase === 'Failed' || update.phase === 'Succeeded') {
+          // Terminal states — mark login as idle after Succeeded or Failed signal
+          // (phase stays visible until cancelLogin or next startLogin)
+        }
+      });
   }
 
   private readonly _settingsSignal: WritableSignal<GlobalSettingsResponse | null> = signal(null);
@@ -122,14 +145,20 @@ export class SettingsService {
   private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
-  private readonly _loginCommandSignal: WritableSignal<string | null> = signal(null);
-  readonly loginCommand: Signal<string | null> = this._loginCommandSignal.asReadonly();
+  private readonly _loginPhaseSignal: WritableSignal<LoginPhase | null> = signal(null);
+  readonly loginPhase: Signal<LoginPhase | null> = this._loginPhaseSignal.asReadonly();
 
-  private readonly _loginCommandLoadingSignal: WritableSignal<boolean> = signal(false);
-  readonly loginCommandLoading: Signal<boolean> = this._loginCommandLoadingSignal.asReadonly();
+  private readonly _loginUrlSignal: WritableSignal<string | null> = signal(null);
+  readonly loginUrl: Signal<string | null> = this._loginUrlSignal.asReadonly();
 
-  private readonly _loginCommandErrorSignal: WritableSignal<string | null> = signal(null);
-  readonly loginCommandError: Signal<string | null> = this._loginCommandErrorSignal.asReadonly();
+  private readonly _loginErrorSignal: WritableSignal<LoginError | null> = signal(null);
+  readonly loginError: Signal<LoginError | null> = this._loginErrorSignal.asReadonly();
+
+  private readonly _codeSubmittingSignal: WritableSignal<boolean> = signal(false);
+  readonly codeSubmitting: Signal<boolean> = this._codeSubmittingSignal.asReadonly();
+
+  private readonly _startLoginErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly startLoginError: Signal<string | null> = this._startLoginErrorSignal.asReadonly();
 
   loadSettings(): Promise<void> {
     return new Promise<void>((resolve) => {
@@ -229,21 +258,48 @@ export class SettingsService {
     });
   }
 
-  fetchLoginCommand(): void {
-    this._loginCommandErrorSignal.set(null);
-    this._loginCommandLoadingSignal.set(true);
+  startLogin(): void {
+    this._startLoginErrorSignal.set(null);
+    this._loginPhaseSignal.set('Starting');
+    this._loginUrlSignal.set(null);
+    this._loginErrorSignal.set(null);
+    this._codeSubmittingSignal.set(false);
 
-    this._http.get<OAuthLoginCommand>('/api/settings/oauth/login-command').subscribe({
-      next: (response) => {
-        this._loginCommandSignal.set(response.command);
-        this._loginCommandLoadingSignal.set(false);
+    this._http.post<{ sessionId: string }>('/api/settings/oauth/login/start', null).subscribe({
+      next: () => {
+        // Phase transitions arrive via SignalR; Starting was set optimistically above
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this._loginCommandErrorSignal.set(FETCH_LOGIN_COMMAND_ERROR);
-        this._loginCommandLoadingSignal.set(false);
+        this._loginPhaseSignal.set(null);
+        this._startLoginErrorSignal.set(START_LOGIN_ERROR);
       },
     });
+  }
+
+  submitLoginCode(code: string): void {
+    this._codeSubmittingSignal.set(true);
+    this._loginPhaseSignal.set('SigningIn');
+
+    this._http.post<void>('/api/settings/oauth/login/code', { code }).subscribe({
+      next: () => {
+        // Success/failure arrives via SignalR
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._codeSubmittingSignal.set(false);
+        // Revert optimistic SigningIn if the HTTP call itself failed (network/4xx before SignalR)
+        this._loginPhaseSignal.update((current) => current === 'SigningIn' ? 'WaitingForAuthorization' : current);
+      },
+    });
+  }
+
+  cancelLogin(): void {
+    this._loginPhaseSignal.set(null);
+    this._loginUrlSignal.set(null);
+    this._loginErrorSignal.set(null);
+    this._codeSubmittingSignal.set(false);
+    this._startLoginErrorSignal.set(null);
   }
 
   updateWorkerLimits(maxConcurrent: number, timeoutMinutes: number): void {

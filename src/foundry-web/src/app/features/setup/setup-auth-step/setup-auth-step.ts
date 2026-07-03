@@ -68,11 +68,7 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
               [status]="_oauthStatus()"
               [expiresAt]="_settingsService.authSettings()?.oauth?.expiresAt ?? null"
               [subscriptionType]="_settingsService.authSettings()?.oauth?.subscriptionType ?? null"
-              [loginCommand]="_settingsService.loginCommand()"
-              [loginCommandLoading]="_settingsService.loginCommandLoading()"
-              [loginCommandError]="_settingsService.loginCommandError()"
               (refresh)="onOAuthRefresh()"
-              (fetchCommand)="_settingsService.fetchLoginCommand()"
             />
 
             @if (_oauthStatus() !== 'Present') {
@@ -134,9 +130,6 @@ export class SetupAuthStepComponent {
 
   onModeChange(mode: AuthMode): void {
     this._selectedMode.set(mode);
-    if (mode === 'oauth') {
-      this._settingsService.fetchLoginCommand();
-    }
   }
 
   onOAuthRefresh(): void {

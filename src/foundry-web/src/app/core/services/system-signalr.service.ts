@@ -1,10 +1,12 @@
-import { Injectable, InjectionToken, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { DISPATCH_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
+import { LoginSessionUpdate } from '../../features/settings/settings.model';
 
 export interface SystemHub {
-  on(methodName: string, callback: (notification: SystemNotification) => void): void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(methodName: string, callback: (...args: any[]) => void): void;
   onReconnected(callback: () => void): void;
   start(): Promise<void>;
 }
@@ -33,13 +35,16 @@ export class SystemSignalRService {
 
   private readonly _notifications: WritableSignal<SystemNotification[]> = signal([]);
 
-  readonly notifications: Signal<SystemNotification[]> = computed(() => this._notifications());
+  readonly notifications: Signal<SystemNotification[]> = this._notifications.asReadonly();
 
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
 
   private readonly _dispatchStateChanged = new Subject<void>();
   readonly dispatchStateChanged: Observable<void> = this._dispatchStateChanged.asObservable();
+
+  private readonly _loginSessionUpdate = new Subject<LoginSessionUpdate>();
+  readonly loginSessionUpdate: Observable<LoginSessionUpdate> = this._loginSessionUpdate.asObservable();
 
   constructor() {
     const hub = this._hubFactory();
@@ -53,6 +58,10 @@ export class SystemSignalRService {
         const filtered = current.filter((n) => n.category !== notification.category);
         return notification.isActive ? [...filtered, notification] : filtered;
       });
+    });
+
+    hub.on('LoginSessionUpdated', (update: LoginSessionUpdate) => {
+      this._loginSessionUpdate.next(update);
     });
 
     hub.onReconnected(() => {

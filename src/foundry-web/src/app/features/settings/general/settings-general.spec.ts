@@ -8,7 +8,7 @@ import { SettingsGeneralComponent } from './settings-general';
 import { SettingsService } from '../settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 
 const IMAGE_FLAGS_DEFAULTS = {
   installDotnet: false,
@@ -35,6 +35,8 @@ const BASE_RESPONSE = {
 const API_KEY_RESPONSE = {
   authMode: 'ApiKey',
   oAuthStatus: 'NotConfigured',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
   expiresAt: null,
@@ -45,6 +47,8 @@ const API_KEY_RESPONSE = {
 const OAUTH_RESPONSE = {
   authMode: 'OAuth',
   oAuthStatus: 'Present',
+  oAuthAccountEmail: 'user@example.com',
+  oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
   expiresAt: '2027-01-01T00:00:00Z',
@@ -55,6 +59,8 @@ const OAUTH_RESPONSE = {
 const OAUTH_NOT_CONFIGURED_RESPONSE = {
   authMode: 'OAuth',
   oAuthStatus: 'NotConfigured',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 60,
   expiresAt: null,
@@ -405,11 +411,6 @@ describe('SettingsGeneralComponent', () => {
     flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
     fixture.detectChanges();
 
-    // The component needs to be in OAuth mode to show the panel, but since oAuthStatus is NotConfigured,
-    // the switch button should not show. Also fetch login command.
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
-    fixture.detectChanges();
-
     // Act
     const el = fixture.nativeElement as HTMLElement;
     const switchBtn = el.querySelector('.general-settings__switch-account-btn');
@@ -483,7 +484,7 @@ describe('SettingsGeneralComponent', () => {
     document.body.removeChild(fixture.nativeElement);
   });
 
-  it('should call pauseDispatch and fetch login command when confirm button is clicked', () => {
+  it('should call pauseDispatch when confirm button is clicked', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -504,10 +505,7 @@ describe('SettingsGeneralComponent', () => {
     // Assert
     const pauseReq = httpMock.expectOne('/api/settings/dispatch/pause');
     expect(pauseReq.request.method).toBe('POST');
-    const commandReq = httpMock.expectOne('/api/settings/oauth/login-command');
-    expect(commandReq.request.method).toBe('GET');
     pauseReq.flush(OAUTH_RESPONSE);
-    commandReq.flush({ command: 'docker run -it' });
   });
 
   it('should move focus to the auth heading after confirming account switch', async () => {
@@ -531,7 +529,6 @@ describe('SettingsGeneralComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
     fixture.detectChanges();
 
     // Assert — focus moves to the auth heading, not lost to body
@@ -560,7 +557,6 @@ describe('SettingsGeneralComponent', () => {
     confirmBtn.click();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
     fixture.detectChanges();
 
     // Assert
@@ -601,7 +597,6 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
     // Fail the pause so pauseResumeError signal is set
     httpMock.expectOne('/api/settings/dispatch/pause').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
     fixture.detectChanges();
 
     // Assert — role="alert" must NOT be a descendant of role="status"

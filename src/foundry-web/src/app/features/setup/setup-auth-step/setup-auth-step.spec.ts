@@ -5,11 +5,13 @@ import { NEVER } from 'rxjs';
 import { SetupAuthStepComponent } from './setup-auth-step';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 
 const OAUTH_SETTINGS_RESPONSE = {
   authMode: 'OAuth',
   oAuthStatus: 'Present',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
   expiresAt: '2026-12-31T00:00:00Z',
   subscriptionType: 'max_5x',
   maxConcurrent: 3,
@@ -34,6 +36,8 @@ const OAUTH_SETTINGS_RESPONSE = {
 const API_KEY_SETTINGS_RESPONSE = {
   authMode: 'ApiKey',
   oAuthStatus: 'NotConfigured',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
   expiresAt: null,
   subscriptionType: null,
   maxConcurrent: 3,
@@ -308,10 +312,10 @@ describe('SetupAuthStepComponent', () => {
     httpMock.expectNone('/api/settings/auth');
   });
 
-  // Cycle 11: selecting OAuth shows fd-oauth-panel and fetches login command
+  // Cycle 11: selecting OAuth shows fd-oauth-panel
   it('should show fd-oauth-panel when OAuth mode is selected', () => {
     // Arrange
-    const { fixture, httpMock } = setup();
+    const { fixture } = setup();
     fixture.detectChanges();
 
     // Act
@@ -323,15 +327,12 @@ describe('SetupAuthStepComponent', () => {
     // Assert
     const panel = el.querySelector('fd-oauth-panel');
     expect(panel).toBeTruthy();
-
-    // Cleanup — fetchLoginCommand fires
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
   });
 
   // Cycle 12: Next button enabled immediately after selecting OAuth mode
   it('should enable Next button when OAuth mode is selected', () => {
     // Arrange
-    const { fixture, httpMock } = setup();
+    const { fixture } = setup();
     fixture.detectChanges();
 
     // Act
@@ -343,24 +344,17 @@ describe('SetupAuthStepComponent', () => {
     // Assert
     const nextButton = el.querySelector('button[class*="next-btn"]') as HTMLButtonElement;
     expect(nextButton.disabled).toBe(false);
-
-    // Cleanup
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
   });
 
   // Cycle 13: shows non-blocking warning note when OAuth status is not Present
   it('should show the not-logged-in note when OAuth status is NotConfigured', () => {
     // Arrange
-    const { fixture, httpMock } = setup();
+    const { fixture } = setup();
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
     const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
     radios[1].click();
-    fixture.detectChanges();
-
-    // Flush login command
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
     fixture.detectChanges();
 
     // Assert
@@ -371,16 +365,13 @@ describe('SetupAuthStepComponent', () => {
   // Cycle 14: no warning note when OAuth status is Present
   it('should not show the not-logged-in note when OAuth status is Present', () => {
     // Arrange
-    const { fixture, component, httpMock } = setup();
+    const { fixture, component } = setup();
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
     const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
     radios[1].click();
     fixture.detectChanges();
-
-    // Flush login command — simulate that after switching to OAuth, status becomes Present
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
 
     // Simulate settings loaded with Present status
     const service = component['_settingsService'];
@@ -399,7 +390,7 @@ describe('SetupAuthStepComponent', () => {
   // Cycle 15: emits complete on Next click in OAuth mode (no gating on status)
   it('should emit complete after clicking Next in OAuth mode', () => {
     // Arrange
-    const { fixture, component, httpMock } = setup();
+    const { fixture, component } = setup();
     fixture.detectChanges();
 
     let emitted = false;
@@ -408,9 +399,6 @@ describe('SetupAuthStepComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
     radios[1].click();
-    fixture.detectChanges();
-
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it' });
     fixture.detectChanges();
 
     // Act

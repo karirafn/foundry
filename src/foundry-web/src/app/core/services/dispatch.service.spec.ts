@@ -8,6 +8,8 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
   return {
     authMode: 'ApiKey',
     oAuthStatus: 'NotConfigured',
+    oAuthAccountEmail: null,
+    oAuthAccountOrgName: null,
     maxConcurrent: 3,
     timeoutMinutes: 60,
     expiresAt: null,

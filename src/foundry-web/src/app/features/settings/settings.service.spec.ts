@@ -5,30 +5,15 @@ import { WritableSignal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { vi } from 'vitest';
 import { SettingsService } from './settings.service';
-import { AuthSettings, ImageBuildStatus } from './settings.model';
+import { LoginSessionUpdate } from './settings.model';
 import { DispatchService } from '../../core/services/dispatch.service';
 import { SystemSignalRService } from '../../core/services/system-signalr.service';
-
-const mockAuthSettings: AuthSettings = {
-  mode: 'api_key',
-  apiKeyConfigured: false,
-  oauth: null,
-};
-
-const mockOAuthSettings: AuthSettings = {
-  mode: 'oauth',
-  apiKeyConfigured: false,
-  oauth: {
-    status: 'Present',
-    expiresAt: '2027-01-01T00:00:00Z',
-    subscriptionType: 'pro',
-  },
-};
 
 function createMockSignalRService() {
   return {
     reconnected: new Subject<void>(),
     dispatchStateChanged: new Subject<void>(),
+    loginSessionUpdate: new Subject<LoginSessionUpdate>(),
     notifications: [] as never,
   };
 }
@@ -57,6 +42,8 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
   return {
     authMode: 'ApiKey',
     oAuthStatus: 'NotConfigured',
+    oAuthAccountEmail: null,
+    oAuthAccountOrgName: null,
     maxConcurrent: 3,
     timeoutMinutes: 60,
     expiresAt: null,
@@ -1140,65 +1127,261 @@ describe('SettingsService', () => {
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
   });
 
-  // Login command signals: initial state
-  it('should start with null loginCommand, false loginCommandLoading, and null loginCommandError', () => {
+  // Login-flow signals: initial state
+  it('should start with null loginPhase, null loginUrl, null loginError, false codeSubmitting', () => {
     // Arrange / Act — (no action — testing initial state)
 
     // Assert
-    expect(service.loginCommand()).toBeNull();
-    expect(service.loginCommandLoading()).toBe(false);
-    expect(service.loginCommandError()).toBeNull();
+    expect(service.loginPhase()).toBeNull();
+    expect(service.loginUrl()).toBeNull();
+    expect(service.loginError()).toBeNull();
+    expect(service.codeSubmitting()).toBe(false);
   });
 
-  // fetchLoginCommand: GETs /api/settings/oauth/login-command
-  it('should GET /api/settings/oauth/login-command when fetchLoginCommand is called', () => {
+  // startLogin: POSTs /api/settings/oauth/login/start
+  it('should POST to /api/settings/oauth/login/start when startLogin is called', () => {
     // Arrange
     // (service initialized by test setup)
 
     // Act
-    service.fetchLoginCommand();
-    const req = httpMock.expectOne('/api/settings/oauth/login-command');
+    service.startLogin();
+    const req = httpMock.expectOne('/api/settings/oauth/login/start');
 
     // Assert
-    expect(req.request.method).toBe('GET');
-    req.flush({ command: 'docker run -it --rm claude /login' });
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toBeNull();
+    req.flush({ sessionId: 'session-1' }, { status: 202, statusText: 'Accepted' });
   });
 
-  it('should set loginCommandLoading to true while fetchLoginCommand is in flight', () => {
+  it('should set loginPhase to Starting optimistically when startLogin is called', () => {
     // Arrange
     // (service initialized by test setup)
 
     // Act
-    service.fetchLoginCommand();
+    service.startLogin();
 
     // Assert — before flush
-    expect(service.loginCommandLoading()).toBe(true);
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it --rm claude /login' });
+    expect(service.loginPhase()).toBe('Starting');
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'session-1' }, { status: 202, statusText: 'Accepted' });
   });
 
-  it('should set loginCommand and clear loginCommandLoading after fetchLoginCommand succeeds', () => {
+  it('should reset loginPhase to null and set startLoginError when startLogin fails', () => {
     // Arrange
-    service.fetchLoginCommand();
-    httpMock.expectOne('/api/settings/oauth/login-command').flush({ command: 'docker run -it --rm claude /login' });
-
-    // Assert
-    expect(service.loginCommand()).toBe('docker run -it --rm claude /login');
-    expect(service.loginCommandLoading()).toBe(false);
-    expect(service.loginCommandError()).toBeNull();
-  });
-
-  it('should set loginCommandError when fetchLoginCommand fails', () => {
-    // Arrange
-    service.fetchLoginCommand();
-    httpMock.expectOne('/api/settings/oauth/login-command').flush('Server Error', {
+    service.startLogin();
+    httpMock.expectOne('/api/settings/oauth/login/start').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
 
     // Assert
-    expect(service.loginCommandError()).not.toBeNull();
-    expect(service.loginCommandLoading()).toBe(false);
-    expect(service.loginCommand()).toBeNull();
+    expect(service.loginPhase()).toBeNull();
+    expect(service.startLoginError()).toBe('Failed to start login');
+  });
+
+
+  // submitLoginCode: POSTs /api/settings/oauth/login/code
+  it('should POST to /api/settings/oauth/login/code when submitLoginCode is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.submitLoginCode('my-code-123');
+    const req = httpMock.expectOne('/api/settings/oauth/login/code');
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ code: 'my-code-123' });
+    req.flush(null);
+  });
+
+  it('should set codeSubmitting to true and loginPhase to SigningIn optimistically when submitLoginCode is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.submitLoginCode('my-code-123');
+
+    // Assert — before flush
+    expect(service.codeSubmitting()).toBe(true);
+    expect(service.loginPhase()).toBe('SigningIn');
+    httpMock.expectOne('/api/settings/oauth/login/code').flush(null);
+  });
+
+
+});
+
+describe('SettingsService — SignalR login session', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  function setupWithSignalR() {
+    const mockSignalR = createMockSignalRService();
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsService,
+        DispatchService,
+        { provide: SystemSignalRService, useValue: mockSignalR },
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
+    });
+    return {
+      service: TestBed.inject(SettingsService),
+      httpMock: TestBed.inject(HttpTestingController),
+      mockSignalR,
+    };
+  }
+
+  // Cycle: SignalR WaitingForAuthorization update sets loginPhase and loginUrl
+  it('should set loginPhase and loginUrl when SignalR pushes WaitingForAuthorization', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+
+    // Act
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 'session-1',
+      phase: 'WaitingForAuthorization',
+      url: 'https://claude.ai/oauth/authorize?q=abc',
+      failure: null,
+      message: null,
+    });
+
+    // Assert
+    expect(service.loginPhase()).toBe('WaitingForAuthorization');
+    expect(service.loginUrl()).toBe('https://claude.ai/oauth/authorize?q=abc');
+    httpMock.verify();
+  });
+
+  // Cycle: SignalR Failed sets loginError
+  it('should set loginError when SignalR pushes Failed with failure reason', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+
+    // Act
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 'session-1',
+      phase: 'Failed',
+      url: null,
+      failure: 'InvalidCode',
+      message: null,
+    });
+
+    // Assert
+    expect(service.loginPhase()).toBe('Failed');
+    expect(service.loginError()).toBe('InvalidCode');
+    httpMock.verify();
+  });
+
+  // Cycle: startLogin clears stale loginError and loginUrl before the POST
+  it('should clear loginUrl and loginError when startLogin is called', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 's1',
+      phase: 'Failed',
+      url: null,
+      failure: 'InvalidCode',
+      message: null,
+    });
+    expect(service.loginError()).toBe('InvalidCode');
+
+    // Act
+    service.startLogin();
+
+    // Assert
+    expect(service.loginUrl()).toBeNull();
+    expect(service.loginError()).toBeNull();
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'session-1' }, { status: 202, statusText: 'Accepted' });
+  });
+
+  // Cycle: SignalR Succeeded triggers a settings reload
+  it('should reload settings when SignalR pushes Succeeded', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+
+    // Act
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 'session-1',
+      phase: 'Succeeded',
+      url: null,
+      failure: null,
+      message: null,
+    });
+
+    // Assert — settings reload is triggered
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+  });
+
+  // Cycle: SignalR SigningIn clears codeSubmitting (because server confirmed it)
+  it('should clear codeSubmitting when SignalR pushes SigningIn', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+
+    // Act — submit code (sets codeSubmitting optimistically)
+    service.submitLoginCode('a-code');
+    httpMock.expectOne('/api/settings/oauth/login/code').flush(null);
+
+    // Simulate SignalR echo of SigningIn
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 'session-1',
+      phase: 'SigningIn',
+      url: null,
+      failure: null,
+      message: null,
+    });
+
+    // Assert
+    expect(service.codeSubmitting()).toBe(false);
+    expect(service.loginPhase()).toBe('SigningIn');
+    httpMock.verify();
+  });
+
+  // Cycle: submitLoginCode HTTP error reverts optimistic SigningIn phase
+  it('should revert loginPhase to WaitingForAuthorization when submitLoginCode HTTP call fails', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 's1',
+      phase: 'WaitingForAuthorization',
+      url: 'https://claude.ai',
+      failure: null,
+      message: null,
+    });
+
+    // Act
+    service.submitLoginCode('bad-code');
+    httpMock.expectOne('/api/settings/oauth/login/code').flush('Unprocessable', {
+      status: 422,
+      statusText: 'Unprocessable Entity',
+    });
+
+    // Assert
+    expect(service.codeSubmitting()).toBe(false);
+    expect(service.loginPhase()).toBe('WaitingForAuthorization');
+  });
+
+  // Cycle: cancelLogin clears all login signals
+  it('should clear all login phase signals when cancelLogin is called', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 's1',
+      phase: 'WaitingForAuthorization',
+      url: 'https://claude.ai/oauth/authorize?q=1',
+      failure: null,
+      message: null,
+    });
+    expect(service.loginPhase()).toBe('WaitingForAuthorization');
+    expect(service.loginUrl()).toBe('https://claude.ai/oauth/authorize?q=1');
+
+    // Act
+    service.cancelLogin();
+
+    // Assert
+    expect(service.loginPhase()).toBeNull();
+    expect(service.loginUrl()).toBeNull();
+    expect(service.loginError()).toBeNull();
+    expect(service.codeSubmitting()).toBe(false);
+    httpMock.verify();
   });
 });
 
