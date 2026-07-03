@@ -227,6 +227,9 @@ internal sealed class DockerWorkerOrchestrator(
 
         Pipe pipe = new();
 
+        // Link a CTS so we can signal the pump to stop when the consumer breaks early.
+        using CancellationTokenSource pumpCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
         Task copyTask = Task.Run(
             async () =>
             {
@@ -236,24 +239,52 @@ internal sealed class DockerWorkerOrchestrator(
                         Stream.Null,
                         pipe.Writer.AsStream(),
                         pipe.Writer.AsStream(),
-                        cancellationToken);
+                        pumpCts.Token);
+                }
+                catch (Exception ex) when (
+                    ex is EndOfStreamException
+                    || (ex is IOException ioEx
+                        && ioEx.Message.Contains("Unexpected end of stream", StringComparison.Ordinal)))
+                {
+                    // The Docker log stream terminates when the container exits. CopyOutputToAsync
+                    // raises an IOException or EndOfStreamException in that situation — treat it as
+                    // normal completion so copyTask never faults with an expected end-of-stream.
                 }
                 finally
                 {
                     await pipe.Writer.CompleteAsync();
                 }
             },
-            cancellationToken);
+            pumpCts.Token);
 
         using StreamReader reader = new(pipe.Reader.AsStream());
 
-        string? line;
-        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+        try
         {
-            yield return SecretRedactor.Redact(line);
+            string? line;
+            while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+            {
+                yield return SecretRedactor.Redact(line);
+            }
         }
-
-        await copyTask;
+        finally
+        {
+            // Cancel the pump on every exit path (normal completion, early break, exception).
+            // Then await copyTask so it is never orphaned and can never produce an unobserved
+            // faulted task. Swallow any residual exception — we are tearing down, and any error
+            // here (e.g. OCE from our own cancellation) is irrelevant to the consumer.
+#pragma warning disable CA1031 // Intentional catch-all in teardown: copyTask is a background pump being shut down; any exception here is irrelevant to the consumer
+            await pumpCts.CancelAsync();
+            try
+            {
+                await copyTask;
+            }
+            catch (Exception)
+            {
+                // Swallow — pump is being torn down; all exceptions here are expected.
+            }
+#pragma warning restore CA1031
+        }
     }
 
     public async Task<string?> GetLogsAsync(
