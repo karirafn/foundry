@@ -38,8 +38,13 @@ internal sealed class LoginSessionService(
     private TaskCompletionSource _urlScanComplete = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     // CTS that lets tests trigger CodeTimeout without waiting 10 minutes.
-    // Also used to link the WaitForLoginSuccessAsync log-scan so it cannot outlive the session.
+    // Owned exclusively by the background task RunSessionAsync — SubmitCodeAsync must NOT read it.
     private CancellationTokenSource? _sessionTimeoutCts;
+
+    // Self-owned CTS for the sign-in log scan. Set when SubmitCodeAsync begins the scan,
+    // cleared when done. Exposed for tests so they can trigger a sign-in timeout without
+    // waiting the full 2 minutes.
+    private CancellationTokenSource? _signInTimeoutCts;
 
     public bool IsLoginActive => _activeSession?.IsActive ?? false;
 
@@ -71,7 +76,20 @@ internal sealed class LoginSessionService(
             // prevent the task from being scheduled — the linked sessionTimeoutCts already
             // carries the host signal.
             _ = Task.Run(
-                () => RunSessionAsync(session, sessionTimeoutCts, cancellationToken),
+                async () =>
+                {
+                    try
+                    {
+                        await RunSessionAsync(session, sessionTimeoutCts, cancellationToken);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // Prevent the fire-and-forget task from faulting unobserved.
+                        // RunSessionAsync handles all expected exceptions internally; any
+                        // escape here is a programming error and must be logged.
+                        logger?.LogError(ex, "Unobserved exception escaped RunSessionAsync.");
+                    }
+                },
                 CancellationToken.None);
 
             return Task.FromResult(session.SessionId);
@@ -103,23 +121,25 @@ internal sealed class LoginSessionService(
 
         await TransitionAndBroadcastAsync(session, LoginPhase.SigningIn.Instance, cancellationToken);
 
+        // Self-owned sign-in scan CTS — decoupled from _sessionTimeoutCts so the background
+        // task can dispose _sessionTimeoutCts without racing with this method.
+        // NOT linked to cancellationToken here; linked below via linkedSignIn so we can
+        // distinguish "our timer fired" (CodeTimeout) from "host shutdown" (no broadcast).
+        using CancellationTokenSource signInCts = new();
+        signInCts.CancelAfter(LoginSessionOptions.SignInTimeout);
+        _signInTimeoutCts = signInCts;
+
+        // Link the scan token so host shutdown propagates into WaitForLoginSuccessAsync.
+        using CancellationTokenSource linkedSignIn =
+            CancellationTokenSource.CreateLinkedTokenSource(signInCts.Token, cancellationToken);
+
         bool commitSucceeded = false;
 
         try
         {
             await orchestrator.DeliverLoginCodeAsync(session.ContainerId, code, cancellationToken);
 
-            // Link the log scan to the session-timeout CTS so it cannot outlive the session.
-            CancellationToken scanToken;
-            lock (_sessionLock)
-            {
-                scanToken = _sessionTimeoutCts?.Token ?? cancellationToken;
-            }
-
-            using CancellationTokenSource linkedScan =
-                CancellationTokenSource.CreateLinkedTokenSource(scanToken, cancellationToken);
-
-            bool loginSuccessful = await WaitForLoginSuccessAsync(session.ContainerId, linkedScan.Token);
+            bool loginSuccessful = await WaitForLoginSuccessAsync(session.ContainerId, linkedSignIn.Token);
 
             if (!loginSuccessful)
             {
@@ -160,10 +180,29 @@ internal sealed class LoginSessionService(
                 new LoginPhase.Succeeded(identitySuccess.Value),
                 cancellationToken);
         }
+        catch (OperationCanceledException) when (signInCts.IsCancellationRequested
+                                                  && !cancellationToken.IsCancellationRequested)
+        {
+            // Sign-in-scan timeout fired (not host shutdown) — treat as CodeTimeout.
+            _signInTimeoutCts = null;
+            await FailSessionAsync(
+                session,
+                new LoginFailureReason.CodeTimeout("Sign-in timed out waiting for login confirmation."),
+                CancellationToken.None);
+            return Result.Ok();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Host shutdown — do NOT broadcast Failed; just clear the session and exit.
+            _signInTimeoutCts = null;
+            ClearActiveSession(session);
+            return Result.Ok();
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Log the real cause server-side; broadcast an opaque fixed message to clients.
             logger?.LogError(ex, "Unexpected error during login code submission.");
+            _signInTimeoutCts = null;
 
             // Only fail the session when the commit has NOT persisted — once committed, the
             // credential is durable and we must not flip observable state to Failed.
@@ -172,18 +211,22 @@ internal sealed class LoginSessionService(
                 await FailSessionAsync(
                     session,
                     new LoginFailureReason.Unknown(UnknownFailureClientMessage),
-                    cancellationToken);
+                    CancellationToken.None);
+            }
+            else
+            {
+                // Committed but post-commit work threw — clear the session so IsLoginActive
+                // does not stay true forever (the commit is durable; only in-memory state leaks).
+                ClearActiveSession(session);
             }
 
             return Result.Ok();
         }
 
+        _signInTimeoutCts = null;
         await TeardownContainerAsync(session.ContainerId, cancellationToken);
 
-        lock (_sessionLock)
-        {
-            _activeSession = null;
-        }
+        ClearActiveSession(session);
 
         return Result.Ok();
     }
@@ -201,6 +244,12 @@ internal sealed class LoginSessionService(
     /// without waiting the full 10 minutes. For tests only.
     /// </summary>
     internal void TriggerSessionTimeoutForTest() => _sessionTimeoutCts?.Cancel();
+
+    /// <summary>
+    /// Cancels the sign-in scan CTS immediately so SubmitCodeAsync fires CodeTimeout
+    /// without waiting the full 2 minutes. For tests only.
+    /// </summary>
+    internal void TriggerSignInTimeoutForTest() => _signInTimeoutCts?.Cancel();
 
     // Maximum length of a single log line accepted for URL extraction and broadcast.
     // Lines longer than this are skipped — a legitimate OAuth URL is never this long.
@@ -253,6 +302,12 @@ internal sealed class LoginSessionService(
             // Wait for code submission or session timeout
             await WaitForCodeOrTimeoutAsync(session, sessionTimeoutCts.Token, hostToken);
         }
+        catch (OperationCanceledException) when (hostToken.IsCancellationRequested)
+        {
+            // Host shutdown — exit cleanly without broadcasting Failed.
+            // _activeSession is cleared in the finally block only when we still own it.
+            _urlScanComplete.TrySetResult();
+        }
         catch (OperationCanceledException) when (sessionTimeoutCts.IsCancellationRequested
                                                   && !hostToken.IsCancellationRequested)
         {
@@ -275,13 +330,16 @@ internal sealed class LoginSessionService(
         }
         finally
         {
-            // EVERY exit path must clear _activeSession so IsLoginActive does not stay true.
-            // This covers host cancellation, session timeout, URL timeout, and unexpected errors.
             _urlScanComplete.TrySetResult();
 
-            lock (_sessionLock)
+            // The background task only clears _activeSession when it still owns the session
+            // (i.e. the phase is Starting or WaitingForAuthorization — before handoff).
+            // After SubmitCodeAsync transitions to SigningIn, ownership transfers and the
+            // background must NOT clear — SubmitCodeAsync is responsible from that point.
+            // FailSessionAsync already clears on its own terminal paths.
+            if (session.Phase is LoginPhase.Starting or LoginPhase.WaitingForAuthorization)
             {
-                _activeSession = null;
+                ClearActiveSession(session);
             }
 
             sessionTimeoutCts.Dispose();
@@ -410,8 +468,8 @@ internal sealed class LoginSessionService(
     /// Waits for the login success signal or "Invalid code" rejection in the log stream.
     /// Returns <c>true</c> when login succeeded (success signal seen AND container exit 0).
     /// Returns <c>false</c> when an "Invalid code" rejection is detected (CLI re-prompts;
-    /// the stream is cancelled via <paramref name="cancellationToken"/> which is linked to
-    /// the session-timeout CTS so the scan can never outlive the session).
+    /// the stream is cancelled via <paramref name="cancellationToken"/> which is the self-owned
+    /// sign-in CTS so the scan is bounded by <see cref="LoginSessionOptions.SignInTimeout"/>.
     /// </summary>
     private async Task<bool> WaitForLoginSuccessAsync(string containerId, CancellationToken cancellationToken)
     {
@@ -454,9 +512,22 @@ internal sealed class LoginSessionService(
         await TransitionAndBroadcastAsync(session, new LoginPhase.Failed(reason), cancellationToken);
         await TeardownContainerAsync(session.ContainerId, cancellationToken);
 
+        ClearActiveSession(session);
+    }
+
+    /// <summary>
+    /// Clears <see cref="_activeSession"/> only when it still refers to <paramref name="session"/>.
+    /// Guards against a race where a new session has been started and we would incorrectly
+    /// clear the new session instead.
+    /// </summary>
+    private void ClearActiveSession(LoginSession session)
+    {
         lock (_sessionLock)
         {
-            _activeSession = null;
+            if (ReferenceEquals(_activeSession, session))
+            {
+                _activeSession = null;
+            }
         }
     }
 

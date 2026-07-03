@@ -30,6 +30,9 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
     // When true, StreamLogsAsync yields _logLines then blocks until cancellation (does not close).
     private bool _blockAfterLines;
 
+    // Gate for DeliverLoginCodeAsync — when set, Deliver blocks until the TCS is completed.
+    private TaskCompletionSource? _deliverGate;
+
     public int DeliverLoginCodeCallCount { get; private set; }
     public int StopContainerCallCount { get; private set; }
     public int RemoveContainerCallCount { get; private set; }
@@ -86,6 +89,24 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
         _blockAfterLines = true;
         return this;
     }
+
+    /// <summary>
+    /// Arms a gate that makes <see cref="DeliverLoginCodeAsync"/> block until
+    /// <see cref="ReleaseDeliver"/> is called. Use this to deterministically reproduce the
+    /// race where the background task disposes <c>_sessionTimeoutCts</c> while
+    /// <c>SubmitCodeAsync</c> is still inside <c>DeliverLoginCodeAsync</c>.
+    /// </summary>
+    public FakeWorkerOrchestrator WithBlockingDeliver()
+    {
+        _deliverGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        return this;
+    }
+
+    /// <summary>
+    /// Releases the gate armed by <see cref="WithBlockingDeliver"/>, allowing
+    /// <see cref="DeliverLoginCodeAsync"/> to return.
+    /// </summary>
+    public void ReleaseDeliver() => _deliverGate?.TrySetResult();
 
     public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
@@ -144,11 +165,15 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
         CancellationToken cancellationToken)
         => Task.FromResult(_startLoginResult);
 
-    public Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
+    public async Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
     {
         DeliverLoginCodeCallCount++;
         LastDeliveredCode = code;
-        return Task.CompletedTask;
+
+        if (_deliverGate is not null)
+        {
+            await _deliverGate.Task.WaitAsync(cancellationToken);
+        }
     }
 
     public Task<Result<AccountIdentity>> GetAuthStatusAsync(string containerId, CancellationToken cancellationToken)

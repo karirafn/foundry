@@ -18,4 +18,11 @@ internal static class LoginSessionOptions
     /// If no code is submitted within this window the session fails with <see cref="LoginFailureReason.CodeTimeout"/>.
     /// </summary>
     internal static readonly TimeSpan SessionTimeout = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Maximum time to wait for the container to confirm login success after the code is delivered.
+    /// Bounds the post-code token-exchange log scan so it cannot outlive the session indefinitely.
+    /// Mapped to <see cref="LoginFailureReason.CodeTimeout"/> when it fires.
+    /// </summary>
+    internal static readonly TimeSpan SignInTimeout = TimeSpan.FromMinutes(2);
 }

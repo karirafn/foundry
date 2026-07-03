@@ -291,16 +291,10 @@ public sealed class SubmitCodeAsync
         failure.Error.Code.ShouldBe(LoginErrors.NotAcceptingCodeCode);
 
         // Cleanup — cancel the first submit (it's blocked waiting for the log stream).
-        // TriggerSessionTimeoutForTest cancels the session CTS which propagates cancellation
-        // into the first SubmitCodeAsync; ignore the resulting OperationCanceledException.
-        sut.TriggerSessionTimeoutForTest();
-        try
-        {
-            await firstSubmit;
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected — the session-timeout CTS fired while the stream scan was in progress.
-        }
+        // TriggerSignInTimeoutForTest cancels the sign-in scan CTS, which propagates
+        // cancellation into the blocking WaitForLoginSuccessAsync call.
+        // The resulting CodeTimeout failure is handled cleanly inside SubmitCodeAsync.
+        sut.TriggerSignInTimeoutForTest();
+        await firstSubmit;
     }
 }
