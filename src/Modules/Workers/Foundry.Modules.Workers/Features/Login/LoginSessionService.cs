@@ -22,59 +22,59 @@ internal sealed class LoginSessionService(
 
     private LoginSession? _activeSession;
 
+    // Signals when the URL-scan phase is complete (URL found, UrlTimeout, or exception).
+    // Exposed for tests so they can await the session reaching a stable phase before asserting.
+    private TaskCompletionSource _urlScanComplete = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    // CTS that lets tests trigger CodeTimeout without waiting 10 minutes.
+    private CancellationTokenSource? _sessionTimeoutCts;
+
     public bool IsLoginActive => _activeSession?.IsActive ?? false;
 
     /// <summary>
-    /// Starts a new login session, or returns the existing one if already active (idempotent).
-    /// Scans container log output for the OAuth URL and transitions the session to
-    /// <see cref="LoginPhase.WaitingForAuthorization"/> when found.
+    /// Starts a new login session or returns the existing session id when one is already active (idempotent).
+    /// Returns immediately — container start, URL scan, and timeouts run in a background task.
+    /// The URL and result are delivered later via SignalR.
     /// </summary>
-    internal async Task<LoginSession> StartAsync(CancellationToken cancellationToken)
+    internal Task<Guid> StartAsync(CancellationToken cancellationToken)
     {
         if (_activeSession is not null)
         {
-            return _activeSession;
+            return Task.FromResult(_activeSession.SessionId);
         }
 
-        Result<ContainerId> startResult = await orchestrator.StartLoginContainerAsync(
-            new LoginContainerSpec(TimeoutSeconds: (int)LoginSessionOptions.SessionTimeout.TotalSeconds),
-            cancellationToken);
+        _urlScanComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        string containerId = startResult is Result<ContainerId>.Success s
-            ? s.Value.Value
-            : string.Empty;
-
-        LoginSession session = LoginSession.Create(containerId);
+        LoginSession session = LoginSession.Create(containerId: string.Empty);
         _activeSession = session;
 
-        await TransitionAndBroadcastAsync(session, LoginPhase.Starting.Instance, cancellationToken);
+        CancellationTokenSource sessionTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        sessionTimeoutCts.CancelAfter(LoginSessionOptions.SessionTimeout);
+        _sessionTimeoutCts = sessionTimeoutCts;
 
-        await ScanForUrlAsync(session, cancellationToken);
+        // Fire-and-forget; errors are handled inside RunSessionAsync
+        _ = Task.Run(
+            () => RunSessionAsync(session, sessionTimeoutCts.Token, cancellationToken),
+            cancellationToken);
 
-        // If the log stream exhausted without a URL, the session never transitioned
-        // out of Starting — treat this as a UrlTimeout failure
-        if (session.Phase is LoginPhase.Starting)
-        {
-            await FailSessionAsync(
-                session,
-                new LoginFailureReason.UrlTimeout("No authorization URL received from the login container."),
-                cancellationToken);
-        }
-
-        return session;
+        return Task.FromResult(session.SessionId);
     }
 
     /// <summary>
-    /// Submits the operator's code to the active login session.
-    /// Transitions through <see cref="LoginPhase.SigningIn"/> and then to
-    /// <see cref="LoginPhase.Succeeded"/> or <see cref="LoginPhase.Failed"/>.
-    /// On failure, teardown is performed and no DB mutation occurs.
+    /// Submits the operator's authorization code to the active login session.
+    /// Returns a failure result if there is no session or the session is not in a state
+    /// that accepts a code (i.e. not <see cref="LoginPhase.WaitingForAuthorization"/>).
     /// </summary>
-    internal async Task SubmitCodeAsync(string code, CancellationToken cancellationToken)
+    internal async Task<Result> SubmitCodeAsync(string code, CancellationToken cancellationToken)
     {
         if (_activeSession is null)
         {
-            return;
+            return Result.Fail(LoginErrors.NoActiveSession);
+        }
+
+        if (_activeSession.Phase is not LoginPhase.WaitingForAuthorization)
+        {
+            return Result.Fail(LoginErrors.NotAcceptingCode);
         }
 
         LoginSession session = _activeSession;
@@ -90,7 +90,7 @@ internal sealed class LoginSessionService(
             if (!loginSuccessful)
             {
                 await FailSessionAsync(session, new LoginFailureReason.InvalidCode(), cancellationToken);
-                return;
+                return Result.Ok();
             }
 
             // Capture identity BEFORE teardown — the container must still be up for auth status exec
@@ -108,7 +108,7 @@ internal sealed class LoginSessionService(
                     description);
 
                 await FailSessionAsync(session, new LoginFailureReason.Unknown(description), cancellationToken);
-                return;
+                return Result.Ok();
             }
 
             await successCommitter.CommitAsync(identitySuccess.Value, cancellationToken);
@@ -122,29 +122,154 @@ internal sealed class LoginSessionService(
         {
             logger?.LogError(ex, "Unexpected error during login code submission.");
             await FailSessionAsync(session, new LoginFailureReason.Unknown(ex.Message), cancellationToken);
-            return;
+            return Result.Ok();
         }
 
         await TeardownContainerAsync(session.ContainerId, cancellationToken);
         _activeSession = null;
+
+        return Result.Ok();
     }
 
-    private async Task ScanForUrlAsync(LoginSession session, CancellationToken cancellationToken)
-    {
-        await foreach (string line in orchestrator
-            .StreamLogsAsync(session.ContainerId, cancellationToken)
-            .ConfigureAwait(false))
-        {
-            string? url = AuthorizationUrlExtractor.Extract(line);
+    /// <summary>
+    /// Waits until the URL-scan phase has completed (URL found, UrlTimeout, or unexpected failure).
+    /// After this task completes, the session is either in <see cref="LoginPhase.WaitingForAuthorization"/>
+    /// or in a terminal <see cref="LoginPhase.Failed"/> state.
+    /// Exposed for tests — the URL and result arrive via SignalR in production.
+    /// </summary>
+    internal Task WaitForStartCompletedAsync() => _urlScanComplete.Task;
 
-            if (url is not null)
+    /// <summary>
+    /// Cancels the session-timeout CTS immediately so the background task fires CodeTimeout
+    /// without waiting the full 10 minutes. For tests only.
+    /// </summary>
+    internal void TriggerSessionTimeoutForTest() => _sessionTimeoutCts?.Cancel();
+
+    /// <summary>
+    /// The current session phase, or <c>null</c> when no session exists.
+    /// Exposed for test observation only.
+    /// </summary>
+    internal LoginPhase? ActiveSessionPhaseForTest => _activeSession?.Phase;
+
+    private async Task RunSessionAsync(
+        LoginSession session,
+        CancellationToken sessionTimeoutToken,
+        CancellationToken hostToken)
+    {
+        try
+        {
+            Result<ContainerId> startResult = await orchestrator.StartLoginContainerAsync(
+                new LoginContainerSpec(TimeoutSeconds: (int)LoginSessionOptions.SessionTimeout.TotalSeconds),
+                hostToken);
+
+            string containerId = startResult is Result<ContainerId>.Success s
+                ? s.Value.Value
+                : string.Empty;
+
+            // Patch the session's container ID now that we have it
+            session.SetContainerId(containerId);
+
+            await TransitionAndBroadcastAsync(session, LoginPhase.Starting.Instance, hostToken);
+
+            // Scan for the OAuth URL with the URL-specific timeout
+            await ScanForUrlAsync(session, sessionTimeoutToken, hostToken);
+
+            if (session.Phase is LoginPhase.Starting)
             {
-                await TransitionAndBroadcastAsync(
+                // Log stream exhausted without a URL — UrlTimeout
+                await FailSessionAsync(
                     session,
-                    new LoginPhase.WaitingForAuthorization(url),
-                    cancellationToken);
+                    new LoginFailureReason.UrlTimeout("No authorization URL received from the login container."),
+                    hostToken);
+
+                _urlScanComplete.TrySetResult();
                 return;
             }
+
+            // URL received — signal tests that startup phase is complete
+            _urlScanComplete.TrySetResult();
+
+            // Wait for code submission or session timeout
+            await WaitForCodeOrTimeoutAsync(session, sessionTimeoutToken, hostToken);
+        }
+        catch (OperationCanceledException) when (sessionTimeoutToken.IsCancellationRequested
+                                                  && !hostToken.IsCancellationRequested)
+        {
+            // Session-level timeout fired (not host shutdown) — fail with CodeTimeout
+            _urlScanComplete.TrySetResult();
+            await FailSessionAsync(
+                session,
+                new LoginFailureReason.CodeTimeout("Session timed out waiting for authorization code."),
+                hostToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger?.LogError(ex, "Unexpected error in login session background task.");
+            _urlScanComplete.TrySetException(ex);
+            await FailSessionAsync(session, new LoginFailureReason.Unknown(ex.Message), CancellationToken.None);
+        }
+        finally
+        {
+            _urlScanComplete.TrySetResult();
+            _sessionTimeoutCts?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Holds the background task in the URL-received state until the session leaves
+    /// <see cref="LoginPhase.WaitingForAuthorization"/> (code submitted) or the session timeout fires.
+    /// </summary>
+    private static async Task WaitForCodeOrTimeoutAsync(
+        LoginSession session,
+        CancellationToken sessionTimeoutToken,
+        CancellationToken hostToken)
+    {
+        // Poll at low cost until the phase changes (SubmitCodeAsync transitions out of WaitingForAuthorization)
+        // or until the session-timeout CTS fires.
+        using PeriodicTimer timer = new(TimeSpan.FromMilliseconds(100));
+
+        while (await timer.WaitForNextTickAsync(sessionTimeoutToken))
+        {
+            if (session.Phase is not LoginPhase.WaitingForAuthorization)
+            {
+                // Code was submitted — SubmitCodeAsync owns the rest
+                return;
+            }
+        }
+    }
+
+    private async Task ScanForUrlAsync(
+        LoginSession session,
+        CancellationToken sessionTimeoutToken,
+        CancellationToken hostToken)
+    {
+        using CancellationTokenSource urlTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
+            sessionTimeoutToken,
+            hostToken);
+        urlTimeoutCts.CancelAfter(LoginSessionOptions.UrlTimeout);
+
+        try
+        {
+            await foreach (string line in orchestrator
+                .StreamLogsAsync(session.ContainerId, urlTimeoutCts.Token)
+                .ConfigureAwait(false))
+            {
+                string? url = AuthorizationUrlExtractor.Extract(line);
+
+                if (url is not null)
+                {
+                    await TransitionAndBroadcastAsync(
+                        session,
+                        new LoginPhase.WaitingForAuthorization(url),
+                        hostToken);
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (urlTimeoutCts.IsCancellationRequested
+                                                  && !hostToken.IsCancellationRequested)
+        {
+            // URL timeout fired — session stays in Starting; caller handles this
         }
     }
 

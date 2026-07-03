@@ -1,0 +1,58 @@
+using Foundry.Shared;
+
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Routing;
+
+namespace Foundry.Modules.Workers.Features.Login;
+
+/// <summary>
+/// POST /api/settings/oauth/login/code
+/// Submits the operator's authorization code to the active login session.
+/// Returns 400 when the code is empty/whitespace, 422 when there is no active session
+/// or the session is not in a state that accepts a code, 200 on acceptance.
+/// </summary>
+internal static class SubmitLoginCode
+{
+    internal sealed record Request(string Code);
+
+    internal static class Endpoint
+    {
+        internal static void Map(RouteGroupBuilder group)
+        {
+            group.MapPost("/code", static async (
+                    Request request,
+                    LoginSessionService service,
+                    CancellationToken cancellationToken) =>
+                await HandleAsync(request, service, cancellationToken))
+                .WithName("SubmitOAuthLoginCode")
+                .WithSummary("Submits the authorization code to the active login session")
+                .Produces(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        }
+
+        internal static async Task<Results<Ok, BadRequest<string>, UnprocessableEntity<string>>> HandleAsync(
+            Request request,
+            LoginSessionService service,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(request.Code))
+            {
+                return TypedResults.BadRequest("Authorization code must not be empty.");
+            }
+
+            Result submitResult = await service.SubmitCodeAsync(request.Code, cancellationToken);
+
+            return submitResult.Match<Results<Ok, BadRequest<string>, UnprocessableEntity<string>>>(
+                () => TypedResults.Ok(),
+                error => error.Code switch
+                {
+                    LoginErrors.NoActiveSessionCode => TypedResults.UnprocessableEntity(error.Message),
+                    LoginErrors.NotAcceptingCodeCode => TypedResults.UnprocessableEntity(error.Message),
+                    _ => TypedResults.UnprocessableEntity(error.Message),
+                });
+        }
+    }
+}

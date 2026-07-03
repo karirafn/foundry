@@ -33,6 +33,7 @@ public sealed class BroadcastPhaseTransitions
 
         // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Assert
         broadcaster.Captured.ShouldContain(u => u.Phase == LoginPhaseDiscriminator.Starting);
@@ -50,6 +51,7 @@ public sealed class BroadcastPhaseTransitions
 
         // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Assert
         broadcaster.Captured.ShouldContain(u => u.Phase == LoginPhaseDiscriminator.WaitingForAuthorization);
@@ -68,6 +70,7 @@ public sealed class BroadcastPhaseTransitions
 
         // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Assert
         broadcaster.Captured.ShouldContain(u => u.Phase == LoginPhaseDiscriminator.Failed);
@@ -84,6 +87,7 @@ public sealed class BroadcastPhaseTransitions
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Act
         await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
@@ -103,6 +107,7 @@ public sealed class BroadcastPhaseTransitions
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Act
         await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
@@ -122,6 +127,7 @@ public sealed class BroadcastPhaseTransitions
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Act
         await sut.SubmitCodeAsync("bad-code", TestContext.Current.CancellationToken);
@@ -129,7 +135,7 @@ public sealed class BroadcastPhaseTransitions
         // Assert
         broadcaster.Captured.ShouldContain(u => u.Phase == LoginPhaseDiscriminator.Failed);
         LoginSessionUpdate failed = broadcaster.Captured
-            .Single(u => u.Phase == LoginPhaseDiscriminator.Failed);
+            .Last(u => u.Phase == LoginPhaseDiscriminator.Failed);
         failed.FailureReason.ShouldBe(LoginFailureDiscriminator.InvalidCode);
     }
 

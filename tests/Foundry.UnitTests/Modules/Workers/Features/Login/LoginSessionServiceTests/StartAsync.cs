@@ -20,10 +20,12 @@ public sealed class StartAsync
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
-        LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Assert
-        session.Phase.ShouldBeOfType<LoginPhase.WaitingForAuthorization>()
+        sut.ActiveSessionPhaseForTest
+            .ShouldBeOfType<LoginPhase.WaitingForAuthorization>()
             .Url.ShouldBe(oauthUrl);
     }
 
@@ -39,6 +41,7 @@ public sealed class StartAsync
 
         // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeTrue();
@@ -52,11 +55,12 @@ public sealed class StartAsync
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
-        LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Assert
-        LoginPhase.Failed failed = session.Phase.ShouldBeOfType<LoginPhase.Failed>();
-        failed.Reason.ShouldBeOfType<LoginFailureReason.UrlTimeout>();
+        sut.ActiveSessionPhaseForTest.ShouldBeNull();
+        ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
     }
 
     [Fact]
@@ -68,13 +72,14 @@ public sealed class StartAsync
 
         // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task WhenCalledTwice_ReturnsSameSession()
+    public async Task WhenCalledTwice_ReturnsSameSessionId()
     {
         // Arrange
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
@@ -84,10 +89,44 @@ public sealed class StartAsync
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
-        LoginSession first = await sut.StartAsync(TestContext.Current.CancellationToken);
-        LoginSession second = await sut.StartAsync(TestContext.Current.CancellationToken);
+        Guid first = await sut.StartAsync(TestContext.Current.CancellationToken);
+        Guid second = await sut.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        second.SessionId.ShouldBe(first.SessionId);
+        second.ShouldBe(first);
+    }
+
+    [Fact]
+    public async Task StartAsync_ReturnsNonEmptySessionId()
+    {
+        // Arrange
+        string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
+        string logLine = $"If the browser didn't open, visit: {oauthUrl}";
+
+        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
+
+        // Act
+        Guid sessionId = await sut.StartAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        sessionId.ShouldNotBe(Guid.Empty);
+    }
+
+    [Fact]
+    public async Task StartAsync_ReturnsImmediately_BeforeUrlScanCompletes()
+    {
+        // Arrange — orchestrator with a URL so background task has work to do
+        string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
+        string logLine = $"If the browser didn't open, visit: {oauthUrl}";
+
+        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
+
+        // Act — StartAsync should return without waiting for the URL scan
+        Guid sessionId = await sut.StartAsync(TestContext.Current.CancellationToken);
+
+        // Assert — we have a session id immediately, before awaiting the background task
+        sessionId.ShouldNotBe(Guid.Empty);
     }
 }

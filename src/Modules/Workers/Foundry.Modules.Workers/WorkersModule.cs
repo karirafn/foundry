@@ -65,6 +65,7 @@ public static class WorkersModule
     public static IEndpointRouteBuilder MapWorkersEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapWorkerEndpoints();
+        app.MapLoginEndpoints();
         return app;
     }
 }

@@ -32,6 +32,7 @@ public sealed class IsLoginActive
         FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
         // Act
         bool result = ((ILoginSessionState)sut).IsLoginActive;
@@ -43,14 +44,16 @@ public sealed class IsLoginActive
     [Fact]
     public async Task WhenSessionTransitionedToFailed_ReturnsFalse()
     {
-        // Arrange — use a URL so StartAsync transitions to WaitingForAuthorization (active)
+        // Arrange — session transitions to WaitingForAuthorization then we trigger timeout
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
-        LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
-        // Act — simulate a terminal transition (e.g. code timeout)
-        session.Transition(new LoginPhase.Failed(new LoginFailureReason.CodeTimeout("Timed out waiting for code")));
+        // Act — trigger session timeout to get to Failed state
+        sut.TriggerSessionTimeoutForTest();
+        await Task.Delay(TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken);
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
@@ -61,12 +64,17 @@ public sealed class IsLoginActive
     {
         // Arrange
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
-        FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
+        string logLine = $"If the browser didn't open, visit: {oauthUrl}";
+        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        orchestrator.WithExitedContainer(exitCode: 0);
+        AccountIdentity identity = new("user@example.com", "Example Org", "pro");
+        orchestrator.WithAuthStatusIdentity(identity);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
-        LoginSession session = await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
 
-        // Act — simulate successful login completion
-        session.Transition(new LoginPhase.Succeeded(new AccountIdentity("user@example.com", "Example Org", "pro")));
+        // Act — submit code to complete and reach Succeeded
+        await sut.SubmitCodeAsync("any-code", TestContext.Current.CancellationToken);
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
