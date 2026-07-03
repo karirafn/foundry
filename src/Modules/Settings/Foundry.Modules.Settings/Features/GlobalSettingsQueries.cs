@@ -14,10 +14,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
-        // GetSettingsAsync via IGlobalSettingsQueries has no access to ICredentialVolumeReader
-        // (it is a cross-module query interface). Credential status is not surfaced here;
-        // callers that need honest OAuthStatus use the GetSettings query handler directly.
-        return settings is null ? null : GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+        return settings is null ? null : GlobalSettingsMapper.ToSummary(settings);
     }
 
     public async Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(

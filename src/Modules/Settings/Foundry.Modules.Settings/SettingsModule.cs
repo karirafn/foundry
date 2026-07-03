@@ -1,7 +1,6 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Features;
-using Foundry.Modules.Settings.Infrastructure;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;
@@ -14,7 +13,6 @@ public static class SettingsModule
     public static IServiceCollection AddSettingsModule(this IServiceCollection services)
     {
         services.AddScoped<IGlobalSettingsQueries, GlobalSettingsQueries>();
-        services.AddScoped<ICredentialVolumeReader, CredentialVolumeReader>();
         services.AddHostedService<SettingsSeeder>();
 
         services.AddQueryHandler<GetSettings.Query, GlobalSettingsSummary, GetSettings.Handler>();

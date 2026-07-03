@@ -31,7 +31,7 @@ internal static class PauseDispatch
             settings.PauseDispatch();
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+            return GlobalSettingsMapper.ToSummary(settings);
         }
     }
 

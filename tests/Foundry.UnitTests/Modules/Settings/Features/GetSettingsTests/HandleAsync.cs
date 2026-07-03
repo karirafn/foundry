@@ -52,8 +52,7 @@ public sealed class HandleAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        InMemoryCredentialVolumeReader reader = new(new CredentialVolumeStatus(false, null, null));
-        GetSettings.Handler sut = new(dbContext, reader);
+        GetSettings.Handler sut = new(dbContext);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -72,21 +71,19 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenSettingsExistWithOAuthModeAndCredentialPresent_ReturnsPresent()
+    public async Task WhenOAuthModeAndCommittedAccountPresent_ReturnsPresent()
     {
         // Arrange
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.SetAuthMode(new AuthMode.OAuth("pro"));
+            settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        DateTimeOffset expiry = new(2027, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        InMemoryCredentialVolumeReader reader = new(new CredentialVolumeStatus(true, expiry, "max"));
-        GetSettings.Handler sut = new(dbContext, reader);
+        GetSettings.Handler sut = new(dbContext);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -98,12 +95,12 @@ public sealed class HandleAsync : IAsyncDisposable
         success.Value.ShouldSatisfyAllConditions(
             () => success.Value.AuthMode.ShouldBe("OAuth"),
             () => success.Value.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusPresent),
-            () => success.Value.ExpiresAt.ShouldBe(expiry),
-            () => success.Value.SubscriptionType.ShouldBe("max"));
+            () => success.Value.ExpiresAt.ShouldBeNull(),
+            () => success.Value.SubscriptionType.ShouldBe("pro"));
     }
 
     [Fact]
-    public async Task WhenOAuthModeAndCredentialAbsent_ReturnsReLoginNeeded()
+    public async Task WhenOAuthModeAndNoCommittedAccount_ReturnsReLoginNeeded()
     {
         // Arrange
         await using (FoundryDbContext seedDb = CreateDbContext())
@@ -115,8 +112,7 @@ public sealed class HandleAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        InMemoryCredentialVolumeReader reader = new(new CredentialVolumeStatus(false, null, null));
-        GetSettings.Handler sut = new(dbContext, reader);
+        GetSettings.Handler sut = new(dbContext);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -135,15 +131,14 @@ public sealed class HandleAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.SetAuthMode(new AuthMode.OAuth("pro"));
+            settings.SetOAuthAccountIdentity("user@example.com", "MyOrg", "pro");
             settings.PauseForAuthInvalid();
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        InMemoryCredentialVolumeReader reader = new(new CredentialVolumeStatus(true, null, "pro"));
-        GetSettings.Handler sut = new(dbContext, reader);
+        GetSettings.Handler sut = new(dbContext);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -160,8 +155,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        InMemoryCredentialVolumeReader reader = new(new CredentialVolumeStatus(false, null, null));
-        GetSettings.Handler sut = new(dbContext, reader);
+        GetSettings.Handler sut = new(dbContext);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -172,10 +166,4 @@ public sealed class HandleAsync : IAsyncDisposable
         Result<GlobalSettingsSummary>.Failure failure = result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
         failure.Error.Code.ShouldBe(SettingsErrors.NotFoundCode);
     }
-}
-
-internal sealed class InMemoryCredentialVolumeReader(CredentialVolumeStatus status) : ICredentialVolumeReader
-{
-    public Task<CredentialVolumeStatus> ReadStatusAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(status);
 }

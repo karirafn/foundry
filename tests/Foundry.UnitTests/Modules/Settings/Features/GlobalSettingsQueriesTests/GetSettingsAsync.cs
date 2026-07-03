@@ -82,9 +82,7 @@ public sealed class GetSettingsAsync : IAsyncDisposable
     [Fact]
     public async Task WhenOAuthSettings_ReturnsOAuthAuthModeWithReLoginNeededStatus()
     {
-        // Arrange
-        // GlobalSettingsQueries.GetSettingsAsync has no access to ICredentialVolumeReader
-        // so OAuth mode without a credential reader always returns ReLoginNeeded.
+        // Arrange — OAuth mode without a committed account email returns ReLoginNeeded.
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();

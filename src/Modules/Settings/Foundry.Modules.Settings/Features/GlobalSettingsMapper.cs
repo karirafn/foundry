@@ -9,7 +9,7 @@ internal static class GlobalSettingsMapper
     internal const string OAuthStatusPresent = "Present";
     internal const string OAuthStatusReLoginNeeded = "ReLoginNeeded";
 
-    internal static GlobalSettingsSummary ToSummary(GlobalSettings settings, CredentialVolumeStatus? credentialStatus)
+    internal static GlobalSettingsSummary ToSummary(GlobalSettings settings)
     {
         string authModeName = settings.AuthMode switch
         {
@@ -29,17 +29,15 @@ internal static class GlobalSettingsMapper
             ? failed.ErrorTail
             : null;
 
-        string oauthStatus = ComputeOAuthStatus(settings, credentialStatus);
-        DateTimeOffset? expiresAt = credentialStatus?.ExpiresAt;
-        string? subscriptionType = credentialStatus?.SubscriptionType
-            ?? (settings.AuthMode is AuthMode.OAuth oauth ? oauth.SubscriptionType : null);
+        string oauthStatus = ComputeOAuthStatus(settings);
+        string? subscriptionType = settings.AuthMode is AuthMode.OAuth oauth ? oauth.SubscriptionType : null;
 
         return new GlobalSettingsSummary(
             authModeName,
             settings.MaxConcurrent,
             settings.TimeoutMinutes,
             oauthStatus,
-            expiresAt,
+            null,
             subscriptionType,
             settings.OAuthAccountEmail,
             settings.OAuthAccountOrgName,
@@ -60,7 +58,7 @@ internal static class GlobalSettingsMapper
             settings.LastImageBuiltAt is not null);
     }
 
-    private static string ComputeOAuthStatus(GlobalSettings settings, CredentialVolumeStatus? credentialStatus)
+    private static string ComputeOAuthStatus(GlobalSettings settings)
     {
         if (settings.AuthMode is not AuthMode.OAuth)
         {
@@ -72,11 +70,8 @@ internal static class GlobalSettingsMapper
             return OAuthStatusReLoginNeeded;
         }
 
-        if (credentialStatus is null || !credentialStatus.Present)
-        {
-            return OAuthStatusReLoginNeeded;
-        }
-
-        return OAuthStatusPresent;
+        return string.IsNullOrEmpty(settings.OAuthAccountEmail)
+            ? OAuthStatusReLoginNeeded
+            : OAuthStatusPresent;
     }
 }

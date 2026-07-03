@@ -56,7 +56,7 @@ internal static class UpdateWorkerLimits
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+            return GlobalSettingsMapper.ToSummary(settings);
         }
     }
 

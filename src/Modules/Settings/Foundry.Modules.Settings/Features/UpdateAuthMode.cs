@@ -63,7 +63,7 @@ internal static class UpdateAuthMode
             settings.SetAuthMode(mode);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            GlobalSettingsSummary summary = GlobalSettingsMapper.ToSummary(settings, credentialStatus: null);
+            GlobalSettingsSummary summary = GlobalSettingsMapper.ToSummary(settings);
             return new Response(summary.AuthMode, summary.MaxConcurrent, summary.TimeoutMinutes);
         }
     }
