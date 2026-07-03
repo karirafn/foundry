@@ -254,6 +254,12 @@
     color: var(--fd-text-secondary);
     font-size: 0.875rem;
     padding: var(--fd-spacing-md);
+
+    &--empty {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
   }
 
   &__switch-error {

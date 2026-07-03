@@ -40,15 +40,14 @@
   }
 
   &__rows {
-    display: flex;
-    flex-direction: column;
-    gap: var(--fd-spacing-sm);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: var(--fd-spacing-xs) var(--fd-spacing-md);
   }
 
   &__row {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
+    display: contents;
   }
 
   &__row-label {
@@ -62,12 +61,7 @@
   &__row-value {
     color: var(--fd-text-primary);
     font-size: 0.875rem;
-  }
-
-  &__hint {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-    margin: 0;
+    overflow-wrap: anywhere;
   }
 
   &__message {
@@ -107,6 +101,9 @@
 
   &__switch-btn {
     align-self: flex-start;
+    // Match the save-button separation used across the other settings cards
+    // (form gap + two empty status rows ≈ 3× spacing-md above the button).
+    margin-top: var(--fd-spacing-xl);
     background: transparent;
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-sm);

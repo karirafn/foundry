@@ -160,17 +160,6 @@ describe('OAuthPanelComponent', () => {
       expect(el.textContent).toContain('pro');
     });
 
-    it('should show the auto-refresh hint', () => {
-      // Arrange
-      const fixture = setup({ status: 'Present' });
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-
-      // Assert
-      expect(el.textContent).toContain('Refreshes automatically');
-    });
-
     it('should show "Switch account" button when status is Present and loginPhase is null', () => {
       // Arrange
       const fixture = setup({ status: 'Present', loginPhase: null });

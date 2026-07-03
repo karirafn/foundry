@@ -148,6 +148,7 @@ const COOLDOWN_MINUTES_MAX = 1440;
             <!-- Persistent live region — text binding drives announcements, never @if-mounted. -->
             <div
               class="general-settings__drain-gate"
+              [class.general-settings__drain-gate--empty]="!_drainGateText()"
               role="status"
             >{{ _drainGateText() }}</div>
             @if (_showResumeAfterSwitch()) {

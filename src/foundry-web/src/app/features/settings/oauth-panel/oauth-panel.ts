@@ -39,9 +39,6 @@ import { LoginFlowComponent } from './login-flow/login-flow';
               <span class="oauth-panel__row-value">{{ subscriptionType() ?? '—' }}</span>
             </div>
           </div>
-          <p class="oauth-panel__hint">
-            Refreshes automatically — Foundry never stores it.
-          </p>
 
           @if (!loginPhase()) {
             <button
