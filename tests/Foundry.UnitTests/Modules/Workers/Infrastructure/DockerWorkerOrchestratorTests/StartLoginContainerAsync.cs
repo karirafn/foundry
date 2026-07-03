@@ -163,6 +163,7 @@ public sealed class StartLoginContainerAsync
             () => cmdStr.ShouldContain("mkfifo"),
             () => cmdStr.ShouldContain(LoginExecCommand.FifoPath),
             () => cmdStr.ShouldContain("sleep 600"),
+            () => cmdStr.ShouldContain($"echo $! > {LoginExecCommand.SleepPidPath}"),
             () => cmdStr.ShouldContain("exec claude auth login --claudeai"),
             () => cmdStr.ShouldContain($"< {LoginExecCommand.FifoPath}"));
     }

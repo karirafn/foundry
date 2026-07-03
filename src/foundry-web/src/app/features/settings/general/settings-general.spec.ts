@@ -68,6 +68,18 @@ const OAUTH_NOT_CONFIGURED_RESPONSE = {
   ...BASE_RESPONSE,
 };
 
+const OAUTH_RELOGIN_NEEDED_RESPONSE = {
+  authMode: 'OAuth',
+  oAuthStatus: 'ReLoginNeeded',
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  expiresAt: null,
+  subscriptionType: null,
+  ...BASE_RESPONSE,
+};
+
 function setup() {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -435,7 +447,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Assert — uses role="group", not role="dialog"
     const group = el.querySelector('[role="group"][aria-label="Confirm account switch"]');
-    expect(group?.textContent).toContain('Switching account pauses dispatch');
+    expect(group?.textContent).toContain('Signing in will pause dispatch');
   });
 
   it('should use role="group" (not role="dialog") for the inline confirm', () => {
@@ -485,7 +497,7 @@ describe('SettingsGeneralComponent', () => {
     document.body.removeChild(fixture.nativeElement);
   });
 
-  it('should call pauseDispatch when confirm button is clicked', () => {
+  it('should call pauseDispatch and startLogin when confirm button is clicked', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -503,10 +515,14 @@ describe('SettingsGeneralComponent', () => {
     confirmBtn.click();
     fixture.detectChanges();
 
-    // Assert
+    // Assert — pauseDispatch fires and startLogin fires
     const pauseReq = httpMock.expectOne('/api/settings/dispatch/pause');
     expect(pauseReq.request.method).toBe('POST');
     pauseReq.flush(OAUTH_RESPONSE);
+
+    const loginReq = httpMock.expectOne('/api/settings/oauth/login/start');
+    expect(loginReq.request.method).toBe('POST');
+    loginReq.flush({ sessionId: 'test-session' });
   });
 
   it('should move focus to the auth heading after confirming account switch', async () => {
@@ -530,6 +546,7 @@ describe('SettingsGeneralComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Assert — focus moves to the auth heading, not lost to body
@@ -558,6 +575,7 @@ describe('SettingsGeneralComponent', () => {
     confirmBtn.click();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Assert
@@ -598,6 +616,7 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
     // Fail the pause so pauseResumeError signal is set
     httpMock.expectOne('/api/settings/dispatch/pause').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Assert — role="alert" must NOT be a descendant of role="status"
@@ -609,6 +628,107 @@ describe('SettingsGeneralComponent', () => {
     const oauthSection = el.querySelector('.general-settings__oauth-section');
     const siblingAlert = oauthSection?.querySelector('.general-settings__switch-error[role="alert"]');
     expect(siblingAlert).toBeTruthy();
+  });
+
+  it('should show confirm dialog when "Log in again" is clicked (ReLoginNeeded status)', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RELOGIN_NEEDED_RESPONSE);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const loginAgainBtn = el.querySelector('.oauth-panel__login-btn') as HTMLButtonElement;
+    loginAgainBtn.click();
+    fixture.detectChanges();
+
+    // Assert — confirm group appears (same drain flow as Switch account)
+    const group = el.querySelector('[role="group"][aria-label="Confirm account switch"]');
+    expect(group).toBeTruthy();
+    expect(group?.textContent).toContain('Signing in will pause dispatch');
+  });
+
+  it('should reset drain-gate state when login phase becomes Succeeded', () => {
+    // Arrange — enter draining state via switch account
+    const { httpMock, service } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const switchBtn = el.querySelector('.oauth-panel__switch-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = el.querySelector('.general-settings__switch-confirm-btn') as HTMLButtonElement;
+    confirmBtn.click();
+    fixture.detectChanges();
+    httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
+    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    fixture.detectChanges();
+
+    // Verify draining
+    let drainGate = el.querySelector('.general-settings__drain-gate');
+    expect(drainGate?.textContent).toContain('Dispatch is paused');
+
+    // Act — simulate Succeeded signal via private writable (test-only cast)
+    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('Succeeded');
+    fixture.detectChanges();
+
+    // Assert — drain gate resets
+    drainGate = el.querySelector('.general-settings__drain-gate');
+    expect(drainGate?.textContent?.trim()).toBe('');
+  });
+
+  it('should focus the entry login button on cancel when login flow is not in drain state', async () => {
+    // Arrange — Not-Configured state, no drain gate, login button is visible
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — cancel login from an active phase (simulate by calling onCancelLogin directly)
+    fixture.componentInstance.onCancelLogin();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — focus goes to the Log in entry button (visible when not draining)
+    const loginBtn = el.querySelector('.oauth-panel__login-btn') as HTMLButtonElement;
+    expect(loginBtn).toBeTruthy();
+    expect(document.activeElement).toBe(loginBtn);
+
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  it('should focus auth heading on cancel when no entry login button is reachable', async () => {
+    // Arrange — OAuth not yet selected (api_key mode, so no oauth-panel__login-btn or switch-btn visible)
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — cancel login; no oauth panel rendered so no entry button exists
+    fixture.componentInstance.onCancelLogin();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — falls back to auth heading
+    const authHeading = Array.from(el.querySelectorAll('.general-settings__section-title'))
+      .find(h => h.textContent?.includes('Worker Authentication')) as HTMLElement;
+    expect(document.activeElement).toBe(authHeading);
+
+    document.body.removeChild(fixture.nativeElement);
   });
 
   it('should render the "Worker Prompts" section title', () => {

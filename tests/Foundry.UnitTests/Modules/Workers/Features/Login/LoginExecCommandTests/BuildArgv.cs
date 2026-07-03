@@ -19,7 +19,7 @@ public sealed class BuildArgv
 
         // Assert
         command.Argv.ShouldBe(
-            ["sh", "-c", $"printf '%s\\n' \"$C\" > {LoginExecCommand.FifoPath}"]);
+            ["sh", "-c", $"printf '%s\\n' \"$C\" > {LoginExecCommand.FifoPath}; kill $(cat {LoginExecCommand.SleepPidPath} 2>/dev/null) 2>/dev/null || true"]);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class BuildArgv
         // Assert
         // The argv must be unchanged (code is NOT in the command string)
         command.Argv.ShouldBe(
-            ["sh", "-c", $"printf '%s\\n' \"$C\" > {LoginExecCommand.FifoPath}"]);
+            ["sh", "-c", $"printf '%s\\n' \"$C\" > {LoginExecCommand.FifoPath}; kill $(cat {LoginExecCommand.SleepPidPath} 2>/dev/null) 2>/dev/null || true"]);
 
         // The code is in the env, not in the command string
         command.Env.ShouldContain($"C={code}");

@@ -8,10 +8,10 @@ import {
   WritableSignal,
   afterNextRender,
   computed,
+  effect,
   inject,
   runInInjectionContext,
   signal,
-  effect,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../settings.service';
@@ -134,13 +134,13 @@ const COOLDOWN_MINUTES_MAX = 1440;
               [codeSubmitting]="settingsService.codeSubmitting()"
               (startLogin)="onStartLogin()"
               (submitCode)="settingsService.submitLoginCode($event)"
-              (cancel)="settingsService.cancelLogin()"
+              (cancel)="onCancelLogin()"
             />
 
             @if (_showSwitchAccountConfirm()) {
               <div class="general-settings__switch-confirm" role="group" aria-label="Confirm account switch">
                 <p class="general-settings__switch-confirm-text">
-                  Switching account pauses dispatch and waits for in-flight workers to finish. Continue?
+                  Signing in will pause dispatch and wait for in-flight workers to finish. Continue?
                 </p>
                 <div class="general-settings__switch-confirm-actions">
                   <button
@@ -462,6 +462,7 @@ export class SettingsGeneralComponent {
   protected readonly settingsService = inject(SettingsService);
   protected readonly dispatchService = inject(DispatchService);
   private readonly _injector = inject(Injector);
+  private readonly _elementRef = inject(ElementRef);
 
   @ViewChild('authHeading') private readonly _authHeading?: ElementRef<HTMLHeadingElement>;
   @ViewChild('switchConfirmBtn') private readonly _switchConfirmBtn?: ElementRef<HTMLButtonElement>;
@@ -585,6 +586,15 @@ export class SettingsGeneralComponent {
         this._installDockerValue.set(flags.installDocker);
       }
     });
+
+    // Reset the drain UI when login succeeds (Succeeded phase + status returns to Present).
+    effect(() => {
+      const phase = this.settingsService.loginPhase();
+      if (phase === 'Succeeded' && this._switchAccountDraining()) {
+        this._switchAccountDraining.set(false);
+        this._showResumeAfterSwitch.set(false);
+      }
+    });
   }
 
   onModeChange(mode: AuthMode): void {
@@ -601,7 +611,10 @@ export class SettingsGeneralComponent {
   }
 
   onStartLogin(): void {
-    if (this._oauthStatus() === 'Present') {
+    // Both "Switch account" (Present) and "Log in again" (ReLoginNeeded) go through
+    // the confirm → pause → drain-gate flow before starting the login flow.
+    const status = this._oauthStatus();
+    if (status === 'Present' || status === 'ReLoginNeeded') {
       this._showSwitchAccountConfirm.set(true);
       runInInjectionContext(this._injector, () =>
         afterNextRender(() => this._switchConfirmBtn?.nativeElement.focus())
@@ -618,10 +631,29 @@ export class SettingsGeneralComponent {
     );
   }
 
+  onCancelLogin(): void {
+    this.settingsService.cancelLogin();
+    // Return focus to the entry login button (visible when not draining), else auth heading.
+    runInInjectionContext(this._injector, () =>
+      afterNextRender(() => {
+        const host = this._elementRef.nativeElement as HTMLElement;
+        const entryBtn = host.querySelector<HTMLButtonElement>(
+          '.oauth-panel__login-btn, .oauth-panel__switch-btn'
+        );
+        if (entryBtn) {
+          entryBtn.focus();
+        } else {
+          this._authHeading?.nativeElement.focus();
+        }
+      })
+    );
+  }
+
   onConfirmSwitchAccount(): void {
     this._showSwitchAccountConfirm.set(false);
     this._switchAccountDraining.set(true);
     this.dispatchService.pauseDispatch();
+    this.settingsService.startLogin();
     runInInjectionContext(this._injector, () =>
       afterNextRender(() => this._authHeading?.nativeElement.focus())
     );

@@ -336,8 +336,12 @@ internal sealed class DockerWorkerOrchestrator(
         try
         {
             string fifoPath = LoginExecCommand.FifoPath;
+            // Bootstrap: create FIFO, start a sleep process that holds the writer end open for the
+            // session timeout duration, store its PID so DeliverLoginCodeAsync can kill it after
+            // writing the code (giving the CLI EOF on stdin), then exec the login CLI.
+            string sleepPidPath = LoginExecCommand.SleepPidPath;
             string bootstrapCmd =
-                $"mkfifo {fifoPath}; sleep {spec.TimeoutSeconds} > {fifoPath} & exec claude auth login --claudeai < {fifoPath}";
+                $"mkfifo {fifoPath}; sleep {spec.TimeoutSeconds} > {fifoPath} & echo $! > {sleepPidPath}; exec claude auth login --claudeai < {fifoPath}";
 
             CreateContainerParameters createParams = new()
             {

@@ -13,10 +13,18 @@ internal sealed record LoginExecCommand(IReadOnlyList<string> Argv, IReadOnlyLis
     /// <summary>Path to the FIFO inside the login container that receives the OAuth code.</summary>
     internal const string FifoPath = "/tmp/ci";
 
+    /// <summary>
+    /// Path to the file that holds the PID of the sleep process keeping the FIFO writer open.
+    /// Written by the bootstrap command; read here to kill the process after delivering the code,
+    /// so the CLI receives EOF on stdin and can proceed to token exchange without waiting.
+    /// </summary>
+    internal const string SleepPidPath = "/tmp/ci.pid";
+
     private const string EnvVarName = "C";
 
     /// <summary>
-    /// Creates the exec command that writes <paramref name="code"/> into the container FIFO.
+    /// Creates the exec command that writes <paramref name="code"/> into the container FIFO,
+    /// then kills the bootstrap sleep process so the CLI receives EOF on stdin and can proceed.
     /// </summary>
     internal static LoginExecCommand ForCode(string code)
     {
@@ -24,7 +32,7 @@ internal sealed record LoginExecCommand(IReadOnlyList<string> Argv, IReadOnlyLis
         [
             "sh",
             "-c",
-            $"printf '%s\\n' \"${EnvVarName}\" > {FifoPath}",
+            $"printf '%s\\n' \"${EnvVarName}\" > {FifoPath}; kill $(cat {SleepPidPath} 2>/dev/null) 2>/dev/null || true",
         ];
 
         IReadOnlyList<string> env = [$"{EnvVarName}={code}"];
