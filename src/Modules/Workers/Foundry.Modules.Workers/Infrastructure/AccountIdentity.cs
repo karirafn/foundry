@@ -11,8 +11,8 @@ namespace Foundry.Modules.Workers.Infrastructure;
 /// </summary>
 internal sealed record AccountIdentity(string Email, string OrgName, string SubscriptionType)
 {
-    internal const int MaxEmailLength = 256;
-    internal const int MaxOrgNameLength = 512;
+    internal const int MaxEmailLength = 254;
+    internal const int MaxOrgNameLength = 200;
     internal const int MaxSubscriptionTypeLength = 64;
 
     private static readonly Error NotLoggedIn = new(

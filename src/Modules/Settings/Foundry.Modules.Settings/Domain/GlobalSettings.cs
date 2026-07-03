@@ -134,8 +134,15 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public void SetOAuthAccountIdentity(string? email, string? orgName, string? subscriptionType)
     {
-        OAuthAccountEmail = email;
-        OAuthAccountOrgName = orgName;
+        // Clamp at the domain caps to enforce the invariant regardless of caller.
+        // SQLite does not enforce HasMaxLength, so a field exceeding the cap would persist
+        // but fail a future migration to a stricter database engine.
+        OAuthAccountEmail = email is not null && email.Length > MaxOAuthAccountEmailLength
+            ? email[..MaxOAuthAccountEmailLength]
+            : email;
+        OAuthAccountOrgName = orgName is not null && orgName.Length > MaxOAuthAccountOrgNameLength
+            ? orgName[..MaxOAuthAccountOrgNameLength]
+            : orgName;
         AuthMode = new AuthMode.OAuth(subscriptionType);
         UpdatedAt = DateTimeOffset.UtcNow;
     }

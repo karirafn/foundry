@@ -399,14 +399,18 @@ internal sealed class DockerWorkerOrchestrator(
         string code,
         CancellationToken cancellationToken)
     {
-        LoginExecCommand cmd = LoginExecCommand.ForStdin();
+        LoginExecCommand cmd = LoginExecCommand.ForCode(code);
 
         ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
             containerId,
             new ContainerExecCreateParameters
             {
                 Cmd = [.. cmd.Argv],
-                AttachStdin = true,
+                // Code is delivered via the C env var — never interpolated into the shell command.
+                // Stream-stdin delivery is not viable: Docker.DotNet WriteAsync does not land on
+                // the Windows npipe transport (bytes never reach the container).
+                Env = [$"C={code}"],
+                AttachStdin = false,
                 AttachStdout = true,
                 AttachStderr = true,
             },
@@ -416,12 +420,6 @@ internal sealed class DockerWorkerOrchestrator(
             execResponse.ID,
             false,
             cancellationToken);
-
-        // Write the code to the exec's STDIN so it never appears in env or argv
-        // (not visible via docker inspect / GET /exec/{id}/json during the delivery window).
-        byte[] codeBytes = System.Text.Encoding.UTF8.GetBytes(code + "\n");
-        await stream.WriteAsync(codeBytes, 0, codeBytes.Length, cancellationToken);
-        stream.CloseWrite();
 
         await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
     }

@@ -64,7 +64,15 @@ The HTTP surface for the login flow — including `POST /api/settings/oauth/logi
 Foundry relies on network-level isolation to the operator; it is not designed for exposure to untrusted networks.
 
 The OAuth authorization code transits Foundry only in memory (never logged, never written to the database or disk).
-It is delivered to the login container via `docker exec` STDIN, using a pre-created FIFO, so it never appears in the container's environment or process list.
+It is delivered to the login container via a `docker exec` environment variable (`C=<code>`), which writes into the pre-created FIFO via `printf '%s\n' "$C" > /tmp/ci`.
+The code is never interpolated into the shell command string in argv.
+
+**Residual risk — delivery exec inspection window:** The `C` environment variable is briefly visible via `docker inspect` / `GET /exec/{id}/json` during the ~millisecond delivery window.
+This is an accepted residual risk bounded by the Docker-socket trust boundary: an attacker able to inspect the exec already controls the daemon and can read the credential volume directly.
+
+**Cross-platform constraint:** Stream-stdin delivery (`docker exec` stdin) is not viable.
+`Docker.DotNet`'s `MultiplexedStream.WriteAsync` does not land on the Windows npipe transport — bytes written to the exec's stdin stream never reach the container.
+The env-var approach was the spike-proven cross-platform design from the outset.
 
 Accepted residual risks (unchanged from ADR 0024):
 

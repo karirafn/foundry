@@ -46,7 +46,7 @@ public sealed class DeliverLoginCodeAsync
     }
 
     [Fact]
-    public async Task WhenCodeDelivered_ExecArgvMatchesLoginExecCommand()
+    public async Task WhenCodeDelivered_ExecArgvMatchesForCodeCommand()
     {
         // Arrange
         CapturingExecOperations execOps = new();
@@ -55,14 +55,14 @@ public sealed class DeliverLoginCodeAsync
         // Act
         await sut.DeliverLoginCodeAsync("container-id", "auth-code-abc", CancellationToken.None);
 
-        // Assert — argv uses stdin delivery (cat > fifo), not printf/env
-        LoginExecCommand expectedCmd = LoginExecCommand.ForStdin();
+        // Assert — argv uses env-var delivery (ForCode), not stdin (ForStdin)
+        LoginExecCommand expectedCmd = LoginExecCommand.ForCode("auth-code-abc");
         ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
         captured.Cmd.ShouldBe(expectedCmd.Argv);
     }
 
     [Fact]
-    public async Task WhenCodeDelivered_AttachStdinIsTrue()
+    public async Task WhenCodeDelivered_CodeIsInEnvVarNotArgv()
     {
         // Arrange
         CapturingExecOperations execOps = new();
@@ -71,44 +71,63 @@ public sealed class DeliverLoginCodeAsync
         // Act
         await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
 
-        // Assert — exec must be created with AttachStdin so the code can be written to STDIN
-        ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
-        captured.AttachStdin.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task WhenCodeDelivered_CodeWrittenToStdin()
-    {
-        // Arrange
-        CapturingExecOperations execOps = new();
-        DockerWorkerOrchestrator sut = BuildSut(execOps);
-
-        // Act
-        await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
-
-        // Assert — the code bytes were written to the exec's STDIN stream (not the env)
-        string written = System.Text.Encoding.UTF8.GetString(execOps.WrittenStdinBytes.ToArray()).TrimEnd('\n');
-        written.ShouldBe("secret-code");
-    }
-
-    [Fact]
-    public async Task WhenCodeDelivered_CodeNotInEnvOrArgv()
-    {
-        // Arrange
-        CapturingExecOperations execOps = new();
-        DockerWorkerOrchestrator sut = BuildSut(execOps);
-
-        // Act
-        await sut.DeliverLoginCodeAsync("container-id", "top-secret-code", CancellationToken.None);
-
-        // Assert — code must not appear in env or argv (visible via docker inspect)
+        // Assert — code carried as env var C=<code>, never interpolated into argv
         ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
         string allArgs = string.Join(" ", captured.Cmd);
-        allArgs.ShouldNotContain("top-secret-code");
-        foreach (string env in captured.Env ?? [])
-        {
-            env.ShouldNotContain("top-secret-code");
-        }
+        allArgs.ShouldNotContain("secret-code");
+
+        IList<string> env = captured.Env.ShouldNotBeNull();
+        env.ShouldContain("C=secret-code");
+    }
+
+    [Fact]
+    public async Task WhenCodeContainsShellMetacharacters_CodeStaysLiteralInEnv()
+    {
+        // Arrange
+        CapturingExecOperations execOps = new();
+        DockerWorkerOrchestrator sut = BuildSut(execOps);
+        const string codeWithMeta = @"abc$'"";&|";
+
+        // Act
+        await sut.DeliverLoginCodeAsync("container-id", codeWithMeta, CancellationToken.None);
+
+        // Assert — the literal code value is in the env var, not shell-expanded
+        ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
+        IList<string> env = captured.Env.ShouldNotBeNull();
+        env.ShouldContain($"C={codeWithMeta}");
+
+        // The argv must not contain the metacharacters literally (they stay in the env var)
+        string allArgs = string.Join(" ", captured.Cmd);
+        allArgs.ShouldNotContain(codeWithMeta);
+    }
+
+    [Fact]
+    public async Task WhenCodeDelivered_AttachStdinIsFalse()
+    {
+        // Arrange
+        CapturingExecOperations execOps = new();
+        DockerWorkerOrchestrator sut = BuildSut(execOps);
+
+        // Act
+        await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
+
+        // Assert — env-var delivery does not use stdin at all
+        ContainerExecCreateParameters captured = execOps.LastCreateParameters.ShouldNotBeNull();
+        captured.AttachStdin.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenCodeDelivered_NoStreamWriteOccurs()
+    {
+        // Arrange
+        CapturingExecOperations execOps = new();
+        DockerWorkerOrchestrator sut = BuildSut(execOps);
+
+        // Act
+        await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
+
+        // Assert — code delivery no longer writes to the exec stream
+        execOps.WrittenStdinBytes.ShouldBeEmpty();
     }
 
     /// <summary>

@@ -93,4 +93,48 @@ public sealed class SetOAuthAccountIdentity
         // Assert
         settings.CreatedAt.ShouldBe(createdAt);
     }
+
+    [Fact]
+    public void WhenEmailExceedsMaxLength_EmailIsTruncatedToMax()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        string oversizedEmail = new string('a', GlobalSettings.MaxOAuthAccountEmailLength + 10);
+
+        // Act
+        settings.SetOAuthAccountIdentity(oversizedEmail, "MyOrg", "pro");
+
+        // Assert — email clamped to the domain invariant cap, not stored oversized
+        settings.OAuthAccountEmail.ShouldNotBeNull()
+            .Length.ShouldBe(GlobalSettings.MaxOAuthAccountEmailLength);
+    }
+
+    [Fact]
+    public void WhenOrgNameExceedsMaxLength_OrgNameIsTruncatedToMax()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        string oversizedOrgName = new string('b', GlobalSettings.MaxOAuthAccountOrgNameLength + 10);
+
+        // Act
+        settings.SetOAuthAccountIdentity("user@example.com", oversizedOrgName, "pro");
+
+        // Assert — org name clamped to the domain invariant cap, not stored oversized
+        settings.OAuthAccountOrgName.ShouldNotBeNull()
+            .Length.ShouldBe(GlobalSettings.MaxOAuthAccountOrgNameLength);
+    }
+
+    [Fact]
+    public void WhenEmailAtExactMaxLength_EmailStoredUnchanged()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        string exactEmail = new string('a', GlobalSettings.MaxOAuthAccountEmailLength);
+
+        // Act
+        settings.SetOAuthAccountIdentity(exactEmail, "MyOrg", "pro");
+
+        // Assert
+        settings.OAuthAccountEmail.ShouldBe(exactEmail);
+    }
 }

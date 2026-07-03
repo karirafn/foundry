@@ -5,9 +5,14 @@ namespace Foundry.Modules.Workers.Features.Login;
 /// into the login container's FIFO.
 /// </summary>
 /// <remarks>
-/// The code is written to the exec's STDIN stream — it never appears in the exec
-/// process's argv or environment variables and is therefore not visible via
-/// <c>docker inspect</c> or the Docker API's <c>GET /exec/{id}/json</c> endpoint.
+/// The code is delivered via the exec's <c>C</c> environment variable — it never appears
+/// in the exec process's argv and is therefore not interpolated into the shell command string.
+/// The code is briefly visible via <c>docker inspect</c> / <c>GET /exec/{id}/json</c> during
+/// the ~millisecond delivery window; this is an accepted residual risk bounded by the
+/// Docker-socket trust boundary (an attacker able to inspect the exec already controls the
+/// daemon and can read the credential volume directly). Cross-platform stream-stdin delivery
+/// is not viable: Docker.DotNet's <c>MultiplexedStream.WriteAsync</c> does not land on the
+/// Windows npipe transport.
 /// </remarks>
 internal sealed record LoginExecCommand
 {
@@ -29,15 +34,16 @@ internal sealed record LoginExecCommand
     internal IReadOnlyList<string> Argv { get; }
 
     /// <summary>
-    /// Creates the exec command argv that reads from STDIN, writes into the container FIFO,
-    /// then kills the bootstrap sleep process so the CLI receives EOF and can proceed.
-    /// The code must be written to the exec's STDIN by the caller.
+    /// Creates the exec command argv that writes the code (from the <c>C</c> env var) into
+    /// the container FIFO, then kills the bootstrap sleep process so the CLI receives EOF
+    /// and can proceed. The code is passed via <c>Env = ["C=&lt;code&gt;"]</c> on the exec
+    /// parameters — it is never interpolated into the shell command string.
     /// </summary>
-    internal static LoginExecCommand ForStdin() =>
+    internal static LoginExecCommand ForCode(string code) =>
         new(
         [
             "sh",
             "-c",
-            $"cat > {FifoPath}; kill $(cat {SleepPidPath} 2>/dev/null) 2>/dev/null || true",
+            $"printf '%s\\n' \"$C\" > {FifoPath}; kill $(cat {SleepPidPath} 2>/dev/null) 2>/dev/null || true",
         ]);
 }

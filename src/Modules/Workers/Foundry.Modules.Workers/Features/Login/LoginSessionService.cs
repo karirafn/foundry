@@ -416,7 +416,6 @@ internal sealed class LoginSessionService(
 
         await foreach (string line in orchestrator
             .StreamLogsAsync(containerId, cancellationToken)
-            .WithCancellation(cancellationToken)
             .ConfigureAwait(false))
         {
             if (line.Contains(InvalidCodeSignal, StringComparison.OrdinalIgnoreCase))
