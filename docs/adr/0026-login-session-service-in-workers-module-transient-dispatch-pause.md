@@ -57,3 +57,18 @@ Rejected because:
 - Pre-existing auth-invalid pauses (`IsAuthInvalidPaused`) are unaffected by a restart — they survive as intended. The login session pause and the auth-invalid pause are fully independent.
 - `ILoginSessionState` is a public interface (referenced by `WorkerDispatchService` across the module boundary via DI). `LoginSessionService` implements it as an `internal sealed class` — tests inject a stub via the interface, production DI resolves the real singleton.
 - Adding a UI "login in progress" indicator on page load requires a `GET /api/settings/oauth/login/status` endpoint that reads `LoginSessionService.IsLoginActive` — no persistence needed.
+
+## Security / Trust Boundary
+
+The HTTP surface for the login flow — including `POST /api/settings/oauth/login/start` and `POST /api/settings/oauth/login/code` — is **unauthenticated at the application layer**.
+Foundry relies on network-level isolation to the operator; it is not designed for exposure to untrusted networks.
+
+The OAuth authorization code transits Foundry only in memory (never logged, never written to the database or disk).
+It is delivered to the login container via `docker exec` STDIN, using a pre-created FIFO, so it never appears in the container's environment or process list.
+
+Accepted residual risks (unchanged from ADR 0024):
+
+- The seeded `.credentials.json` sits in plaintext inside the Docker-managed credential volume, consistent with how the Claude Code CLI stores credentials locally on the host.
+- Foundry operates within the Docker socket trust boundary; any process with access to the Docker socket can read the credential volume.
+
+These trade-offs were evaluated in ADR 0024 and are accepted as inherent to the genuine-CLI delegation model.
