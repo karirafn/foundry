@@ -19,6 +19,11 @@ internal sealed class LoginSessionService(
     ILogger<LoginSessionService>? logger = null) : ILoginSessionState
 {
     internal const string LoginSuccessSignal = "Login successful.";
+    internal const string InvalidCodeSignal = "Invalid code";
+
+    // Protects _activeSession null-check-and-assign so two concurrent StartAsync calls
+    // cannot both observe null and create two sessions.
+    private readonly Lock _sessionLock = new();
 
     private LoginSession? _activeSession;
 
@@ -27,6 +32,7 @@ internal sealed class LoginSessionService(
     private TaskCompletionSource _urlScanComplete = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     // CTS that lets tests trigger CodeTimeout without waiting 10 minutes.
+    // Also used to link the WaitForLoginSuccessAsync log-scan so it cannot outlive the session.
     private CancellationTokenSource? _sessionTimeoutCts;
 
     public bool IsLoginActive => _activeSession?.IsActive ?? false;
@@ -38,26 +44,32 @@ internal sealed class LoginSessionService(
     /// </summary>
     internal Task<Guid> StartAsync(CancellationToken cancellationToken)
     {
-        if (_activeSession is not null)
+        lock (_sessionLock)
         {
-            return Task.FromResult(_activeSession.SessionId);
+            if (_activeSession is not null)
+            {
+                return Task.FromResult(_activeSession.SessionId);
+            }
+
+            _urlScanComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            LoginSession session = LoginSession.Create(containerId: string.Empty);
+            _activeSession = session;
+
+            CancellationTokenSource sessionTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            sessionTimeoutCts.CancelAfter(LoginSessionOptions.SessionTimeout);
+            _sessionTimeoutCts = sessionTimeoutCts;
+
+            // Fire-and-forget; errors are handled inside RunSessionAsync.
+            // Pass CancellationToken.None to Task.Run so a precancelled host token does not
+            // prevent the task from being scheduled — the linked sessionTimeoutCts already
+            // carries the host signal.
+            _ = Task.Run(
+                () => RunSessionAsync(session, sessionTimeoutCts, cancellationToken),
+                CancellationToken.None);
+
+            return Task.FromResult(session.SessionId);
         }
-
-        _urlScanComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        LoginSession session = LoginSession.Create(containerId: string.Empty);
-        _activeSession = session;
-
-        CancellationTokenSource sessionTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        sessionTimeoutCts.CancelAfter(LoginSessionOptions.SessionTimeout);
-        _sessionTimeoutCts = sessionTimeoutCts;
-
-        // Fire-and-forget; errors are handled inside RunSessionAsync
-        _ = Task.Run(
-            () => RunSessionAsync(session, sessionTimeoutCts.Token, cancellationToken),
-            cancellationToken);
-
-        return Task.FromResult(session.SessionId);
     }
 
     /// <summary>
@@ -67,25 +79,41 @@ internal sealed class LoginSessionService(
     /// </summary>
     internal async Task<Result> SubmitCodeAsync(string code, CancellationToken cancellationToken)
     {
-        if (_activeSession is null)
+        LoginSession? session;
+        lock (_sessionLock)
+        {
+            session = _activeSession;
+        }
+
+        if (session is null)
         {
             return Result.Fail(LoginErrors.NoActiveSession);
         }
 
-        if (_activeSession.Phase is not LoginPhase.WaitingForAuthorization)
+        if (session.Phase is not LoginPhase.WaitingForAuthorization)
         {
             return Result.Fail(LoginErrors.NotAcceptingCode);
         }
 
-        LoginSession session = _activeSession;
-
         await TransitionAndBroadcastAsync(session, LoginPhase.SigningIn.Instance, cancellationToken);
+
+        bool commitSucceeded = false;
 
         try
         {
             await orchestrator.DeliverLoginCodeAsync(session.ContainerId, code, cancellationToken);
 
-            bool loginSuccessful = await WaitForLoginSuccessAsync(session.ContainerId, cancellationToken);
+            // Link the log scan to the session-timeout CTS so it cannot outlive the session.
+            CancellationToken scanToken;
+            lock (_sessionLock)
+            {
+                scanToken = _sessionTimeoutCts?.Token ?? cancellationToken;
+            }
+
+            using CancellationTokenSource linkedScan =
+                CancellationTokenSource.CreateLinkedTokenSource(scanToken, cancellationToken);
+
+            bool loginSuccessful = await WaitForLoginSuccessAsync(session.ContainerId, linkedScan.Token);
 
             if (!loginSuccessful)
             {
@@ -112,6 +140,7 @@ internal sealed class LoginSessionService(
             }
 
             await successCommitter.CommitAsync(identitySuccess.Value, cancellationToken);
+            commitSucceeded = true;
 
             await TransitionAndBroadcastAsync(
                 session,
@@ -121,12 +150,23 @@ internal sealed class LoginSessionService(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger?.LogError(ex, "Unexpected error during login code submission.");
-            await FailSessionAsync(session, new LoginFailureReason.Unknown(ex.Message), cancellationToken);
+
+            // Only fail the session when the commit has NOT persisted — once committed, the
+            // credential is durable and we must not flip observable state to Failed.
+            if (!commitSucceeded)
+            {
+                await FailSessionAsync(session, new LoginFailureReason.Unknown(ex.Message), cancellationToken);
+            }
+
             return Result.Ok();
         }
 
         await TeardownContainerAsync(session.ContainerId, cancellationToken);
-        _activeSession = null;
+
+        lock (_sessionLock)
+        {
+            _activeSession = null;
+        }
 
         return Result.Ok();
     }
@@ -153,7 +193,7 @@ internal sealed class LoginSessionService(
 
     private async Task RunSessionAsync(
         LoginSession session,
-        CancellationToken sessionTimeoutToken,
+        CancellationTokenSource sessionTimeoutCts,
         CancellationToken hostToken)
     {
         try
@@ -172,7 +212,7 @@ internal sealed class LoginSessionService(
             await TransitionAndBroadcastAsync(session, LoginPhase.Starting.Instance, hostToken);
 
             // Scan for the OAuth URL with the URL-specific timeout
-            await ScanForUrlAsync(session, sessionTimeoutToken, hostToken);
+            await ScanForUrlAsync(session, sessionTimeoutCts.Token, hostToken);
 
             if (session.Phase is LoginPhase.Starting)
             {
@@ -190,9 +230,9 @@ internal sealed class LoginSessionService(
             _urlScanComplete.TrySetResult();
 
             // Wait for code submission or session timeout
-            await WaitForCodeOrTimeoutAsync(session, sessionTimeoutToken, hostToken);
+            await WaitForCodeOrTimeoutAsync(session, sessionTimeoutCts.Token, hostToken);
         }
-        catch (OperationCanceledException) when (sessionTimeoutToken.IsCancellationRequested
+        catch (OperationCanceledException) when (sessionTimeoutCts.IsCancellationRequested
                                                   && !hostToken.IsCancellationRequested)
         {
             // Session-level timeout fired (not host shutdown) — fail with CodeTimeout
@@ -210,8 +250,16 @@ internal sealed class LoginSessionService(
         }
         finally
         {
+            // EVERY exit path must clear _activeSession so IsLoginActive does not stay true.
+            // This covers host cancellation, session timeout, URL timeout, and unexpected errors.
             _urlScanComplete.TrySetResult();
-            _sessionTimeoutCts?.Dispose();
+
+            lock (_sessionLock)
+            {
+                _activeSession = null;
+            }
+
+            sessionTimeoutCts.Dispose();
         }
     }
 
@@ -326,20 +374,38 @@ internal sealed class LoginSessionService(
         };
 
     /// <summary>
-    /// Waits for the login success signal in the log stream and checks the container exit code.
-    /// Returns <c>true</c> when the container exits with code 0.
-    /// Returns <c>false</c> on non-zero exit (bad or expired code).
+    /// Waits for the login success signal or "Invalid code" rejection in the log stream.
+    /// Returns <c>true</c> when login succeeded (success signal seen AND container exit 0).
+    /// Returns <c>false</c> when an "Invalid code" rejection is detected (CLI re-prompts;
+    /// the stream is cancelled via <paramref name="cancellationToken"/> which is linked to
+    /// the session-timeout CTS so the scan can never outlive the session).
     /// </summary>
     private async Task<bool> WaitForLoginSuccessAsync(string containerId, CancellationToken cancellationToken)
     {
+        bool successSeen = false;
+
         await foreach (string line in orchestrator
             .StreamLogsAsync(containerId, cancellationToken)
+            .WithCancellation(cancellationToken)
             .ConfigureAwait(false))
         {
+            if (line.Contains(InvalidCodeSignal, StringComparison.OrdinalIgnoreCase))
+            {
+                // CLI rejected the code and will re-prompt — stream stays open indefinitely.
+                // Treat this as definitive failure immediately rather than waiting for EOF.
+                return false;
+            }
+
             if (line.Contains(LoginSuccessSignal, StringComparison.Ordinal))
             {
+                successSeen = true;
                 break;
             }
+        }
+
+        if (!successSeen)
+        {
+            return false;
         }
 
         WorkerStatus? status = await orchestrator.GetStatusAsync(containerId, cancellationToken);
@@ -355,7 +421,11 @@ internal sealed class LoginSessionService(
     {
         await TransitionAndBroadcastAsync(session, new LoginPhase.Failed(reason), cancellationToken);
         await TeardownContainerAsync(session.ContainerId, cancellationToken);
-        _activeSession = null;
+
+        lock (_sessionLock)
+        {
+            _activeSession = null;
+        }
     }
 
     private async Task TeardownContainerAsync(string containerId, CancellationToken cancellationToken)

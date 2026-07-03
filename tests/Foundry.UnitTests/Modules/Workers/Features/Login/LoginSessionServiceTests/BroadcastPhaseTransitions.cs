@@ -139,16 +139,4 @@ public sealed class BroadcastPhaseTransitions
         failed.FailureReason.ShouldBe(LoginFailureDiscriminator.InvalidCode);
     }
 
-    internal sealed class CapturingLoginSessionBroadcaster : ILoginSessionBroadcaster
-    {
-        private readonly List<LoginSessionUpdate> _captured = [];
-
-        public IReadOnlyList<LoginSessionUpdate> Captured => _captured;
-
-        public Task BroadcastAsync(LoginSessionUpdate update, CancellationToken cancellationToken)
-        {
-            _captured.Add(update);
-            return Task.CompletedTask;
-        }
-    }
 }

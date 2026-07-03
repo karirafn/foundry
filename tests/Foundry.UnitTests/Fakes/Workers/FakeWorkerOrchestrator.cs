@@ -27,6 +27,9 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
         Result<ContainerId>.Ok(ContainerId.From("fake-login-container"));
     private IReadOnlyList<ContainerId> _loginContainerIds = [];
 
+    // When true, StreamLogsAsync yields _logLines then blocks until cancellation (does not close).
+    private bool _blockAfterLines;
+
     public int DeliverLoginCodeCallCount { get; private set; }
     public int StopContainerCallCount { get; private set; }
     public int RemoveContainerCallCount { get; private set; }
@@ -72,6 +75,17 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
         return this;
     }
 
+    /// <summary>
+    /// Configures <see cref="StreamLogsAsync"/> to yield <paramref name="logLines"/> and then
+    /// block indefinitely until the cancellation token fires (simulating a CLI that re-prompts
+    /// after an invalid code without exiting).
+    /// </summary>
+    public FakeWorkerOrchestrator WithBlockingStreamAfterLines()
+    {
+        _blockAfterLines = true;
+        return this;
+    }
+
     public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
 
@@ -95,6 +109,13 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
             cancellationToken.ThrowIfCancellationRequested();
             await Task.CompletedTask;
             yield return line;
+        }
+
+        if (_blockAfterLines)
+        {
+            // Block until the cancellation token fires — simulates a CLI that stays alive
+            // (e.g., after emitting "Invalid code", it re-prompts and never exits).
+            await Task.Delay(Timeout.Infinite, cancellationToken);
         }
     }
 
