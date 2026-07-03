@@ -21,6 +21,12 @@ internal sealed class LoginSessionService(
     internal const string LoginSuccessSignal = "Login successful.";
     internal const string InvalidCodeSignal = "Invalid code";
 
+    /// <summary>
+    /// Fixed opaque failure message broadcast to clients for Unknown failures.
+    /// The real cause is logged server-side and never sent over the wire.
+    /// </summary>
+    internal const string UnknownFailureClientMessage = "An unexpected error occurred.";
+
     // Protects _activeSession null-check-and-assign so two concurrent StartAsync calls
     // cannot both observe null and create two sessions.
     private readonly Lock _sessionLock = new();
@@ -135,7 +141,11 @@ internal sealed class LoginSessionService(
                     "Login container exited cleanly but auth status could not be read: {Error}",
                     description);
 
-                await FailSessionAsync(session, new LoginFailureReason.Unknown(description), cancellationToken);
+                // Log the real detail server-side; broadcast a fixed opaque message to clients.
+                await FailSessionAsync(
+                    session,
+                    new LoginFailureReason.Unknown(UnknownFailureClientMessage),
+                    cancellationToken);
                 return Result.Ok();
             }
 
@@ -149,13 +159,17 @@ internal sealed class LoginSessionService(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Log the real cause server-side; broadcast an opaque fixed message to clients.
             logger?.LogError(ex, "Unexpected error during login code submission.");
 
             // Only fail the session when the commit has NOT persisted — once committed, the
             // credential is durable and we must not flip observable state to Failed.
             if (!commitSucceeded)
             {
-                await FailSessionAsync(session, new LoginFailureReason.Unknown(ex.Message), cancellationToken);
+                await FailSessionAsync(
+                    session,
+                    new LoginFailureReason.Unknown(UnknownFailureClientMessage),
+                    cancellationToken);
             }
 
             return Result.Ok();
@@ -244,9 +258,13 @@ internal sealed class LoginSessionService(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Log the real cause server-side; broadcast an opaque fixed message to clients.
             logger?.LogError(ex, "Unexpected error in login session background task.");
             _urlScanComplete.TrySetException(ex);
-            await FailSessionAsync(session, new LoginFailureReason.Unknown(ex.Message), CancellationToken.None);
+            await FailSessionAsync(
+                session,
+                new LoginFailureReason.Unknown(UnknownFailureClientMessage),
+                CancellationToken.None);
         }
         finally
         {
