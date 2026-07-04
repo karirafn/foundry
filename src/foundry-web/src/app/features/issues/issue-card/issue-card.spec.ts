@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { IssueCardComponent } from './issue-card';
-import { IssueSummary } from '../issue.model';
+import { IssueCardComponent, formatCost, formatDuration } from './issue-card';
+import { IssueSummary, RunStats } from '../issue.model';
 import { TickerService } from '../../../core/services/ticker.service';
 
 const mockIssue: IssueSummary = {
@@ -628,6 +628,104 @@ describe('IssueCardComponent', () => {
     expect(tierChip).toBeFalsy();
   });
 
+  // --- formatCost pure function tests (Step 5 TDD) ---
+
+  describe('formatCost', () => {
+    // Cycle 1: true zero → $0.00
+    it('should format 0 as $0.00', () => {
+      // Arrange / Act
+      const result = formatCost(0);
+
+      // Assert
+      expect(result).toBe('$0.00');
+    });
+
+    // Cycle 2: very small nonzero below a cent → <$0.01
+    it('should format a value greater than 0 but less than 0.005 as <$0.01', () => {
+      // Arrange / Act
+      const result = formatCost(0.004);
+
+      // Assert
+      expect(result).toBe('<$0.01');
+    });
+
+    // Cycle 3: exactly 0.005 rounds up to $0.01
+    it('should format 0.005 as $0.01 (rounds up to nearest cent)', () => {
+      // Arrange / Act
+      const result = formatCost(0.005);
+
+      // Assert
+      expect(result).toBe('$0.01');
+    });
+
+    // Cycle 4: normal value rounds to 2dp
+    it('should format 1.239 as $1.24 (nearest cent)', () => {
+      // Arrange / Act
+      const result = formatCost(1.239);
+
+      // Assert
+      expect(result).toBe('$1.24');
+    });
+
+    // Cycle 5: exact cent boundary
+    it('should format 0.01 as $0.01', () => {
+      // Arrange / Act
+      const result = formatCost(0.01);
+
+      // Assert
+      expect(result).toBe('$0.01');
+    });
+
+    // Cycle 6: larger value
+    it('should format 12.5 as $12.50', () => {
+      // Arrange / Act
+      const result = formatCost(12.5);
+
+      // Assert
+      expect(result).toBe('$12.50');
+    });
+  });
+
+  // --- formatDuration pure function tests (Step 5 TDD) ---
+
+  describe('formatDuration', () => {
+    // Cycle 1: seconds only
+    it('should format 45000ms as 45s', () => {
+      // Arrange / Act
+      const result = formatDuration(45000);
+
+      // Assert
+      expect(result).toBe('45s');
+    });
+
+    // Cycle 2: minutes and seconds
+    it('should format 90000ms (1m 30s) correctly', () => {
+      // Arrange / Act
+      const result = formatDuration(90000);
+
+      // Assert
+      expect(result).toBe('1m 30s');
+    });
+
+    // Cycle 3: hours and minutes
+    it('should format 3660000ms (1h 1m) correctly', () => {
+      // Arrange / Act
+      const result = formatDuration(3660000);
+
+      // Assert
+      expect(result).toBe('1h 1m');
+    });
+
+    // Cycle 4: zero
+    it('should format 0ms as 0s', () => {
+      // Arrange / Act
+      const result = formatDuration(0);
+
+      // Assert
+      expect(result).toBe('0s');
+    });
+  });
+
   // Cycle 13: "Next up" marker visible when isNextUp input is true
   it('should render "Next up" marker when isNextUp input is true', () => {
     // Arrange
@@ -709,5 +807,192 @@ describe('IssueCardComponent', () => {
     // Assert
     const card = el.querySelector('.issue-card') as HTMLElement;
     expect(card?.getAttribute('aria-label')).toContain('Next up');
+  });
+
+  // --- Step 6: stat pill tests ---
+
+  const fullRunStats: RunStats = {
+    runCount: 3,
+    durationMs: 90000,
+    numTurns: 12,
+    totalCostUsd: 1.239,
+    inputTokens: 5000,
+    outputTokens: 2000,
+  };
+
+  // Cycle 14: all pills present when all stats are non-null and runCount > 1
+  it('should render the run-stats row when runStats has non-null fields', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const row = el.querySelector('.issue-card__run-stats');
+    expect(row).toBeTruthy();
+  });
+
+  it('should render the run-count pill with warning class when runCount > 1', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--run-count');
+    expect(pill).toBeTruthy();
+    expect(pill?.classList.contains('issue-card__stat-pill--warning')).toBe(true);
+  });
+
+  it('should render the duration pill', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--duration');
+    expect(pill).toBeTruthy();
+  });
+
+  it('should render the turns pill', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--turns');
+    expect(pill).toBeTruthy();
+  });
+
+  it('should render the cost pill with formatted value', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--cost');
+    expect(pill).toBeTruthy();
+    expect(pill?.textContent).toContain('$1.24');
+  });
+
+  it('should render the input-tokens pill', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--input-tokens');
+    expect(pill).toBeTruthy();
+  });
+
+  it('should render the output-tokens pill', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--output-tokens');
+    expect(pill).toBeTruthy();
+  });
+
+  // Cycle 15: runCount === 1 → run-count pill hidden
+  it('should hide the run-count pill when runCount is 1', () => {
+    // Arrange
+    const singleRunStats: RunStats = { ...fullRunStats, runCount: 1 };
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: singleRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--run-count');
+    expect(pill).toBeFalsy();
+  });
+
+  // Cycle 16: null individual totals omit their pill
+  it('should omit the duration pill when durationMs is null', () => {
+    // Arrange
+    const statsNoDuration: RunStats = { ...fullRunStats, durationMs: null };
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: statsNoDuration };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--duration');
+    expect(pill).toBeFalsy();
+  });
+
+  it('should omit the cost pill when totalCostUsd is null', () => {
+    // Arrange
+    const statsNoCost: RunStats = { ...fullRunStats, totalCostUsd: null };
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: statsNoCost };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--cost');
+    expect(pill).toBeFalsy();
+  });
+
+  // Cycle 17: empty-row omission when nothing would render
+  it('should omit the run-stats row when runStats is null', () => {
+    // Arrange
+    const issueNoStats: IssueSummary = { ...mockIssue, runStats: null };
+
+    // Act
+    const fixture = createComponent(issueNoStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const row = el.querySelector('.issue-card__run-stats');
+    expect(row).toBeFalsy();
+  });
+
+  it('should omit the run-stats row when runStats is undefined', () => {
+    // Arrange / Act
+    const fixture = createComponent(mockIssue); // no runStats on mockIssue
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const row = el.querySelector('.issue-card__run-stats');
+    expect(row).toBeFalsy();
+  });
+
+  // Cycle 18: subtype and isError never in DOM
+  it('should never render subtype in the stat row', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — RunStats doesn't have subtype; card must not render it
+    const subtypePill = el.querySelector('.issue-card__stat-pill--subtype');
+    expect(subtypePill).toBeFalsy();
   });
 });

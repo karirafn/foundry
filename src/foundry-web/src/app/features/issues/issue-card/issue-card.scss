@@ -147,4 +147,66 @@
       outline-offset: 2px;
     }
   }
+
+  &__run-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-xs);
+    margin-bottom: var(--fd-spacing-sm);
+  }
+
+  &__stat-pill {
+    align-items: center;
+    background: var(--fd-border-muted);
+    border-radius: 9999px;
+    color: var(--fd-text-secondary);
+    display: inline-flex;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    gap: 3px;
+    padding: 2px 7px;
+    pointer-events: none;
+    white-space: nowrap;
+
+    &--warning {
+      background: var(--fd-stat-runs-bg);
+      color: var(--fd-stat-runs-tint);
+    }
+
+    &--run-count {
+      background: var(--fd-stat-runs-bg);
+      color: var(--fd-stat-runs-tint);
+    }
+
+    &--duration {
+      background: var(--fd-stat-duration-bg);
+      color: var(--fd-stat-duration-tint);
+    }
+
+    &--turns {
+      background: var(--fd-stat-turns-bg);
+      color: var(--fd-stat-turns-tint);
+    }
+
+    &--cost {
+      background: var(--fd-stat-cost-bg);
+      color: var(--fd-stat-cost-tint);
+    }
+
+    &--input-tokens {
+      background: var(--fd-stat-tokens-in-bg);
+      color: var(--fd-stat-tokens-in-tint);
+    }
+
+    &--output-tokens {
+      background: var(--fd-stat-tokens-out-bg);
+      color: var(--fd-stat-tokens-out-tint);
+    }
+  }
+
+  &__stat-icon {
+    flex-shrink: 0;
+    height: 10px;
+    width: 10px;
+  }
 }

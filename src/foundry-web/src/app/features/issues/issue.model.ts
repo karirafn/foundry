@@ -14,6 +14,15 @@ export type IssueState =
   | 'revision_failed'
   | 'ineligible';
 
+export interface RunStats {
+  runCount: number;
+  durationMs: number | null;
+  numTurns: number | null;
+  totalCostUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
+
 export interface IssueSummary {
   id: string;
   issueNumber: number;
@@ -24,6 +33,7 @@ export interface IssueSummary {
   url: string;
   failureClassification?: string;
   repositoryEligibilityStatus?: string | null;
+  runStats?: RunStats | null;
 }
 
 export interface EligibilityViolation {

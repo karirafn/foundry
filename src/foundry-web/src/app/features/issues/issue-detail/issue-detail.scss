@@ -285,27 +285,4 @@
     word-break: break-word;
   }
 
-  &__run-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--fd-spacing-sm);
-    margin-bottom: var(--fd-spacing-sm);
-  }
-
-  &__run-stat {
-    background: var(--fd-border-muted);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-secondary);
-    font-size: 0.75rem;
-    padding: 2px var(--fd-spacing-sm);
-
-    &--error {
-      background: var(--fd-bg-error-subtle);
-      color: var(--fd-text-error);
-    }
-
-    &--subtype {
-      font-style: italic;
-    }
-  }
 }

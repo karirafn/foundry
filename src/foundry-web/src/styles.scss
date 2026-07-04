@@ -60,6 +60,20 @@
   --fd-radius-md: 8px;
   --fd-radius-lg: 12px;
 
+  /* Stat pill tint tokens — category-tinted, distinct from state-badge palette */
+  --fd-stat-runs-tint: #bf8700;
+  --fd-stat-runs-bg: rgba(191, 135, 0, 0.10);
+  --fd-stat-duration-tint: #0969da;
+  --fd-stat-duration-bg: rgba(9, 105, 218, 0.10);
+  --fd-stat-turns-tint: #8250df;
+  --fd-stat-turns-bg: rgba(130, 80, 223, 0.10);
+  --fd-stat-cost-tint: #1a7f37;
+  --fd-stat-cost-bg: rgba(26, 127, 55, 0.10);
+  --fd-stat-tokens-in-tint: #0e7490;
+  --fd-stat-tokens-in-bg: rgba(14, 116, 144, 0.10);
+  --fd-stat-tokens-out-tint: #6e4c9e;
+  --fd-stat-tokens-out-bg: rgba(110, 76, 158, 0.10);
+
   /* Mobile filter bar height — shared between the bar and issue-list body padding */
   /* Composed height: padding-top 8 + button 44 + padding-bottom 8 + border 1 ≈ 61px; round to 64px */
   --fd-filter-bar-height: 64px;

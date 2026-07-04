@@ -11,7 +11,7 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { Observable } from 'rxjs';
 import { IssueDetail } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
@@ -27,7 +27,7 @@ import { getFailureCategoryDisplay } from '../../workers/failure-category';
   selector: 'fd-issue-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, DecimalPipe, SafeHrefPipe, LogViewComponent],
+  imports: [DatePipe, SafeHrefPipe, LogViewComponent],
   template: `
     @if (error()) {
       <div class="issue-detail__error" role="alert">
@@ -178,44 +178,6 @@ import { getFailureCategoryDisplay } from '../../workers/failure-category';
               </div>
             }
 
-            @if (wr.durationMs !== null || wr.numTurns !== null || wr.totalCostUsd !== null) {
-              <div class="issue-detail__run-stats" aria-label="Run statistics">
-                @if (wr.durationMs !== null) {
-                  <span class="issue-detail__run-stat">
-                    <span class="sr-only">Duration: </span>{{ _formatDuration(wr.durationMs) }}
-                  </span>
-                }
-                @if (wr.numTurns !== null) {
-                  <span class="issue-detail__run-stat">
-                    <span class="sr-only">Turns: </span>{{ wr.numTurns }}<span class="sr-only"> turns</span><span aria-hidden="true"> turns</span>
-                  </span>
-                }
-                @if (wr.totalCostUsd !== null) {
-                  <span class="issue-detail__run-stat">
-                    <span class="sr-only">Cost: </span>&#36;{{ wr.totalCostUsd.toFixed(4) }}<span class="sr-only"> USD</span>
-                  </span>
-                }
-                @if (wr.inputTokens !== null) {
-                  <span class="issue-detail__run-stat">
-                    <span class="sr-only">Input tokens: </span>{{ wr.inputTokens | number }}<span class="sr-only"> input tokens</span><span aria-hidden="true">↑</span>
-                  </span>
-                }
-                @if (wr.outputTokens !== null) {
-                  <span class="issue-detail__run-stat">
-                    <span class="sr-only">Output tokens: </span>{{ wr.outputTokens | number }}<span class="sr-only"> output tokens</span><span aria-hidden="true">↓</span>
-                  </span>
-                }
-                @if (wr.subtype) {
-                  <span class="issue-detail__run-stat issue-detail__run-stat--subtype">{{ wr.subtype }}</span>
-                }
-                @if (wr.isError) {
-                  <span class="issue-detail__run-stat issue-detail__run-stat--error" role="img" aria-label="Run ended with error">
-                    <span aria-hidden="true">⚠</span>
-                  </span>
-                }
-              </div>
-            }
-
             @if (wr.state === 'failed' && wr.hasStoredLog) {
               <fd-log-view
                 mode="static"
@@ -338,17 +300,4 @@ export class IssueDetailComponent {
     return getFailureCategoryDisplay(category)?.cssClass ?? 'badge--failed';
   }
 
-  protected _formatDuration(ms: number): string {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m`;
-    }
-    if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    }
-    return `${seconds}s`;
-  }
 }

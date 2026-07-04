@@ -1,12 +1,38 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { NgClass } from '@angular/common';
-import { IssueSummary, LIVE_STATES } from '../issue.model';
+import { IssueSummary, RunStats, LIVE_STATES } from '../issue.model';
 import { STATE_ARIA_LABELS } from '../state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
+
+const SUB_CENT_THRESHOLD = 0.005;
+
+export function formatCost(value: number): string {
+  if (value === 0) {
+    return '$0.00';
+  }
+  if (value > 0 && value < SUB_CENT_THRESHOLD) {
+    return '<$0.01';
+  }
+  return `$${value.toFixed(2)}`;
+}
+
+export function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  }
+  return `${seconds}s`;
+}
 
 const WARNING_CLASSES: Record<string, string> = {
   ineligible: 'issue-card__repo-warning--ineligible',
@@ -57,6 +83,17 @@ function silentDuration(lastActivityAt: string): string {
     return 'silent <1m';
   }
   return `silent ${diffMinutes}m`;
+}
+
+function hasVisiblePills(stats: RunStats): boolean {
+  return (
+    stats.runCount > 1 ||
+    stats.durationMs !== null ||
+    stats.numTurns !== null ||
+    stats.totalCostUsd !== null ||
+    stats.inputTokens !== null ||
+    stats.outputTokens !== null
+  );
 }
 
 @Component({
@@ -114,6 +151,66 @@ function silentDuration(lastActivityAt: string): string {
         class="issue-card__title"
         [attr.title]="issue().title"
       >{{ issue().title }}</div>
+
+      @if (_visibleRunStats(); as stats) {
+        <div class="issue-card__run-stats" aria-label="Run statistics">
+          @if (stats.runCount > 1) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--run-count issue-card__stat-pill--warning">
+              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="17 1 21 5 17 9" />
+                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                <polyline points="7 23 3 19 7 15" />
+                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              </svg>
+              <span class="sr-only">Runs: </span>{{ stats.runCount }}
+            </span>
+          }
+          @if (stats.durationMs !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--duration">
+              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span class="sr-only">Duration: </span>{{ _formatDuration(stats.durationMs) }}
+            </span>
+          }
+          @if (stats.numTurns !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--turns">
+              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+              <span class="sr-only">Turns: </span>{{ stats.numTurns }}
+            </span>
+          }
+          @if (stats.totalCostUsd !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--cost">
+              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+              <span class="sr-only">Cost: </span>{{ _formatCost(stats.totalCostUsd) }}
+            </span>
+          }
+          @if (stats.inputTokens !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--input-tokens">
+              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+              <span class="sr-only">Input tokens: </span>{{ stats.inputTokens }}
+            </span>
+          }
+          @if (stats.outputTokens !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--output-tokens">
+              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <polyline points="19 12 12 19 5 12" />
+              </svg>
+              <span class="sr-only">Output tokens: </span>{{ stats.outputTokens }}
+            </span>
+          }
+        </div>
+      }
 
       <div class="issue-card__footer">
         <span class="issue-card__timestamp">{{ timestamp() }}</span>
@@ -176,6 +273,14 @@ export class IssueCardComponent {
     return status ? (WARNING_CLASSES[status] ?? '') : '';
   });
 
+  readonly _visibleRunStats = computed((): RunStats | null => {
+    const stats = this.issue().runStats ?? null;
+    if (stats === null || !hasVisiblePills(stats)) {
+      return null;
+    }
+    return stats;
+  });
+
   issueAriaLabel(): string {
     const issue = this.issue();
     const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
@@ -203,6 +308,14 @@ export class IssueCardComponent {
 
   timestamp(): string {
     return timeAgo(this.issue().detectedAt);
+  }
+
+  protected _formatCost(value: number): string {
+    return formatCost(value);
+  }
+
+  protected _formatDuration(ms: number): string {
+    return formatDuration(ms);
   }
 
   onCardClick(): void {

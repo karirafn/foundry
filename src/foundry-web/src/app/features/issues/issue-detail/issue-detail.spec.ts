@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { of } from 'rxjs';
@@ -934,6 +935,61 @@ describe('IssueDetailComponent', () => {
     // Assert
     const workerRun = el.querySelector('.issue-detail__worker-run');
     expect(workerRun).toBeFalsy();
+  });
+
+  // Step 7: run-stats row must not appear in the detail panel (rendered on the card instead)
+  it('should NOT render a run-stats row in the detail panel', () => {
+    // Arrange — worker run with all telemetry fields populated
+    const failedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: { ...mockStateDetails, workerRunId: 'run-123' },
+    };
+    const mockWorkerRunServiceWithStats = {
+      getDetail: () => of({
+        workerRunId: 'run-123',
+        issueId: 'issue-1',
+        state: 'failed',
+        failureCategory: null,
+        failureSummary: null,
+        resultText: null,
+        subtype: null,
+        isError: null,
+        durationMs: 5000,
+        numTurns: 10,
+        totalCostUsd: 1.23,
+        inputTokens: 5000,
+        outputTokens: 2000,
+        lastActivityAt: null,
+        commitMarkers: [],
+        hasStoredLog: false,
+      }),
+      getLog: () => of(null),
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        { provide: IssueService, useValue: { retryingEligibility: signal(false), retryingFailed: signal(false), retryFailedError: signal(null), retryFailedSuccess: signal(null) } },
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        { provide: WorkerRunService, useValue: mockWorkerRunServiceWithStats },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', failedDetail);
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — stat row must be absent; telemetry lives on the card
+    const runStats = el.querySelector('.issue-detail__run-stats');
+    expect(runStats).toBeFalsy();
   });
 
   // Worker run section: failure chip renders when WorkerRunDetail is returned with a failureCategory
