@@ -59,7 +59,8 @@ public sealed class StreamLogsAsync
         }
 
         // Assert — the unexpected IOException must reach the consumer
-        IOException ioEx = thrown.ShouldBeOfType<IOException>();
+        Exception notNull = thrown.ShouldNotBeNull();
+        IOException ioEx = notNull.ShouldBeOfType<IOException>();
         ioEx.Message.ShouldBe("Network reset by peer");
     }
 

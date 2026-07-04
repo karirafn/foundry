@@ -253,11 +253,10 @@ internal sealed class DockerWorkerOrchestrator(
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    // Unexpected pump fault — record it so the pipe reader sees the exception
-                    // rather than a silent EOF. OperationCanceledException is excluded: it occurs
+                    // Unexpected pump fault — record it so CompleteAsync forwards it to the pipe reader
+                    // rather than signalling a silent EOF. OperationCanceledException is excluded: it occurs
                     // during teardown and is irrelevant to the consumer.
                     pumpFault = ex;
-                    throw;
                 }
                 finally
                 {
