@@ -33,6 +33,37 @@ public sealed class StreamLogsAsync
     // ── EOF / early-break resource-cleanup tests ──────────────────────────────
 
     [Fact]
+    public async Task WhenPumpThrowsUnexpectedIoException_ExceptionSurfacesFromEnumeration()
+    {
+        // Arrange — the stream throws an IOException that is NOT the known end-of-stream variant.
+        // This must propagate from StreamLogsAsync rather than being swallowed.
+        ThrowingStreamStub stub = new(new IOException("Network reset by peer"));
+        DockerWorkerOrchestrator sut = BuildSut(stub);
+
+        // Act
+        Exception? thrown = null;
+        try
+        {
+            await foreach (string line in sut.StreamLogsAsync(
+                "container-io-error",
+                TestContext.Current.CancellationToken))
+            {
+                _ = line;
+            }
+        }
+#pragma warning disable CA1031 // Intentionally catch-all to assert the specific exception type propagates
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            thrown = ex;
+        }
+
+        // Assert — the unexpected IOException must reach the consumer
+        IOException ioEx = thrown.ShouldBeOfType<IOException>();
+        ioEx.Message.ShouldBe("Network reset by peer");
+    }
+
+    [Fact]
     public async Task WhenStreamThrowsUnexpectedEndOfStream_EnumerationCompletesWithoutException()
     {
         // Arrange — stream throws the IOException that Docker emits when the container exits
@@ -89,6 +120,40 @@ public sealed class StreamLogsAsync
         }
 
         // Assert
+        thrown.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenConsumerCancelsMidStream_EnumerationEndsCleanlyWithNoOce()
+    {
+        // Arrange — stream emits one line then blocks. The consumer cancels after receiving
+        // the first line. Enumeration must complete without an OperationCanceledException
+        // escaping the iterator.
+        TwoPhaseStreamStub stub = new("first line\n");
+        DockerWorkerOrchestrator sut = BuildSut(stub);
+        using CancellationTokenSource cts = new();
+
+        // Act
+        List<string> received = [];
+        Exception? thrown = null;
+        try
+        {
+            await foreach (string line in sut.StreamLogsAsync("container-cancel", cts.Token))
+            {
+                received.Add(line);
+                await cts.CancelAsync();
+            }
+        }
+#pragma warning disable CA1031 // Intentionally catch-all to assert no exception propagates from StreamLogsAsync
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            thrown = ex;
+        }
+
+        // Assert — first line received, no OCE escapes
+        received.Count.ShouldBe(1);
+        received[0].ShouldBe("first line");
         thrown.ShouldBeNull();
     }
 
