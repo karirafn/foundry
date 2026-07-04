@@ -1,5 +1,5 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
-import { NgClass } from '@angular/common';
+import { DecimalPipe, NgClass } from '@angular/common';
 import { IssueSummary, RunStats, LIVE_STATES } from '../issue.model';
 import { STATE_ARIA_LABELS } from '../state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
@@ -99,7 +99,7 @@ function hasVisiblePills(stats: RunStats): boolean {
 @Component({
   selector: 'fd-issue-card',
   standalone: true,
-  imports: [StateBadgeComponent, SafeHrefPipe, NgClass],
+  imports: [StateBadgeComponent, SafeHrefPipe, NgClass, DecimalPipe],
   template: `
     <button
       type="button"
@@ -156,57 +156,58 @@ function hasVisiblePills(stats: RunStats): boolean {
         <div class="issue-card__run-stats" aria-label="Run statistics">
           @if (stats.runCount > 1) {
             <span class="issue-card__stat-pill issue-card__stat-pill--run-count issue-card__stat-pill--warning">
-              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="17 1 21 5 17 9" />
-                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                <polyline points="7 23 3 19 7 15" />
-                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
               </svg>
-              <span class="sr-only">Runs: </span>{{ stats.runCount }}
+              <span class="sr-only">Run count: </span><span class="issue-card__stat-value">{{ stats.runCount }}<span class="sr-only"> runs</span></span>
             </span>
           }
           @if (stats.durationMs !== null) {
             <span class="issue-card__stat-pill issue-card__stat-pill--duration">
-              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <polyline points="12 7 12 12 15 14" />
               </svg>
-              <span class="sr-only">Duration: </span>{{ _formatDuration(stats.durationMs) }}
+              <span class="sr-only">Duration: </span><span class="issue-card__stat-value">{{ _formatDuration(stats.durationMs) }}</span>
             </span>
           }
           @if (stats.numTurns !== null) {
             <span class="issue-card__stat-pill issue-card__stat-pill--turns">
-              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="9 18 15 12 9 6" />
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
               </svg>
-              <span class="sr-only">Turns: </span>{{ stats.numTurns }}
+              <span class="sr-only">Turns: </span><span class="issue-card__stat-value">{{ stats.numTurns }}<span class="sr-only"> turns</span></span>
             </span>
           }
           @if (stats.totalCostUsd !== null) {
             <span class="issue-card__stat-pill issue-card__stat-pill--cost">
-              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="12" y1="1" x2="12" y2="23" />
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M14.8 9.3a2.6 2.6 0 0 0-2.8-1.3c-1.3.2-2.2 1-2.2 2 0 1.2 1.1 1.6 2.6 2 1.7.4 2.8.9 2.8 2.1 0 1.1-1 1.9-2.4 2a2.7 2.7 0 0 1-2.8-1.4" />
+                <line x1="12" y1="6" x2="12" y2="8" />
+                <line x1="12" y1="16" x2="12" y2="18" />
               </svg>
-              <span class="sr-only">Cost: </span>{{ _formatCost(stats.totalCostUsd) }}
+              <span class="sr-only">Cost: </span><span class="issue-card__stat-value">{{ _formatCost(stats.totalCostUsd) }}<span class="sr-only"> USD</span></span>
             </span>
           }
           @if (stats.inputTokens !== null) {
             <span class="issue-card__stat-pill issue-card__stat-pill--input-tokens">
-              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <line x1="12" y1="19" x2="12" y2="5" />
-                <polyline points="5 12 12 5 19 12" />
+                <polyline points="6 11 12 5 18 11" />
               </svg>
-              <span class="sr-only">Input tokens: </span>{{ stats.inputTokens }}
+              <span class="sr-only">Input tokens: </span><span class="issue-card__stat-value">{{ stats.inputTokens | number }}<span class="sr-only"> input tokens</span></span>
             </span>
           }
           @if (stats.outputTokens !== null) {
             <span class="issue-card__stat-pill issue-card__stat-pill--output-tokens">
-              <svg class="issue-card__stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <line x1="12" y1="5" x2="12" y2="19" />
-                <polyline points="19 12 12 19 5 12" />
+                <polyline points="6 13 12 19 18 13" />
               </svg>
-              <span class="sr-only">Output tokens: </span>{{ stats.outputTokens }}
+              <span class="sr-only">Output tokens: </span><span class="issue-card__stat-value">{{ stats.outputTokens | number }}<span class="sr-only"> output tokens</span></span>
             </span>
           }
         </div>
