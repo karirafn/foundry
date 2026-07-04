@@ -97,6 +97,429 @@ public sealed class StreamLogsAsync
         lines[0].ShouldBe(line);
     }
 
+    [Fact]
+    public async Task WhenConsumerCancelsMidStream_EnumerationEndsGracefully()
+    {
+        // Arrange
+        using CancellationTokenSource cts = new();
+        string firstLine = "first log line";
+        BlockingLogsStub stub = new(firstLine);
+        DockerWorkerOrchestrator sut = BuildSut(stub);
+
+        // Act
+        List<string> lines = [];
+        Exception? caught = null;
+        try
+        {
+            await foreach (string emitted in sut.StreamLogsAsync("container-cancel", cts.Token))
+            {
+                lines.Add(emitted);
+                await cts.CancelAsync();
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            caught = ex;
+        }
+
+        // Assert
+        caught.ShouldBeNull();
+        lines.ShouldContain(firstLine);
+    }
+
+    [Fact]
+    public async Task WhenPumpFaultsWithNonCancellationError_ExceptionPropagates()
+    {
+        // Arrange
+        FaultingLogsStub stub = new(new IOException("simulated pump fault"));
+        DockerWorkerOrchestrator sut = BuildSut(stub);
+
+        // Act
+        Exception? caught = null;
+        try
+        {
+            await foreach (string _ in sut.StreamLogsAsync("container-fault", CancellationToken.None))
+            {
+                // consume
+            }
+        }
+        catch (IOException ex)
+        {
+            caught = ex;
+        }
+
+        // Assert
+        IOException ioEx = caught.ShouldBeOfType<IOException>();
+        ioEx.Message.ShouldBe("simulated pump fault");
+    }
+
+    /// <summary>
+    /// A stream that emits one line of content then signals EOF on the next read.
+    /// After the consumer receives the line and cancels the enumeration token, the
+    /// subsequent <see cref="StreamReader.ReadLineAsync"/> call on the already-cancelled
+    /// token throws <see cref="OperationCanceledException"/>, which the
+    /// <c>ReadLineOrEndAsync</c> helper converts to a clean null end-of-stream.
+    /// </summary>
+    private sealed class SingleLineStream(string line) : Stream
+    {
+        private readonly byte[] _content = Encoding.UTF8.GetBytes(line + "\n");
+        private int _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_position >= _content.Length)
+            {
+                return 0; // EOF
+            }
+
+            int toCopy = Math.Min(count, _content.Length - _position);
+            Array.Copy(_content, _position, buffer, offset, toCopy);
+            _position += toCopy;
+            return toCopy;
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// A stream that immediately throws a non-cancellation exception on the first read,
+    /// simulating a pump fault.
+    /// </summary>
+    private sealed class FaultingStream(Exception fault) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw fault;
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            throw fault;
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class BlockingLogsStub(string firstLine) : IContainerOperations
+    {
+        public Task<MultiplexedStream> GetContainerLogsAsync(
+            string id,
+            bool tty,
+            ContainerLogsParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new MultiplexedStream(new SingleLineStream(firstLine), false));
+
+        public Task<CreateContainerResponse> CreateContainerAsync(
+            CreateContainerParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new CreateContainerResponse { ID = "stub-id" });
+
+        public Task<bool> StartContainerAsync(
+            string id,
+            ContainerStartParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(true);
+
+        public Task<bool> StopContainerAsync(
+            string id,
+            ContainerStopParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(true);
+
+        public Task RemoveContainerAsync(
+            string id,
+            ContainerRemoveParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<ContainerInspectResponse> InspectContainerAsync(
+            string id,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerInspectResponse());
+
+        public Task<IList<ContainerListResponse>> ListContainersAsync(
+            ContainersListParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IList<ContainerListResponse>>([]);
+
+        public Task<MultiplexedStream> AttachContainerAsync(
+            string id,
+            bool tty,
+            ContainerAttachParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new MultiplexedStream(Stream.Null, false));
+
+        public Task<Stream> ExportContainerAsync(string id, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(Stream.Null);
+
+        public Task ExtractArchiveToContainerAsync(
+            string id,
+            ContainerPathStatParameters parameters,
+            Stream stream,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<GetArchiveFromContainerResponse> GetArchiveFromContainerAsync(
+            string id,
+            GetArchiveFromContainerParameters parameters,
+            bool statOnly,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new GetArchiveFromContainerResponse());
+
+        public Task<Stream> GetContainerLogsAsync(
+            string id,
+            ContainerLogsParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(Stream.Null);
+
+        public Task GetContainerLogsAsync(
+            string id,
+            ContainerLogsParameters parameters,
+            CancellationToken cancellationToken,
+            IProgress<string> progress)
+            => Task.CompletedTask;
+
+        public Task<Stream> GetContainerStatsAsync(
+            string id,
+            ContainerStatsParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(Stream.Null);
+
+        public Task GetContainerStatsAsync(
+            string id,
+            ContainerStatsParameters parameters,
+            IProgress<ContainerStatsResponse> progress,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<IList<ContainerFileSystemChangeResponse>> InspectChangesAsync(
+            string id,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IList<ContainerFileSystemChangeResponse>>([]);
+
+        public Task KillContainerAsync(
+            string id,
+            ContainerKillParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<ContainerProcessesResponse> ListProcessesAsync(
+            string id,
+            ContainerListProcessesParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerProcessesResponse());
+
+        public Task PauseContainerAsync(string id, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<ContainersPruneResponse> PruneContainersAsync(
+            ContainersPruneParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainersPruneResponse());
+
+        public Task RenameContainerAsync(
+            string id,
+            ContainerRenameParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task ResizeContainerTtyAsync(
+            string id,
+            ContainerResizeParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task RestartContainerAsync(
+            string id,
+            ContainerRestartParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task UnpauseContainerAsync(string id, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<ContainerUpdateResponse> UpdateContainerAsync(
+            string id,
+            ContainerUpdateParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerUpdateResponse());
+
+        public Task<ContainerWaitResponse> WaitContainerAsync(
+            string id,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerWaitResponse());
+    }
+
+    private sealed class FaultingLogsStub(Exception fault) : IContainerOperations
+    {
+        public Task<MultiplexedStream> GetContainerLogsAsync(
+            string id,
+            bool tty,
+            ContainerLogsParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new MultiplexedStream(new FaultingStream(fault), false));
+
+        public Task<CreateContainerResponse> CreateContainerAsync(
+            CreateContainerParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new CreateContainerResponse { ID = "stub-id" });
+
+        public Task<bool> StartContainerAsync(
+            string id,
+            ContainerStartParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(true);
+
+        public Task<bool> StopContainerAsync(
+            string id,
+            ContainerStopParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(true);
+
+        public Task RemoveContainerAsync(
+            string id,
+            ContainerRemoveParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<ContainerInspectResponse> InspectContainerAsync(
+            string id,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerInspectResponse());
+
+        public Task<IList<ContainerListResponse>> ListContainersAsync(
+            ContainersListParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IList<ContainerListResponse>>([]);
+
+        public Task<MultiplexedStream> AttachContainerAsync(
+            string id,
+            bool tty,
+            ContainerAttachParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new MultiplexedStream(Stream.Null, false));
+
+        public Task<Stream> ExportContainerAsync(string id, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(Stream.Null);
+
+        public Task ExtractArchiveToContainerAsync(
+            string id,
+            ContainerPathStatParameters parameters,
+            Stream stream,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<GetArchiveFromContainerResponse> GetArchiveFromContainerAsync(
+            string id,
+            GetArchiveFromContainerParameters parameters,
+            bool statOnly,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new GetArchiveFromContainerResponse());
+
+        public Task<Stream> GetContainerLogsAsync(
+            string id,
+            ContainerLogsParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(Stream.Null);
+
+        public Task GetContainerLogsAsync(
+            string id,
+            ContainerLogsParameters parameters,
+            CancellationToken cancellationToken,
+            IProgress<string> progress)
+            => Task.CompletedTask;
+
+        public Task<Stream> GetContainerStatsAsync(
+            string id,
+            ContainerStatsParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(Stream.Null);
+
+        public Task GetContainerStatsAsync(
+            string id,
+            ContainerStatsParameters parameters,
+            IProgress<ContainerStatsResponse> progress,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<IList<ContainerFileSystemChangeResponse>> InspectChangesAsync(
+            string id,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IList<ContainerFileSystemChangeResponse>>([]);
+
+        public Task KillContainerAsync(
+            string id,
+            ContainerKillParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<ContainerProcessesResponse> ListProcessesAsync(
+            string id,
+            ContainerListProcessesParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerProcessesResponse());
+
+        public Task PauseContainerAsync(string id, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<ContainersPruneResponse> PruneContainersAsync(
+            ContainersPruneParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainersPruneResponse());
+
+        public Task RenameContainerAsync(
+            string id,
+            ContainerRenameParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task ResizeContainerTtyAsync(
+            string id,
+            ContainerResizeParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task RestartContainerAsync(
+            string id,
+            ContainerRestartParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task UnpauseContainerAsync(string id, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<ContainerUpdateResponse> UpdateContainerAsync(
+            string id,
+            ContainerUpdateParameters parameters,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerUpdateResponse());
+
+        public Task<ContainerWaitResponse> WaitContainerAsync(
+            string id,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new ContainerWaitResponse());
+    }
+
     private sealed class FixedLogsStub(string logContent) : IContainerOperations
     {
         public Task<MultiplexedStream> GetContainerLogsAsync(

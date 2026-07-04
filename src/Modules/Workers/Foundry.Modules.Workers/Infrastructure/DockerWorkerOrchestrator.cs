@@ -193,6 +193,8 @@ internal sealed class DockerWorkerOrchestrator(
 
         Pipe pipe = new();
 
+        using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
         Task copyTask = Task.Run(
             async () =>
             {
@@ -202,24 +204,51 @@ internal sealed class DockerWorkerOrchestrator(
                         Stream.Null,
                         pipe.Writer.AsStream(),
                         pipe.Writer.AsStream(),
-                        cancellationToken);
+                        linkedCts.Token);
                 }
                 finally
                 {
                     await pipe.Writer.CompleteAsync();
                 }
             },
-            cancellationToken);
+            linkedCts.Token);
 
         using StreamReader reader = new(pipe.Reader.AsStream());
 
-        string? line;
-        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+        try
         {
-            yield return SecretRedactor.Redact(line);
+            string? line;
+            while ((line = await ReadLineOrEndAsync(reader, cancellationToken)) is not null)
+            {
+                yield return SecretRedactor.Redact(line);
+            }
         }
+        finally
+        {
+            await linkedCts.CancelAsync();
 
-        await copyTask;
+            try
+            {
+                await copyTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // Pump was cancelled as part of teardown — not a fault.
+            }
+        }
+    }
+
+    private static async Task<string?> ReadLineOrEndAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await reader.ReadLineAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Consumer cancelled mid-stream — treat as clean end-of-stream.
+            return null;
+        }
     }
 
     public async Task<string?> GetLogsAsync(
