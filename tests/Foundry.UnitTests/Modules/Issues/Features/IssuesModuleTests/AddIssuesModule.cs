@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
@@ -43,6 +44,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
         services.AddScoped<IRepositoryEligibilityQuery, NullRepositoryEligibilityQuery>();
+        services.AddScoped<IWorkerRunQueries, NullWorkerRunQueries>();
         services.AddScoped<IIssueBroadcaster, NullIssueBroadcaster>();
         services.AddIssuesModule();
 

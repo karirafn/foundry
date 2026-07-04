@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
@@ -11,6 +12,53 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 {
+    public async Task<IReadOnlyDictionary<Guid, RunAggregate>> GetRunAggregatesForIssuesAsync(
+        IReadOnlyCollection<Guid> issueIds,
+        CancellationToken cancellationToken)
+    {
+        if (issueIds.Count == 0)
+        {
+            return new Dictionary<Guid, RunAggregate>();
+        }
+
+        List<IssueId> issueIdValues = issueIds
+            .Select(IssueId.From)
+            .ToList();
+
+        // The telemetry columns live on the RunResultSummary owned entity, configured via
+        // OwnsOne on CompletedRun and FailedRun only. EF cannot project OwnsOne properties
+        // from the base TPH Set<WorkerRun>() because the owned navigation is not on the base.
+        // Query the base set for per-row IssueId + telemetry-bearing subtype detection,
+        // then aggregate in memory. A single round-trip fetches all rows for the given issue IDs.
+        List<WorkerRunTelemetryRow> allRows = await FetchTelemetryRowsAsync(issueIdValues, cancellationToken);
+
+        return allRows
+            .GroupBy(r => r.IssueId)
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    List<WorkerRunTelemetryRow> groupRows = g.ToList();
+                    return new RunAggregate(
+                        RunCount: groupRows.Count,
+                        DurationMs: groupRows.Any(r => r.DurationMs.HasValue)
+                            ? groupRows.Sum(r => r.DurationMs)
+                            : null,
+                        NumTurns: groupRows.Any(r => r.NumTurns.HasValue)
+                            ? groupRows.Sum(r => r.NumTurns)
+                            : null,
+                        TotalCostUsd: groupRows.Any(r => r.TotalCostUsd.HasValue)
+                            ? groupRows.Sum(r => r.TotalCostUsd)
+                            : null,
+                        InputTokens: groupRows.Any(r => r.InputTokens.HasValue)
+                            ? (long?)groupRows.Sum(r => (long?)r.InputTokens ?? 0L)
+                            : null,
+                        OutputTokens: groupRows.Any(r => r.OutputTokens.HasValue)
+                            ? (long?)groupRows.Sum(r => (long?)r.OutputTokens ?? 0L)
+                            : null);
+                });
+    }
+
     public async Task<Result<WorkerRunDetail>> GetWorkerRunDetailAsync(
         Guid workerRunId,
         CancellationToken cancellationToken)
@@ -139,4 +187,60 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             LastActivityAt: null,
             CommitMarkers: [],
             HasStoredLog: false);
+
+    // Fetches one row per worker run for the specified issues. Server-side filtering (WHERE issue_id IN ...)
+    // is applied to keep the result set small; per-row telemetry is extracted from the typed subtypes
+    // because EF cannot project OwnsOne navigation properties from the base Set<WorkerRun>() in TPH.
+    private async Task<List<WorkerRunTelemetryRow>> FetchTelemetryRowsAsync(
+        List<IssueId> issueIds,
+        CancellationToken cancellationToken)
+    {
+        List<WorkerRunTelemetryRow> completed = await db.Set<CompletedRun>()
+            .AsNoTracking()
+            .Where(r => issueIds.Contains(r.IssueId))
+            .Select(r => new WorkerRunTelemetryRow(
+                IssueId: r.IssueId.Value,
+                DurationMs: r.ResultSummary != null ? (long?)r.ResultSummary.DurationMs : null,
+                NumTurns: r.ResultSummary != null ? (int?)r.ResultSummary.NumTurns : null,
+                TotalCostUsd: r.ResultSummary != null ? r.ResultSummary.TotalCostUsd : null,
+                InputTokens: r.ResultSummary != null ? r.ResultSummary.InputTokens : null,
+                OutputTokens: r.ResultSummary != null ? r.ResultSummary.OutputTokens : null))
+            .ToListAsync(cancellationToken);
+
+        List<WorkerRunTelemetryRow> failed = await db.Set<FailedRun>()
+            .AsNoTracking()
+            .Where(r => issueIds.Contains(r.IssueId))
+            .Select(r => new WorkerRunTelemetryRow(
+                IssueId: r.IssueId.Value,
+                DurationMs: r.ResultSummary != null ? (long?)r.ResultSummary.DurationMs : null,
+                NumTurns: r.ResultSummary != null ? (int?)r.ResultSummary.NumTurns : null,
+                TotalCostUsd: r.ResultSummary != null ? r.ResultSummary.TotalCostUsd : null,
+                InputTokens: r.ResultSummary != null ? r.ResultSummary.InputTokens : null,
+                OutputTokens: r.ResultSummary != null ? r.ResultSummary.OutputTokens : null))
+            .ToListAsync(cancellationToken);
+
+        // StartingRun and ActiveRun contribute to RunCount but have no telemetry.
+        List<WorkerRunTelemetryRow> noTelemetry = await db.Set<WorkerRun>()
+            .AsNoTracking()
+            .Where(r => issueIds.Contains(r.IssueId))
+            .Where(r => r is StartingRun || r is ActiveRun)
+            .Select(r => new WorkerRunTelemetryRow(
+                IssueId: r.IssueId.Value,
+                DurationMs: null,
+                NumTurns: null,
+                TotalCostUsd: null,
+                InputTokens: null,
+                OutputTokens: null))
+            .ToListAsync(cancellationToken);
+
+        return [..completed, ..failed, ..noTelemetry];
+    }
+
+    private sealed record WorkerRunTelemetryRow(
+        Guid IssueId,
+        long? DurationMs,
+        int? NumTurns,
+        decimal? TotalCostUsd,
+        int? InputTokens,
+        int? OutputTokens);
 }

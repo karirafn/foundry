@@ -4,6 +4,8 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +15,8 @@ namespace Foundry.Modules.Issues.Features;
 internal sealed class IssueQueries(
     DbContext db,
     IRepositorySlugQueries slugQueries,
-    IRepositoryEligibilityQuery eligibilityQuery) : IIssueQueries
+    IRepositoryEligibilityQuery eligibilityQuery,
+    IWorkerRunQueries workerRunQueries) : IIssueQueries
 {
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -126,6 +129,14 @@ internal sealed class IssueQueries(
             repositoryGuids,
             cancellationToken);
 
+        List<Guid> issueIds = issues
+            .Select(i => i.Id.Value)
+            .ToList();
+
+        IReadOnlyDictionary<Guid, RunAggregate> runAggregates = await workerRunQueries.GetRunAggregatesForIssuesAsync(
+            issueIds,
+            cancellationToken);
+
         return issues
             .Select(i => new IssueSummary(
                 Id: i.Id.Value,
@@ -138,9 +149,21 @@ internal sealed class IssueQueries(
                 FailureClassification: GetFailureCategory(i),
                 RepositoryEligibilityStatus: eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status)
                     ? status
+                    : null,
+                RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
+                    ? MapRunStats(aggregate)
                     : null))
             .ToList();
     }
+
+    private static RunStats MapRunStats(RunAggregate aggregate) =>
+        new(
+            RunCount: aggregate.RunCount,
+            DurationMs: aggregate.DurationMs,
+            NumTurns: aggregate.NumTurns,
+            TotalCostUsd: aggregate.TotalCostUsd,
+            InputTokens: aggregate.InputTokens,
+            OutputTokens: aggregate.OutputTokens);
 
     public async Task<IssueSummary?> GetIssueSummaryAsync(
         IssueId issueId,
@@ -182,7 +205,8 @@ internal sealed class IssueQueries(
             DetectedAt: issue.DetectedAt,
             Url: issue.Url.Value.ToString(),
             FailureClassification: GetFailureCategory(issue),
-            RepositoryEligibilityStatus: eligibilityStatus);
+            RepositoryEligibilityStatus: eligibilityStatus,
+            RunStats: null);
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -433,6 +457,14 @@ internal sealed class IssueQueries(
             repositoryGuids,
             cancellationToken);
 
+        List<Guid> issueIds = issues
+            .Select(i => i.Id.Value)
+            .ToList();
+
+        IReadOnlyDictionary<Guid, RunAggregate> runAggregates = await workerRunQueries.GetRunAggregatesForIssuesAsync(
+            issueIds,
+            cancellationToken);
+
         // Build a position lookup: repoId → Position for eligible repos only.
         Dictionary<Guid, int> positionByRepo = eligibleRepositories
             .ToDictionary(r => r.Id, r => r.Position);
@@ -487,6 +519,9 @@ internal sealed class IssueQueries(
                 FailureClassification: GetFailureCategory(i),
                 RepositoryEligibilityStatus: eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status)
                     ? status
+                    : null,
+                RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
+                    ? MapRunStats(aggregate)
                     : null))
             .ToList();
     }
