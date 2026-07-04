@@ -225,16 +225,19 @@ internal sealed class DockerWorkerOrchestrator(
         }
         finally
         {
+            // CancelAsync is a no-op when the pump already completed; it drives teardown on early exit.
             await linkedCts.CancelAsync();
 
             try
             {
                 await copyTask;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex) when (ex.CancellationToken == linkedCts.Token)
             {
-                // Pump was cancelled as part of teardown — not a fault.
+                // Pump cancelled as part of teardown — expected, not a fault.
             }
+
+            await pipe.Reader.CompleteAsync();
         }
     }
 
@@ -244,7 +247,7 @@ internal sealed class DockerWorkerOrchestrator(
         {
             return await reader.ReadLineAsync(cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
         {
             // Consumer cancelled mid-stream — treat as clean end-of-stream.
             return null;
