@@ -633,8 +633,11 @@ describe('IssueCardComponent', () => {
   describe('formatCost', () => {
     // Cycle 1: true zero → $0.00
     it('should format 0 as $0.00', () => {
-      // Arrange / Act
-      const result = formatCost(0);
+      // Arrange
+      const value = 0;
+
+      // Act
+      const result = formatCost(value);
 
       // Assert
       expect(result).toBe('$0.00');
@@ -642,8 +645,11 @@ describe('IssueCardComponent', () => {
 
     // Cycle 2: very small nonzero below a cent → <$0.01
     it('should format a value greater than 0 but less than 0.005 as <$0.01', () => {
-      // Arrange / Act
-      const result = formatCost(0.004);
+      // Arrange
+      const value = 0.004;
+
+      // Act
+      const result = formatCost(value);
 
       // Assert
       expect(result).toBe('<$0.01');
@@ -651,8 +657,11 @@ describe('IssueCardComponent', () => {
 
     // Cycle 3: exactly 0.005 rounds up to $0.01
     it('should format 0.005 as $0.01 (rounds up to nearest cent)', () => {
-      // Arrange / Act
-      const result = formatCost(0.005);
+      // Arrange
+      const value = 0.005;
+
+      // Act
+      const result = formatCost(value);
 
       // Assert
       expect(result).toBe('$0.01');
@@ -660,8 +669,11 @@ describe('IssueCardComponent', () => {
 
     // Cycle 4: normal value rounds to 2dp
     it('should format 1.239 as $1.24 (nearest cent)', () => {
-      // Arrange / Act
-      const result = formatCost(1.239);
+      // Arrange
+      const value = 1.239;
+
+      // Act
+      const result = formatCost(value);
 
       // Assert
       expect(result).toBe('$1.24');
@@ -669,8 +681,11 @@ describe('IssueCardComponent', () => {
 
     // Cycle 5: exact cent boundary
     it('should format 0.01 as $0.01', () => {
-      // Arrange / Act
-      const result = formatCost(0.01);
+      // Arrange
+      const value = 0.01;
+
+      // Act
+      const result = formatCost(value);
 
       // Assert
       expect(result).toBe('$0.01');
@@ -678,8 +693,11 @@ describe('IssueCardComponent', () => {
 
     // Cycle 6: larger value
     it('should format 12.5 as $12.50', () => {
-      // Arrange / Act
-      const result = formatCost(12.5);
+      // Arrange
+      const value = 12.5;
+
+      // Act
+      const result = formatCost(value);
 
       // Assert
       expect(result).toBe('$12.50');
@@ -691,8 +709,11 @@ describe('IssueCardComponent', () => {
   describe('formatDuration', () => {
     // Cycle 1: seconds only
     it('should format 45000ms as 45s', () => {
-      // Arrange / Act
-      const result = formatDuration(45000);
+      // Arrange
+      const ms = 45000;
+
+      // Act
+      const result = formatDuration(ms);
 
       // Assert
       expect(result).toBe('45s');
@@ -700,8 +721,11 @@ describe('IssueCardComponent', () => {
 
     // Cycle 2: minutes and seconds
     it('should format 90000ms (1m 30s) correctly', () => {
-      // Arrange / Act
-      const result = formatDuration(90000);
+      // Arrange
+      const ms = 90000;
+
+      // Act
+      const result = formatDuration(ms);
 
       // Assert
       expect(result).toBe('1m 30s');
@@ -709,8 +733,11 @@ describe('IssueCardComponent', () => {
 
     // Cycle 3: hours and minutes
     it('should format 3660000ms (1h 1m) correctly', () => {
-      // Arrange / Act
-      const result = formatDuration(3660000);
+      // Arrange
+      const ms = 3660000;
+
+      // Act
+      const result = formatDuration(ms);
 
       // Assert
       expect(result).toBe('1h 1m');
@@ -718,8 +745,11 @@ describe('IssueCardComponent', () => {
 
     // Cycle 4: zero
     it('should format 0ms as 0s', () => {
-      // Arrange / Act
-      const result = formatDuration(0);
+      // Arrange
+      const ms = 0;
+
+      // Act
+      const result = formatDuration(ms);
 
       // Assert
       expect(result).toBe('0s');
@@ -973,11 +1003,14 @@ describe('IssueCardComponent', () => {
   });
 
   it('should omit the run-stats row when runStats is undefined', () => {
-    // Arrange / Act
-    const fixture = createComponent(mockIssue); // no runStats on mockIssue
+    // Arrange
+    // mockIssue has no runStats property
+
+    // Act
+    const fixture = createComponent(mockIssue);
+    const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const el = fixture.nativeElement as HTMLElement;
     const row = el.querySelector('.issue-card__run-stats');
     expect(row).toBeFalsy();
   });
@@ -994,5 +1027,111 @@ describe('IssueCardComponent', () => {
     // Assert — RunStats doesn't have subtype; card must not render it
     const subtypePill = el.querySelector('.issue-card__stat-pill--subtype');
     expect(subtypePill).toBeFalsy();
+  });
+
+  // Cycle 19: runCount === 1 with ALL metric fields null hides the run-stats row
+  it('should omit the run-stats row when runCount is 1 and all metric fields are null', () => {
+    // Arrange
+    const singleRunNoMetrics: RunStats = {
+      runCount: 1,
+      durationMs: null,
+      numTurns: null,
+      totalCostUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+    };
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: singleRunNoMetrics };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const row = el.querySelector('.issue-card__run-stats');
+    expect(row).toBeFalsy();
+  });
+
+  // Cycle 20: aria-label includes run-stat summary when stats are present
+  it('should include run-stat summary in aria-label when runStats has visible pills', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Run stats:');
+  });
+
+  it('should include run count in aria-label only when runCount > 1', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats }; // runCount: 3
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('3 runs');
+  });
+
+  it('should omit run count from aria-label when runCount is 1', () => {
+    // Arrange
+    const singleRunStats: RunStats = { ...fullRunStats, runCount: 1 };
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: singleRunStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('runs');
+  });
+
+  it('should omit null metrics from aria-label run-stat summary', () => {
+    // Arrange — only runCount and durationMs are non-null
+    const partialStats: RunStats = {
+      runCount: 2,
+      durationMs: 90000,
+      numTurns: null,
+      totalCostUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+    };
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: partialStats };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Run stats:');
+    expect(label).toContain('2 runs');
+    expect(label).not.toContain('turns');
+    expect(label).not.toContain('input tokens');
+    expect(label).not.toContain('output tokens');
+  });
+
+  it('should not include run-stat summary in aria-label when runStats is null', () => {
+    // Arrange
+    const issueNoStats: IssueSummary = { ...mockIssue, runStats: null };
+
+    // Act
+    const fixture = createComponent(issueNoStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('Run stats:');
   });
 });

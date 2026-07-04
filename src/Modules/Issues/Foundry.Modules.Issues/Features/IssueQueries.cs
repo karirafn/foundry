@@ -196,6 +196,10 @@ internal sealed class IssueQueries(
             ? repoStatus
             : null;
 
+        IReadOnlyDictionary<Guid, RunAggregate> runAggregates = await workerRunQueries.GetRunAggregatesForIssuesAsync(
+            [issue.Id.Value],
+            cancellationToken);
+
         return new IssueSummary(
             Id: issue.Id.Value,
             IssueNumber: issue.IssueNumber,
@@ -206,7 +210,9 @@ internal sealed class IssueQueries(
             Url: issue.Url.Value.ToString(),
             FailureClassification: GetFailureCategory(issue),
             RepositoryEligibilityStatus: eligibilityStatus,
-            RunStats: null);
+            RunStats: runAggregates.TryGetValue(issue.Id.Value, out RunAggregate? aggregate)
+                ? MapRunStats(aggregate)
+                : null);
     }
 
     private static string? GetFailureCategory(Issue issue) =>

@@ -50,11 +50,12 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                         TotalCostUsd: groupRows.Any(r => r.TotalCostUsd.HasValue)
                             ? groupRows.Sum(r => r.TotalCostUsd)
                             : null,
+                        // int? per-row tokens promote to long? in the aggregate to avoid overflow.
                         InputTokens: groupRows.Any(r => r.InputTokens.HasValue)
-                            ? (long?)groupRows.Sum(r => (long?)r.InputTokens ?? 0L)
+                            ? groupRows.Sum(r => (long?)r.InputTokens)
                             : null,
                         OutputTokens: groupRows.Any(r => r.OutputTokens.HasValue)
-                            ? (long?)groupRows.Sum(r => (long?)r.OutputTokens ?? 0L)
+                            ? groupRows.Sum(r => (long?)r.OutputTokens)
                             : null);
                 });
     }
@@ -236,6 +237,8 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         return [..completed, ..failed, ..noTelemetry];
     }
 
+    // InputTokens and OutputTokens are stored as int? per-row but aggregated as long? to avoid
+    // integer overflow when summing across many runs with high token counts.
     private sealed record WorkerRunTelemetryRow(
         Guid IssueId,
         long? DurationMs,

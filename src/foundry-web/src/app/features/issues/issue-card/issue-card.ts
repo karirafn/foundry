@@ -153,7 +153,7 @@ function hasVisiblePills(stats: RunStats): boolean {
       >{{ issue().title }}</div>
 
       @if (_visibleRunStats(); as stats) {
-        <div class="issue-card__run-stats" aria-label="Run statistics">
+        <div class="issue-card__run-stats">
           @if (stats.runCount > 1) {
             <span class="issue-card__stat-pill issue-card__stat-pill--run-count issue-card__stat-pill--warning">
               <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -289,7 +289,38 @@ export class IssueCardComponent {
     const base = `${nextUp}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
     const warning = this.repoWarningLabel();
     const warningPart = warning ? ` ${warning}` : '';
-    return `${base}${warningPart}`;
+    const runStatsPart = this._buildRunStatsAriaText();
+    return `${base}${warningPart}${runStatsPart}`;
+  }
+
+  private _buildRunStatsAriaText(): string {
+    const stats = this._visibleRunStats();
+    if (stats === null) {
+      return '';
+    }
+
+    const parts: string[] = [];
+
+    if (stats.runCount > 1) {
+      parts.push(`${stats.runCount} runs`);
+    }
+    if (stats.durationMs !== null) {
+      parts.push(formatDuration(stats.durationMs));
+    }
+    if (stats.numTurns !== null) {
+      parts.push(`${stats.numTurns} turns`);
+    }
+    if (stats.totalCostUsd !== null) {
+      parts.push(formatCost(stats.totalCostUsd));
+    }
+    if (stats.inputTokens !== null) {
+      parts.push(`${stats.inputTokens.toLocaleString()} input tokens`);
+    }
+    if (stats.outputTokens !== null) {
+      parts.push(`${stats.outputTokens.toLocaleString()} output tokens`);
+    }
+
+    return ` Run stats: ${parts.join(', ')}.`;
   }
 
   repoWarningLabel(): string | null {
