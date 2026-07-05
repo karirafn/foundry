@@ -14,6 +14,7 @@ public static class ServiceDefaultsExtensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
+    private const string ReadinessEndpointPath = "/ready";
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -52,6 +53,7 @@ public static class ServiceDefaultsExtensions
                         tracing.Filter = context =>
                             !context.Request.Path.StartsWithSegments(HealthEndpointPath, StringComparison.OrdinalIgnoreCase)
                             && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath, StringComparison.OrdinalIgnoreCase)
+                            && !context.Request.Path.StartsWithSegments(ReadinessEndpointPath, StringComparison.OrdinalIgnoreCase)
                     )
                     .AddHttpClientInstrumentation();
             });
@@ -84,6 +86,11 @@ public static class ServiceDefaultsExtensions
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
+
+        app.MapHealthChecks(ReadinessEndpointPath, new HealthCheckOptions
+        {
+            Predicate = r => r.Tags.Contains("ready")
+        });
 
         if (app.Environment.IsDevelopment())
         {
