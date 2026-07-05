@@ -32,6 +32,7 @@
   <Folder Name="/src/Shared/">
     <Project Path="src/Foundry.Shared/Foundry.Shared.csproj" />
     <Project Path="src/Foundry.Shared.Infrastructure/Foundry.Shared.Infrastructure.csproj" />
+    <Project Path="src/Foundry.Shared.Infrastructure.Docker/Foundry.Shared.Infrastructure.Docker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Foundry.Testing/Foundry.Testing.csproj" />
