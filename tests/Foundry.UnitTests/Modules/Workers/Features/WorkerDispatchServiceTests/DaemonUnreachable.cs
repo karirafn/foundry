@@ -61,7 +61,8 @@ public sealed class DaemonUnreachable : WorkerDispatchServiceTestBase
     public async Task WhenDaemonRecoversAfterUnreachable_RunTransitionsNormally()
     {
         // Arrange — tick 1: both reconcile and monitor return Unreachable (run stays Active).
-        //            tick 2: reconcile skipped; monitor returns Available(exited) → CompletedRun.
+        //            tick 2: reconcile runs again (_reconciled not latched because tick 1 saw Unreachable);
+        //                    reconcile path (via MonitorRunAsync with knownProbe) transitions run → CompletedRun.
         SeedActiveRun("recovering-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
 
@@ -80,7 +81,8 @@ public sealed class DaemonUnreachable : WorkerDispatchServiceTestBase
         WorkerRun? midRun = await midDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         midRun.ShouldBeOfType<ActiveRun>();
 
-        // Act — second tick: reconcile skipped; monitor sees Available(exited) → transitions
+        // Act — second tick: reconcile runs again (daemon was unreachable on tick 1, _reconciled still false);
+        //        reconcile sees Available(exited) via MonitorRunAsync(knownProbe) → transitions run
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert — run transitioned to CompletedRun after daemon recovered

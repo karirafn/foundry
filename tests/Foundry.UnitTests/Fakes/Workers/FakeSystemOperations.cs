@@ -31,7 +31,7 @@ internal sealed class FakeSystemOperations : ISystemOperations
     /// </summary>
     public FakeSystemOperations WithTimeoutPing()
     {
-        _pingBehavior = ct => Task.FromException<Task>(new OperationCanceledException(ct));
+        _pingBehavior = ct => Task.FromException(new OperationCanceledException(ct));
         return this;
     }
 

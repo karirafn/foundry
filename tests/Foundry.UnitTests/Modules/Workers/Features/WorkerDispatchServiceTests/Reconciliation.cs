@@ -191,13 +191,8 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
             _probe = probe;
         }
 
-        private ReconciliationStubWorkerOrchestrator(WorkerStatusProbe probe, bool _)
-        {
-            _probe = probe;
-        }
-
         public static ReconciliationStubWorkerOrchestrator WithUnreachableDaemon()
-            => new(new WorkerStatusProbe.Unreachable(), false);
+            => new(new WorkerStatusProbe.Unreachable());
 
         public int GetStatusCallCount { get; private set; }
 
