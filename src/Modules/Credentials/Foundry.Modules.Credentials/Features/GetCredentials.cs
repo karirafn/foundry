@@ -29,7 +29,7 @@ internal static class GetCredentials
                 return Result<ClaudeAccountSummary>.Fail(CredentialsErrors.NotFound);
             }
 
-            return new ClaudeAccountSummary(account.Id.Value);
+            return CredentialQueries.ToSummary(account);
         }
     }
 

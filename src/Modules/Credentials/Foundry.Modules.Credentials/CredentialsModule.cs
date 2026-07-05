@@ -1,5 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Credentials.Features;
+using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;
@@ -13,6 +15,10 @@ public static class CredentialsModule
     {
         services.AddQueryHandler<GetCredentials.Query, ClaudeAccountSummary, GetCredentials.Handler>();
         services.AddHostedService<ClaudeAccountSeeder>();
+
+        services.AddScoped<ICredentialQueries, CredentialQueries>();
+        services.AddScoped<ICredentialGate, CredentialGate>();
+        services.AddSingleton<ILoginSessionState, NullLoginSessionState>();
 
         return services;
     }
