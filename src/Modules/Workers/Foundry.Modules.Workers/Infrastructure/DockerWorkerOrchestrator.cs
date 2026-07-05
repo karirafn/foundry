@@ -233,6 +233,7 @@ internal sealed class DockerWorkerOrchestrator(
         Task copyTask = Task.Run(
             async () =>
             {
+                Exception? pumpFault = null;
                 try
                 {
                     await multiplexedStream.CopyOutputToAsync(
@@ -250,9 +251,16 @@ internal sealed class DockerWorkerOrchestrator(
                     // raises an IOException or EndOfStreamException in that situation — treat it as
                     // normal completion so copyTask never faults with an expected end-of-stream.
                 }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Unexpected pump fault — record it so CompleteAsync forwards it to the pipe reader
+                    // rather than signalling a silent EOF. OperationCanceledException is excluded: it occurs
+                    // during teardown and is irrelevant to the consumer.
+                    pumpFault = ex;
+                }
                 finally
                 {
-                    await pipe.Writer.CompleteAsync();
+                    await pipe.Writer.CompleteAsync(pumpFault);
                 }
             },
             pumpCts.Token);
@@ -262,7 +270,7 @@ internal sealed class DockerWorkerOrchestrator(
         try
         {
             string? line;
-            while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+            while ((line = await ReadLineOrEndAsync(reader, cancellationToken)) is not null)
             {
                 yield return SecretRedactor.Redact(line);
             }
@@ -650,5 +658,29 @@ internal sealed class DockerWorkerOrchestrator(
             cancellationToken);
 
         await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads the next line from <paramref name="reader"/>, passing <paramref name="cancellationToken"/>
+    /// for prompt cancellation. When the consumer cancels (OperationCanceledException), returns
+    /// <see langword="null"/> so the read loop can exit as a clean <c>yield break</c> rather than
+    /// letting the OCE escape the async iterator. Non-cancellation faults propagate normally.
+    /// </summary>
+    /// <remarks>
+    /// The catch lives here because <c>yield return</c> cannot appear inside a <c>try/catch</c> block.
+    /// </remarks>
+    private static async Task<string?> ReadLineOrEndAsync(
+        StreamReader reader,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await reader.ReadLineAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Consumer cancelled — signal end-of-stream rather than propagating the OCE.
+            return null;
+        }
     }
 }
