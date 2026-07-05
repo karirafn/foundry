@@ -1,4 +1,4 @@
-using Foundry.Modules.Workers.Features;
+using Foundry.Shared.Infrastructure.Docker;
 
 using Shouldly;
 

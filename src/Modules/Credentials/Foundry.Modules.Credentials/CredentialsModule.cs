@@ -2,7 +2,9 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Credentials.Features;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +20,13 @@ public static class CredentialsModule
 
         services.AddScoped<ICredentialQueries, CredentialQueries>();
         services.AddScoped<ICredentialGate, CredentialGate>();
-        services.AddSingleton<ILoginSessionState, NullLoginSessionState>();
+
+        services.AddSharedDockerInfrastructure();
+        services.AddSingleton<ICredentialsOrchestrator, CredentialsOrchestrator>();
+
+        services.AddSingleton<LoginSessionService>();
+        services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
+        services.AddHostedService<LoginContainerReaper>();
 
         return services;
     }
@@ -26,6 +34,7 @@ public static class CredentialsModule
     public static IEndpointRouteBuilder MapCredentialsEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapCredentialEndpoints();
+        app.MapLoginEndpoints();
         return app;
     }
 }

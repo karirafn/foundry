@@ -1,5 +1,5 @@
-using Foundry.Modules.Workers.Features.Login;
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
 
 namespace Foundry.UnitTests.Fakes.Workers;
 

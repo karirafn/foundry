@@ -1,5 +1,6 @@
-using Foundry.Modules.Workers.Features.Login;
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -14,7 +15,7 @@ public sealed class IsLoginActive
     public void WhenNoSessionStarted_ReturnsFalse()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([]);
+        FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -29,7 +30,7 @@ public sealed class IsLoginActive
     {
         // Arrange
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
-        FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
+        FakeCredentialsOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
         await sut.StartAsync(TestContext.Current.CancellationToken);
         await sut.WaitForStartCompletedAsync();
@@ -46,7 +47,7 @@ public sealed class IsLoginActive
     {
         // Arrange — session transitions to WaitingForAuthorization then we trigger timeout
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
-        FakeWorkerOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
+        FakeCredentialsOrchestrator orchestrator = new([$"visit: {oauthUrl}"]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
         await sut.StartAsync(TestContext.Current.CancellationToken);
         await sut.WaitForStartCompletedAsync();
@@ -65,7 +66,7 @@ public sealed class IsLoginActive
         // Arrange
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
         AccountIdentity identity = new("user@example.com", "Example Org", "pro");
         orchestrator.WithAuthStatusIdentity(identity);

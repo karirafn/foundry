@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Features.Login;
 
 using Shouldly;
 

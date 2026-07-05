@@ -3,9 +3,10 @@ using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
 
@@ -39,7 +40,8 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
 
     private DockerClientConfiguration? _config;
     private DockerClient? _dockerClient;
-    private DockerWorkerOrchestrator? _sut;
+    private DockerWorkerOrchestrator? _workerSut;
+    private CredentialsOrchestrator? _credentialsSut;
     private bool _daemonReachable;
     private bool _imagePresent;
 
@@ -84,7 +86,8 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             _dockerClient.Volumes,
             _dockerClient.Exec);
 
-        _sut = new DockerWorkerOrchestrator(runtime, Options.Create(options));
+        _workerSut = new DockerWorkerOrchestrator(runtime, Options.Create(options));
+        _credentialsSut = new CredentialsOrchestrator(runtime);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -130,7 +133,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
-        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+        DockerWorkerOrchestrator workerSut = _workerSut.ShouldNotBeNull();
         string volumeName = _testVolumeName.ShouldNotBeNull();
 
         // Seed the credential volume so onboarding doesn't block the login prompt.
@@ -163,7 +166,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
 
             string? capturedUrl = null;
 
-            await foreach (string line in sut.StreamLogsAsync(containerId, urlCts.Token))
+            await foreach (string line in workerSut.StreamLogsAsync(containerId, urlCts.Token))
             {
                 string? url = AuthorizationUrlExtractor.Extract(line);
                 if (url is not null)
@@ -206,7 +209,8 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
-        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+        DockerWorkerOrchestrator workerSut = _workerSut.ShouldNotBeNull();
+        CredentialsOrchestrator credentialsSut = _credentialsSut.ShouldNotBeNull();
         string volumeName = _testVolumeName.ShouldNotBeNull();
 
         await SeedVolumeAsync(volumeName);
@@ -237,7 +241,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             using CancellationTokenSource urlCts = new(TimeSpan.FromSeconds(90));
 
             bool urlSeen = false;
-            await foreach (string line in sut.StreamLogsAsync(containerId, urlCts.Token))
+            await foreach (string line in workerSut.StreamLogsAsync(containerId, urlCts.Token))
             {
                 if (AuthorizationUrlExtractor.Extract(line) is not null)
                 {
@@ -251,7 +255,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             // Act — deliver a bogus code via exec (code is not a real secret; kept out of logs)
             // The env var C holds the code — no shell injection possible.
             const string BogusCode = "INVALID-CODE-FOR-TEST";
-            await sut.DeliverLoginCodeAsync(containerId, BogusCode, TestContext.Current.CancellationToken);
+            await credentialsSut.DeliverLoginCodeAsync(containerId, BogusCode, TestContext.Current.CancellationToken);
 
             // Assert — CLI rejected the bogus code and emitted an "Invalid code" message.
             // The CLI does NOT exit after one failed attempt; it stays alive and re-prompts.
@@ -260,7 +264,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             using CancellationTokenSource rejectionCts = new(TimeSpan.FromSeconds(60));
 
             bool rejectionSeen = false;
-            await foreach (string line in sut.StreamLogsAsync(containerId, rejectionCts.Token))
+            await foreach (string line in workerSut.StreamLogsAsync(containerId, rejectionCts.Token))
             {
                 if (line.Contains("Invalid code", StringComparison.OrdinalIgnoreCase))
                 {
@@ -280,44 +284,34 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Verifies that <see cref="DockerWorkerOrchestrator.GetAuthStatusAsync"/> correctly
+    /// Verifies that <see cref="CredentialsOrchestrator.GetCredentialVolumeAuthStatusAsync"/> correctly
     /// parses the real <c>claude auth status --json</c> output framing (Docker exec stdout
     /// via real multiplexed stream). When the credential volume has no valid token, the
     /// CLI reports not-logged-in — this confirms the exec→parse path works end-to-end.
     /// </summary>
     [Fact]
-    public async Task GetAuthStatusAsync_ParsesRealCliOutputFraming()
+    public async Task GetCredentialVolumeAuthStatusAsync_ParsesRealCliOutputFraming()
     {
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
-        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+        CredentialsOrchestrator credentialsSut = _credentialsSut.ShouldNotBeNull();
         string volumeName = _testVolumeName.ShouldNotBeNull();
 
         await SeedVolumeAsync(volumeName);
 
-        // Start a minimal container that stays alive long enough for exec.
-        string helperId = await StartHelperContainerAsync(volumeName);
+        // Act — exec auth status via the credential volume; no real token → loggedIn:false
+        Foundry.Shared.Result<AccountIdentity> result =
+            await credentialsSut.GetCredentialVolumeAuthStatusAsync(TestContext.Current.CancellationToken);
 
-        try
-        {
-            // Act — exec auth status; no real token → loggedIn:false
-            Foundry.Shared.Result<AccountIdentity> result =
-                await sut.GetAuthStatusAsync(helperId, TestContext.Current.CancellationToken);
-
-            // Assert — parse succeeds (no JSON framing artifacts); result is Failure (not logged in)
-            // The key assertion is that Parse receives valid JSON (not Docker frame headers).
-            result.ShouldBeOfType<Foundry.Shared.Result<AccountIdentity>.Failure>(
-                "Auth status should fail because no valid OAuth token exists on the test volume.");
-        }
-        finally
-        {
-            await RemoveContainerAsync(helperId);
-        }
+        // Assert — parse succeeds (no JSON framing artifacts); result is Failure (not logged in)
+        // The key assertion is that Parse receives valid JSON (not Docker frame headers).
+        result.ShouldBeOfType<Foundry.Shared.Result<AccountIdentity>.Failure>(
+            "Auth status should fail because no valid OAuth token exists on the test volume.");
     }
 
     /// <summary>
-    /// Verifies that <see cref="DockerWorkerOrchestrator.ListLoginContainersByLabelAsync"/>
+    /// Verifies that <see cref="CredentialsOrchestrator.ListLoginContainersByLabelAsync"/>
     /// finds a running container labeled <c>foundry.login=true</c> and returns its ID.
     /// This exercises the label-filter query that the startup reaper uses.
     /// </summary>
@@ -327,7 +321,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
-        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+        CredentialsOrchestrator credentialsSut = _credentialsSut.ShouldNotBeNull();
         string volumeName = _testVolumeName.ShouldNotBeNull();
 
         // Start a container with the login label (simulates an orphaned login container).
@@ -367,11 +361,13 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
                 TestContext.Current.CancellationToken);
 
             // Act
-            IReadOnlyList<Foundry.Modules.Workers.Domain.ContainerId> found =
-                await sut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
+            IReadOnlyList<string> found =
+                await credentialsSut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
 
             // Assert — at least our test container appears in the result
-            found.ShouldContain(c => c.Value == containerId);
+            // Docker may return either the full ID or a short prefix.
+            string containerPrefix = containerId[..12];
+            found.ShouldContain(id => id == containerId || id.StartsWith(containerPrefix, StringComparison.Ordinal));
         }
         finally
         {
@@ -382,7 +378,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
     /// <summary>
     /// Verifies the startup reap behavior: a container labeled <c>foundry.login=true</c>
     /// that is stopped and removed by <see cref="LoginContainerReaper"/> logic no longer
-    /// appears in <see cref="DockerWorkerOrchestrator.ListLoginContainersByLabelAsync"/>.
+    /// appears in <see cref="CredentialsOrchestrator.ListLoginContainersByLabelAsync"/>.
     /// </summary>
     [Fact]
     public async Task StartupReap_RemovesOrphanedLoginContainer()
@@ -390,7 +386,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
-        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+        CredentialsOrchestrator credentialsSut = _credentialsSut.ShouldNotBeNull();
         string volumeName = _testVolumeName.ShouldNotBeNull();
 
         // Start an "orphaned" login container.
@@ -428,18 +424,19 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         // Confirm it's listed before the reap.
-        IReadOnlyList<Foundry.Modules.Workers.Domain.ContainerId> before =
-            await sut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
-        before.ShouldContain(c => c.Value == orphanId);
+        string orphanPrefix = orphanId[..12];
+        IReadOnlyList<string> before =
+            await credentialsSut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
+        before.ShouldContain(id => id == orphanId || id.StartsWith(orphanPrefix, StringComparison.Ordinal));
 
         // Act — simulate what LoginContainerReaper does: stop then remove.
-        await sut.StopContainerAsync(orphanId, TestContext.Current.CancellationToken);
-        await sut.RemoveContainerAsync(orphanId, TestContext.Current.CancellationToken);
+        await credentialsSut.StopContainerAsync(orphanId, TestContext.Current.CancellationToken);
+        await credentialsSut.RemoveContainerAsync(orphanId, TestContext.Current.CancellationToken);
 
         // Assert — orphan no longer listed
-        IReadOnlyList<Foundry.Modules.Workers.Domain.ContainerId> after =
-            await sut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
-        after.ShouldNotContain(c => c.Value == orphanId);
+        IReadOnlyList<string> after =
+            await credentialsSut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
+        after.ShouldNotContain(id => id == orphanId || id.StartsWith(orphanPrefix, StringComparison.Ordinal));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -603,33 +600,6 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, TestContext.Current.CancellationToken);
-    }
-
-    private async Task<string?> ReadFileFromContainerAsync(string containerId, string path)
-    {
-        ContainerExecCreateResponse execResponse = await _dockerClient!.Exec.ExecCreateContainerAsync(
-            containerId,
-            new ContainerExecCreateParameters
-            {
-                Cmd = ["sh", "-c", $"cat {path} 2>/dev/null || echo ''"],
-                AttachStdout = true,
-                AttachStderr = false,
-            },
-            TestContext.Current.CancellationToken);
-
-        using MultiplexedStream stream = await _dockerClient.Exec.StartAndAttachContainerExecAsync(
-            execResponse.ID,
-            tty: false,
-            TestContext.Current.CancellationToken);
-
-        using MemoryStream stdout = new();
-        await stream.CopyOutputToAsync(Stream.Null, stdout, Stream.Null, TestContext.Current.CancellationToken);
-
-        stdout.Seek(0, SeekOrigin.Begin);
-        using StreamReader reader = new(stdout, Encoding.UTF8);
-        string content = (await reader.ReadToEndAsync(TestContext.Current.CancellationToken)).Trim();
-
-        return string.IsNullOrEmpty(content) ? null : content;
     }
 
     private async Task RemoveContainerAsync(string containerId)

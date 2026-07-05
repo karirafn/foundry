@@ -1,4 +1,5 @@
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -15,7 +16,7 @@ public sealed class SubmitEndpoint
     public async Task WhenCodeIsEmpty_Returns400()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([]);
+        FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -33,7 +34,7 @@ public sealed class SubmitEndpoint
     public async Task WhenCodeIsWhitespace_Returns400()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([]);
+        FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -51,7 +52,7 @@ public sealed class SubmitEndpoint
     public async Task WhenNoActiveSession_Returns422()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([]);
+        FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act — no session started; code is non-empty
@@ -71,7 +72,7 @@ public sealed class SubmitEndpoint
         // Arrange
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 

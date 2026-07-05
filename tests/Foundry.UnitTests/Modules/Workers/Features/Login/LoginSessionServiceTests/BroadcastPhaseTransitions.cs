@@ -1,5 +1,6 @@
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -11,7 +12,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Login.LoginSessionServiceTe
 public sealed class BroadcastPhaseTransitions
 {
     private static LoginSessionService CreateService(
-        FakeWorkerOrchestrator orchestrator,
+        FakeCredentialsOrchestrator orchestrator,
         CapturingLoginSessionBroadcaster broadcaster,
         FakeLoginSuccessCommitter? committer = null)
     {
@@ -27,7 +28,7 @@ public sealed class BroadcastPhaseTransitions
         // Arrange
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
 
@@ -45,7 +46,7 @@ public sealed class BroadcastPhaseTransitions
         // Arrange
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
 
@@ -64,7 +65,7 @@ public sealed class BroadcastPhaseTransitions
     public async Task WhenNoUrlReceived_BroadcastsFailedPhase()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([]);
+        FakeCredentialsOrchestrator orchestrator = new([]);
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
 
@@ -82,7 +83,7 @@ public sealed class BroadcastPhaseTransitions
         // Arrange
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
@@ -102,7 +103,7 @@ public sealed class BroadcastPhaseTransitions
         // Arrange
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
@@ -122,7 +123,7 @@ public sealed class BroadcastPhaseTransitions
         // Arrange
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         orchestrator.WithExitedContainer(exitCode: 1);
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);

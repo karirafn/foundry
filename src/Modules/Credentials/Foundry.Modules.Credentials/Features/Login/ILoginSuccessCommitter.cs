@@ -1,18 +1,19 @@
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure;
 
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// Commits the side-effects of a successful OAuth login: persists the account identity
-/// to <c>GlobalSettings</c>, clears <c>AuthInvalidPause</c>, and publishes
-/// <c>DispatchResumed</c> so the Phase-1 handler re-queues auth-invalid issues.
+/// and publishes <c>CredentialsValidated</c> so consumers can react to the credential update.
 /// </summary>
 /// <remarks>
 /// Injected into <see cref="LoginSessionService"/> so the state machine's
 /// transitions and timeouts are unit-testable with a fake, while the real
 /// DB mutation and event dispatch are tested separately.
+/// The implementation lives in the Workers module until step 6 inverts the
+/// cross-module write into an integration event.
 /// </remarks>
-internal interface ILoginSuccessCommitter
+public interface ILoginSuccessCommitter
 {
     Task CommitAsync(AccountIdentity identity, CancellationToken cancellationToken);
 }

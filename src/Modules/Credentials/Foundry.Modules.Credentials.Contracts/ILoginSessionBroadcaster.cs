@@ -1,10 +1,8 @@
-using Foundry.Modules.Workers.Contracts;
-
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Contracts;
 
 /// <summary>
 /// Broadcasts OAuth login session phase transitions to connected dashboard clients.
-/// The Workers module depends on this abstraction; the SignalR implementation lives in WebApi.
+/// The Credentials module depends on this abstraction; the SignalR implementation lives in WebApi.
 /// </summary>
 public interface ILoginSessionBroadcaster
 {

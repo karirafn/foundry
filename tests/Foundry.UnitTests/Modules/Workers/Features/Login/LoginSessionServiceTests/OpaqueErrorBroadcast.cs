@@ -1,6 +1,7 @@
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -20,7 +21,7 @@ public sealed class OpaqueErrorBroadcast
     private const string OpaqueMessage = "An unexpected error occurred.";
 
     private static LoginSessionService CreateService(
-        FakeWorkerOrchestrator orchestrator,
+        FakeCredentialsOrchestrator orchestrator,
         CapturingLoginSessionBroadcaster broadcaster,
         FakeLoginSuccessCommitter? committer = null)
     {
@@ -38,7 +39,7 @@ public sealed class OpaqueErrorBroadcast
     public async Task WhenAuthStatusFails_FailureMessageIsOpaque()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([UrlLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
         orchestrator.WithAuthStatusFailure(new Error("Auth.Failed", "internal-secret-error-detail"));
 

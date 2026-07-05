@@ -1,14 +1,10 @@
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Domain;
-using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Features.Login;
-using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.UnitTests.Fakes.Workers;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -18,23 +14,15 @@ namespace Foundry.UnitTests.Modules.Workers.Infrastructure.DockerWorkerOrchestra
 
 public sealed class StartLoginContainerAsync
 {
-    private static WorkerOptions DefaultOptions() => new()
-    {
-        Image = "test-image:latest",
-        MemoryLimitMb = 512,
-        CpuLimit = 1.5,
-        PidsLimit = 256,
-    };
-
-    private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
-        new(runtime, Options.Create(DefaultOptions()));
+    private static CredentialsOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
+        new(runtime);
 
     [Fact]
     public async Task WhenStarted_UsesLoginImageName()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
@@ -49,7 +37,7 @@ public sealed class StartLoginContainerAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
@@ -64,7 +52,7 @@ public sealed class StartLoginContainerAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
@@ -79,7 +67,7 @@ public sealed class StartLoginContainerAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
@@ -95,7 +83,7 @@ public sealed class StartLoginContainerAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
@@ -115,7 +103,7 @@ public sealed class StartLoginContainerAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
@@ -131,7 +119,7 @@ public sealed class StartLoginContainerAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
@@ -148,7 +136,7 @@ public sealed class StartLoginContainerAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
@@ -166,21 +154,21 @@ public sealed class StartLoginContainerAsync
     }
 
     [Fact]
-    public async Task WhenStarted_ReturnsContainerIdOnSuccess()
+    public async Task WhenStarted_ReturnsContainerIdStringOnSuccess()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithContainerId("login-container-xyz");
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        Result<ContainerId> result = await sut.StartLoginContainerAsync(
+        Result<string> result = await sut.StartLoginContainerAsync(
             new LoginContainerSpec(TimeoutSeconds: 600),
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<ContainerId>.Success success = result.ShouldBeOfType<Result<ContainerId>.Success>();
-        success.Value.Value.ShouldBe("login-container-xyz");
+        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
+        success.Value.ShouldBe("login-container-xyz");
     }
 }

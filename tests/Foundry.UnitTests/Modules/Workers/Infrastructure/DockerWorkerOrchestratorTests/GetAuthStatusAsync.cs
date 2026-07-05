@@ -1,9 +1,9 @@
-using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Infrastructure;
+using Docker.DotNet.Models;
+
+using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.UnitTests.Fakes.Workers;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -11,18 +11,15 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Infrastructure.DockerWorkerOrchestratorTests;
 
+/// <summary>
+/// Tests for credential volume auth status parsing. The internal <c>GetAuthStatusAsync</c>
+/// helper is exercised through <see cref="CredentialsOrchestrator.GetCredentialVolumeAuthStatusAsync"/>,
+/// which starts a helper container, execs the CLI, then tears it down.
+/// </summary>
 public sealed class GetAuthStatusAsync
 {
-    private static WorkerOptions DefaultOptions() => new()
-    {
-        Image = "test-image:latest",
-        MemoryLimitMb = 512,
-        CpuLimit = 1.5,
-        PidsLimit = 256,
-    };
-
-    private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
-        new(runtime, Options.Create(DefaultOptions()));
+    private static CredentialsOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
+        new(runtime);
 
     private static string ValidAuthStatusJson(
         string email = "user@example.com",
@@ -31,30 +28,15 @@ public sealed class GetAuthStatusAsync
         $$"""{"loggedIn":true,"email":"{{email}}","orgName":"{{orgName}}","subscriptionType":"{{subscriptionType}}"}""";
 
     [Fact]
-    public async Task WhenLoggedIn_ExecTargetsCorrectContainer()
-    {
-        // Arrange
-        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
-            .WithExecCaptureStdout(ValidAuthStatusJson());
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
-
-        // Act
-        await sut.GetAuthStatusAsync("target-container", CancellationToken.None);
-
-        // Assert
-        runtime.LastExecContainerId.ShouldBe("target-container");
-    }
-
-    [Fact]
     public async Task WhenLoggedIn_ExecUsesClaudeAuthStatusJsonCommand()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithExecCaptureStdout(ValidAuthStatusJson());
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.GetAuthStatusAsync("container-id", CancellationToken.None);
+        await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
 
         // Assert
         IReadOnlyList<string> captured = runtime.LastExecCommand.ShouldNotBeNull();
@@ -68,10 +50,10 @@ public sealed class GetAuthStatusAsync
         // layer. At the orchestrator level, verify it delegates to ExecCaptureStdoutAsync (not ExecAsync).
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithExecCaptureStdout(ValidAuthStatusJson());
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.GetAuthStatusAsync("container-id", CancellationToken.None);
+        await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
 
         // Assert — ExecCaptureStdoutAsync was invoked (LastExecContainerId set), not ExecAsync
         runtime.LastExecContainerId.ShouldNotBeNull();
@@ -84,12 +66,10 @@ public sealed class GetAuthStatusAsync
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithExecCaptureStdout(ValidAuthStatusJson("alice@acme.com", "Acme Corp", "max"));
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        Result<AccountIdentity> result = await sut.GetAuthStatusAsync(
-            "container-id",
-            CancellationToken.None);
+        Result<AccountIdentity> result = await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -106,12 +86,10 @@ public sealed class GetAuthStatusAsync
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithExecCaptureStdout("""{"loggedIn":false}""");
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        Result<AccountIdentity> result = await sut.GetAuthStatusAsync(
-            "container-id",
-            CancellationToken.None);
+        Result<AccountIdentity> result = await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeFalse();
@@ -125,14 +103,33 @@ public sealed class GetAuthStatusAsync
         string oversizedOutput = new('x', 20_480);
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithExecCaptureStdout(oversizedOutput);
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act — must not throw an OOM or any other exception; oversized output is truncated
-        Result<AccountIdentity> result = await sut.GetAuthStatusAsync(
-            "container-id",
-            CancellationToken.None);
+        Result<AccountIdentity> result = await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
 
         // Assert — parse fails gracefully (truncated data is not valid JSON); no crash
         result.IsSuccess.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenComplete_StartsHelperContainerWithReadOnlyMount()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithExecCaptureStdout(ValidAuthStatusJson());
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
+
+        // Assert — helper container mounts credential volume read-only
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        IList<Mount> mounts = captured.HostConfig.Mounts.ShouldNotBeNull();
+        mounts.ShouldContain(m =>
+            m.Type == "volume"
+            && m.Source == WorkerVolumeNames.CredentialVolumeName
+            && m.Target == WorkerVolumeNames.ClaudeConfigContainerPath
+            && m.ReadOnly);
     }
 }

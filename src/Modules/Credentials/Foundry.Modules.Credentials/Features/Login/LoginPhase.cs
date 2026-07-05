@@ -1,6 +1,6 @@
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure;
 
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// Sealed state-variant hierarchy representing the current phase of an OAuth login session.

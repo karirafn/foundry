@@ -1,4 +1,4 @@
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Shared;
 
 using Shouldly;

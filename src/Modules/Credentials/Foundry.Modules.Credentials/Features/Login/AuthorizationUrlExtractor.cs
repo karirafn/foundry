@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 internal static partial class AuthorizationUrlExtractor
 {

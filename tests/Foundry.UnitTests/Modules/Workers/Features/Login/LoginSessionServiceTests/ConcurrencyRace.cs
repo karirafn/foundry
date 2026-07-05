@@ -1,7 +1,8 @@
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -20,7 +21,7 @@ public sealed class ConcurrencyRace
     private const string UrlLine = $"If the browser didn't open, visit: {OAuthUrl}";
 
     private static LoginSessionService CreateService(
-        FakeWorkerOrchestrator orchestrator,
+        FakeCredentialsOrchestrator orchestrator,
         FakeLoginSuccessCommitter? committer = null,
         ILoginSessionBroadcaster? broadcaster = null)
     {
@@ -48,7 +49,7 @@ public sealed class ConcurrencyRace
     public async Task WhenBackgroundTaskDisposesCtsDuringDelivery_SubmitCodeAsyncSucceedsWithoutObjectDisposedException()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([UrlLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine, "Login successful."]);
         orchestrator
             .WithExitedContainer(exitCode: 0)
             .WithBlockingDeliver();
@@ -100,7 +101,7 @@ public sealed class ConcurrencyRace
     public async Task WhenSignInScanTimesOut_TransitionsToFailedWithCodeTimeout()
     {
         // Arrange — stream blocks after URL so WaitForLoginSuccessAsync blocks indefinitely
-        FakeWorkerOrchestrator orchestrator = new([UrlLine]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine]);
         orchestrator.WithBlockingStreamAfterLines();
 
         CapturingLoginSessionBroadcaster broadcaster = new();
@@ -138,7 +139,7 @@ public sealed class ConcurrencyRace
     public async Task WhenHostCancelledDuringSignInScan_DoesNotBroadcastFailed()
     {
         // Arrange — blocking stream after URL so sign-in log scan stays alive
-        FakeWorkerOrchestrator orchestrator = new([UrlLine]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine]);
         orchestrator.WithBlockingStreamAfterLines();
 
         CapturingLoginSessionBroadcaster broadcaster = new();
@@ -173,7 +174,7 @@ public sealed class ConcurrencyRace
     public async Task WhenSessionSucceeds_IsLoginActiveFalse_AndNewSessionCanStart()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([UrlLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
 
         AccountIdentity identity = new("user@example.com", "Org", "pro");

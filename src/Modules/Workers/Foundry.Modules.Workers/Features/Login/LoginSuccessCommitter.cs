@@ -1,6 +1,7 @@
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,8 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Workers.Features.Login;
 
 /// <summary>
-/// Real implementation of <see cref="ILoginSuccessCommitter"/>.
+/// Real implementation of <see cref="ILoginSuccessCommitter"/> that remains in the Workers
+/// module until step 6 inverts the cross-module write to an integration event.
 /// Opens a scoped service scope to access the DbContext and integration event dispatcher,
 /// then persists the account identity, clears <c>AuthInvalidPause</c> via
 /// <see cref="GlobalSettings.ResumeDispatch"/>, and publishes <see cref="DispatchResumed"/>

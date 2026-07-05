@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 internal static class LoginEndpoints
 {

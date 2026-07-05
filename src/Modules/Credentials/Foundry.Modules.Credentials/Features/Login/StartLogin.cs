@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// POST /api/settings/oauth/login/start

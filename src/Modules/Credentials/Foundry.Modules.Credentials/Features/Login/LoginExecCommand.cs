@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// Builds the <c>docker exec</c> argv for delivering the OAuth code

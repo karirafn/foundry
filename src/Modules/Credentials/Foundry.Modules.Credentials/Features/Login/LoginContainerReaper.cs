@@ -1,10 +1,9 @@
-using Foundry.Modules.Workers.Domain;
-using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Credentials.Infrastructure;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// Startup hook that stops and removes any orphaned <c>foundry.login</c> containers
@@ -13,12 +12,12 @@ namespace Foundry.Modules.Workers.Features.Login;
 /// before the application starts accepting requests.
 /// </summary>
 internal sealed class LoginContainerReaper(
-    IWorkerOrchestrator orchestrator,
+    ICredentialsOrchestrator orchestrator,
     ILogger<LoginContainerReaper> logger) : IHostedService, IHostedLifecycleService
 {
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
-        IReadOnlyList<ContainerId> orphans =
+        IReadOnlyList<string> orphans =
             await orchestrator.ListLoginContainersByLabelAsync(cancellationToken);
 
         if (orphans.Count == 0)
@@ -30,9 +29,9 @@ internal sealed class LoginContainerReaper(
             "Reaping {Count} orphaned foundry.login container(s) from previous session.",
             orphans.Count);
 
-        foreach (ContainerId containerId in orphans)
+        foreach (string containerId in orphans)
         {
-            await ReapContainerAsync(containerId.Value, cancellationToken);
+            await ReapContainerAsync(containerId, cancellationToken);
         }
     }
 

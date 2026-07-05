@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// Typed reason hierarchy for a failed OAuth login session.

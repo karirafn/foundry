@@ -1,5 +1,6 @@
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -20,7 +21,7 @@ public sealed class InvalidCodeHandling
     private const string UrlLine = $"If the browser didn't open, visit: {OAuthUrl}";
 
     private static LoginSessionService CreateService(
-        FakeWorkerOrchestrator orchestrator,
+        FakeCredentialsOrchestrator orchestrator,
         CapturingLoginSessionBroadcaster? broadcaster = null,
         FakeLoginSuccessCommitter? committer = null)
     {
@@ -39,7 +40,7 @@ public sealed class InvalidCodeHandling
     public async Task WhenCliEmitsInvalidCode_WithBlockingStream_SessionFailsWithInvalidCode()
     {
         // Arrange — stream yields URL + "Invalid code" then blocks indefinitely (no EOF)
-        FakeWorkerOrchestrator orchestrator = new([UrlLine, "Invalid code. Please try again."]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine, "Invalid code. Please try again."]);
         orchestrator.WithBlockingStreamAfterLines();
 
         CapturingLoginSessionBroadcaster broadcaster = new();
@@ -68,7 +69,7 @@ public sealed class InvalidCodeHandling
     public async Task WhenCliEmitsInvalidCodeLowercase_SessionFailsWithInvalidCode()
     {
         // Arrange — lowercase variant of the rejection message
-        FakeWorkerOrchestrator orchestrator = new([UrlLine, "invalid code, please try again"]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine, "invalid code, please try again"]);
         orchestrator.WithBlockingStreamAfterLines();
 
         CapturingLoginSessionBroadcaster broadcaster = new();
@@ -96,7 +97,7 @@ public sealed class InvalidCodeHandling
     public async Task WhenTwoConcurrentStartCalls_OnlyOneSessionCreated_BothReturnSameId()
     {
         // Arrange — orchestrator with URL so background task has stable work
-        FakeWorkerOrchestrator orchestrator = new([UrlLine]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine]);
         LoginSessionService sut = CreateService(orchestrator);
 
         // Act — fire two concurrent starts; the lock must ensure only one session is created
@@ -118,7 +119,7 @@ public sealed class InvalidCodeHandling
     public async Task WhenHostCancellationFires_IsLoginActiveBecomesFalse()
     {
         // Arrange — blocking stream so RunSessionAsync waits; host cancel must unblock it
-        FakeWorkerOrchestrator orchestrator = new([UrlLine]);
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine]);
         orchestrator.WithBlockingStreamAfterLines();
         LoginSessionService sut = CreateService(orchestrator);
 

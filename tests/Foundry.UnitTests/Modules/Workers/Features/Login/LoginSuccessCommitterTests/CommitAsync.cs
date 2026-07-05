@@ -1,7 +1,7 @@
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.Login;
-using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 

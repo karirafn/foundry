@@ -1,4 +1,5 @@
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,7 +16,7 @@ public sealed class StartingAsync
     public async Task WhenNoOrphanedContainers_DoesNotStop_OrRemoveAnyContainers()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new();
+        FakeCredentialsOrchestrator orchestrator = new();
         LoginContainerReaper sut = new(orchestrator, NullLogger<LoginContainerReaper>.Instance);
 
         // Act
@@ -30,7 +31,7 @@ public sealed class StartingAsync
     public async Task WhenOneOrphanedContainer_StopsAndRemovesIt()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new();
+        FakeCredentialsOrchestrator orchestrator = new();
         orchestrator.WithOrphanedLoginContainers("orphan-1");
         LoginContainerReaper sut = new(orchestrator, NullLogger<LoginContainerReaper>.Instance);
 
@@ -46,7 +47,7 @@ public sealed class StartingAsync
     public async Task WhenMultipleOrphanedContainers_StopsAndRemovesEach()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new();
+        FakeCredentialsOrchestrator orchestrator = new();
         orchestrator.WithOrphanedLoginContainers("orphan-1", "orphan-2", "orphan-3");
         LoginContainerReaper sut = new(orchestrator, NullLogger<LoginContainerReaper>.Instance);
 

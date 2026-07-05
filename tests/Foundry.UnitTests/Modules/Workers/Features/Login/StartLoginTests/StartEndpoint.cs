@@ -1,4 +1,5 @@
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -17,7 +18,7 @@ public sealed class StartEndpoint
         // Arrange
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -37,7 +38,7 @@ public sealed class StartEndpoint
         // Arrange
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         Accepted<StartLogin.Response> first = await StartLogin.Endpoint.HandleAsync(

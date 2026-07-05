@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
@@ -7,7 +8,6 @@ using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 

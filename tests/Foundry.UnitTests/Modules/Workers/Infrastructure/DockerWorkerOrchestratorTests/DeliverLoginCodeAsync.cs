@@ -1,9 +1,6 @@
-using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Features.Login;
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.UnitTests.Fakes.Workers;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -13,23 +10,15 @@ namespace Foundry.UnitTests.Modules.Workers.Infrastructure.DockerWorkerOrchestra
 
 public sealed class DeliverLoginCodeAsync
 {
-    private static WorkerOptions DefaultOptions() => new()
-    {
-        Image = "test-image:latest",
-        MemoryLimitMb = 512,
-        CpuLimit = 1.5,
-        PidsLimit = 256,
-    };
-
-    private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
-        new(runtime, Options.Create(DefaultOptions()));
+    private static CredentialsOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
+        new(runtime);
 
     [Fact]
     public async Task WhenCodeDelivered_ExecCreatedInCorrectContainer()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.DeliverLoginCodeAsync("test-container-id", "my-code", CancellationToken.None);
@@ -43,7 +32,7 @@ public sealed class DeliverLoginCodeAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.DeliverLoginCodeAsync("container-id", "auth-code-abc", CancellationToken.None);
@@ -59,7 +48,7 @@ public sealed class DeliverLoginCodeAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
@@ -78,7 +67,7 @@ public sealed class DeliverLoginCodeAsync
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
         const string codeWithMeta = @"abc$'"";&|";
 
         // Act
@@ -99,7 +88,7 @@ public sealed class DeliverLoginCodeAsync
     {
         // Arrange — ExecAsync discards all output; no writes to a capturing stream
         FakeDockerContainerRuntime runtime = new();
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);

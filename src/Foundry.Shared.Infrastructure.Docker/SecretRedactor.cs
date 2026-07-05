@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Shared.Infrastructure.Docker;
 
 /// <summary>
 /// Redacts secrets from container output before persistence.
@@ -9,9 +9,9 @@ namespace Foundry.Modules.Workers.Features;
 /// and redacts values of sensitive environment variables (<c>CLAUDE_CODE_OAUTH_TOKEN</c>, <c>ANTHROPIC_API_KEY</c>)
 /// regardless of value shape.
 /// </summary>
-internal static partial class SecretRedactor
+public static partial class SecretRedactor
 {
-    internal static string Redact(string output)
+    public static string Redact(string output)
     {
         string result = HttpsUserinfoPattern().Replace(output, "https://***@");
         result = SensitiveEnvVarPattern().Replace(result, "${key}=***");

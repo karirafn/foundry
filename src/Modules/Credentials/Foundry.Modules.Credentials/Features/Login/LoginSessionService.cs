@@ -1,11 +1,10 @@
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Domain;
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// Singleton service that manages a single in-memory OAuth login session.
@@ -13,7 +12,7 @@ namespace Foundry.Modules.Workers.Features.Login;
 /// a dependency on the full service.
 /// </summary>
 internal sealed class LoginSessionService(
-    IWorkerOrchestrator orchestrator,
+    ICredentialsOrchestrator orchestrator,
     ILoginSuccessCommitter successCommitter,
     ILoginSessionBroadcaster broadcaster,
     ILogger<LoginSessionService>? logger = null) : ILoginSessionState
@@ -268,12 +267,12 @@ internal sealed class LoginSessionService(
     {
         try
         {
-            Result<ContainerId> startResult = await orchestrator.StartLoginContainerAsync(
+            Result<string> startResult = await orchestrator.StartLoginContainerAsync(
                 new LoginContainerSpec(TimeoutSeconds: (int)LoginSessionOptions.SessionTimeout.TotalSeconds),
                 hostToken);
 
-            string containerId = startResult is Result<ContainerId>.Success s
-                ? s.Value.Value
+            string containerId = startResult is Result<string>.Success s
+                ? s.Value
                 : string.Empty;
 
             // Patch the session's container ID now that we have it
@@ -469,7 +468,7 @@ internal sealed class LoginSessionService(
     /// Returns <c>true</c> immediately when the success signal ("Login successful.") is seen —
     /// the container may still be running at this point, so exit code is not consulted.
     /// The authoritative credential validation happens downstream in
-    /// <see cref="Infrastructure.IWorkerOrchestrator.GetCredentialVolumeAuthStatusAsync"/>.
+    /// <see cref="ICredentialsOrchestrator.GetCredentialVolumeAuthStatusAsync"/>.
     /// Returns <c>false</c> when an "Invalid code" rejection is detected (CLI re-prompts;
     /// the stream is cancelled via <paramref name="cancellationToken"/> which is the self-owned
     /// sign-in CTS so the scan is bounded by <see cref="LoginSessionOptions.SignInTimeout"/>.

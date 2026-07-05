@@ -1,5 +1,6 @@
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -17,7 +18,7 @@ public sealed class SessionTimeout
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
@@ -45,7 +46,7 @@ public sealed class SessionTimeout
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
@@ -72,7 +73,7 @@ public sealed class SessionTimeout
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), broadcaster);
 

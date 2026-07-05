@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// Fixed timeout constants for the interactive OAuth login session.

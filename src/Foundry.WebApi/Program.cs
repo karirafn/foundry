@@ -1,11 +1,11 @@
 using Foundry.Modules.Credentials;
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.ServiceDefaults;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;

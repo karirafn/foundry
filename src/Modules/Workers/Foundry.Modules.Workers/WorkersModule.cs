@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -46,10 +47,10 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
 
+        // LoginSuccessCommitter stays in Workers until step 6 inverts the cross-module write to an event.
+        // Register as ILoginSuccessCommitter (from Credentials) so LoginSessionService (now in Credentials)
+        // can resolve it via DI. The cross-module write will be inverted to an event in step 6.
         services.AddSingleton<ILoginSuccessCommitter, LoginSuccessCommitter>();
-        services.AddSingleton<LoginSessionService>();
-        services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
-        services.AddHostedService<LoginContainerReaper>();
 
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddHostedService<WorkerDispatchService>();
@@ -61,7 +62,6 @@ public static class WorkersModule
     public static IEndpointRouteBuilder MapWorkersEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapWorkerEndpoints();
-        app.MapLoginEndpoints();
         return app;
     }
 }

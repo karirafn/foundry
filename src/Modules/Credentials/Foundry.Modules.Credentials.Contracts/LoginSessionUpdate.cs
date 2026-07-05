@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Contracts;
+namespace Foundry.Modules.Credentials.Contracts;
 
 /// <summary>
 /// Payload broadcast over SignalR to dashboard clients on each OAuth login session phase transition.

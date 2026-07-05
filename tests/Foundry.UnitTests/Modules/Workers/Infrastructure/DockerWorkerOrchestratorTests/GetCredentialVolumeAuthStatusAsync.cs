@@ -1,11 +1,8 @@
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Infrastructure;
 using Foundry.UnitTests.Fakes.Workers;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -15,16 +12,8 @@ namespace Foundry.UnitTests.Modules.Workers.Infrastructure.DockerWorkerOrchestra
 
 public sealed class GetCredentialVolumeAuthStatusAsync
 {
-    private static WorkerOptions DefaultOptions() => new()
-    {
-        Image = "test-image:latest",
-        MemoryLimitMb = 512,
-        CpuLimit = 1.5,
-        PidsLimit = 256,
-    };
-
-    private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
-        new(runtime, Options.Create(DefaultOptions()));
+    private static CredentialsOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
+        new(runtime);
 
     [Fact]
     public async Task WhenStarted_MountsCredentialVolumeReadOnly()
@@ -35,7 +24,7 @@ public sealed class GetCredentialVolumeAuthStatusAsync
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithContainerId("helper-container-id")
             .WithExecCaptureStdout(validJson);
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);

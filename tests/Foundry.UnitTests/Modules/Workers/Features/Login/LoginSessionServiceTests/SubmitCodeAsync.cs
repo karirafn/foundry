@@ -1,6 +1,7 @@
-using Foundry.Modules.Workers.Features.Login;
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -12,7 +13,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Login.LoginSessionServiceTe
 public sealed class SubmitCodeAsync
 {
     private static LoginSessionService CreateService(
-        FakeWorkerOrchestrator orchestrator,
+        FakeCredentialsOrchestrator orchestrator,
         FakeLoginSuccessCommitter? committer = null)
     {
         return new LoginSessionService(
@@ -28,7 +29,7 @@ public sealed class SubmitCodeAsync
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
 
         AccountIdentity expectedIdentity = new("alice@example.com", "Acme Corp", "pro");
@@ -56,7 +57,7 @@ public sealed class SubmitCodeAsync
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
 
         AccountIdentity expectedIdentity = new("bob@example.com", "Widgets Inc", "team");
@@ -91,7 +92,7 @@ public sealed class SubmitCodeAsync
         // Login container exits with code 0 — it is stopped when GetAuthStatusAsync is called on it.
         // The faithful fake throws on exec-against-stopped-container, so if the production code
         // still calls GetAuthStatusAsync(containerId, ...) the test would fail with Unknown failure.
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
 
         AccountIdentity expectedIdentity = new("carol@example.com", "Acme Ltd", "pro");
@@ -118,7 +119,7 @@ public sealed class SubmitCodeAsync
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
 
         LoginSessionService sut = CreateService(orchestrator);
@@ -140,7 +141,7 @@ public sealed class SubmitCodeAsync
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
 
         LoginSessionService sut = CreateService(orchestrator);
@@ -162,7 +163,7 @@ public sealed class SubmitCodeAsync
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
         orchestrator.WithExitedContainer(exitCode: 0);
 
         LoginSessionService sut = CreateService(orchestrator);
@@ -183,7 +184,7 @@ public sealed class SubmitCodeAsync
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         orchestrator.WithExitedContainer(exitCode: 1);
 
         LoginSessionService sut = CreateService(orchestrator);
@@ -204,7 +205,7 @@ public sealed class SubmitCodeAsync
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         orchestrator.WithExitedContainer(exitCode: 1);
 
         LoginSessionService sut = CreateService(orchestrator);
@@ -226,7 +227,7 @@ public sealed class SubmitCodeAsync
         string url = "https://claude.ai/oauth/authorize?code=true";
         string logLine = $"If the browser didn't open, visit: {url}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         orchestrator.WithExitedContainer(exitCode: 1);
 
         FakeLoginSuccessCommitter committer = new();
@@ -255,8 +256,8 @@ public sealed class SubmitCodeAsync
         string logLine = $"If the browser didn't open, visit: {url}";
 
         // Container remains running — GetStatusAsync returns ExitCode == null.
-        // Do NOT call WithExitedContainer() — default FakeWorkerOrchestrator state is running.
-        FakeWorkerOrchestrator orchestrator = new([logLine, "Login successful."]);
+        // Do NOT call WithExitedContainer() — default FakeCredentialsOrchestrator state is running.
+        FakeCredentialsOrchestrator orchestrator = new([logLine, "Login successful."]);
 
         AccountIdentity expectedIdentity = new("alice@example.com", "Acme Corp", "pro");
         orchestrator.WithAuthStatusIdentity(expectedIdentity);
@@ -279,7 +280,7 @@ public sealed class SubmitCodeAsync
     public async Task WhenNoActiveSession_SubmitCodeAsync_ReturnsNoActiveSessionError()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([]);
+        FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService sut = CreateService(orchestrator);
 
         // Act — no session started
@@ -301,7 +302,7 @@ public sealed class SubmitCodeAsync
 
         // Use a blocking-stream orchestrator so the log scan for the second code delivery
         // does not race to completion — the session stays in SigningIn throughout.
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         orchestrator.WithBlockingStreamAfterLines();
         LoginSessionService sut = CreateService(orchestrator);
 

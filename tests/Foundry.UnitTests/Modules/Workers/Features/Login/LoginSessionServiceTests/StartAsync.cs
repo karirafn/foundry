@@ -1,4 +1,5 @@
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Features.Login;
+using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -16,7 +17,7 @@ public sealed class StartAsync
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -36,7 +37,7 @@ public sealed class StartAsync
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -51,7 +52,7 @@ public sealed class StartAsync
     public async Task WhenNoUrlEmitted_TransitionsToFailed_WithUrlTimeout()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([]);
+        FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -67,7 +68,7 @@ public sealed class StartAsync
     public async Task WhenNoUrlEmitted_IsLoginActiveBecomesFalse()
     {
         // Arrange
-        FakeWorkerOrchestrator orchestrator = new([]);
+        FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -85,7 +86,7 @@ public sealed class StartAsync
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -103,7 +104,7 @@ public sealed class StartAsync
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
@@ -120,7 +121,7 @@ public sealed class StartAsync
         string oauthUrl = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz";
         string logLine = $"If the browser didn't open, visit: {oauthUrl}";
 
-        FakeWorkerOrchestrator orchestrator = new([logLine]);
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act — StartAsync should return without waiting for the URL scan
@@ -138,7 +139,7 @@ public sealed class StartAsync
         string padding = new('x', 8_193);
         string oversizedLine = $"{padding} visit: {oauthUrl}";
 
-        FakeWorkerOrchestrator orchestrator = new([oversizedLine]);
+        FakeCredentialsOrchestrator orchestrator = new([oversizedLine]);
         LoginSessionService sut = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act — background task should exhaust the log stream without finding a URL

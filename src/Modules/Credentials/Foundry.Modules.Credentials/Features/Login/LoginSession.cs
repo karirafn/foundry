@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Features.Login;
+namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
 /// Holds the in-memory state for a single OAuth login session.

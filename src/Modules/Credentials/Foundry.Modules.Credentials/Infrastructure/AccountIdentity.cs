@@ -3,17 +3,17 @@ using System.Text.Json.Nodes;
 
 using Foundry.Shared;
 
-namespace Foundry.Modules.Workers.Infrastructure;
+namespace Foundry.Modules.Credentials.Infrastructure;
 
 /// <summary>
 /// Parsed result of <c>claude auth status --json</c>.
 /// Contains the display identity fields needed after a successful OAuth login.
 /// </summary>
-internal sealed record AccountIdentity(string Email, string OrgName, string SubscriptionType)
+public sealed record AccountIdentity(string Email, string OrgName, string SubscriptionType)
 {
-    internal const int MaxEmailLength = 254;
-    internal const int MaxOrgNameLength = 200;
-    internal const int MaxSubscriptionTypeLength = 64;
+    public const int MaxEmailLength = 254;
+    public const int MaxOrgNameLength = 200;
+    public const int MaxSubscriptionTypeLength = 64;
 
     private static readonly Error NotLoggedIn = new(
         "AccountIdentity.NotLoggedIn",
@@ -32,7 +32,7 @@ internal sealed record AccountIdentity(string Email, string OrgName, string Subs
     /// Returns a failure when the JSON is invalid or <c>loggedIn</c> is <c>false</c>.
     /// Fields exceeding their length cap are silently truncated.
     /// </summary>
-    internal static Result<AccountIdentity> Parse(string json)
+    public static Result<AccountIdentity> Parse(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {

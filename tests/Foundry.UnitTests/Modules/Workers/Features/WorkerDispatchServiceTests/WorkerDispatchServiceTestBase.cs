@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -7,7 +8,6 @@ using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 

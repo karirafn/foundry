@@ -1,11 +1,7 @@
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Workers.Domain;
-using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure;
 using Foundry.UnitTests.Fakes.Workers;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -17,16 +13,8 @@ public sealed class ListLoginContainersByLabelAsync
 {
     private const string LoginLabel = "foundry.login";
 
-    private static WorkerOptions DefaultOptions() => new()
-    {
-        Image = "test-image:latest",
-        MemoryLimitMb = 512,
-        CpuLimit = 1.5,
-        PidsLimit = 256,
-    };
-
-    private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
-        new(runtime, Options.Create(DefaultOptions()));
+    private static CredentialsOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
+        new(runtime);
 
     [Fact]
     public async Task WhenNoLoginContainersExist_ReturnsEmptyList()
@@ -34,10 +22,10 @@ public sealed class ListLoginContainersByLabelAsync
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithListResponse([]);
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        IReadOnlyList<ContainerId> result = await sut.ListLoginContainersByLabelAsync(CancellationToken.None);
+        IReadOnlyList<string> result = await sut.ListLoginContainersByLabelAsync(CancellationToken.None);
 
         // Assert
         result.ShouldBeEmpty();
@@ -54,15 +42,15 @@ public sealed class ListLoginContainersByLabelAsync
         ];
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithListResponse(containers);
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        IReadOnlyList<ContainerId> result = await sut.ListLoginContainersByLabelAsync(CancellationToken.None);
+        IReadOnlyList<string> result = await sut.ListLoginContainersByLabelAsync(CancellationToken.None);
 
         // Assert
         result.Count.ShouldBe(2);
-        result.ShouldContain(ContainerId.From("login-container-1"));
-        result.ShouldContain(ContainerId.From("login-container-2"));
+        result.ShouldContain("login-container-1");
+        result.ShouldContain("login-container-2");
     }
 
     [Fact]
@@ -71,7 +59,7 @@ public sealed class ListLoginContainersByLabelAsync
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithListResponse([]);
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.ListLoginContainersByLabelAsync(CancellationToken.None);
@@ -88,7 +76,7 @@ public sealed class ListLoginContainersByLabelAsync
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
             .WithListResponse([]);
-        DockerWorkerOrchestrator sut = BuildSut(runtime);
+        CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.ListLoginContainersByLabelAsync(CancellationToken.None);
