@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
@@ -121,7 +123,7 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
     private sealed class OrphanedContainerCleanupStub : IWorkerOrchestrator
     {
         private readonly IReadOnlyList<(ContainerId, WorkerRunId)> _containers;
-        private readonly WorkerStatus? _status;
+        private readonly WorkerStatusProbe _probe;
         private readonly bool _listThrows;
 
         public int StopAsyncCallCount { get; private set; }
@@ -134,9 +136,25 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
             bool listThrows = false)
         {
             _containers = containers ?? [];
-            _status = status;
+            _probe = status is null
+                ? new WorkerStatusProbe.NotFound()
+                : new WorkerStatusProbe.Available(status);
             _listThrows = listThrows;
         }
+
+        private OrphanedContainerCleanupStub(
+            IReadOnlyList<(ContainerId, WorkerRunId)> containers,
+            WorkerStatusProbe probe,
+            bool listThrows)
+        {
+            _containers = containers;
+            _probe = probe;
+            _listThrows = listThrows;
+        }
+
+        public static OrphanedContainerCleanupStub WithUnreachableDaemon(
+            IReadOnlyList<(ContainerId, WorkerRunId)>? containers = null)
+            => new(containers ?? [], new WorkerStatusProbe.Unreachable(), listThrows: false);
 
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test", "No dispatch")));
@@ -152,9 +170,7 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         }
 
         public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatusProbe>(_status is null
-                ? new WorkerStatusProbe.NotFound()
-                : new WorkerStatusProbe.Available(_status));
+            => Task.FromResult(_probe);
 
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
@@ -169,7 +185,7 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
             yield break;
@@ -197,9 +213,9 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
             CancellationToken cancellationToken)
             => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
 
-
         public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+
         public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ContainerId>>([]);
 

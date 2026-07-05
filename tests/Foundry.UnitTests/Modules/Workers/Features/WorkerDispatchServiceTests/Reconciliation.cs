@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Login;
@@ -20,7 +22,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
     {
         // Arrange — resolver maps null-exit with no MR and no commits → NonZeroExit(-1)
         SeedActiveRun("orphaned-container");
-        ReconciliationStubWorkerOrchestrator orchestrator = new(status: null);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.NotFound());
         WorkerDispatchService sut = BuildService(orchestrator);
 
         // Act
@@ -40,7 +42,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("running-container");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        ReconciliationStubWorkerOrchestrator orchestrator = new(status: runningStatus);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.Available(runningStatus));
         WorkerDispatchService sut = BuildService(orchestrator);
 
         // Act
@@ -58,7 +60,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("exited-zero-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
-        ReconciliationStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.Available(exitedStatus));
         WorkerDispatchService sut = BuildService(orchestrator);
 
         // Act
@@ -76,7 +78,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("exited-nonzero-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 2, FinishedAt: DateTimeOffset.UtcNow);
-        ReconciliationStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.Available(exitedStatus));
         WorkerDispatchService sut = BuildService(orchestrator);
 
         // Act
@@ -96,7 +98,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("exited-on-reconcile-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
-        ReconciliationStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.Available(exitedStatus));
         WorkerDispatchService sut = BuildService(orchestrator);
 
         // Act
@@ -111,7 +113,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
     {
         // Arrange — seed run, first tick will reconcile (container missing → FailedRun)
         // Then seed another active run; second tick should NOT reconcile it (it stays Active)
-        ReconciliationStubWorkerOrchestrator orchestrator = new(status: null);
+        ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.NotFound());
         WorkerDispatchService sut = BuildService(orchestrator);
 
         // First tick: reconciles the orphaned run (no active runs seeded yet, so nothing happens)
@@ -130,7 +132,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         orchestrator.GetStatusCallCount.ShouldBe(1);
     }
 
-    internal sealed class ReconciliationStubWorkerOrchestrator(WorkerStatus? status) : IWorkerOrchestrator
+    internal sealed class ReconciliationStubWorkerOrchestrator(WorkerStatusProbe probe) : IWorkerOrchestrator
     {
         public int GetStatusCallCount { get; private set; }
 
@@ -146,14 +148,12 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
         {
             GetStatusCallCount++;
-            return Task.FromResult<WorkerStatusProbe>(status is null
-                ? new WorkerStatusProbe.NotFound()
-                : new WorkerStatusProbe.Available(status));
+            return Task.FromResult(probe);
         }
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
             yield break;
@@ -185,9 +185,9 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
             CancellationToken cancellationToken)
             => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
 
-
         public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+
         public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ContainerId>>([]);
 
