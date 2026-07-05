@@ -2111,6 +2111,97 @@ describe('IssueService (dispatch-order queue grouping)', () => {
   });
 });
 
+// Step 9 — Dispatch-order signals read raw issues(), not sortedIssues() (issue #275)
+describe('IssueService (dispatch-order vs visual-sort regression)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  const base: IssueSummary = {
+    id: 'base',
+    issueNumber: 1,
+    title: 'Base',
+    state: 'queued',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/1',
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Regression: when continuation_queued (In progress bucket) visually precedes queued/revision_queued
+  // (Waiting bucket) in sortedIssues(), nextUpIssueId must still reflect true server dispatch order
+  // from issues() — NOT the visual position in sortedIssues().
+  it('should pick nextUpIssueId from server dispatch order, not from visual sortedIssues position', () => {
+    // Arrange — server delivers eligible queued first (position 0), then continuation_queued (position 1).
+    // In sortedIssues(), continuation_queued (In progress, rank 0) renders visually ABOVE queued (Waiting, rank 2).
+    const eligibleQueued: IssueSummary = { ...base, id: 'server-first-queued', state: 'queued', repositoryEligibilityStatus: null };
+    const contQueued: IssueSummary = { ...base, id: 'cont-queued', state: 'continuation_queued', repositoryEligibilityStatus: null };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([eligibleQueued, contQueued]);
+
+    // Assert — sortedIssues() has continuation_queued first (In progress bucket precedes Waiting bucket)
+    expect(service.sortedIssues()[0].id).toBe('cont-queued');
+    expect(service.sortedIssues()[1].id).toBe('server-first-queued');
+
+    // But nextUpIssueId must follow server order from issues() — queued (server position 0) is next up,
+    // NOT continuation_queued which only appears first visually
+    expect(service.nextUpIssueId()).toBe('server-first-queued');
+  });
+
+  // eligibleQueuedIssues returns cards in raw server order (not visual sort order)
+  it('should return eligibleQueuedIssues in raw server order from issues()', () => {
+    // Arrange — server delivers: queued (elig, pos 0), revision_queued (elig, pos 1), continuation_queued (elig, pos 2).
+    // Visual sort puts continuation_queued (In progress bucket) first, but server order must be preserved.
+    const queuedFirst: IssueSummary = { ...base, id: 'q-first', state: 'queued', repositoryEligibilityStatus: null };
+    const revQueuedSecond: IssueSummary = { ...base, id: 'rv-second', state: 'revision_queued', repositoryEligibilityStatus: null };
+    const contQueuedThird: IssueSummary = { ...base, id: 'cq-third', state: 'continuation_queued', repositoryEligibilityStatus: null };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([queuedFirst, revQueuedSecond, contQueuedThird]);
+
+    // Assert — server order preserved in eligibleQueuedIssues
+    const eligible = service.eligibleQueuedIssues();
+    expect(eligible[0].id).toBe('q-first');
+    expect(eligible[1].id).toBe('rv-second');
+    expect(eligible[2].id).toBe('cq-third');
+    expect(eligible.length).toBe(3);
+  });
+
+  // ineligibleQueuedIssues returns cards in raw server order
+  it('should return ineligibleQueuedIssues in raw server order from issues()', () => {
+    // Arrange — server delivers: continuation_queued (inelig, pos 0), queued (inelig, pos 1).
+    // Visual sort would put continuation_queued first regardless; server order must be preserved.
+    const contQueuedFirst: IssueSummary = { ...base, id: 'cq-inelig-first', state: 'continuation_queued', repositoryEligibilityStatus: 'ineligible' };
+    const queuedSecond: IssueSummary = { ...base, id: 'q-inelig-second', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([contQueuedFirst, queuedSecond]);
+
+    // Assert — server order preserved
+    const ineligible = service.ineligibleQueuedIssues();
+    expect(ineligible[0].id).toBe('cq-inelig-first');
+    expect(ineligible[1].id).toBe('q-inelig-second');
+    expect(ineligible.length).toBe(2);
+  });
+});
+
 // Step 8 — Group-rank multi-key sort (issue #275)
 describe('IssueService (group-rank multi-key sort)', () => {
   let service: IssueService;

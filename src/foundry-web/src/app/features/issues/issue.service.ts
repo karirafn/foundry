@@ -116,16 +116,21 @@ export class IssueService {
     this.issues().filter(i => LIVE_STATES.has(i.state)).length
   );
 
+  // Read issues() (raw server order = DispatchOrderKey) — NOT sortedIssues().
+  // Step 2's bucket sort splits the queued chain across visual groups (continuation_queued
+  // lands in "In progress", queued/revision_queued land in "Waiting"), so sortedIssues()
+  // no longer reflects true server dispatch priority. Dispatch order must follow issues().
   readonly eligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
-    this.sortedIssues().filter(i =>
+    this.issues().filter(i =>
       QUEUED_TIER_STATES.has(i.state) &&
       i.repositoryEligibilityStatus !== 'ineligible' &&
       i.repositoryEligibilityStatus !== 'unreachable'
     )
   );
 
+  // Same rationale: filter issues() to preserve server dispatch order.
   readonly ineligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
-    this.sortedIssues().filter(i =>
+    this.issues().filter(i =>
       QUEUED_TIER_STATES.has(i.state) &&
       (i.repositoryEligibilityStatus === 'ineligible' || i.repositoryEligibilityStatus === 'unreachable')
     )
