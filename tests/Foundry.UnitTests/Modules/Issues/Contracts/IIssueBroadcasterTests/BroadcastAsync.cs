@@ -21,7 +21,8 @@ public sealed class BroadcastAsync
             DetectedAt: DateTimeOffset.UtcNow,
             Url: "https://github.com/owner/repo/issues/42",
             FailureClassification: null,
-            RepositoryEligibilityStatus: null);
+            RepositoryEligibilityStatus: null,
+            RunStats: null);
 
         StubIssueBroadcaster sut = new();
 

@@ -1,12 +1,38 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
-import { NgClass } from '@angular/common';
-import { IssueSummary, LIVE_STATES } from '../issue.model';
+import { DecimalPipe, NgClass } from '@angular/common';
+import { IssueSummary, RunStats, LIVE_STATES } from '../issue.model';
 import { STATE_ARIA_LABELS } from '../state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
+
+const SUB_CENT_THRESHOLD = 0.005;
+
+export function formatCost(value: number): string {
+  if (value === 0) {
+    return '$0.00';
+  }
+  if (value > 0 && value < SUB_CENT_THRESHOLD) {
+    return '<$0.01';
+  }
+  return `$${value.toFixed(2)}`;
+}
+
+export function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  }
+  return `${seconds}s`;
+}
 
 const WARNING_CLASSES: Record<string, string> = {
   ineligible: 'issue-card__repo-warning--ineligible',
@@ -59,10 +85,21 @@ function silentDuration(lastActivityAt: string): string {
   return `silent ${diffMinutes}m`;
 }
 
+function hasVisiblePills(stats: RunStats): boolean {
+  return (
+    stats.runCount > 1 ||
+    stats.durationMs !== null ||
+    stats.numTurns !== null ||
+    stats.totalCostUsd !== null ||
+    stats.inputTokens !== null ||
+    stats.outputTokens !== null
+  );
+}
+
 @Component({
   selector: 'fd-issue-card',
   standalone: true,
-  imports: [StateBadgeComponent, SafeHrefPipe, NgClass],
+  imports: [StateBadgeComponent, SafeHrefPipe, NgClass, DecimalPipe],
   template: `
     <button
       type="button"
@@ -114,6 +151,67 @@ function silentDuration(lastActivityAt: string): string {
         class="issue-card__title"
         [attr.title]="issue().title"
       >{{ issue().title }}</div>
+
+      @if (_visibleRunStats(); as stats) {
+        <div class="issue-card__run-stats">
+          @if (stats.runCount > 1) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--run-count issue-card__stat-pill--warning">
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+              <span class="sr-only">Run count: </span><span class="issue-card__stat-value">{{ stats.runCount }}<span class="sr-only"> runs</span></span>
+            </span>
+          }
+          @if (stats.durationMs !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--duration">
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <polyline points="12 7 12 12 15 14" />
+              </svg>
+              <span class="sr-only">Duration: </span><span class="issue-card__stat-value">{{ _formatDuration(stats.durationMs) }}</span>
+            </span>
+          }
+          @if (stats.numTurns !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--turns">
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
+              <span class="sr-only">Turns: </span><span class="issue-card__stat-value">{{ stats.numTurns }}<span class="sr-only"> turns</span></span>
+            </span>
+          }
+          @if (stats.totalCostUsd !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--cost">
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M14.8 9.3a2.6 2.6 0 0 0-2.8-1.3c-1.3.2-2.2 1-2.2 2 0 1.2 1.1 1.6 2.6 2 1.7.4 2.8.9 2.8 2.1 0 1.1-1 1.9-2.4 2a2.7 2.7 0 0 1-2.8-1.4" />
+                <line x1="12" y1="6" x2="12" y2="8" />
+                <line x1="12" y1="16" x2="12" y2="18" />
+              </svg>
+              <span class="sr-only">Cost: </span><span class="issue-card__stat-value">{{ _formatCost(stats.totalCostUsd) }}<span class="sr-only"> USD</span></span>
+            </span>
+          }
+          @if (stats.inputTokens !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--input-tokens">
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="6 11 12 5 18 11" />
+              </svg>
+              <span class="sr-only">Input tokens: </span><span class="issue-card__stat-value">{{ stats.inputTokens | number }}<span class="sr-only"> input tokens</span></span>
+            </span>
+          }
+          @if (stats.outputTokens !== null) {
+            <span class="issue-card__stat-pill issue-card__stat-pill--output-tokens">
+              <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <polyline points="6 13 12 19 18 13" />
+              </svg>
+              <span class="sr-only">Output tokens: </span><span class="issue-card__stat-value">{{ stats.outputTokens | number }}<span class="sr-only"> output tokens</span></span>
+            </span>
+          }
+        </div>
+      }
 
       <div class="issue-card__footer">
         <span class="issue-card__timestamp">{{ timestamp() }}</span>
@@ -176,6 +274,14 @@ export class IssueCardComponent {
     return status ? (WARNING_CLASSES[status] ?? '') : '';
   });
 
+  readonly _visibleRunStats = computed((): RunStats | null => {
+    const stats = this.issue().runStats ?? null;
+    if (stats === null || !hasVisiblePills(stats)) {
+      return null;
+    }
+    return stats;
+  });
+
   issueAriaLabel(): string {
     const issue = this.issue();
     const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
@@ -183,7 +289,38 @@ export class IssueCardComponent {
     const base = `${nextUp}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
     const warning = this.repoWarningLabel();
     const warningPart = warning ? ` ${warning}` : '';
-    return `${base}${warningPart}`;
+    const runStatsPart = this._buildRunStatsAriaText();
+    return `${base}${warningPart}${runStatsPart}`;
+  }
+
+  private _buildRunStatsAriaText(): string {
+    const stats = this._visibleRunStats();
+    if (stats === null) {
+      return '';
+    }
+
+    const parts: string[] = [];
+
+    if (stats.runCount > 1) {
+      parts.push(`${stats.runCount} runs`);
+    }
+    if (stats.durationMs !== null) {
+      parts.push(formatDuration(stats.durationMs));
+    }
+    if (stats.numTurns !== null) {
+      parts.push(`${stats.numTurns} turns`);
+    }
+    if (stats.totalCostUsd !== null) {
+      parts.push(formatCost(stats.totalCostUsd));
+    }
+    if (stats.inputTokens !== null) {
+      parts.push(`${stats.inputTokens.toLocaleString()} input tokens`);
+    }
+    if (stats.outputTokens !== null) {
+      parts.push(`${stats.outputTokens.toLocaleString()} output tokens`);
+    }
+
+    return ` Run stats: ${parts.join(', ')}.`;
   }
 
   repoWarningLabel(): string | null {
@@ -203,6 +340,14 @@ export class IssueCardComponent {
 
   timestamp(): string {
     return timeAgo(this.issue().detectedAt);
+  }
+
+  protected _formatCost(value: number): string {
+    return formatCost(value);
+  }
+
+  protected _formatDuration(ms: number): string {
+    return formatDuration(ms);
   }
 
   onCardClick(): void {

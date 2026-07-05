@@ -1,0 +1,199 @@
+using System.Net;
+using System.Net.Http.Json;
+
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Domain;
+using Foundry.Shared;
+using Foundry.WebApi.Persistence;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.IntegrationTests.Modules.Issues.Endpoints.GetIssuesTests;
+
+public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
+{
+    private readonly FoundryWebAppFactory _factory;
+    private readonly HttpClient _client;
+
+    private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
+
+    private static IssueAuthor ValidAuthor =>
+        IssueAuthor.Create("octocat").ValueOrThrow();
+
+    private static ProviderUrl ValidUrl =>
+        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
+
+    public WhenIssueHasWorkerRuns()
+    {
+        _factory = new FoundryWebAppFactory();
+        _client = _factory.CreateClient();
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    private async Task<IssueId> SeedQueuedIssueAsync(int issueNumber)
+    {
+        // No POST endpoint for issues — seed directly via DbContext.
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        DetectedIssue detected = DetectedIssue.Detect(
+            RepositoryId,
+            issueNumber: issueNumber,
+            title: $"Issue {issueNumber}",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+
+        dbContext.Set<Issue>().Add(queued);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return queued.Id;
+    }
+
+    private async Task SeedCompletedRunAsync(
+        IssueId issueId,
+        long durationMs,
+        int numTurns,
+        decimal totalCostUsd)
+    {
+        // No POST endpoint for worker runs — seed directly via DbContext.
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
+        ActiveRun active = starting.Activate(
+            ContainerId.From("container-stats-test"),
+            BranchName.From("feat/stats-test"),
+            MonitoredRepositoryId.New());
+
+        RunResultSummary summary = RunResultSummary.Create(
+            resultText: null,
+            subtype: null,
+            isError: false,
+            durationMs: durationMs,
+            numTurns: numTurns,
+            totalCostUsd: totalCostUsd,
+            inputTokens: 100,
+            outputTokens: 50);
+
+        CompletedRun completed = active.Complete(exitCode: 0, branchName: null, pullRequestUrl: null, resultSummary: summary);
+        dbContext.Set<WorkerRun>().Add(completed);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task WhenActiveIssueHasTwoRuns_RunStatsContainsSums()
+    {
+        // Arrange
+        IssueId issueId = await SeedQueuedIssueAsync(issueNumber: 1);
+        await SeedCompletedRunAsync(issueId, durationMs: 1000, numTurns: 3, totalCostUsd: 0.10m);
+        await SeedCompletedRunAsync(issueId, durationMs: 2000, numTurns: 5, totalCostUsd: 0.20m);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/issues", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+            TestContext.Current.CancellationToken);
+        summaries.ShouldNotBeNull();
+        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        RunStats runStats = summary.RunStats.ShouldNotBeNull();
+        runStats.ShouldSatisfyAllConditions(
+            () => runStats.RunCount.ShouldBe(2),
+            () => runStats.DurationMs.ShouldBe(3000L),
+            () => runStats.NumTurns.ShouldBe(8),
+            () => runStats.TotalCostUsd.ShouldBe(0.30m),
+            () => runStats.InputTokens.ShouldBe(200L),
+            () => runStats.OutputTokens.ShouldBe(100L));
+    }
+
+    [Fact]
+    public async Task WhenActiveIssueHasNoRuns_RunStatsIsNull()
+    {
+        // Arrange
+        await SeedQueuedIssueAsync(issueNumber: 2);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/issues", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+            TestContext.Current.CancellationToken);
+        summaries.ShouldNotBeNull();
+        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        summary.RunStats.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenResolvedIssueHasTwoRuns_RunStatsContainsSums()
+    {
+        // Arrange — seed a completed issue (resolved state).
+        using IServiceScope seedScope = _factory.Services.CreateScope();
+        DbContext seedDb = seedScope.ServiceProvider.GetRequiredService<DbContext>();
+
+        DetectedIssue detected = DetectedIssue.Detect(
+            RepositoryId,
+            issueNumber: 3,
+            title: "Resolved Issue",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        ReviewIssue review = inProgress.MarkInReview(
+            inProgress.WorkerRunId,
+            "feat/3-fix",
+            "https://github.com/owner/repo/pull/3",
+            DateTimeOffset.UtcNow.AddHours(1));
+        CompletedIssue completedIssue = review.Complete(DateTimeOffset.UtcNow.AddHours(2));
+
+        seedDb.Set<Issue>().Add(completedIssue);
+        await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        IssueId issueId = completedIssue.Id;
+        await SeedCompletedRunAsync(issueId, durationMs: 3000, numTurns: 4, totalCostUsd: 0.15m);
+        await SeedCompletedRunAsync(issueId, durationMs: 7000, numTurns: 6, totalCostUsd: 0.25m);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/issues?states=completed", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        PagedIssues? result = await response.Content.ReadFromJsonAsync<PagedIssues>(
+            TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
+        RunStats runStats = summary.RunStats.ShouldNotBeNull();
+        runStats.ShouldSatisfyAllConditions(
+            () => runStats.RunCount.ShouldBe(2),
+            () => runStats.DurationMs.ShouldBe(10000L),
+            () => runStats.NumTurns.ShouldBe(10));
+    }
+}

@@ -27,7 +27,8 @@ public sealed class BroadcastAsync
             DetectedAt: DateTimeOffset.UtcNow,
             Url: "https://github.com/owner/repo/issues/1",
             FailureClassification: null,
-            RepositoryEligibilityStatus: null);
+            RepositoryEligibilityStatus: null,
+            RunStats: null);
 
         // Act
         await sut.BroadcastAsync(summary, TestContext.Current.CancellationToken);
