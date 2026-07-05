@@ -120,3 +120,9 @@ body {
   white-space: nowrap;
   border: 0;
 }
+
+/* Global utility keyframe — shared by skeleton components (issue-card-skeleton, run-stats-bar, etc.) */
+@keyframes fd-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

@@ -82,10 +82,20 @@ function setupComponent() {
   return { fixture, httpMock };
 }
 
+const mockRunTotals = {
+  runCount: 0,
+  durationMs: 0,
+  numTurns: 0,
+  totalCostUsd: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+};
+
 function flushInit(httpMock: HttpTestingController, issues: IssueSummary[] = []) {
   httpMock.expectOne('/api/issues').flush(issues);
   httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
   httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+  httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
 }
 
 describe('IssueListComponent', () => {
@@ -131,6 +141,7 @@ describe('IssueListComponent', () => {
     httpMock.expectOne('/api/issues').flush([]);
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
   });
 
   it('should call loadCounts on initialization', () => {
@@ -146,6 +157,7 @@ describe('IssueListComponent', () => {
     const countsReq = httpMock.expectOne('/api/issues/counts');
     expect(countsReq.request.url).toBe('/api/issues/counts');
     countsReq.flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
   });
 
   // Cycle 3: renders fd-issue-filter-rail
@@ -271,6 +283,7 @@ describe('IssueListComponent', () => {
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
 
     // Assert — error state, not empty-active state
@@ -408,6 +421,7 @@ describe('IssueListComponent', () => {
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
 
     // Assert
@@ -429,6 +443,7 @@ describe('IssueListComponent', () => {
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
 
     // Assert
@@ -447,6 +462,7 @@ describe('IssueListComponent', () => {
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
 
     // Act
@@ -705,6 +721,7 @@ describe('IssueListComponent', () => {
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
 
     // Assert
@@ -727,6 +744,22 @@ describe('IssueListComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const controls = el.querySelector('fd-dispatch-controls');
     expect(controls).toBeTruthy();
+  });
+
+  // Cycle 13b: fd-run-stats-bar is mounted in the issue-list body
+  it('should render fd-run-stats-bar inside the issue-list body', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+
+    // Act
+    fixture.detectChanges();
+    flushInit(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const bar = el.querySelector('fd-run-stats-bar');
+    expect(bar).toBeTruthy();
   });
 
   // Cycle 14: resolved band — no divider when no resolved state selected
@@ -1346,6 +1379,7 @@ describe('IssueListComponent', () => {
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
 
     // Assert — active error block present, no resolved section
@@ -1492,6 +1526,7 @@ describe('IssueListComponent', () => {
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
 
     // Act — click retry; flush the resulting request before asserting so cleanup runs even on failure

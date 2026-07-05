@@ -20,4 +20,10 @@ public sealed class NullWorkerRunQueries : IWorkerRunQueries
         IReadOnlyCollection<Guid> issueIds,
         CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyDictionary<Guid, RunAggregate>>(new Dictionary<Guid, RunAggregate>());
+
+    public Task<RunTotals> GetRunTotalsAsync(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
+        => Task.FromResult(new RunTotals(0, 0L, 0, 0m, 0L, 0L));
 }
