@@ -34,20 +34,34 @@ internal sealed class DockerContainerRuntime(
         int waitBeforeKillSeconds,
         CancellationToken cancellationToken)
     {
-        await containerOperations.StopContainerAsync(
-            containerId,
-            new ContainerStopParameters { WaitBeforeKillSeconds = (uint)waitBeforeKillSeconds },
-            cancellationToken);
+        try
+        {
+            await containerOperations.StopContainerAsync(
+                containerId,
+                new ContainerStopParameters { WaitBeforeKillSeconds = (uint)waitBeforeKillSeconds },
+                cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            // Container already gone — treat as successful stop.
+        }
     }
 
     public async Task RemoveAsync(
         string containerId,
         CancellationToken cancellationToken)
     {
-        await containerOperations.RemoveContainerAsync(
-            containerId,
-            new ContainerRemoveParameters { Force = true },
-            cancellationToken);
+        try
+        {
+            await containerOperations.RemoveContainerAsync(
+                containerId,
+                new ContainerRemoveParameters { Force = true },
+                cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            // Container already gone — treat as successful removal.
+        }
     }
 
     public async Task<ContainerInspectResponse> InspectAsync(
