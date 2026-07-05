@@ -209,16 +209,22 @@ internal sealed class DockerContainerRuntime(
         int? maxBytes,
         CancellationToken cancellationToken)
     {
+        ContainerExecCreateParameters execParams = new()
+        {
+            Cmd = [.. command],
+            AttachStdin = false,
+            AttachStdout = true,
+            AttachStderr = false,
+        };
+
+        if (environment.Count > 0)
+        {
+            execParams.Env = [.. environment];
+        }
+
         ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
             containerId,
-            new ContainerExecCreateParameters
-            {
-                Cmd = [.. command],
-                Env = [.. environment],
-                AttachStdin = false,
-                AttachStdout = true,
-                AttachStderr = false,
-            },
+            execParams,
             cancellationToken);
 
         using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
@@ -247,27 +253,12 @@ internal sealed class DockerContainerRuntime(
         string filePath,
         CancellationToken cancellationToken)
     {
-        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
+        string content = await ExecCaptureStdoutAsync(
             containerId,
-            new ContainerExecCreateParameters
-            {
-                Cmd = ["cat", filePath],
-                AttachStdout = true,
-                AttachStderr = false,
-            },
+            ["cat", filePath],
+            [],
+            maxBytes: null,
             cancellationToken);
-
-        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
-            execResponse.ID,
-            false,
-            cancellationToken);
-
-        using MemoryStream stdoutStream = new();
-        await stream.CopyOutputToAsync(Stream.Null, stdoutStream, Stream.Null, cancellationToken);
-
-        stdoutStream.Seek(0, SeekOrigin.Begin);
-        using StreamReader reader = new(stdoutStream, Encoding.UTF8);
-        string content = await reader.ReadToEndAsync(cancellationToken);
 
         return string.IsNullOrWhiteSpace(content) ? null : content;
     }
