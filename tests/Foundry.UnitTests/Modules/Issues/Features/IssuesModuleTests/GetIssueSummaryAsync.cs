@@ -159,5 +159,11 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             Guid workerRunId,
             CancellationToken cancellationToken)
             => Task.FromResult<WorkerRunLogResult>(new WorkerRunLogResult.RunNotFound());
+
+        public Task<RunTotals> GetRunTotalsAsync(
+            DateTimeOffset from,
+            DateTimeOffset to,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new RunTotals(0, 0L, 0, 0m, 0L, 0L));
     }
 }

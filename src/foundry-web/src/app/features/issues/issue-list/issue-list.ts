@@ -11,6 +11,8 @@ import { IssueFilterRailComponent } from '../issue-filter-rail/issue-filter-rail
 import { IssueFilterBarComponent } from '../issue-filter-bar/issue-filter-bar';
 import { SettingsService } from '../../../features/settings/settings.service';
 import { LIVE_STATES } from '../issue.model';
+import { RunStatsBarComponent } from '../run-stats-bar/run-stats-bar';
+import { WorkerRunTotalsService } from '../../workers/run-totals.service';
 
 const SKELETON_COUNT = 4;
 const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
@@ -30,6 +32,7 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
     DispatchControlsComponent,
     IssueFilterRailComponent,
     IssueFilterBarComponent,
+    RunStatsBarComponent,
   ],
   template: `
     <div class="issue-list">
@@ -46,6 +49,8 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
         </aside>
 
         <div class="issue-list__body">
+          <fd-run-stats-bar />
+
           @if (issueService.initialLoading()) {
             <div
               class="issue-list__skeletons"
@@ -234,6 +239,7 @@ export class IssueListComponent implements OnInit {
   protected readonly signalR = inject(IssueSignalRService);
   protected readonly workerSignalR = inject(WorkerSignalRService);
   private readonly _settingsService = inject(SettingsService);
+  private readonly _runTotalsService = inject(WorkerRunTotalsService);
 
   private readonly issueListHeadingEl = viewChild.required<ElementRef<HTMLHeadingElement>>('issueListHeadingEl');
   private readonly resolvedBandHeadingEl = viewChild<ElementRef<HTMLHeadingElement>>('resolvedBandHeadingEl');
@@ -317,5 +323,6 @@ export class IssueListComponent implements OnInit {
     this.issueService.loadIssues();
     this.issueService.loadCounts();
     this._settingsService.loadSettings();
+    this._runTotalsService.fetch();
   }
 }

@@ -1,0 +1,232 @@
+.run-stats-bar {
+  margin-bottom: var(--fd-spacing-lg);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+    margin-bottom: var(--fd-spacing-sm);
+  }
+
+  &__heading {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fd-text-secondary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__scope-caption {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--fd-text-secondary);
+  }
+
+  // Segmented scope toggle — native radios styled as pills
+  &__scope-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    overflow: hidden;
+  }
+
+  &__scope-label {
+    display: flex;
+    align-items: center;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: var(--fd-text-secondary);
+    transition: background 0.1s, color 0.1s;
+    position: relative;
+    user-select: none;
+
+    &:not(:first-child) {
+      border-left: 1px solid var(--fd-border-default);
+    }
+
+    &:has(input:checked) {
+      background: var(--fd-bg-card-hover);
+      color: var(--fd-text-primary);
+    }
+
+    &:has(input:focus-visible) {
+      // Inset box-shadow is not clipped by parent overflow:hidden; outline would be
+      box-shadow: inset 0 0 0 2px var(--fd-text-link);
+    }
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+  }
+
+  &__scope-radio {
+    // Visually hidden but focusable — 1px box preserved so :focus-visible fires on iOS Safari
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+  }
+
+  // Six-column grid of KPI cards
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    background: var(--fd-bg-card);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-md);
+    min-width: 0;
+  }
+
+  &__icon {
+    color: var(--card-tint, var(--fd-text-secondary));
+    flex-shrink: 0;
+  }
+
+  &__card-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__card-label {
+    font-size: 0.6875rem;
+    color: var(--fd-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__card-value {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--fd-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // Skeleton state
+  &__skeleton {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__skeleton-pill {
+    height: 4.5rem;
+    border-radius: var(--fd-radius-md);
+    background: linear-gradient(
+      90deg,
+      var(--fd-border-default) 0%,
+      var(--fd-bg-card-hover) 50%,
+      var(--fd-border-default) 100%
+    );
+    background-size: 200% 100%;
+    animation: fd-skeleton-shimmer 1.4s ease-in-out infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+      background: var(--fd-border-default);
+    }
+  }
+
+  // Error state
+  &__error {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-md);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    background: var(--fd-bg-error-subtle);
+    border: 1px solid var(--fd-text-error);
+    border-radius: var(--fd-radius-md);
+    font-size: 0.875rem;
+  }
+
+  &__error-message {
+    color: var(--fd-text-error);
+    flex: 1;
+  }
+
+  &__retry {
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+    min-height: 36px;
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
+
+  // Mobile: compact horizontally-scrollable pill strip
+  @container issue-list (max-width: 600px) {
+    &__grid {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      gap: var(--fd-spacing-xs);
+      // Allow natural height for scrollable strip
+    }
+
+    &__grid:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+
+    &__skeleton {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      gap: var(--fd-spacing-xs);
+    }
+
+    &__skeleton-pill {
+      flex: 0 0 4rem;
+      height: 2.5rem;
+    }
+
+    &__card {
+      flex: 0 0 auto;
+      flex-direction: row;
+      align-items: center;
+      gap: var(--fd-spacing-xs);
+      padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+      scroll-snap-align: start;
+      min-width: 4rem;
+    }
+
+    &__card-label {
+      // Hide label on mobile — icon + value only
+      display: none;
+    }
+
+    &__card-value {
+      font-size: 0.8125rem;
+    }
+  }
+}
