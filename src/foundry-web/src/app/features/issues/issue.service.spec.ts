@@ -110,47 +110,47 @@ describe('IssueService', () => {
     expect(service.sortedIssues()[1].id).toBe('older');
   });
 
-  // Cycle 3b: live issues sort before non-live issues
-  it('should sort live issues before non-live issues in sortedIssues', () => {
+  // Cycle 3b: In progress group (rank 0) sorts before Waiting group (rank 2)
+  it('should sort In progress group (rank 0) before Waiting group (rank 2) regardless of detectedAt', () => {
     // Arrange
-    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
-    const live: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+    const waiting: IssueSummary = { ...mockSummary, id: 'non-live', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
+    const inProgress: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([nonLive, live]);
+    httpMock.expectOne('/api/issues').flush([waiting, inProgress]);
 
-    // Assert — live appears first even though it has an older detectedAt
+    // Assert — In progress (rank 0) appears first even though it has an older detectedAt
     expect(service.sortedIssues()[0].id).toBe('live');
     expect(service.sortedIssues()[1].id).toBe('non-live');
   });
 
-  // Cycle 3c: revision_in_progress is treated as a live state
-  it('should treat revision_in_progress as a live state in sortedIssues', () => {
+  // Cycle 3c: revision_in_progress is in the In progress group (rank 0), before Needs attention (rank 1)
+  it('should place revision_in_progress (In progress, rank 0) before failed (Needs attention, rank 1) in sortedIssues', () => {
     // Arrange
-    const nonLive: IssueSummary = { ...mockSummary, id: 'non-live', state: 'failed', detectedAt: '2026-06-01T00:00:00Z' };
+    const needsAttn: IssueSummary = { ...mockSummary, id: 'non-live', state: 'failed', detectedAt: '2026-06-01T00:00:00Z' };
     const revision: IssueSummary = { ...mockSummary, id: 'revision', state: 'revision_in_progress', detectedAt: '2026-01-01T00:00:00Z' };
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([nonLive, revision]);
+    httpMock.expectOne('/api/issues').flush([needsAttn, revision]);
 
-    // Assert — revision_in_progress appears first even with an older detectedAt
+    // Assert — revision_in_progress (In progress, rank 0) appears first even with an older detectedAt
     expect(service.sortedIssues()[0].id).toBe('revision');
     expect(service.sortedIssues()[1].id).toBe('non-live');
   });
 
-  // Cycle 3d: within the live group, issues are sorted by detectedAt descending
-  it('should sort live issues by detectedAt descending within the live group', () => {
+  // Cycle 3d: within the In progress group, non-queued issues sort by detectedAt descending
+  it('should sort non-queued In progress issues by detectedAt descending within the same group', () => {
     // Arrange
-    const liveOlder: IssueSummary = { ...mockSummary, id: 'live-older', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
-    const liveNewer: IssueSummary = { ...mockSummary, id: 'live-newer', state: 'revision_in_progress', detectedAt: '2026-06-01T00:00:00Z' };
+    const inProgOlder: IssueSummary = { ...mockSummary, id: 'live-older', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+    const inProgNewer: IssueSummary = { ...mockSummary, id: 'live-newer', state: 'revision_in_progress', detectedAt: '2026-06-01T00:00:00Z' };
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([liveOlder, liveNewer]);
+    httpMock.expectOne('/api/issues').flush([inProgOlder, inProgNewer]);
 
-    // Assert
+    // Assert — newer detectedAt sorts first within the same group rank
     expect(service.sortedIssues()[0].id).toBe('live-newer');
     expect(service.sortedIssues()[1].id).toBe('live-older');
   });
@@ -2108,5 +2108,214 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Assert
     expect(service.eligibleQueuedIssues().some(i => i.id === 'cont-1')).toBe(true);
+  });
+});
+
+// Step 9 — Dispatch-order signals read raw issues(), not sortedIssues() (issue #275)
+describe('IssueService (dispatch-order vs visual-sort regression)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Regression: when continuation_queued (In progress bucket) visually precedes queued/revision_queued
+  // (Waiting bucket) in sortedIssues(), nextUpIssueId must still reflect true server dispatch order
+  // from issues() — NOT the visual position in sortedIssues().
+  it('should pick nextUpIssueId from server dispatch order, not from visual sortedIssues position', () => {
+    // Arrange — server delivers eligible queued first (position 0), then continuation_queued (position 1).
+    // In sortedIssues(), continuation_queued (In progress, rank 0) renders visually ABOVE queued (Waiting, rank 2).
+    const eligibleQueued: IssueSummary = { ...mockSummary, id: 'server-first-queued', state: 'queued', repositoryEligibilityStatus: null };
+    const contQueued: IssueSummary = { ...mockSummary, id: 'cont-queued', state: 'continuation_queued', repositoryEligibilityStatus: null };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([eligibleQueued, contQueued]);
+
+    // Assert — sortedIssues() has continuation_queued first (In progress bucket precedes Waiting bucket)
+    expect(service.sortedIssues()[0].id).toBe('cont-queued');
+    expect(service.sortedIssues()[1].id).toBe('server-first-queued');
+
+    // But nextUpIssueId must follow server order from issues() — queued (server position 0) is next up,
+    // NOT continuation_queued which only appears first visually
+    expect(service.nextUpIssueId()).toBe('server-first-queued');
+  });
+
+  // eligibleQueuedIssues returns cards in raw server order (not visual sort order)
+  it('should return eligibleQueuedIssues in raw server order from issues()', () => {
+    // Arrange — server delivers: queued (elig, pos 0), revision_queued (elig, pos 1), continuation_queued (elig, pos 2).
+    // Visual sort puts continuation_queued (In progress bucket) first, but server order must be preserved.
+    const queuedFirst: IssueSummary = { ...mockSummary, id: 'q-first', state: 'queued', repositoryEligibilityStatus: null };
+    const revQueuedSecond: IssueSummary = { ...mockSummary, id: 'rv-second', state: 'revision_queued', repositoryEligibilityStatus: null };
+    const contQueuedThird: IssueSummary = { ...mockSummary, id: 'cq-third', state: 'continuation_queued', repositoryEligibilityStatus: null };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([queuedFirst, revQueuedSecond, contQueuedThird]);
+
+    // Assert — server order preserved in eligibleQueuedIssues
+    const eligible = service.eligibleQueuedIssues();
+    expect(eligible[0].id).toBe('q-first');
+    expect(eligible[1].id).toBe('rv-second');
+    expect(eligible[2].id).toBe('cq-third');
+    expect(eligible.length).toBe(3);
+  });
+
+  // ineligibleQueuedIssues returns cards in raw server order
+  it('should return ineligibleQueuedIssues in raw server order from issues()', () => {
+    // Arrange — server delivers: continuation_queued (inelig, pos 0), queued (inelig, pos 1).
+    // Visual sort would put continuation_queued first regardless; server order must be preserved.
+    const contQueuedFirst: IssueSummary = { ...mockSummary, id: 'cq-inelig-first', state: 'continuation_queued', repositoryEligibilityStatus: 'ineligible' };
+    const queuedSecond: IssueSummary = { ...mockSummary, id: 'q-inelig-second', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([contQueuedFirst, queuedSecond]);
+
+    // Assert — server order preserved
+    const ineligible = service.ineligibleQueuedIssues();
+    expect(ineligible[0].id).toBe('cq-inelig-first');
+    expect(ineligible[1].id).toBe('q-inelig-second');
+    expect(ineligible.length).toBe(2);
+  });
+});
+
+// Step 8 — Group-rank multi-key sort (issue #275)
+describe('IssueService (group-rank multi-key sort)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Cycle G1: Needs attention (failed, rank 1) sorts before Waiting (detected, rank 2) regardless of detectedAt
+  it('should sort a failed card (Needs attention) before a detected card (Waiting) regardless of detectedAt', () => {
+    // Arrange — detected has a newer date but lower group priority
+    const waiting: IssueSummary = { ...mockSummary, id: 'waiting', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
+    const needsAttn: IssueSummary = { ...mockSummary, id: 'needs-attn', state: 'failed', detectedAt: '2026-01-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([waiting, needsAttn]);
+
+    // Assert — failed (Needs attention, rank 1) precedes detected (Waiting, rank 2)
+    expect(service.sortedIssues()[0].id).toBe('needs-attn');
+    expect(service.sortedIssues()[1].id).toBe('waiting');
+  });
+
+  // Cycle G2: within the same bucket, non-queued cards sort by detectedAt desc, then queued cards follow in server order
+  it('should sort non-queued Waiting cards by detectedAt desc, then queued Waiting cards in server order', () => {
+    // Arrange — Waiting bucket: blocked (non-queued) older, detected (non-queued) newer, queued server-first, revision_queued server-second
+    const blockedOld: IssueSummary = { ...mockSummary, id: 'blocked-old', state: 'blocked', detectedAt: '2026-01-01T00:00:00Z' };
+    const detectedNew: IssueSummary = { ...mockSummary, id: 'detected-new', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
+    const queuedFirst: IssueSummary = { ...mockSummary, id: 'queued-first', state: 'queued', detectedAt: '2026-01-01T00:00:00Z' };
+    const revQueuedSecond: IssueSummary = { ...mockSummary, id: 'rev-queued-second', state: 'revision_queued', detectedAt: '2026-06-01T00:00:00Z' };
+
+    // Act — server delivers: blocked-old, detected-new, queued-first, rev-queued-second
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([blockedOld, detectedNew, queuedFirst, revQueuedSecond]);
+
+    // Assert — all four are in Waiting (rank 2), non-queued by date desc first, then queued in server order
+    const waiting = service.sortedIssues().filter(i =>
+      i.state === 'blocked' || i.state === 'detected' || i.state === 'queued' || i.state === 'revision_queued'
+    );
+    expect(waiting[0].id).toBe('detected-new');    // non-queued, newer date
+    expect(waiting[1].id).toBe('blocked-old');      // non-queued, older date
+    expect(waiting[2].id).toBe('queued-first');     // queued, server position 0
+    expect(waiting[3].id).toBe('rev-queued-second'); // queued, server position 1
+  });
+
+  // Cycle G3: queued-tier cards within a bucket stay in raw server order (not re-sorted by date)
+  it('should preserve raw server order for queued-tier cards within their bucket, not sorting by date', () => {
+    // Arrange — server delivers newer-date queued issue first (higher dispatch priority)
+    const queuedNewerFirst: IssueSummary = { ...mockSummary, id: 'q-newer', state: 'queued', detectedAt: '2026-06-01T00:00:00Z' };
+    const queuedOlderSecond: IssueSummary = { ...mockSummary, id: 'q-older', state: 'queued', detectedAt: '2026-01-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([queuedNewerFirst, queuedOlderSecond]);
+
+    // Assert — server order preserved even though q-older has an older date (would sort first by date desc)
+    const queued = service.sortedIssues().filter(i => i.state === 'queued');
+    expect(queued[0].id).toBe('q-newer');
+    expect(queued[1].id).toBe('q-older');
+  });
+
+  // Cycle G4: ineligible sorts last in the active band (after all defined group buckets)
+  it('should sort ineligible after all defined-group issues in sortedIssues', () => {
+    // Arrange — one issue from each group rank, plus an ineligible
+    const inProgress: IssueSummary = { ...mockSummary, id: 'in-prog', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+    const needsAttn: IssueSummary = { ...mockSummary, id: 'needs-attn', state: 'failed', detectedAt: '2026-01-01T00:00:00Z' };
+    const waiting: IssueSummary = { ...mockSummary, id: 'waiting', state: 'detected', detectedAt: '2026-01-01T00:00:00Z' };
+    const ineligible: IssueSummary = { ...mockSummary, id: 'ineligible', state: 'ineligible', detectedAt: '2026-06-01T00:00:00Z' };
+
+    // Act — server order: ineligible first (newest date), then others
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([ineligible, inProgress, needsAttn, waiting]);
+
+    // Assert — ineligible appears last regardless of server order and detectedAt
+    const sorted = service.sortedIssues();
+    expect(sorted[sorted.length - 1].id).toBe('ineligible');
+    // In progress is first
+    expect(sorted[0].id).toBe('in-prog');
+  });
+
+  // Cycle G5: In progress (rank 0) sorts before Needs attention (rank 1)
+  it('should sort In progress issues before Needs attention issues', () => {
+    // Arrange
+    const needsAttn: IssueSummary = { ...mockSummary, id: 'needs-attn', state: 'review', detectedAt: '2026-06-01T00:00:00Z' };
+    const inProgress: IssueSummary = { ...mockSummary, id: 'in-prog', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([needsAttn, inProgress]);
+
+    // Assert — in_progress (rank 0) before review (rank 1), despite older date
+    expect(service.sortedIssues()[0].id).toBe('in-prog');
+    expect(service.sortedIssues()[1].id).toBe('needs-attn');
+  });
+
+  // Cycle G6: continuation_queued is in In progress group (rank 0), after non-queued in-progress cards, in server order
+  it('should place continuation_queued after non-queued In progress cards, in server order within the bucket', () => {
+    // Arrange — server order: cont-queued-1, cont-queued-2, in_progress
+    const contQueued1: IssueSummary = { ...mockSummary, id: 'cq-1', state: 'continuation_queued', detectedAt: '2026-06-01T00:00:00Z' };
+    const contQueued2: IssueSummary = { ...mockSummary, id: 'cq-2', state: 'continuation_queued', detectedAt: '2026-01-01T00:00:00Z' };
+    const inProg: IssueSummary = { ...mockSummary, id: 'in-prog', state: 'in_progress', detectedAt: '2026-03-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([contQueued1, contQueued2, inProg]);
+
+    // Assert — in_progress (non-queued) sorts first, then continuation_queued in server order
+    const inProgressGroup = service.sortedIssues().filter(i =>
+      i.state === 'in_progress' || i.state === 'continuation_queued' || i.state === 'revision_in_progress'
+    );
+    expect(inProgressGroup[0].id).toBe('in-prog');    // non-queued goes first
+    expect(inProgressGroup[1].id).toBe('cq-1');       // queued, server position 0
+    expect(inProgressGroup[2].id).toBe('cq-2');       // queued, server position 1
   });
 });
