@@ -11,6 +11,7 @@ using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -292,5 +293,39 @@ public sealed class AddWorkersModule
         // Assert
         IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
         hostedServices.ShouldContain(s => s is LoginContainerReaper);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersISystemOperations()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        ISystemOperations systemOperations = provider.GetRequiredService<ISystemOperations>();
+        systemOperations.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersDockerDaemonHealthCheckWithReadyTag()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        HealthCheckServiceOptions options = provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value;
+        options.Registrations.ShouldContain(r => r.Name == "docker-daemon");
+        HealthCheckRegistration registration = options.Registrations.Single(r => r.Name == "docker-daemon");
+        registration.Tags.ShouldContain("ready");
     }
 }
