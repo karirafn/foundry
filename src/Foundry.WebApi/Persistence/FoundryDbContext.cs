@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using CredentialsInfrastructure = Foundry.Modules.Credentials.Infrastructure;
 using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure;
 using SettingsInfrastructure = Foundry.Modules.Settings.Infrastructure;
 
@@ -23,7 +24,6 @@ public sealed class FoundryDbContext(
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ClaudeAccountConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IssueConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(WorkerRunConfiguration).Assembly);
 
@@ -33,11 +33,17 @@ public sealed class FoundryDbContext(
         ILogger<MonitoringInfrastructure.EncryptedStringConverter>? monitoringConverterLogger =
             loggerFactory?.CreateLogger<MonitoringInfrastructure.EncryptedStringConverter>();
 
+        ILogger<CredentialsInfrastructure.EncryptedStringConverter>? credentialsConverterLogger =
+            loggerFactory?.CreateLogger<CredentialsInfrastructure.EncryptedStringConverter>();
+
         modelBuilder.ApplyConfiguration(new MonitoredRepositoryConfiguration());
         modelBuilder.ApplyConfiguration(
             new AccountConfiguration(_dataProtectionProvider, monitoringConverterLogger));
 
         modelBuilder.ApplyConfiguration(
             new GlobalSettingsConfiguration(_dataProtectionProvider, settingsConverterLogger));
+
+        modelBuilder.ApplyConfiguration(
+            new ClaudeAccountConfiguration(_dataProtectionProvider, credentialsConverterLogger));
     }
 }
