@@ -5,34 +5,12 @@ import { STATE_ARIA_LABELS } from '../state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
+import { formatCost as _formatCostImpl, formatDuration as _formatDurationImpl } from '../run-stats.format';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
 
-const SUB_CENT_THRESHOLD = 0.005;
-
-export function formatCost(value: number): string {
-  if (value === 0) {
-    return '$0.00';
-  }
-  if (value > 0 && value < SUB_CENT_THRESHOLD) {
-    return '<$0.01';
-  }
-  return `$${value.toFixed(2)}`;
-}
-
-export function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`;
-  }
-  return `${seconds}s`;
-}
+// Re-export shared helpers so existing imports from this module continue to work.
+export { formatCost, formatDuration } from '../run-stats.format';
 
 const WARNING_CLASSES: Record<string, string> = {
   ineligible: 'issue-card__repo-warning--ineligible',
@@ -305,13 +283,13 @@ export class IssueCardComponent {
       parts.push(`${stats.runCount} runs`);
     }
     if (stats.durationMs !== null) {
-      parts.push(formatDuration(stats.durationMs));
+      parts.push(_formatDurationImpl(stats.durationMs));
     }
     if (stats.numTurns !== null) {
       parts.push(`${stats.numTurns} turns`);
     }
     if (stats.totalCostUsd !== null) {
-      parts.push(formatCost(stats.totalCostUsd));
+      parts.push(_formatCostImpl(stats.totalCostUsd));
     }
     if (stats.inputTokens !== null) {
       parts.push(`${stats.inputTokens.toLocaleString()} input tokens`);
@@ -343,11 +321,11 @@ export class IssueCardComponent {
   }
 
   protected _formatCost(value: number): string {
-    return formatCost(value);
+    return _formatCostImpl(value);
   }
 
   protected _formatDuration(ms: number): string {
-    return formatDuration(ms);
+    return _formatDurationImpl(ms);
   }
 
   onCardClick(): void {
