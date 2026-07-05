@@ -15,6 +15,11 @@ public interface IWorkerRunQueries
     Task<IReadOnlyDictionary<Guid, RunAggregate>> GetRunAggregatesForIssuesAsync(
         IReadOnlyCollection<Guid> issueIds,
         CancellationToken cancellationToken);
+
+    Task<RunTotals> GetRunTotalsAsync(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

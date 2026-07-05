@@ -189,6 +189,74 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             CommitMarkers: [],
             HasStoredLog: false);
 
+    public async Task<RunTotals> GetRunTotalsAsync(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
+    {
+        // The SQLite provider stores DateTimeOffset as ISO 8601 TEXT and cannot translate
+        // DateTimeOffset comparison operators (>=, <) in server-side LINQ. Rows are fetched
+        // for all typed subtypes and the window filter is applied in memory. At the scale
+        // of this application (issue management, not analytics) this is acceptable.
+        //
+        // The telemetry columns live on the RunResultSummary owned entity, configured via
+        // OwnsOne on CompletedRun and FailedRun only. Query each typed set separately so EF
+        // can project the owned navigation, then combine in memory.
+        List<DateFilteredTelemetryRow> allCompleted = await db.Set<CompletedRun>()
+            .AsNoTracking()
+            .Select(r => new DateFilteredTelemetryRow(
+                CreatedAt: r.CreatedAt,
+                DurationMs: r.ResultSummary != null ? (long?)r.ResultSummary.DurationMs : null,
+                NumTurns: r.ResultSummary != null ? (int?)r.ResultSummary.NumTurns : null,
+                TotalCostUsd: r.ResultSummary != null ? r.ResultSummary.TotalCostUsd : null,
+                InputTokens: r.ResultSummary != null ? r.ResultSummary.InputTokens : null,
+                OutputTokens: r.ResultSummary != null ? r.ResultSummary.OutputTokens : null))
+            .ToListAsync(cancellationToken);
+
+        List<DateFilteredTelemetryRow> allFailed = await db.Set<FailedRun>()
+            .AsNoTracking()
+            .Select(r => new DateFilteredTelemetryRow(
+                CreatedAt: r.CreatedAt,
+                DurationMs: r.ResultSummary != null ? (long?)r.ResultSummary.DurationMs : null,
+                NumTurns: r.ResultSummary != null ? (int?)r.ResultSummary.NumTurns : null,
+                TotalCostUsd: r.ResultSummary != null ? r.ResultSummary.TotalCostUsd : null,
+                InputTokens: r.ResultSummary != null ? r.ResultSummary.InputTokens : null,
+                OutputTokens: r.ResultSummary != null ? r.ResultSummary.OutputTokens : null))
+            .ToListAsync(cancellationToken);
+
+        // StartingRun and ActiveRun contribute to RunCount but have no telemetry.
+        List<DateTimeOffset> inProgressDates = await db.Set<WorkerRun>()
+            .AsNoTracking()
+            .Where(r => r is StartingRun || r is ActiveRun)
+            .Select(r => r.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        List<TelemetryRow> inWindowRows = [
+            ..allCompleted
+                .Where(r => r.CreatedAt >= from)
+                .Where(r => r.CreatedAt < to)
+                .Select(r => new TelemetryRow(r.DurationMs, r.NumTurns, r.TotalCostUsd, r.InputTokens, r.OutputTokens)),
+            ..allFailed
+                .Where(r => r.CreatedAt >= from)
+                .Where(r => r.CreatedAt < to)
+                .Select(r => new TelemetryRow(r.DurationMs, r.NumTurns, r.TotalCostUsd, r.InputTokens, r.OutputTokens)),
+        ];
+
+        int inProgressCount = inProgressDates
+            .Count(d => d >= from && d < to);
+
+        int runCount = inWindowRows.Count + inProgressCount;
+
+        return new RunTotals(
+            RunCount: runCount,
+            DurationMs: inWindowRows.Sum(r => r.DurationMs) ?? 0L,
+            NumTurns: inWindowRows.Sum(r => r.NumTurns) ?? 0,
+            TotalCostUsd: inWindowRows.Sum(r => r.TotalCostUsd) ?? 0m,
+            // int? per-row tokens promote to long? via cast to avoid integer overflow.
+            InputTokens: inWindowRows.Sum(r => (long?)r.InputTokens) ?? 0L,
+            OutputTokens: inWindowRows.Sum(r => (long?)r.OutputTokens) ?? 0L);
+    }
+
     // Fetches one row per worker run for the specified issues. Server-side filtering (WHERE issue_id IN ...)
     // is applied to keep the result set small; per-row telemetry is extracted from the typed subtypes
     // because EF cannot project OwnsOne navigation properties from the base Set<WorkerRun>() in TPH.
@@ -241,6 +309,24 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
     // integer overflow when summing across many runs with high token counts.
     private sealed record WorkerRunTelemetryRow(
         Guid IssueId,
+        long? DurationMs,
+        int? NumTurns,
+        decimal? TotalCostUsd,
+        int? InputTokens,
+        int? OutputTokens);
+
+    // Per-row projection for GetRunTotalsAsync — no IssueId needed since this is a cross-issue aggregate.
+    // Includes CreatedAt for in-memory window filtering (SQLite cannot translate DateTimeOffset >= in LINQ).
+    private sealed record DateFilteredTelemetryRow(
+        DateTimeOffset CreatedAt,
+        long? DurationMs,
+        int? NumTurns,
+        decimal? TotalCostUsd,
+        int? InputTokens,
+        int? OutputTokens);
+
+    // Post-filter projection after window filtering has been applied.
+    private sealed record TelemetryRow(
         long? DurationMs,
         int? NumTurns,
         decimal? TotalCostUsd,
