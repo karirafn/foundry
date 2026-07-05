@@ -11,6 +11,10 @@ public interface IWorkerRunQueries
     Task<WorkerRunLogResult> GetWorkerRunLogAsync(
         Guid workerRunId,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyDictionary<Guid, RunAggregate>> GetRunAggregatesForIssuesAsync(
+        IReadOnlyCollection<Guid> issueIds,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

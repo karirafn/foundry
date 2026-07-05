@@ -53,7 +53,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     }
 
     private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery) =>
-        new IssueQueries(_dbContext, new NullRepositorySlugQueries(), eligibilityQuery);
+        new IssueQueries(_dbContext, new NullRepositorySlugQueries(), eligibilityQuery, new NullWorkerRunQueries());
 
     private QueuedIssue SeedQueuedIssue(
         MonitoredRepositoryId repositoryId,

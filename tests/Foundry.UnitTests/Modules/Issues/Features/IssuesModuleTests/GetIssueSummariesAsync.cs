@@ -36,7 +36,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
         _slugQueries = new StubRepositorySlugQueries();
-        _sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery());
+        _sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), new NullWorkerRunQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

@@ -31,7 +31,8 @@ public sealed class AdapterHandleAsync
             DetectedAt: DateTimeOffset.UtcNow,
             Url: "https://github.com/owner/repo/issues/7",
             FailureClassification: null,
-            RepositoryEligibilityStatus: null);
+            RepositoryEligibilityStatus: null,
+            RunStats: null);
         issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());
@@ -62,7 +63,8 @@ public sealed class AdapterHandleAsync
             DetectedAt: DateTimeOffset.UtcNow,
             Url: "https://github.com/owner/repo/issues/3",
             FailureClassification: null,
-            RepositoryEligibilityStatus: null);
+            RepositoryEligibilityStatus: null,
+            RunStats: null);
         issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());

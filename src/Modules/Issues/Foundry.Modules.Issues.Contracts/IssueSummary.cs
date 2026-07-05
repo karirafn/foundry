@@ -9,4 +9,5 @@ public sealed record IssueSummary(
     DateTimeOffset DetectedAt,
     string Url,
     string? FailureClassification,
-    string? RepositoryEligibilityStatus);
+    string? RepositoryEligibilityStatus,
+    RunStats? RunStats);

@@ -60,6 +60,14 @@
   --fd-radius-md: 8px;
   --fd-radius-lg: 12px;
 
+  /* Stat-pill category tints — icon-only, distinct from state-badge palette */
+  /* runs pill reuses --fd-text-warning (#e0a526) — intentional semantic borrow */
+  --fd-stat-duration: #a371f7;  /* light: #6639ba */
+  --fd-stat-turns:    #58a6ff;  /* light: #0969da */
+  --fd-stat-cost:     #3fb950;  /* light: #1a7f37 */
+  --fd-stat-input:    #79c0ff;  /* light: #0550ae */
+  --fd-stat-output:   #ffa657;  /* light: #bc4c00 */
+
   /* Mobile filter bar height — shared between the bar and issue-list body padding */
   /* Composed height: padding-top 8 + button 44 + padding-bottom 8 + border 1 ≈ 61px; round to 64px */
   --fd-filter-bar-height: 64px;

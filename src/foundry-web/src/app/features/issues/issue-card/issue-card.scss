@@ -147,4 +147,60 @@
       outline-offset: 2px;
     }
   }
+
+  &__run-stats {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+    margin-bottom: var(--fd-spacing-sm);
+  }
+
+  &__stat-pill {
+    align-items: center;
+    background: var(--fd-bg-card-hover);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    display: inline-flex;
+    font-size: 0.75rem;
+    gap: 3px;
+    line-height: 1.4;
+    padding: 1px var(--fd-spacing-xs);
+    pointer-events: none;
+    white-space: nowrap;
+
+    &--run-count .issue-card__stat-icon,
+    &--warning .issue-card__stat-icon {
+      color: var(--fd-text-warning);
+    }
+
+    &--duration .issue-card__stat-icon {
+      color: var(--fd-stat-duration);
+    }
+
+    &--turns .issue-card__stat-icon {
+      color: var(--fd-stat-turns);
+    }
+
+    &--cost .issue-card__stat-icon {
+      color: var(--fd-stat-cost);
+    }
+
+    &--input-tokens .issue-card__stat-icon {
+      color: var(--fd-stat-input);
+    }
+
+    &--output-tokens .issue-card__stat-icon {
+      color: var(--fd-stat-output);
+    }
+  }
+
+  &__stat-icon {
+    color: var(--fd-text-secondary);
+    flex-shrink: 0;
+  }
+
+  &__stat-value {
+    color: var(--fd-text-secondary);
+  }
 }
