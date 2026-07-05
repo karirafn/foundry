@@ -1,4 +1,4 @@
-import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, isResolvedState } from './issue-lifecycle.model';
+import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, UNGROUPED_RANK, groupRankFor, isResolvedState } from './issue-lifecycle.model';
 import { IssueState } from './issue.model';
 
 // All lifecycle states — ineligible is an overlay, not a lifecycle state.
@@ -143,6 +143,41 @@ describe('issue-lifecycle model', () => {
   it('should place Resolved group last', () => {
     // Arrange / Act / Assert
     expect(STATE_GROUPS[STATE_GROUPS.length - 1].label).toBe('Resolved');
+  });
+
+  it('should place Needs attention before Waiting', () => {
+    // Arrange
+    const needsAttentionIndex = STATE_GROUPS.findIndex(g => g.label === 'Needs attention');
+    const waitingIndex = STATE_GROUPS.findIndex(g => g.label === 'Waiting');
+
+    // Act / Assert
+    expect(needsAttentionIndex).toBeLessThan(waitingIndex);
+  });
+
+  // Cycle 5: groupRankFor helper
+  it('should return the group index for a state in that group', () => {
+    // Arrange
+    const inProgressIndex = STATE_GROUPS.findIndex(g => g.label === 'In progress');
+
+    // Act / Assert
+    expect(groupRankFor('in_progress')).toBe(inProgressIndex);
+  });
+
+  it('should rank Needs attention before Waiting', () => {
+    // Arrange / Act / Assert
+    expect(groupRankFor('review')).toBeLessThan(groupRankFor('queued'));
+  });
+
+  it('should return UNGROUPED_RANK for ineligible', () => {
+    // Arrange / Act / Assert
+    expect(groupRankFor('ineligible')).toBe(UNGROUPED_RANK);
+  });
+
+  it('should return UNGROUPED_RANK that sorts after all defined groups', () => {
+    // Arrange / Act / Assert
+    for (let i = 0; i < STATE_GROUPS.length; i++) {
+      expect(UNGROUPED_RANK).toBeGreaterThan(i);
+    }
   });
 
   // Cycle 4: group → state membership spot checks
