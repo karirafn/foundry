@@ -1,7 +1,4 @@
-using System.Globalization;
-using System.IO.Pipelines;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -11,15 +8,14 @@ using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Infrastructure;
 
 internal sealed class DockerWorkerOrchestrator(
-    IContainerOperations containerOperations,
-    IVolumeOperations volumeOperations,
-    IExecOperations execOperations,
+    IDockerContainerRuntime runtime,
     IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
 {
     private const string WorkerRunLabelKey = "foundry.worker-run-id";
@@ -57,7 +53,7 @@ internal sealed class DockerWorkerOrchestrator(
 
     public async Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
     {
-        await volumeOperations.CreateAsync(
+        await runtime.CreateVolumeAsync(
             new VolumesCreateParameters
             {
                 Name = CredentialVolume.VolumeName,
@@ -99,16 +95,8 @@ internal sealed class DockerWorkerOrchestrator(
                 },
             };
 
-            CreateContainerResponse response = await containerOperations.CreateContainerAsync(
-                createParams,
-                cancellationToken);
-
-            await containerOperations.StartContainerAsync(
-                response.ID,
-                new ContainerStartParameters(),
-                cancellationToken);
-
-            return Result<ContainerId>.Ok(ContainerId.From(response.ID));
+            string containerId = await runtime.CreateAndStartAsync(createParams, cancellationToken);
+            return Result<ContainerId>.Ok(ContainerId.From(containerId));
         }
         catch (DockerApiException ex)
         {
@@ -122,22 +110,8 @@ internal sealed class DockerWorkerOrchestrator(
 
     public async Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await containerOperations.StopContainerAsync(
-                containerId,
-                new ContainerStopParameters { WaitBeforeKillSeconds = 10 },
-                cancellationToken);
-
-            await containerOperations.RemoveContainerAsync(
-                containerId,
-                new ContainerRemoveParameters { Force = true },
-                cancellationToken);
-        }
-        catch (DockerContainerNotFoundException)
-        {
-            // Container already gone — treat as successful stop.
-        }
+        await runtime.StopAsync(containerId, 10, cancellationToken);
+        await runtime.RemoveAsync(containerId, cancellationToken);
     }
 
     public async Task<WorkerStatusProbe> GetStatusAsync(
@@ -146,9 +120,7 @@ internal sealed class DockerWorkerOrchestrator(
     {
         try
         {
-            ContainerInspectResponse response = await containerOperations.InspectContainerAsync(
-                containerId,
-                cancellationToken);
+            ContainerInspectResponse response = await runtime.InspectAsync(containerId, cancellationToken);
 
             DateTimeOffset? finishedAt = null;
             if (!string.IsNullOrEmpty(response.State.FinishedAt)
@@ -189,9 +161,7 @@ internal sealed class DockerWorkerOrchestrator(
             },
         };
 
-        IList<ContainerListResponse> containers = await containerOperations.ListContainersAsync(
-            parameters,
-            cancellationToken);
+        IList<ContainerListResponse> containers = await runtime.ListAsync(parameters, cancellationToken);
 
         List<(ContainerId ContainerId, WorkerRunId WorkerRunId)> results = [];
 
@@ -217,87 +187,10 @@ internal sealed class DockerWorkerOrchestrator(
         string containerId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        ContainerLogsParameters logsParams = new()
+        await foreach (string line in runtime.StreamLogsAsync(containerId, cancellationToken)
+            .WithCancellation(cancellationToken))
         {
-            Follow = true,
-            ShowStdout = true,
-            ShowStderr = true,
-            Timestamps = true,
-        };
-
-        using MultiplexedStream multiplexedStream = await containerOperations.GetContainerLogsAsync(
-            containerId,
-            false,
-            logsParams,
-            cancellationToken);
-
-        Pipe pipe = new();
-
-        // Link a CTS so we can signal the pump to stop when the consumer breaks early.
-        using CancellationTokenSource pumpCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        Task copyTask = Task.Run(
-            async () =>
-            {
-                Exception? pumpFault = null;
-                try
-                {
-                    await multiplexedStream.CopyOutputToAsync(
-                        Stream.Null,
-                        pipe.Writer.AsStream(),
-                        pipe.Writer.AsStream(),
-                        pumpCts.Token);
-                }
-                catch (Exception ex) when (
-                    ex is EndOfStreamException
-                    || (ex is IOException ioEx
-                        && ioEx.Message.Contains("Unexpected end of stream", StringComparison.Ordinal)))
-                {
-                    // The Docker log stream terminates when the container exits. CopyOutputToAsync
-                    // raises an IOException or EndOfStreamException in that situation — treat it as
-                    // normal completion so copyTask never faults with an expected end-of-stream.
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    // Unexpected pump fault — record it so CompleteAsync forwards it to the pipe reader
-                    // rather than signalling a silent EOF. OperationCanceledException is excluded: it occurs
-                    // during teardown and is irrelevant to the consumer.
-                    pumpFault = ex;
-                }
-                finally
-                {
-                    await pipe.Writer.CompleteAsync(pumpFault);
-                }
-            },
-            pumpCts.Token);
-
-        using StreamReader reader = new(pipe.Reader.AsStream());
-
-        try
-        {
-            string? line;
-            while ((line = await ReadLineOrEndAsync(reader, cancellationToken)) is not null)
-            {
-                yield return SecretRedactor.Redact(line);
-            }
-        }
-        finally
-        {
-            // Cancel the pump on every exit path (normal completion, early break, exception).
-            // Then await copyTask so it is never orphaned and can never produce an unobserved
-            // faulted task. Swallow any residual exception — we are tearing down, and any error
-            // here (e.g. OCE from our own cancellation) is irrelevant to the consumer.
-#pragma warning disable CA1031 // Intentional catch-all in teardown: copyTask is a background pump being shut down; any exception here is irrelevant to the consumer
-            await pumpCts.CancelAsync();
-            try
-            {
-                await copyTask;
-            }
-            catch (Exception)
-            {
-                // Swallow — pump is being torn down; all exceptions here are expected.
-            }
-#pragma warning restore CA1031
+            yield return SecretRedactor.Redact(line);
         }
     }
 
@@ -306,73 +199,26 @@ internal sealed class DockerWorkerOrchestrator(
         int tailLines,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            ContainerLogsParameters logsParams = new()
-            {
-                Follow = false,
-                ShowStdout = true,
-                ShowStderr = true,
-                Timestamps = true,
-                Tail = tailLines.ToString(CultureInfo.InvariantCulture),
-            };
-
-            using MultiplexedStream multiplexedStream = await containerOperations.GetContainerLogsAsync(
-                containerId,
-                false,
-                logsParams,
-                cancellationToken);
-
-            using MemoryStream outputStream = new();
-            await multiplexedStream.CopyOutputToAsync(
-                Stream.Null,
-                outputStream,
-                outputStream,
-                cancellationToken);
-
-            outputStream.Seek(0, SeekOrigin.Begin);
-            using StreamReader reader = new(outputStream);
-            string output = await reader.ReadToEndAsync(cancellationToken);
-            string redacted = SecretRedactor.Redact(output);
-
-            return redacted.Length > ContainerOutputMaxBytes
-                ? redacted[^ContainerOutputMaxBytes..]
-                : redacted;
-        }
-        catch (DockerContainerNotFoundException)
+        string? raw = await runtime.GetLogsAsync(containerId, tailLines, cancellationToken);
+        if (raw is null)
         {
             return null;
         }
+
+        string redacted = SecretRedactor.Redact(raw);
+        return redacted.Length > ContainerOutputMaxBytes
+            ? redacted[^ContainerOutputMaxBytes..]
+            : redacted;
     }
 
     public async Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await containerOperations.StopContainerAsync(
-                containerId,
-                new ContainerStopParameters { WaitBeforeKillSeconds = 10 },
-                cancellationToken);
-        }
-        catch (DockerContainerNotFoundException)
-        {
-            // Container already gone — treat as successful stop.
-        }
+        await runtime.StopAsync(containerId, 10, cancellationToken);
     }
 
     public async Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await containerOperations.RemoveContainerAsync(
-                containerId,
-                new ContainerRemoveParameters { Force = true },
-                cancellationToken);
-        }
-        catch (DockerContainerNotFoundException)
-        {
-            // Container already gone — treat as successful removal.
-        }
+        await runtime.RemoveAsync(containerId, cancellationToken);
     }
 
     public async Task<Result<ContainerId>> StartLoginContainerAsync(
@@ -382,9 +228,6 @@ internal sealed class DockerWorkerOrchestrator(
         try
         {
             string fifoPath = LoginExecCommand.FifoPath;
-            // Bootstrap: create FIFO, start a sleep process that holds the writer end open for the
-            // session timeout duration, store its PID so DeliverLoginCodeAsync can kill it after
-            // writing the code (giving the CLI EOF on stdin), then exec the login CLI.
             string sleepPidPath = LoginExecCommand.SleepPidPath;
             string bootstrapCmd =
                 $"mkfifo {fifoPath}; sleep {spec.TimeoutSeconds} > {fifoPath} & echo $! > {sleepPidPath}; exec claude auth login --claudeai < {fifoPath}";
@@ -418,16 +261,8 @@ internal sealed class DockerWorkerOrchestrator(
                 },
             };
 
-            CreateContainerResponse response = await containerOperations.CreateContainerAsync(
-                createParams,
-                cancellationToken);
-
-            await containerOperations.StartContainerAsync(
-                response.ID,
-                new ContainerStartParameters(),
-                cancellationToken);
-
-            return Result<ContainerId>.Ok(ContainerId.From(response.ID));
+            string containerId = await runtime.CreateAndStartAsync(createParams, cancellationToken);
+            return Result<ContainerId>.Ok(ContainerId.From(containerId));
         }
         catch (DockerApiException ex)
         {
@@ -446,59 +281,23 @@ internal sealed class DockerWorkerOrchestrator(
     {
         LoginExecCommand cmd = LoginExecCommand.ForCode();
 
-        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
+        await runtime.ExecAsync(
             containerId,
-            new ContainerExecCreateParameters
-            {
-                Cmd = [.. cmd.Argv],
-                // Code is delivered via the C env var — never interpolated into the shell command.
-                // Stream-stdin delivery is not viable: Docker.DotNet WriteAsync does not land on
-                // the Windows npipe transport (bytes never reach the container).
-                Env = [$"C={code}"],
-                AttachStdin = false,
-                AttachStdout = true,
-                AttachStderr = true,
-            },
+            cmd.Argv,
+            [$"C={code}"],
             cancellationToken);
-
-        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
-            execResponse.ID,
-            false,
-            cancellationToken);
-
-        await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
     }
 
     public async Task<Result<AccountIdentity>> GetAuthStatusAsync(
         string containerId,
         CancellationToken cancellationToken)
     {
-        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
+        string json = await runtime.ExecCaptureStdoutAsync(
             containerId,
-            new ContainerExecCreateParameters
-            {
-                Cmd = ["claude", "auth", "status", "--json"],
-                AttachStdout = true,
-                AttachStderr = false,
-            },
+            ["claude", "auth", "status", "--json"],
+            [],
+            AuthStatusOutputMaxBytes,
             cancellationToken);
-
-        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
-            execResponse.ID,
-            false,
-            cancellationToken);
-
-        using MemoryStream stdoutStream = new();
-        await stream.CopyOutputToAsync(Stream.Null, stdoutStream, Stream.Null, cancellationToken);
-
-        stdoutStream.Seek(0, SeekOrigin.Begin);
-        using StreamReader reader = new(stdoutStream, Encoding.UTF8);
-
-        // Read only up to AuthStatusOutputMaxBytes to prevent unbounded memory consumption
-        // from a misbehaving or compromised container writing excessive output.
-        char[] buffer = new char[AuthStatusOutputMaxBytes];
-        int charsRead = await reader.ReadAsync(buffer, cancellationToken);
-        string json = new(buffer, 0, charsRead);
 
         return AccountIdentity.Parse(json);
     }
@@ -518,9 +317,7 @@ internal sealed class DockerWorkerOrchestrator(
             },
         };
 
-        IList<ContainerListResponse> containers = await containerOperations.ListContainersAsync(
-            parameters,
-            cancellationToken);
+        IList<ContainerListResponse> containers = await runtime.ListAsync(parameters, cancellationToken);
 
         List<ContainerId> results = [];
 
@@ -548,22 +345,15 @@ internal sealed class DockerWorkerOrchestrator(
 
     public async Task SeedOnboardingAsync(CancellationToken cancellationToken)
     {
-        // Use a short-lived helper container to read, merge, and write .claude.json
-        // onto the credential volume without copying the volume to the host.
         string configPath = $"{CredentialVolume.ContainerPath}/.claude.json";
 
         string helperId = await StartCredentialHelperContainerAsync(readOnly: false, cancellationToken);
 
         try
         {
-            // Read existing .claude.json (tolerate absence).
-            string? existingJson = await ReadFileFromContainerAsync(helperId, configPath, cancellationToken);
-
-            // Compute the merged JSON in C# — OnboardingSeed.Merge is the single source of truth.
+            string? existingJson = await runtime.ReadFileAsync(helperId, configPath, cancellationToken);
             string mergedJson = OnboardingSeed.Merge(existingJson, OnboardingSeed.DefaultWorkDir);
-
-            // Write the merged content back via printf (code in env J — no shell injection).
-            await WriteFileToContainerAsync(helperId, configPath, mergedJson, cancellationToken);
+            await runtime.WriteFileAsync(helperId, configPath, mergedJson, cancellationToken);
         }
         finally
         {
@@ -571,11 +361,6 @@ internal sealed class DockerWorkerOrchestrator(
         }
     }
 
-    /// <summary>
-    /// Starts a minimal helper container that mounts the credential volume and sleeps long enough
-    /// for exec operations. The caller is responsible for stopping and removing it via
-    /// <see cref="StopAndRemoveAsync"/> in a <c>finally</c> block.
-    /// </summary>
     private async Task<string> StartCredentialHelperContainerAsync(bool readOnly, CancellationToken cancellationToken)
     {
         CreateContainerParameters createParams = new()
@@ -598,95 +383,6 @@ internal sealed class DockerWorkerOrchestrator(
             },
         };
 
-        CreateContainerResponse response = await containerOperations.CreateContainerAsync(
-            createParams,
-            cancellationToken);
-
-        await containerOperations.StartContainerAsync(
-            response.ID,
-            new ContainerStartParameters(),
-            cancellationToken);
-
-        return response.ID;
-    }
-
-    private async Task<string?> ReadFileFromContainerAsync(
-        string containerId,
-        string filePath,
-        CancellationToken cancellationToken)
-    {
-        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
-            containerId,
-            new ContainerExecCreateParameters
-            {
-                Cmd = ["cat", filePath],
-                AttachStdout = true,
-                AttachStderr = false,
-            },
-            cancellationToken);
-
-        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
-            execResponse.ID,
-            false,
-            cancellationToken);
-
-        using MemoryStream stdoutStream = new();
-        await stream.CopyOutputToAsync(Stream.Null, stdoutStream, Stream.Null, cancellationToken);
-
-        stdoutStream.Seek(0, SeekOrigin.Begin);
-        using StreamReader reader = new(stdoutStream, Encoding.UTF8);
-        string content = await reader.ReadToEndAsync(cancellationToken);
-
-        return string.IsNullOrWhiteSpace(content) ? null : content;
-    }
-
-    private async Task WriteFileToContainerAsync(
-        string containerId,
-        string filePath,
-        string content,
-        CancellationToken cancellationToken)
-    {
-        // Pass content via env J — never interpolated — to avoid shell injection.
-        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
-            containerId,
-            new ContainerExecCreateParameters
-            {
-                Cmd = ["sh", "-c", $"printf '%s' \"$J\" > {filePath}"],
-                Env = [$"J={content}"],
-                AttachStdout = false,
-                AttachStderr = false,
-            },
-            cancellationToken);
-
-        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
-            execResponse.ID,
-            false,
-            cancellationToken);
-
-        await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
-    }
-
-    /// <summary>
-    /// Reads the next line from <paramref name="reader"/>, passing <paramref name="cancellationToken"/>
-    /// for prompt cancellation. When the consumer cancels (OperationCanceledException), returns
-    /// <see langword="null"/> so the read loop can exit as a clean <c>yield break</c> rather than
-    /// letting the OCE escape the async iterator. Non-cancellation faults propagate normally.
-    /// </summary>
-    /// <remarks>
-    /// The catch lives here because <c>yield return</c> cannot appear inside a <c>try/catch</c> block.
-    /// </remarks>
-    private static async Task<string?> ReadLineOrEndAsync(
-        StreamReader reader,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await reader.ReadLineAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // Consumer cancelled — signal end-of-stream rather than propagating the OCE.
-            return null;
-        }
+        return await runtime.CreateAndStartAsync(createParams, cancellationToken);
     }
 }
