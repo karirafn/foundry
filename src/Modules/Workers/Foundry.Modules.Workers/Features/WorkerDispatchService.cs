@@ -172,62 +172,75 @@ internal sealed class WorkerDispatchService(
 
         foreach (ActiveRun activeRun in activeRuns)
         {
-            // TODO(step3): replace WorkerStatus?-bridge with full WorkerStatusProbe handling
             WorkerStatusProbe probe = await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
-            WorkerStatus? status = probe is WorkerStatusProbe.Available probeAvailable ? probeAvailable.Status : null;
 
-            if (status is null)
+            switch (probe)
             {
-                WorkerOutcome outcome = await resolver.ResolveAsync(
-                    activeRun,
-                    exitCode: null,
-                    containerOutput: null,
-                    defaultCooldownMinutes,
-                    cancellationToken);
-
-                if (outcome is WorkerOutcome.Indeterminate indeterminate)
-                {
-                    logger.LogWarning(
-                        "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; "
-                        + "state indeterminate: {Error}. Leaving for next tick.",
-                        activeRun.Id,
-                        activeRun.ContainerId.Value,
-                        indeterminate.Error);
+                case WorkerStatusProbe.Unreachable:
+                    LogDaemonUnreachable(activeRun.Id, activeRun.ContainerId.Value);
                     continue;
+
+                case WorkerStatusProbe.NotFound:
+                {
+                    WorkerOutcome outcome = await resolver.ResolveAsync(
+                        activeRun,
+                        exitCode: null,
+                        containerOutput: null,
+                        defaultCooldownMinutes,
+                        cancellationToken);
+
+                    if (outcome is WorkerOutcome.Indeterminate indeterminate)
+                    {
+                        logger.LogWarning(
+                            "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation; "
+                            + "state indeterminate: {Error}. Leaving for next tick.",
+                            activeRun.Id,
+                            activeRun.ContainerId.Value,
+                            indeterminate.Error);
+                        continue;
+                    }
+
+                    runsToRemove.Add(activeRun);
+
+                    await ApplyOutcomeAsync(
+                        outcome,
+                        activeRun,
+                        dbContext,
+                        orchestrator,
+                        integrationEventDispatcher,
+                        domainEventDispatcher,
+                        cancellationToken);
+
+                    logger.LogWarning(
+                        "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation.",
+                        activeRun.Id,
+                        activeRun.ContainerId.Value);
+                    break;
                 }
 
-                runsToRemove.Add(activeRun);
+                case WorkerStatusProbe.Available available when !available.Status.IsRunning:
+                    await MonitorRunAsync(
+                        dbContext,
+                        orchestrator,
+                        integrationEventDispatcher,
+                        domainEventDispatcher,
+                        resolver,
+                        postExitProviderQueries,
+                        containerOutputParser,
+                        timeoutMinutes,
+                        defaultCooldownMinutes,
+                        activeRun,
+                        cancellationToken,
+                        knownProbe: probe);
+                    runsToRemove.Add(activeRun);
+                    break;
 
-                await ApplyOutcomeAsync(
-                    outcome,
-                    activeRun,
-                    dbContext,
-                    orchestrator,
-                    integrationEventDispatcher,
-                    domainEventDispatcher,
-                    cancellationToken);
+                case WorkerStatusProbe.Available:
+                    // Container is still running — leave in active list for monitoring loop.
+                    break;
 
-                logger.LogWarning(
-                    "Worker run {WorkerRunId} container {ContainerId} not found during reconciliation.",
-                    activeRun.Id,
-                    activeRun.ContainerId.Value);
-            }
-            else if (!status.IsRunning)
-            {
-                await MonitorRunAsync(
-                    dbContext,
-                    orchestrator,
-                    integrationEventDispatcher,
-                    domainEventDispatcher,
-                    resolver,
-                    postExitProviderQueries,
-                    containerOutputParser,
-                    timeoutMinutes,
-                    defaultCooldownMinutes,
-                    activeRun,
-                    cancellationToken,
-                    knownStatus: status);
-                runsToRemove.Add(activeRun);
+                default:
+                    throw new UnreachableException($"Unhandled WorkerStatusProbe type {probe.GetType().Name}");
             }
         }
 
@@ -279,84 +292,39 @@ internal sealed class WorkerDispatchService(
         int defaultCooldownMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
-        WorkerStatus? knownStatus = null)
+        WorkerStatusProbe? knownProbe = null)
     {
-        // TODO(step3): replace WorkerStatus?-bridge with full WorkerStatusProbe handling
-        WorkerStatusProbe statusProbe = knownStatus is not null
-            ? new WorkerStatusProbe.Available(knownStatus)
-            : await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
-        WorkerStatus? status = statusProbe is WorkerStatusProbe.Available monitorAvailable
-            ? monitorAvailable.Status
-            : null;
+        WorkerStatusProbe statusProbe = knownProbe
+            ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
 
-        if (status is null)
+        switch (statusProbe)
         {
-            WorkerOutcome outcome = await resolver.ResolveAsync(
-                activeRun,
-                exitCode: null,
-                containerOutput: null,
-                defaultCooldownMinutes,
-                cancellationToken);
-
-            if (outcome is WorkerOutcome.Indeterminate indeterminate)
-            {
-                logger.LogWarning(
-                    "Worker run {WorkerRunId} container {ContainerId} not found; "
-                    + "state indeterminate: {Error}. Leaving for next tick.",
-                    activeRun.Id,
-                    activeRun.ContainerId.Value,
-                    indeterminate.Error);
+            case WorkerStatusProbe.Unreachable:
+                LogDaemonUnreachable(activeRun.Id, activeRun.ContainerId.Value);
                 return;
-            }
 
-            await ApplyOutcomeAsync(
-                outcome,
-                activeRun,
-                dbContext,
-                orchestrator,
-                integrationEventDispatcher,
-                domainEventDispatcher,
-                cancellationToken);
-
-            logger.LogWarning(
-                "Worker run {WorkerRunId} container {ContainerId} not found; marked as {OutcomeType}.",
-                activeRun.Id,
-                activeRun.ContainerId.Value,
-                outcome.GetType().Name);
-            return;
-        }
-
-        DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(timeoutMinutes);
-
-        if (status.IsRunning)
-        {
-            // Timeout applies only to still-running containers — an exited container's MR state
-            // must be consulted first regardless of wall-clock time.
-            if (DateTimeOffset.UtcNow >= timeout)
+            case WorkerStatusProbe.NotFound:
             {
-                await TryStopContainerAsync(
-                    orchestrator,
-                    activeRun.ContainerId.Value,
-                    activeRun.Id.Value,
-                    cancellationToken);
-
-                string? containerOutput = await TryGetLogsAsync(
-                    orchestrator,
-                    activeRun.ContainerId.Value,
-                    activeRun.Id.Value,
-                    cancellationToken);
-
-                RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
-
-                WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                WorkerOutcome outcome = await resolver.ResolveAsync(
                     activeRun,
-                    containerOutput,
-                    timeoutSummary,
-                    postExitProviderQueries,
+                    exitCode: null,
+                    containerOutput: null,
+                    defaultCooldownMinutes,
                     cancellationToken);
+
+                if (outcome is WorkerOutcome.Indeterminate indeterminate)
+                {
+                    logger.LogWarning(
+                        "Worker run {WorkerRunId} container {ContainerId} not found; "
+                        + "state indeterminate: {Error}. Leaving for next tick.",
+                        activeRun.Id,
+                        activeRun.ContainerId.Value,
+                        indeterminate.Error);
+                    return;
+                }
 
                 await ApplyOutcomeAsync(
-                    timeoutOutcome,
+                    outcome,
                     activeRun,
                     dbContext,
                     orchestrator,
@@ -365,84 +333,139 @@ internal sealed class WorkerDispatchService(
                     cancellationToken);
 
                 logger.LogWarning(
-                    "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
+                    "Worker run {WorkerRunId} container {ContainerId} not found; marked as {OutcomeType}.",
                     activeRun.Id,
-                    timeoutMinutes);
+                    activeRun.ContainerId.Value,
+                    outcome.GetType().Name);
                 return;
             }
 
-            await ObserveRunningWorkerAsync(
-                dbContext,
-                orchestrator,
-                domainEventDispatcher,
-                postExitProviderQueries,
-                activeRun,
-                cancellationToken);
-            return;
-        }
-
-        // Container has exited — always resolve via MR-state-first so a merged PR produces
-        // Completed even when the wall-clock timeout has passed.
-        string? exitContainerOutput = await TryGetLogsAsync(
-            orchestrator,
-            activeRun.ContainerId.Value,
-            activeRun.Id.Value,
-            cancellationToken);
-
-        WorkerOutcome exitOutcome = await resolver.ResolveAsync(
-            activeRun,
-            status.ExitCode,
-            exitContainerOutput,
-            defaultCooldownMinutes,
-            cancellationToken);
-
-        if (exitOutcome is WorkerOutcome.Indeterminate exitIndeterminate)
-        {
-            // Resolver could not determine the outcome (transient provider error).
-            // If the run has also exceeded the timeout ceiling, force a timeout outcome so
-            // the slot is not held indefinitely; otherwise leave for the next tick.
-            if (DateTimeOffset.UtcNow >= timeout)
+            case WorkerStatusProbe.Available available:
             {
-                RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(exitContainerOutput);
-                WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                WorkerStatus status = available.Status;
+                DateTimeOffset timeout = activeRun.StartedAt.AddMinutes(timeoutMinutes);
+
+                if (status.IsRunning)
+                {
+                    // Timeout applies only to still-running containers — an exited container's MR state
+                    // must be consulted first regardless of wall-clock time.
+                    if (DateTimeOffset.UtcNow >= timeout)
+                    {
+                        await TryStopContainerAsync(
+                            orchestrator,
+                            activeRun.ContainerId.Value,
+                            activeRun.Id.Value,
+                            cancellationToken);
+
+                        string? containerOutput = await TryGetLogsAsync(
+                            orchestrator,
+                            activeRun.ContainerId.Value,
+                            activeRun.Id.Value,
+                            cancellationToken);
+
+                        RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
+
+                        WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                            activeRun,
+                            containerOutput,
+                            timeoutSummary,
+                            postExitProviderQueries,
+                            cancellationToken);
+
+                        await ApplyOutcomeAsync(
+                            timeoutOutcome,
+                            activeRun,
+                            dbContext,
+                            orchestrator,
+                            integrationEventDispatcher,
+                            domainEventDispatcher,
+                            cancellationToken);
+
+                        logger.LogWarning(
+                            "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
+                            activeRun.Id,
+                            timeoutMinutes);
+                        return;
+                    }
+
+                    await ObserveRunningWorkerAsync(
+                        dbContext,
+                        orchestrator,
+                        domainEventDispatcher,
+                        postExitProviderQueries,
+                        activeRun,
+                        cancellationToken);
+                    return;
+                }
+
+                // Container has exited — always resolve via MR-state-first so a merged PR produces
+                // Completed even when the wall-clock timeout has passed.
+                string? exitContainerOutput = await TryGetLogsAsync(
+                    orchestrator,
+                    activeRun.ContainerId.Value,
+                    activeRun.Id.Value,
+                    cancellationToken);
+
+                WorkerOutcome exitOutcome = await resolver.ResolveAsync(
                     activeRun,
+                    status.ExitCode,
                     exitContainerOutput,
-                    timeoutSummary,
-                    postExitProviderQueries,
+                    defaultCooldownMinutes,
                     cancellationToken);
 
+                if (exitOutcome is WorkerOutcome.Indeterminate exitIndeterminate)
+                {
+                    // Resolver could not determine the outcome (transient provider error).
+                    // If the run has also exceeded the timeout ceiling, force a timeout outcome so
+                    // the slot is not held indefinitely; otherwise leave for the next tick.
+                    if (DateTimeOffset.UtcNow >= timeout)
+                    {
+                        RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(exitContainerOutput);
+                        WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                            activeRun,
+                            exitContainerOutput,
+                            timeoutSummary,
+                            postExitProviderQueries,
+                            cancellationToken);
+
+                        await ApplyOutcomeAsync(
+                            timeoutOutcome,
+                            activeRun,
+                            dbContext,
+                            orchestrator,
+                            integrationEventDispatcher,
+                            domainEventDispatcher,
+                            cancellationToken);
+
+                        logger.LogWarning(
+                            "Worker run {WorkerRunId} exited but state is indeterminate and timeout has elapsed; "
+                            + "forcing timeout outcome: {Error}.",
+                            activeRun.Id,
+                            exitIndeterminate.Error);
+                        return;
+                    }
+
+                    logger.LogWarning(
+                        "Worker run {WorkerRunId} exited but state is indeterminate: {Error}. Leaving for next tick.",
+                        activeRun.Id,
+                        exitIndeterminate.Error);
+                    return;
+                }
+
                 await ApplyOutcomeAsync(
-                    timeoutOutcome,
+                    exitOutcome,
                     activeRun,
                     dbContext,
                     orchestrator,
                     integrationEventDispatcher,
                     domainEventDispatcher,
                     cancellationToken);
-
-                logger.LogWarning(
-                    "Worker run {WorkerRunId} exited but state is indeterminate and timeout has elapsed; "
-                    + "forcing timeout outcome: {Error}.",
-                    activeRun.Id,
-                    exitIndeterminate.Error);
                 return;
             }
 
-            logger.LogWarning(
-                "Worker run {WorkerRunId} exited but state is indeterminate: {Error}. Leaving for next tick.",
-                activeRun.Id,
-                exitIndeterminate.Error);
-            return;
+            default:
+                throw new UnreachableException($"Unhandled WorkerStatusProbe type {statusProbe.GetType().Name}");
         }
-
-        await ApplyOutcomeAsync(
-            exitOutcome,
-            activeRun,
-            dbContext,
-            orchestrator,
-            integrationEventDispatcher,
-            domainEventDispatcher,
-            cancellationToken);
     }
 
     /// <summary>
@@ -986,6 +1009,15 @@ internal sealed class WorkerDispatchService(
                 workerRunId);
             return null;
         }
+    }
+
+    private void LogDaemonUnreachable(WorkerRunId runId, string containerId)
+    {
+        logger.LogWarning(
+            "Docker daemon unreachable while monitoring worker run {WorkerRunId} container {ContainerId}; "
+            + "deferring until next tick.",
+            runId,
+            containerId);
     }
 
     private const int LogTailLines = 500;
