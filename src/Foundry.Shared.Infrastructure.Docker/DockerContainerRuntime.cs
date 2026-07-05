@@ -153,9 +153,13 @@ internal sealed class DockerContainerRuntime(
             {
                 await copyTask;
             }
-            catch (Exception)
+            catch (OperationCanceledException)
             {
-                // Swallow — pump is being torn down; all exceptions here are expected.
+                // Expected: pumpCts was just cancelled above, so an OCE from the pump is a normal teardown signal.
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Swallow — residual pump exception during teardown; irrelevant to the consumer.
             }
 #pragma warning restore CA1031
         }
@@ -175,23 +179,14 @@ internal sealed class DockerContainerRuntime(
             Tail = tailLines.ToString(CultureInfo.InvariantCulture),
         };
 
-        MultiplexedStream multiplexedStream;
         try
         {
-            multiplexedStream = await containerOperations.GetContainerLogsAsync(
+            using MultiplexedStream multiplexedStream = await containerOperations.GetContainerLogsAsync(
                 containerId,
                 false,
                 logsParams,
                 cancellationToken);
-        }
-        catch (DockerContainerNotFoundException)
-        {
-            // Container already gone — no logs to return.
-            return null;
-        }
 
-        using (multiplexedStream)
-        {
             using MemoryStream outputStream = new();
             await multiplexedStream.CopyOutputToAsync(
                 Stream.Null,
@@ -202,6 +197,11 @@ internal sealed class DockerContainerRuntime(
             outputStream.Seek(0, SeekOrigin.Begin);
             using StreamReader reader = new(outputStream);
             return await reader.ReadToEndAsync(cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            // Container already gone — no logs to return.
+            return null;
         }
     }
 
@@ -281,13 +281,13 @@ internal sealed class DockerContainerRuntime(
         string content,
         CancellationToken cancellationToken)
     {
-        // Pass content via env J — never interpolated — to avoid shell injection.
+        // Pass content via env J and path via env P — neither is interpolated — to avoid shell injection.
         ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
             containerId,
             new ContainerExecCreateParameters
             {
-                Cmd = ["sh", "-c", $"printf '%s' \"$J\" > {filePath}"],
-                Env = [$"J={content}"],
+                Cmd = ["sh", "-c", "printf '%s' \"$J\" > \"$P\""],
+                Env = [$"J={content}", $"P={filePath}"],
                 AttachStdout = false,
                 AttachStderr = false,
             },

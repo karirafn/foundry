@@ -29,8 +29,6 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
 
     // Captured call arguments
     public CreateContainerParameters? LastCreateAndStartParameters { get; private set; }
-    public IReadOnlyList<CreateContainerParameters> AllCreateAndStartParameters { get; } =
-        new List<CreateContainerParameters>();
 
     public string? LastStopContainerId { get; private set; }
     public int LastStopWaitBeforeKillSeconds { get; private set; }
@@ -114,7 +112,6 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         CreateContainerParameters createParams,
         CancellationToken cancellationToken)
     {
-        ((List<CreateContainerParameters>)AllCreateAndStartParameters).Add(createParams);
         LastCreateAndStartParameters = createParams;
 
         if (_createAndStartException is not null)

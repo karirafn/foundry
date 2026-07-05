@@ -16,7 +16,30 @@ public sealed class WriteFileAsync
         new(new SpyContainerOperations(), new NullVolumeOperations(), execOps);
 
     [Fact]
-    public async Task WhenCalled_ExecsWithPrintfCommandAndFilePath()
+    public async Task WhenFilePathContainsShellMetacharacters_PathDeliveredViaEnvVarNotInterpolated()
+    {
+        // Arrange — a path with shell metacharacters that would cause injection if interpolated directly
+        FakeExecOperations fake = new();
+        DockerContainerRuntime sut = BuildSut(fake);
+        string dangerousPath = "/tmp/x; touch /pwned";
+
+        // Act
+        await sut.WriteFileAsync("container-id", dangerousPath, "content", CancellationToken.None);
+
+        // Assert — shell command string must reference $P by name, not the raw path string
+        ContainerExecCreateParameters captured = fake.LastCreateParameters.ShouldNotBeNull();
+        IList<string> cmd = captured.Cmd.ShouldNotBeNull();
+        string shellCmd = cmd[2];
+        shellCmd.ShouldContain("\"$P\"");
+        shellCmd.ShouldNotContain(dangerousPath);
+
+        // Assert — path delivered safely via the P env var
+        IList<string> env = captured.Env.ShouldNotBeNull();
+        env.ShouldContain($"P={dangerousPath}");
+    }
+
+    [Fact]
+    public async Task WhenCalled_ExecsWithPrintfCommandUsingEnvVarReferences()
     {
         // Arrange
         FakeExecOperations fake = new();
@@ -25,9 +48,10 @@ public sealed class WriteFileAsync
         // Act
         await sut.WriteFileAsync("container-id", "/etc/config.json", "content", CancellationToken.None);
 
-        // Assert
+        // Assert — both content ($J) and path ($P) referenced via env vars, not interpolated
         ContainerExecCreateParameters captured = fake.LastCreateParameters.ShouldNotBeNull();
-        captured.Cmd.ShouldBe(["sh", "-c", "printf '%s' \"$J\" > /etc/config.json"]);
+        IList<string> cmd = captured.Cmd.ShouldNotBeNull();
+        cmd[2].ShouldBe("printf '%s' \"$J\" > \"$P\"");
     }
 
     [Fact]
@@ -44,6 +68,21 @@ public sealed class WriteFileAsync
         // Assert
         ContainerExecCreateParameters captured = fake.LastCreateParameters.ShouldNotBeNull();
         captured.Env.ShouldContain($"J={content}");
+    }
+
+    [Fact]
+    public async Task WhenCalled_PassesFilePathViaEnvPVariable()
+    {
+        // Arrange
+        FakeExecOperations fake = new();
+        DockerContainerRuntime sut = BuildSut(fake);
+
+        // Act
+        await sut.WriteFileAsync("container-id", "/etc/config.json", "content", CancellationToken.None);
+
+        // Assert
+        ContainerExecCreateParameters captured = fake.LastCreateParameters.ShouldNotBeNull();
+        captured.Env.ShouldContain("P=/etc/config.json");
     }
 
     [Fact]
