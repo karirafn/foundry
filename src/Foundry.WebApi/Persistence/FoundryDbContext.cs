@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Infrastructure.Configurations;
 using Foundry.Modules.Issues.Infrastructure.Configurations;
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Modules.Settings.Infrastructure.Configurations;
@@ -22,6 +23,7 @@ public sealed class FoundryDbContext(
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ClaudeAccountConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IssueConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(WorkerRunConfiguration).Assembly);
 

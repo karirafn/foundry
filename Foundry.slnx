@@ -13,6 +13,10 @@
     <Project Path="src/Foundry.WebApi/Foundry.WebApi.csproj" />
   </Folder>
   <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Credentials/">
+    <Project Path="src/Modules/Credentials/Foundry.Modules.Credentials/Foundry.Modules.Credentials.csproj" />
+    <Project Path="src/Modules/Credentials/Foundry.Modules.Credentials.Contracts/Foundry.Modules.Credentials.Contracts.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Issues/">
     <Project Path="src/Modules/Issues/Foundry.Modules.Issues/Foundry.Modules.Issues.csproj" />
     <Project Path="src/Modules/Issues/Foundry.Modules.Issues.Contracts/Foundry.Modules.Issues.Contracts.csproj" />
