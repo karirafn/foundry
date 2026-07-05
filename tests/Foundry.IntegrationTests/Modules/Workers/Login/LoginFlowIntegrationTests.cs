@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
+using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.Extensions.Options;
 
@@ -78,11 +79,12 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             PidsLimit = 256,
         };
 
-        _sut = new DockerWorkerOrchestrator(
+        DockerContainerRuntime runtime = new(
             _dockerClient.Containers,
             _dockerClient.Volumes,
-            _dockerClient.Exec,
-            Options.Create(options));
+            _dockerClient.Exec);
+
+        _sut = new DockerWorkerOrchestrator(runtime, Options.Create(options));
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

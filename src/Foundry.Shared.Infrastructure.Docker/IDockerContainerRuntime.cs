@@ -2,7 +2,7 @@ using Docker.DotNet.Models;
 
 namespace Foundry.Shared.Infrastructure.Docker;
 
-internal interface IDockerContainerRuntime
+public interface IDockerContainerRuntime
 {
     // Container lifecycle
     Task<string> CreateAndStartAsync(
@@ -58,5 +58,16 @@ internal interface IDockerContainerRuntime
         string containerId,
         string filePath,
         string content,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Execs a command with stdout and stderr attached (both discarded). Use for fire-and-wait
+    /// exec calls that need output channels open but do not read them — e.g. delivering a login
+    /// code via an environment variable.
+    /// </summary>
+    Task ExecAsync(
+        string containerId,
+        IReadOnlyList<string> command,
+        IReadOnlyList<string> environment,
         CancellationToken cancellationToken);
 }

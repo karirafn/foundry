@@ -1,5 +1,3 @@
-using Docker.DotNet;
-
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -11,6 +9,7 @@ using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -32,16 +31,7 @@ public static class WorkersModule
         services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
 
-        services.AddSingleton<DockerClient>(_ =>
-        {
-            using DockerClientConfiguration config = new();
-            return config.CreateClient();
-        });
-        services.AddSingleton<IImageOperations>(sp => sp.GetRequiredService<DockerClient>().Images);
-        services.AddSingleton<IContainerOperations>(sp => sp.GetRequiredService<DockerClient>().Containers);
-        services.AddSingleton<IVolumeOperations>(sp => sp.GetRequiredService<DockerClient>().Volumes);
-        services.AddSingleton<IExecOperations>(sp => sp.GetRequiredService<DockerClient>().Exec);
-        services.AddSingleton<ISystemOperations>(sp => sp.GetRequiredService<DockerClient>().System);
+        services.AddSharedDockerInfrastructure();
 
         services.AddHealthChecks()
             .AddCheck<DockerDaemonHealthCheck>("docker-daemon", tags: ["ready"]);

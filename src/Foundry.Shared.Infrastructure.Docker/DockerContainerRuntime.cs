@@ -301,6 +301,34 @@ internal sealed class DockerContainerRuntime(
         await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
     }
 
+    public async Task ExecAsync(
+        string containerId,
+        IReadOnlyList<string> command,
+        IReadOnlyList<string> environment,
+        CancellationToken cancellationToken)
+    {
+        ContainerExecCreateParameters execParams = new()
+        {
+            Cmd = [.. command],
+            Env = [.. environment],
+            AttachStdin = false,
+            AttachStdout = true,
+            AttachStderr = true,
+        };
+
+        ContainerExecCreateResponse execResponse = await execOperations.ExecCreateContainerAsync(
+            containerId,
+            execParams,
+            cancellationToken);
+
+        using MultiplexedStream stream = await execOperations.StartAndAttachContainerExecAsync(
+            execResponse.ID,
+            false,
+            cancellationToken);
+
+        await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, cancellationToken);
+    }
+
     /// <summary>
     /// Reads the next line from <paramref name="reader"/>, passing <paramref name="cancellationToken"/>
     /// for prompt cancellation. When the consumer cancels (OperationCanceledException), returns

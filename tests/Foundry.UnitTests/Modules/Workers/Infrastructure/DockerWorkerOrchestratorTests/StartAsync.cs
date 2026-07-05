@@ -48,19 +48,24 @@ public sealed class StartAsync
             VolumeMounts = volumeMounts ?? [],
         };
 
+    private static DockerWorkerOrchestrator BuildSut(
+        FakeDockerContainerRuntime runtime,
+        WorkerOptions? options = null) =>
+        new(runtime, Options.Create(options ?? DefaultOptions()));
+
     [Fact]
     public async Task WhenStarted_SetsMemoryLimitFromOptions()
     {
         // Arrange
-        SpyContainerOperations spy = new();
+        FakeDockerContainerRuntime runtime = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(options));
+        DockerWorkerOrchestrator sut = BuildSut(runtime, options);
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.Memory.ShouldBe(options.MemoryLimitMb * BytesPerMegabyte);
     }
 
@@ -68,15 +73,15 @@ public sealed class StartAsync
     public async Task WhenStarted_SetsNanoCpusFromOptions()
     {
         // Arrange
-        SpyContainerOperations spy = new();
+        FakeDockerContainerRuntime runtime = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(options));
+        DockerWorkerOrchestrator sut = BuildSut(runtime, options);
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.NanoCPUs.ShouldBe((long)(options.CpuLimit * NanoCpusPerCpu));
     }
 
@@ -84,15 +89,15 @@ public sealed class StartAsync
     public async Task WhenStarted_SetsPidsLimitFromOptions()
     {
         // Arrange
-        SpyContainerOperations spy = new();
+        FakeDockerContainerRuntime runtime = new();
         WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(options));
+        DockerWorkerOrchestrator sut = BuildSut(runtime, options);
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.PidsLimit.ShouldBe(options.PidsLimit);
     }
 
@@ -100,19 +105,19 @@ public sealed class StartAsync
     public async Task WhenStarted_SetsBindsFromSpec()
     {
         // Arrange
-        SpyContainerOperations spy = new();
+        FakeDockerContainerRuntime runtime = new();
         IReadOnlyList<BindMount> bindMounts =
         [
             new BindMount("/host/data", "/container/data", ReadOnly: false),
             new BindMount("/host/config", "/container/config", ReadOnly: true),
         ];
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartAsync(MinimalSpec(bindMounts: bindMounts), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.Binds.ShouldBe(
             ["/host/data:/container/data", "/host/config:/container/config:ro"],
             ignoreOrder: false);
@@ -122,8 +127,9 @@ public sealed class StartAsync
     public async Task WhenStarted_ReturnsContainerIdOnSuccess()
     {
         // Arrange
-        SpyContainerOperations spy = new("created-container-abc");
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithContainerId("created-container-abc");
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -138,15 +144,15 @@ public sealed class StartAsync
     public async Task WhenSpecHasSecurityOptions_SetsHostConfigSecurityOpt()
     {
         // Arrange
-        SpyContainerOperations spy = new();
+        FakeDockerContainerRuntime runtime = new();
         IReadOnlyList<string> securityOptions = ["seccomp=unconfined", "apparmor=unconfined"];
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartAsync(MinimalSpec(securityOptions: securityOptions), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.SecurityOpt.ShouldBe(
             ["seccomp=unconfined", "apparmor=unconfined"],
             ignoreOrder: false);
@@ -156,15 +162,15 @@ public sealed class StartAsync
     public async Task WhenSpecHasDevices_SetsHostConfigDevicesWithCorrectMapping()
     {
         // Arrange
-        SpyContainerOperations spy = new();
+        FakeDockerContainerRuntime runtime = new();
         IReadOnlyList<string> devices = ["/dev/fuse"];
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartAsync(MinimalSpec(devices: devices), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         IList<DeviceMapping> hostDevices = captured.HostConfig.Devices.ShouldNotBeNull();
         hostDevices.Count.ShouldBe(1);
         DeviceMapping mapping = hostDevices[0];
@@ -178,14 +184,14 @@ public sealed class StartAsync
     public async Task WhenSpecHasEmptyCollections_DoesNotSetSecurityOptOrDevices()
     {
         // Arrange
-        SpyContainerOperations spy = new();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.SecurityOpt.ShouldBeNull();
         captured.HostConfig.Devices.ShouldBeNull();
     }
@@ -194,18 +200,18 @@ public sealed class StartAsync
     public async Task WhenSpecHasVolumeMounts_SetsHostConfigMountsWithVolumeType()
     {
         // Arrange
-        SpyContainerOperations spy = new();
+        FakeDockerContainerRuntime runtime = new();
         IReadOnlyList<VolumeMount> volumeMounts =
         [
             new VolumeMount("foundry-claude-credentials", "/home/node/.claude", ReadOnly: false),
         ];
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartAsync(MinimalSpec(volumeMounts: volumeMounts), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         IList<Docker.DotNet.Models.Mount> mounts = captured.HostConfig.Mounts.ShouldNotBeNull();
         mounts.Count.ShouldBe(1);
         Docker.DotNet.Models.Mount mount = mounts[0];
@@ -220,14 +226,14 @@ public sealed class StartAsync
     public async Task WhenSpecHasNoVolumeMounts_HostConfigMountsIsNull()
     {
         // Arrange
-        SpyContainerOperations spy = new();
-        DockerWorkerOrchestrator sut = new(spy, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         await sut.StartAsync(MinimalSpec(), CancellationToken.None);
 
         // Assert
-        CreateContainerParameters captured = spy.LastCreateParameters.ShouldNotBeNull();
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.Mounts.ShouldBeNull();
     }
 
@@ -236,10 +242,11 @@ public sealed class StartAsync
     {
         // Arrange
         string rawMessage = "pull access denied for https://user:s3cr3t@registry.example.com/image";
-        ThrowingContainerOperations throwing = new(new DockerApiException(
-            HttpStatusCode.InternalServerError,
-            rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithCreateAndStartThrowing(new DockerApiException(
+                HttpStatusCode.InternalServerError,
+                rawMessage));
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -255,10 +262,11 @@ public sealed class StartAsync
     {
         // Arrange
         string rawMessage = "authentication failed: ghp_abc123TokenValue";
-        ThrowingContainerOperations throwing = new(new DockerApiException(
-            HttpStatusCode.Unauthorized,
-            rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithCreateAndStartThrowing(new DockerApiException(
+                HttpStatusCode.Unauthorized,
+                rawMessage));
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -288,10 +296,11 @@ public sealed class StartAsync
         int paddingLength = UrlStartPositionInFullMessage - fullMessagePrefixLength;
         string padding = new('x', paddingLength);
         string rawMessage = padding + "https://user:s3cr3tpassword@registry.example.com/image";
-        ThrowingContainerOperations throwing = new(new DockerApiException(
-            HttpStatusCode.InternalServerError,
-            rawMessage));
-        DockerWorkerOrchestrator sut = new(throwing, new NullVolumeOperations(), new NullExecOperations(), Options.Create(DefaultOptions()));
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithCreateAndStartThrowing(new DockerApiException(
+                HttpStatusCode.InternalServerError,
+                rawMessage));
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(MinimalSpec(), CancellationToken.None);
@@ -299,337 +308,5 @@ public sealed class StartAsync
         // Assert
         Result<ContainerId>.Failure failure = result.ShouldBeOfType<Result<ContainerId>.Failure>();
         failure.Error.Message.ShouldNotContain("s3cr3t");
-    }
-
-    private sealed class NullVolumeOperations : IVolumeOperations
-    {
-        public Task<VolumeResponse> CreateAsync(
-            VolumesCreateParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new VolumeResponse { Name = parameters.Name });
-
-        public Task<VolumeResponse> InspectAsync(string name, CancellationToken cancellationToken)
-            => Task.FromResult(new VolumeResponse { Name = name });
-
-        public Task<VolumesListResponse> ListAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new VolumesListResponse());
-
-        public Task<VolumesListResponse> ListAsync(
-            VolumesListParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new VolumesListResponse());
-
-        public Task<VolumesPruneResponse> PruneAsync(
-            VolumesPruneParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new VolumesPruneResponse());
-
-        public Task RemoveAsync(string name, bool? force, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-    }
-
-    private sealed class ThrowingContainerOperations(DockerApiException exception) : IContainerOperations
-    {
-        public Task<CreateContainerResponse> CreateContainerAsync(
-            CreateContainerParameters parameters,
-            CancellationToken cancellationToken)
-            => throw exception;
-
-        public Task<bool> StartContainerAsync(
-            string id,
-            ContainerStartParameters parameters,
-            CancellationToken cancellationToken)
-            => throw exception;
-
-        public Task<bool> StopContainerAsync(
-            string id,
-            ContainerStopParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(true);
-
-        public Task RemoveContainerAsync(
-            string id,
-            ContainerRemoveParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<ContainerInspectResponse> InspectContainerAsync(
-            string id,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainerInspectResponse());
-
-        public Task<IList<ContainerListResponse>> ListContainersAsync(
-            ContainersListParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IList<ContainerListResponse>>([]);
-
-        public Task<MultiplexedStream> GetContainerLogsAsync(
-            string id,
-            bool tty,
-            ContainerLogsParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new MultiplexedStream(Stream.Null, false));
-
-        public Task<MultiplexedStream> AttachContainerAsync(
-            string id,
-            bool tty,
-            ContainerAttachParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new MultiplexedStream(Stream.Null, false));
-
-        public Task<Stream> ExportContainerAsync(string id, CancellationToken cancellationToken)
-            => Task.FromResult<Stream>(Stream.Null);
-
-        public Task ExtractArchiveToContainerAsync(
-            string id,
-            ContainerPathStatParameters parameters,
-            Stream stream,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<GetArchiveFromContainerResponse> GetArchiveFromContainerAsync(
-            string id,
-            GetArchiveFromContainerParameters parameters,
-            bool statOnly,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new GetArchiveFromContainerResponse());
-
-        public Task<Stream> GetContainerLogsAsync(
-            string id,
-            ContainerLogsParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult<Stream>(Stream.Null);
-
-        public Task GetContainerLogsAsync(
-            string id,
-            ContainerLogsParameters parameters,
-            CancellationToken cancellationToken,
-            IProgress<string> progress)
-            => Task.CompletedTask;
-
-        public Task<Stream> GetContainerStatsAsync(
-            string id,
-            ContainerStatsParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult<Stream>(Stream.Null);
-
-        public Task GetContainerStatsAsync(
-            string id,
-            ContainerStatsParameters parameters,
-            IProgress<ContainerStatsResponse> progress,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<IList<ContainerFileSystemChangeResponse>> InspectChangesAsync(
-            string id,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IList<ContainerFileSystemChangeResponse>>([]);
-
-        public Task KillContainerAsync(
-            string id,
-            ContainerKillParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<ContainerProcessesResponse> ListProcessesAsync(
-            string id,
-            ContainerListProcessesParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainerProcessesResponse());
-
-        public Task PauseContainerAsync(string id, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<ContainersPruneResponse> PruneContainersAsync(
-            ContainersPruneParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainersPruneResponse());
-
-        public Task RenameContainerAsync(
-            string id,
-            ContainerRenameParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task ResizeContainerTtyAsync(
-            string id,
-            ContainerResizeParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task RestartContainerAsync(
-            string id,
-            ContainerRestartParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task UnpauseContainerAsync(string id, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<ContainerUpdateResponse> UpdateContainerAsync(
-            string id,
-            ContainerUpdateParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainerUpdateResponse());
-
-        public Task<ContainerWaitResponse> WaitContainerAsync(
-            string id,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainerWaitResponse());
-    }
-
-    private sealed class SpyContainerOperations(string containerId = "spy-container-id") : IContainerOperations
-    {
-        public CreateContainerParameters? LastCreateParameters { get; private set; }
-
-        public Task<CreateContainerResponse> CreateContainerAsync(
-            CreateContainerParameters parameters,
-            CancellationToken cancellationToken)
-        {
-            LastCreateParameters = parameters;
-            return Task.FromResult(new CreateContainerResponse { ID = containerId });
-        }
-
-        public Task<bool> StartContainerAsync(
-            string id,
-            ContainerStartParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(true);
-
-        public Task<bool> StopContainerAsync(
-            string id,
-            ContainerStopParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(true);
-
-        public Task RemoveContainerAsync(
-            string id,
-            ContainerRemoveParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<ContainerInspectResponse> InspectContainerAsync(
-            string id,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainerInspectResponse());
-
-        public Task<IList<ContainerListResponse>> ListContainersAsync(
-            ContainersListParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IList<ContainerListResponse>>([]);
-
-        public Task<MultiplexedStream> GetContainerLogsAsync(
-            string id,
-            bool tty,
-            ContainerLogsParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new MultiplexedStream(Stream.Null, false));
-
-        public Task<MultiplexedStream> AttachContainerAsync(
-            string id,
-            bool tty,
-            ContainerAttachParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new MultiplexedStream(Stream.Null, false));
-
-        public Task<Stream> ExportContainerAsync(string id, CancellationToken cancellationToken)
-            => Task.FromResult<Stream>(Stream.Null);
-
-        public Task ExtractArchiveToContainerAsync(
-            string id,
-            ContainerPathStatParameters parameters,
-            Stream stream,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<GetArchiveFromContainerResponse> GetArchiveFromContainerAsync(
-            string id,
-            GetArchiveFromContainerParameters parameters,
-            bool statOnly,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new GetArchiveFromContainerResponse());
-
-        public Task<Stream> GetContainerLogsAsync(
-            string id,
-            ContainerLogsParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult<Stream>(Stream.Null);
-
-        public Task GetContainerLogsAsync(
-            string id,
-            ContainerLogsParameters parameters,
-            CancellationToken cancellationToken,
-            IProgress<string> progress)
-            => Task.CompletedTask;
-
-        public Task<Stream> GetContainerStatsAsync(
-            string id,
-            ContainerStatsParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult<Stream>(Stream.Null);
-
-        public Task GetContainerStatsAsync(
-            string id,
-            ContainerStatsParameters parameters,
-            IProgress<ContainerStatsResponse> progress,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<IList<ContainerFileSystemChangeResponse>> InspectChangesAsync(
-            string id,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IList<ContainerFileSystemChangeResponse>>([]);
-
-        public Task KillContainerAsync(
-            string id,
-            ContainerKillParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<ContainerProcessesResponse> ListProcessesAsync(
-            string id,
-            ContainerListProcessesParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainerProcessesResponse());
-
-        public Task PauseContainerAsync(string id, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<ContainersPruneResponse> PruneContainersAsync(
-            ContainersPruneParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainersPruneResponse());
-
-        public Task RenameContainerAsync(
-            string id,
-            ContainerRenameParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task ResizeContainerTtyAsync(
-            string id,
-            ContainerResizeParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task RestartContainerAsync(
-            string id,
-            ContainerRestartParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task UnpauseContainerAsync(string id, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<ContainerUpdateResponse> UpdateContainerAsync(
-            string id,
-            ContainerUpdateParameters parameters,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainerUpdateResponse());
-
-        public Task<ContainerWaitResponse> WaitContainerAsync(
-            string id,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new ContainerWaitResponse());
     }
 }
