@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Health;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
@@ -14,6 +15,7 @@ using Foundry.Shared.Infrastructure;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers;
@@ -39,6 +41,10 @@ public static class WorkersModule
         services.AddSingleton<IContainerOperations>(sp => sp.GetRequiredService<DockerClient>().Containers);
         services.AddSingleton<IVolumeOperations>(sp => sp.GetRequiredService<DockerClient>().Volumes);
         services.AddSingleton<IExecOperations>(sp => sp.GetRequiredService<DockerClient>().Exec);
+        services.AddSingleton<ISystemOperations>(sp => sp.GetRequiredService<DockerClient>().System);
+
+        services.AddHealthChecks()
+            .AddCheck<DockerDaemonHealthCheck>("docker-daemon", tags: ["ready"]);
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();

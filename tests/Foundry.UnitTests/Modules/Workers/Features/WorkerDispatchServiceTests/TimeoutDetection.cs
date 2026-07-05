@@ -238,8 +238,8 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatus?>(new WorkerStatus(IsRunning: false, ExitCode: exitCode, FinishedAt: DateTimeOffset.UtcNow));
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<WorkerStatusProbe>(new WorkerStatusProbe.Available(new WorkerStatus(IsRunning: false, ExitCode: exitCode, FinishedAt: DateTimeOffset.UtcNow)));
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,
@@ -318,8 +318,8 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
             return Task.CompletedTask;
         }
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatus?>(new WorkerStatus(IsRunning: isRunning, ExitCode: null, FinishedAt: null));
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<WorkerStatusProbe>(new WorkerStatusProbe.Available(new WorkerStatus(IsRunning: isRunning, ExitCode: null, FinishedAt: null)));
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,

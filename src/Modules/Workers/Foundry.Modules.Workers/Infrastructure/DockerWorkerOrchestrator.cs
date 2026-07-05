@@ -140,7 +140,7 @@ internal sealed class DockerWorkerOrchestrator(
         }
     }
 
-    public async Task<WorkerStatus?> GetStatusAsync(
+    public async Task<WorkerStatusProbe> GetStatusAsync(
         string containerId,
         CancellationToken cancellationToken)
     {
@@ -157,14 +157,20 @@ internal sealed class DockerWorkerOrchestrator(
                 finishedAt = parsed;
             }
 
-            return new WorkerStatus(
+            WorkerStatus status = new(
                 response.State.Running,
                 response.State.Running ? null : (int)Math.Clamp(response.State.ExitCode, int.MinValue, int.MaxValue),
                 finishedAt);
+
+            return new WorkerStatusProbe.Available(status);
         }
         catch (DockerContainerNotFoundException)
         {
-            return null;
+            return new WorkerStatusProbe.NotFound();
+        }
+        catch (Exception ex) when (DockerDaemonConnectivity.IsUnreachable(ex, cancellationToken))
+        {
+            return new WorkerStatusProbe.Unreachable();
         }
     }
 

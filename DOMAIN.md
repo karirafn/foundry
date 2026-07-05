@@ -333,6 +333,20 @@ Every terminal outcome (`Completed`, `Review`, `ContinuableFailure`, `Failure`, 
 The watchdog ceiling (`StartedAt + timeout_minutes`) is evaluated regardless of whether the container is still running.
 Any unresolved run that exceeds the ceiling is processed through the same resolver → applier pair (exit code null; MR-state still consulted first), so no run can hold a worker slot indefinitely.
 
+**Docker daemon reachability.**
+`GetStatusAsync` returns a discriminated `WorkerStatusProbe` distinguishing three cases:
+
+- `Available` — container exists (running or exited); carries a `WorkerStatus` with `IsRunning`, `ExitCode`, and `FinishedAt`.
+- `NotFound` — container is definitively gone (Docker 404).
+- `Unreachable` — daemon connectivity failure: only `HttpRequestException`, `TimeoutException`, or a self-timeout `OperationCanceledException` (caller's token was NOT already cancelled).
+  Any other `DockerApiException` propagates as an unexpected error.
+
+On `Unreachable` the active run is left in `ActiveRun` state (never failed) and recovers on a later tick.
+Startup reconciliation is deferred when the daemon is unreachable — the `_reconciled` latch is gated on daemon reachability across both the orphan-container sweep (`ListByLabelAsync`) and per-run `GetStatusAsync` probes — so the orphan sweep is not silently skipped for the boot.
+
+A `/ready` readiness health check (tagged `ready`, mapped unconditionally at `/ready`) surfaces Docker daemon connectivity:
+healthy when the daemon responds to a ping within 3 seconds, unhealthy with a message identifying Docker daemon connectivity when the ping fails or times out.
+
 ## Container Output
 
 The captured tail of a failed worker container's stdout/stderr, stored on `FailedRun` as a nullable string.

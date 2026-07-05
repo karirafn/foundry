@@ -21,6 +21,7 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
     private readonly IReadOnlyList<string> _logLines = logLines?.ToList() ?? [];
 
     private WorkerStatus _containerStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
+    private WorkerStatusProbe? _probeOverride;
     private Result<AccountIdentity> _authStatusResult =
         Result<AccountIdentity>.Ok(new AccountIdentity("user@example.com", "Test Org", "pro"));
     private Result<ContainerId> _startLoginResult =
@@ -46,6 +47,14 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
             IsRunning: false,
             ExitCode: exitCode,
             FinishedAt: DateTimeOffset.UtcNow);
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="GetStatusAsync"/> to return an <see cref="WorkerStatusProbe.Unreachable"/> probe,
+    /// simulating a Docker daemon connectivity failure.</summary>
+    public FakeWorkerOrchestrator WithUnreachableDaemon()
+    {
+        _probeOverride = new WorkerStatusProbe.Unreachable();
         return this;
     }
 
@@ -119,8 +128,8 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
     public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
-    public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-        => Task.FromResult<WorkerStatus?>(_containerStatus);
+    public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+        => Task.FromResult(_probeOverride ?? (WorkerStatusProbe)new WorkerStatusProbe.Available(_containerStatus));
 
     public async IAsyncEnumerable<string> StreamLogsAsync(
         string containerId,

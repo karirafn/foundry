@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
@@ -106,6 +108,37 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
         orchestrator.StopAsyncCallCount.ShouldBe(0);
     }
 
+    [Fact]
+    public async Task WhenDockerScanThrowsConnectivityException_ReconciliationIsDeferred()
+    {
+        // Arrange — ListByLabelAsync throws HttpRequestException (connectivity failure)
+        OrphanedContainerCleanupStub orchestrator = OrphanedContainerCleanupStub.WithConnectivityException();
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act — first tick: orphan scan throws connectivity exception → _reconciled stays false
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — second tick must run reconciliation again (ListByLabelAsync called twice)
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        orchestrator.ListByLabelCallCount.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenDockerScanThrowsNonConnectivityException_ReconciliationIsLatched()
+    {
+        // Arrange — ListByLabelAsync throws InvalidOperationException (non-connectivity failure)
+        // This matches the existing WhenDockerScanThrows_LogsWarningAndContinues behaviour.
+        OrphanedContainerCleanupStub orchestrator = new(listThrows: true);
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act — first tick: orphan scan throws non-connectivity exception → _reconciled stays true
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — second tick skips reconciliation (ListByLabelAsync called only once)
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        orchestrator.ListByLabelCallCount.ShouldBe(1);
+    }
+
     private CompletedRun SeedCompletedRun()
     {
         using FoundryDbContext db = CreateDbContext();
@@ -121,10 +154,13 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
     private sealed class OrphanedContainerCleanupStub : IWorkerOrchestrator
     {
         private readonly IReadOnlyList<(ContainerId, WorkerRunId)> _containers;
-        private readonly WorkerStatus? _status;
+        private readonly WorkerStatusProbe _probe;
         private readonly bool _listThrows;
+        private readonly bool _listThrowsConnectivity;
 
         public int StopAsyncCallCount { get; private set; }
+
+        public int ListByLabelCallCount { get; private set; }
 
         public List<string> StoppedContainerIds { get; } = [];
 
@@ -134,9 +170,31 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
             bool listThrows = false)
         {
             _containers = containers ?? [];
-            _status = status;
+            _probe = status is null
+                ? new WorkerStatusProbe.NotFound()
+                : new WorkerStatusProbe.Available(status);
             _listThrows = listThrows;
         }
+
+        private OrphanedContainerCleanupStub(
+            IReadOnlyList<(ContainerId, WorkerRunId)> containers,
+            WorkerStatusProbe probe,
+            bool listThrows,
+            bool listThrowsConnectivity)
+        {
+            _containers = containers;
+            _probe = probe;
+            _listThrows = listThrows;
+            _listThrowsConnectivity = listThrowsConnectivity;
+        }
+
+        public static OrphanedContainerCleanupStub WithUnreachableDaemon(
+            IReadOnlyList<(ContainerId, WorkerRunId)>? containers = null)
+            => new(containers ?? [], new WorkerStatusProbe.Unreachable(), listThrows: false, listThrowsConnectivity: false);
+
+        public static OrphanedContainerCleanupStub WithConnectivityException(
+            IReadOnlyList<(ContainerId, WorkerRunId)>? containers = null)
+            => new(containers ?? [], new WorkerStatusProbe.NotFound(), listThrows: false, listThrowsConnectivity: true);
 
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
             => Task.FromResult(Result<ContainerId>.Fail(new Error("Test", "No dispatch")));
@@ -151,12 +209,19 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
             return Task.CompletedTask;
         }
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult(_status);
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult(_probe);
 
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
         {
+            ListByLabelCallCount++;
+
+            if (_listThrowsConnectivity)
+            {
+                throw new HttpRequestException("Docker daemon connection refused");
+            }
+
             if (_listThrows)
             {
                 throw new InvalidOperationException("Docker daemon unavailable");
@@ -167,7 +232,7 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
             yield break;
@@ -195,9 +260,9 @@ public sealed class OrphanedContainerCleanup : WorkerDispatchServiceTestBase
             CancellationToken cancellationToken)
             => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
 
-
         public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
+
         public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ContainerId>>([]);
 

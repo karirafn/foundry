@@ -116,8 +116,10 @@ public sealed class TerminalContainerCleanup : WorkerDispatchServiceTestBase
             return Task.CompletedTask;
         }
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult(_status);
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<WorkerStatusProbe>(_status is null
+                ? new WorkerStatusProbe.NotFound()
+                : new WorkerStatusProbe.Available(_status));
 
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
