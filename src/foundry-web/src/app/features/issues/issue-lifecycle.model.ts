@@ -57,14 +57,14 @@ export const STATE_GROUPS: readonly StateGroup[] = [
   },
 ] as const;
 
-export const UNGROUPED_RANK: number = STATE_GROUPS.length;
+export const UNGROUPED_RANK = STATE_GROUPS.length;
 
-const _groupRankMap: Map<IssueState, number> = new Map<IssueState, number>(
+const groupRankMap = new Map<IssueState, number>(
   STATE_GROUPS.flatMap((group, index) =>
     group.states.map((state): [IssueState, number] => [state, index])
   )
 );
 
 export function groupRankFor(state: IssueState): number {
-  return _groupRankMap.get(state) ?? UNGROUPED_RANK;
+  return groupRankMap.get(state) ?? UNGROUPED_RANK;
 }

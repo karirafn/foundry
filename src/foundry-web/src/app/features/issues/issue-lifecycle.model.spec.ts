@@ -173,6 +173,18 @@ describe('issue-lifecycle model', () => {
     expect(groupRankFor('ineligible')).toBe(UNGROUPED_RANK);
   });
 
+  it('should return the Resolved group index (3) for a Resolved-group state', () => {
+    // Arrange
+    const resolvedIndex = STATE_GROUPS.findIndex(g => g.label === 'Resolved');
+
+    // Act
+    const rank = groupRankFor('completed');
+
+    // Assert
+    expect(rank).toBe(resolvedIndex);
+    expect(rank).toBe(3);
+  });
+
   it('should return UNGROUPED_RANK that sorts after all defined groups', () => {
     // Arrange / Act / Assert
     for (let i = 0; i < STATE_GROUPS.length; i++) {
