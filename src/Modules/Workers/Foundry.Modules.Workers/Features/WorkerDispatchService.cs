@@ -172,7 +172,9 @@ internal sealed class WorkerDispatchService(
 
         foreach (ActiveRun activeRun in activeRuns)
         {
-            WorkerStatus? status = await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
+            // TODO(step3): replace WorkerStatus?-bridge with full WorkerStatusProbe handling
+            WorkerStatusProbe probe = await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
+            WorkerStatus? status = probe is WorkerStatusProbe.Available probeAvailable ? probeAvailable.Status : null;
 
             if (status is null)
             {
@@ -279,8 +281,13 @@ internal sealed class WorkerDispatchService(
         CancellationToken cancellationToken,
         WorkerStatus? knownStatus = null)
     {
-        WorkerStatus? status = knownStatus
-            ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
+        // TODO(step3): replace WorkerStatus?-bridge with full WorkerStatusProbe handling
+        WorkerStatusProbe statusProbe = knownStatus is not null
+            ? new WorkerStatusProbe.Available(knownStatus)
+            : await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
+        WorkerStatus? status = statusProbe is WorkerStatusProbe.Available monitorAvailable
+            ? monitorAvailable.Status
+            : null;
 
         if (status is null)
         {

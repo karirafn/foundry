@@ -112,8 +112,8 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatus?>(ExitedStatus);
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<WorkerStatusProbe>(new WorkerStatusProbe.Available(ExitedStatus));
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,

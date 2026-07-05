@@ -313,8 +313,8 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatus?>(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<WorkerStatusProbe>(new WorkerStatusProbe.Available(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null)));
 
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
@@ -374,8 +374,8 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatus?>(null);
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<WorkerStatusProbe>(new WorkerStatusProbe.NotFound());
 
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
@@ -438,13 +438,13 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
         {
             _callCount++;
-            WorkerStatus? status = _callCount == 1
-                ? new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null)
-                : null;
-            return Task.FromResult(status);
+            WorkerStatusProbe probe = _callCount == 1
+                ? new WorkerStatusProbe.Available(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null))
+                : new WorkerStatusProbe.NotFound();
+            return Task.FromResult(probe);
         }
 
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(

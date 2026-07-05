@@ -119,8 +119,8 @@ internal sealed class FakeWorkerOrchestrator(IEnumerable<string>? logLines = nul
     public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
-    public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-        => Task.FromResult<WorkerStatus?>(_containerStatus);
+    public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+        => Task.FromResult<WorkerStatusProbe>(new WorkerStatusProbe.Available(_containerStatus));
 
     public async IAsyncEnumerable<string> StreamLogsAsync(
         string containerId,

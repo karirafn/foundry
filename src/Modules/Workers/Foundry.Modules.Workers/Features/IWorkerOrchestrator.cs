@@ -13,7 +13,7 @@ internal interface IWorkerOrchestrator
 
     Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken);
 
-    Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken);
+    Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken);
 
     IAsyncEnumerable<string> StreamLogsAsync(string containerId, CancellationToken cancellationToken);
 

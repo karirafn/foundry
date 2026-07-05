@@ -209,8 +209,10 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatus?>(status);
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<WorkerStatusProbe>(status is null
+                ? new WorkerStatusProbe.NotFound()
+                : new WorkerStatusProbe.Available(status));
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,

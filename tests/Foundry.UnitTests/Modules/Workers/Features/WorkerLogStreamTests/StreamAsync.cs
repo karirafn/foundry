@@ -59,7 +59,7 @@ public sealed class StreamAsync : IAsyncDisposable
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken) =>
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public async IAsyncEnumerable<string> StreamLogsAsync(

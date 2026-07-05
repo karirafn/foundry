@@ -304,8 +304,8 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         public Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-        public Task<WorkerStatus?> GetStatusAsync(string containerId, CancellationToken cancellationToken)
-            => Task.FromResult<WorkerStatus?>(exitedStatus);
+        public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<WorkerStatusProbe>(new WorkerStatusProbe.Available(exitedStatus));
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,
