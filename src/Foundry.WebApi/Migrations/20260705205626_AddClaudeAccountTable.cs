@@ -16,6 +16,10 @@ namespace Foundry.WebApi.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    auth_mode = table.Column<string>(type: "TEXT", nullable: false),
+                    validity = table.Column<string>(type: "TEXT", nullable: false),
+                    oauth_account_email = table.Column<string>(type: "TEXT", maxLength: 254, nullable: true),
+                    oauth_account_org_name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "TEXT", nullable: false)
                 },

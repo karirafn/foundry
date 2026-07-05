@@ -26,6 +26,26 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("AuthMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("auth_mode");
+
+                    b.Property<string>("Validity")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("validity");
+
+                    b.Property<string>("OAuthAccountEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("oauth_account_email");
+
+                    b.Property<string>("OAuthAccountOrgName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("oauth_account_org_name");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
