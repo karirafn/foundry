@@ -7,50 +7,16 @@ interface StatCard {
   readonly key: string;
   readonly label: string;
   readonly tintVar: string;
-  readonly svgPath: string;
 }
 
 const STAT_CARDS = [
-  {
-    key: 'runCount',
-    label: 'Total runs',
-    tintVar: '--fd-text-warning',
-    svgPath: '<polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />',
-  },
-  {
-    key: 'durationMs',
-    label: 'Total duration',
-    tintVar: '--fd-stat-duration',
-    svgPath: '<circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />',
-  },
-  {
-    key: 'numTurns',
-    label: 'Total turns',
-    tintVar: '--fd-stat-turns',
-    svgPath: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />',
-  },
-  {
-    key: 'totalCostUsd',
-    label: 'Total cost',
-    tintVar: '--fd-stat-cost',
-    svgPath: '<circle cx="12" cy="12" r="9" /><path d="M14.8 9.3a2.6 2.6 0 0 0-2.8-1.3c-1.3.2-2.2 1-2.2 2 0 1.2 1.1 1.6 2.6 2 1.7.4 2.8.9 2.8 2.1 0 1.1-1 1.9-2.4 2a2.7 2.7 0 0 1-2.8-1.4" /><line x1="12" y1="6" x2="12" y2="8" /><line x1="12" y1="16" x2="12" y2="18" />',
-  },
-  {
-    key: 'inputTokens',
-    label: 'Input tokens',
-    tintVar: '--fd-stat-input',
-    svgPath: '<line x1="12" y1="19" x2="12" y2="5" /><polyline points="6 11 12 5 18 11" />',
-  },
-  {
-    key: 'outputTokens',
-    label: 'Output tokens',
-    tintVar: '--fd-stat-output',
-    svgPath: '<line x1="12" y1="5" x2="12" y2="19" /><polyline points="6 13 12 19 18 13" />',
-  },
+  { key: 'runCount',      label: 'Total runs',     tintVar: '--fd-text-warning'  },
+  { key: 'durationMs',   label: 'Total duration',  tintVar: '--fd-stat-duration' },
+  { key: 'numTurns',     label: 'Total turns',     tintVar: '--fd-stat-turns'    },
+  { key: 'totalCostUsd', label: 'Total cost',      tintVar: '--fd-stat-cost'     },
+  { key: 'inputTokens',  label: 'Input tokens',    tintVar: '--fd-stat-input'    },
+  { key: 'outputTokens', label: 'Output tokens',   tintVar: '--fd-stat-output'   },
 ] as const satisfies readonly StatCard[];
-
-const HEADING_ID = 'run-stats-bar-heading';
-const SCOPE_GROUP_NAME = 'run-stats-scope';
 
 let nextScopeId = 0;
 
@@ -63,7 +29,7 @@ let nextScopeId = 0;
       <div class="run-stats-bar__header">
         <h2 [id]="headingId" class="run-stats-bar__heading">
           Run statistics
-          <span class="run-stats-bar__scope-caption" aria-hidden="true">
+          <span class="run-stats-bar__scope-caption">
             {{ service.scope() === 'month' ? 'This month' : 'All time' }}
           </span>
         </h2>
@@ -114,7 +80,12 @@ let nextScopeId = 0;
           >Retry</button>
         </div>
       } @else if (service.totals(); as totals) {
-        <div class="run-stats-bar__grid">
+        <div
+          class="run-stats-bar__grid"
+          role="group"
+          aria-label="Run statistics, scrollable"
+          tabindex="0"
+        >
           @for (card of statCards; track card.key) {
             <div
               class="run-stats-bar__card"
@@ -132,8 +103,36 @@ let nextScopeId = 0;
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 aria-hidden="true"
-                [innerHTML]="card.svgPath"
-              ></svg>
+              >
+                @switch (card.key) {
+                  @case ('runCount') {
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  }
+                  @case ('durationMs') {
+                    <circle cx="12" cy="12" r="9" />
+                    <polyline points="12 7 12 12 15 14" />
+                  }
+                  @case ('numTurns') {
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                  }
+                  @case ('totalCostUsd') {
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M14.8 9.3a2.6 2.6 0 0 0-2.8-1.3c-1.3.2-2.2 1-2.2 2 0 1.2 1.1 1.6 2.6 2 1.7.4 2.8.9 2.8 2.1 0 1.1-1 1.9-2.4 2a2.7 2.7 0 0 1-2.8-1.4" />
+                    <line x1="12" y1="6" x2="12" y2="8" />
+                    <line x1="12" y1="16" x2="12" y2="18" />
+                  }
+                  @case ('inputTokens') {
+                    <line x1="12" y1="19" x2="12" y2="5" />
+                    <polyline points="6 11 12 5 18 11" />
+                  }
+                  @case ('outputTokens') {
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <polyline points="6 13 12 19 18 13" />
+                  }
+                }
+              </svg>
               <span class="run-stats-bar__card-body" aria-hidden="true">
                 <span class="run-stats-bar__card-label">{{ card.label }}</span>
                 <span class="run-stats-bar__card-value">{{ formatValue(card.key, _asRecord(totals)) }}</span>
@@ -149,15 +148,15 @@ let nextScopeId = 0;
 export class RunStatsBarComponent {
   protected readonly service = inject(WorkerRunTotalsService);
   protected readonly statCards = STAT_CARDS;
-  protected readonly headingId = HEADING_ID;
   protected readonly _radioGroupName = `run-stats-scope-${++nextScopeId}`;
+  protected readonly headingId = `run-stats-bar-heading-${nextScopeId}`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   protected _asRecord(totals: unknown): Record<string, number> {
     return totals as Record<string, number>;
   }
 
-  formatValue(key: string, totals: Record<string, number>): string {
+  protected formatValue(key: string, totals: Record<string, number>): string {
     switch (key) {
       case 'durationMs':
         return formatDuration(totals['durationMs']);

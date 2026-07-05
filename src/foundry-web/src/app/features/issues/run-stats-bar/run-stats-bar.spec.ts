@@ -345,4 +345,94 @@ describe('RunStatsBarComponent', () => {
     const componentDef = (RunStatsBarComponent as any).ɵcmp;
     expect(componentDef?.onPush).toBe(true);
   });
+
+  // Fix 3: grid div is keyboard-reachable on mobile via tabindex
+  it('should render the stats grid with tabindex="0" for keyboard scrollability', () => {
+    // Arrange
+    const { fixture, httpMock, service } = setup();
+    service.fetch();
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockTotals);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const grid = el.querySelector('.run-stats-bar__grid');
+    expect(grid).toBeTruthy();
+    expect(grid?.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('should render the stats grid with role="group" and aria-label', () => {
+    // Arrange
+    const { fixture, httpMock, service } = setup();
+    service.fetch();
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockTotals);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const grid = el.querySelector('.run-stats-bar__grid');
+    expect(grid?.getAttribute('role')).toBe('group');
+    expect(grid?.getAttribute('aria-label')).toBeTruthy();
+  });
+
+  // Fix 4: caption span is not aria-hidden so heading accessible name includes it
+  it('should not have aria-hidden on the scope caption span', () => {
+    // Arrange
+    const { fixture } = setup();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const caption = el.querySelector('.run-stats-bar__scope-caption');
+    expect(caption).toBeTruthy();
+    expect(caption?.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  // Fix 6: formatValue is accessible from the template (protected)
+  it('should render formatted value via template for run count', () => {
+    // Arrange — verifies formatValue is template-accessible (protected works in templates)
+    const { fixture, httpMock, service } = setup();
+    service.fetch();
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockTotals);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — if protected formatValue were inaccessible the card values would be empty
+    const el = fixture.nativeElement as HTMLElement;
+    const cardValues = el.querySelectorAll('.run-stats-bar__card-value');
+    expect(cardValues.length).toBeGreaterThan(0);
+    const hasNonEmptyValue = Array.from(cardValues).some(v => (v.textContent ?? '').trim().length > 0);
+    expect(hasNonEmptyValue).toBe(true);
+  });
+
+  // Fix 7: instance-scoped heading id — two instances must not share the same id
+  it('should use unique heading ids across multiple instances', () => {
+    // Arrange
+    const { fixture: fixture1, httpMock: hm1 } = setup();
+    fixture1.detectChanges();
+    const id1 = (fixture1.nativeElement as HTMLElement).querySelector('h2')?.getAttribute('id');
+
+    // Cleanup first instance's pending requests
+    hm1.match(() => true).forEach(r => r.flush(mockTotals));
+
+    // Create a second instance in a new TestBed to get a fresh component
+    TestBed.resetTestingModule();
+    const { fixture: fixture2, httpMock: hm2 } = setup();
+    fixture2.detectChanges();
+    const id2 = (fixture2.nativeElement as HTMLElement).querySelector('h2')?.getAttribute('id');
+
+    hm2.match(() => true).forEach(r => r.flush(mockTotals));
+
+    // Assert — ids differ between instances
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+  });
 });

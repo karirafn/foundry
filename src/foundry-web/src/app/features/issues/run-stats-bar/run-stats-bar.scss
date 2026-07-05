@@ -23,7 +23,7 @@
   &__scope-caption {
     font-size: 0.75rem;
     font-weight: 400;
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
   }
 
   // Segmented scope toggle — native radios styled as pills
@@ -53,6 +53,11 @@
     &:has(input:checked) {
       background: var(--fd-bg-card-hover);
       color: var(--fd-text-primary);
+    }
+
+    &:has(input:focus-visible) {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: -2px;
     }
 
     &:hover {
@@ -188,7 +193,7 @@
       // Allow natural height for scrollable strip
     }
 
-    &__grid:focus {
+    &__grid:focus-visible {
       outline: 2px solid var(--fd-text-link);
       outline-offset: 2px;
     }
