@@ -175,22 +175,34 @@ internal sealed class DockerContainerRuntime(
             Tail = tailLines.ToString(CultureInfo.InvariantCulture),
         };
 
-        using MultiplexedStream multiplexedStream = await containerOperations.GetContainerLogsAsync(
-            containerId,
-            false,
-            logsParams,
-            cancellationToken);
+        MultiplexedStream multiplexedStream;
+        try
+        {
+            multiplexedStream = await containerOperations.GetContainerLogsAsync(
+                containerId,
+                false,
+                logsParams,
+                cancellationToken);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            // Container already gone — no logs to return.
+            return null;
+        }
 
-        using MemoryStream outputStream = new();
-        await multiplexedStream.CopyOutputToAsync(
-            Stream.Null,
-            outputStream,
-            outputStream,
-            cancellationToken);
+        using (multiplexedStream)
+        {
+            using MemoryStream outputStream = new();
+            await multiplexedStream.CopyOutputToAsync(
+                Stream.Null,
+                outputStream,
+                outputStream,
+                cancellationToken);
 
-        outputStream.Seek(0, SeekOrigin.Begin);
-        using StreamReader reader = new(outputStream);
-        return await reader.ReadToEndAsync(cancellationToken);
+            outputStream.Seek(0, SeekOrigin.Begin);
+            using StreamReader reader = new(outputStream);
+            return await reader.ReadToEndAsync(cancellationToken);
+        }
     }
 
     public async Task CreateVolumeAsync(
