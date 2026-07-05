@@ -77,7 +77,8 @@ internal sealed class WorkerDispatchService(
 
         if (!_reconciled)
         {
-            await ReconcileOrphanedRunsAsync(
+            // Return value wired to _reconciled gate in step 7; discard here to keep current behaviour unchanged.
+            _ = await ReconcileOrphanedRunsAsync(
                 dbContext,
                 orchestrator,
                 integrationEventDispatcher,
@@ -153,7 +154,49 @@ internal sealed class WorkerDispatchService(
             cancellationToken);
     }
 
-    private async Task ReconcileOrphanedRunsAsync(
+    /// <summary>
+    /// Exposed as <c>internal</c> for unit tests that need to verify the reachability signal
+    /// returned by <see cref="ReconcileOrphanedRunsAsync"/> before step 7 wires the gate.
+    /// </summary>
+    internal async Task<bool> ReconcileOrphanedRunsForTestAsync(CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
+        IIntegrationEventDispatcher integrationEventDispatcher =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
+        IDomainEventDispatcher domainEventDispatcher =
+            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
+        IGlobalSettingsQueries settingsQueries =
+            scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
+        IPostExitProviderQueries postExitProviderQueries =
+            scope.ServiceProvider.GetRequiredService<IPostExitProviderQueries>();
+        IContainerOutputParser containerOutputParser =
+            scope.ServiceProvider.GetRequiredService<IContainerOutputParser>();
+        WorkerOutcomeResolver resolver = scope.ServiceProvider.GetRequiredService<WorkerOutcomeResolver>();
+
+        List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
+            .ToListAsync(cancellationToken);
+
+        int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
+        int defaultCooldownMinutes = await settingsQueries.GetDefaultCooldownMinutesAsync(cancellationToken);
+
+        return await ReconcileOrphanedRunsAsync(
+            dbContext,
+            orchestrator,
+            integrationEventDispatcher,
+            domainEventDispatcher,
+            resolver,
+            postExitProviderQueries,
+            containerOutputParser,
+            timeoutMinutes,
+            defaultCooldownMinutes,
+            activeRuns,
+            cancellationToken);
+    }
+
+    private async Task<bool> ReconcileOrphanedRunsAsync(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
@@ -168,6 +211,7 @@ internal sealed class WorkerDispatchService(
     {
         await RemoveUnknownContainersAsync(dbContext, orchestrator, cancellationToken);
 
+        bool daemonReachable = true;
         List<ActiveRun> runsToRemove = [];
 
         foreach (ActiveRun activeRun in activeRuns)
@@ -178,6 +222,7 @@ internal sealed class WorkerDispatchService(
             {
                 case WorkerStatusProbe.Unreachable:
                     LogDaemonUnreachable(activeRun.Id, activeRun.ContainerId.Value);
+                    daemonReachable = false;
                     continue;
 
                 case WorkerStatusProbe.NotFound:
@@ -248,6 +293,8 @@ internal sealed class WorkerDispatchService(
         {
             activeRuns.Remove(run);
         }
+
+        return daemonReachable;
     }
 
     private async Task MonitorActiveRunsAsync(

@@ -132,8 +132,54 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         orchestrator.GetStatusCallCount.ShouldBe(1);
     }
 
-    internal sealed class ReconciliationStubWorkerOrchestrator(WorkerStatusProbe probe) : IWorkerOrchestrator
+    [Fact]
+    public async Task WhenReconcileAndAllProbesReachable_ReturnsTrue()
     {
+        // Arrange — two active runs, all probes reachable (NotFound)
+        SeedActiveRun("container-a");
+        SeedActiveRun("container-b");
+        ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.NotFound());
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act
+        bool result = await sut.ReconcileOrphanedRunsForTestAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenReconcileAndAnyProbeUnreachable_ReturnsFalse()
+    {
+        // Arrange — one active run, probe returns Unreachable
+        SeedActiveRun("container-unreachable");
+        ReconciliationStubWorkerOrchestrator orchestrator = ReconciliationStubWorkerOrchestrator.WithUnreachableDaemon();
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act
+        bool result = await sut.ReconcileOrphanedRunsForTestAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    internal sealed class ReconciliationStubWorkerOrchestrator : IWorkerOrchestrator
+    {
+        private readonly WorkerStatusProbe _probe;
+
+        public ReconciliationStubWorkerOrchestrator(WorkerStatusProbe probe)
+        {
+            _probe = probe;
+        }
+
+        private ReconciliationStubWorkerOrchestrator(WorkerStatusProbe probe, bool _)
+        {
+            _probe = probe;
+        }
+
+        public static ReconciliationStubWorkerOrchestrator WithUnreachableDaemon()
+            => new(new WorkerStatusProbe.Unreachable(), false);
+
         public int GetStatusCallCount { get; private set; }
 
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
@@ -148,7 +194,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         public Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken)
         {
             GetStatusCallCount++;
-            return Task.FromResult(probe);
+            return Task.FromResult(_probe);
         }
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
