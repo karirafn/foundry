@@ -376,7 +376,7 @@ describe('RunStatsBarComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const grid = el.querySelector('.run-stats-bar__grid');
     expect(grid?.getAttribute('role')).toBe('group');
-    expect(grid?.getAttribute('aria-label')).toBeTruthy();
+    expect(grid?.getAttribute('aria-label')).toBe('Run statistics');
   });
 
   // Fix 4: caption span is not aria-hidden so heading accessible name includes it

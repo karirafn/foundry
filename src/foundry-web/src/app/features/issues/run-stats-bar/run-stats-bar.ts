@@ -83,7 +83,7 @@ let nextScopeId = 0;
         <div
           class="run-stats-bar__grid"
           role="group"
-          aria-label="Run statistics, scrollable"
+          aria-label="Run statistics"
           tabindex="0"
         >
           @for (card of statCards; track card.key) {

@@ -56,8 +56,8 @@
     }
 
     &:has(input:focus-visible) {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: -2px;
+      // Inset box-shadow is not clipped by parent overflow:hidden; outline would be
+      box-shadow: inset 0 0 0 2px var(--fd-text-link);
     }
 
     &:hover {
@@ -66,12 +66,12 @@
   }
 
   &__scope-radio {
-    // Visually hide but keep keyboard accessible
+    // Visually hidden but focusable — 1px box preserved so :focus-visible fires on iOS Safari
     position: absolute;
     opacity: 0;
-    width: 0;
-    height: 0;
-    pointer-events: none;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
   }
 
   // Six-column grid of KPI cards
