@@ -8,11 +8,16 @@ internal static class WorkerEndpoints
 {
     internal static IEndpointRouteBuilder MapWorkerEndpoints(this IEndpointRouteBuilder routes)
     {
-        RouteGroupBuilder group = routes.MapGroup("/api/workers/runs")
+        RouteGroupBuilder runsGroup = routes.MapGroup("/api/workers/runs")
             .WithTags("Workers");
 
-        GetWorkerRunDetail.Endpoint.Map(group);
-        GetWorkerRunLog.Endpoint.Map(group);
+        GetWorkerRunDetail.Endpoint.Map(runsGroup);
+        GetWorkerRunLog.Endpoint.Map(runsGroup);
+
+        RouteGroupBuilder runTotalsGroup = routes.MapGroup("/api/workers/run-totals")
+            .WithTags("Workers");
+
+        GetRunTotals.Endpoint.Map(runTotalsGroup);
 
         return routes;
     }
