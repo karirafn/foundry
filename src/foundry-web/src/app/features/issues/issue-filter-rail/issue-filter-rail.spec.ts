@@ -77,6 +77,17 @@ describe('IssueFilterRailComponent', () => {
     expect(labels).toContain('Resolved');
   });
 
+  it('should render group labels in the order: In progress, Needs attention, Waiting, Resolved', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — DOM order must match STATE_GROUPS order exactly
+    const headings = el.querySelectorAll('.filter-rail__group-label');
+    const labels = Array.from(headings).map(h => h.textContent?.trim());
+    expect(labels).toEqual(['In progress', 'Needs attention', 'Waiting', 'Resolved']);
+  });
+
   // Cycle 2: renders a toggle button per state
   it('should render one toggle button per state across all groups', () => {
     // Arrange

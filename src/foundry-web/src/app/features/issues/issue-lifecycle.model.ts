@@ -44,15 +44,27 @@ export const STATE_GROUPS: readonly StateGroup[] = [
     states: ['in_progress', 'revision_in_progress', 'continuation_queued'],
   },
   {
-    label: 'Waiting',
-    states: ['detected', 'queued', 'blocked', 'revision_queued'],
-  },
-  {
     label: 'Needs attention',
     states: ['review', 'failed', 'continuable_failed', 'revision_failed'],
+  },
+  {
+    label: 'Waiting',
+    states: ['detected', 'queued', 'blocked', 'revision_queued'],
   },
   {
     label: 'Resolved',
     states: ['completed', 'unchanged'],
   },
 ] as const;
+
+export const UNGROUPED_RANK = STATE_GROUPS.length;
+
+const groupRankMap = new Map<IssueState, number>(
+  STATE_GROUPS.flatMap((group, index) =>
+    group.states.map((state): [IssueState, number] => [state, index])
+  )
+);
+
+export function groupRankFor(state: IssueState): number {
+  return groupRankMap.get(state) ?? UNGROUPED_RANK;
+}
