@@ -194,14 +194,16 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         DateTimeOffset to,
         CancellationToken cancellationToken)
     {
-        // The SQLite provider stores DateTimeOffset as ISO 8601 TEXT and cannot translate
-        // DateTimeOffset comparison operators (>=, <) in server-side LINQ. Rows are fetched
-        // for all typed subtypes and the window filter is applied in memory. At the scale
-        // of this application (issue management, not analytics) this is acceptable.
+        // The SQLite provider stores DateTimeOffset as ISO 8601 TEXT. EF Core 10 cannot translate
+        // DateTimeOffset comparison operators (>=, <) in server-side LINQ for this mapping — attempting
+        // to push the CreatedAt window filter into a WHERE clause throws InvalidOperationException at
+        // query compilation time. The CreatedAt-to-SQL pre-filter path was considered and is not viable
+        // on the SQLite provider. This matches the sibling GetRunAggregatesForIssuesAsync in-memory
+        // pattern and is acceptable at the current POC scale (issue management, not analytics).
         //
         // The telemetry columns live on the RunResultSummary owned entity, configured via
         // OwnsOne on CompletedRun and FailedRun only. Query each typed set separately so EF
-        // can project the owned navigation, then combine in memory.
+        // can project the owned navigation, then apply the window filter in memory.
         List<DateFilteredTelemetryRow> allCompleted = await db.Set<CompletedRun>()
             .AsNoTracking()
             .Select(r => new DateFilteredTelemetryRow(

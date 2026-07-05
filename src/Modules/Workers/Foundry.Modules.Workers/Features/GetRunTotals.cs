@@ -32,13 +32,21 @@ internal static class GetRunTotals
                     DateTimeOffset from = range.From ?? DateTimeOffset.MinValue;
                     DateTimeOffset to = range.To ?? DateTimeOffset.UtcNow;
 
+                    if (from >= to)
+                    {
+                        return (Results<Ok<RunTotals>, ProblemHttpResult>)TypedResults.Problem(
+                            detail: "'from' must be earlier than 'to'.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+
                     RunTotals totals = await queries.GetRunTotalsAsync(from, to, cancellationToken);
 
-                    return TypedResults.Ok(totals);
+                    return (Results<Ok<RunTotals>, ProblemHttpResult>)TypedResults.Ok(totals);
                 })
                 .WithName("GetRunTotals")
                 .WithSummary("Gets aggregated worker-run totals across all issues for a time window")
-                .Produces<RunTotals>();
+                .Produces<RunTotals>()
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

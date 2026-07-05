@@ -128,6 +128,25 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
         return active;
     }
 
+    private async Task<StartingRun> SeedStartingRunAsync(DateTimeOffset? createdAt = null)
+    {
+        IssueId issueId = IssueId.New();
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
+
+        _dbContext.Set<WorkerRun>().Add(starting);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        if (createdAt.HasValue)
+        {
+            // Override CreatedAt for date-window filtering tests.
+            _dbContext.Entry(starting).Property(r => r.CreatedAt).CurrentValue = createdAt.Value;
+            await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        _dbContext.ChangeTracker.Clear();
+        return starting;
+    }
+
     [Fact]
     public async Task WhenNoRunsInWindow_ReturnsAllZeros()
     {
@@ -350,5 +369,66 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
 
         // Assert
         result.RunCount.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenRunsHaveNoResultSummary_TelemetryFieldsAreZero()
+    {
+        // Arrange
+        // Seed completed and failed runs in-window with no ResultSummary (null telemetry).
+        await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: null);
+        await SeedFailedRunAsync(createdAt: InWindow, resultSummary: null);
+
+        WorkerRunQueries sut = new(_dbContext);
+
+        // Act
+        RunTotals result = await sut.GetRunTotalsAsync(
+            WindowStart,
+            WindowEnd,
+            TestContext.Current.CancellationToken);
+
+        // Assert — one logical outcome: all telemetry fields zero, run count still counts the rows.
+        result.ShouldSatisfyAllConditions(
+            () => result.RunCount.ShouldBe(2),
+            () => result.DurationMs.ShouldBe(0L),
+            () => result.NumTurns.ShouldBe(0),
+            () => result.TotalCostUsd.ShouldBe(0m),
+            () => result.InputTokens.ShouldBe(0L),
+            () => result.OutputTokens.ShouldBe(0L));
+    }
+
+    [Fact]
+    public async Task WhenStartingRunInWindow_AddsToRunCountOnly()
+    {
+        // Arrange
+        RunResultSummary completedSummary = RunResultSummary.Create(
+            resultText: null,
+            subtype: null,
+            isError: false,
+            durationMs: 1000L,
+            numTurns: 2,
+            totalCostUsd: 0.02m,
+            inputTokens: 100,
+            outputTokens: 200);
+
+        await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: completedSummary);
+        await SeedStartingRunAsync(createdAt: InWindow);
+
+        WorkerRunQueries sut = new(_dbContext);
+
+        // Act
+        RunTotals result = await sut.GetRunTotalsAsync(
+            WindowStart,
+            WindowEnd,
+            TestContext.Current.CancellationToken);
+
+        // Assert — StartingRun adds to RunCount but contributes no telemetry sums.
+        result.ShouldSatisfyAllConditions(
+            () => result.RunCount.ShouldBe(2),
+            () => result.DurationMs.ShouldBe(1000L),
+            () => result.NumTurns.ShouldBe(2),
+            () => result.TotalCostUsd.ShouldBe(0.02m),
+            () => result.InputTokens.ShouldBe(100L),
+            () => result.OutputTokens.ShouldBe(200L));
     }
 }

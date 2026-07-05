@@ -94,6 +94,23 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
+    private async Task SeedStartingRunAsync(DateTimeOffset createdAt)
+    {
+        // No POST endpoint for worker runs — seed directly via DbContext.
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        IssueId issueId = IssueId.New();
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
+
+        dbContext.Set<WorkerRun>().Add(starting);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Back-date CreatedAt to the requested timestamp for window-filtering tests.
+        dbContext.Entry(starting).Property(r => r.CreatedAt).CurrentValue = createdAt;
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
     private async Task SeedActiveRunAsync(DateTimeOffset createdAt)
     {
         // No POST endpoint for worker runs — seed directly via DbContext.
@@ -229,6 +246,77 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
 
         await SeedCompletedRunAsync(InWindow, completedSummary);
         await SeedActiveRunAsync(InWindow);
+
+        string from = Uri.EscapeDataString(WindowStart.ToString("O"));
+        string to = Uri.EscapeDataString(WindowEnd.ToString("O"));
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/workers/run-totals?from={from}&to={to}", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        RunTotals? totals = await response.Content.ReadFromJsonAsync<RunTotals>(
+            TestContext.Current.CancellationToken);
+        totals.ShouldNotBeNull();
+        totals.ShouldSatisfyAllConditions(
+            () => totals.RunCount.ShouldBe(2),
+            () => totals.DurationMs.ShouldBe(1000L),
+            () => totals.NumTurns.ShouldBe(2),
+            () => totals.TotalCostUsd.ShouldBe(0.02m),
+            () => totals.InputTokens.ShouldBe(100L),
+            () => totals.OutputTokens.ShouldBe(200L));
+    }
+
+    [Fact]
+    public async Task WhenFromIsAfterTo_Returns400BadRequest()
+    {
+        // Arrange — inverted range: from is later than to.
+        string from = Uri.EscapeDataString(WindowEnd.ToString("O"));
+        string to = Uri.EscapeDataString(WindowStart.ToString("O"));
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/workers/run-totals?from={from}&to={to}", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task WhenFromEqualsTo_Returns400BadRequest()
+    {
+        // Arrange — degenerate window: from and to are identical.
+        string from = Uri.EscapeDataString(WindowStart.ToString("O"));
+        string to = Uri.EscapeDataString(WindowStart.ToString("O"));
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/workers/run-totals?from={from}&to={to}", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task WhenStartingRunInWindow_AddsToRunCountButNotSums()
+    {
+        // Arrange
+        RunResultSummary completedSummary = RunResultSummary.Create(
+            resultText: null,
+            subtype: null,
+            isError: false,
+            durationMs: 1000L,
+            numTurns: 2,
+            totalCostUsd: 0.02m,
+            inputTokens: 100,
+            outputTokens: 200);
+
+        await SeedCompletedRunAsync(InWindow, completedSummary);
+        await SeedStartingRunAsync(InWindow);
 
         string from = Uri.EscapeDataString(WindowStart.ToString("O"));
         string to = Uri.EscapeDataString(WindowEnd.ToString("O"));
