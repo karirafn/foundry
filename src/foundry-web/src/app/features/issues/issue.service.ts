@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, QUEUED_TIER_STATES } from './issue.model';
-import { ACTIVE_STATES, RESOLVED_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
+import { ACTIVE_STATES, RESOLVED_STATES, groupRankFor, isKnownState, isResolvedState } from './issue-lifecycle.model';
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
@@ -78,14 +78,38 @@ export class IssueService {
   private _resolvedRequestToken = 0;
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
-    const byDate = (a: IssueSummary, b: IssueSummary): number =>
-      new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
     const all = this.issues();
-    // Live issues sorted by recency; queued issues preserve server dispatch order; rest by recency.
-    const live = [...all].filter(i => LIVE_STATES.has(i.state)).sort(byDate);
-    const queued = all.filter(i => QUEUED_TIER_STATES.has(i.state));
-    const other = [...all].filter(i => !LIVE_STATES.has(i.state) && !QUEUED_TIER_STATES.has(i.state)).sort(byDate);
-    return [...live, ...queued, ...other];
+    // Resolved states never enter issues() — filtered in loadIssues/_upsertIssue —
+    // so this sort never encounters completed or unchanged.
+
+    // Build server-index map once so the comparator is O(1) per lookup (not O(n²) indexOf).
+    const serverIndex = new Map<string, number>(all.map((issue, i) => [issue.id, i]));
+
+    return [...all].sort((a, b) => {
+      const rankA = groupRankFor(a.state);
+      const rankB = groupRankFor(b.state);
+
+      // Primary: group rank ascending (In progress → Needs attention → Waiting → ungrouped last).
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+
+      const aIsQueued = QUEUED_TIER_STATES.has(a.state);
+      const bIsQueued = QUEUED_TIER_STATES.has(b.state);
+
+      // Secondary: within a bucket, non-queued cards sort before queued-tier cards.
+      if (aIsQueued !== bIsQueued) {
+        return aIsQueued ? 1 : -1;
+      }
+
+      // Tertiary (both queued): preserve raw server order (dispatch priority).
+      if (aIsQueued) {
+        return (serverIndex.get(a.id) ?? 0) - (serverIndex.get(b.id) ?? 0);
+      }
+
+      // Tertiary (both non-queued): sort by detectedAt descending.
+      return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
+    });
   });
 
   readonly liveIssueCount: Signal<number> = computed(() =>
