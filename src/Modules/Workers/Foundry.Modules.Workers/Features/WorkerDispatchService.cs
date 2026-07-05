@@ -77,8 +77,7 @@ internal sealed class WorkerDispatchService(
 
         if (!_reconciled)
         {
-            // Return value wired to _reconciled gate in step 7; discard here to keep current behaviour unchanged.
-            _ = await ReconcileOrphanedRunsAsync(
+            _reconciled = await ReconcileOrphanedRunsAsync(
                 dbContext,
                 orchestrator,
                 integrationEventDispatcher,
@@ -90,7 +89,6 @@ internal sealed class WorkerDispatchService(
                 defaultCooldownMinutes,
                 activeRuns,
                 cancellationToken);
-            _reconciled = true;
         }
 
         await MonitorActiveRunsAsync(
@@ -209,9 +207,7 @@ internal sealed class WorkerDispatchService(
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
-        await RemoveUnknownContainersAsync(dbContext, orchestrator, cancellationToken);
-
-        bool daemonReachable = true;
+        bool daemonReachable = await RemoveUnknownContainersAsync(dbContext, orchestrator, cancellationToken);
         List<ActiveRun> runsToRemove = [];
 
         foreach (ActiveRun activeRun in activeRuns)
@@ -904,7 +900,7 @@ internal sealed class WorkerDispatchService(
         return true;
     }
 
-    private async Task RemoveUnknownContainersAsync(
+    private async Task<bool> RemoveUnknownContainersAsync(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         CancellationToken cancellationToken)
@@ -929,14 +925,24 @@ internal sealed class WorkerDispatchService(
 
                 await orchestrator.StopAndRemoveAsync(containerId.Value, cancellationToken);
             }
+
+            return true;
         }
 #pragma warning disable CA1031 // Docker daemon failures during startup must not crash the BackgroundService; the warning log surfaces the issue without blocking reconciliation.
         catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
+            if (DockerDaemonConnectivity.IsUnreachable(ex, cancellationToken))
+            {
+                logger.LogWarning(
+                    "Docker daemon unreachable during startup reconciliation orphan scan; deferring until next tick.");
+                return false;
+            }
+
             logger.LogWarning(
                 ex,
                 "Docker scan failed during startup reconciliation; skipping orphaned container removal.");
+            return true;
         }
     }
 

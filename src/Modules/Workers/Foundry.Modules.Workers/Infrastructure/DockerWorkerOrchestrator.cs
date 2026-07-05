@@ -168,16 +168,11 @@ internal sealed class DockerWorkerOrchestrator(
         {
             return new WorkerStatusProbe.NotFound();
         }
-        catch (Exception ex) when (IsDaemonUnreachable(ex, cancellationToken))
+        catch (Exception ex) when (DockerDaemonConnectivity.IsUnreachable(ex, cancellationToken))
         {
             return new WorkerStatusProbe.Unreachable();
         }
     }
-
-    private static bool IsDaemonUnreachable(Exception ex, CancellationToken cancellationToken) =>
-        ex is HttpRequestException
-        || ex is TimeoutException
-        || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested);
 
     public async Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
         CancellationToken cancellationToken)

@@ -133,6 +133,25 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenReconcileTickSeesUnreachableProbe_ReconciledIsNotLatched()
+    {
+        // Arrange — active run exists, first tick: reconcile probe returns Unreachable → _reconciled stays false
+        SeedActiveRun("unreachable-reconcile-container");
+        ReconciliationStubWorkerOrchestrator orchestrator = ReconciliationStubWorkerOrchestrator.WithUnreachableDaemon();
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act — first tick: reconcile sees Unreachable → _reconciled must NOT be latched
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — second tick runs reconciliation again.
+        // Each tick calls GetStatusAsync twice: once in reconcile and once in monitor.
+        // Tick 1: reconcile(1) + monitor(1) = 2. Tick 2: reconcile(1) + monitor(1) = 4.
+        // If _reconciled were latched after tick 1 (wrong), tick 2 would only call monitor: total = 3.
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        orchestrator.GetStatusCallCount.ShouldBe(4);
+    }
+
+    [Fact]
     public async Task WhenReconcileAndAllProbesReachable_ReturnsTrue()
     {
         // Arrange — two active runs, all probes reachable (NotFound)
