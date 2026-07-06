@@ -28,10 +28,9 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("auth_mode");
 
-                    b.Property<string>("Validity")
-                        .IsRequired()
+                    b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT")
-                        .HasColumnName("validity");
+                        .HasColumnName("created_at");
 
                     b.Property<string>("OAuthAccountEmail")
                         .HasMaxLength(254)
@@ -43,13 +42,14 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("oauth_account_org_name");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("created_at");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("updated_at");
+
+                    b.Property<string>("Validity")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("validity");
 
                     b.HasKey("Id");
 
@@ -287,15 +287,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<bool>("AuthInvalidPause")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("auth_invalid_pause");
-
-                    b.Property<string>("AuthMode")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("auth_mode");
-
                     b.Property<bool>("AutoResumeOnUsageReset")
                         .HasColumnType("INTEGER")
                         .HasColumnName("auto_resume_on_usage_reset");
@@ -324,16 +315,6 @@ namespace Foundry.WebApi.Migrations
                     b.Property<int>("MaxConcurrent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_concurrent");
-
-                    b.Property<string>("OAuthAccountEmail")
-                        .HasMaxLength(254)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("oauth_account_email");
-
-                    b.Property<string>("OAuthAccountOrgName")
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("oauth_account_org_name");
 
                     b.Property<string>("SystemPromptTemplate")
                         .HasMaxLength(32768)
