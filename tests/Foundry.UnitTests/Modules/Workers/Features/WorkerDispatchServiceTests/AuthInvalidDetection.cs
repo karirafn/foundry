@@ -37,16 +37,10 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
             containerOutputParser: outputParser);
     }
 
-    private void SeedGlobalSettings(bool authInvalidPause = false)
+    private void SeedGlobalSettings()
     {
         using FoundryDbContext db = CreateDbContext();
         GlobalSettings settings = GlobalSettings.Create();
-
-        if (authInvalidPause)
-        {
-            settings.PauseForAuthInvalid();
-        }
-
         db.Set<GlobalSettings>().Add(settings);
         db.SaveChanges();
     }
@@ -72,23 +66,23 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithAuthInvalidOutput_SetsAuthInvalidPauseOnGlobalSettings()
+    public async Task WhenContainerExitsWithAuthInvalidOutput_DoesNotMutateAuthInvalidPauseOnGlobalSettings()
     {
         // Arrange
         SeedGlobalSettings();
-        SeedActiveRun("container-auth-invalid-pause");
+        ActiveRun activeRun = SeedActiveRun("container-auth-invalid-no-pause");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         WorkerDispatchService sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert
+        // Assert — settings flag must remain false; mutation is now the Credentials module's responsibility
         await using FoundryDbContext assertDb = CreateDbContext();
         GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
-        settings.AuthInvalidPause.ShouldBeTrue();
+        settings.AuthInvalidPause.ShouldBeFalse();
     }
 
     [Fact]
@@ -115,11 +109,11 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithAuthInvalidOutput_DispatchesDispatchPausedForAuthInvalid()
+    public async Task WhenContainerExitsWithAuthInvalidOutput_PublishesWorkerAuthenticationFailed()
     {
         // Arrange
         SeedGlobalSettings();
-        SeedActiveRun("container-auth-invalid-event");
+        ActiveRun activeRun = SeedActiveRun("container-auth-invalid-event");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
         WorkerDispatchService sut = BuildServiceWithParser(
@@ -131,29 +125,11 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        dispatcher.Captured
-            .OfType<DispatchPausedForAuthInvalid>()
+        WorkerAuthenticationFailed authFailedEvent = dispatcher.Captured
+            .OfType<WorkerAuthenticationFailed>()
             .ShouldHaveSingleItem();
-    }
-
-    [Fact]
-    public async Task WhenAuthInvalidPauseAlreadySet_DoesNotDispatchDispatchPausedForAuthInvalidAgain()
-    {
-        // Arrange — GlobalSettings already has AuthInvalidPause = true (repeat auth-invalid exit)
-        SeedGlobalSettings(authInvalidPause: true);
-        SeedActiveRun("container-auth-invalid-idempotent");
-        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
-            AuthInvalidOutput,
-            exitedStatus,
-            integrationEventDispatcher: dispatcher);
-
-        // Act
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        dispatcher.Captured.OfType<DispatchPausedForAuthInvalid>().ShouldBeEmpty();
+        authFailedEvent.WorkerRunId.ShouldBe(activeRun.Id.Value);
+        authFailedEvent.IssueId.ShouldBe(activeRun.IssueId.Value);
     }
 
     [Fact]
@@ -228,7 +204,6 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
-
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator
@@ -265,7 +240,6 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
-
     }
 
     private sealed class ConfigurablePauseStateQueries(DispatchPauseState pauseState) : IGlobalSettingsQueries

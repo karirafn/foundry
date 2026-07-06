@@ -12,9 +12,9 @@ using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
-using DispatchPausedForAuthInvalidEvent = Foundry.Modules.Workers.Contracts.DispatchPausedForAuthInvalid;
 using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.DispatchResumed;
 
+using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.WorkerAuthenticationFailed;
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
 using WorkerRunFailedEvent = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
 
@@ -621,9 +621,9 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     continuable.FailureReason,
                     cancellationToken);
-                await PersistAuthInvalidIfNeededAsync(
-                    dbContext,
+                await PublishAuthFailedIfNeededAsync(
                     integrationEventDispatcher,
+                    activeRun,
                     continuable.FailureReason,
                     cancellationToken);
                 await TryDispatchAsync(
@@ -656,9 +656,9 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     failure.FailureReason,
                     cancellationToken);
-                await PersistAuthInvalidIfNeededAsync(
-                    dbContext,
+                await PublishAuthFailedIfNeededAsync(
                     integrationEventDispatcher,
+                    activeRun,
                     failure.FailureReason,
                     cancellationToken);
                 await TryDispatchAsync(
@@ -823,12 +823,12 @@ internal sealed class WorkerDispatchService(
 
     /// <summary>
     /// When <paramref name="failureReason"/> is <see cref="FailureReason.AuthInvalid"/>,
-    /// sets <see cref="GlobalSettings.AuthInvalidPause"/>, persists it, and dispatches
-    /// <see cref="DispatchPausedForAuthInvalidEvent"/>.
+    /// publishes <see cref="WorkerAuthenticationFailedEvent"/> so the Credentials module
+    /// can transition the account state and broadcast the dispatch-paused notification.
     /// </summary>
-    private async Task PersistAuthInvalidIfNeededAsync(
-        DbContext dbContext,
+    private async Task PublishAuthFailedIfNeededAsync(
         IIntegrationEventDispatcher integrationEventDispatcher,
+        ActiveRun activeRun,
         FailureReason failureReason,
         CancellationToken cancellationToken)
     {
@@ -837,29 +837,15 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(cancellationToken);
+        await TryDispatchAsync(
+            integrationEventDispatcher,
+            new WorkerAuthenticationFailedEvent(
+                activeRun.Id.Value,
+                activeRun.IssueId.Value,
+                failureReason.Summary),
+            cancellationToken);
 
-        if (settings is null)
-        {
-            logger.LogWarning(
-                "Auth-invalid exit detected but could not persist pause — no GlobalSettings row exists.");
-            return;
-        }
-
-        bool wasAlreadyPaused = settings.AuthInvalidPause;
-        settings.PauseForAuthInvalid();
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        if (!wasAlreadyPaused)
-        {
-            await TryDispatchAsync(
-                integrationEventDispatcher,
-                new DispatchPausedForAuthInvalidEvent(),
-                cancellationToken);
-        }
-
-        logger.LogWarning("Auth-invalid exit detected; dispatch paused until credentials are refreshed.");
+        logger.LogWarning("Auth-invalid exit detected; WorkerAuthenticationFailed published.");
     }
 
     /// <summary>
