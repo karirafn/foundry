@@ -16,7 +16,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Workers.Login;
+namespace Foundry.IntegrationTests.Modules.Credentials.Login;
 
 /// <summary>
 /// Integration tests for the login flow against the real login image
