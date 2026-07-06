@@ -29,7 +29,8 @@ Foundry stores no token and injects none — the CLI is solely responsible for a
 **In-app interactive login.**
 Operators seed the credential volume from within the Foundry dashboard via an interactive OAuth flow, without running any Docker command manually.
 Foundry starts a dedicated login container (`foundry-claude-login` image) using the Docker API with `Tty: false`.
-The container's entrypoint bootstraps a named FIFO at `/tmp/ci`, writes the FIFO's writer sleep-holder PID to `/tmp/ci.pid`, then starts `claude auth login --claudeai` with the FIFO wired to stdin so the process blocks waiting for the authorization code.
+The container's entrypoint bootstraps a named FIFO at `/tmp/ci`, writes the FIFO's writer sleep-holder PID to `/tmp/ci.pid`, then starts `claude auth login --claudeai` — wrapped in `timeout -k 10 <session-timeout>` — with the FIFO wired to stdin so the process blocks waiting for the authorization code.
+The `timeout` wrapper bounds the CLI's lifetime independently of the sleep-holder (which the code-delivery exec kills), and the container is created with `AutoRemove: true`, so it self-terminates and Docker removes it even if Foundry is not alive to tear it down — leaks cannot outlive the session timeout.
 Foundry streams the container's stdout/stderr log lines and extracts the `https://…/oauth/…` authorization URL (the `visit:` line emitted by the CLI) — the URL is broadcast to the dashboard via SignalR as a `LoginSessionUpdate`.
 The operator opens the URL, authorizes, and pastes the code into the dashboard.
 Foundry delivers the code into the FIFO via `docker exec` (`printf '%s\n' "$C" > /tmp/ci`), then kills the sleep-holder process (read from `/tmp/ci.pid`) so the FIFO writer closes and the CLI receives EOF on stdin and proceeds to token exchange.
@@ -43,9 +44,12 @@ On an invalid code the session transitions to `Failed(InvalidCode)` and is broad
 Before starting `claude auth login --claudeai`, the entrypoint idempotently merges onboarding-gate flags into the volume's `.claude.json` (`hasCompletedOnboarding`, `hasTrustDialogAccepted`, `theme`), setting each key only when absent, so existing credentials and account data are never overwritten.
 
 **Session lifecycle.**
-At most one login session is active at a time — `LoginSessionService` (singleton, in-memory, Workers module) enforces this.
+At most one login session is active at a time — `LoginSessionService` (singleton, in-memory, Credentials module) enforces this.
 Dispatch is transiently suppressed while a session is active via `ILoginSessionState.IsLoginActive` (checked by `WorkerDispatchService`); no pause record is persisted.
-Session state is not persisted: a Foundry restart mid-login leaves the in-memory session gone, and `LoginContainerReaper` (an `IHostedLifecycleService`) stops and removes any orphaned `foundry.login` containers on startup.
+Session state is not persisted: a Foundry restart mid-login leaves the in-memory session gone.
+In-process, `LoginSessionService.SubmitCodeAsync` tears the container down in a `finally`, so every exit path — success, invalid code, timeout, host shutdown — removes it exactly once (a second remove is a safe no-op).
+For crashes where no in-process path runs, two reapers back it up: `LoginContainerReaper` (an `IHostedLifecycleService`) reaps orphaned transient containers on startup, and `TransientContainerReaper` (a periodic background service, 60 s) reaps them continuously.
+Both — and all transient login and credential-helper containers — key off the `foundry.transient=true` label, deliberately distinct from the `foundry.managed`/`foundry.worker-run-id` labels on long-lived worker containers, so reaping never touches a running worker.
 A session times out if no URL is captured within the URL timeout, if no code is submitted within the session timeout, or if login confirmation is not seen within the sign-in timeout after the code is delivered; these surface as typed `LoginFailureReason` variants (`UrlTimeout`, `CodeTimeout`).
 
 **Auth-invalid pause.**
