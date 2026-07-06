@@ -1,4 +1,4 @@
-using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
@@ -15,14 +15,14 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Issues.Features.DispatchResumedHandlerTests;
+namespace Foundry.UnitTests.Modules.Issues.Features.CredentialsValidatedHandlerTests;
 
 public sealed class HandleAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
-    private readonly IIntegrationEventHandler<DispatchResumed> _sut;
+    private readonly IIntegrationEventHandler<CredentialsValidated> _sut;
 
     private static IssueAuthor ValidAuthor =>
         IssueAuthor.Create("octocat").ValueOrThrow();
@@ -42,10 +42,10 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
         _dispatcher = new CapturingDomainEventDispatcher();
-        _sut = new DispatchResumedHandler(
+        _sut = new CredentialsValidatedHandler(
             _dbContext,
             _dispatcher,
-            NullLogger<DispatchResumedHandler>.Instance);
+            NullLogger<CredentialsValidatedHandler>.Instance);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -107,13 +107,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenFailedIssueIsUsageLimited_TransitionsToQueuedIssue()
+    public async Task WhenFailedIssueIsAuthInvalid_TransitionsToQueuedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedFailedIssue(repositoryId, WorkerRunFailed.UsageLimitedReason);
+        SeedFailedIssue(repositoryId, WorkerRunFailed.AuthInvalidReason);
 
-        DispatchResumed @event = new();
+        CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -128,13 +128,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenContinuableFailedIssueIsUsageLimited_TransitionsToContinuationQueuedIssue()
+    public async Task WhenContinuableFailedIssueIsAuthInvalid_TransitionsToContinuationQueuedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedContinuableFailedIssue(repositoryId, WorkerRunFailed.UsageLimitedReason);
+        SeedContinuableFailedIssue(repositoryId, WorkerRunFailed.AuthInvalidReason);
 
-        DispatchResumed @event = new();
+        CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -149,13 +149,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenFailedIssueIsNotUsageLimited_RemainsAsFailed()
+    public async Task WhenFailedIssueIsNotAuthInvalid_RemainsAsFailed()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedFailedIssue(repositoryId, "Non-zero exit code: 1");
+        SeedFailedIssue(repositoryId, WorkerRunFailed.UsageLimitedReason);
 
-        DispatchResumed @event = new();
+        CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -170,13 +170,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenContinuableFailedIssueIsNotUsageLimited_RemainsAsContinuableFailed()
+    public async Task WhenContinuableFailedIssueIsNotAuthInvalid_RemainsAsContinuableFailed()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedContinuableFailedIssue(repositoryId, "Non-zero exit code: 1");
+        SeedContinuableFailedIssue(repositoryId, WorkerRunFailed.UsageLimitedReason);
 
-        DispatchResumed @event = new();
+        CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -194,103 +194,12 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenNoFailedIssues_HandlesGracefully()
     {
         // Arrange
-        DispatchResumed @event = new();
+        CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
         // Act
         Task act = _sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
         await Should.NotThrowAsync(act);
-    }
-
-    [Fact]
-    public async Task WhenMultipleUsageLimitedFailedIssues_RetryAll()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId1 = MonitoredRepositoryId.New();
-        MonitoredRepositoryId repositoryId2 = MonitoredRepositoryId.New();
-        SeedFailedIssue(repositoryId1, WorkerRunFailed.UsageLimitedReason, issueNumber: 1);
-        SeedFailedIssue(repositoryId2, WorkerRunFailed.UsageLimitedReason, issueNumber: 2);
-
-        DispatchResumed @event = new();
-
-        // Act
-        await _sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dbContext.ChangeTracker.Clear();
-        List<Issue> issues = await _dbContext.Set<Issue>()
-            .ToListAsync(TestContext.Current.CancellationToken);
-        issues.ShouldAllBe(i => i is QueuedIssue);
-    }
-
-    [Fact]
-    public async Task WhenMixedFailedIssues_OnlyUsageLimitedAreRetried()
-    {
-        // Arrange
-        MonitoredRepositoryId usageLimitedRepo = MonitoredRepositoryId.New();
-        MonitoredRepositoryId nonUsageLimitedRepo = MonitoredRepositoryId.New();
-        SeedFailedIssue(usageLimitedRepo, WorkerRunFailed.UsageLimitedReason, issueNumber: 1);
-        SeedFailedIssue(nonUsageLimitedRepo, "Non-zero exit code: 1", issueNumber: 2);
-
-        DispatchResumed @event = new();
-
-        // Act
-        await _sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dbContext.ChangeTracker.Clear();
-        Issue? usageLimitedIssue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == usageLimitedRepo,
-                TestContext.Current.CancellationToken);
-        Issue? nonUsageLimitedIssue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == nonUsageLimitedRepo,
-                TestContext.Current.CancellationToken);
-        usageLimitedIssue.ShouldBeOfType<QueuedIssue>();
-        nonUsageLimitedIssue.ShouldBeOfType<FailedIssue>();
-    }
-
-    [Fact]
-    public async Task WhenFailedIssueIsAuthInvalid_RemainsAsFailed()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedFailedIssue(repositoryId, WorkerRunFailed.AuthInvalidReason);
-
-        DispatchResumed @event = new();
-
-        // Act
-        await _sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dbContext.ChangeTracker.Clear();
-        Issue? issue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repositoryId,
-                TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<FailedIssue>();
-    }
-
-    [Fact]
-    public async Task WhenContinuableFailedIssueIsAuthInvalid_RemainsAsContinuableFailed()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedContinuableFailedIssue(repositoryId, WorkerRunFailed.AuthInvalidReason);
-
-        DispatchResumed @event = new();
-
-        // Act
-        await _sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dbContext.ChangeTracker.Clear();
-        Issue? issue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repositoryId,
-                TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<ContinuableFailedIssue>();
     }
 }

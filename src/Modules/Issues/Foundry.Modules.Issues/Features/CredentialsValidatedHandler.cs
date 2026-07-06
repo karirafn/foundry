@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues.Domain;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -8,19 +9,19 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features;
 
-internal sealed class DispatchResumedHandler(
+internal sealed class CredentialsValidatedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
-    ILogger<DispatchResumedHandler> logger) : IIntegrationEventHandler<DispatchResumed>
+    ILogger<CredentialsValidatedHandler> logger) : IIntegrationEventHandler<CredentialsValidated>
 {
-    public async Task HandleAsync(DispatchResumed @event, CancellationToken cancellationToken)
+    public async Task HandleAsync(CredentialsValidated @event, CancellationToken cancellationToken)
     {
         List<FailedIssue> failedIssues = await db.Set<FailedIssue>()
-            .Where(i => EF.Functions.Like(i.FailureReason, WorkerRunFailed.UsageLimitedReason + "%"))
+            .Where(i => i.FailureReason == WorkerRunFailed.AuthInvalidReason)
             .ToListAsync(cancellationToken);
 
         List<ContinuableFailedIssue> continuableFailedIssues = await db.Set<ContinuableFailedIssue>()
-            .Where(i => EF.Functions.Like(i.FailureReason, WorkerRunFailed.UsageLimitedReason + "%"))
+            .Where(i => i.FailureReason == WorkerRunFailed.AuthInvalidReason)
             .ToListAsync(cancellationToken);
 
         foreach (FailedIssue failed in failedIssues)
@@ -29,20 +30,22 @@ internal sealed class DispatchResumedHandler(
             await db.TransitionAsync(failed, queued, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(
-                "Dispatch resumed: re-queued issue #{IssueNumber} (reason: {FailureReason}, was FailedIssue).",
-                failed.IssueNumber,
-                failed.FailureReason);
+                "Credentials validated: re-queued issue #{IssueNumber} (was FailedIssue, auth-invalid).",
+                failed.IssueNumber);
         }
 
         foreach (ContinuableFailedIssue continuableFailed in continuableFailedIssues)
         {
             ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
-            await db.TransitionAsync(continuableFailed, continuationQueued, domainEventDispatcher, cancellationToken);
+            await db.TransitionAsync(
+                continuableFailed,
+                continuationQueued,
+                domainEventDispatcher,
+                cancellationToken);
 
             logger.LogInformation(
-                "Dispatch resumed: re-queued issue #{IssueNumber} (reason: {FailureReason}, was ContinuableFailedIssue).",
-                continuableFailed.IssueNumber,
-                continuableFailed.FailureReason);
+                "Credentials validated: re-queued issue #{IssueNumber} (was ContinuableFailedIssue, auth-invalid).",
+                continuableFailed.IssueNumber);
         }
     }
 }

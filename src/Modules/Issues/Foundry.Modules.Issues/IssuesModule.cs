@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
@@ -30,6 +31,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
+        services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedHandler>();
 
         services.AddScoped<IssueStateChangedHandler>();
         AddIssueStateChangedHandler<IssueQueued>(services);
