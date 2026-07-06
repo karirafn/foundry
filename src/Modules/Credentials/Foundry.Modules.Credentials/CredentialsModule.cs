@@ -20,6 +20,8 @@ public static class CredentialsModule
         services.AddHostedService<ClaudeAccountSeeder>();
 
         services.AddIntegrationEventHandler<WorkerAuthenticationFailed, WorkerAuthenticationFailedHandler>();
+        services.AddIntegrationEventHandler<CredentialsInvalidated, CredentialsInvalidatedBroadcastHandler>();
+        services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedBroadcastHandler>();
 
         services.AddScoped<ICredentialQueries, CredentialQueries>();
         services.AddScoped<ICredentialGate, CredentialGate>();
