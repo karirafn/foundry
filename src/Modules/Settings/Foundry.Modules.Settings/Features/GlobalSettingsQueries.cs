@@ -17,29 +17,6 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return settings is null ? null : GlobalSettingsMapper.ToSummary(settings);
     }
 
-    public async Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(
-        CancellationToken cancellationToken)
-    {
-        // Full entity load is required here: AuthMode uses a ValueConverter that
-        // applies decrypt + JSON deserialization, which cannot be expressed as a
-        // SQL projection. EF Core cannot translate the converter into a SELECT.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (settings is null)
-        {
-            return null;
-        }
-
-        return settings.AuthMode switch
-        {
-            AuthMode.ApiKey apiKey => ("ANTHROPIC_API_KEY", apiKey.Key),
-            AuthMode.OAuth => null,
-            _ => null,
-        };
-    }
-
     public async Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
     {
         int? value = await dbContext.Set<GlobalSettings>()
@@ -79,8 +56,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .Select(s => new DispatchPauseState(
                 s.UsageLimitResetsAt,
                 s.IsDispatchPaused,
-                s.AutoResumeOnUsageReset,
-                s.AuthInvalidPause))
+                s.AutoResumeOnUsageReset))
             .FirstOrDefaultAsync(cancellationToken)
             ?? new DispatchPauseState(null, false, true);
     }
@@ -123,25 +99,5 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .FirstOrDefaultAsync(cancellationToken);
 
         return settings?.WorkerImageConfiguration.InstallDocker ?? false;
-    }
-
-    public async Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
-    {
-        // AuthMode uses a ValueConverter (decrypt + JSON) that cannot be projected into SQL.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (settings is null)
-        {
-            return null;
-        }
-
-        return settings.AuthMode switch
-        {
-            AuthMode.ApiKey => "ApiKey",
-            AuthMode.OAuth => "OAuth",
-            _ => null,
-        };
     }
 }

@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -50,6 +52,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IWorkerOrchestrator? orchestrator = null,
         WorkerOptions? workerOptions = null,
         IGlobalSettingsQueries? settingsQueries = null,
+        ICredentialQueries? credentialQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null)
     {
         WorkerOptions options = workerOptions ?? new WorkerOptions
@@ -62,7 +65,8 @@ public sealed class HandleAsync : IAsyncDisposable
             orchestrator ?? new StubWorkerOrchestrator(succeeds: true, containerId: "container-default"),
             new NullDomainEventDispatcher(),
             Options.Create(options),
-            settingsQueries ?? new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")),
+            settingsQueries ?? new StubGlobalSettingsQueries(),
+            credentialQueries ?? new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             postExitProviderQueries ?? new StubPostExitProviderQueries(branchCreationSucceeds: true),
             NullLogger<IssueClaimedHandler>.Instance);
     }
@@ -161,7 +165,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c1");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")));
+            credentialQueries: new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")));
         IssueClaimed @event = BuildEvent(
             issueNumber: 7,
             title: "My Issue",
@@ -190,7 +194,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: StubGlobalSettingsQueries.ForOAuth());
+            credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -210,7 +214,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-dir");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: StubGlobalSettingsQueries.ForOAuth());
+            credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -229,7 +233,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-no-token");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: StubGlobalSettingsQueries.ForOAuth());
+            credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -248,7 +252,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-vol");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: StubGlobalSettingsQueries.ForOAuth());
+            credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -265,7 +269,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-apikey");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")));
+            credentialQueries: new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -282,7 +286,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-apikey-vol");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(("ANTHROPIC_API_KEY", "test-api-key")));
+            credentialQueries: new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -299,7 +303,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         IssueClaimedHandler sut = BuildHandler(
-            settingsQueries: new StubGlobalSettingsQueries(authVar: null, settingsExist: false));
+            credentialQueries: new StubCredentialQueries(authVar: null, settingsExist: false));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -318,7 +322,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — auth mode says "ApiKey" but GetAuthEnvironmentVariableAsync returns null
         IssueClaimedHandler sut = BuildHandler(
-            settingsQueries: StubGlobalSettingsQueries.ForApiKeyModeWithNoEnvVar());
+            credentialQueries: StubCredentialQueries.ForApiKeyModeWithNoEnvVar());
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -783,7 +787,6 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(
-                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
                 systemPromptTemplate: "Custom system prompt for issue #{issueNumber}. {issueContent}",
                 workerPromptTemplate: null));
         IssueClaimed @event = BuildEvent(issueNumber: 99);
@@ -805,7 +808,6 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(
-                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
                 systemPromptTemplate: null,
                 workerPromptTemplate: "Custom worker prompt for #{issueNumber}."));
         IssueClaimed @event = BuildEvent(issueNumber: 55);
@@ -907,7 +909,6 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(
-                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
                 systemPromptTemplate: null,
                 workerPromptTemplate: null));
         IssueClaimed @event = BuildEvent(issueNumber: 7);
@@ -929,9 +930,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(
-                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
-                installsDocker: true));
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -952,9 +951,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(
-                authVar: ("ANTHROPIC_API_KEY", "test-api-key"),
-                installsDocker: false));
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: false));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1063,23 +1060,20 @@ public sealed class HandleAsync : IAsyncDisposable
 
     }
 
-    private sealed class StubGlobalSettingsQueries(
+    private sealed class StubCredentialQueries(
         (string Key, string Value)? authVar,
-        string? systemPromptTemplate = null,
-        string? workerPromptTemplate = null,
-        bool installsDocker = false,
         bool settingsExist = true,
-        string? authModeOverride = null) : IGlobalSettingsQueries
+        string? authModeOverride = null) : ICredentialQueries
     {
-        /// <summary>Creates a stub configured for OAuth mode: no auth env var, but settings exist.</summary>
-        public static StubGlobalSettingsQueries ForOAuth() =>
+        /// <summary>Creates a stub configured for OAuth mode: no auth env var, but credentials exist.</summary>
+        public static StubCredentialQueries ForOAuth() =>
             new(authVar: null, settingsExist: true);
 
         /// <summary>
         /// Creates a stub where auth mode reports ApiKey but the env-var query returns null —
         /// simulates a mis-configured API-key credential.
         /// </summary>
-        public static StubGlobalSettingsQueries ForApiKeyModeWithNoEnvVar() =>
+        public static StubCredentialQueries ForApiKeyModeWithNoEnvVar() =>
             new(authVar: null, settingsExist: true, authModeOverride: "ApiKey");
 
         public Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
@@ -1093,41 +1087,23 @@ public sealed class HandleAsync : IAsyncDisposable
             return Task.FromResult<string?>(mode);
         }
 
-        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
-        {
-            if (!settingsExist)
-            {
-                return Task.FromResult<GlobalSettingsSummary?>(null);
-            }
-
-            GlobalSettingsSummary summary = new(
-                "OAuth",
-                MaxConcurrent: 3,
-                TimeoutMinutes: 120,
-                OAuthStatus: "Present",
-                SubscriptionType: "pro",
-                OAuthAccountEmail: null,
-                OAuthAccountOrgName: null,
-                SystemPromptTemplate: null,
-                WorkerPromptTemplate: null,
-                UsageLimitResetsAt: null,
-                IsDispatchPaused: false,
-                AutoResumeOnUsageReset: true,
-                DefaultCooldownMinutes: 60,
-                InstallDotnet: false,
-                InstallAngular: false,
-                InstallGlab: false,
-                InstallGh: false,
-                InstallChromium: false,
-                InstallDocker: false,
-                ImageBuildStatus: ImageBuildStatus.Idle,
-                LastImageBuildError: null,
-                HasUsableImage: false);
-            return Task.FromResult<GlobalSettingsSummary?>(summary);
-        }
-
         public Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(CancellationToken cancellationToken)
             => Task.FromResult(authVar);
+
+        public Task<bool> IsValidAsync(CancellationToken cancellationToken)
+            => Task.FromResult(settingsExist);
+
+        public Task<ClaudeAccountSummary?> GetSummaryAsync(CancellationToken cancellationToken)
+            => Task.FromResult<ClaudeAccountSummary?>(null);
+    }
+
+    private sealed class StubGlobalSettingsQueries(
+        string? systemPromptTemplate = null,
+        string? workerPromptTemplate = null,
+        bool installsDocker = false) : IGlobalSettingsQueries
+    {
+        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<GlobalSettingsSummary?>(null);
 
         public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
             => Task.FromResult(3);

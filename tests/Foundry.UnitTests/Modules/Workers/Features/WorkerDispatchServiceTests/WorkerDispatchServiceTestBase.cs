@@ -214,9 +214,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
 
-        public Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(CancellationToken cancellationToken)
-            => Task.FromResult<(string Key, string Value)?>(("ANTHROPIC_API_KEY", "test-api-key"));
-
         public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
             => Task.FromResult(maxConcurrent);
 
@@ -238,9 +235,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
-
-        public Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
-            => Task.FromResult<string?>("ApiKey");
     }
 
     private sealed class AlwaysCanDispatchCredentialGate : ICredentialGate

@@ -3,14 +3,11 @@ namespace Foundry.Modules.Settings.Contracts.Queries;
 public sealed record DispatchPauseState(
     DateTimeOffset? UsageLimitResetsAt,
     bool IsDispatchPaused,
-    bool AutoResumeOnUsageReset,
-    bool AuthInvalidPause = false);
+    bool AutoResumeOnUsageReset);
 
 public interface IGlobalSettingsQueries
 {
     Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken);
-
-    Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(CancellationToken cancellationToken);
 
     Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken);
 
@@ -26,6 +23,4 @@ public interface IGlobalSettingsQueries
     Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken);
 
     Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken);
-
-    Task<string?> GetAuthModeAsync(CancellationToken cancellationToken);
 }
