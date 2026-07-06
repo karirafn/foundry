@@ -3,6 +3,7 @@ using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Credentials.Features;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
 
@@ -17,6 +18,8 @@ public static class CredentialsModule
     {
         services.AddQueryHandler<GetCredentials.Query, ClaudeAccountSummary, GetCredentials.Handler>();
         services.AddHostedService<ClaudeAccountSeeder>();
+
+        services.AddIntegrationEventHandler<WorkerAuthenticationFailed, WorkerAuthenticationFailedHandler>();
 
         services.AddScoped<ICredentialQueries, CredentialQueries>();
         services.AddScoped<ICredentialGate, CredentialGate>();
