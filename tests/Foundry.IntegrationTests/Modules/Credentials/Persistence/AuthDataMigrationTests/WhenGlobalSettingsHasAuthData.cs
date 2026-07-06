@@ -62,7 +62,7 @@ public sealed class WhenGlobalSettingsHasAuthData : IAsyncLifetime, IAsyncDispos
     }
 
     [Fact]
-    public async Task AuthMode_IscopiedFromGlobalSettingsToClaudeAccount()
+    public async Task WhenGlobalSettingsHasAuthData_AuthModeIsCopiedToClaudeAccount()
     {
         // Arrange — insert a global_settings row with a known auth_mode ciphertext value.
         string authModeCiphertext = await InsertGlobalSettingsRowAsync(authInvalidPause: false);
@@ -78,7 +78,7 @@ public sealed class WhenGlobalSettingsHasAuthData : IAsyncLifetime, IAsyncDispos
     }
 
     [Fact]
-    public async Task OAuthAccountEmail_IsCopiedFromGlobalSettingsToClaudeAccount()
+    public async Task WhenGlobalSettingsHasOAuthIdentity_EmailAndOrgNameAreCopiedToClaudeAccount()
     {
         // Arrange
         await InsertGlobalSettingsRowAsync(
@@ -133,7 +133,7 @@ public sealed class WhenGlobalSettingsHasAuthData : IAsyncLifetime, IAsyncDispos
     }
 
     [Fact]
-    public async Task GlobalSettings_NoLongerHasAuthColumns()
+    public async Task WhenMigrationRuns_GlobalSettingsNoLongerHasAuthColumns()
     {
         // Arrange
         await InsertGlobalSettingsRowAsync(authInvalidPause: false);
