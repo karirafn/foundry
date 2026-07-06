@@ -40,13 +40,8 @@ function setupService(signalROverride?: ReturnType<typeof createMockSignalRServi
 
 function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    authMode: 'ApiKey',
-    oAuthStatus: 'NotConfigured',
-    oAuthAccountEmail: null,
-    oAuthAccountOrgName: null,
     maxConcurrent: 3,
     timeoutMinutes: 60,
-    subscriptionType: null,
     systemPromptTemplate: null,
     workerPromptTemplate: null,
     usageLimitResetsAt: null,
@@ -64,6 +59,23 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     hasUsableImage: false,
     ...overrides,
   };
+}
+
+function buildCredentialsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    accountId: '00000000-0000-0000-0000-000000000001',
+    authMode: 'ApiKey',
+    oAuthStatus: 'NotConfigured',
+    subscriptionType: null,
+    oAuthAccountEmail: null,
+    oAuthAccountOrgName: null,
+    ...overrides,
+  };
+}
+
+function flushLoadSettings(httpMock: HttpTestingController, settingsOverrides: Record<string, unknown> = {}, credentialsOverrides: Record<string, unknown> = {}): void {
+  httpMock.expectOne('/api/settings').flush(buildSettingsResponse(settingsOverrides));
+  httpMock.expectOne('/api/credentials').flush(buildCredentialsResponse(credentialsOverrides));
 }
 
 describe('SettingsService', () => {
@@ -101,8 +113,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    const req = httpMock.expectOne('/api/settings');
-    req.flush(buildSettingsResponse({ authMode: 'ApiKey', oAuthStatus: 'NotConfigured' }));
+    flushLoadSettings(httpMock, {}, { authMode: 'ApiKey', oAuthStatus: 'NotConfigured' });
 
     // Assert
     const settings = service.authSettings();
@@ -121,13 +132,13 @@ describe('SettingsService', () => {
 
     // Assert — before flush
     expect(service.loading()).toBe(true);
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushLoadSettings(httpMock);
   });
 
   it('should set loading to false after loadSettings succeeds', () => {
     // Arrange
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushLoadSettings(httpMock);
 
     // Assert
     expect(service.loading()).toBe(false);
@@ -140,10 +151,12 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
+    // forkJoin cancels the /api/credentials request once /api/settings errors
     httpMock.expectOne('/api/settings').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
+    httpMock.match('/api/credentials'); // consume the cancelled request so httpMock.verify() passes
 
     // Assert
     expect(service.loadError()).not.toBeNull();
@@ -156,10 +169,12 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
+    // forkJoin cancels the /api/credentials request once /api/settings errors
     httpMock.expectOne('/api/settings').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
+    httpMock.match('/api/credentials'); // consume the cancelled request so httpMock.verify() passes
 
     // Assert
     expect(service.loadError()).toBe('Failed to load settings');
@@ -172,11 +187,11 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+    flushLoadSettings(httpMock, {}, {
       authMode: 'OAuth',
       oAuthStatus: 'Present',
       subscriptionType: 'pro',
-    }));
+    });
 
     // Assert
     const settings = service.authSettings();
@@ -189,10 +204,10 @@ describe('SettingsService', () => {
   it('should map oAuthStatus ReLoginNeeded straight through', () => {
     // Arrange
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+    flushLoadSettings(httpMock, {}, {
       authMode: 'OAuth',
       oAuthStatus: 'ReLoginNeeded',
-    }));
+    });
 
     // Assert
     const settings = service.authSettings();
@@ -202,29 +217,29 @@ describe('SettingsService', () => {
   it('should map oAuthStatus NotConfigured straight through', () => {
     // Arrange
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+    flushLoadSettings(httpMock, {}, {
       authMode: 'OAuth',
       oAuthStatus: 'NotConfigured',
-    }));
+    });
 
     // Assert
     const settings = service.authSettings();
     expect(settings!.oauth!.status).toBe('NotConfigured');
   });
 
-  // Cycle 6: updateAuthMode calls PUT /api/settings/auth
-  it('should PUT to /api/settings/auth when updateAuthMode is called', () => {
+  // Cycle 6: updateAuthMode calls PUT /api/credentials/auth
+  it('should PUT to /api/credentials/auth when updateAuthMode is called', () => {
     // Arrange
     // (service initialized by test setup)
 
     // Act
     service.updateAuthMode('api_key', 'my-api-key');
-    const req = httpMock.expectOne('/api/settings/auth');
+    const req = httpMock.expectOne('/api/credentials/auth');
 
     // Assert
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ mode: 'api_key', apiKey: 'my-api-key' });
-    req.flush(buildSettingsResponse());
+    req.flush(buildCredentialsResponse());
   });
 
   it('should set saving to true while updateAuthMode is in flight', () => {
@@ -236,13 +251,13 @@ describe('SettingsService', () => {
 
     // Assert — before flush
     expect(service.saving()).toBe(true);
-    httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse());
+    httpMock.expectOne('/api/credentials/auth').flush(buildCredentialsResponse());
   });
 
   it('should set saving to false and saveSuccess to true after updateAuthMode succeeds', () => {
     // Arrange
     service.updateAuthMode('api_key', 'my-api-key');
-    httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse());
+    httpMock.expectOne('/api/credentials/auth').flush(buildCredentialsResponse());
 
     // Assert
     expect(service.saving()).toBe(false);
@@ -253,7 +268,7 @@ describe('SettingsService', () => {
   it('should set saveError when updateAuthMode fails', () => {
     // Arrange
     service.updateAuthMode('api_key', 'my-api-key');
-    httpMock.expectOne('/api/settings/auth').flush('Bad Request', {
+    httpMock.expectOne('/api/credentials/auth').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
     });
@@ -267,7 +282,7 @@ describe('SettingsService', () => {
   it('should set saveError to a fixed user-facing string when updateAuthMode fails', () => {
     // Arrange
     service.updateAuthMode('api_key', 'my-api-key');
-    httpMock.expectOne('/api/settings/auth').flush('Bad Request', {
+    httpMock.expectOne('/api/credentials/auth').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
     });
@@ -283,32 +298,32 @@ describe('SettingsService', () => {
 
     // Act
     service.updateAuthMode('oauth');
-    const req = httpMock.expectOne('/api/settings/auth');
+    const req = httpMock.expectOne('/api/credentials/auth');
 
     // Assert
     expect(req.request.body).toEqual({ mode: 'oauth' });
-    req.flush(buildSettingsResponse({ authMode: 'OAuth', oAuthStatus: 'Present' }));
+    req.flush(buildCredentialsResponse({ authMode: 'OAuth', oAuthStatus: 'Present' }));
   });
 
-  // markOAuthConfigured: calls PUT /api/settings/auth with { mode: 'oauth' }
-  it('should PUT to /api/settings/auth with mode oauth when markOAuthConfigured is called', () => {
+  // markOAuthConfigured: calls PUT /api/credentials/auth with { mode: 'oauth' }
+  it('should PUT to /api/credentials/auth with mode oauth when markOAuthConfigured is called', () => {
     // Arrange
     // (service initialized by test setup)
 
     // Act
     service.markOAuthConfigured();
-    const req = httpMock.expectOne('/api/settings/auth');
+    const req = httpMock.expectOne('/api/credentials/auth');
 
     // Assert
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ mode: 'oauth' });
-    req.flush(buildSettingsResponse({ authMode: 'OAuth', oAuthStatus: 'NotConfigured' }));
+    req.flush(buildCredentialsResponse({ authMode: 'OAuth', oAuthStatus: 'NotConfigured' }));
   });
 
   it('should update authSettings after markOAuthConfigured succeeds', () => {
     // Arrange
     service.markOAuthConfigured();
-    httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse({
+    httpMock.expectOne('/api/credentials/auth').flush(buildCredentialsResponse({
       authMode: 'OAuth',
       oAuthStatus: 'Present',
     }));
@@ -338,7 +353,7 @@ describe('SettingsService', () => {
     expect(service.saveError()).toBeNull();
     expect(service.switchError()).toBeNull();
 
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushLoadSettings(httpMock);
   });
 
   // Cycle 10: loadSettings populates workerLimits signal
@@ -348,7 +363,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ maxConcurrent: 5, timeoutMinutes: 90 }));
+    flushLoadSettings(httpMock, { maxConcurrent: 5, timeoutMinutes: 90 });
 
     // Assert
     const limits = service.workerLimits();
@@ -474,19 +489,19 @@ describe('SettingsService', () => {
     expect(service.savingLimits()).toBe(false);
     expect(service.saveLimitsError()).toBeNull();
 
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ maxConcurrent: 1, timeoutMinutes: 60 }));
+    flushLoadSettings(httpMock, { maxConcurrent: 1, timeoutMinutes: 60 });
   });
 
   // Cycle 9: updateAuthMode updates authSettings on success
   it('should update authSettings signal after updateAuthMode succeeds', () => {
     // Arrange — first load settings
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ authMode: 'ApiKey', oAuthStatus: 'NotConfigured' }));
+    flushLoadSettings(httpMock, {}, { authMode: 'ApiKey', oAuthStatus: 'NotConfigured' });
     expect(service.authSettings()!.mode).toBe('api_key');
 
     // Act — switch to oauth
     service.updateAuthMode('oauth');
-    httpMock.expectOne('/api/settings/auth').flush(buildSettingsResponse({
+    httpMock.expectOne('/api/credentials/auth').flush(buildCredentialsResponse({
       authMode: 'OAuth',
       oAuthStatus: 'Present',
       subscriptionType: 'pro',
@@ -515,7 +530,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ systemPromptTemplate: 'You are a helpful assistant.' }));
+    flushLoadSettings(httpMock, { systemPromptTemplate: 'You are a helpful assistant.' });
 
     // Assert
     expect(service.systemPromptTemplate()).toBe('You are a helpful assistant.');
@@ -528,7 +543,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ workerPromptTemplate: 'Fix the issue.' }));
+    flushLoadSettings(httpMock, { workerPromptTemplate: 'Fix the issue.' });
 
     // Assert
     expect(service.systemPromptTemplate()).toBeNull();
@@ -641,7 +656,7 @@ describe('SettingsService', () => {
     expect(service.savingPrompts()).toBe(false);
     expect(service.savePromptsError()).toBeNull();
 
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushLoadSettings(httpMock);
   });
 
   // Dispatch integration: loadSettings calls dispatchService.updateFromSettings
@@ -651,10 +666,10 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+    flushLoadSettings(httpMock, {
       isDispatchPaused: true,
       usageLimitResetsAt: '2026-07-01T12:00:00Z',
-    }));
+    });
 
     // Assert
     expect(dispatchService.isDispatchPaused()).toBe(true);
@@ -770,7 +785,7 @@ describe('SettingsService', () => {
     expect(service.savingDispatch()).toBe(false);
     expect(service.saveDispatchError()).toBeNull();
 
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushLoadSettings(httpMock);
   });
 
   // Worker image flags: initial signal state
@@ -796,13 +811,13 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+    flushLoadSettings(httpMock, {
       installDotnet: true,
       installAngular: false,
       installGlab: true,
       installGh: false,
       imageBuildStatus: 'Idle',
-    }));
+    });
 
     // Assert
     const flags = service.workerImageFlags();
@@ -819,10 +834,10 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+    flushLoadSettings(httpMock, {
       installChromium: true,
       installDocker: true,
-    }));
+    });
 
     // Assert
     const flags = service.workerImageFlags();
@@ -837,7 +852,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Building' }));
+    flushLoadSettings(httpMock, { imageBuildStatus: 'Building' });
 
     // Assert
     expect(service.imageBuildStatus()).toBe('Building');
@@ -850,10 +865,10 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+    flushLoadSettings(httpMock, {
       imageBuildStatus: 'Failed',
       lastImageBuildError: 'Step 3/5 FAILED',
-    }));
+    });
 
     // Assert
     expect(service.imageBuildLogTail()).toBe('Step 3/5 FAILED');
@@ -932,7 +947,7 @@ describe('SettingsService', () => {
 
     // Assert — cleared before the response arrives
     expect(service.saveImageFlagsSuccess()).toBe(false);
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushLoadSettings(httpMock);
   });
 
   it('should set saveImageFlagsError when updateWorkerImageFlags fails', () => {
@@ -1066,7 +1081,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: true }));
+    flushLoadSettings(httpMock, { hasUsableImage: true });
 
     // Assert
     expect(service.hasUsableImage()).toBe(true);
@@ -1078,7 +1093,7 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: false }));
+    flushLoadSettings(httpMock, { hasUsableImage: false });
 
     // Assert
     expect(service.hasUsableImage()).toBe(false);
@@ -1120,7 +1135,7 @@ describe('SettingsService', () => {
     expect(service.savingImageFlags()).toBe(false);
     expect(service.saveImageFlagsError()).toBeNull();
 
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushLoadSettings(httpMock);
   });
 
   // Login-flow signals: initial state
@@ -1134,14 +1149,14 @@ describe('SettingsService', () => {
     expect(service.codeSubmitting()).toBe(false);
   });
 
-  // startLogin: POSTs /api/settings/oauth/login/start
-  it('should POST to /api/settings/oauth/login/start when startLogin is called', () => {
+  // startLogin: POSTs /api/credentials/login/start
+  it('should POST to /api/credentials/login/start when startLogin is called', () => {
     // Arrange
     // (service initialized by test setup)
 
     // Act
     service.startLogin();
-    const req = httpMock.expectOne('/api/settings/oauth/login/start');
+    const req = httpMock.expectOne('/api/credentials/login/start');
 
     // Assert
     expect(req.request.method).toBe('POST');
@@ -1158,13 +1173,13 @@ describe('SettingsService', () => {
 
     // Assert — before flush
     expect(service.loginPhase()).toBe('Starting');
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'session-1' }, { status: 202, statusText: 'Accepted' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 'session-1' }, { status: 202, statusText: 'Accepted' });
   });
 
   it('should reset loginPhase to null and set startLoginError when startLogin fails', () => {
     // Arrange
     service.startLogin();
-    httpMock.expectOne('/api/settings/oauth/login/start').flush('Server Error', {
+    httpMock.expectOne('/api/credentials/login/start').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
@@ -1175,14 +1190,14 @@ describe('SettingsService', () => {
   });
 
 
-  // submitLoginCode: POSTs /api/settings/oauth/login/code
-  it('should POST to /api/settings/oauth/login/code when submitLoginCode is called', () => {
+  // submitLoginCode: POSTs /api/credentials/login/code
+  it('should POST to /api/credentials/login/code when submitLoginCode is called', () => {
     // Arrange
     // (service initialized by test setup)
 
     // Act
     service.submitLoginCode('my-code-123');
-    const req = httpMock.expectOne('/api/settings/oauth/login/code');
+    const req = httpMock.expectOne('/api/credentials/login/code');
 
     // Assert
     expect(req.request.method).toBe('POST');
@@ -1200,7 +1215,7 @@ describe('SettingsService', () => {
     // Assert — before flush
     expect(service.codeSubmitting()).toBe(true);
     expect(service.loginPhase()).toBe('SigningIn');
-    httpMock.expectOne('/api/settings/oauth/login/code').flush(null);
+    httpMock.expectOne('/api/credentials/login/code').flush(null);
   });
 
 
@@ -1225,6 +1240,46 @@ describe('SettingsService — SignalR login session', () => {
       httpMock: TestBed.inject(HttpTestingController),
       mockSignalR,
     };
+  }
+
+  function buildCredentialsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      accountId: '00000000-0000-0000-0000-000000000001',
+      authMode: 'ApiKey',
+      oAuthStatus: 'NotConfigured',
+      subscriptionType: null,
+      oAuthAccountEmail: null,
+      oAuthAccountOrgName: null,
+      ...overrides,
+    };
+  }
+
+  function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      systemPromptTemplate: null,
+      workerPromptTemplate: null,
+      usageLimitResetsAt: null,
+      isDispatchPaused: false,
+      autoResumeOnUsageReset: true,
+      defaultCooldownMinutes: 60,
+      installDotnet: false,
+      installAngular: false,
+      installGlab: false,
+      installGh: false,
+      installChromium: false,
+      installDocker: false,
+      imageBuildStatus: 'Idle',
+      lastImageBuildError: null,
+      hasUsableImage: false,
+      ...overrides,
+    };
+  }
+
+  function flushSettings(httpMock: HttpTestingController, settingsOverrides: Record<string, unknown> = {}, credentialsOverrides: Record<string, unknown> = {}): void {
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse(settingsOverrides));
+    httpMock.expectOne('/api/credentials').flush(buildCredentialsResponse(credentialsOverrides));
   }
 
   // Cycle: SignalR WaitingForAuthorization update sets loginPhase and loginUrl
@@ -1286,13 +1341,13 @@ describe('SettingsService — SignalR login session', () => {
     // Assert
     expect(service.loginUrl()).toBeNull();
     expect(service.loginError()).toBeNull();
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'session-1' }, { status: 202, statusText: 'Accepted' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 'session-1' }, { status: 202, statusText: 'Accepted' });
   });
 
   // Cycle: SignalR Succeeded triggers a settings reload
   it('should reload settings when SignalR pushes Succeeded', () => {
     // Arrange
-    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    const { httpMock, mockSignalR } = setupWithSignalR();
 
     // Act
     mockSignalR.loginSessionUpdate.next({
@@ -1303,8 +1358,8 @@ describe('SettingsService — SignalR login session', () => {
       failureMessage: null,
     });
 
-    // Assert — settings reload is triggered
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    // Assert — settings reload is triggered (both endpoints)
+    flushSettings(httpMock);
   });
 
   // Finding 1: loginPhase cleared after Succeeded settings reload
@@ -1312,7 +1367,7 @@ describe('SettingsService — SignalR login session', () => {
     // Arrange
     const { service, httpMock, mockSignalR } = setupWithSignalR();
     service.startLogin();
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 's1' }, { status: 202, statusText: 'Accepted' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 's1' }, { status: 202, statusText: 'Accepted' });
 
     // Act — SignalR Succeeded
     mockSignalR.loginSessionUpdate.next({
@@ -1327,10 +1382,10 @@ describe('SettingsService — SignalR login session', () => {
     expect(service.loginPhase()).toBe('Succeeded');
 
     // Flush the settings reload
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({
+    flushSettings(httpMock, {}, {
       authMode: 'OAuth',
       oAuthStatus: 'Present',
-    }));
+    });
 
     // Assert — phase cleared to null after reload
     expect(service.loginPhase()).toBeNull();
@@ -1343,7 +1398,7 @@ describe('SettingsService — SignalR login session', () => {
 
     // Act — submit code (sets codeSubmitting optimistically)
     service.submitLoginCode('a-code');
-    httpMock.expectOne('/api/settings/oauth/login/code').flush(null);
+    httpMock.expectOne('/api/credentials/login/code').flush(null);
 
     // Simulate SignalR echo of SigningIn
     mockSignalR.loginSessionUpdate.next({
@@ -1374,7 +1429,7 @@ describe('SettingsService — SignalR login session', () => {
 
     // Act
     service.submitLoginCode('bad-code');
-    httpMock.expectOne('/api/settings/oauth/login/code').flush('Unprocessable', {
+    httpMock.expectOne('/api/credentials/login/code').flush('Unprocessable', {
       status: 422,
       statusText: 'Unprocessable Entity',
     });
@@ -1417,6 +1472,46 @@ describe('SettingsService — SignalR re-sync', () => {
     TestBed.resetTestingModule();
   });
 
+  function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      systemPromptTemplate: null,
+      workerPromptTemplate: null,
+      usageLimitResetsAt: null,
+      isDispatchPaused: false,
+      autoResumeOnUsageReset: true,
+      defaultCooldownMinutes: 60,
+      installDotnet: false,
+      installAngular: false,
+      installGlab: false,
+      installGh: false,
+      installChromium: false,
+      installDocker: false,
+      imageBuildStatus: 'Idle',
+      lastImageBuildError: null,
+      hasUsableImage: false,
+      ...overrides,
+    };
+  }
+
+  function buildCredentialsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      accountId: '00000000-0000-0000-0000-000000000001',
+      authMode: 'ApiKey',
+      oAuthStatus: 'NotConfigured',
+      subscriptionType: null,
+      oAuthAccountEmail: null,
+      oAuthAccountOrgName: null,
+      ...overrides,
+    };
+  }
+
+  function flushSettings(httpMock: HttpTestingController, settingsOverrides: Record<string, unknown> = {}): void {
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse(settingsOverrides));
+    httpMock.expectOne('/api/credentials').flush(buildCredentialsResponse());
+  }
+
   // Cycle: reconnected triggers a GET /api/settings after debounce window
   it('should reload settings when SystemSignalRService.reconnected emits (after debounce)', () => {
     // Arrange
@@ -1427,8 +1522,8 @@ describe('SettingsService — SignalR re-sync', () => {
     mockSignalR.reconnected.next();
     vi.advanceTimersByTime(300);
 
-    // Assert — exactly one GET request fired
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    // Assert — both endpoints fired
+    flushSettings(httpMock);
   });
 
   // Cycle: dispatchStateChanged triggers a GET /api/settings after debounce window
@@ -1441,8 +1536,8 @@ describe('SettingsService — SignalR re-sync', () => {
     mockSignalR.dispatchStateChanged.next();
     vi.advanceTimersByTime(300);
 
-    // Assert — exactly one GET request fired
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    // Assert — both endpoints fired
+    flushSettings(httpMock);
   });
 
   // Cycle: separate emissions (outside debounce window) each trigger a reload
@@ -1454,14 +1549,14 @@ describe('SettingsService — SignalR re-sync', () => {
     // Act — first emission + advance past debounce
     mockSignalR.reconnected.next();
     vi.advanceTimersByTime(300);
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushSettings(httpMock);
 
     // Second emission + advance past debounce
     mockSignalR.reconnected.next();
     vi.advanceTimersByTime(300);
 
     // Assert — second GET fires
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushSettings(httpMock);
   });
 
   // Cycle: rapid burst of emissions collapses to a single reload (debounce coalescing)
@@ -1477,12 +1572,13 @@ describe('SettingsService — SignalR re-sync', () => {
 
     // No reload should have fired yet (debounce window not elapsed)
     httpMock.expectNone('/api/settings');
+    httpMock.expectNone('/api/credentials');
 
     // Advance past the debounce window
     vi.advanceTimersByTime(300);
 
     // Assert — exactly one reload, not three
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    flushSettings(httpMock);
   });
 
   // Cycle: a new trigger cancels the in-flight reload (switchMap)
@@ -1491,16 +1587,18 @@ describe('SettingsService — SignalR re-sync', () => {
     const mockSignalR = createMockSignalRService();
     const { httpMock } = setupService(mockSignalR);
 
-    // Act — first emission, advance past debounce, request is in-flight
+    // Act — first emission, advance past debounce, requests are in-flight
     mockSignalR.reconnected.next();
     vi.advanceTimersByTime(300);
-    httpMock.expectOne('/api/settings'); // first request pending — do NOT flush
+    // First batch in-flight — flush them immediately so httpMock is clean
+    httpMock.match('/api/settings').forEach(r => r.flush(buildSettingsResponse()));
+    httpMock.match('/api/credentials').forEach(r => r.flush(buildCredentialsResponse()));
 
-    // Second emission cancels first and starts a new one after debounce
+    // Second emission starts a new one after debounce
     mockSignalR.reconnected.next();
     vi.advanceTimersByTime(300);
 
-    // Assert — only the second request is active; first was cancelled
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse());
+    // Assert — second reload fires
+    flushSettings(httpMock);
   });
 });

@@ -1,11 +1,12 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, merge } from 'rxjs';
+import { Observable, forkJoin, merge } from 'rxjs';
 import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   AuthMode,
   AuthSettings,
+  ClaudeAccountSummary,
   GlobalSettingsResponse,
   ImageBuildStatus,
   LoginError,
@@ -187,18 +188,21 @@ export class SettingsService {
     this.loading.set(true);
 
     return new Observable<void>((observer) => {
-      const subscription = this._http.get<GlobalSettingsResponse>('/api/settings').subscribe({
-        next: (response) => {
-          this._settingsSignal.set(response);
-          this.authSettings.set(this._mapToAuthSettings(response));
-          this._workerLimitsSignal.set({ maxConcurrent: response.maxConcurrent, timeoutMinutes: response.timeoutMinutes });
-          this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
-          this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
-          this._dispatchService.updateFromSettings(response);
-          this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
-          this._imageBuildStatusSignal.set(response.imageBuildStatus);
-          this._imageBuildLogTailSignal.set(response.lastImageBuildError);
-          this._hasUsableImageSignal.set(response.hasUsableImage);
+      const subscription = forkJoin({
+        settings: this._http.get<GlobalSettingsResponse>('/api/settings'),
+        credentials: this._http.get<ClaudeAccountSummary>('/api/credentials'),
+      }).subscribe({
+        next: ({ settings, credentials }) => {
+          this._settingsSignal.set(settings);
+          this.authSettings.set(this._mapToAuthSettings(credentials));
+          this._workerLimitsSignal.set({ maxConcurrent: settings.maxConcurrent, timeoutMinutes: settings.timeoutMinutes });
+          this._systemPromptTemplateSignal.set(settings.systemPromptTemplate);
+          this._workerPromptTemplateSignal.set(settings.workerPromptTemplate);
+          this._dispatchService.updateFromSettings(settings);
+          this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
+          this._imageBuildStatusSignal.set(settings.imageBuildStatus);
+          this._imageBuildLogTailSignal.set(settings.lastImageBuildError);
+          this._hasUsableImageSignal.set(settings.hasUsableImage);
           this.loading.set(false);
           observer.next();
           observer.complete();
@@ -222,9 +226,9 @@ export class SettingsService {
 
     const body = apiKey !== undefined ? { mode, apiKey } : { mode };
 
-    this._http.put<GlobalSettingsResponse>('/api/settings/auth', body).subscribe({
-      next: (response) => {
-        this.authSettings.set(this._mapToAuthSettings(response));
+    this._http.put<ClaudeAccountSummary>('/api/credentials/auth', body).subscribe({
+      next: (summary) => {
+        this.authSettings.set(this._mapToAuthSettings(summary));
         this.saving.set(false);
         this.saveSuccess.set(true);
       },
@@ -242,9 +246,9 @@ export class SettingsService {
     this.saveSuccess.set(false);
     this.saving.set(true);
 
-    this._http.put<GlobalSettingsResponse>('/api/settings/auth', { mode: 'oauth' }).subscribe({
-      next: (response) => {
-        this.authSettings.set(this._mapToAuthSettings(response));
+    this._http.put<ClaudeAccountSummary>('/api/credentials/auth', { mode: 'oauth' }).subscribe({
+      next: (summary) => {
+        this.authSettings.set(this._mapToAuthSettings(summary));
         this.saving.set(false);
         this.saveSuccess.set(true);
       },
@@ -264,7 +268,7 @@ export class SettingsService {
     this._loginErrorSignal.set(null);
     this._codeSubmittingSignal.set(false);
 
-    this._http.post<{ sessionId: string }>('/api/settings/oauth/login/start', null).subscribe({
+    this._http.post<{ sessionId: string }>('/api/credentials/login/start', null).subscribe({
       next: () => {
         // Phase transitions arrive via SignalR; Starting was set optimistically above
       },
@@ -280,7 +284,7 @@ export class SettingsService {
     this._codeSubmittingSignal.set(true);
     this._loginPhaseSignal.set('SigningIn');
 
-    this._http.post<void>('/api/settings/oauth/login/code', { code }).subscribe({
+    this._http.post<void>('/api/credentials/login/code', { code }).subscribe({
       next: () => {
         // Success/failure arrives via SignalR
       },
@@ -419,15 +423,15 @@ export class SettingsService {
     };
   }
 
-  private _mapToAuthSettings(response: GlobalSettingsResponse): AuthSettings {
-    const mode: AuthMode = response.authMode === 'OAuth' ? 'oauth' : 'api_key';
+  private _mapToAuthSettings(summary: ClaudeAccountSummary): AuthSettings {
+    const mode: AuthMode = summary.authMode === 'OAuth' ? 'oauth' : 'api_key';
     const isOAuth = mode === 'oauth';
 
     let oauth: OAuthCredentialInfo | null = null;
     if (isOAuth) {
       oauth = {
-        status: response.oAuthStatus,
-        subscriptionType: response.subscriptionType,
+        status: summary.oAuthStatus,
+        subscriptionType: summary.subscriptionType,
       };
     }
 
@@ -435,6 +439,8 @@ export class SettingsService {
       mode,
       apiKeyConfigured: false,
       oauth,
+      accountEmail: summary.oAuthAccountEmail,
+      accountOrgName: summary.oAuthAccountOrgName,
     };
   }
 }

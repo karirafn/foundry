@@ -163,8 +163,8 @@ const COOLDOWN_MINUTES_MAX = 1440;
             <fd-oauth-panel
               [status]="_oauthStatus()"
               [subscriptionType]="settingsService.authSettings()?.oauth?.subscriptionType ?? null"
-              [accountEmail]="settingsService.settings()?.oAuthAccountEmail ?? null"
-              [accountOrgName]="settingsService.settings()?.oAuthAccountOrgName ?? null"
+              [accountEmail]="settingsService.authSettings()?.accountEmail ?? null"
+              [accountOrgName]="settingsService.authSettings()?.accountOrgName ?? null"
               [loginPhase]="settingsService.loginPhase()"
               [loginUrl]="settingsService.loginUrl()"
               [loginError]="settingsService.loginError()"

@@ -12,12 +12,32 @@ import { SETTINGS_ROUTES } from '../settings.routes';
 const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 
 const SETTINGS_RESPONSE = {
-  authMode: 'ApiKey',
   maxConcurrent: 3,
   timeoutMinutes: 60,
-  accessTokenPresent: false,
-  refreshTokenPresent: false,
+  systemPromptTemplate: null,
+  workerPromptTemplate: null,
+  usageLimitResetsAt: null,
+  isDispatchPaused: false,
+  autoResumeOnUsageReset: true,
+  defaultCooldownMinutes: 60,
+  installDotnet: false,
+  installAngular: false,
+  installGlab: false,
+  installGh: false,
+  installChromium: false,
+  installDocker: false,
+  imageBuildStatus: 'Idle',
+  lastImageBuildError: null,
+  hasUsableImage: false,
+};
+
+const CREDENTIALS_RESPONSE = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  oAuthStatus: 'NotConfigured',
   subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
 };
 
 function setup() {
@@ -40,6 +60,16 @@ function setup() {
 
 function flushSettings(httpMock: HttpTestingController, response: object = SETTINGS_RESPONSE): void {
   httpMock.expectOne('/api/settings').flush(response);
+  httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
+}
+
+function flushSettingsError(httpMock: HttpTestingController): void {
+  // forkJoin cancels /api/credentials once /api/settings errors
+  httpMock.expectOne('/api/settings').flush('Server Error', {
+    status: 500,
+    statusText: 'Internal Server Error',
+  });
+  httpMock.match('/api/credentials'); // consume the cancelled request
 }
 
 describe('SettingsLayoutComponent', () => {
@@ -105,6 +135,7 @@ describe('SettingsLayoutComponent', () => {
     const req = httpMock.expectOne('/api/settings');
     expect(req.request.method).toBe('GET');
     req.flush(SETTINGS_RESPONSE);
+    httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
   });
 
   it('should show a loading indicator while settings are loading', () => {
@@ -144,10 +175,7 @@ describe('SettingsLayoutComponent', () => {
     fixture.detectChanges();
 
     // Act
-    httpMock.expectOne('/api/settings').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
+    flushSettingsError(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -161,10 +189,7 @@ describe('SettingsLayoutComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
+    flushSettingsError(httpMock);
     fixture.detectChanges();
 
     // Act
@@ -180,10 +205,7 @@ describe('SettingsLayoutComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne('/api/settings').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
+    flushSettingsError(httpMock);
     fixture.detectChanges();
 
     // Act
@@ -191,10 +213,8 @@ describe('SettingsLayoutComponent', () => {
     const retryBtn = el.querySelector('.settings-layout__retry-btn') as HTMLButtonElement;
     retryBtn.click();
 
-    // Assert
-    const req = httpMock.expectOne('/api/settings');
-    expect(req.request.method).toBe('GET');
-    req.flush(SETTINGS_RESPONSE);
+    // Assert — retry triggers both endpoints again
+    flushSettings(httpMock);
   });
 
   it('should not render sidebar or router-outlet while loading', () => {
@@ -218,10 +238,7 @@ describe('SettingsLayoutComponent', () => {
     fixture.detectChanges();
 
     // Act
-    httpMock.expectOne('/api/settings').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
+    flushSettingsError(httpMock);
     fixture.detectChanges();
 
     // Assert
@@ -283,7 +300,9 @@ describe('SettingsLayoutComponent', () => {
     // Assert
     expect(router.url).toBe('/settings/general');
 
-    TestBed.inject(HttpTestingController).match('/api/settings');
+    const hm = TestBed.inject(HttpTestingController);
+    hm.match('/api/settings');
+    hm.match('/api/credentials');
   });
 
   it('should set aria-current="page" on the active nav link', async () => {
@@ -303,6 +322,7 @@ describe('SettingsLayoutComponent', () => {
     const httpMock = TestBed.inject(HttpTestingController);
     const harness = await RouterTestingHarness.create('/settings/general');
     httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
+    httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
     harness.detectChanges();
     await harness.fixture.whenStable();
     harness.detectChanges();

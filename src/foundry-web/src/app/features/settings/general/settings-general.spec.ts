@@ -33,48 +33,50 @@ const BASE_RESPONSE = {
 };
 
 const API_KEY_RESPONSE = {
+  maxConcurrent: 3,
+  timeoutMinutes: 60,
+  ...BASE_RESPONSE,
+};
+
+const CREDENTIALS_API_KEY = {
+  accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'ApiKey',
   oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
   oAuthAccountEmail: null,
   oAuthAccountOrgName: null,
-  maxConcurrent: 3,
-  timeoutMinutes: 60,
-  subscriptionType: null,
-  ...BASE_RESPONSE,
 };
 
-const OAUTH_RESPONSE = {
+const CREDENTIALS_OAUTH = {
+  accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'OAuth',
   oAuthStatus: 'Present',
+  subscriptionType: 'pro',
   oAuthAccountEmail: 'user@example.com',
   oAuthAccountOrgName: null,
-  maxConcurrent: 3,
-  timeoutMinutes: 60,
-  subscriptionType: 'pro',
-  ...BASE_RESPONSE,
 };
 
-const OAUTH_NOT_CONFIGURED_RESPONSE = {
+const CREDENTIALS_OAUTH_NOT_CONFIGURED = {
+  accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'OAuth',
   oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
   oAuthAccountEmail: null,
   oAuthAccountOrgName: null,
-  maxConcurrent: 3,
-  timeoutMinutes: 60,
-  subscriptionType: null,
-  ...BASE_RESPONSE,
 };
 
-const OAUTH_RELOGIN_NEEDED_RESPONSE = {
+const CREDENTIALS_OAUTH_RELOGIN_NEEDED = {
+  accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'OAuth',
   oAuthStatus: 'ReLoginNeeded',
+  subscriptionType: null,
   oAuthAccountEmail: null,
   oAuthAccountOrgName: null,
-  maxConcurrent: 3,
-  timeoutMinutes: 60,
-  subscriptionType: null,
-  ...BASE_RESPONSE,
 };
+
+const OAUTH_RESPONSE = { ...API_KEY_RESPONSE };
+const OAUTH_NOT_CONFIGURED_RESPONSE = { ...API_KEY_RESPONSE };
+const OAUTH_RELOGIN_NEEDED_RESPONSE = { ...API_KEY_RESPONSE };
 
 function setup() {
   TestBed.resetTestingModule();
@@ -95,8 +97,9 @@ function setup() {
   return { service, httpMock };
 }
 
-function flushSettings(httpMock: HttpTestingController, response: object = API_KEY_RESPONSE): void {
-  httpMock.expectOne('/api/settings').flush(response);
+function flushSettings(httpMock: HttpTestingController, settingsResponse: object = API_KEY_RESPONSE, credentialsResponse: object = CREDENTIALS_API_KEY): void {
+  httpMock.expectOne('/api/settings').flush(settingsResponse);
+  httpMock.expectOne('/api/credentials').flush(credentialsResponse);
 }
 
 describe('SettingsGeneralComponent', () => {
@@ -175,7 +178,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     // Act
@@ -191,7 +194,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     // Act
@@ -231,7 +234,7 @@ describe('SettingsGeneralComponent', () => {
     // Act
     const service = TestBed.inject(SettingsService);
     service.updateAuthMode('api_key', 'bad-key');
-    httpMock.expectOne('/api/settings/auth').flush('Bad Request', {
+    httpMock.expectOne('/api/credentials/auth').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
     });
@@ -389,10 +392,10 @@ describe('SettingsGeneralComponent', () => {
     fixture.componentInstance.saveApiKey();
 
     // Assert
-    const req = httpMock.expectOne('/api/settings/auth');
+    const req = httpMock.expectOne('/api/credentials/auth');
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ mode: 'api_key', apiKey: 'test-key' });
-    req.flush(API_KEY_RESPONSE);
+    req.flush(CREDENTIALS_API_KEY);
   });
 
   it('should show "Switch account" button when OAuth mode is active and status is Present', () => {
@@ -400,7 +403,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     // Act
@@ -416,7 +419,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH_NOT_CONFIGURED);
     fixture.detectChanges();
 
     // Act
@@ -432,7 +435,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     // Act
@@ -451,7 +454,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -470,7 +473,7 @@ describe('SettingsGeneralComponent', () => {
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     document.body.appendChild(fixture.nativeElement);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -498,7 +501,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -516,7 +519,7 @@ describe('SettingsGeneralComponent', () => {
     expect(pauseReq.request.method).toBe('POST');
     pauseReq.flush(OAUTH_RESPONSE);
 
-    const loginReq = httpMock.expectOne('/api/settings/oauth/login/start');
+    const loginReq = httpMock.expectOne('/api/credentials/login/start');
     expect(loginReq.request.method).toBe('POST');
     loginReq.flush({ sessionId: 'test-session' });
   });
@@ -527,7 +530,7 @@ describe('SettingsGeneralComponent', () => {
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     document.body.appendChild(fixture.nativeElement);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -542,7 +545,7 @@ describe('SettingsGeneralComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Assert — focus moves to the auth heading, not lost to body
@@ -558,7 +561,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -577,7 +580,7 @@ describe('SettingsGeneralComponent', () => {
     confirmBtn.click();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Assert — same persistent element now has content (text binding changed, element was not re-mounted)
@@ -591,7 +594,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -604,7 +607,7 @@ describe('SettingsGeneralComponent', () => {
     confirmBtn.click();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Assert
@@ -617,7 +620,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     // Assert — the live-region wrapper must always be present (empty when not draining)
@@ -632,7 +635,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -645,7 +648,7 @@ describe('SettingsGeneralComponent', () => {
     fixture.detectChanges();
     // Fail the pause so pauseResumeError signal is set
     httpMock.expectOne('/api/settings/dispatch/pause').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Assert — role="alert" must NOT be a descendant of role="status"
@@ -664,7 +667,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RELOGIN_NEEDED_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH_RELOGIN_NEEDED);
     fixture.detectChanges();
 
     // Act
@@ -684,7 +687,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock, service } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -696,7 +699,7 @@ describe('SettingsGeneralComponent', () => {
     confirmBtn.click();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Verify draining
@@ -717,7 +720,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock, service } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -729,7 +732,7 @@ describe('SettingsGeneralComponent', () => {
     confirmBtn.click();
     fixture.detectChanges();
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
-    httpMock.expectOne('/api/settings/oauth/login/start').flush({ sessionId: 'test-session' });
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 'test-session' });
     fixture.detectChanges();
 
     // Act — simulate Failed phase while still draining
@@ -750,7 +753,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock, service } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -764,7 +767,7 @@ describe('SettingsGeneralComponent', () => {
     httpMock.expectOne('/api/settings/dispatch/pause').flush(OAUTH_RESPONSE);
 
     // Fail the login start POST
-    httpMock.expectOne('/api/settings/oauth/login/start').flush('Server Error', {
+    httpMock.expectOne('/api/credentials/login/start').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
@@ -781,7 +784,7 @@ describe('SettingsGeneralComponent', () => {
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     document.body.appendChild(fixture.nativeElement);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
     fixture.detectChanges();
 
     // Act — simulate Succeeded phase
@@ -804,13 +807,13 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH_NOT_CONFIGURED);
     fixture.detectChanges();
 
     // Act — startLogin fails (POST 500)
     const service = TestBed.inject(SettingsService);
     service.startLogin();
-    httpMock.expectOne('/api/settings/oauth/login/start').flush('Server Error', {
+    httpMock.expectOne('/api/credentials/login/start').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
@@ -829,7 +832,7 @@ describe('SettingsGeneralComponent', () => {
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     document.body.appendChild(fixture.nativeElement);
     fixture.detectChanges();
-    flushSettings(httpMock, OAUTH_NOT_CONFIGURED_RESPONSE);
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH_NOT_CONFIGURED);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;

@@ -7,54 +7,13 @@ import { SystemSignalRService } from '../../../core/services/system-signalr.serv
 
 const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 
-const OAUTH_SETTINGS_RESPONSE = {
-  authMode: 'OAuth',
-  oAuthStatus: 'Present',
-  oAuthAccountEmail: null,
-  oAuthAccountOrgName: null,
-  subscriptionType: 'max_5x',
-  maxConcurrent: 3,
-  timeoutMinutes: 60,
-  systemPromptTemplate: null,
-  workerPromptTemplate: null,
-  usageLimitResetsAt: null,
-  isDispatchPaused: false,
-  autoResumeOnUsageReset: true,
-  defaultCooldownMinutes: 60,
-  installDotnet: false,
-  installAngular: false,
-  installGlab: false,
-  installGh: false,
-  installChromium: false,
-  installDocker: false,
-  imageBuildStatus: 'Idle',
-  lastImageBuildError: null,
-  hasUsableImage: false,
-};
-
-const API_KEY_SETTINGS_RESPONSE = {
+const CREDENTIALS_API_KEY_RESPONSE = {
+  accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'ApiKey',
   oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
   oAuthAccountEmail: null,
   oAuthAccountOrgName: null,
-  subscriptionType: null,
-  maxConcurrent: 3,
-  timeoutMinutes: 60,
-  systemPromptTemplate: null,
-  workerPromptTemplate: null,
-  usageLimitResetsAt: null,
-  isDispatchPaused: false,
-  autoResumeOnUsageReset: true,
-  defaultCooldownMinutes: 60,
-  installDotnet: false,
-  installAngular: false,
-  installGlab: false,
-  installGh: false,
-  installChromium: false,
-  installDocker: false,
-  imageBuildStatus: 'Idle',
-  lastImageBuildError: null,
-  hasUsableImage: false,
 };
 
 function setup() {
@@ -191,7 +150,7 @@ describe('SetupAuthStepComponent', () => {
     expect(button.disabled).toBe(true);
 
     // Cleanup
-    httpMock.expectOne('/api/settings/auth').flush(API_KEY_SETTINGS_RESPONSE);
+    httpMock.expectOne('/api/credentials/auth').flush(CREDENTIALS_API_KEY_RESPONSE);
   });
 
   // Cycle 7: emits complete after successful API Key save
@@ -218,7 +177,7 @@ describe('SetupAuthStepComponent', () => {
     button.click();
     fixture.detectChanges();
 
-    httpMock.expectOne('/api/settings/auth').flush(API_KEY_SETTINGS_RESPONSE);
+    httpMock.expectOne('/api/credentials/auth').flush(CREDENTIALS_API_KEY_RESPONSE);
     fixture.detectChanges();
 
     // Assert
@@ -246,7 +205,7 @@ describe('SetupAuthStepComponent', () => {
     button.click();
     fixture.detectChanges();
 
-    httpMock.expectOne('/api/settings/auth').flush('Server Error', {
+    httpMock.expectOne('/api/credentials/auth').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
@@ -281,7 +240,7 @@ describe('SetupAuthStepComponent', () => {
     button.click();
     fixture.detectChanges();
 
-    httpMock.expectOne('/api/settings/auth').flush('Server Error', {
+    httpMock.expectOne('/api/credentials/auth').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
@@ -307,7 +266,7 @@ describe('SetupAuthStepComponent', () => {
     expect(emitted).toBe(false);
 
     // Cleanup
-    httpMock.expectNone('/api/settings/auth');
+    httpMock.expectNone('/api/credentials/auth');
   });
 
   // Cycle 11: selecting OAuth shows fd-oauth-panel
@@ -377,6 +336,8 @@ describe('SetupAuthStepComponent', () => {
       mode: 'oauth',
       apiKeyConfigured: false,
       oauth: { status: 'Present', subscriptionType: null },
+      accountEmail: null,
+      accountOrgName: null,
     });
     fixture.detectChanges();
 
@@ -491,7 +452,7 @@ describe('SetupAuthStepComponent', () => {
 
     // Act — simulate startLogin POST failure
     service.startLogin();
-    TestBed.inject(HttpTestingController).expectOne('/api/settings/oauth/login/start').flush(
+    TestBed.inject(HttpTestingController).expectOne('/api/credentials/login/start').flush(
       'Server Error',
       { status: 500, statusText: 'Internal Server Error' }
     );

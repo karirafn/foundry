@@ -6,13 +6,8 @@ import { GlobalSettingsResponse } from '../../features/settings/settings.model';
 
 function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalSettingsResponse {
   return {
-    authMode: 'ApiKey',
-    oAuthStatus: 'NotConfigured',
-    oAuthAccountEmail: null,
-    oAuthAccountOrgName: null,
     maxConcurrent: 3,
     timeoutMinutes: 60,
-    subscriptionType: null,
     systemPromptTemplate: null,
     workerPromptTemplate: null,
     usageLimitResetsAt: null,
