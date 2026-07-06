@@ -1,5 +1,7 @@
 # Login Session Service Placement in Workers Module and Transient In-Memory Dispatch Pause
 
+> **Status: superseded by [0030](0030-extract-claude-credentials-module.md).** The Claude worker-credential capability — including `LoginSessionService` and the credential validity state — moved into the `Foundry.Modules.Credentials` module (#268). The one-way Workers → Settings write documented below is replaced by integration-event choreography (`WorkerAuthenticationFailed` → `CredentialsInvalidated`; login → `CredentialsValidated`). The transient in-memory login-in-progress reasoning still holds, now composed inside `ICredentialGate`.
+
 ## Context
 
 The interactive OAuth login feature (Phase 2 of #208) requires a singleton service that manages the active login session and a mechanism to suppress worker dispatch while a login is in progress.
