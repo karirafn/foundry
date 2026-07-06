@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain;
@@ -70,7 +71,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedGlobalSettings();
-        ActiveRun activeRun = SeedActiveRun("container-auth-invalid-no-pause");
+        SeedActiveRun("container-auth-invalid-no-pause");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         WorkerDispatchService sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);
 
@@ -152,22 +153,26 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenAuthInvalidPauseIsTrue_DoesNotDispatchWorkerCapacityAvailable()
+    public async Task WhenCredentialGateReturnsFalse_DoesNotDispatchWorkerCapacityAvailable()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        DispatchPauseState pauseState =
-            new(UsageLimitResetsAt: null, IsDispatchPaused: false, AutoResumeOnUsageReset: true, AuthInvalidPause: true);
         WorkerDispatchService sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            credentialGate: new CannotDispatchCredentialGate());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
         dispatcher.Captured.ShouldNotContain(e => e is WorkerCapacityAvailable);
+    }
+
+    private sealed class CannotDispatchCredentialGate : ICredentialGate
+    {
+        public Task<bool> CanDispatchAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 
     private sealed class ExitedWorkerOrchestrator(WorkerStatus exitedStatus, string? logs) : IWorkerOrchestrator
@@ -240,39 +245,5 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
-    }
-
-    private sealed class ConfigurablePauseStateQueries(DispatchPauseState pauseState) : IGlobalSettingsQueries
-    {
-        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<GlobalSettingsSummary?>(null);
-
-        public Task<(string Key, string Value)?> GetAuthEnvironmentVariableAsync(CancellationToken cancellationToken)
-            => Task.FromResult<(string Key, string Value)?>(("ANTHROPIC_API_KEY", "test-api-key"));
-
-        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
-            => Task.FromResult(3);
-
-        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(120);
-
-        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult<(string?, string?)>((null, null));
-
-        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(pauseState);
-
-        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(60);
-
-        public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
-            => Task.FromResult(ImageBuildStatus.Idle);
-
-        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-            => Task.FromResult(false);
-
-        public Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
-            => Task.FromResult<string?>("ApiKey");
     }
 }

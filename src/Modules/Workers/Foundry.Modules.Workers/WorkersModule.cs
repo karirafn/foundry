@@ -41,7 +41,6 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
-        services.AddIntegrationEventHandler<DispatchPausedForAuthInvalid, DispatchPausedForAuthInvalidBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
 

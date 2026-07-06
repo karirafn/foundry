@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 
-using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -75,8 +74,7 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
         await SeedActiveRunAsync();
 
         IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
-        ILoginSessionState loginSessionState = _factory.Services.GetRequiredService<ILoginSessionState>();
-        using WorkerDispatchService sut = new(scopeFactory, loginSessionState, NullLogger<WorkerDispatchService>.Instance);
+        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

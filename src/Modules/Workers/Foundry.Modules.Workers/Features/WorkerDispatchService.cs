@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
@@ -27,7 +27,6 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
-    ILoginSessionState loginSessionState,
     ILogger<WorkerDispatchService> logger) : PeriodicBackgroundService(logger)
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
@@ -47,12 +46,6 @@ internal sealed class WorkerDispatchService(
 
     internal async Task ExecuteTickAsync(CancellationToken cancellationToken)
     {
-        if (loginSessionState.IsLoginActive)
-        {
-            logger.LogDebug("Dispatch skipped: an interactive OAuth login session is active.");
-            return;
-        }
-
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -68,6 +61,7 @@ internal sealed class WorkerDispatchService(
         IContainerOutputParser containerOutputParser =
             scope.ServiceProvider.GetRequiredService<IContainerOutputParser>();
         WorkerOutcomeResolver resolver = scope.ServiceProvider.GetRequiredService<WorkerOutcomeResolver>();
+        ICredentialGate credentialGate = scope.ServiceProvider.GetRequiredService<ICredentialGate>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
@@ -112,13 +106,20 @@ internal sealed class WorkerDispatchService(
             pauseState,
             cancellationToken);
 
-        if (!autoResumed && (pauseState.IsDispatchPaused || pauseState.UsageLimitResetsAt.HasValue || pauseState.AuthInvalidPause))
+        bool canDispatch = await credentialGate.CanDispatchAsync(cancellationToken);
+
+        if (!canDispatch)
+        {
+            logger.LogDebug("Dispatch skipped: credential gate returned false.");
+            return;
+        }
+
+        if (!autoResumed && (pauseState.IsDispatchPaused || pauseState.UsageLimitResetsAt.HasValue))
         {
             logger.LogDebug(
-                "Dispatch skipped: dispatch is paused (IsDispatchPaused={IsDispatchPaused}, UsageLimitResetsAt={UsageLimitResetsAt}, AuthInvalidPause={AuthInvalidPause}).",
+                "Dispatch skipped: dispatch is paused (IsDispatchPaused={IsDispatchPaused}, UsageLimitResetsAt={UsageLimitResetsAt}).",
                 pauseState.IsDispatchPaused,
-                pauseState.UsageLimitResetsAt,
-                pauseState.AuthInvalidPause);
+                pauseState.UsageLimitResetsAt);
             return;
         }
 

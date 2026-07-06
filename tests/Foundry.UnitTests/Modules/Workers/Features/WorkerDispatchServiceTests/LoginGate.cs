@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
@@ -15,14 +15,14 @@ namespace Foundry.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 public sealed class LoginGate : WorkerDispatchServiceTestBase
 {
     [Fact]
-    public async Task WhenLoginIsActive_DoesNotDispatchWorkerCapacityAvailable()
+    public async Task WhenCredentialGateReturnsFalse_DoesNotDispatchWorkerCapacityAvailable()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
         WorkerDispatchService sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            loginSessionState: new ActiveLoginSessionState());
+            credentialGate: new CannotDispatchCredentialGate());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -32,7 +32,7 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenLoginIsActive_DoesNotReadDatabase()
+    public async Task WhenCredentialGateReturnsFalse_DoesNotReadDatabase()
     {
         // Arrange — no DB rows; if the tick reads ActiveRun it would be fine, but
         // we validate it returns before any dispatch logic by checking no WorkerCapacityAvailable
@@ -40,7 +40,7 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
         WorkerDispatchService sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            loginSessionState: new ActiveLoginSessionState());
+            credentialGate: new CannotDispatchCredentialGate());
 
         // Act — completes without exception and without dispatching
         Exception? exception = await Record.ExceptionAsync(
@@ -52,14 +52,14 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenLoginIsInactive_DispatchesWorkerCapacityAvailable()
+    public async Task WhenCredentialGateReturnsTrue_DispatchesWorkerCapacityAvailable()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
         WorkerDispatchService sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            loginSessionState: new InactiveLoginSessionState());
+            credentialGate: new CanDispatchCredentialGate());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -68,14 +68,16 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
         dispatcher.Captured.ShouldContain(e => e is WorkerCapacityAvailable);
     }
 
-    private sealed class ActiveLoginSessionState : ILoginSessionState
+    private sealed class CannotDispatchCredentialGate : ICredentialGate
     {
-        public bool IsLoginActive => true;
+        public Task<bool> CanDispatchAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 
-    private sealed class InactiveLoginSessionState : ILoginSessionState
+    private sealed class CanDispatchCredentialGate : ICredentialGate
     {
-        public bool IsLoginActive => false;
+        public Task<bool> CanDispatchAsync(CancellationToken cancellationToken)
+            => Task.FromResult(true);
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator
