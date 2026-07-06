@@ -54,7 +54,10 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private FailedIssue SeedFailedIssue(MonitoredRepositoryId repositoryId, string failureReason, int issueNumber = 1)
+    private async Task<FailedIssue> SeedFailedIssueAsync(
+        MonitoredRepositoryId repositoryId,
+        string failureReason,
+        int issueNumber = 1)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -73,12 +76,12 @@ public sealed class HandleAsync : IAsyncDisposable
             DateTimeOffset.UtcNow,
             "generic_failure");
         _dbContext.Set<Issue>().Add(failed);
-        _dbContext.SaveChanges();
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
         return failed;
     }
 
-    private ContinuableFailedIssue SeedContinuableFailedIssue(
+    private async Task<ContinuableFailedIssue> SeedContinuableFailedIssueAsync(
         MonitoredRepositoryId repositoryId,
         string failureReason,
         int issueNumber = 1)
@@ -101,7 +104,7 @@ public sealed class HandleAsync : IAsyncDisposable
             "generic_failure",
             DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuableFailed);
-        _dbContext.SaveChanges();
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
         return continuableFailed;
     }
@@ -111,7 +114,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedFailedIssue(repositoryId, WorkerRunFailed.AuthInvalidReason);
+        await SeedFailedIssueAsync(repositoryId, WorkerRunFailed.AuthInvalidReason);
 
         CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
@@ -132,7 +135,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedContinuableFailedIssue(repositoryId, WorkerRunFailed.AuthInvalidReason);
+        await SeedContinuableFailedIssueAsync(repositoryId, WorkerRunFailed.AuthInvalidReason);
 
         CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
@@ -153,7 +156,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedFailedIssue(repositoryId, WorkerRunFailed.UsageLimitedReason);
+        await SeedFailedIssueAsync(repositoryId, WorkerRunFailed.UsageLimitedReason);
 
         CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
@@ -174,7 +177,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedContinuableFailedIssue(repositoryId, WorkerRunFailed.UsageLimitedReason);
+        await SeedContinuableFailedIssueAsync(repositoryId, WorkerRunFailed.UsageLimitedReason);
 
         CredentialsValidated @event = new("alice@example.com", "Acme Corp", "pro");
 
