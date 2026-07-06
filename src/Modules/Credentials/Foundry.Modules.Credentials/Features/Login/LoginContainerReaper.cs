@@ -18,7 +18,7 @@ internal sealed class LoginContainerReaper(
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<string> orphans =
-            await orchestrator.ListLoginContainersByLabelAsync(cancellationToken);
+            await orchestrator.ListTransientContainersAsync(cancellationToken);
 
         if (orphans.Count == 0)
         {

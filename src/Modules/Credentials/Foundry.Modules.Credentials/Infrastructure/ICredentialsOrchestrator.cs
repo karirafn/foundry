@@ -24,7 +24,7 @@ internal interface ICredentialsOrchestrator
 
     Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<string>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken);
 
     Task SeedOnboardingAsync(CancellationToken cancellationToken);
 

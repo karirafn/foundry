@@ -178,6 +178,8 @@ internal sealed class LoginSessionService(
                 session,
                 new LoginPhase.Succeeded(identitySuccess.Value),
                 cancellationToken);
+
+            return Result.Ok();
         }
         catch (OperationCanceledException) when (signInCts.IsCancellationRequested
                                                   && !cancellationToken.IsCancellationRequested)
@@ -194,7 +196,6 @@ internal sealed class LoginSessionService(
         {
             // Host shutdown — do NOT broadcast Failed; just clear the session and exit.
             _signInTimeoutCts = null;
-            ClearActiveSession(session);
             return Result.Ok();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -212,22 +213,18 @@ internal sealed class LoginSessionService(
                     new LoginFailureReason.Unknown(UnknownFailureClientMessage),
                     CancellationToken.None);
             }
-            else
-            {
-                // Committed but post-commit work threw — clear the session so IsLoginActive
-                // does not stay true forever (the commit is durable; only in-memory state leaks).
-                ClearActiveSession(session);
-            }
 
             return Result.Ok();
         }
-
-        _signInTimeoutCts = null;
-        await TeardownContainerAsync(session.ContainerId, cancellationToken);
-
-        ClearActiveSession(session);
-
-        return Result.Ok();
+        finally
+        {
+            // Guarantee teardown on every exit path — success, failure, timeout, and host shutdown.
+            // FailSessionAsync paths also tear down, but the second attempt is a safe no-op thanks to
+            // DockerContainerNotFoundException swallowing in StopAsync/RemoveAsync.
+            _signInTimeoutCts = null;
+            await TeardownContainerAsync(session.ContainerId, CancellationToken.None);
+            ClearActiveSession(session);
+        }
     }
 
     /// <summary>

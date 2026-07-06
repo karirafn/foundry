@@ -38,4 +38,53 @@ public sealed class GetCredentialVolumeAuthStatusAsync
             && m.Target == WorkerVolumeNames.ClaudeConfigContainerPath
             && m.ReadOnly);
     }
+
+    [Fact]
+    public async Task WhenStarted_HelperContainerSetsTransientLabel()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.Labels.ShouldNotBeNull();
+        captured.Labels.ShouldContainKey("foundry.transient");
+        captured.Labels["foundry.transient"].ShouldBe("true");
+    }
+
+    [Fact]
+    public async Task WhenStarted_HelperContainerSetsRoleCredentialHelperLabel()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.Labels.ShouldNotBeNull();
+        captured.Labels.ShouldContainKey("foundry.role");
+        captured.Labels["foundry.role"].ShouldBe("credential-helper");
+    }
+
+    [Fact]
+    public async Task WhenStarted_HelperContainerSetsAutoRemoveTrue()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.AutoRemove.ShouldBeTrue();
+    }
 }

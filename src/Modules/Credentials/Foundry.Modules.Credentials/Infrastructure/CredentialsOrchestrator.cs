@@ -31,7 +31,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
             string fifoPath = LoginExecCommand.FifoPath;
             string sleepPidPath = LoginExecCommand.SleepPidPath;
             string bootstrapCmd =
-                $"mkfifo {fifoPath}; sleep {spec.TimeoutSeconds} > {fifoPath} & echo $! > {sleepPidPath}; exec claude auth login --claudeai < {fifoPath}";
+                $"mkfifo {fifoPath}; sleep {spec.TimeoutSeconds} > {fifoPath} & echo $! > {sleepPidPath}; timeout -k 10 {spec.TimeoutSeconds} claude auth login --claudeai < {fifoPath}";
 
             CreateContainerParameters createParams = new()
             {
@@ -46,9 +46,12 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                 {
                     [LoginLabelKey] = "true",
                     [ManagedLabelKey] = "true",
+                    [ContainerLabelConstants.TransientLabelKey] = ContainerLabelConstants.TransientLabelValue,
+                    [ContainerLabelConstants.RoleLabelKey] = ContainerLabelConstants.RoleLogin,
                 },
                 HostConfig = new HostConfig
                 {
+                    AutoRemove = true,
                     Mounts =
                     [
                         new Mount
@@ -124,7 +127,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
         await runtime.RemoveAsync(containerId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<string>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken)
     {
         ContainersListParameters parameters = new()
         {
@@ -133,7 +136,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
             {
                 ["label"] = new Dictionary<string, bool>
                 {
-                    [LoginLabelKey] = true,
+                    [ContainerLabelConstants.TransientLabelKey] = true,
                 },
             },
         };
@@ -203,8 +206,14 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
             Image = WorkerImageNames.LoginImageName,
             Cmd = ["sh", "-c", "sleep 30"],
             Env = [$"{CredentialVolumeConstants.ConfigDirEnvVar}={CredentialVolumeConstants.ContainerPath}"],
+            Labels = new Dictionary<string, string>
+            {
+                [ContainerLabelConstants.TransientLabelKey] = ContainerLabelConstants.TransientLabelValue,
+                [ContainerLabelConstants.RoleLabelKey] = ContainerLabelConstants.RoleCredentialHelper,
+            },
             HostConfig = new HostConfig
             {
+                AutoRemove = true,
                 Mounts =
                 [
                     new Mount

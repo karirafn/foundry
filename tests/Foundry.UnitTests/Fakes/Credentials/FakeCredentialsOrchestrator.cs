@@ -22,7 +22,8 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         Result<AccountIdentity>.Ok(new AccountIdentity("user@example.com", "Test Org", "pro"));
     private Result<string> _startLoginResult =
         Result<string>.Ok("fake-login-container");
-    private IReadOnlyList<string> _loginContainerIds = [];
+    private IReadOnlyList<string> _transientContainerIds = [];
+    private Exception? _listTransientException;
 
     // When true, StreamLogsAsync yields _logLines then blocks until cancellation (does not close).
     private bool _blockAfterLines;
@@ -73,10 +74,17 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         return this;
     }
 
-    /// <summary>Scripts <see cref="ListLoginContainersByLabelAsync"/> to return orphaned container IDs.</summary>
-    public FakeCredentialsOrchestrator WithOrphanedLoginContainers(params string[] containerIds)
+    /// <summary>Scripts <see cref="ListTransientContainersAsync"/> to return orphaned container IDs.</summary>
+    public FakeCredentialsOrchestrator WithOrphanedTransientContainers(params string[] containerIds)
     {
-        _loginContainerIds = [.. containerIds];
+        _transientContainerIds = [.. containerIds];
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="ListTransientContainersAsync"/> to throw the given exception.</summary>
+    public FakeCredentialsOrchestrator WithListTransientThrows(Exception exception)
+    {
+        _listTransientException = exception;
         return this;
     }
 
@@ -162,8 +170,15 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<string>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
-        => Task.FromResult(_loginContainerIds);
+    public Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken)
+    {
+        if (_listTransientException is not null)
+        {
+            return Task.FromException<IReadOnlyList<string>>(_listTransientException);
+        }
+
+        return Task.FromResult(_transientContainerIds);
+    }
 
     public Task SeedOnboardingAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;

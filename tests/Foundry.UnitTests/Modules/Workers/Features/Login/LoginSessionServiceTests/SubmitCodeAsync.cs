@@ -332,4 +332,36 @@ public sealed class SubmitCodeAsync
         sut.TriggerSignInTimeoutForTest();
         await firstSubmit;
     }
+
+    [Fact]
+    public async Task WhenHostShutdownDuringSignIn_TearsDownContainer()
+    {
+        // Arrange — session reaches WaitingForAuthorization, then host shuts down mid-submit
+        string url = "https://claude.ai/oauth/authorize?code=true";
+        string logLine = $"If the browser didn't open, visit: {url}";
+
+        // Blocking stream keeps SubmitCodeAsync alive in WaitForLoginSuccessAsync
+        FakeCredentialsOrchestrator orchestrator = new([logLine]);
+        orchestrator.WithBlockingStreamAfterLines();
+        LoginSessionService sut = CreateService(orchestrator);
+
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await sut.WaitForStartCompletedAsync();
+
+        // Use a linked CTS so test-level cancellation propagates while we control host-shutdown timing.
+        using CancellationTokenSource hostCts = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+
+        // Start submit — it will block in the log scan (blocking stream)
+        Task<Result> submitTask = sut.SubmitCodeAsync("some-code", hostCts.Token);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+
+        // Act — simulate host shutdown
+        await hostCts.CancelAsync();
+        await submitTask;
+
+        // Assert — teardown must have happened even on the host-shutdown path
+        orchestrator.StopContainerCallCount.ShouldBeGreaterThan(0);
+        orchestrator.RemoveContainerCallCount.ShouldBeGreaterThan(0);
+    }
 }

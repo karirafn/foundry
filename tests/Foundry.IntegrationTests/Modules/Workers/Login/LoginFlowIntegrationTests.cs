@@ -311,12 +311,12 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Verifies that <see cref="CredentialsOrchestrator.ListLoginContainersByLabelAsync"/>
-    /// finds a running container labeled <c>foundry.login=true</c> and returns its ID.
-    /// This exercises the label-filter query that the startup reaper uses.
+    /// Verifies that <see cref="CredentialsOrchestrator.ListTransientContainersAsync"/>
+    /// finds a running container labeled <c>foundry.transient=true</c> and returns its ID.
+    /// This exercises the label-filter query that the reapers use.
     /// </summary>
     [Fact]
-    public async Task ListLoginContainersByLabelAsync_ReturnsLabeledContainers()
+    public async Task ListTransientContainersAsync_ReturnsTransientLabeledContainers()
     {
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
@@ -324,7 +324,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         CredentialsOrchestrator credentialsSut = _credentialsSut.ShouldNotBeNull();
         string volumeName = _testVolumeName.ShouldNotBeNull();
 
-        // Start a container with the login label (simulates an orphaned login container).
+        // Start a container with the transient label (simulates an orphaned login container).
         CreateContainerResponse response = await _dockerClient!.Containers.CreateContainerAsync(
             new CreateContainerParameters
             {
@@ -332,6 +332,8 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
                 Cmd = ["sh", "-c", "sleep 30"],
                 Labels = new Dictionary<string, string>
                 {
+                    ["foundry.transient"] = "true",
+                    ["foundry.role"] = "login",
                     ["foundry.login"] = "true",
                     ["foundry.managed"] = "true",
                 },
@@ -362,7 +364,7 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
 
             // Act
             IReadOnlyList<string> found =
-                await credentialsSut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
+                await credentialsSut.ListTransientContainersAsync(TestContext.Current.CancellationToken);
 
             // Assert — at least our test container appears in the result
             // Docker may return either the full ID or a short prefix.
@@ -376,12 +378,12 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Verifies the startup reap behavior: a container labeled <c>foundry.login=true</c>
+    /// Verifies the startup reap behavior: a container labeled <c>foundry.transient=true</c>
     /// that is stopped and removed by <see cref="LoginContainerReaper"/> logic no longer
-    /// appears in <see cref="CredentialsOrchestrator.ListLoginContainersByLabelAsync"/>.
+    /// appears in <see cref="CredentialsOrchestrator.ListTransientContainersAsync"/>.
     /// </summary>
     [Fact]
-    public async Task StartupReap_RemovesOrphanedLoginContainer()
+    public async Task StartupReap_RemovesOrphanedTransientContainer()
     {
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
@@ -397,6 +399,8 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
                 Cmd = ["sh", "-c", "sleep 60"],
                 Labels = new Dictionary<string, string>
                 {
+                    ["foundry.transient"] = "true",
+                    ["foundry.role"] = "login",
                     ["foundry.login"] = "true",
                     ["foundry.managed"] = "true",
                 },
@@ -426,16 +430,16 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         // Confirm it's listed before the reap.
         string orphanPrefix = orphanId[..12];
         IReadOnlyList<string> before =
-            await credentialsSut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
+            await credentialsSut.ListTransientContainersAsync(TestContext.Current.CancellationToken);
         before.ShouldContain(id => id == orphanId || id.StartsWith(orphanPrefix, StringComparison.Ordinal));
 
-        // Act — simulate what LoginContainerReaper does: stop then remove.
+        // Act — simulate what the reapers do: stop then remove.
         await credentialsSut.StopContainerAsync(orphanId, TestContext.Current.CancellationToken);
         await credentialsSut.RemoveContainerAsync(orphanId, TestContext.Current.CancellationToken);
 
         // Assert — orphan no longer listed
         IReadOnlyList<string> after =
-            await credentialsSut.ListLoginContainersByLabelAsync(TestContext.Current.CancellationToken);
+            await credentialsSut.ListTransientContainersAsync(TestContext.Current.CancellationToken);
         after.ShouldNotContain(id => id == orphanId || id.StartsWith(orphanPrefix, StringComparison.Ordinal));
     }
 

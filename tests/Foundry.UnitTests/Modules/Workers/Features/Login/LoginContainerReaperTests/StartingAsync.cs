@@ -32,7 +32,7 @@ public sealed class StartingAsync
     {
         // Arrange
         FakeCredentialsOrchestrator orchestrator = new();
-        orchestrator.WithOrphanedLoginContainers("orphan-1");
+        orchestrator.WithOrphanedTransientContainers("orphan-1");
         LoginContainerReaper sut = new(orchestrator, NullLogger<LoginContainerReaper>.Instance);
 
         // Act
@@ -48,7 +48,7 @@ public sealed class StartingAsync
     {
         // Arrange
         FakeCredentialsOrchestrator orchestrator = new();
-        orchestrator.WithOrphanedLoginContainers("orphan-1", "orphan-2", "orphan-3");
+        orchestrator.WithOrphanedTransientContainers("orphan-1", "orphan-2", "orphan-3");
         LoginContainerReaper sut = new(orchestrator, NullLogger<LoginContainerReaper>.Instance);
 
         // Act

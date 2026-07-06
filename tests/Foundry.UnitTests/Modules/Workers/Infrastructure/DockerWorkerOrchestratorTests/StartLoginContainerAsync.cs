@@ -149,7 +149,7 @@ public sealed class StartLoginContainerAsync
             () => cmdStr.ShouldContain(LoginExecCommand.FifoPath),
             () => cmdStr.ShouldContain("sleep 600"),
             () => cmdStr.ShouldContain($"echo $! > {LoginExecCommand.SleepPidPath}"),
-            () => cmdStr.ShouldContain("exec claude auth login --claudeai"),
+            () => cmdStr.ShouldContain("timeout -k 10 600 claude auth login --claudeai"),
             () => cmdStr.ShouldContain($"< {LoginExecCommand.FifoPath}"));
     }
 
@@ -170,5 +170,68 @@ public sealed class StartLoginContainerAsync
         result.IsSuccess.ShouldBeTrue();
         Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
         success.Value.ShouldBe("login-container-xyz");
+    }
+
+    [Fact]
+    public async Task WhenStarted_BootstrapWrapsCliWithTimeout()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        string cmdStr = string.Join(" ", captured.Cmd);
+        cmdStr.ShouldContain("timeout -k 10 600 claude auth login --claudeai");
+    }
+
+    [Fact]
+    public async Task WhenStarted_SetsAutoRemoveTrue()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.AutoRemove.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenStarted_SetsTransientLabel()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.Labels.ShouldContainKey("foundry.transient");
+        captured.Labels["foundry.transient"].ShouldBe("true");
+    }
+
+    [Fact]
+    public async Task WhenStarted_SetsRoleLoginLabel()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartLoginContainerAsync(new LoginContainerSpec(TimeoutSeconds: 600), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.Labels.ShouldContainKey("foundry.role");
+        captured.Labels["foundry.role"].ShouldBe("login");
     }
 }
