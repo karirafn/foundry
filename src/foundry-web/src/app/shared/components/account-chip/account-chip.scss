@@ -4,6 +4,7 @@
 
 .account-chip {
   display: inline-flex;
+  min-width: 0;
   align-items: center;
   height: 28px;
   gap: var(--fd-spacing-xs);
@@ -46,10 +47,11 @@
 }
 
 .account-chip__text {
+  min-width: 0;
   max-width: 220px;
   overflow: hidden;
   white-space: nowrap;
-  text-overflow: clip;
+  text-overflow: ellipsis;
 }
 
 .account-chip__monogram {
