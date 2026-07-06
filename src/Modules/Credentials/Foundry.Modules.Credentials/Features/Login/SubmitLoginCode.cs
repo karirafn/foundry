@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Routing;
 namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
-/// POST /api/settings/oauth/login/code
+/// POST /api/credentials/login/code
 /// Submits the operator's authorization code to the active login session.
 /// Returns 400 when the code is empty/whitespace, 422 when there is no active session
 /// or the session is not in a state that accepts a code, 200 on acceptance.

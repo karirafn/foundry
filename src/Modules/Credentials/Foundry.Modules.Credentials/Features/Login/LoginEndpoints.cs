@@ -8,7 +8,7 @@ internal static class LoginEndpoints
 {
     internal static IEndpointRouteBuilder MapLoginEndpoints(this IEndpointRouteBuilder routes)
     {
-        RouteGroupBuilder group = routes.MapGroup("/api/settings/oauth/login")
+        RouteGroupBuilder group = routes.MapGroup("/api/credentials/login")
             .WithTags("OAuth");
 
         StartLogin.Endpoint.Map(group);

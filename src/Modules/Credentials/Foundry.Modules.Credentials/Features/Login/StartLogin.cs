@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Routing;
 namespace Foundry.Modules.Credentials.Features.Login;
 
 /// <summary>
-/// POST /api/settings/oauth/login/start
+/// POST /api/credentials/login/start
 /// Starts a new OAuth login session (or reuses the active one) and returns 202 Accepted
 /// immediately. The container start, URL scan, and timeouts run in the background;
 /// the URL and result are delivered later via SignalR.
