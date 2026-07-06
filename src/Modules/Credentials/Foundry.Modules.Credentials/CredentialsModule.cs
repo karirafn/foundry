@@ -29,6 +29,7 @@ public static class CredentialsModule
         services.AddSharedDockerInfrastructure();
         services.AddSingleton<ICredentialsOrchestrator, CredentialsOrchestrator>();
 
+        services.AddSingleton<ILoginSuccessCommitter, LoginSuccessCommitter>();
         services.AddSingleton<LoginSessionService>();
         services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
         services.AddHostedService<LoginContainerReaper>();

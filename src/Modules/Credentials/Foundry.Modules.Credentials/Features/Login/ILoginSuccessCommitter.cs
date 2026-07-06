@@ -10,8 +10,6 @@ namespace Foundry.Modules.Credentials.Features.Login;
 /// Injected into <see cref="LoginSessionService"/> so the state machine's
 /// transitions and timeouts are unit-testable with a fake, while the real
 /// DB mutation and event dispatch are tested separately.
-/// The implementation lives in the Workers module until step 6 inverts the
-/// cross-module write into an integration event.
 /// </remarks>
 public interface ILoginSuccessCommitter
 {

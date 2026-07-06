@@ -1,7 +1,8 @@
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Domain;
+using Foundry.Modules.Credentials.Domain.ValueObjects;
+using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure;
-using Foundry.Modules.Settings.Domain;
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -14,7 +15,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Login.LoginSuccessCommitterTests;
+namespace Foundry.UnitTests.Modules.Credentials.Features.Login.LoginSuccessCommitterTests;
 
 public sealed class CommitAsync : IAsyncLifetime
 {
@@ -60,18 +61,18 @@ public sealed class CommitAsync : IAsyncLifetime
         return new LoginSuccessCommitter(scopeFactory, NullLogger<LoginSuccessCommitter>.Instance);
     }
 
-    private async Task SeedGlobalSettings()
+    private async Task SeedClaudeAccount()
     {
         await using FoundryDbContext db = CreateDbContext();
-        db.Set<GlobalSettings>().Add(GlobalSettings.Create());
+        db.Set<ClaudeAccount>().Add(ClaudeAccount.Create());
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
-    public async Task WhenSettingsExist_PersistsOAuthAccountIdentity()
+    public async Task WhenAccountExists_SetsOAuthModeAndIdentity()
     {
         // Arrange
-        await SeedGlobalSettings();
+        await SeedClaudeAccount();
 
         CapturingIntegrationEventDispatcher dispatcher = new();
         LoginSuccessCommitter sut = CreateSut(dispatcher);
@@ -82,26 +83,22 @@ public sealed class CommitAsync : IAsyncLifetime
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
+        ClaudeAccount? account = await assertDb.Set<ClaudeAccount>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
 
-        stored.ShouldNotBeNull();
-        stored.ShouldSatisfyAllConditions(
-            () => stored.OAuthAccountEmail.ShouldBe("alice@example.com"),
-            () => stored.OAuthAccountOrgName.ShouldBe("Acme Corp"));
+        account.ShouldNotBeNull();
+        account.ShouldSatisfyAllConditions(
+            () => account.OAuthAccountEmail.ShouldBe("alice@example.com"),
+            () => account.OAuthAccountOrgName.ShouldBe("Acme Corp"),
+            () => account.AuthMode.ShouldBeOfType<AuthMode.OAuth>(),
+            () => account.Validity.ShouldBeOfType<CredentialValidity.Valid>());
     }
 
     [Fact]
-    public async Task WhenSettingsExist_ClearsAuthInvalidPause()
+    public async Task WhenAccountExists_PublishesCredentialsValidated()
     {
         // Arrange
-        await using (FoundryDbContext seedDb = CreateDbContext())
-        {
-            GlobalSettings settings = GlobalSettings.Create();
-            settings.PauseForAuthInvalid();
-            seedDb.Set<GlobalSettings>().Add(settings);
-            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
+        await SeedClaudeAccount();
 
         CapturingIntegrationEventDispatcher dispatcher = new();
         LoginSuccessCommitter sut = CreateSut(dispatcher);
@@ -111,39 +108,22 @@ public sealed class CommitAsync : IAsyncLifetime
         await sut.CommitAsync(identity, TestContext.Current.CancellationToken);
 
         // Assert
-        await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-
-        stored.ShouldNotBeNull();
-        stored.AuthInvalidPause.ShouldBeFalse();
+        IIntegrationEvent captured = dispatcher.Captured.ShouldHaveSingleItem();
+        CredentialsValidated validated = captured.ShouldBeOfType<CredentialsValidated>();
+        validated.ShouldSatisfyAllConditions(
+            () => validated.Email.ShouldBe("bob@example.com"),
+            () => validated.OrgName.ShouldBe("OrgB"),
+            () => validated.SubscriptionType.ShouldBe("team"));
     }
 
     [Fact]
-    public async Task WhenSettingsExist_PublishesDispatchResumedEvent()
+    public async Task WhenAccountNotFound_DoesNotPublishEvent()
     {
-        // Arrange
-        await SeedGlobalSettings();
+        // Arrange — no ClaudeAccount seeded
 
         CapturingIntegrationEventDispatcher dispatcher = new();
         LoginSuccessCommitter sut = CreateSut(dispatcher);
         AccountIdentity identity = new("carol@example.com", "OrgC", "free");
-
-        // Act
-        await sut.CommitAsync(identity, TestContext.Current.CancellationToken);
-
-        // Assert
-        dispatcher.Captured.ShouldContain(e => e is DispatchResumed);
-    }
-
-    [Fact]
-    public async Task WhenSettingsNotFound_DoesNotPublishEvent()
-    {
-        // Arrange — no GlobalSettings seeded
-
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        LoginSuccessCommitter sut = CreateSut(dispatcher);
-        AccountIdentity identity = new("dave@example.com", "OrgD", "team");
 
         // Act
         await sut.CommitAsync(identity, TestContext.Current.CancellationToken);
