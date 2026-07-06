@@ -67,26 +67,6 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithAuthInvalidOutput_DoesNotMutateAuthInvalidPauseOnGlobalSettings()
-    {
-        // Arrange
-        SeedGlobalSettings();
-        SeedActiveRun("container-auth-invalid-no-pause");
-        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);
-
-        // Act
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — settings flag must remain false; mutation is now the Credentials module's responsibility
-        await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
-            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        settings.ShouldNotBeNull();
-        settings.AuthInvalidPause.ShouldBeFalse();
-    }
-
-    [Fact]
     public async Task WhenContainerExitsWithAuthInvalidOutput_DispatchesFailedEventWithAuthInvalidCategory()
     {
         // Arrange

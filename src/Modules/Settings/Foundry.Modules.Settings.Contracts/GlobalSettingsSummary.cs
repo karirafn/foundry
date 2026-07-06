@@ -1,13 +1,8 @@
 namespace Foundry.Modules.Settings.Contracts;
 
 public sealed record GlobalSettingsSummary(
-    string AuthMode,
     int MaxConcurrent,
     int TimeoutMinutes,
-    string OAuthStatus,
-    string? SubscriptionType,
-    string? OAuthAccountEmail,
-    string? OAuthAccountOrgName,
     string? SystemPromptTemplate,
     string? WorkerPromptTemplate,
     DateTimeOffset? UsageLimitResetsAt,

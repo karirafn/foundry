@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 
 using CredentialsInfrastructure = Foundry.Modules.Credentials.Infrastructure;
 using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure;
-using SettingsInfrastructure = Foundry.Modules.Settings.Infrastructure;
 
 namespace Foundry.WebApi.Persistence;
 
@@ -27,9 +26,6 @@ public sealed class FoundryDbContext(
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IssueConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(WorkerRunConfiguration).Assembly);
 
-        ILogger<SettingsInfrastructure.EncryptedStringConverter>? settingsConverterLogger =
-            loggerFactory?.CreateLogger<SettingsInfrastructure.EncryptedStringConverter>();
-
         ILogger<MonitoringInfrastructure.EncryptedStringConverter>? monitoringConverterLogger =
             loggerFactory?.CreateLogger<MonitoringInfrastructure.EncryptedStringConverter>();
 
@@ -40,8 +36,7 @@ public sealed class FoundryDbContext(
         modelBuilder.ApplyConfiguration(
             new AccountConfiguration(_dataProtectionProvider, monitoringConverterLogger));
 
-        modelBuilder.ApplyConfiguration(
-            new GlobalSettingsConfiguration(_dataProtectionProvider, settingsConverterLogger));
+        modelBuilder.ApplyConfiguration(new GlobalSettingsConfiguration());
 
         modelBuilder.ApplyConfiguration(
             new ClaudeAccountConfiguration(_dataProtectionProvider, credentialsConverterLogger));
