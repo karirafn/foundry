@@ -17,6 +17,7 @@ public static class CredentialsModule
     public static IServiceCollection AddCredentialsModule(this IServiceCollection services)
     {
         services.AddQueryHandler<GetCredentials.Query, ClaudeAccountSummary, GetCredentials.Handler>();
+        services.AddCommandHandler<UpdateAuthMode.Command, ClaudeAccountSummary, UpdateAuthMode.Handler, UpdateAuthMode.Validator>();
         services.AddHostedService<ClaudeAccountSeeder>();
 
         services.AddIntegrationEventHandler<WorkerAuthenticationFailed, WorkerAuthenticationFailedHandler>();

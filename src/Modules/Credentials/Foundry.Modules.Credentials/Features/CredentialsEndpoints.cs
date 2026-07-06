@@ -14,6 +14,7 @@ internal static class CredentialsEndpoints
             .WithTags("Credentials");
 
         GetCredentials.Endpoint.Map(group);
+        UpdateAuthMode.Endpoint.Map(group);
 
         return routes;
     }
