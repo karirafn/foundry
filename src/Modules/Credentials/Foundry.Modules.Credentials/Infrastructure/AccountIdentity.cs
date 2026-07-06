@@ -9,7 +9,7 @@ namespace Foundry.Modules.Credentials.Infrastructure;
 /// Parsed result of <c>claude auth status --json</c>.
 /// Contains the display identity fields needed after a successful OAuth login.
 /// </summary>
-public sealed record AccountIdentity(string Email, string OrgName, string SubscriptionType)
+internal sealed record AccountIdentity(string Email, string OrgName, string SubscriptionType)
 {
     public const int MaxEmailLength = 254;
     public const int MaxOrgNameLength = 200;

@@ -11,7 +11,7 @@ namespace Foundry.Modules.Credentials.Features.Login;
 /// transitions and timeouts are unit-testable with a fake, while the real
 /// DB mutation and event dispatch are tested separately.
 /// </remarks>
-public interface ILoginSuccessCommitter
+internal interface ILoginSuccessCommitter
 {
     Task CommitAsync(AccountIdentity identity, CancellationToken cancellationToken);
 }
