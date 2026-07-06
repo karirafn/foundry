@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Pipelines;
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -61,6 +62,12 @@ internal sealed class DockerContainerRuntime(
         catch (DockerContainerNotFoundException)
         {
             // Container already gone — treat as successful removal.
+        }
+        catch (DockerApiException ex)
+            when (ex.StatusCode == HttpStatusCode.Conflict
+                  && ex.ResponseBody.Contains("already in progress", StringComparison.OrdinalIgnoreCase))
+        {
+            // AutoRemove raced our explicit call — container is being removed, which is the desired end state.
         }
     }
 
