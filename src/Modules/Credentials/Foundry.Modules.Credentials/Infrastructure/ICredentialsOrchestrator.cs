@@ -24,7 +24,13 @@ internal interface ICredentialsOrchestrator
 
     Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken);
 
+    /// <summary>Returns IDs of all transient containers (running and exited).
+    /// Used by the startup reaper — safe to call before any session is active.</summary>
     Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken);
+
+    /// <summary>Returns IDs of transient containers that are NOT running (exited, dead, created).
+    /// Used by the periodic reaper to avoid killing the active login session.</summary>
+    Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken);
 
     Task SeedOnboardingAsync(CancellationToken cancellationToken);
 

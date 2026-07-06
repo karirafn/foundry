@@ -43,6 +43,22 @@ public sealed class TickAsync
     }
 
     [Fact]
+    public async Task WhenRunningTransientContainerExists_DoesNotReapIt()
+    {
+        // Arrange — simulate the active login container (running transient)
+        FakeCredentialsOrchestrator orchestrator = new();
+        orchestrator.WithRunningTransientContainers("active-login-container");
+        TransientContainerReaper sut = new(orchestrator, NullLogger<TransientContainerReaper>.Instance);
+
+        // Act
+        await sut.TickForTest(CancellationToken.None);
+
+        // Assert
+        orchestrator.StopContainerCallCount.ShouldBe(0);
+        orchestrator.RemoveContainerCallCount.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task WhenTickThrows_DoesNotPropagateException()
     {
         // Arrange — orchestrator throws when listing transient containers

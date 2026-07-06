@@ -56,7 +56,7 @@ public sealed class ListTransientContainersAsync
     }
 
     [Fact]
-    public async Task WhenCalled_FiltersContainersByTransientLabel()
+    public async Task WhenCalled_FiltersByTransientLabelKeyAndValue()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
@@ -66,10 +66,11 @@ public sealed class ListTransientContainersAsync
         // Act
         await sut.ListTransientContainersAsync(CancellationToken.None);
 
-        // Assert — filter must target foundry.transient, NOT foundry.managed or foundry.login
+        // Assert — filter key must be "foundry.transient=true" (key=value), not just "foundry.transient"
+        // Using key-only matches any value; key=value ensures we only pick up containers explicitly labelled true
         ContainersListParameters capturedParams = runtime.LastListParameters.ShouldNotBeNull();
         capturedParams.Filters.ShouldContainKey("label");
-        capturedParams.Filters["label"].ShouldContainKey(TransientLabel);
+        capturedParams.Filters["label"].ShouldContainKey($"{TransientLabel}=true");
         capturedParams.Filters["label"].ShouldNotContainKey(ManagedLabel);
     }
 

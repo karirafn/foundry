@@ -11,8 +11,9 @@ namespace Foundry.Modules.Credentials.Features.Login;
 /// </summary>
 /// <remarks>
 /// Filters by <c>foundry.transient=true</c> — never by <c>foundry.managed</c>, which worker
-/// containers also carry. Self-removing containers (<c>AutoRemove=true</c>) that have already
-/// exited are not listed, so stop/remove calls are only issued to genuinely orphaned ones.
+/// containers also carry. Only non-running containers (exited/dead/created) are reaped; running
+/// containers are skipped because they may be the active login session. Any running crash orphan
+/// is already bounded by the <c>timeout -k 10</c> wrapper and <c>AutoRemove</c>.
 /// </remarks>
 internal sealed class TransientContainerReaper(
     ICredentialsOrchestrator orchestrator,
@@ -33,7 +34,7 @@ internal sealed class TransientContainerReaper(
         try
         {
             IReadOnlyList<string> containers =
-                await orchestrator.ListTransientContainersAsync(cancellationToken);
+                await orchestrator.ListExitedTransientContainersAsync(cancellationToken);
 
             foreach (string containerId in containers)
             {

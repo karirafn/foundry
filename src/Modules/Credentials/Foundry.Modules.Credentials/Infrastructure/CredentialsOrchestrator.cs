@@ -136,7 +136,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
             {
                 ["label"] = new Dictionary<string, bool>
                 {
-                    [ContainerLabelConstants.TransientLabelKey] = true,
+                    [$"{ContainerLabelConstants.TransientLabelKey}={ContainerLabelConstants.TransientLabelValue}"] = true,
                 },
             },
         };
@@ -148,6 +148,35 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
         foreach (ContainerListResponse container in containers)
         {
             results.Add(container.ID);
+        }
+
+        return results;
+    }
+
+    public async Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
+    {
+        ContainersListParameters parameters = new()
+        {
+            All = true,
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool>
+                {
+                    [$"{ContainerLabelConstants.TransientLabelKey}={ContainerLabelConstants.TransientLabelValue}"] = true,
+                },
+            },
+        };
+
+        IList<ContainerListResponse> containers = await runtime.ListAsync(parameters, cancellationToken);
+
+        List<string> results = [];
+
+        foreach (ContainerListResponse container in containers)
+        {
+            if (container.State != "running")
+            {
+                results.Add(container.ID);
+            }
         }
 
         return results;

@@ -44,6 +44,25 @@ public sealed class StartingAsync
     }
 
     [Fact]
+    public async Task WhenBothRunningAndExitedTransientContainersExist_ReapsBoth()
+    {
+        // Arrange — startup reaper must force-remove all transient containers including running ones,
+        // because any running transient at startup is a guaranteed crash orphan (no active session yet)
+        FakeCredentialsOrchestrator orchestrator = new();
+        orchestrator
+            .WithRunningTransientContainers("running-orphan")
+            .WithOrphanedTransientContainers("exited-orphan");
+        LoginContainerReaper sut = new(orchestrator, NullLogger<LoginContainerReaper>.Instance);
+
+        // Act
+        await sut.StartingAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.StopContainerCallCount.ShouldBe(2);
+        orchestrator.RemoveContainerCallCount.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task WhenMultipleOrphanedContainers_StopsAndRemovesEach()
     {
         // Arrange

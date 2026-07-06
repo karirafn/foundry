@@ -22,7 +22,8 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         Result<AccountIdentity>.Ok(new AccountIdentity("user@example.com", "Test Org", "pro"));
     private Result<string> _startLoginResult =
         Result<string>.Ok("fake-login-container");
-    private IReadOnlyList<string> _transientContainerIds = [];
+    private IReadOnlyList<string> _runningTransientContainerIds = [];
+    private IReadOnlyList<string> _exitedTransientContainerIds = [];
     private Exception? _listTransientException;
 
     // When true, StreamLogsAsync yields _logLines then blocks until cancellation (does not close).
@@ -74,10 +75,20 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         return this;
     }
 
-    /// <summary>Scripts <see cref="ListTransientContainersAsync"/> to return orphaned container IDs.</summary>
+    /// <summary>Scripts <see cref="ListExitedTransientContainersAsync"/> and <see cref="ListTransientContainersAsync"/>
+    /// to include the given exited (orphaned) container IDs.</summary>
     public FakeCredentialsOrchestrator WithOrphanedTransientContainers(params string[] containerIds)
     {
-        _transientContainerIds = [.. containerIds];
+        _exitedTransientContainerIds = [.. containerIds];
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="ListTransientContainersAsync"/> to include the given running container IDs.
+    /// These are excluded from <see cref="ListExitedTransientContainersAsync"/> so the periodic reaper
+    /// (which calls the exited-only method) never sees them.</summary>
+    public FakeCredentialsOrchestrator WithRunningTransientContainers(params string[] containerIds)
+    {
+        _runningTransientContainerIds = [.. containerIds];
         return this;
     }
 
@@ -177,7 +188,18 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
             return Task.FromException<IReadOnlyList<string>>(_listTransientException);
         }
 
-        return Task.FromResult(_transientContainerIds);
+        IReadOnlyList<string> all = [.. _runningTransientContainerIds, .. _exitedTransientContainerIds];
+        return Task.FromResult(all);
+    }
+
+    public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
+    {
+        if (_listTransientException is not null)
+        {
+            return Task.FromException<IReadOnlyList<string>>(_listTransientException);
+        }
+
+        return Task.FromResult(_exitedTransientContainerIds);
     }
 
     public Task SeedOnboardingAsync(CancellationToken cancellationToken)
