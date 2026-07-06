@@ -203,4 +203,24 @@ describe('App', () => {
     expect(banner?.hasAttribute('inert')).toBe(true);
     expect(main?.hasAttribute('inert')).toBe(true);
   });
+
+  // Step 3: fd-account-chip renders before the settings gear link
+  it('should render fd-account-chip before .app-header__settings-link in .app-header__nav', () => {
+    // Arrange / Act
+    const fixture = setupApp();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const nav = compiled.querySelector('.app-header__nav');
+
+    // Assert
+    expect(nav).not.toBeNull();
+    const chip = nav?.querySelector('fd-account-chip');
+    const settingsLink = nav?.querySelector('.app-header__settings-link');
+    expect(chip).not.toBeNull();
+    expect(settingsLink).not.toBeNull();
+
+    const navChildren = Array.from(nav?.children ?? []);
+    const chipIndex = navChildren.indexOf(chip as Element);
+    const settingsIndex = navChildren.indexOf(settingsLink as Element);
+    expect(chipIndex).toBeLessThan(settingsIndex);
+  });
 });

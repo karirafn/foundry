@@ -1,0 +1,83 @@
+:host {
+  display: contents;
+}
+
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  gap: var(--fd-spacing-xs);
+  padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  background: transparent;
+  color: var(--fd-text-secondary);
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+
+  &:hover {
+    color: var(--fd-text-primary);
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+
+  &--warning {
+    background: var(--fd-bg-warning-subtle);
+    border-color: var(--fd-border-warning);
+    color: var(--fd-text-warning);
+
+    &:hover {
+      background: rgba(210, 153, 34, 0.18);
+      color: var(--fd-text-warning);
+    }
+
+    &:focus-visible {
+      outline-color: var(--fd-text-warning);
+    }
+  }
+}
+
+.account-chip__text {
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.account-chip__monogram {
+  display: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--fd-bg-card-hover);
+  color: var(--fd-text-primary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.account-chip__icon {
+  flex-shrink: 0;
+}
+
+@container app-header-nav (max-width: 240px) {
+  .account-chip__text {
+    display: none;
+  }
+
+  .account-chip__monogram {
+    display: inline-flex;
+  }
+}

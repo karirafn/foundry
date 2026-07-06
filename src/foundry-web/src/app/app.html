@@ -1,6 +1,7 @@
 <header class="app-header" [attr.inert]="overlayBlocking() ? '' : null">
   <span class="app-header__logo">Foundry</span>
   <nav class="app-header__nav" aria-label="Global navigation">
+    <fd-account-chip />
     <a
       class="app-header__settings-link"
       routerLink="/settings"

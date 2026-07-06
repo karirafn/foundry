@@ -1,15 +1,17 @@
-import { Component, Signal, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Signal, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { SystemBannerComponent } from './shared/components/system-banner/system-banner';
 import { ForgeOverlayComponent } from './shared/components/forge-overlay/forge-overlay';
 import { ToastHostComponent } from './shared/components/toast-host/toast-host';
+import { AccountChipComponent } from './shared/components/account-chip/account-chip';
 import { SettingsService } from './features/settings/settings.service';
 
 @Component({
   selector: 'fd-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, SystemBannerComponent, ForgeOverlayComponent, ToastHostComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, SystemBannerComponent, ForgeOverlayComponent, ToastHostComponent, AccountChipComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App {
   private readonly _settingsService = inject(SettingsService);
