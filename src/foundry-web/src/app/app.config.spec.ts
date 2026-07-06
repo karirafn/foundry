@@ -10,12 +10,8 @@ const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, log
 
 function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    authMode: 'ApiKey',
     maxConcurrent: 3,
     timeoutMinutes: 60,
-    accessTokenPresent: false,
-    refreshTokenPresent: false,
-    subscriptionType: null,
     systemPromptTemplate: null,
     workerPromptTemplate: null,
     usageLimitResetsAt: null,
@@ -31,6 +27,18 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     imageBuildStatus: 'Idle',
     lastImageBuildError: null,
     hasUsableImage: false,
+    ...overrides,
+  };
+}
+
+function buildCredentialsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    accountId: '00000000-0000-0000-0000-000000000001',
+    authMode: 'ApiKey',
+    oAuthStatus: 'NotConfigured',
+    subscriptionType: null,
+    oAuthAccountEmail: null,
+    oAuthAccountOrgName: null,
     ...overrides,
   };
 }
@@ -59,7 +67,9 @@ describe('app initializer', () => {
       accountService.loadAccounts(),
     ]);
 
+    // forkJoin cancels /api/credentials once /api/settings errors
     httpMock.expectOne('/api/settings').flush('error', { status: 500, statusText: 'Internal Server Error' });
+    httpMock.match('/api/credentials'); // consume the cancelled request so httpMock.verify() passes
     httpMock.expectOne('/api/accounts').flush('error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert — promise resolves without throwing even when the API errors
@@ -90,6 +100,7 @@ describe('app initializer', () => {
     ]);
 
     httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: true }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentialsResponse());
     httpMock.expectOne('/api/accounts').flush([{ id: '1', name: 'Test', providerType: 'github', baseUrl: 'https://api.github.com/', hasToken: true }]);
 
     // Assert — promise resolves and signals are populated

@@ -6,7 +6,6 @@ using Docker.DotNet.Models;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
@@ -19,13 +18,11 @@ internal sealed class DockerWorkerOrchestrator(
     IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
 {
     private const string WorkerRunLabelKey = "foundry.worker-run-id";
-    private const string LoginLabelKey = "foundry.login";
     private const string ManagedLabelKey = "foundry.managed";
     private const long BytesPerMegabyte = 1024L * 1024L;
     private const long NanoCpusPerCpu = 1_000_000_000L;
     private const int DockerErrorMessageMaxLength = 500;
     private const int ContainerOutputMaxBytes = 65_536;
-    private const int AuthStatusOutputMaxBytes = 16_384;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
@@ -219,170 +216,5 @@ internal sealed class DockerWorkerOrchestrator(
     public async Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
     {
         await runtime.RemoveAsync(containerId, cancellationToken);
-    }
-
-    public async Task<Result<ContainerId>> StartLoginContainerAsync(
-        LoginContainerSpec spec,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            string fifoPath = LoginExecCommand.FifoPath;
-            string sleepPidPath = LoginExecCommand.SleepPidPath;
-            string bootstrapCmd =
-                $"mkfifo {fifoPath}; sleep {spec.TimeoutSeconds} > {fifoPath} & echo $! > {sleepPidPath}; exec claude auth login --claudeai < {fifoPath}";
-
-            CreateContainerParameters createParams = new()
-            {
-                Image = WorkerImageNames.LoginImageName,
-                Cmd = ["sh", "-c", bootstrapCmd],
-                Env = [$"{CredentialVolume.ConfigDirEnvVar}={CredentialVolume.ContainerPath}"],
-                Tty = false,
-                AttachStdout = true,
-                AttachStderr = true,
-                WorkingDir = OnboardingSeed.DefaultWorkDir,
-                Labels = new Dictionary<string, string>
-                {
-                    [LoginLabelKey] = "true",
-                    [ManagedLabelKey] = "true",
-                },
-                HostConfig = new HostConfig
-                {
-                    Mounts =
-                    [
-                        new Mount
-                        {
-                            Type = "volume",
-                            Source = CredentialVolume.VolumeName,
-                            Target = CredentialVolume.ContainerPath,
-                            ReadOnly = false,
-                        },
-                    ],
-                },
-            };
-
-            string containerId = await runtime.CreateAndStartAsync(createParams, cancellationToken);
-            return Result<ContainerId>.Ok(ContainerId.From(containerId));
-        }
-        catch (DockerApiException ex)
-        {
-            string redacted = SecretRedactor.Redact(ex.Message);
-            string message = redacted.Length > DockerErrorMessageMaxLength
-                ? redacted[..DockerErrorMessageMaxLength]
-                : redacted;
-            return Result<ContainerId>.Fail(new Error("Docker.LoginStartFailed", message));
-        }
-    }
-
-    public async Task DeliverLoginCodeAsync(
-        string containerId,
-        string code,
-        CancellationToken cancellationToken)
-    {
-        LoginExecCommand cmd = LoginExecCommand.ForCode();
-
-        await runtime.ExecAsync(
-            containerId,
-            cmd.Argv,
-            [$"C={code}"],
-            cancellationToken);
-    }
-
-    public async Task<Result<AccountIdentity>> GetAuthStatusAsync(
-        string containerId,
-        CancellationToken cancellationToken)
-    {
-        string json = await runtime.ExecCaptureStdoutAsync(
-            containerId,
-            ["claude", "auth", "status", "--json"],
-            [],
-            AuthStatusOutputMaxBytes,
-            cancellationToken);
-
-        return AccountIdentity.Parse(json);
-    }
-
-    public async Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(
-        CancellationToken cancellationToken)
-    {
-        ContainersListParameters parameters = new()
-        {
-            All = true,
-            Filters = new Dictionary<string, IDictionary<string, bool>>
-            {
-                ["label"] = new Dictionary<string, bool>
-                {
-                    [LoginLabelKey] = true,
-                },
-            },
-        };
-
-        IList<ContainerListResponse> containers = await runtime.ListAsync(parameters, cancellationToken);
-
-        List<ContainerId> results = [];
-
-        foreach (ContainerListResponse container in containers)
-        {
-            results.Add(ContainerId.From(container.ID));
-        }
-
-        return results;
-    }
-
-    public async Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
-    {
-        string helperId = await StartCredentialHelperContainerAsync(readOnly: true, cancellationToken);
-
-        try
-        {
-            return await GetAuthStatusAsync(helperId, cancellationToken);
-        }
-        finally
-        {
-            await StopAndRemoveAsync(helperId, cancellationToken);
-        }
-    }
-
-    public async Task SeedOnboardingAsync(CancellationToken cancellationToken)
-    {
-        string configPath = $"{CredentialVolume.ContainerPath}/.claude.json";
-
-        string helperId = await StartCredentialHelperContainerAsync(readOnly: false, cancellationToken);
-
-        try
-        {
-            string? existingJson = await runtime.ReadFileAsync(helperId, configPath, cancellationToken);
-            string mergedJson = OnboardingSeed.Merge(existingJson, OnboardingSeed.DefaultWorkDir);
-            await runtime.WriteFileAsync(helperId, configPath, mergedJson, cancellationToken);
-        }
-        finally
-        {
-            await StopAndRemoveAsync(helperId, cancellationToken);
-        }
-    }
-
-    private async Task<string> StartCredentialHelperContainerAsync(bool readOnly, CancellationToken cancellationToken)
-    {
-        CreateContainerParameters createParams = new()
-        {
-            Image = WorkerImageNames.LoginImageName,
-            Cmd = ["sh", "-c", "sleep 30"],
-            Env = [$"{CredentialVolume.ConfigDirEnvVar}={CredentialVolume.ContainerPath}"],
-            HostConfig = new HostConfig
-            {
-                Mounts =
-                [
-                    new Mount
-                    {
-                        Type = "volume",
-                        Source = CredentialVolume.VolumeName,
-                        Target = CredentialVolume.ContainerPath,
-                        ReadOnly = readOnly,
-                    },
-                ],
-            },
-        };
-
-        return await runtime.CreateAndStartAsync(createParams, cancellationToken);
     }
 }

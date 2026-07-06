@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 
+using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -21,6 +22,7 @@ internal sealed class IssueClaimedHandler(
     IDomainEventDispatcher domainEventDispatcher,
     IOptions<WorkerOptions> optionsAccessor,
     IGlobalSettingsQueries settingsQueries,
+    ICredentialQueries credentialQueries,
     IPostExitProviderQueries postExitProviderQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
@@ -136,7 +138,7 @@ internal sealed class IssueClaimedHandler(
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
-        string? authMode = await settingsQueries.GetAuthModeAsync(cancellationToken);
+        string? authMode = await credentialQueries.GetAuthModeAsync(cancellationToken);
 
         if (authMode is null)
         {
@@ -148,7 +150,7 @@ internal sealed class IssueClaimedHandler(
 
         (string Key, string Value)? authVar = isOAuthMode
             ? null
-            : await settingsQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
+            : await credentialQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
 
         if (!isOAuthMode && authVar is null)
         {

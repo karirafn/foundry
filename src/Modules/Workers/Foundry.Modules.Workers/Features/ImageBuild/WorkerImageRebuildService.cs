@@ -5,8 +5,8 @@ using Docker.DotNet.Models;
 
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
-
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

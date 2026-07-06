@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
@@ -7,14 +8,13 @@ using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
-using DispatchPausedForAuthInvalidEvent = Foundry.Modules.Workers.Contracts.DispatchPausedForAuthInvalid;
 using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.DispatchResumed;
 
+using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.WorkerAuthenticationFailed;
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
 using WorkerRunFailedEvent = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
 
@@ -27,7 +27,6 @@ namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
-    ILoginSessionState loginSessionState,
     ILogger<WorkerDispatchService> logger) : PeriodicBackgroundService(logger)
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
@@ -47,12 +46,6 @@ internal sealed class WorkerDispatchService(
 
     internal async Task ExecuteTickAsync(CancellationToken cancellationToken)
     {
-        if (loginSessionState.IsLoginActive)
-        {
-            logger.LogDebug("Dispatch skipped: an interactive OAuth login session is active.");
-            return;
-        }
-
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -68,6 +61,7 @@ internal sealed class WorkerDispatchService(
         IContainerOutputParser containerOutputParser =
             scope.ServiceProvider.GetRequiredService<IContainerOutputParser>();
         WorkerOutcomeResolver resolver = scope.ServiceProvider.GetRequiredService<WorkerOutcomeResolver>();
+        ICredentialGate credentialGate = scope.ServiceProvider.GetRequiredService<ICredentialGate>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
@@ -112,13 +106,20 @@ internal sealed class WorkerDispatchService(
             pauseState,
             cancellationToken);
 
-        if (!autoResumed && (pauseState.IsDispatchPaused || pauseState.UsageLimitResetsAt.HasValue || pauseState.AuthInvalidPause))
+        bool canDispatch = await credentialGate.CanDispatchAsync(cancellationToken);
+
+        if (!canDispatch)
+        {
+            logger.LogDebug("Dispatch skipped: credential gate returned false.");
+            return;
+        }
+
+        if (!autoResumed && (pauseState.IsDispatchPaused || pauseState.UsageLimitResetsAt.HasValue))
         {
             logger.LogDebug(
-                "Dispatch skipped: dispatch is paused (IsDispatchPaused={IsDispatchPaused}, UsageLimitResetsAt={UsageLimitResetsAt}, AuthInvalidPause={AuthInvalidPause}).",
+                "Dispatch skipped: dispatch is paused (IsDispatchPaused={IsDispatchPaused}, UsageLimitResetsAt={UsageLimitResetsAt}).",
                 pauseState.IsDispatchPaused,
-                pauseState.UsageLimitResetsAt,
-                pauseState.AuthInvalidPause);
+                pauseState.UsageLimitResetsAt);
             return;
         }
 
@@ -621,9 +622,9 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     continuable.FailureReason,
                     cancellationToken);
-                await PersistAuthInvalidIfNeededAsync(
-                    dbContext,
+                await PublishAuthFailedIfNeededAsync(
                     integrationEventDispatcher,
+                    activeRun,
                     continuable.FailureReason,
                     cancellationToken);
                 await TryDispatchAsync(
@@ -656,9 +657,9 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     failure.FailureReason,
                     cancellationToken);
-                await PersistAuthInvalidIfNeededAsync(
-                    dbContext,
+                await PublishAuthFailedIfNeededAsync(
                     integrationEventDispatcher,
+                    activeRun,
                     failure.FailureReason,
                     cancellationToken);
                 await TryDispatchAsync(
@@ -823,12 +824,12 @@ internal sealed class WorkerDispatchService(
 
     /// <summary>
     /// When <paramref name="failureReason"/> is <see cref="FailureReason.AuthInvalid"/>,
-    /// sets <see cref="GlobalSettings.AuthInvalidPause"/>, persists it, and dispatches
-    /// <see cref="DispatchPausedForAuthInvalidEvent"/>.
+    /// publishes <see cref="WorkerAuthenticationFailedEvent"/> so the Credentials module
+    /// can transition the account state and broadcast the dispatch-paused notification.
     /// </summary>
-    private async Task PersistAuthInvalidIfNeededAsync(
-        DbContext dbContext,
+    private async Task PublishAuthFailedIfNeededAsync(
         IIntegrationEventDispatcher integrationEventDispatcher,
+        ActiveRun activeRun,
         FailureReason failureReason,
         CancellationToken cancellationToken)
     {
@@ -837,29 +838,15 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(cancellationToken);
+        await TryDispatchAsync(
+            integrationEventDispatcher,
+            new WorkerAuthenticationFailedEvent(
+                activeRun.Id.Value,
+                activeRun.IssueId.Value,
+                failureReason.Summary),
+            cancellationToken);
 
-        if (settings is null)
-        {
-            logger.LogWarning(
-                "Auth-invalid exit detected but could not persist pause — no GlobalSettings row exists.");
-            return;
-        }
-
-        bool wasAlreadyPaused = settings.AuthInvalidPause;
-        settings.PauseForAuthInvalid();
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        if (!wasAlreadyPaused)
-        {
-            await TryDispatchAsync(
-                integrationEventDispatcher,
-                new DispatchPausedForAuthInvalidEvent(),
-                cancellationToken);
-        }
-
-        logger.LogWarning("Auth-invalid exit detected; dispatch paused until credentials are refreshed.");
+        logger.LogWarning("Auth-invalid exit detected; WorkerAuthenticationFailed published.");
     }
 
     /// <summary>

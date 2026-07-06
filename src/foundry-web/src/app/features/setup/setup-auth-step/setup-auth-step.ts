@@ -81,8 +81,8 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
             <fd-oauth-panel
               [status]="_oauthStatus()"
               [subscriptionType]="_settingsService.authSettings()?.oauth?.subscriptionType ?? null"
-              [accountEmail]="_settingsService.settings()?.oAuthAccountEmail ?? null"
-              [accountOrgName]="_settingsService.settings()?.oAuthAccountOrgName ?? null"
+              [accountEmail]="_settingsService.authSettings()?.accountEmail ?? null"
+              [accountOrgName]="_settingsService.authSettings()?.accountOrgName ?? null"
               [loginPhase]="_settingsService.loginPhase()"
               [loginUrl]="_settingsService.loginUrl()"
               [loginError]="_settingsService.loginError()"

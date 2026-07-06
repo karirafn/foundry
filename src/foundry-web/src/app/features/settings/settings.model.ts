@@ -34,6 +34,8 @@ export interface AuthSettings {
   mode: AuthMode;
   apiKeyConfigured: boolean;
   oauth: OAuthCredentialInfo | null;
+  accountEmail: string | null;
+  accountOrgName: string | null;
 }
 
 export interface UpdateAuthModeRequest {
@@ -46,14 +48,18 @@ export interface WorkerLimits {
   timeoutMinutes: number;
 }
 
-export interface GlobalSettingsResponse {
+export interface ClaudeAccountSummary {
+  accountId: string;
   authMode: string;
   oAuthStatus: OAuthStatus;
+  subscriptionType: string | null;
   oAuthAccountEmail: string | null;
   oAuthAccountOrgName: string | null;
+}
+
+export interface GlobalSettingsResponse {
   maxConcurrent: number;
   timeoutMinutes: number;
-  subscriptionType: string | null;
   systemPromptTemplate: string | null;
   workerPromptTemplate: string | null;
   usageLimitResetsAt: string | null;

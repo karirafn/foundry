@@ -5,7 +5,6 @@ namespace Foundry.Modules.Settings.Domain;
 internal static class SettingsErrors
 {
     internal const string NotFoundCode = "Settings.NotFound";
-    internal const string InvalidAuthModeCode = "Settings.InvalidAuthMode";
     internal const string InvalidMaxConcurrentCode = "Settings.InvalidMaxConcurrent";
     internal const string InvalidTimeoutCode = "Settings.InvalidTimeout";
     internal const string InvalidPromptTemplateCode = "Settings.InvalidPromptTemplate";
@@ -13,9 +12,6 @@ internal static class SettingsErrors
 
     internal static readonly Error NotFound =
         new(NotFoundCode, "Global settings were not found.");
-
-    internal static readonly Error InvalidAuthMode =
-        new(InvalidAuthModeCode, "The specified authentication mode is not valid.");
 
     internal static readonly Error InvalidPromptTemplate =
         new(InvalidPromptTemplateCode, "Prompt templates must not be empty. Provide a value or omit the field to use the default.");

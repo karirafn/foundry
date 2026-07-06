@@ -4,20 +4,14 @@ using Foundry.Modules.Settings.Domain;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared.Infrastructure;
 
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Settings.Infrastructure.Configurations;
 
-internal sealed class GlobalSettingsConfiguration(
-    IDataProtectionProvider dataProtectionProvider,
-    ILogger<EncryptedStringConverter>? encryptedStringConverterLogger = null)
-    : IEntityTypeConfiguration<GlobalSettings>
+internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<GlobalSettings>
 {
-    private static readonly JsonSerializerOptions SerializerOptions = BuildSerializerOptions();
     private static readonly JsonSerializerOptions ImageBuildStateOptions = BuildImageBuildStateOptions();
 
     public void Configure(EntityTypeBuilder<GlobalSettings> builder)
@@ -29,19 +23,6 @@ internal sealed class GlobalSettingsConfiguration(
         builder.Property(s => s.Id)
             .HasConversion(new StronglyTypedIdValueConverter<GlobalSettingsId>())
             .HasColumnName("id");
-
-        EncryptedStringConverter encryptedConverter = new(dataProtectionProvider, encryptedStringConverterLogger);
-        Func<string, string> encrypt = encryptedConverter.ConvertToProviderExpression.Compile();
-        Func<string, string> decrypt = encryptedConverter.ConvertFromProviderExpression.Compile();
-
-        ValueConverter<AuthMode, string> authModeConverter = new(
-            mode => encrypt(SerializeAuthMode(mode)),
-            encrypted => DeserializeAuthMode(decrypt(encrypted)));
-
-        builder.Property(s => s.AuthMode)
-            .HasConversion(authModeConverter)
-            .HasColumnType("TEXT")
-            .HasColumnName("auth_mode");
 
         builder.Property(s => s.MaxConcurrent)
             .HasColumnName("max_concurrent");
@@ -68,17 +49,6 @@ internal sealed class GlobalSettingsConfiguration(
 
         builder.Property(s => s.DefaultCooldownMinutes)
             .HasColumnName("default_cooldown_minutes");
-
-        builder.Property(s => s.AuthInvalidPause)
-            .HasColumnName("auth_invalid_pause");
-
-        builder.Property(s => s.OAuthAccountEmail)
-            .HasMaxLength(GlobalSettings.MaxOAuthAccountEmailLength)
-            .HasColumnName("oauth_account_email");
-
-        builder.Property(s => s.OAuthAccountOrgName)
-            .HasMaxLength(GlobalSettings.MaxOAuthAccountOrgNameLength)
-            .HasColumnName("oauth_account_org_name");
 
         ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
             config => SerializeWorkerImageConfiguration(config),
@@ -115,26 +85,12 @@ internal sealed class GlobalSettingsConfiguration(
         => JsonSerializer.Deserialize<WorkerImageConfiguration>(json)
             ?? WorkerImageConfiguration.Default;
 
-    private static JsonSerializerOptions BuildSerializerOptions()
-    {
-        JsonSerializerOptions options = new();
-        options.Converters.Add(new AuthModeJsonConverter());
-        return options;
-    }
-
     private static JsonSerializerOptions BuildImageBuildStateOptions()
     {
         JsonSerializerOptions options = new();
         options.Converters.Add(new ImageBuildStateJsonConverter());
         return options;
     }
-
-    private static string SerializeAuthMode(AuthMode mode)
-        => JsonSerializer.Serialize(mode, SerializerOptions);
-
-    private static AuthMode DeserializeAuthMode(string json)
-        => JsonSerializer.Deserialize<AuthMode>(json, SerializerOptions)
-            ?? throw new InvalidOperationException($"Failed to deserialize AuthMode from JSON: {json}");
 
     private static string SerializeImageBuildState(ImageBuildState state)
         => JsonSerializer.Serialize(state, ImageBuildStateOptions);

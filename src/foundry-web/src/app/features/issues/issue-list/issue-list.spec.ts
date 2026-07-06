@@ -37,13 +37,8 @@ const mockSummary: IssueSummary = {
 };
 
 const mockSettingsResponse: GlobalSettingsResponse = {
-  authMode: 'ApiKey',
-  oAuthStatus: 'NotConfigured',
-  oAuthAccountEmail: null,
-  oAuthAccountOrgName: null,
   maxConcurrent: 3,
   timeoutMinutes: 30,
-  subscriptionType: null,
   systemPromptTemplate: null,
   workerPromptTemplate: null,
   usageLimitResetsAt: null,
@@ -59,6 +54,15 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
   hasUsableImage: false,
+};
+
+const mockCredentialsResponse = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
 };
 
 const mockCountsResponse = { counts: {} };
@@ -94,6 +98,7 @@ const mockRunTotals = {
 function flushInit(httpMock: HttpTestingController, issues: IssueSummary[] = []) {
   httpMock.expectOne('/api/issues').flush(issues);
   httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
   httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
   httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
 }
@@ -140,6 +145,7 @@ describe('IssueListComponent', () => {
     // Assert — the HTTP calls prove loadIssues and loadCounts were called
     httpMock.expectOne('/api/issues').flush([]);
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
   });
@@ -154,6 +160,7 @@ describe('IssueListComponent', () => {
     // Assert — counts request is made on init
     httpMock.expectOne('/api/issues').flush([]);
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     const countsReq = httpMock.expectOne('/api/issues/counts');
     expect(countsReq.request.url).toBe('/api/issues/counts');
     countsReq.flush(mockCountsResponse);
@@ -282,6 +289,7 @@ describe('IssueListComponent', () => {
       statusText: 'Internal Server Error',
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
@@ -420,6 +428,7 @@ describe('IssueListComponent', () => {
       statusText: 'Internal Server Error',
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
@@ -442,6 +451,7 @@ describe('IssueListComponent', () => {
       statusText: 'Internal Server Error',
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
@@ -461,6 +471,7 @@ describe('IssueListComponent', () => {
       statusText: 'Internal Server Error',
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
@@ -720,6 +731,7 @@ describe('IssueListComponent', () => {
       statusText: 'Internal Server Error',
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
@@ -1378,6 +1390,7 @@ describe('IssueListComponent', () => {
       statusText: 'Internal Server Error',
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();
@@ -1525,6 +1538,7 @@ describe('IssueListComponent', () => {
       statusText: 'Internal Server Error',
     });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
+  httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
     fixture.detectChanges();

@@ -17,6 +17,45 @@ namespace Foundry.WebApi.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
 
+            modelBuilder.Entity("Foundry.Modules.Credentials.Domain.ClaudeAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AuthMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("auth_mode");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("OAuthAccountEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("oauth_account_email");
+
+                    b.Property<string>("OAuthAccountOrgName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("oauth_account_org_name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Validity")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("validity");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("claude_account", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.Issue", b =>
                 {
                     b.Property<Guid>("Id")
@@ -248,15 +287,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<bool>("AuthInvalidPause")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("auth_invalid_pause");
-
-                    b.Property<string>("AuthMode")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("auth_mode");
-
                     b.Property<bool>("AutoResumeOnUsageReset")
                         .HasColumnType("INTEGER")
                         .HasColumnName("auto_resume_on_usage_reset");
@@ -285,16 +315,6 @@ namespace Foundry.WebApi.Migrations
                     b.Property<int>("MaxConcurrent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_concurrent");
-
-                    b.Property<string>("OAuthAccountEmail")
-                        .HasMaxLength(254)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("oauth_account_email");
-
-                    b.Property<string>("OAuthAccountOrgName")
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("oauth_account_org_name");
 
                     b.Property<string>("SystemPromptTemplate")
                         .HasMaxLength(32768)

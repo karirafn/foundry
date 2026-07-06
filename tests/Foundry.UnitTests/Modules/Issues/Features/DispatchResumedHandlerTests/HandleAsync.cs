@@ -253,7 +253,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenFailedIssueIsAuthInvalid_TransitionsToQueuedIssue()
+    public async Task WhenFailedIssueIsAuthInvalid_RemainsAsFailed()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -270,11 +270,11 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FailedIssue>();
     }
 
     [Fact]
-    public async Task WhenContinuableFailedIssueIsAuthInvalid_TransitionsToContinuationQueuedIssue()
+    public async Task WhenContinuableFailedIssueIsAuthInvalid_RemainsAsContinuableFailed()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -291,6 +291,6 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<ContinuationQueuedIssue>();
+        issue.ShouldBeOfType<ContinuableFailedIssue>();
     }
 }

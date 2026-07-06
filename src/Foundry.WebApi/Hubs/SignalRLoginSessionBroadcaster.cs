@@ -1,5 +1,4 @@
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Contracts;
 
 using Microsoft.AspNetCore.SignalR;
 

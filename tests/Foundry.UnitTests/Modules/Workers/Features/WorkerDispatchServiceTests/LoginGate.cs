@@ -1,8 +1,9 @@
+using System.Runtime.CompilerServices;
+
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
-using Foundry.Modules.Workers.Features.Login;
-using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 
 using Shouldly;
@@ -14,14 +15,14 @@ namespace Foundry.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 public sealed class LoginGate : WorkerDispatchServiceTestBase
 {
     [Fact]
-    public async Task WhenLoginIsActive_DoesNotDispatchWorkerCapacityAvailable()
+    public async Task WhenCredentialGateReturnsFalse_DoesNotDispatchWorkerCapacityAvailable()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
         WorkerDispatchService sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            loginSessionState: new ActiveLoginSessionState());
+            credentialGate: new CannotDispatchCredentialGate());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -31,7 +32,7 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenLoginIsActive_DoesNotReadDatabase()
+    public async Task WhenCredentialGateReturnsFalse_DoesNotReadDatabase()
     {
         // Arrange — no DB rows; if the tick reads ActiveRun it would be fine, but
         // we validate it returns before any dispatch logic by checking no WorkerCapacityAvailable
@@ -39,7 +40,7 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
         WorkerDispatchService sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            loginSessionState: new ActiveLoginSessionState());
+            credentialGate: new CannotDispatchCredentialGate());
 
         // Act — completes without exception and without dispatching
         Exception? exception = await Record.ExceptionAsync(
@@ -51,14 +52,14 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenLoginIsInactive_DispatchesWorkerCapacityAvailable()
+    public async Task WhenCredentialGateReturnsTrue_DispatchesWorkerCapacityAvailable()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
         WorkerDispatchService sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            loginSessionState: new InactiveLoginSessionState());
+            credentialGate: new CanDispatchCredentialGate());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -67,14 +68,16 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
         dispatcher.Captured.ShouldContain(e => e is WorkerCapacityAvailable);
     }
 
-    private sealed class ActiveLoginSessionState : ILoginSessionState
+    private sealed class CannotDispatchCredentialGate : ICredentialGate
     {
-        public bool IsLoginActive => true;
+        public Task<bool> CanDispatchAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 
-    private sealed class InactiveLoginSessionState : ILoginSessionState
+    private sealed class CanDispatchCredentialGate : ICredentialGate
     {
-        public bool IsLoginActive => false;
+        public Task<bool> CanDispatchAsync(CancellationToken cancellationToken)
+            => Task.FromResult(true);
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator
@@ -93,7 +96,7 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
 
         public async IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
             yield break;
@@ -110,28 +113,6 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
             => Task.CompletedTask;
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<Result<ContainerId>> StartLoginContainerAsync(
-            LoginContainerSpec spec,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<ContainerId>.Ok(ContainerId.From("fake-login-container")));
-
-        public Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
-        public Task<Result<AccountIdentity>> GetAuthStatusAsync(
-            string containerId,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
-
-
-        public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
-            => Task.FromResult(Result<AccountIdentity>.Ok(new AccountIdentity("test@example.com", "Test Org", "pro")));
-        public Task<IReadOnlyList<ContainerId>> ListLoginContainersByLabelAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<ContainerId>>([]);
-
-        public Task SeedOnboardingAsync(CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 }

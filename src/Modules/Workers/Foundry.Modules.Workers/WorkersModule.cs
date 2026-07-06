@@ -6,7 +6,6 @@ using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Health;
 using Foundry.Modules.Workers.Features.ImageBuild;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
@@ -42,14 +41,8 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
-        services.AddIntegrationEventHandler<DispatchPausedForAuthInvalid, DispatchPausedForAuthInvalidBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
-
-        services.AddSingleton<ILoginSuccessCommitter, LoginSuccessCommitter>();
-        services.AddSingleton<LoginSessionService>();
-        services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
-        services.AddHostedService<LoginContainerReaper>();
 
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddHostedService<WorkerDispatchService>();
@@ -61,7 +54,6 @@ public static class WorkersModule
     public static IEndpointRouteBuilder MapWorkersEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapWorkerEndpoints();
-        app.MapLoginEndpoints();
         return app;
     }
 }

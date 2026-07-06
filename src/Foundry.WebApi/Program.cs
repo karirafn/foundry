@@ -1,10 +1,11 @@
+using Foundry.Modules.Credentials;
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features.Login;
 using Foundry.ServiceDefaults;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -26,6 +27,7 @@ builder.Services.AddDbContext<FoundryDbContext>(options =>
 builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 builder.Services.AddScoped<IIntegrationEventDispatcher, IntegrationEventDispatcher>();
+builder.Services.AddCredentialsModule();
 builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule(builder.Configuration);
 builder.Services.AddWorkersModule(builder.Configuration);
@@ -67,6 +69,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapDefaultEndpoints();
+app.MapCredentialsEndpoints();
 app.MapIssuesEndpoints();
 app.MapMonitoringEndpoints();
 app.MapWorkersEndpoints();

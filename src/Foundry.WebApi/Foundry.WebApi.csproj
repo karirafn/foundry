@@ -17,6 +17,7 @@
     <ProjectReference Include="..\Foundry.ServiceDefaults\Foundry.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Foundry.Shared.Infrastructure\Foundry.Shared.Infrastructure.csproj" />
     <ProjectReference Include="..\Foundry.Shared\Foundry.Shared.csproj" />
+    <ProjectReference Include="..\Modules\Credentials\Foundry.Modules.Credentials\Foundry.Modules.Credentials.csproj" />
     <ProjectReference Include="..\Modules\Issues\Foundry.Modules.Issues\Foundry.Modules.Issues.csproj" />
     <ProjectReference Include="..\Modules\Monitoring\Foundry.Modules.Monitoring\Foundry.Modules.Monitoring.csproj" />
     <ProjectReference Include="..\Modules\Workers\Foundry.Modules.Workers\Foundry.Modules.Workers.csproj" />

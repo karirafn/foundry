@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Docker;
 
 namespace Foundry.Modules.Workers.Features;
 

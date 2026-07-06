@@ -1,4 +1,4 @@
-using Foundry.Modules.Workers.Features.Login;
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.WebApi.Hubs;
 
 using Microsoft.Extensions.DependencyInjection;

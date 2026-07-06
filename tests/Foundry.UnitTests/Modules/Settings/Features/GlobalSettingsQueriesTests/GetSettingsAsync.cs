@@ -53,58 +53,6 @@ public sealed class GetSettingsAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenApiKeySettings_ReturnsApiKeyAuthModeWithNotConfiguredOAuthStatus()
-    {
-        // Arrange
-        await using (FoundryDbContext seedDb = CreateDbContext())
-        {
-            GlobalSettings settings = GlobalSettings.Create();
-            settings.SetAuthMode(new AuthMode.ApiKey("encrypted-key"));
-            seedDb.Set<GlobalSettings>().Add(settings);
-            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
-
-        // Act
-        GlobalSettingsSummary? result = await sut.GetSettingsAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        GlobalSettingsSummary summary = result.ShouldNotBeNull();
-        summary.ShouldSatisfyAllConditions(
-            () => summary.AuthMode.ShouldBe("ApiKey"),
-            () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusNotConfigured),
-            () => summary.SubscriptionType.ShouldBeNull());
-    }
-
-    [Fact]
-    public async Task WhenOAuthSettings_ReturnsOAuthAuthModeWithReLoginNeededStatus()
-    {
-        // Arrange — OAuth mode without a committed account email returns ReLoginNeeded.
-        await using (FoundryDbContext seedDb = CreateDbContext())
-        {
-            GlobalSettings settings = GlobalSettings.Create();
-            settings.SetAuthMode(new AuthMode.OAuth("pro"));
-            seedDb.Set<GlobalSettings>().Add(settings);
-            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
-
-        // Act
-        GlobalSettingsSummary? result = await sut.GetSettingsAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        GlobalSettingsSummary summary = result.ShouldNotBeNull();
-        summary.ShouldSatisfyAllConditions(
-            () => summary.AuthMode.ShouldBe("OAuth"),
-            () => summary.OAuthStatus.ShouldBe(GlobalSettingsMapper.OAuthStatusReLoginNeeded),
-            () => summary.SubscriptionType.ShouldBe("pro"));
-    }
-
-    [Fact]
     public async Task WhenSettings_ReturnsMaxConcurrentAndTimeout()
     {
         // Arrange

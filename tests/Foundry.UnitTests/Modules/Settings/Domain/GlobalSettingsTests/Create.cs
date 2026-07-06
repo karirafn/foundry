@@ -39,17 +39,6 @@ public sealed class Create
     }
 
     [Fact]
-    public void WhenCreated_AuthModeIsApiKeyWithEmptyKey()
-    {
-        // Arrange & Act
-        GlobalSettings settings = GlobalSettings.Create();
-
-        // Assert
-        AuthMode.ApiKey apiKey = settings.AuthMode.ShouldBeOfType<AuthMode.ApiKey>();
-        apiKey.Key.ShouldBe(string.Empty);
-    }
-
-    [Fact]
     public void WhenCreated_CreatedAtIsSet()
     {
         // Arrange
