@@ -54,7 +54,7 @@ public sealed class SubmitEndpoint
         // Arrange
         FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
-        string overLongCode = new string('x', 65);
+        string overLongCode = new string('x', 513);
 
         // Act
         Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
@@ -65,6 +65,25 @@ public sealed class SubmitEndpoint
 
         // Assert
         result.Result.ShouldBeOfType<BadRequest<string>>();
+    }
+
+    [Fact]
+    public async Task WhenCodeIsRealisticOAuthLength_DoesNotReturn400()
+    {
+        // Arrange
+        FakeCredentialsOrchestrator orchestrator = new([]);
+        LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
+        string realisticCode = new string('x', 130);
+
+        // Act
+        Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
+            await SubmitLoginCode.Endpoint.HandleAsync(
+                new SubmitLoginCode.Request(Code: realisticCode),
+                service,
+                TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Result.ShouldBeOfType<UnprocessableEntity<string>>();
     }
 
     [Fact]

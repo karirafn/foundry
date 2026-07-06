@@ -19,7 +19,7 @@ internal static class SubmitLoginCode
 
     internal static class Endpoint
     {
-        private const int MaxLoginCodeLength = 64;
+        private const int MaxLoginCodeLength = 512;
 
         internal static void Map(RouteGroupBuilder group)
         {
