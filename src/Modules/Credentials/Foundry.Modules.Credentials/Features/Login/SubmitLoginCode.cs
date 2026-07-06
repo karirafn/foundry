@@ -19,6 +19,8 @@ internal static class SubmitLoginCode
 
     internal static class Endpoint
     {
+        private const int MaxLoginCodeLength = 64;
+
         internal static void Map(RouteGroupBuilder group)
         {
             group.MapPost("/code", static async (
@@ -41,6 +43,11 @@ internal static class SubmitLoginCode
             if (string.IsNullOrWhiteSpace(request.Code))
             {
                 return TypedResults.BadRequest("Authorization code must not be empty.");
+            }
+
+            if (request.Code.Length > MaxLoginCodeLength)
+            {
+                return TypedResults.BadRequest($"Authorization code must not exceed {MaxLoginCodeLength} characters.");
             }
 
             Result submitResult = await service.SubmitCodeAsync(request.Code, cancellationToken);

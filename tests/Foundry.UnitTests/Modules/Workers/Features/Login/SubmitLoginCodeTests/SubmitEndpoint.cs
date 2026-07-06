@@ -49,6 +49,25 @@ public sealed class SubmitEndpoint
     }
 
     [Fact]
+    public async Task WhenCodeExceedsMaxLength_Returns400()
+    {
+        // Arrange
+        FakeCredentialsOrchestrator orchestrator = new([]);
+        LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
+        string overLongCode = new string('x', 65);
+
+        // Act
+        Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
+            await SubmitLoginCode.Endpoint.HandleAsync(
+                new SubmitLoginCode.Request(Code: overLongCode),
+                service,
+                TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Result.ShouldBeOfType<BadRequest<string>>();
+    }
+
+    [Fact]
     public async Task WhenNoActiveSession_Returns422()
     {
         // Arrange

@@ -86,12 +86,12 @@ internal sealed class ClaudeAccountConfiguration(
 
     private static AuthMode DeserializeAuthMode(string json)
         => JsonSerializer.Deserialize<AuthMode>(json, AuthModeSerializerOptions)
-            ?? throw new InvalidOperationException($"Failed to deserialize AuthMode from JSON: {json}");
+            ?? throw new InvalidOperationException("Failed to deserialize AuthMode from the stored value.");
 
     private static string SerializeValidity(CredentialValidity validity)
         => JsonSerializer.Serialize(validity, ValiditySerializerOptions);
 
     private static CredentialValidity DeserializeValidity(string json)
         => JsonSerializer.Deserialize<CredentialValidity>(json, ValiditySerializerOptions)
-            ?? throw new InvalidOperationException($"Failed to deserialize CredentialValidity from JSON: {json}");
+            ?? throw new InvalidOperationException("Failed to deserialize CredentialValidity from the stored value.");
 }
