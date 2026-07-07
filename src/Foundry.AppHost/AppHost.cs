@@ -9,6 +9,7 @@ IResourceBuilder<ProjectResource> webapi = builder
 
 builder.AddJavaScriptApp("foundry-web", "../foundry-web", "start")
     .WithHttpEndpoint(port: 4200, env: "PORT", isProxied: false)
+    .WithHttpHealthCheck(path: "/", statusCode: 200)
     .WithReference(webapi)
     .WaitFor(webapi);
 
