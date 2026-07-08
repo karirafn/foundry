@@ -23,7 +23,7 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     {
         // The stub returns invalid so both create and update see it as invalid,
         // but update is the operation under test.
-        ValidateToken.Response invalidResponse = new(IsValid: false, IsAuthFailure: true, MissingScopes: []);
+        ValidateToken.Response invalidResponse = new(IsValid: false, IsAuthFailure: true, MissingScopes: [], AccountName: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();

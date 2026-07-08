@@ -54,7 +54,10 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
             return Result<TokenValidationResult>.Fail(GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
         }
 
-        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated([]));
+        string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        string? accountName = DeserializeUsername(responseBody);
+
+        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated([], accountName));
     }
 
     public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
@@ -647,6 +650,20 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
     }
 
+    private static string? DeserializeUsername(string responseBody)
+    {
+        try
+        {
+            GitLabUserDto? dto = JsonSerializer.Deserialize<GitLabUserDto>(responseBody, JsonOptions);
+            string? username = dto?.Username;
+            return string.IsNullOrEmpty(username) ? null : username;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
     private static void AddCommonHeaders(HttpRequestMessage request, string token)
     {
         request.Headers.Add("PRIVATE-TOKEN", token);
@@ -736,6 +753,8 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         return error;
     }
+
+    private sealed record GitLabUserDto(string Username);
 
     private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
 

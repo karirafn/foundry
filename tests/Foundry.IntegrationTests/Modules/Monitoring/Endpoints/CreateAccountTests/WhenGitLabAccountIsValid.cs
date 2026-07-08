@@ -21,7 +21,7 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
 
     public WhenGitLabAccountIsValid()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: []);
+        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: [], AccountName: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();

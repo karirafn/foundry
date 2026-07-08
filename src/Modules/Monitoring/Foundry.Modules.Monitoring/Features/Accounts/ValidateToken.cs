@@ -18,7 +18,8 @@ internal static class ValidateToken
     internal sealed record Response(
         bool IsValid,
         bool IsAuthFailure,
-        IReadOnlyList<string> MissingScopes);
+        IReadOnlyList<string> MissingScopes,
+        string? AccountName);
 
     internal sealed class Handler(
         GitHubHttpClient gitHubHttpClient,
@@ -36,7 +37,8 @@ internal static class ValidateToken
                 validation => Result<Response>.Ok(new Response(
                     IsValid: validation.IsValid,
                     IsAuthFailure: validation.IsAuthFailure,
-                    MissingScopes: validation.MissingScopes)),
+                    MissingScopes: validation.MissingScopes,
+                    AccountName: validation.AccountName)),
                 error => Result<Response>.Fail(error));
         }
     }

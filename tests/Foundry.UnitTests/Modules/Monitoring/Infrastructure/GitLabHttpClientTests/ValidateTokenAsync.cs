@@ -137,4 +137,87 @@ public sealed class ValidateTokenAsync
         values.ShouldNotBeNull();
         values.FirstOrDefault().ShouldBe("glpat_my_secret_token");
     }
+
+    [Fact]
+    public async Task WhenResponseBodyContainsUsername_AccountNameIsResolved()
+    {
+        // Arrange
+        string json = """{ "id": 1, "username": "alice" }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "glpat_valid_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.AccountName.ShouldBe("alice");
+    }
+
+    [Fact]
+    public async Task WhenResponseBodyHasEmptyUsername_AccountNameIsNull()
+    {
+        // Arrange
+        string json = """{ "id": 1, "username": "" }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "glpat_valid_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.AccountName.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenResponseBodyHasAbsentUsername_AccountNameIsNull()
+    {
+        // Arrange
+        string json = """{ "id": 1 }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "glpat_valid_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.AccountName.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAuthFailure_AccountNameIsNull()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.Unauthorized, string.Empty);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "glpat_bad_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.AccountName.ShouldBeNull();
+    }
 }

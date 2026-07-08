@@ -20,7 +20,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
 
     public WhenAccountNameIsDuplicate()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: []);
+        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: [], AccountName: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
