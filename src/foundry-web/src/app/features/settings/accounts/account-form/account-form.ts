@@ -44,19 +44,6 @@ const GITHUB_BASE_URL = 'https://github.com';
         {{ _isEditMode() ? 'Edit Account' : 'Add Account' }}
       </h2>
 
-      <div class="account-form__field">
-        <label class="account-form__field-label" for="account-form-name">Account Name</label>
-        <input
-          class="account-form__input"
-          type="text"
-          id="account-form-name"
-          [value]="_name()"
-          (input)="_name.set($any($event.target).value)"
-          autocomplete="off"
-          required
-        />
-      </div>
-
       @if (_isEditMode()) {
         <div class="account-form__field">
           <span class="account-form__field-label">Provider</span>
@@ -82,23 +69,43 @@ const GITHUB_BASE_URL = 'https://github.com';
           id="account-form-base-url"
           [value]="_baseUrl()"
           (input)="onBaseUrlInput($any($event.target).value)"
+          (blur)="onBaseUrlBlur()"
           autocomplete="off"
         />
       </div>
 
+      @if (_isEditMode() && account()!.hasToken) {
+        <div
+          id="account-form-token-on-file"
+          class="account-form__token-on-file"
+        >
+          <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
+          <span class="account-form__validation-message account-form__validation-message--valid">
+            Token on file — authenticated as {{ account()!.name }}
+          </span>
+        </div>
+      }
+
       <div class="account-form__field">
-        <label class="account-form__field-label" for="account-form-token">Token</label>
-        <div class="account-form__token-wrapper">
+        <label class="account-form__field-label" for="account-form-token">
+          {{ _isEditMode() ? 'Replace token' : 'Token' }}
+        </label>
+        <div
+          class="account-form__token-wrapper"
+          [attr.aria-busy]="validating() ? true : null"
+        >
           <input
             class="account-form__input"
             [type]="_showToken() ? 'text' : 'password'"
             id="account-form-token"
             [value]="_token()"
-            (input)="_token.set($any($event.target).value)"
+            (input)="onTokenInput($any($event.target).value)"
+            (blur)="onTokenBlur()"
+            (paste)="onTokenPaste()"
             autocomplete="off"
             [required]="!_isEditMode()"
             [attr.aria-required]="!_isEditMode() || null"
-            aria-describedby="account-form-token-hint account-token-validation account-token-error"
+            [attr.aria-describedby]="_tokenAriaDescribedBy()"
           />
           <button
             class="account-form__toggle-visibility-btn"
@@ -119,17 +126,11 @@ const GITHUB_BASE_URL = 'https://github.com';
               </svg>
             }
           </button>
-          <button
-            class="account-form__validate-btn"
-            type="button"
-            [disabled]="!_canValidate()"
-            (click)="validateToken.emit({ token: _token(), baseUrl: _baseUrl() })"
-          >{{ validating() ? 'Validating...' : 'Validate Token' }}</button>
         </div>
 
         @if (_isEditMode()) {
           <span id="account-form-token-hint" class="account-form__field-hint">
-            Leave empty to keep current token
+            Leave empty to keep the current token
           </span>
         }
       </div>
@@ -140,19 +141,50 @@ const GITHUB_BASE_URL = 'https://github.com';
         role="status"
         aria-live="polite"
       >
-        @if (validationResult(); as result) {
-          @if (result.isValid) {
+        @if (validating()) {
+          <span class="account-form__validation-message">Resolving identity…</span>
+        } @else if (validationResult(); as result) {
+          @if (result.isValid && result.accountName) {
             <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--valid">Token is valid</span>
+            <span class="account-form__validation-message account-form__validation-message--valid">
+              Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span>
+            </span>
           } @else if (result.isAuthFailure) {
             <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--error">Authentication failed — check that the token is correct</span>
-          } @else {
+            <span class="account-form__validation-message account-form__validation-message--error">
+              Authentication failed — check that the token is correct
+            </span>
+          } @else if (!result.isValid && result.missingScopes.length > 0) {
             <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--warning">Missing required scopes: {{ result.missingScopes.join(', ') }}</span>
+            <span class="account-form__validation-message account-form__validation-message--warning">
+              Missing required scopes: {{ result.missingScopes.join(', ') }}
+            </span>
+          } @else if (result.isValid && !result.accountName) {
+            <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+            <span class="account-form__validation-message account-form__validation-message--error">
+              Token is valid, but the account identity could not be resolved from the provider
+            </span>
           }
         }
       </div>
+
+      @if (_isDuplicate()) {
+        <div class="account-form__duplicate-warning">
+          <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+          <span class="account-form__validation-message account-form__validation-message--warning">
+            An account for "{{ _resolvedAccountName() }}" already exists on {{ _resolvedHost() }}
+          </span>
+        </div>
+      }
+
+      @if (_isEditMode() && _showRenameNotice()) {
+        <div class="account-form__rename-notice">
+          <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+          <span class="account-form__validation-message account-form__validation-message--warning">
+            Saving will rename this account to "{{ _resolvedAccountName() }}"
+          </span>
+        </div>
+      }
 
       <div
         class="account-form__validation-error"
@@ -177,6 +209,7 @@ const GITHUB_BASE_URL = 'https://github.com';
 })
 export class AccountFormComponent implements OnInit {
   readonly account: InputSignal<AccountSummary | null> = input<AccountSummary | null>(null);
+  readonly accounts: InputSignal<AccountSummary[]> = input<AccountSummary[]>([]);
   readonly saving: InputSignal<boolean> = input<boolean>(false);
   readonly validating: InputSignal<boolean> = input<boolean>(false);
   readonly validationResult: InputSignal<TokenValidationResult | null> = input<TokenValidationResult | null>(null);
@@ -191,31 +224,86 @@ export class AccountFormComponent implements OnInit {
 
   protected readonly _isEditMode: Signal<boolean> = computed(() => this.account() !== null);
 
-  protected readonly _name: WritableSignal<string> = signal('');
   protected readonly _provider: WritableSignal<ProviderType> = signal('GitHub');
   protected readonly _baseUrl: WritableSignal<string> = signal(GITHUB_BASE_URL);
   protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
 
+  /** Tracks the last (token, baseUrl) pair that was sent to resolution to avoid duplicate calls. */
+  private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string } | null> = signal(null);
+
+  /** Whether a held resolution is pending (token present but baseUrl was empty at blur time). */
+  private readonly _pendingResolution: WritableSignal<boolean> = signal(false);
+
+  protected readonly _resolvedAccountName: Signal<string | null> = computed(() =>
+    this.validationResult()?.accountName ?? null
+  );
+
+  protected readonly _resolvedHost: Signal<string> = computed(() => {
+    try {
+      return new URL(this._baseUrl()).host;
+    } catch {
+      return this._baseUrl();
+    }
+  });
+
+  protected readonly _isDuplicate: Signal<boolean> = computed(() => {
+    const name = this._resolvedAccountName();
+    const baseUrl = this._baseUrl().trim().toLowerCase();
+    if (!name) {
+      return false;
+    }
+    const editingId = this.account()?.id ?? null;
+    return this.accounts().some(a => {
+      if (editingId !== null && a.id === editingId) {
+        return false;
+      }
+      return a.name.toLowerCase() === name.toLowerCase() &&
+        a.baseUrl.trim().toLowerCase() === baseUrl;
+    });
+  });
+
+  protected readonly _showRenameNotice: Signal<boolean> = computed(() => {
+    const acc = this.account();
+    if (!acc) {
+      return false;
+    }
+    const resolved = this._resolvedAccountName();
+    if (!resolved) {
+      return false;
+    }
+    return resolved !== acc.name;
+  });
+
   protected readonly _canSave: Signal<boolean> = computed(() => {
     if (this.saving()) {
       return false;
     }
-    if (!this._name()) {
+    if (this._isDuplicate()) {
       return false;
     }
-    if (!this._isEditMode() && !this._token()) {
+    if (this._isEditMode()) {
+      const hasNewToken = !!this._token();
+      if (!hasNewToken) {
+        return true;
+      }
+      const result = this.validationResult();
+      return result !== null && result.isValid && !!result.accountName;
+    }
+    const result = this.validationResult();
+    if (!result || !result.isValid || !result.accountName) {
       return false;
     }
-    return true;
+    return !!this._token();
   });
 
-  protected readonly _canValidate: Signal<boolean> = computed(() => {
-    if (this.validating()) {
-      return false;
+  protected readonly _tokenAriaDescribedBy: Signal<string> = computed(() => {
+    const parts = ['account-form-token-hint', 'account-token-validation', 'account-token-error'];
+    if (this._isEditMode() && this.account()?.hasToken) {
+      parts.unshift('account-form-token-on-file');
     }
-    return !!this._token() && !!this._baseUrl();
+    return parts.join(' ');
   });
 
   constructor() {
@@ -227,7 +315,6 @@ export class AccountFormComponent implements OnInit {
   ngOnInit(): void {
     const acc = this.account();
     if (acc !== null) {
-      this._name.set(acc.name);
       this._baseUrl.set(acc.baseUrl);
     }
   }
@@ -237,10 +324,56 @@ export class AccountFormComponent implements OnInit {
     this._baseUrlManuallyEdited.set(true);
   }
 
+  onBaseUrlBlur(): void {
+    if (this._pendingResolution() && this._token() && this._baseUrl()) {
+      this._pendingResolution.set(false);
+      this._triggerResolution();
+    }
+  }
+
   onDefaultBaseUrlChange(defaultUrl: string): void {
     if (!this._baseUrlManuallyEdited()) {
       this._baseUrl.set(defaultUrl);
     }
+  }
+
+  onTokenInput(value: string): void {
+    this._token.set(value);
+  }
+
+  onTokenBlur(): void {
+    const token = this._token();
+    const baseUrl = this._baseUrl();
+    if (!token) {
+      return;
+    }
+    if (!baseUrl) {
+      this._pendingResolution.set(true);
+      return;
+    }
+    this._triggerResolution();
+  }
+
+  onTokenPaste(): void {
+    setTimeout(() => {
+      const token = this._token();
+      const baseUrl = this._baseUrl();
+      if (!token || !baseUrl) {
+        return;
+      }
+      this._triggerResolution();
+    }, 0);
+  }
+
+  private _triggerResolution(): void {
+    const token = this._token();
+    const baseUrl = this._baseUrl();
+    const last = this._lastResolvedPair();
+    if (last && last.token === token && last.baseUrl === baseUrl) {
+      return;
+    }
+    this._lastResolvedPair.set({ token, baseUrl });
+    this.validateToken.emit({ token, baseUrl });
   }
 
   onSave(): void {
@@ -248,14 +381,12 @@ export class AccountFormComponent implements OnInit {
     if (acc !== null) {
       const token = this._token() || undefined;
       const request: UpdateAccountRequest = {
-        name: this._name(),
         baseUrl: this._baseUrl(),
         ...(token !== undefined ? { token } : {}),
       };
       this.save.emit(request);
     } else {
       const request: CreateAccountRequest = {
-        name: this._name(),
         providerType: this._provider(),
         baseUrl: this._baseUrl(),
         token: this._token(),
