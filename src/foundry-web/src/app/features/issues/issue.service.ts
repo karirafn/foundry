@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, QUEUED_TIER_STATES } from './issue.model';
-import { ACTIVE_STATES, RESOLVED_STATES, groupRankFor, isKnownState, isResolvedState } from './issue-lifecycle.model';
+import { ACTIVE_STATES, RESOLVED_STATES, groupRankFor, isKnownState, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
@@ -94,20 +94,20 @@ export class IssueService {
         return rankA - rankB;
       }
 
-      const aIsQueued = QUEUED_TIER_STATES.has(a.state);
-      const bIsQueued = QUEUED_TIER_STATES.has(b.state);
+      const withinRankA = withinGroupRankFor(a.state);
+      const withinRankB = withinGroupRankFor(b.state);
 
-      // Secondary: within a bucket, non-queued cards sort before queued-tier cards.
-      if (aIsQueued !== bIsQueued) {
-        return aIsQueued ? 1 : -1;
+      // Secondary: within-group tier rank ascending (queued-tier → detected → blocked).
+      if (withinRankA !== withinRankB) {
+        return withinRankA - withinRankB;
       }
 
-      // Tertiary (both queued): preserve raw server order (dispatch priority).
-      if (aIsQueued) {
+      // Tertiary (both queued-tier): preserve raw server order (dispatch priority).
+      if (QUEUED_TIER_STATES.has(a.state)) {
         return (serverIndex.get(a.id) ?? 0) - (serverIndex.get(b.id) ?? 0);
       }
 
-      // Tertiary (both non-queued): sort by detectedAt descending.
+      // Tertiary (same non-queued-tier): sort by detectedAt descending.
       return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
     });
   });

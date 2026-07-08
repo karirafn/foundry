@@ -1,4 +1,4 @@
-import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, UNGROUPED_RANK, groupRankFor, isResolvedState } from './issue-lifecycle.model';
+import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, UNGROUPED_RANK, WITHIN_GROUP_ORDER, groupRankFor, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
 import { IssueState } from './issue.model';
 
 // All lifecycle states — ineligible is an overlay, not a lifecycle state.
@@ -236,5 +236,97 @@ describe('issue-lifecycle model', () => {
     expect(resolved).toBeDefined();
     expect(resolved!.states).toContain('completed');
     expect(resolved!.states).toContain('unchanged');
+  });
+});
+
+describe('withinGroupRankFor', () => {
+  // Cycle 1: Waiting group tier ordering
+  it('should rank queued before detected in the Waiting group', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('queued')).toBeLessThan(withinGroupRankFor('detected'));
+  });
+
+  it('should rank revision_queued before detected in the Waiting group', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('revision_queued')).toBeLessThan(withinGroupRankFor('detected'));
+  });
+
+  it('should rank detected before blocked in the Waiting group', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('detected')).toBeLessThan(withinGroupRankFor('blocked'));
+  });
+
+  it('should assign equal rank to queued and revision_queued', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('queued')).toBe(withinGroupRankFor('revision_queued'));
+  });
+
+  // Cycle 2: In-progress group tier ordering
+  it('should rank in_progress before continuation_queued in the In progress group', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('in_progress')).toBeLessThan(withinGroupRankFor('continuation_queued'));
+  });
+
+  it('should rank revision_in_progress before continuation_queued in the In progress group', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('revision_in_progress')).toBeLessThan(withinGroupRankFor('continuation_queued'));
+  });
+
+  it('should assign equal rank to in_progress and revision_in_progress', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('in_progress')).toBe(withinGroupRankFor('revision_in_progress'));
+  });
+
+  // Cycle 3: Needs attention — all states equal rank
+  it('should assign equal rank to all Needs attention states', () => {
+    // Arrange
+    const needsAttentionRanks = [
+      withinGroupRankFor('review'),
+      withinGroupRankFor('failed'),
+      withinGroupRankFor('continuable_failed'),
+      withinGroupRankFor('revision_failed'),
+    ];
+
+    // Act / Assert
+    const firstRank = needsAttentionRanks[0];
+    for (const rank of needsAttentionRanks) {
+      expect(rank).toBe(firstRank);
+    }
+  });
+
+  // Cycle 4: Unlisted / ineligible returns default 0
+  it('should return 0 for ineligible (unlisted state)', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('ineligible')).toBe(0);
+  });
+
+  // Cycle 5: Partition guard — every STATE_GROUPS state appears in exactly one within-group tier
+  it('should cover every STATE_GROUPS state in exactly one within-group tier', () => {
+    // Arrange
+    const allGroupedStates = new Set<IssueState>(STATE_GROUPS.flatMap(g => g.states));
+    const seenInTiers = new Map<IssueState, number>();
+
+    // Act
+    for (const [groupLabel, tiers] of Object.entries(WITHIN_GROUP_ORDER) as [string, readonly (readonly IssueState[])[]][]) {
+      tiers.forEach((tier: readonly IssueState[], tierIndex: number) => {
+        for (const state of tier) {
+          if (seenInTiers.has(state)) {
+            throw new Error(
+              `State '${state}' appears in multiple tiers of group '${groupLabel}'`
+            );
+          }
+          seenInTiers.set(state, tierIndex);
+        }
+      });
+    }
+
+    // Assert — every grouped lifecycle state appears in exactly one within-group tier
+    const missingFromTiers: IssueState[] = [];
+    for (const state of allGroupedStates) {
+      if (!seenInTiers.has(state)) {
+        missingFromTiers.push(state);
+      }
+    }
+    expect(missingFromTiers).toEqual([]);
   });
 });
