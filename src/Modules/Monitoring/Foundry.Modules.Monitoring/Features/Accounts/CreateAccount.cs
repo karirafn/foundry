@@ -18,7 +18,6 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 internal static partial class CreateAccount
 {
     internal sealed record Command(
-        string Name,
         string ProviderType,
         string BaseUrl,
         string Token) : ICommand<AccountSummary>;
@@ -26,7 +25,6 @@ internal static partial class CreateAccount
     internal sealed partial class Validator : ICommandValidator<Command>
     {
         internal const string InvalidProviderTypeCode = "CreateAccount.InvalidProviderType";
-        internal const string NameEmptyCode = "CreateAccount.NameEmpty";
         internal const string TokenEmptyCode = "CreateAccount.TokenEmpty";
         internal const string TokenInvalidCharsCode = "CreateAccount.TokenInvalidChars";
 
@@ -35,11 +33,6 @@ internal static partial class CreateAccount
 
         public Result Validate(Command command)
         {
-            if (string.IsNullOrWhiteSpace(command.Name))
-            {
-                return new Error(NameEmptyCode, "Account name must not be empty.");
-            }
-
             Result<BaseUrlVo> baseUrlResult = BaseUrlVo.Create(command.BaseUrl);
             if (baseUrlResult is Result<BaseUrlVo>.Failure baseUrlFailure)
             {
@@ -80,15 +73,6 @@ internal static partial class CreateAccount
             Command command,
             CancellationToken cancellationToken)
         {
-            bool nameExists = await dbContext.Set<Account>()
-                .AsNoTracking()
-                .AnyAsync(a => a.Name == command.Name, cancellationToken);
-
-            if (nameExists)
-            {
-                return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(command.Name));
-            }
-
             if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
             {
                 throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
@@ -117,12 +101,27 @@ internal static partial class CreateAccount
                 return Result<AccountSummary>.Fail(AccountErrors.InvalidToken);
             }
 
+            if (string.IsNullOrWhiteSpace(tokenResponse.AccountName))
+            {
+                return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+            }
+
+            string accountName = tokenResponse.AccountName;
+
             Account account = isGitLab
-                ? GitLabAccount.Create(command.Name, command.Token, baseUrl)
-                : GitHubAccount.Create(command.Name, command.Token, baseUrl);
+                ? GitLabAccount.Create(accountName, command.Token, baseUrl)
+                : GitHubAccount.Create(accountName, command.Token, baseUrl);
 
             dbContext.Set<Account>().Add(account);
-            await dbContext.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            {
+                return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(accountName));
+            }
 
             string providerType = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
             AccountSummary summary = new(
@@ -136,10 +135,15 @@ internal static partial class CreateAccount
         }
     }
 
+    // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
+    // The monitoring module does not reference the SQLite provider directly,
+    // so we detect the violation via the exception message instead of SqliteException.SqliteErrorCode.
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
+        ex.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true;
+
     internal static class Endpoint
     {
         private sealed record RequestBody(
-            string Name,
             string ProviderType,
             string BaseUrl,
             string Token);
@@ -151,7 +155,7 @@ internal static partial class CreateAccount
                     ICommandHandler<Command, AccountSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(body.Name, body.ProviderType, body.BaseUrl, body.Token);
+                    Command command = new(body.ProviderType, body.BaseUrl, body.Token);
                     Result<AccountSummary> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Created<AccountSummary>, Conflict<string>, BadRequest<string>>>(
@@ -159,6 +163,7 @@ internal static partial class CreateAccount
                         error => error.Code switch
                         {
                             AccountErrors.DuplicateNameCode => TypedResults.Conflict(error.Message),
+                            AccountErrors.UnresolvedIdentityCode => TypedResults.BadRequest(error.Message),
                             _ => TypedResults.BadRequest(error.Message),
                         });
                 })

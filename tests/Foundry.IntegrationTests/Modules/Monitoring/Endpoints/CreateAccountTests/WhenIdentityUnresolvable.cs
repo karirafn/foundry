@@ -13,19 +13,25 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
-public sealed class WhenTokenIsInvalid : IAsyncDisposable
+public sealed class WhenIdentityUnresolvable : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenTokenIsInvalid()
+    public WhenIdentityUnresolvable()
     {
-        ValidateToken.Response invalidResponse = new(IsValid: false, IsAuthFailure: true, MissingScopes: [], AccountName: null);
+        // Token is valid (IsValid = true) but the provider returned no identity (AccountName = null).
+        ValidateToken.Response unresolvedResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: null);
+
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
-                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(invalidResponse)));
+                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(unresolvedResponse)));
         });
         _client = _factory.CreateClient();
     }
@@ -44,7 +50,7 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
         {
             providerType = "github",
             baseUrl = "https://github.com",
-            token = "ghp_invalid_token",
+            token = "ghp_test_token",
         };
 
         // Act
@@ -58,15 +64,20 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTokenMissesScopes_ReturnsBadRequest()
+    public async Task WhenAccountNameIsWhitespace_ReturnsBadRequest()
     {
-        // Arrange — token is valid auth but missing required scopes, so IsValid == false
-        ValidateToken.Response missingScopes = new(IsValid: false, IsAuthFailure: false, MissingScopes: ["repo"], AccountName: null);
+        // Arrange — whitespace account name is treated as unresolved identity
+        ValidateToken.Response whitespaceResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: "   ");
+
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
-                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(missingScopes)));
+                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(whitespaceResponse)));
         });
         using HttpClient client = factory.CreateClient();
 
@@ -74,7 +85,7 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
         {
             providerType = "github",
             baseUrl = "https://github.com",
-            token = "ghp_no_scopes_token",
+            token = "ghp_test_token",
         };
 
         // Act

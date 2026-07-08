@@ -11,7 +11,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.CreateAccountValidatorTe
 public sealed class Validate
 {
     private static CreateAccount.Command ValidCommand =>
-        new("My Account", "github", "https://github.com", "ghp_valid_token");
+        new("github", "https://github.com", "ghp_valid_token");
 
     [Fact]
     public void WhenBaseUrlIsNotHttps_ReturnsBaseUrlInvalidError()

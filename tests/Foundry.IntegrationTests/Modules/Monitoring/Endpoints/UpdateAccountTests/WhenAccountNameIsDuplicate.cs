@@ -16,17 +16,22 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 
 public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
 {
+    // Each POST derives the account name from the stub's AccountName.
+    // Use distinct identities so the two accounts get different names.
+    private const string FirstAccountName = "first-user";
+    private const string SecondAccountName = "second-user";
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
+    private readonly CountingStub _stub;
 
     public WhenAccountNameIsDuplicate()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: [], AccountName: null);
+        _stub = new CountingStub(FirstAccountName, SecondAccountName);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
-            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
-                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(validResponse)));
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(_ => _stub);
         });
         _client = _factory.CreateClient();
     }
@@ -40,10 +45,10 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
     [Fact]
     public async Task ReturnsConflict()
     {
-        // Arrange — create two accounts with different names
+        // Arrange — first POST creates an account named "first-user",
+        // second POST creates an account named "second-user".
         object firstBody = new
         {
-            name = "First Account",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_first_token",
@@ -51,7 +56,6 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
 
         object secondBody = new
         {
-            name = "Second Account",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_second_token",
@@ -72,7 +76,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         second.ShouldNotBeNull();
 
         // Try to rename second account to the first account's name
-        object updateBody = new { name = "First Account", baseUrl = "https://github.com" };
+        object updateBody = new { name = FirstAccountName, baseUrl = "https://github.com" };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
@@ -88,15 +92,28 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
     public async Task WhenNameUnchanged_DoesNotConflict()
     {
         // Arrange — updating with the same name should not trigger a conflict
+        ValidateToken.Response validResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: "octocat");
+
+        using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(validResponse)));
+        });
+        using HttpClient client = factory.CreateClient();
+
         object createBody = new
         {
-            name = "My Account",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_test_token",
         };
 
-        HttpResponseMessage createResponse = await _client.PostAsJsonAsync(
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             new Uri("/api/accounts", UriKind.Relative),
             createBody,
             TestContext.Current.CancellationToken);
@@ -105,16 +122,36 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
         created.ShouldNotBeNull();
 
-        object updateBody = new { name = "My Account", baseUrl = "https://github.com" };
+        object updateBody = new { name = "octocat", baseUrl = "https://github.com" };
 
         // Act
-        HttpResponseMessage response = await _client.PutAsJsonAsync(
+        HttpResponseMessage response = await client.PutAsJsonAsync(
             new Uri($"/api/accounts/{created.Id}", UriKind.Relative),
             updateBody,
             TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    // Returns firstName on the first HandleAsync call, secondName on all subsequent calls.
+    private sealed class CountingStub(string firstName, string secondName)
+        : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
+    {
+        private int _callCount;
+
+        public Task<Result<ValidateToken.Response>> HandleAsync(
+            ValidateToken.Query query,
+            CancellationToken cancellationToken)
+        {
+            string accountName = Interlocked.Increment(ref _callCount) == 1 ? firstName : secondName;
+            ValidateToken.Response response = new(
+                IsValid: true,
+                IsAuthFailure: false,
+                MissingScopes: [],
+                AccountName: accountName);
+            return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
+        }
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)
