@@ -92,7 +92,6 @@ const GITHUB_BASE_URL = 'https://github.com';
         </label>
         <div
           class="account-form__token-wrapper"
-          [attr.aria-busy]="validating() ? true : null"
         >
           <input
             class="account-form__input"
@@ -143,7 +142,7 @@ const GITHUB_BASE_URL = 'https://github.com';
       >
         @if (validating()) {
           <span class="account-form__validation-message">Resolving identity…</span>
-        } @else if (validationResult(); as result) {
+        } @else if (_resultVisible() && validationResult(); as result) {
           @if (result.isValid && result.accountName) {
             <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
             <span class="account-form__validation-message account-form__validation-message--valid">
@@ -166,27 +165,22 @@ const GITHUB_BASE_URL = 'https://github.com';
             </span>
           }
         }
-      </div>
-
-      @if (_isDuplicate()) {
-        <div class="account-form__duplicate-warning">
+        @if (_isDuplicate()) {
           <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
           <span class="account-form__validation-message account-form__validation-message--warning">
             An account for "{{ _resolvedAccountName() }}" already exists on {{ _resolvedHost() }}
           </span>
-        </div>
-      }
-
-      @if (_isEditMode() && _showRenameNotice()) {
-        <div class="account-form__rename-notice">
+        }
+        @if (_isEditMode() && _showRenameNotice()) {
           <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
           <span class="account-form__validation-message account-form__validation-message--warning">
             Saving will rename this account to "{{ _resolvedAccountName() }}"
           </span>
-        </div>
-      }
+        }
+      </div>
 
       <div
+        id="account-form-validation-error"
         class="account-form__validation-error"
         role="alert"
       >{{ validationError() ?? '' }}</div>
@@ -236,9 +230,14 @@ export class AccountFormComponent implements OnInit {
   /** Whether a held resolution is pending (token present but baseUrl was empty at blur time). */
   private readonly _pendingResolution: WritableSignal<boolean> = signal(false);
 
-  protected readonly _resolvedAccountName: Signal<string | null> = computed(() =>
-    this.validationResult()?.accountName ?? null
-  );
+  /** Resolved name from the current (non-stale) validation result; null when the result is stale. */
+  protected readonly _resolvedAccountName: Signal<string | null> = computed(() => {
+    const last = this._lastResolvedPair();
+    if (!last || last.token !== this._token() || last.baseUrl !== this._baseUrl()) {
+      return null;
+    }
+    return this.validationResult()?.accountName ?? null;
+  });
 
   protected readonly _resolvedHost: Signal<string> = computed(() => {
     try {
@@ -262,6 +261,15 @@ export class AccountFormComponent implements OnInit {
       return a.name.toLowerCase() === name.toLowerCase() &&
         a.baseUrl.trim().toLowerCase() === baseUrl;
     });
+  });
+
+  /** True only when the last resolved pair still matches current inputs — hides stale results after edits. */
+  protected readonly _resultVisible: Signal<boolean> = computed(() => {
+    const last = this._lastResolvedPair();
+    if (!last) {
+      return false;
+    }
+    return last.token === this._token() && last.baseUrl === this._baseUrl();
   });
 
   protected readonly _showRenameNotice: Signal<boolean> = computed(() => {
@@ -288,8 +296,14 @@ export class AccountFormComponent implements OnInit {
       if (!hasNewToken) {
         return true;
       }
+      if (!this._resultVisible()) {
+        return false;
+      }
       const result = this.validationResult();
       return result !== null && result.isValid && !!result.accountName;
+    }
+    if (!this._resultVisible()) {
+      return false;
     }
     const result = this.validationResult();
     if (!result || !result.isValid || !result.accountName) {
@@ -299,9 +313,12 @@ export class AccountFormComponent implements OnInit {
   });
 
   protected readonly _tokenAriaDescribedBy: Signal<string> = computed(() => {
-    const parts = ['account-form-token-hint', 'account-token-validation', 'account-token-error'];
-    if (this._isEditMode() && this.account()?.hasToken) {
-      parts.unshift('account-form-token-on-file');
+    const parts: string[] = ['account-token-validation', 'account-form-validation-error', 'account-token-error'];
+    if (this._isEditMode()) {
+      parts.unshift('account-form-token-hint');
+      if (this.account()?.hasToken) {
+        parts.unshift('account-form-token-on-file');
+      }
     }
     return parts.join(' ');
   });
@@ -322,6 +339,7 @@ export class AccountFormComponent implements OnInit {
   onBaseUrlInput(value: string): void {
     this._baseUrl.set(value);
     this._baseUrlManuallyEdited.set(true);
+    this._clearResolution();
   }
 
   onBaseUrlBlur(): void {
@@ -339,6 +357,7 @@ export class AccountFormComponent implements OnInit {
 
   onTokenInput(value: string): void {
     this._token.set(value);
+    this._clearResolution();
   }
 
   onTokenBlur(): void {
@@ -363,6 +382,10 @@ export class AccountFormComponent implements OnInit {
       }
       this._triggerResolution();
     }, 0);
+  }
+
+  private _clearResolution(): void {
+    this._lastResolvedPair.set(null);
   }
 
   private _triggerResolution(): void {

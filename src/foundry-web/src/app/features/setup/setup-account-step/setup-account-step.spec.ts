@@ -556,4 +556,76 @@ describe('SetupAccountStepComponent', () => {
     const radiogroup = el.querySelector('[role="radiogroup"]');
     expect(radiogroup?.getAttribute('aria-labelledby')).toBe('setup-provider-label');
   });
+
+  // Stale result is cleared when base URL is edited
+  it('should hide "Authenticated as" after base URL is edited', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+    fixture.detectChanges();
+
+    // Act — edit base URL
+    const baseUrlInput = el.querySelector('input[id="setup-base-url"]') as HTMLInputElement;
+    baseUrlInput.value = 'https://github.example.com';
+    baseUrlInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert — stale result no longer visible
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent).not.toContain('Authenticated as');
+  });
+
+  // Stale result is cleared when token input is edited
+  it('should hide "Authenticated as" after the token is edited', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+    fixture.detectChanges();
+
+    // Act — edit token
+    tokenInput.value = 'ghp_different';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert — stale result no longer visible
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent).not.toContain('Authenticated as');
+  });
+
+  // Token wrapper has no aria-busy (role-less div, attribute is inert there)
+  it('should not set aria-busy on the token wrapper div', () => {
+    // Arrange / Act
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — wrapper has no aria-busy even while validating
+    const wrapper = el.querySelector('.setup-account-step__token-wrapper') as HTMLElement;
+    expect(wrapper.getAttribute('aria-busy')).toBeNull();
+
+    // Cleanup
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+  });
 });

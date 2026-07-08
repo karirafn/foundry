@@ -115,9 +115,10 @@ $text-warning: #d29922;
     display: inline-flex;
     flex-shrink: 0;
     justify-content: center;
-    min-height: 40px;
+    min-height: 44px;
+    min-width: 44px;
     padding: var(--fd-spacing-xs);
-    width: 40px;
+    width: 44px;
 
     &:hover {
       background: var(--fd-bg-card-hover);
@@ -147,14 +148,6 @@ $text-warning: #d29922;
     font-size: 0.875rem;
     gap: var(--fd-spacing-xs);
     min-height: 1.25rem;
-  }
-
-  &__duplicate-warning,
-  &__rename-notice {
-    align-items: center;
-    display: flex;
-    font-size: 0.875rem;
-    gap: var(--fd-spacing-xs);
   }
 
   &__account-name {

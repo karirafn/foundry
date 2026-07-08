@@ -121,6 +121,7 @@ $text-warning: #d29922;
     display: flex;
     font-size: 0.875rem;
     gap: var(--fd-spacing-xs);
+    min-height: 1.25rem;
   }
 
   &__validation-dot {

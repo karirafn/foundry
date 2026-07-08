@@ -56,7 +56,6 @@ const GITHUB_BASE_URL = 'https://github.com';
           <label class="setup-account-step__field-label" for="setup-token">Token</label>
           <div
             class="setup-account-step__token-wrapper"
-            [attr.aria-busy]="_accountService.validating() ? true : null"
           >
             <input
               class="setup-account-step__input"
@@ -100,7 +99,7 @@ const GITHUB_BASE_URL = 'https://github.com';
         >
           @if (_accountService.validating()) {
             <span class="setup-account-step__validation-message">Resolving identity…</span>
-          } @else if (_accountService.validationResult(); as result) {
+          } @else if (_resultVisible() && _accountService.validationResult(); as result) {
             @if (result.isValid && result.accountName) {
               <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
               <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">
@@ -170,11 +169,23 @@ export class SetupAccountStepComponent {
 
   private readonly _hasSaved: WritableSignal<boolean> = signal(false);
 
+  /** True only when the last resolved pair still matches current inputs — hides stale results after edits. */
+  protected readonly _resultVisible: Signal<boolean> = computed(() => {
+    const last = this._lastResolvedPair();
+    if (!last) {
+      return false;
+    }
+    return last.token === this._token() && last.baseUrl === this._baseUrl();
+  });
+
   protected readonly _canCreate: Signal<boolean> = computed(() => {
     if (this._accountService.saving()) {
       return false;
     }
     if (!this._token()) {
+      return false;
+    }
+    if (!this._resultVisible()) {
       return false;
     }
     const result = this._accountService.validationResult();

@@ -356,8 +356,8 @@ describe('AccountFormComponent', () => {
     expect(emitted).toEqual({ token: 'ghp_pasted_token', baseUrl: 'https://github.com' });
   });
 
-  // Cycle 20: resolving state — aria-busy set on token wrapper
-  it('should set aria-busy="true" on token wrapper while validating', () => {
+  // Cycle 20: resolving state — live region shows "Resolving identity…"
+  it('should show "Resolving identity…" in the live region while validating', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
@@ -365,12 +365,12 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ validating: true });
 
     // Assert
-    const wrapper = el.querySelector('.account-form__token-wrapper') as HTMLElement;
-    expect(wrapper.getAttribute('aria-busy')).toBe('true');
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('Resolving identity…');
   });
 
-  // Cycle 21: idle state — no aria-busy on token wrapper
-  it('should not set aria-busy on token wrapper when not validating', () => {
+  // Cycle 21: idle state — token wrapper has no aria-busy
+  it('should not set aria-busy on token wrapper (role-less div, inert attribute)', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
@@ -413,10 +413,15 @@ describe('AccountFormComponent', () => {
   // Cycle 24: authenticated state shows green dot + "Authenticated as {name}"
   it('should show "Authenticated as {name}" with green dot when token is valid and has accountName', () => {
     // Arrange
-    // (TestBed configured in beforeEach)
+    const { el, fixture } = setup({ validationResult: VALID_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
 
-    // Act
-    const { el } = setup({ validationResult: VALID_RESULT });
+    // Act — blur triggers resolution, setting _lastResolvedPair
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
 
     // Assert
     const dot = el.querySelector('.account-form__validation-dot--valid');
@@ -428,10 +433,15 @@ describe('AccountFormComponent', () => {
   // Cycle 25: auth-failure state
   it('should show auth failure message with error dot', () => {
     // Arrange
-    // (TestBed configured in beforeEach)
+    const { el, fixture } = setup({ validationResult: AUTH_FAIL_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'bad_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
 
     // Act
-    const { el } = setup({ validationResult: AUTH_FAIL_RESULT });
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
 
     // Assert
     const dot = el.querySelector('.account-form__validation-dot--error');
@@ -443,10 +453,15 @@ describe('AccountFormComponent', () => {
   // Cycle 26: missing scopes state
   it('should show missing scopes message with warning dot', () => {
     // Arrange
-    // (TestBed configured in beforeEach)
+    const { el, fixture } = setup({ validationResult: MISSING_SCOPES_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'limited_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
 
     // Act
-    const { el } = setup({ validationResult: MISSING_SCOPES_RESULT });
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
 
     // Assert
     const dot = el.querySelector('.account-form__validation-dot--warning');
@@ -458,10 +473,15 @@ describe('AccountFormComponent', () => {
   // Cycle 27: valid-but-null identity state
   it('should show error message when token valid but accountName is null', () => {
     // Arrange
-    // (TestBed configured in beforeEach)
+    const { el, fixture } = setup({ validationResult: VALID_NULL_IDENTITY_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'anon_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
 
     // Act
-    const { el } = setup({ validationResult: VALID_NULL_IDENTITY_RESULT });
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
 
     // Assert
     const dot = el.querySelector('.account-form__validation-dot--error');
@@ -571,10 +591,12 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({ account: null, validationResult: VALID_RESULT });
 
-    // Act — set token input to match what would have been resolved
+    // Act — set token input and blur to trigger resolution
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_test_token';
     tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
 
     // Assert
@@ -589,6 +611,8 @@ describe('AccountFormComponent', () => {
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_token';
     tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
 
     // Assert
@@ -606,6 +630,8 @@ describe('AccountFormComponent', () => {
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_newtoken';
     tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
 
     // Act
@@ -635,6 +661,8 @@ describe('AccountFormComponent', () => {
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'glpat_token';
     tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
 
     // Act
@@ -720,7 +748,9 @@ describe('AccountFormComponent', () => {
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    // Act
+    // Act — blur triggers resolution, enabling Save
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
     const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
     saveBtn.click();
 
@@ -758,9 +788,13 @@ describe('AccountFormComponent', () => {
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    // Assert — duplicate warning visible
-    const warning = el.querySelector('.account-form__duplicate-warning');
-    expect(warning?.textContent).toContain('An account for "my-github" already exists on github.com');
+    // Act — blur triggers resolution, making result visible
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — duplicate warning visible inside live region
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('An account for "my-github" already exists on github.com');
 
     // Assert — save disabled
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
@@ -781,9 +815,13 @@ describe('AccountFormComponent', () => {
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    // Assert — no duplicate warning
-    const warning = el.querySelector('.account-form__duplicate-warning');
-    expect(warning).toBeNull();
+    // Act — blur triggers resolution, making result visible
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — no duplicate warning in live region
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).not.toContain('already exists');
 
     // Assert — save enabled
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
@@ -845,9 +883,13 @@ describe('AccountFormComponent', () => {
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
+    // Act — blur triggers resolution, making result visible
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
     // Assert
-    const notice = el.querySelector('.account-form__rename-notice');
-    expect(notice?.textContent).toContain('Saving will rename this account to "new-identity"');
+    const region = el.querySelector('#account-token-validation[role="status"]');
+    expect(region?.textContent).toContain('Saving will rename this account to "new-identity"');
   });
 
   // Cycle 49: token input has required attribute in add mode
@@ -874,5 +916,103 @@ describe('AccountFormComponent', () => {
     // Assert
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     expect(tokenInput.required).toBe(false);
+  });
+
+  // Cycle 51: stale validation result is hidden after base URL edit
+  it('should hide "Authenticated as" badge after the base URL field is edited', () => {
+    // Arrange
+    const { el, fixture } = setup({ validationResult: VALID_RESULT });
+
+    // Simulate that token was resolved at old baseUrl: trigger resolution then edit base URL
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Act — edit base URL to simulate host change
+    const baseUrlInput = el.querySelector('#account-form-base-url') as HTMLInputElement;
+    baseUrlInput.value = 'https://github.example.com';
+    baseUrlInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert — stale "Authenticated as" no longer visible
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).not.toContain('Authenticated as');
+  });
+
+  // Cycle 52: stale validation result is hidden after token edit
+  it('should hide "Authenticated as" badge after the token field is edited', () => {
+    // Arrange
+    const { el, fixture } = setup({ validationResult: VALID_RESULT });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Act — change the token value
+    tokenInput.value = 'ghp_different_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert — stale result no longer shown
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).not.toContain('Authenticated as');
+  });
+
+  // Cycle 53: duplicate warning is inside the live status region
+  it('should render duplicate warning inside the role="status" live region', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: null,
+      accounts: [MOCK_ACCOUNT],
+      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'my-github' },
+    });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — warning text is inside the polite live region
+    const region = el.querySelector('#account-token-validation[role="status"]');
+    expect(region?.textContent).toContain('already exists on');
+  });
+
+  // Cycle 54: rename notice is inside the live status region
+  it('should render rename notice inside the role="status" live region', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: MOCK_ACCOUNT,
+      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'new-identity' },
+    });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_newtoken';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — notice text is inside the polite live region
+    const region = el.querySelector('#account-token-validation[role="status"]');
+    expect(region?.textContent).toContain('Saving will rename this account to');
+  });
+
+  // Cycle 55: validation-error div has a stable id
+  it('should render the validation-error div with id "account-form-validation-error"', () => {
+    // Arrange / Act
+    const { el } = setup({ validationError: null });
+
+    // Assert
+    const errorEl = el.querySelector('#account-form-validation-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
   });
 });
