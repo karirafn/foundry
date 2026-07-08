@@ -17,9 +17,6 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static partial class UpdateAccount
 {
-    // Mirrors AccountConfiguration.NameMaxLength — kept in sync manually.
-    private const int AccountNameMaxLength = 200;
-
     internal sealed record Command(
         AccountId Id,
         string BaseUrl,
@@ -109,7 +106,7 @@ internal static partial class UpdateAccount
 
                 string resolvedName = tokenResponse.AccountName;
 
-                if (resolvedName.Length > AccountNameMaxLength || resolvedName.Any(char.IsControl))
+                if (resolvedName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || resolvedName.Any(char.IsControl))
                 {
                     return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
                 }

@@ -17,9 +17,6 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static partial class CreateAccount
 {
-    // Mirrors AccountConfiguration.NameMaxLength — kept in sync manually.
-    private const int AccountNameMaxLength = 200;
-
     internal sealed record Command(
         string ProviderType,
         string BaseUrl,
@@ -111,7 +108,7 @@ internal static partial class CreateAccount
 
             string accountName = tokenResponse.AccountName;
 
-            if (accountName.Length > AccountNameMaxLength || accountName.Any(char.IsControl))
+            if (accountName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || accountName.Any(char.IsControl))
             {
                 return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
             }

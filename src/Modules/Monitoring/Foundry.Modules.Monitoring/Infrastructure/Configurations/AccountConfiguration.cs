@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.DataProtection;
@@ -15,7 +16,6 @@ internal sealed class AccountConfiguration(
     ILogger<EncryptedStringConverter>? encryptedStringConverterLogger = null)
     : IEntityTypeConfiguration<Account>
 {
-    private const int NameMaxLength = 200;
     private const int TokenMaxLength = 2000;
     private const int BaseUrlMaxLength = 2000;
     private const int DiscriminatorMaxLength = 20;
@@ -31,7 +31,7 @@ internal sealed class AccountConfiguration(
             .HasColumnName("id");
 
         builder.Property(a => a.Name)
-            .HasMaxLength(NameMaxLength)
+            .HasMaxLength(AccountsDatabaseHelpers.AccountNameMaxLength)
             .IsUnicode(true)
             .IsRequired()
             .HasColumnName("name");
