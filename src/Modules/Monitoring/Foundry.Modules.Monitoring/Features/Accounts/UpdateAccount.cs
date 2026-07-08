@@ -19,13 +19,11 @@ internal static partial class UpdateAccount
 {
     internal sealed record Command(
         AccountId Id,
-        string Name,
         string BaseUrl,
         string? Token) : ICommand<AccountSummary>;
 
     internal sealed partial class Validator : ICommandValidator<Command>
     {
-        internal const string NameEmptyCode = "UpdateAccount.NameEmpty";
         internal const string TokenInvalidCharsCode = "UpdateAccount.TokenInvalidChars";
 
         [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
@@ -33,11 +31,6 @@ internal static partial class UpdateAccount
 
         public Result Validate(Command command)
         {
-            if (string.IsNullOrWhiteSpace(command.Name))
-            {
-                return new Error(NameEmptyCode, "Account name must not be empty.");
-            }
-
             Result<BaseUrlVo> baseUrlResult = BaseUrlVo.Create(command.BaseUrl);
             if (baseUrlResult is Result<BaseUrlVo>.Failure baseUrlFailure)
             {
@@ -71,20 +64,12 @@ internal static partial class UpdateAccount
                 return Result<AccountSummary>.Fail(AccountErrors.NotFound(command.Id));
             }
 
-            bool nameConflict = await dbContext.Set<Account>()
-                .AsNoTracking()
-                .Where(a => a.Name == command.Name)
-                .AnyAsync(a => a.Id != command.Id, cancellationToken);
-
-            if (nameConflict)
-            {
-                return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(command.Name));
-            }
-
             if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
             {
                 throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
             }
+
+            string accountName = account.Name;
 
             if (command.Token is not null)
             {
@@ -106,27 +91,50 @@ internal static partial class UpdateAccount
                     return Result<AccountSummary>.Fail(tokenFailure.Error);
                 }
 
-                if (tokenResult is Result<ValidateToken.Response>.Success tokenSuccess &&
-                    !tokenSuccess.Value.IsValid)
+                // tokenResult is guaranteed Success here — Failure was handled above.
+                ValidateToken.Response tokenResponse = ((Result<ValidateToken.Response>.Success)tokenResult).Value;
+
+                if (!tokenResponse.IsValid)
                 {
                     return Result<AccountSummary>.Fail(AccountErrors.InvalidToken);
                 }
+
+                if (string.IsNullOrWhiteSpace(tokenResponse.AccountName))
+                {
+                    return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+                }
+
+                string resolvedName = tokenResponse.AccountName;
+
+                if (resolvedName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || resolvedName.Any(char.IsControl))
+                {
+                    return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+                }
+
+                accountName = resolvedName;
             }
 
             switch (account)
             {
                 case GitHubAccount gitHubAccount:
-                    gitHubAccount.Update(command.Name, command.Token, baseUrl);
+                    gitHubAccount.Update(accountName, command.Token, baseUrl);
                     break;
                 case GitLabAccount gitLabAccount:
-                    gitLabAccount.Update(command.Name, command.Token, baseUrl);
+                    gitLabAccount.Update(accountName, command.Token, baseUrl);
                     break;
                 default:
                     throw new UnreachableException(
                         $"No Update handler for account type '{account.GetType().Name}'.");
             }
 
-            await dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsAccountNameDuplicateViolation(ex))
+            {
+                return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(accountName));
+            }
 
             string providerType = account is GitLabAccount ? ProviderTypes.GitLab : ProviderTypes.GitHub;
             AccountSummary summary = new(
@@ -142,7 +150,7 @@ internal static partial class UpdateAccount
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(string Name, string BaseUrl, string? Token);
+        private sealed record RequestBody(string BaseUrl, string? Token);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -153,7 +161,7 @@ internal static partial class UpdateAccount
                     CancellationToken cancellationToken) =>
                 {
                     AccountId accountId = AccountId.From(id);
-                    Command command = new(accountId, body.Name, body.BaseUrl, body.Token);
+                    Command command = new(accountId, body.BaseUrl, body.Token);
                     Result<AccountSummary> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Ok<AccountSummary>, NotFound, Conflict<string>, BadRequest<string>>>(

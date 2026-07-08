@@ -53,8 +53,10 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
+        // Use slug-derived name to avoid (base_url, name) unique constraint violations when
+        // seeding multiple accounts with the same base URL.
         GitHubAccount account = GitHubAccount.Create(
-            "my-org",
+            slug.Replace("/", "-", StringComparison.Ordinal),
             "TOKEN",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Account>().Add(account);
@@ -74,8 +76,10 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
+        // Use slug-derived name to avoid (base_url, name) unique constraint violations when
+        // seeding multiple accounts with the same base URL.
         GitHubAccount account = GitHubAccount.Create(
-            "my-org",
+            slug.Replace("/", "-", StringComparison.Ordinal),
             "TOKEN",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Account>().Add(account);

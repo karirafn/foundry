@@ -8,6 +8,7 @@ internal static class AccountErrors
     internal const string NotFoundCode = "Account.NotFound";
     internal const string DuplicateNameCode = "Account.DuplicateName";
     internal const string InvalidTokenCode = "Account.InvalidToken";
+    internal const string UnresolvedIdentityCode = "Account.UnresolvedIdentity";
 
     internal static Error NotFound(AccountId id) =>
         new(NotFoundCode, $"Account with ID '{id.Value}' was not found.");
@@ -17,4 +18,7 @@ internal static class AccountErrors
 
     internal static readonly Error InvalidToken =
         new(InvalidTokenCode, "The token is not valid or is missing required scopes.");
+
+    internal static readonly Error UnresolvedIdentity =
+        new(UnresolvedIdentityCode, "Could not resolve the account identity from the provider.");
 }

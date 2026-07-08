@@ -14,10 +14,10 @@ public sealed class Validate
     private static readonly AccountId ValidId = AccountId.New();
 
     private static UpdateAccount.Command ValidCommandWithToken =>
-        new(ValidId, "My Account", "https://github.com", "ghp_valid_token");
+        new(ValidId, "https://github.com", "ghp_valid_token");
 
     private static UpdateAccount.Command ValidCommandNoToken =>
-        new(ValidId, "My Account", "https://github.com", null);
+        new(ValidId, "https://github.com", null);
 
     [Fact]
     public void WhenBaseUrlIsNotHttps_ReturnsBaseUrlInvalidError()

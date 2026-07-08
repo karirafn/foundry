@@ -16,12 +16,19 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 
 public sealed class WhenRequestIsValid : IAsyncDisposable
 {
+    private const string ResolvedAccountName = "octocat";
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
     public WhenRequestIsValid()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: []);
+        ValidateToken.Response validResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: ResolvedAccountName);
+
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -43,7 +50,6 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         // Arrange
         object body = new
         {
-            name = "My GitHub",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_test_token",
@@ -61,7 +67,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
         account.ShouldNotBeNull();
         account.ShouldSatisfyAllConditions(
-            () => account.Name.ShouldBe("My GitHub"),
+            () => account.Name.ShouldBe(ResolvedAccountName),
             () => account.ProviderType.ShouldBe("github"),
             () => account.BaseUrl.ShouldBe("https://github.com/"),
             () => account.HasToken.ShouldBeTrue());
@@ -73,7 +79,6 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         // Arrange
         object body = new
         {
-            name = "My GitHub Mixed",
             providerType = "GitHub",
             baseUrl = "https://github.com",
             token = "ghp_test_token",
@@ -95,7 +100,6 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         // Arrange
         object body = new
         {
-            name = "My GitHub",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_test_token",
@@ -116,7 +120,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         IReadOnlyList<AccountSummary>? accounts = await getResponse.Content
             .ReadFromJsonAsync<IReadOnlyList<AccountSummary>>(TestContext.Current.CancellationToken);
         accounts.ShouldNotBeNull();
-        accounts.ShouldContain(a => a.Name == "My GitHub");
+        accounts.ShouldContain(a => a.Name == ResolvedAccountName);
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

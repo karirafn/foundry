@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
@@ -12,23 +11,27 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
+namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
-public sealed class WhenTokenIsInvalid : IAsyncDisposable
+public sealed class WhenIdentityUnresolvable : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenTokenIsInvalid()
+    public WhenIdentityUnresolvable()
     {
-        // The stub returns invalid so both create and update see it as invalid,
-        // but update is the operation under test.
-        ValidateToken.Response invalidResponse = new(IsValid: false, IsAuthFailure: true, MissingScopes: [], AccountName: null);
+        // Token is valid (IsValid = true) but the provider returned no identity (AccountName = null).
+        ValidateToken.Response unresolvedResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: null);
+
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
-                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(invalidResponse)));
+                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(unresolvedResponse)));
         });
         _client = _factory.CreateClient();
     }
@@ -40,57 +43,20 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNewTokenIsInvalid_ReturnsBadRequest()
+    public async Task ReturnsBadRequest()
     {
-        // Arrange — insert directly via DbContext since token validation blocks creation through POST
-        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
-
-        object updateBody = new
+        // Arrange
+        object body = new
         {
-            baseUrl = "https://github.com",
-            token = "ghp_invalid_token",
-        };
-
-        // Act
-        HttpResponseMessage response = await _client.PutAsJsonAsync(
-            new Uri($"/api/accounts/{accountId}", UriKind.Relative),
-            updateBody,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task WhenTokenResolvesNullIdentity_ReturnsBadRequest()
-    {
-        // Arrange — token is valid but provider returned no identity (AccountName = null)
-        ValidateToken.Response unresolvedResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            MissingScopes: [],
-            AccountName: null);
-
-        using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
-        {
-            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
-            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
-                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(unresolvedResponse)));
-        });
-        using HttpClient client = factory.CreateClient();
-
-        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(factory);
-
-        object updateBody = new
-        {
+            providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_test_token",
         };
 
         // Act
-        HttpResponseMessage response = await client.PutAsJsonAsync(
-            new Uri($"/api/accounts/{accountId}", UriKind.Relative),
-            updateBody,
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -98,7 +64,42 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTokenResolvesOversizedName_ReturnsBadRequest()
+    public async Task WhenAccountNameIsWhitespace_ReturnsBadRequest()
+    {
+        // Arrange — whitespace account name is treated as unresolved identity
+        ValidateToken.Response whitespaceResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: "   ");
+
+        using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(whitespaceResponse)));
+        });
+        using HttpClient client = factory.CreateClient();
+
+        object body = new
+        {
+            providerType = "github",
+            baseUrl = "https://github.com",
+            token = "ghp_test_token",
+        };
+
+        // Act
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task WhenAccountNameExceedsMaxLength_ReturnsBadRequest()
     {
         // Arrange — provider returns a name longer than 200 characters (max allowed length)
         string oversizedName = new('a', 201);
@@ -116,18 +117,17 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
         });
         using HttpClient client = factory.CreateClient();
 
-        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(factory);
-
-        object updateBody = new
+        object body = new
         {
+            providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_test_token",
         };
 
         // Act
-        HttpResponseMessage response = await client.PutAsJsonAsync(
-            new Uri($"/api/accounts/{accountId}", UriKind.Relative),
-            updateBody,
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -135,7 +135,7 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTokenResolvesNameWithControlCharacter_ReturnsBadRequest()
+    public async Task WhenAccountNameContainsControlCharacter_ReturnsBadRequest()
     {
         // Arrange — provider returns a name containing a control character (newline)
         ValidateToken.Response controlCharResponse = new(
@@ -152,18 +152,17 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
         });
         using HttpClient client = factory.CreateClient();
 
-        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(factory);
-
-        object updateBody = new
+        object body = new
         {
+            providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_test_token",
         };
 
         // Act
-        HttpResponseMessage response = await client.PutAsJsonAsync(
-            new Uri($"/api/accounts/{accountId}", UriKind.Relative),
-            updateBody,
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
             TestContext.Current.CancellationToken);
 
         // Assert

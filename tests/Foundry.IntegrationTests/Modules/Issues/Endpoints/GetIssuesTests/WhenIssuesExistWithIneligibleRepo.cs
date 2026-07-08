@@ -50,7 +50,9 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        // Use slug-derived name to avoid (base_url, name) unique constraint violations when
+        // seeding multiple accounts with the same base URL.
+        GitHubAccount account = GitHubAccount.Create(slug.Replace("/", "-", StringComparison.Ordinal), "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Account>().Add(account);
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();

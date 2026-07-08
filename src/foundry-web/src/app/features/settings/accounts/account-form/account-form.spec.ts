@@ -10,8 +10,45 @@ const MOCK_ACCOUNT: AccountSummary = {
   hasToken: true,
 };
 
+const MOCK_ACCOUNT_2: AccountSummary = {
+  id: '00000000-0000-0000-0000-000000000002',
+  name: 'work-github',
+  providerType: 'GitHub',
+  baseUrl: 'https://github.com',
+  hasToken: true,
+};
+
+const VALID_RESULT: TokenValidationResult = {
+  isValid: true,
+  isAuthFailure: false,
+  missingScopes: [],
+  accountName: 'octocat',
+};
+
+const AUTH_FAIL_RESULT: TokenValidationResult = {
+  isValid: false,
+  isAuthFailure: true,
+  missingScopes: [],
+  accountName: null,
+};
+
+const MISSING_SCOPES_RESULT: TokenValidationResult = {
+  isValid: false,
+  isAuthFailure: false,
+  missingScopes: ['repo', 'workflow'],
+  accountName: null,
+};
+
+const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
+  isValid: true,
+  isAuthFailure: false,
+  missingScopes: [],
+  accountName: null,
+};
+
 function setup(overrides: {
   account?: AccountSummary | null;
+  accounts?: AccountSummary[];
   saving?: boolean;
   validating?: boolean;
   validationResult?: TokenValidationResult | null;
@@ -20,6 +57,7 @@ function setup(overrides: {
 } = {}) {
   const fixture = TestBed.createComponent(AccountFormComponent);
   fixture.componentRef.setInput('account', overrides.account ?? null);
+  fixture.componentRef.setInput('accounts', overrides.accounts ?? []);
   fixture.componentRef.setInput('saving', overrides.saving ?? false);
   fixture.componentRef.setInput('validating', overrides.validating ?? false);
   fixture.componentRef.setInput('validationResult', overrides.validationResult ?? null);
@@ -91,36 +129,22 @@ describe('AccountFormComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  // Cycle 5: name field is rendered with label and input
-  it('should render the name field with label and input', () => {
+  // Cycle 5: Name field absent in create mode
+  it('should NOT render a name field in add mode', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup();
+    const { el } = setup({ account: null });
 
     // Assert
-    const label = el.querySelector('label[for="account-form-name"]');
-    expect(label).toBeTruthy();
-    const input = el.querySelector('#account-form-name') as HTMLInputElement;
-    expect(input).toBeTruthy();
-    expect(input.type).toBe('text');
+    const nameInput = el.querySelector('#account-form-name');
+    expect(nameInput).toBeNull();
+    const nameLabel = el.querySelector('label[for="account-form-name"]');
+    expect(nameLabel).toBeNull();
   });
 
-  // Cycle 6: in edit mode name field pre-filled from account
-  it('should pre-fill name from account in edit mode', () => {
-    // Arrange
-    // (TestBed configured in beforeEach)
-
-    // Act
-    const { el } = setup({ account: MOCK_ACCOUNT });
-
-    // Assert
-    const input = el.querySelector('#account-form-name') as HTMLInputElement;
-    expect(input.value).toBe('my-github');
-  });
-
-  // Cycle 7: base URL field rendered with label
+  // Cycle 6: base URL field rendered with label
   it('should render the base URL field with label and input', () => {
     // Arrange
     // (TestBed configured in beforeEach)
@@ -135,7 +159,7 @@ describe('AccountFormComponent', () => {
     expect(input).toBeTruthy();
   });
 
-  // Cycle 8: base URL defaults to https://github.com in add mode
+  // Cycle 7: base URL defaults to https://github.com in add mode
   it('should default base URL to https://github.com in add mode', () => {
     // Arrange
     // (TestBed configured in beforeEach)
@@ -148,7 +172,7 @@ describe('AccountFormComponent', () => {
     expect(input.value).toBe('https://github.com');
   });
 
-  // Cycle 9: base URL pre-filled from account in edit mode
+  // Cycle 8: base URL pre-filled from account in edit mode
   it('should pre-fill base URL from account in edit mode', () => {
     // Arrange
     // (TestBed configured in beforeEach)
@@ -161,7 +185,7 @@ describe('AccountFormComponent', () => {
     expect(input.value).toBe('https://github.com');
   });
 
-  // Cycle 10: provider selector component is shown in add mode
+  // Cycle 9: provider selector component is shown in add mode
   it('should show fd-provider-selector in add mode', () => {
     // Arrange
     // (TestBed configured in beforeEach)
@@ -176,7 +200,7 @@ describe('AccountFormComponent', () => {
     expect(radios.length).toBe(2);
   });
 
-  // Cycle 11: changing provider to GitLab updates the base URL
+  // Cycle 10: changing provider to GitLab updates the base URL
   it('should update base URL to https://gitlab.com when GitLab is selected', () => {
     // Arrange
     const { el, fixture } = setup({ account: null });
@@ -192,7 +216,7 @@ describe('AccountFormComponent', () => {
     expect(baseUrlInput.value).toBe('https://gitlab.com');
   });
 
-  // Cycle 12: edit mode shows provider badge, not selector
+  // Cycle 11: edit mode shows provider badge, not selector
   it('should show provider badge in edit mode, not the selector', () => {
     // Arrange
     // (TestBed configured in beforeEach)
@@ -208,24 +232,21 @@ describe('AccountFormComponent', () => {
     expect(selector).toBeNull();
   });
 
-  // Cycle 13: token field rendered with label
-  it('should render the token field with label and password input', () => {
+  // Cycle 12: token field label "Token" in create mode
+  it('should label the token field "Token" in add mode', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup();
+    const { el } = setup({ account: null });
 
     // Assert
     const label = el.querySelector('label[for="account-form-token"]');
-    expect(label).toBeTruthy();
-    const input = el.querySelector('#account-form-token') as HTMLInputElement;
-    expect(input).toBeTruthy();
-    expect(input.type).toBe('password');
+    expect(label?.textContent?.trim()).toBe('Token');
   });
 
-  // Cycle 14: edit mode token hint is shown
-  it('should show "Leave empty to keep current token" hint in edit mode', () => {
+  // Cycle 13: token field label "Replace token" in edit mode
+  it('should label the token field "Replace token" in edit mode', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
@@ -233,8 +254,21 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
-    const hint = el.querySelector('.account-form__field-hint');
-    expect(hint?.textContent).toContain('Leave empty to keep current token');
+    const label = el.querySelector('label[for="account-form-token"]');
+    expect(label?.textContent?.trim()).toBe('Replace token');
+  });
+
+  // Cycle 14: edit mode token hint shown
+  it('should show "Leave empty to keep the current token" hint in edit mode', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ account: MOCK_ACCOUNT });
+
+    // Assert
+    const hint = el.querySelector('#account-form-token-hint');
+    expect(hint?.textContent).toContain('Leave empty to keep the current token');
   });
 
   // Cycle 15: toggle visibility button shows/hides token
@@ -253,8 +287,8 @@ describe('AccountFormComponent', () => {
     expect(input.type).toBe('text');
   });
 
-  // Cycle 16: validate token button rendered
-  it('should render the validate token button', () => {
+  // Cycle 16: no "Validate Token" button (replaced by auto-resolve)
+  it('should NOT render the validate token button', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
@@ -263,12 +297,11 @@ describe('AccountFormComponent', () => {
 
     // Assert
     const btn = el.querySelector('.account-form__validate-btn');
-    expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toBe('Validate Token');
+    expect(btn).toBeNull();
   });
 
-  // Cycle 17: clicking validate emits validateToken with token and baseUrl
-  it('should emit validateToken with token and baseUrl when validate is clicked', () => {
+  // Cycle 17: token blur with non-empty token + baseUrl emits validateToken
+  it('should emit validateToken with token and baseUrl when token input loses focus', () => {
     // Arrange
     const { el, component, fixture } = setup();
     let emitted: { token: string; baseUrl: string } | undefined;
@@ -280,28 +313,51 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Act
-    const validateBtn = el.querySelector('.account-form__validate-btn') as HTMLButtonElement;
-    validateBtn.click();
+    tokenInput.dispatchEvent(new Event('blur'));
 
     // Assert
     expect(emitted).toEqual({ token: 'ghp_test_token', baseUrl: 'https://github.com' });
   });
 
-  // Cycle 18: validate button is disabled when token is empty
-  it('should disable validate button when token is empty', () => {
+  // Cycle 18: token blur with empty token does NOT emit
+  it('should not emit validateToken when token is empty on blur', () => {
     // Arrange
-    // (TestBed configured in beforeEach)
+    const { el, component } = setup();
+    let emitted: unknown;
+    component.validateToken.subscribe((v: unknown) => { emitted = v; });
 
-    // Act
-    const { el } = setup();
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+
+    // Act — blur with no value
+    tokenInput.dispatchEvent(new Event('blur'));
 
     // Assert
-    const btn = el.querySelector('.account-form__validate-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    expect(emitted).toBeUndefined();
   });
 
-  // Cycle 19: validating state - button shows "Validating..."
-  it('should show "Validating..." and disable validate button when validating', () => {
+  // Cycle 19: paste on token field emits validateToken on next tick
+  it('should emit validateToken after paste on token field (next tick, baseUrl present)', async () => {
+    // Arrange
+    const { el, component, fixture } = setup();
+    let emitted: { token: string; baseUrl: string } | undefined;
+    component.validateToken.subscribe((v: { token: string; baseUrl: string }) => { emitted = v; });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_pasted_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('paste'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    fixture.detectChanges();
+
+    // Assert
+    expect(emitted).toEqual({ token: 'ghp_pasted_token', baseUrl: 'https://github.com' });
+  });
+
+  // Cycle 20: resolving state — live region shows "Resolving identity…"
+  it('should show "Resolving identity…" in the live region while validating', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
@@ -309,282 +365,145 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ validating: true });
 
     // Assert
-    const btn = el.querySelector('.account-form__validate-btn') as HTMLButtonElement;
-    expect(btn.textContent?.trim()).toBe('Validating...');
-    expect(btn.disabled).toBe(true);
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('Resolving identity…');
   });
 
-  // Cycle 20: validation result - valid
-  it('should show valid validation result with green dot', () => {
+  // Cycle 21: idle state — token wrapper has no aria-busy
+  it('should not set aria-busy on token wrapper (role-less div, inert attribute)', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup({
-      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [] },
-    });
+    const { el } = setup({ validating: false });
 
     // Assert
-    const result = el.querySelector('.account-form__validation-result');
-    expect(result).toBeTruthy();
-    const dot = el.querySelector('.account-form__validation-dot--valid');
-    expect(dot).toBeTruthy();
-    const msg = el.querySelector('.account-form__validation-message--valid');
-    expect(msg?.textContent).toContain('Token is valid');
+    const wrapper = el.querySelector('.account-form__token-wrapper') as HTMLElement;
+    expect(wrapper.getAttribute('aria-busy')).toBeNull();
   });
 
-  // Cycle 21: validation result - auth failure
-  it('should show auth failure validation result with error dot', () => {
-    // Arrange
-    // (TestBed configured in beforeEach)
-
-    // Act
-    const { el } = setup({
-      validationResult: { isValid: false, isAuthFailure: true, missingScopes: [] },
-    });
-
-    // Assert
-    const dot = el.querySelector('.account-form__validation-dot--error');
-    expect(dot).toBeTruthy();
-    const msg = el.querySelector('.account-form__validation-message--error');
-    expect(msg?.textContent).toContain('Authentication failed');
-  });
-
-  // Cycle 22: validation result - missing scopes
-  it('should show missing scopes validation result with warning dot', () => {
-    // Arrange
-    // (TestBed configured in beforeEach)
-
-    // Act
-    const { el } = setup({
-      validationResult: { isValid: false, isAuthFailure: false, missingScopes: ['repo', 'workflow'] },
-    });
-
-    // Assert
-    const dot = el.querySelector('.account-form__validation-dot--warning');
-    expect(dot).toBeTruthy();
-    const msg = el.querySelector('.account-form__validation-message--warning');
-    expect(msg?.textContent).toContain('Missing required scopes');
-    expect(msg?.textContent).toContain('repo');
-    expect(msg?.textContent).toContain('workflow');
-  });
-
-  // Cycle 23: no validation result content shown when null
-  it('should not show validation result content when validationResult is null', () => {
+  // Cycle 22: status region always present
+  it('should render the status region at all times', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
     const { el } = setup({ validationResult: null });
 
-    // Assert — wrapper is always present (aria-live must persist), content is empty
-    const result = el.querySelector('.account-form__validation-result');
-    expect(result).toBeTruthy();
-    const dot = el.querySelector('.account-form__validation-dot');
-    expect(dot).toBeNull();
+    // Assert
+    const region = el.querySelector('#account-token-validation');
+    expect(region).toBeTruthy();
+    expect(region?.getAttribute('role')).toBe('status');
+    expect(region?.getAttribute('aria-live')).toBe('polite');
   });
 
-  // Cycle 24: server error is shown
-  it('should show save error when saveError is set', () => {
+  // Cycle 23: resolving state shows "Resolving identity…"
+  it('should show "Resolving identity…" in the status region while validating', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup({ saveError: 'Something went wrong' });
+    const { el } = setup({ validating: true });
 
     // Assert
-    const errorEl = el.querySelector('.account-form__save-error');
-    expect(errorEl).toBeTruthy();
-    expect(errorEl?.getAttribute('role')).toBe('alert');
-    expect(errorEl?.textContent).toContain('Something went wrong');
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('Resolving identity…');
   });
 
-  // Cycle 25: no error content shown when saveError null
-  it('should not show save error content when saveError is null', () => {
+  // Cycle 24: authenticated state shows green dot + "Authenticated as {name}"
+  it('should show "Authenticated as {name}" with green dot when token is valid and has accountName', () => {
+    // Arrange
+    const { el, fixture } = setup({ validationResult: VALID_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act — blur triggers resolution, setting _lastResolvedPair
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const dot = el.querySelector('.account-form__validation-dot--valid');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--valid');
+    expect(msg?.textContent).toContain('Authenticated as octocat');
+  });
+
+  // Cycle 25: auth-failure state
+  it('should show auth failure message with error dot', () => {
+    // Arrange
+    const { el, fixture } = setup({ validationResult: AUTH_FAIL_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'bad_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const dot = el.querySelector('.account-form__validation-dot--error');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--error');
+    expect(msg?.textContent).toContain('Authentication failed — check that the token is correct');
+  });
+
+  // Cycle 26: missing scopes state
+  it('should show missing scopes message with warning dot', () => {
+    // Arrange
+    const { el, fixture } = setup({ validationResult: MISSING_SCOPES_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'limited_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const dot = el.querySelector('.account-form__validation-dot--warning');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--warning');
+    expect(msg?.textContent).toContain('Missing required scopes: repo, workflow');
+  });
+
+  // Cycle 27: valid-but-null identity state
+  it('should show error message when token valid but accountName is null', () => {
+    // Arrange
+    const { el, fixture } = setup({ validationResult: VALID_NULL_IDENTITY_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'anon_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const dot = el.querySelector('.account-form__validation-dot--error');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--error');
+    expect(msg?.textContent).toContain('Token is valid, but the account identity could not be resolved from the provider');
+  });
+
+  // Cycle 28: idle status region empty when validationResult null and not validating
+  it('should show empty status region when validationResult is null and not validating', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup({ saveError: null });
-
-    // Assert — wrapper always present, but inner content is empty
-    const errorEl = el.querySelector('.account-form__save-error');
-    expect(errorEl?.textContent?.trim()).toBeFalsy();
-  });
-
-  // Cycle 26: save button is rendered
-  it('should render the save button', () => {
-    // Arrange
-    // (TestBed configured in beforeEach)
-
-    // Act
-    const { el } = setup();
+    const { el } = setup({ validationResult: null, validating: false });
 
     // Assert
-    const btn = el.querySelector('.account-form__save-btn');
-    expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toBe('Save');
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent?.trim()).toBeFalsy();
   });
 
-  // Cycle 27: save button disabled when name empty in add mode
-  it('should disable save button when name is empty', () => {
-    // Arrange
-    // (TestBed configured in beforeEach)
-
-    // Act
-    const { el } = setup({ account: null });
-
-    // Assert
-    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-  });
-
-  // Cycle 28: save button disabled when token empty in add mode (even with name)
-  it('should disable save button when token is empty in add mode', () => {
-    // Arrange
-    const { el, fixture } = setup({ account: null });
-    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
-    nameInput.value = 'my-account';
-    nameInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    // Assert
-    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-  });
-
-  // Cycle 29: save button disabled while saving
-  it('should disable save button when saving is true', () => {
-    // Arrange
-    const { el, fixture } = setup({ account: null, saving: true });
-    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
-    nameInput.value = 'my-account';
-    nameInput.dispatchEvent(new Event('input'));
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_token';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    // Assert
-    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-  });
-
-  // Cycle 30: save emits CreateAccountRequest in add mode
-  it('should emit CreateAccountRequest on save in add mode', () => {
-    // Arrange
-    const { el, component, fixture } = setup({ account: null });
-    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
-    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
-
-    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
-    nameInput.value = 'new-account';
-    nameInput.dispatchEvent(new Event('input'));
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_newtoken';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    // Act
-    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    saveBtn.click();
-
-    // Assert
-    expect(emitted).toEqual({
-      name: 'new-account',
-      providerType: 'GitHub',
-      baseUrl: 'https://github.com',
-      token: 'ghp_newtoken',
-    });
-  });
-
-  // Cycle 30b: save emits CreateAccountRequest with GitLab provider when GitLab is selected
-  it('should emit CreateAccountRequest with GitLab providerType when GitLab is selected', () => {
-    // Arrange
-    const { el, component, fixture } = setup({ account: null });
-    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
-    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
-
-    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
-    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
-    gitlabRadio.click();
-    fixture.detectChanges();
-
-    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
-    nameInput.value = 'my-gitlab';
-    nameInput.dispatchEvent(new Event('input'));
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'glpat_token';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    // Act
-    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    saveBtn.click();
-
-    // Assert
-    expect(emitted).toEqual({
-      name: 'my-gitlab',
-      providerType: 'GitLab',
-      baseUrl: 'https://gitlab.com',
-      token: 'glpat_token',
-    });
-  });
-
-  // Cycle 31: save emits UpdateAccountRequest in edit mode
-  it('should emit UpdateAccountRequest on save in edit mode', () => {
-    // Arrange
-    const { el, component, fixture } = setup({ account: MOCK_ACCOUNT });
-    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
-    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
-
-    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
-    nameInput.value = 'renamed-account';
-    nameInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    // Act
-    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    saveBtn.click();
-
-    // Assert
-    expect(emitted).toEqual({
-      name: 'renamed-account',
-      baseUrl: 'https://github.com',
-    });
-  });
-
-  // Cycle 32: save in edit mode with token emits token in UpdateAccountRequest
-  it('should include token in UpdateAccountRequest when token is entered in edit mode', () => {
-    // Arrange
-    const { el, component, fixture } = setup({ account: MOCK_ACCOUNT });
-    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
-    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
-
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_newtoken';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    // Act
-    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    saveBtn.click();
-
-    // Assert
-    expect((emitted as UpdateAccountRequest).token).toBe('ghp_newtoken');
-  });
-
-  // Cycle 33: save button enabled in edit mode with name but empty token
-  it('should enable save button in edit mode when name is filled but token is empty', () => {
-    // Arrange
-    const { el } = setup({ account: MOCK_ACCOUNT });
-
-    // Assert
-    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(false);
-  });
-
-  // Cycle 34: validationError is shown when set
+  // Cycle 29: validation error (network) is shown in the alert region
   it('should show validation error when validationError is set', () => {
     // Arrange
     // (TestBed configured in beforeEach)
@@ -599,47 +518,166 @@ describe('AccountFormComponent', () => {
     expect(errorEl?.textContent).toContain('Token validation failed');
   });
 
-  // Cycle 35: no validationError content shown when null
-  it('should not show validation error content when validationError is null', () => {
+  // Cycle 30: save error is shown
+  it('should show save error when saveError is set', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup({ validationError: null });
-
-    // Assert — wrapper always present, content is empty
-    const errorEl = el.querySelector('.account-form__validation-error');
-    expect(errorEl?.textContent?.trim()).toBeFalsy();
-  });
-
-  // Cycle 36: name input has required attribute
-  it('should have required attribute on name input', () => {
-    // Arrange
-    // (TestBed configured in beforeEach)
-
-    // Act
-    const { el } = setup({ account: null });
+    const { el } = setup({ saveError: 'Something went wrong' });
 
     // Assert
-    const nameInput = el.querySelector('#account-form-name') as HTMLInputElement;
-    expect(nameInput.required).toBe(true);
+    const errorEl = el.querySelector('.account-form__save-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
+    expect(errorEl?.textContent).toContain('Something went wrong');
   });
 
-  // Cycle 37: token input has required attribute in add mode
-  it('should have required attribute on token input in add mode', () => {
+  // Cycle 31: save button rendered
+  it('should render the save button', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup({ account: null });
+    const { el } = setup();
 
     // Assert
+    const btn = el.querySelector('.account-form__save-btn');
+    expect(btn).toBeTruthy();
+    expect(btn?.textContent?.trim()).toBe('Save');
+  });
+
+  // Cycle 32: save disabled in create mode without valid resolution
+  it('should disable save button in add mode without a valid resolved accountName', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ account: null, validationResult: null });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle 33: save disabled in create mode when auth failed
+  it('should disable save button in add mode when auth failed', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ account: null, validationResult: AUTH_FAIL_RESULT });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle 34: save disabled in create mode when valid but null identity
+  it('should disable save button in add mode when identity could not be resolved', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ account: null, validationResult: VALID_NULL_IDENTITY_RESULT });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle 35: save enabled in create mode with valid result and accountName
+  it('should enable save button in add mode when valid and accountName is resolved', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: VALID_RESULT });
+
+    // Act — set token input and blur to trigger resolution
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    expect(tokenInput.required).toBe(true);
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
   });
 
-  // Cycle 38: token input does not have required attribute in edit mode
-  it('should not have required attribute on token input in edit mode', () => {
+  // Cycle 36: save disabled while saving
+  it('should disable save button when saving is true', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, saving: true, validationResult: VALID_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle 37: save emits CreateAccountRequest without name in add mode
+  it('should emit CreateAccountRequest without name on save in add mode', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ account: null, validationResult: VALID_RESULT });
+    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
+    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_newtoken';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Act
+    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    expect(emitted).toEqual({
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      token: 'ghp_newtoken',
+    });
+  });
+
+  // Cycle 37b: save emits CreateAccountRequest with GitLab provider when GitLab selected
+  it('should emit CreateAccountRequest with GitLab providerType when GitLab is selected', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ account: null, validationResult: VALID_RESULT });
+    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
+    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
+
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Act
+    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    expect((emitted as CreateAccountRequest).providerType).toBe('GitLab');
+    expect((emitted as CreateAccountRequest).token).toBe('glpat_token');
+    const r = emitted as unknown as Record<string, unknown>;
+    expect(r['name']).toBeUndefined();
+  });
+
+  // Cycle 38: edit mode — token-on-file panel shown when hasToken + name
+  it('should show token-on-file panel in edit mode when account has token', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
@@ -647,11 +685,150 @@ describe('AccountFormComponent', () => {
     const { el } = setup({ account: MOCK_ACCOUNT });
 
     // Assert
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    expect(tokenInput.required).toBe(false);
+    const panel = el.querySelector('.account-form__token-on-file');
+    expect(panel).toBeTruthy();
+    expect(panel?.textContent).toContain('Token on file — authenticated as my-github');
   });
 
-  // Cycle 39: live-region divs render unconditionally so screen readers announce changes
+  // Cycle 39: edit mode — token-on-file panel NOT shown when hasToken is false
+  it('should not show token-on-file panel when account has no token', () => {
+    // Arrange
+    const accountWithoutToken: AccountSummary = { ...MOCK_ACCOUNT, hasToken: false };
+
+    // Act
+    const { el } = setup({ account: accountWithoutToken });
+
+    // Assert
+    const panel = el.querySelector('.account-form__token-on-file');
+    expect(panel).toBeNull();
+  });
+
+  // Cycle 40: save enabled in edit mode with no new token (name unchanged)
+  it('should enable save button in edit mode when no new token is entered', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ account: MOCK_ACCOUNT });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+  });
+
+  // Cycle 41: save emits UpdateAccountRequest without name, without token (edit mode, no new token)
+  it('should emit UpdateAccountRequest without name and without token when no replacement token entered', () => {
+    // Arrange
+    const { el, component } = setup({ account: MOCK_ACCOUNT });
+    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
+    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
+
+    // Act
+    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    expect(emitted).toEqual({
+      baseUrl: 'https://github.com',
+    });
+    const r = emitted as unknown as Record<string, unknown>;
+    expect(r['name']).toBeUndefined();
+    expect(r['token']).toBeUndefined();
+  });
+
+  // Cycle 42: edit mode with new token includes token in UpdateAccountRequest
+  it('should include token in UpdateAccountRequest when replacement token entered', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ account: MOCK_ACCOUNT, validationResult: VALID_RESULT });
+    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
+    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_newtoken';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act — blur triggers resolution, enabling Save
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    expect((emitted as UpdateAccountRequest).token).toBe('ghp_newtoken');
+    const r = emitted as unknown as Record<string, unknown>;
+    expect(r['name']).toBeUndefined();
+  });
+
+  // Cycle 43: edit mode with new token and pending resolution — save disabled
+  it('should disable save in edit mode when new token entered but no valid resolution yet', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: MOCK_ACCOUNT, validationResult: null });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_newtoken';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle 44: duplicate detection in create mode — duplicate warning shown, save disabled
+  it('should show duplicate warning and disable save when account with same name+baseUrl exists in create mode', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: null,
+      accounts: [MOCK_ACCOUNT],
+      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'my-github' },
+    });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act — blur triggers resolution, making result visible
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — duplicate warning visible inside live region
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('An account for "my-github" already exists on github.com');
+
+    // Assert — save disabled
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle 45: duplicate detection excludes self in edit mode
+  it('should NOT show duplicate warning when the matching account is the account being edited', () => {
+    // Arrange — resolves to same name/baseUrl as MOCK_ACCOUNT, but MOCK_ACCOUNT is the account being edited
+    const { el, fixture } = setup({
+      account: MOCK_ACCOUNT,
+      accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
+      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'my-github' },
+    });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act — blur triggers resolution, making result visible
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — no duplicate warning in live region
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).not.toContain('already exists');
+
+    // Assert — save enabled
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+  });
+
+  // Cycle 46: live-region divs render unconditionally so screen readers announce changes
   it('should render validation-error div even when validationError is null', () => {
     // Arrange
     // (TestBed configured in beforeEach)
@@ -678,7 +855,7 @@ describe('AccountFormComponent', () => {
     expect(errorEl?.getAttribute('role')).toBe('alert');
   });
 
-  // Cycle 40: inner radiogroup inside fd-provider-selector is labelled via aria-labelledby
+  // Cycle 47: inner radiogroup inside fd-provider-selector is labelled via aria-labelledby
   it('should associate the Provider label with the inner radiogroup via aria-labelledby', () => {
     // Arrange
     // (TestBed configured in beforeEach)
@@ -691,5 +868,151 @@ describe('AccountFormComponent', () => {
     expect(labelSpan).toBeTruthy();
     const radiogroup = el.querySelector('[role="radiogroup"]');
     expect(radiogroup?.getAttribute('aria-labelledby')).toBe('account-form-provider-label');
+  });
+
+  // Cycle 48: edit mode rename notice shown when resolved identity differs from account.name
+  it('should show rename notice in edit mode when resolved identity differs from account name', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: MOCK_ACCOUNT,
+      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'new-identity' },
+    });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_newtoken';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act — blur triggers resolution, making result visible
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const region = el.querySelector('#account-token-validation[role="status"]');
+    expect(region?.textContent).toContain('Saving will rename this account to "new-identity"');
+  });
+
+  // Cycle 49: token input has required attribute in add mode
+  it('should have required attribute on token input in add mode', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ account: null });
+
+    // Assert
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    expect(tokenInput.required).toBe(true);
+  });
+
+  // Cycle 50: token input does not have required attribute in edit mode
+  it('should not have required attribute on token input in edit mode', () => {
+    // Arrange
+    // (TestBed configured in beforeEach)
+
+    // Act
+    const { el } = setup({ account: MOCK_ACCOUNT });
+
+    // Assert
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    expect(tokenInput.required).toBe(false);
+  });
+
+  // Cycle 51: stale validation result is hidden after base URL edit
+  it('should hide "Authenticated as" badge after the base URL field is edited', () => {
+    // Arrange
+    const { el, fixture } = setup({ validationResult: VALID_RESULT });
+
+    // Simulate that token was resolved at old baseUrl: trigger resolution then edit base URL
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Act — edit base URL to simulate host change
+    const baseUrlInput = el.querySelector('#account-form-base-url') as HTMLInputElement;
+    baseUrlInput.value = 'https://github.example.com';
+    baseUrlInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert — stale "Authenticated as" no longer visible
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).not.toContain('Authenticated as');
+  });
+
+  // Cycle 52: stale validation result is hidden after token edit
+  it('should hide "Authenticated as" badge after the token field is edited', () => {
+    // Arrange
+    const { el, fixture } = setup({ validationResult: VALID_RESULT });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Act — change the token value
+    tokenInput.value = 'ghp_different_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert — stale result no longer shown
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).not.toContain('Authenticated as');
+  });
+
+  // Cycle 53: duplicate warning is inside the live status region
+  it('should render duplicate warning inside the role="status" live region', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: null,
+      accounts: [MOCK_ACCOUNT],
+      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'my-github' },
+    });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — warning text is inside the polite live region
+    const region = el.querySelector('#account-token-validation[role="status"]');
+    expect(region?.textContent).toContain('already exists on');
+  });
+
+  // Cycle 54: rename notice is inside the live status region
+  it('should render rename notice inside the role="status" live region', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: MOCK_ACCOUNT,
+      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'new-identity' },
+    });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_newtoken';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — notice text is inside the polite live region
+    const region = el.querySelector('#account-token-validation[role="status"]');
+    expect(region?.textContent).toContain('Saving will rename this account to');
+  });
+
+  // Cycle 55: validation-error div has a stable id
+  it('should render the validation-error div with id "account-form-validation-error"', () => {
+    // Arrange / Act
+    const { el } = setup({ validationError: null });
+
+    // Assert
+    const errorEl = el.querySelector('#account-form-validation-error');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.getAttribute('role')).toBe('alert');
   });
 });

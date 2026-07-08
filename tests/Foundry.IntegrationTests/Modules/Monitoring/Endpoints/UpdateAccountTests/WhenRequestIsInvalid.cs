@@ -21,7 +21,7 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
     public WhenRequestIsInvalid()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: []);
+        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: [], AccountName: "octocat");
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -41,7 +41,6 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     {
         object createBody = new
         {
-            name = "My GitHub",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_test_token",
@@ -59,28 +58,11 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNameIsEmpty_ReturnsBadRequest()
-    {
-        // Arrange
-        Guid id = await SeedAccountAsync();
-        object body = new { name = "", baseUrl = "https://github.com" };
-
-        // Act
-        HttpResponseMessage response = await _client.PutAsJsonAsync(
-            new Uri($"/api/accounts/{id}", UriKind.Relative),
-            body,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task WhenBaseUrlIsNotHttps_ReturnsBadRequest()
     {
         // Arrange
         Guid id = await SeedAccountAsync();
-        object body = new { name = "My GitHub", baseUrl = "http://github.com" };
+        object body = new { baseUrl = "http://github.com" };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
@@ -97,7 +79,7 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     {
         // Arrange
         Guid id = await SeedAccountAsync();
-        object body = new { name = "My GitHub", baseUrl = "https://attacker@github.com" };
+        object body = new { baseUrl = "https://attacker@github.com" };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
@@ -114,7 +96,7 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     {
         // Arrange
         Guid id = await SeedAccountAsync();
-        object body = new { name = "My GitHub", baseUrl = "not-a-url" };
+        object body = new { baseUrl = "not-a-url" };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
@@ -450,14 +451,17 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             return Result<TokenValidationResult>.Fail(ErrorFromNonSuccess(response));
         }
 
+        string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        string? accountName = DeserializeLogin(responseBody);
+
         if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
         {
-            return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated([]));
+            return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated([], accountName));
         }
 
         IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
 
-        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missingScopes));
+        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missingScopes, accountName));
     }
 
     public async Task<Result<IReadOnlyList<AvailableRepository>>> ListRepositoriesAsync(
@@ -779,6 +783,20 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return string.Concat(body.AsSpan(0, MaxCommentBodyLength), TruncatedSuffix);
     }
 
+    private static string? DeserializeLogin(string responseBody)
+    {
+        try
+        {
+            GitHubUserDto? dto = JsonSerializer.Deserialize<GitHubUserDto>(responseBody, JsonOptions);
+            string? login = dto?.Login;
+            return string.IsNullOrEmpty(login) ? null : login;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
     private static string? SanitizeFilePath(string? path)
     {
         if (path is null)
@@ -833,7 +851,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string HtmlUrl,
         IReadOnlyList<GitHubLabelDto> Labels);
 
-    private sealed record GitHubUserDto(string Login);
+    private sealed record GitHubUserDto([property: JsonPropertyName("login")] string Login);
 
     private sealed record GitHubLabelDto(string Name);
 
@@ -881,28 +899,6 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
-
-internal sealed class TokenValidationResult
-{
-    private TokenValidationResult(bool isValid, bool isAuthFailure, IReadOnlyList<string> missingScopes)
-    {
-        IsValid = isValid;
-        IsAuthFailure = isAuthFailure;
-        MissingScopes = missingScopes;
-    }
-
-    public bool IsValid { get; }
-
-    public bool IsAuthFailure { get; }
-
-    public IReadOnlyList<string> MissingScopes { get; }
-
-    public static TokenValidationResult Validated(IReadOnlyList<string> missingScopes) =>
-        new(missingScopes.Count == 0, false, missingScopes);
-
-    public static TokenValidationResult AuthFailure() =>
-        new(false, true, []);
-}
 
 internal sealed record AvailableRepository(string Slug, bool IsPrivate);
 

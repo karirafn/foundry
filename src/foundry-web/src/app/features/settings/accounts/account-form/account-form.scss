@@ -115,9 +115,10 @@ $text-warning: #d29922;
     display: inline-flex;
     flex-shrink: 0;
     justify-content: center;
-    min-height: 40px;
+    min-height: 44px;
+    min-width: 44px;
     padding: var(--fd-spacing-xs);
-    width: 40px;
+    width: 44px;
 
     &:hover {
       background: var(--fd-bg-card-hover);
@@ -130,41 +131,34 @@ $text-warning: #d29922;
     }
   }
 
-  &__validate-btn {
+  &__token-on-file {
     align-items: center;
-    background: transparent;
-    border: 1px solid var(--fd-border-default);
+    background: var(--fd-bg-success-subtle, rgba(22, 163, 74, 0.12));
+    border: 1px solid rgba(22, 163, 74, 0.25);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-primary);
-    cursor: pointer;
-    display: inline-flex;
-    flex-shrink: 0;
+    display: flex;
     font-size: 0.875rem;
-    min-height: 40px;
+    gap: var(--fd-spacing-xs);
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
-    white-space: nowrap;
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
-    &:not(:disabled):hover {
-      background: var(--fd-bg-card-hover);
-      border-color: var(--fd-text-secondary);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
   }
 
   &__validation-result {
-    align-items: center;
     display: flex;
-    gap: var(--fd-spacing-xs);
+    flex-direction: column;
     font-size: 0.875rem;
+    gap: 4px;
+    min-height: 1.25rem;
+  }
+
+  &__validation-block {
+    align-items: center;
+    display: inline-flex;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__account-name {
+    font-family: var(--fd-font-mono);
+    font-weight: 600;
   }
 
   &__validation-dot {
