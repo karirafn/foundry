@@ -105,7 +105,6 @@ describe('SetupAccountStepComponent', () => {
     const req = httpMock.expectOne('/api/accounts');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
-      name: 'My GitHub',
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       token: 'ghp_token',
@@ -144,7 +143,6 @@ describe('SetupAccountStepComponent', () => {
     // Assert
     const req = httpMock.expectOne('/api/accounts');
     expect(req.request.body).toEqual({
-      name: 'My GitLab',
       providerType: 'GitLab',
       baseUrl: 'https://gitlab.com',
       token: 'glpat_token',

@@ -211,7 +211,6 @@ describe('SettingsAccountsComponent', () => {
 
     // Act
     fixture.componentInstance.onSaveNewAccount({
-      name: 'New Account',
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       token: 'ghp_test',
@@ -221,7 +220,6 @@ describe('SettingsAccountsComponent', () => {
     const req = httpMock.expectOne('/api/accounts');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
-      name: 'New Account',
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       token: 'ghp_test',
@@ -253,7 +251,6 @@ describe('SettingsAccountsComponent', () => {
 
     // Act
     fixture.componentInstance.onSaveExistingAccount({
-      name: 'Updated Org',
       baseUrl: 'https://github.com',
     });
 
@@ -261,7 +258,6 @@ describe('SettingsAccountsComponent', () => {
     const req = httpMock.expectOne(`/api/accounts/${account.id}`);
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({
-      name: 'Updated Org',
       baseUrl: 'https://github.com',
     });
     req.flush({
@@ -284,7 +280,6 @@ describe('SettingsAccountsComponent', () => {
 
     // Act
     fixture.componentInstance.onSaveNewAccount({
-      name: 'New Account',
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       token: 'ghp_test',

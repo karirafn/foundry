@@ -236,7 +236,6 @@ export class SetupAccountStepComponent {
   onCreate(): void {
     this._hasSaved.set(true);
     this._accountService.createAccount({
-      name: this._name(),
       providerType: this._provider(),
       baseUrl: this._baseUrl(),
       token: this._token(),
