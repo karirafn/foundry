@@ -30,19 +30,6 @@ const GITHUB_BASE_URL = 'https://github.com';
 
       <div class="setup-account-step__form">
         <div class="setup-account-step__field">
-          <label class="setup-account-step__field-label" for="setup-name">Account Name</label>
-          <input
-            class="setup-account-step__input"
-            type="text"
-            id="setup-name"
-            autocomplete="off"
-            [value]="_name()"
-            (input)="_name.set($any($event.target).value)"
-            required
-          />
-        </div>
-
-        <div class="setup-account-step__field">
           <span id="setup-provider-label" class="setup-account-step__field-label">Provider</span>
           <fd-provider-selector
             [provider]="_provider()"
@@ -61,19 +48,25 @@ const GITHUB_BASE_URL = 'https://github.com';
             autocomplete="off"
             [value]="_baseUrl()"
             (input)="onBaseUrlInput($any($event.target).value)"
+            (blur)="onBaseUrlBlur()"
           />
         </div>
 
         <div class="setup-account-step__field">
           <label class="setup-account-step__field-label" for="setup-token">Token</label>
-          <div class="setup-account-step__token-wrapper">
+          <div
+            class="setup-account-step__token-wrapper"
+            [attr.aria-busy]="_accountService.validating() ? true : null"
+          >
             <input
               class="setup-account-step__input"
               [type]="_showToken() ? 'text' : 'password'"
               id="setup-token"
               autocomplete="off"
               [value]="_token()"
-              (input)="_token.set($any($event.target).value)"
+              (input)="onTokenInput($any($event.target).value)"
+              (blur)="onTokenBlur()"
+              (paste)="onTokenPaste()"
               required
               aria-describedby="setup-token-validation setup-save-error"
             />
@@ -96,13 +89,6 @@ const GITHUB_BASE_URL = 'https://github.com';
                 </svg>
               }
             </button>
-            <button
-              class="setup-account-step__validate-btn"
-              type="button"
-              [disabled]="!_canValidate()"
-              [attr.aria-busy]="_accountService.validating() || null"
-              (click)="onValidate()"
-            >{{ _accountService.validating() ? 'Validating...' : 'Validate Token' }}</button>
           </div>
         </div>
 
@@ -112,16 +98,31 @@ const GITHUB_BASE_URL = 'https://github.com';
           role="status"
           aria-live="polite"
         >
-          <span
-            class="setup-account-step__validation-dot"
-            [class]="'setup-account-step__validation-dot' + (_validationModifier() ? ' setup-account-step__validation-dot--' + _validationModifier() : '')"
-            [style.display]="_validationModifier() ? '' : 'none'"
-            aria-hidden="true"
-          ></span>
-          <span
-            class="setup-account-step__validation-message"
-            [class]="'setup-account-step__validation-message' + (_validationModifier() ? ' setup-account-step__validation-message--' + _validationModifier() : '')"
-          >{{ _validationMessage() }}</span>
+          @if (_accountService.validating()) {
+            <span class="setup-account-step__validation-message">Resolving identity…</span>
+          } @else if (_accountService.validationResult(); as result) {
+            @if (result.isValid && result.accountName) {
+              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
+              <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">
+                Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span>
+              </span>
+            } @else if (result.isAuthFailure) {
+              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+              <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                Authentication failed — check that the token is correct
+              </span>
+            } @else if (!result.isValid && result.missingScopes.length > 0) {
+              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+              <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
+                Missing required scopes: {{ result.missingScopes.join(', ') }}
+              </span>
+            } @else if (result.isValid && !result.accountName) {
+              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+              <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                Token is valid, but the account identity could not be resolved from the provider
+              </span>
+            }
+          }
         </div>
 
         <div
@@ -155,12 +156,17 @@ export class SetupAccountStepComponent {
   readonly complete: OutputEmitterRef<string> = output<string>();
   readonly back: OutputEmitterRef<void> = output<void>();
 
-  protected readonly _name: WritableSignal<string> = signal('');
   protected readonly _provider: WritableSignal<ProviderType> = signal('GitHub');
   protected readonly _baseUrl: WritableSignal<string> = signal(GITHUB_BASE_URL);
   protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
+
+  /** Tracks the last (token, baseUrl) pair sent to resolution to avoid duplicate calls. */
+  private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string } | null> = signal(null);
+
+  /** Whether a held resolution is pending (token present but baseUrl was empty at blur time). */
+  private readonly _pendingResolution: WritableSignal<boolean> = signal(false);
 
   private readonly _hasSaved: WritableSignal<boolean> = signal(false);
 
@@ -168,42 +174,11 @@ export class SetupAccountStepComponent {
     if (this._accountService.saving()) {
       return false;
     }
-    return !!this._name() && !!this._token();
-  });
-
-  protected readonly _canValidate: Signal<boolean> = computed(() => {
-    if (this._accountService.validating()) {
+    if (!this._token()) {
       return false;
     }
-    return !!this._token() && !!this._baseUrl();
-  });
-
-  protected readonly _validationModifier: Signal<'valid' | 'error' | 'warning' | null> = computed(() => {
     const result = this._accountService.validationResult();
-    if (!result) {
-      return null;
-    }
-    if (result.isValid) {
-      return 'valid';
-    }
-    if (result.isAuthFailure) {
-      return 'error';
-    }
-    return 'warning';
-  });
-
-  protected readonly _validationMessage: Signal<string> = computed(() => {
-    const result = this._accountService.validationResult();
-    if (!result) {
-      return '';
-    }
-    if (result.isValid) {
-      return 'Token is valid';
-    }
-    if (result.isAuthFailure) {
-      return 'Authentication failed — check that the token is correct';
-    }
-    return `Missing required scopes: ${result.missingScopes.join(', ')}`;
+    return result !== null && result.isValid && !!result.accountName;
   });
 
   constructor() {
@@ -225,12 +200,49 @@ export class SetupAccountStepComponent {
   onBaseUrlInput(value: string): void {
     this._baseUrl.set(value);
     this._baseUrlManuallyEdited.set(true);
+    this._clearResolution();
+  }
+
+  onBaseUrlBlur(): void {
+    if (this._pendingResolution() && this._token() && this._baseUrl()) {
+      this._pendingResolution.set(false);
+      this._triggerResolution();
+    }
   }
 
   onDefaultBaseUrlChange(defaultUrl: string): void {
     if (!this._baseUrlManuallyEdited()) {
       this._baseUrl.set(defaultUrl);
     }
+  }
+
+  onTokenInput(value: string): void {
+    this._token.set(value);
+    this._clearResolution();
+  }
+
+  onTokenBlur(): void {
+    const token = this._token();
+    const baseUrl = this._baseUrl();
+    if (!token) {
+      return;
+    }
+    if (!baseUrl) {
+      this._pendingResolution.set(true);
+      return;
+    }
+    this._triggerResolution();
+  }
+
+  onTokenPaste(): void {
+    setTimeout(() => {
+      const token = this._token();
+      const baseUrl = this._baseUrl();
+      if (!token || !baseUrl) {
+        return;
+      }
+      this._triggerResolution();
+    }, 0);
   }
 
   onCreate(): void {
@@ -242,10 +254,18 @@ export class SetupAccountStepComponent {
     });
   }
 
-  onValidate(): void {
-    this._accountService.validateToken({
-      token: this._token(),
-      baseUrl: this._baseUrl(),
-    });
+  private _clearResolution(): void {
+    this._lastResolvedPair.set(null);
+  }
+
+  private _triggerResolution(): void {
+    const token = this._token();
+    const baseUrl = this._baseUrl();
+    const last = this._lastResolvedPair();
+    if (last && last.token === token && last.baseUrl === baseUrl) {
+      return;
+    }
+    this._lastResolvedPair.set({ token, baseUrl });
+    this._accountService.validateToken({ token, baseUrl });
   }
 }

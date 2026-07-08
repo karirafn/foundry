@@ -350,4 +350,57 @@ describe('SettingsAccountsComponent', () => {
     // Assert - no DELETE request should have been made
     httpMock.expectNone(`/api/accounts/${account.id}`);
   });
+
+  it('should pass loaded accounts to [accounts] input on fd-account-form in add view', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+
+    // Act
+    fixture.componentInstance.onAddAccount();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const form = el.querySelector('fd-account-form');
+    expect(form).toBeTruthy();
+    // The AccountService loaded one account; the form's [accounts] binding reflects that list
+    const accountService = TestBed.inject(AccountService);
+    expect(accountService.accounts()).toEqual([account]);
+  });
+
+  it('should pass loaded accounts to [accounts] input on fd-account-form in edit view', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+
+    // Act
+    fixture.componentInstance.onEditAccount(account);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const form = el.querySelector('fd-account-form');
+    expect(form).toBeTruthy();
+    const accountService = TestBed.inject(AccountService);
+    expect(accountService.accounts()).toEqual([account]);
+  });
 });
