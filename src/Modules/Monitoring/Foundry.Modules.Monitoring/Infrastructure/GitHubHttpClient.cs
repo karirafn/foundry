@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
@@ -850,7 +851,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string HtmlUrl,
         IReadOnlyList<GitHubLabelDto> Labels);
 
-    private sealed record GitHubUserDto(string Login);
+    private sealed record GitHubUserDto([property: JsonPropertyName("login")] string Login);
 
     private sealed record GitHubLabelDto(string Name);
 

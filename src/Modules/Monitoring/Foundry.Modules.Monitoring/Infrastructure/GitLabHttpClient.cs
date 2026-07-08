@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
@@ -754,7 +755,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return error;
     }
 
-    private sealed record GitLabUserDto(string Username);
+    private sealed record GitLabUserDto([property: JsonPropertyName("username")] string Username);
 
     private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
 

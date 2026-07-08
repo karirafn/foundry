@@ -17,6 +17,9 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static partial class UpdateAccount
 {
+    // Mirrors AccountConfiguration.NameMaxLength — kept in sync manually.
+    private const int AccountNameMaxLength = 200;
+
     internal sealed record Command(
         AccountId Id,
         string BaseUrl,
@@ -91,21 +94,27 @@ internal static partial class UpdateAccount
                     return Result<AccountSummary>.Fail(tokenFailure.Error);
                 }
 
-                if (tokenResult is Result<ValidateToken.Response>.Success tokenSuccess &&
-                    !tokenSuccess.Value.IsValid)
+                // tokenResult is guaranteed Success here — Failure was handled above.
+                ValidateToken.Response tokenResponse = ((Result<ValidateToken.Response>.Success)tokenResult).Value;
+
+                if (!tokenResponse.IsValid)
                 {
                     return Result<AccountSummary>.Fail(AccountErrors.InvalidToken);
                 }
 
-                if (tokenResult is Result<ValidateToken.Response>.Success { Value.AccountName: string resolvedName }
-                    && !string.IsNullOrWhiteSpace(resolvedName))
-                {
-                    accountName = resolvedName;
-                }
-                else
+                if (string.IsNullOrWhiteSpace(tokenResponse.AccountName))
                 {
                     return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
                 }
+
+                string resolvedName = tokenResponse.AccountName;
+
+                if (resolvedName.Length > AccountNameMaxLength || resolvedName.Any(char.IsControl))
+                {
+                    return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+                }
+
+                accountName = resolvedName;
             }
 
             switch (account)
@@ -125,7 +134,7 @@ internal static partial class UpdateAccount
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsAccountNameDuplicateViolation(ex))
             {
                 return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(accountName));
             }
@@ -141,12 +150,6 @@ internal static partial class UpdateAccount
             return Result<AccountSummary>.Ok(summary);
         }
     }
-
-    // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
-    // The monitoring module does not reference the SQLite provider directly,
-    // so we detect the violation via the exception message instead of SqliteException.SqliteErrorCode.
-    private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
-        ex.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true;
 
     internal static class Endpoint
     {

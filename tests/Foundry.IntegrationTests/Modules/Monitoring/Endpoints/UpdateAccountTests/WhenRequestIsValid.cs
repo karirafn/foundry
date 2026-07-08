@@ -85,13 +85,21 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
     [Fact]
     public async Task WhenTokenProvided_RenamesAccountToResolvedIdentity()
     {
-        // Arrange — create returns InitialAccountName; update stub also returns "new-identity"
+        // Arrange — token-keyed routing: original token yields InitialAccountName, new token yields NewIdentity.
+        const string OriginalToken = "ghp_original_token";
+        const string NewToken = "ghp_new_token";
         const string NewIdentity = "new-identity";
-        CountingStub countingStub = new(InitialAccountName, NewIdentity);
+
+        TokenKeyedStub tokenKeyedStub = new(new Dictionary<string, string>
+        {
+            [OriginalToken] = InitialAccountName,
+            [NewToken] = NewIdentity,
+        });
+
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
-            services.AddSingleton<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(countingStub);
+            services.AddSingleton<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(tokenKeyedStub);
         });
         using HttpClient client = factory.CreateClient();
 
@@ -99,7 +107,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         {
             providerType = "github",
             baseUrl = "https://github.com",
-            token = "ghp_original_token",
+            token = OriginalToken,
         };
 
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
@@ -114,7 +122,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         object updateBody = new
         {
             baseUrl = "https://github.com",
-            token = "ghp_new_token",
+            token = NewToken,
         };
 
         // Act
@@ -168,20 +176,23 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         AccountSummary? account = await response.Content
             .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
         account.ShouldNotBeNull();
-        account.HasToken.ShouldBeTrue();
+        account.ShouldSatisfyAllConditions(
+            () => account.HasToken.ShouldBeTrue(),
+            () => account.Name.ShouldBe(InitialAccountName));
     }
 
-    // Returns firstName on the first HandleAsync call, secondName on all subsequent calls.
-    private sealed class CountingStub(string firstName, string secondName)
+    // Routes each ValidateToken call to a fixed account name based on the token value.
+    // This is robust against extra internal calls — the result depends solely on the token.
+    private sealed class TokenKeyedStub(Dictionary<string, string> tokenToName)
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {
-        private int _callCount;
-
         public Task<Result<ValidateToken.Response>> HandleAsync(
             ValidateToken.Query query,
             CancellationToken cancellationToken)
         {
-            string accountName = Interlocked.Increment(ref _callCount) == 1 ? firstName : secondName;
+            string accountName = tokenToName.TryGetValue(query.Token, out string? name)
+                ? name
+                : "default-user";
             ValidateToken.Response response = new(
                 IsValid: true,
                 IsAuthFailure: false,

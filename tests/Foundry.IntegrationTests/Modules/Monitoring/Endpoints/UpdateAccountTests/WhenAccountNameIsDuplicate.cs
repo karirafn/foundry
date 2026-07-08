@@ -16,18 +16,28 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 
 public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
 {
-    // Each POST derives the account name from the stub's AccountName.
-    // Use distinct identities so the two accounts get different names.
+    // Token-keyed routing: each token maps to a fixed account name.
+    // ghp_first_token  → first-user  (create first account)
+    // ghp_second_token → second-user (create second account)
+    // ghp_colliding_token → first-user (update second account; triggers conflict)
+    private const string FirstToken = "ghp_first_token";
+    private const string SecondToken = "ghp_second_token";
+    private const string CollidingToken = "ghp_colliding_token";
     private const string FirstAccountName = "first-user";
     private const string SecondAccountName = "second-user";
 
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
-    private readonly CountingStub _stub;
+    private readonly TokenKeyedStub _stub;
 
     public WhenAccountNameIsDuplicate()
     {
-        _stub = new CountingStub(FirstAccountName, SecondAccountName);
+        _stub = new TokenKeyedStub(new Dictionary<string, string>
+        {
+            [FirstToken] = FirstAccountName,
+            [SecondToken] = SecondAccountName,
+            [CollidingToken] = FirstAccountName,
+        });
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -51,14 +61,14 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         {
             providerType = "github",
             baseUrl = "https://github.com",
-            token = "ghp_first_token",
+            token = FirstToken,
         };
 
         object secondBody = new
         {
             providerType = "github",
             baseUrl = "https://github.com",
-            token = "ghp_second_token",
+            token = SecondToken,
         };
 
         await _client.PostAsJsonAsync(
@@ -79,7 +89,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         object updateBody = new
         {
             baseUrl = "https://github.com",
-            token = "ghp_colliding_token",
+            token = CollidingToken,
         };
 
         // Act
@@ -138,20 +148,18 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    // Returns firstName on calls 1 and 3+, secondName only on call 2.
-    // Call 1: CreateAccount for first account → first-user
-    // Call 2: CreateAccount for second account → second-user
-    // Call 3: UpdateAccount with colliding token → first-user (triggers conflict)
-    private sealed class CountingStub(string firstName, string secondName)
+    // Routes each ValidateToken call to a fixed account name based on the token value.
+    // This is robust against extra internal calls — the result depends solely on the token.
+    private sealed class TokenKeyedStub(Dictionary<string, string> tokenToName)
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {
-        private int _callCount;
-
         public Task<Result<ValidateToken.Response>> HandleAsync(
             ValidateToken.Query query,
             CancellationToken cancellationToken)
         {
-            string accountName = Interlocked.Increment(ref _callCount) == 2 ? secondName : firstName;
+            string accountName = tokenToName.TryGetValue(query.Token, out string? name)
+                ? name
+                : "default-user";
             ValidateToken.Response response = new(
                 IsValid: true,
                 IsAuthFailure: false,

@@ -14,9 +14,10 @@ namespace Foundry.WebApi.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             // POC data is disposable — dedup is acceptable here.
-            // Delete duplicate (base_url, name) rows, keeping the one with the lowest id.
-            // This runs before CreateIndex so the unique constraint is not violated on
-            // databases that already have duplicate rows from pre-index operation.
+            // Delete duplicate (base_url, name) rows, keeping an arbitrary deterministic survivor
+            // (the row with the lowest GUID string for id — not the oldest row, as accounts has no
+            // created_at column). This runs before CreateIndex so the unique constraint is not
+            // violated on databases that already have duplicate rows from pre-index operation.
             migrationBuilder.Sql(
                 """
                 DELETE FROM accounts
@@ -37,6 +38,8 @@ namespace Foundry.WebApi.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Note: Down drops the unique index but cannot restore rows deleted by Up.
+            // The dedup deletions in Up are irreversible by design.
             migrationBuilder.DropIndex(
                 name: "ix_accounts_base_url_name",
                 table: "accounts");

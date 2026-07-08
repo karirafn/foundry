@@ -98,6 +98,77 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task WhenAccountNameExceedsMaxLength_ReturnsBadRequest()
+    {
+        // Arrange — provider returns a name longer than 200 characters (max allowed length)
+        string oversizedName = new('a', 201);
+        ValidateToken.Response oversizedResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: oversizedName);
+
+        using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(oversizedResponse)));
+        });
+        using HttpClient client = factory.CreateClient();
+
+        object body = new
+        {
+            providerType = "github",
+            baseUrl = "https://github.com",
+            token = "ghp_test_token",
+        };
+
+        // Act
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task WhenAccountNameContainsControlCharacter_ReturnsBadRequest()
+    {
+        // Arrange — provider returns a name containing a control character (newline)
+        ValidateToken.Response controlCharResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: "valid-prefix\ninjected");
+
+        using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(controlCharResponse)));
+        });
+        using HttpClient client = factory.CreateClient();
+
+        object body = new
+        {
+            providerType = "github",
+            baseUrl = "https://github.com",
+            token = "ghp_test_token",
+        };
+
+        // Act
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {

@@ -17,6 +17,9 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static partial class CreateAccount
 {
+    // Mirrors AccountConfiguration.NameMaxLength — kept in sync manually.
+    private const int AccountNameMaxLength = 200;
+
     internal sealed record Command(
         string ProviderType,
         string BaseUrl,
@@ -108,6 +111,11 @@ internal static partial class CreateAccount
 
             string accountName = tokenResponse.AccountName;
 
+            if (accountName.Length > AccountNameMaxLength || accountName.Any(char.IsControl))
+            {
+                return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+            }
+
             Account account = isGitLab
                 ? GitLabAccount.Create(accountName, command.Token, baseUrl)
                 : GitHubAccount.Create(accountName, command.Token, baseUrl);
@@ -118,7 +126,7 @@ internal static partial class CreateAccount
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsAccountNameDuplicateViolation(ex))
             {
                 return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(accountName));
             }
@@ -134,12 +142,6 @@ internal static partial class CreateAccount
             return Result<AccountSummary>.Ok(summary);
         }
     }
-
-    // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
-    // The monitoring module does not reference the SQLite provider directly,
-    // so we detect the violation via the exception message instead of SqliteException.SqliteErrorCode.
-    private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
-        ex.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true;
 
     internal static class Endpoint
     {

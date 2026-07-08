@@ -1,6 +1,6 @@
 namespace Foundry.Modules.Monitoring.Infrastructure;
 
-internal sealed class TokenValidationResult
+internal sealed record TokenValidationResult
 {
     private TokenValidationResult(bool isValid, bool isAuthFailure, IReadOnlyList<string> missingScopes, string? accountName)
     {
