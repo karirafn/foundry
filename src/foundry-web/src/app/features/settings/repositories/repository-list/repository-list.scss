@@ -265,7 +265,7 @@
   }
 
   &__last-polled {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.8125rem;
     white-space: nowrap;
   }
@@ -413,24 +413,10 @@
   }
 
   &__delete-btn {
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
 
     &:hover {
       background: var(--fd-bg-card-hover);
-    }
-  }
-
-  @media (hover: hover) {
-    &__item:not(:hover):not(:focus-within) {
-      .repository-list__edit-btn,
-      .repository-list__delete-btn,
-      .repository-list__drag-handle,
-      .repository-list__move-up-btn,
-      .repository-list__move-down-btn,
-      .repository-list__toggle-btn {
-        opacity: 0.75;
-        transition: opacity 0.15s ease;
-      }
     }
   }
 }
@@ -455,27 +441,27 @@
       align-items: center;
     }
 
-    // Tier 1: reorder-group hidden (folded into identity row on mobile)
+    // Tier 1: reorder-group visible on mobile (▲▼ buttons are the WCAG 2.5.7 non-drag alternative)
     &__reorder-group {
-      display: none;
+      order: 1;
     }
 
     // Tier 1 row: identity + actions pinned right
     &__identity {
       flex: 1;
       min-width: 0;
-      order: 1;
+      order: 2;
     }
 
     &__eligibility-group {
       border-inline-start: none;
       padding-inline-start: 0;
       margin-inline-start: auto;
-      order: 2;
+      order: 3;
     }
 
     &__actions {
-      order: 3;
+      order: 4;
     }
 
     // Tier 2: metadata as flex-wrap inline cluster with dot separators
@@ -484,7 +470,7 @@
       flex-wrap: wrap;
       align-items: center;
       gap: 0;
-      order: 4;
+      order: 5;
       width: 100%;
 
       > * + *::before {
@@ -497,12 +483,12 @@
     fd-repository-eligibility-details {
       grid-column: unset;
       width: 100%;
-      order: 5;
+      order: 6;
     }
   }
 }
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .repository-list {
     &__edit-btn,
     &__delete-btn,
