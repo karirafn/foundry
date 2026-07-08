@@ -136,36 +136,4 @@
     display: flex;
     gap: var(--fd-spacing-sm);
   }
-
-  &__edit-btn,
-  &__delete-btn {
-    background: transparent;
-    border: none;
-    border-radius: var(--fd-radius-sm);
-    cursor: pointer;
-    font-size: 0.8125rem;
-    min-height: 32px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
-  }
-
-  &__edit-btn {
-    color: var(--fd-text-link);
-
-    &:hover {
-      background: var(--fd-bg-card-hover);
-    }
-  }
-
-  &__delete-btn {
-    color: var(--fd-state-failed);
-
-    &:hover {
-      background: var(--fd-bg-card-hover);
-    }
-  }
 }

@@ -225,8 +225,8 @@ describe('RepositoryListComponent', () => {
     expect(badge).toBeFalsy();
   });
 
-  // Cycle 7: slug and account name shown
-  it('should render slug as primary text and account name as secondary text', () => {
+  // Cycle 7: slug shown; account name folded into slug title attribute
+  it('should render slug as primary text and fold account name into the slug title attribute', () => {
     // Arrange
 
     // Act
@@ -235,12 +235,11 @@ describe('RepositoryListComponent', () => {
     // Assert
     const slug = el.querySelector('.repository-list__slug');
     expect(slug?.textContent?.trim()).toBe('my-org/my-repo');
-    const accountName = el.querySelector('.repository-list__account-name');
-    expect(accountName?.textContent?.trim()).toBe('my-github');
+    expect(slug?.getAttribute('title')).toBe('my-org/my-repo — my-github');
   });
 
-  // Cycle 8: poll interval in minutes
-  it('should render poll interval in minutes', () => {
+  // Cycle 8: poll interval in abbreviated minutes
+  it('should render poll interval in abbreviated minutes format', () => {
     // Arrange
 
     // Act
@@ -248,7 +247,29 @@ describe('RepositoryListComponent', () => {
 
     // Assert
     const pollInterval = el.querySelector('.repository-list__poll-interval');
-    expect(pollInterval?.textContent?.trim()).toBe('5 min');
+    expect(pollInterval?.textContent?.trim()).toBe('5m');
+  });
+
+  it('should render "—" for poll interval when pollIntervalSeconds is null', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_2] });
+
+    // Assert
+    const pollInterval = el.querySelector('.repository-list__poll-interval');
+    expect(pollInterval?.textContent?.trim()).toBe('—');
+  });
+
+  it('should render a descriptive title on the poll-interval element', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const pollInterval = el.querySelector('.repository-list__poll-interval');
+    expect(pollInterval?.getAttribute('title')).toBeTruthy();
   });
 
   // Cycle 9: active status indicator
@@ -291,18 +312,18 @@ describe('RepositoryListComponent', () => {
     expect(lastPolled?.textContent?.trim()).toBe('Never');
   });
 
-  // Cycle 11: action buttons with aria-labels
-  it('should render edit and delete buttons with accessible labels', () => {
+  // Cycle 11: action buttons with aria-labels (rendered via fd-row-actions)
+  it('should render edit and delete icon buttons with accessible labels', () => {
     // Arrange
 
     // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
-    const editBtn = el.querySelector('.repository-list__edit-btn');
-    expect(editBtn?.getAttribute('aria-label')).toBe('Edit repository my-org/my-repo');
-    const deleteBtn = el.querySelector('.repository-list__delete-btn');
-    expect(deleteBtn?.getAttribute('aria-label')).toBe('Delete repository my-org/my-repo');
+    const editBtn = el.querySelector('[aria-label="Edit repository my-org/my-repo"]');
+    expect(editBtn).toBeTruthy();
+    const deleteBtn = el.querySelector('[aria-label="Delete repository my-org/my-repo"]');
+    expect(deleteBtn).toBeTruthy();
   });
 
   // Cycle 12: populated state shows Add Repository button in header
@@ -368,7 +389,7 @@ describe('RepositoryListComponent', () => {
     component.edit.subscribe((r: RepositorySummary) => { emittedRepo = r; });
 
     // Act
-    const editBtn = el.querySelector('.repository-list__edit-btn') as HTMLButtonElement;
+    const editBtn = el.querySelector('[aria-label="Edit repository my-org/my-repo"]') as HTMLButtonElement;
     editBtn.click();
 
     // Assert
@@ -383,7 +404,7 @@ describe('RepositoryListComponent', () => {
     component.delete.subscribe((r: RepositorySummary) => { emittedRepo = r; });
 
     // Act
-    const deleteBtn = el.querySelector('.repository-list__delete-btn') as HTMLButtonElement;
+    const deleteBtn = el.querySelector('[aria-label="Delete repository my-org/my-repo"]') as HTMLButtonElement;
     deleteBtn.click();
 
     // Assert
@@ -451,6 +472,20 @@ describe('RepositoryListComponent', () => {
     // Assert
     const toggle = el.querySelector('.repository-list__toggle-btn');
     expect(toggle).toBeTruthy();
+  });
+
+  // Eligibility group sr-only: screen-reader text is always present in eligibility-group
+  it('should render an sr-only element with the eligibility status label in the eligibility group', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const eligibilityGroup = el.querySelector('.repository-list__eligibility-group');
+    const srOnly = eligibilityGroup?.querySelector('.sr-only');
+    expect(srOnly).toBeTruthy();
+    expect(srOnly?.textContent?.trim()).toBe('Eligible');
   });
 
   // Cycle 30: eligible repos do not show disclosure toggle
@@ -1035,5 +1070,80 @@ describe('RepositoryListComponent', () => {
     const liveRegion = el.querySelector('.repository-list__announcement');
     expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
     expect(liveRegion?.textContent?.trim()).toBe(`${MOCK_REPO_INELIGIBLE.slug}: Re-check failed`);
+  });
+
+  // Stacked reorder: ▲▼ buttons are inside a __move-stack sub-container within __reorder-group
+  it('should render the move-up and move-down buttons inside a __move-stack within __reorder-group', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const reorderGroup = el.querySelector('.repository-list__reorder-group');
+    const moveStack = reorderGroup?.querySelector('.repository-list__move-stack');
+    expect(moveStack).toBeTruthy();
+    expect(moveStack?.querySelector('.repository-list__move-up-btn')).toBeTruthy();
+    expect(moveStack?.querySelector('.repository-list__move-down-btn')).toBeTruthy();
+  });
+
+  // AC-6: reorder controls are visually grouped in __reorder-group, separate from __actions
+  it('should render drag-handle and move buttons inside __reorder-group, separate from __actions', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const reorderGroup = el.querySelector('.repository-list__reorder-group');
+    expect(reorderGroup).toBeTruthy();
+    expect(reorderGroup?.querySelector('.repository-list__drag-handle')).toBeTruthy();
+    expect(reorderGroup?.querySelector('.repository-list__move-up-btn')).toBeTruthy();
+    expect(reorderGroup?.querySelector('.repository-list__move-down-btn')).toBeTruthy();
+
+    const actions = el.querySelector('.repository-list__actions');
+    expect(actions).toBeTruthy();
+    expect(actions?.querySelector('.repository-list__drag-handle')).toBeFalsy();
+    expect(actions?.querySelector('.repository-list__move-up-btn')).toBeFalsy();
+    expect(actions?.querySelector('.repository-list__move-down-btn')).toBeFalsy();
+  });
+
+  // AC-3: slug span carries a title attribute containing slug and account name
+  it('should set the title attribute on the slug span to "slug — accountName"', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const slugSpan = el.querySelector('.repository-list__slug');
+    expect(slugSpan?.getAttribute('title')).toBe(`${MOCK_REPO.slug} — ${MOCK_REPO.accountName}`);
+  });
+
+  // AC-4: metadata cluster contains poll-interval, status, last-polled (account-name moved to slug title)
+  it('should render poll-interval, status, and last-polled inside __metadata', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const metadata = el.querySelector('.repository-list__metadata');
+    expect(metadata).toBeTruthy();
+    expect(metadata?.querySelector('.repository-list__poll-interval')).toBeTruthy();
+    expect(metadata?.querySelector('.repository-list__status')).toBeTruthy();
+    expect(metadata?.querySelector('.repository-list__last-polled')).toBeTruthy();
+  });
+
+  // account-name span is no longer rendered in the DOM
+  it('should not render the account-name span in the repository row', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const accountName = el.querySelector('.repository-list__account-name');
+    expect(accountName).toBeFalsy();
   });
 });

@@ -1,6 +1,15 @@
-.repository-list {
-  --repo-meta-columns: minmax(8rem, 1.5fr) 6rem 7rem 7rem;
+:host {
+  --repo-row-columns:
+    auto              /* reorder (drag handle + stacked ▲▼) */
+    minmax(9rem, 1fr) /* identity (icon + slug)              */
+    4.25rem           /* poll interval                       */
+    auto              /* status (dot + label)                */
+    4.5rem            /* last-polled                         */
+    auto              /* eligibility (dot + chevron)         */
+    auto;             /* actions (icon buttons)              */
+}
 
+.repository-list {
   &__empty {
     display: flex;
     flex-direction: column;
@@ -115,6 +124,8 @@
   }
 
   &__list {
+    container-type: inline-size;
+    container-name: repo-list;
     display: flex;
     flex-direction: column;
     gap: var(--fd-spacing-sm);
@@ -127,31 +138,85 @@
     background: var(--fd-bg-page);
     border: 1px solid var(--fd-border-muted);
     border-radius: var(--fd-radius-sm);
+    display: grid;
+    grid-template-columns: var(--repo-row-columns);
+    align-items: center;
+    column-gap: var(--fd-spacing-sm);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &.cdk-drag-preview {
+      background: var(--fd-bg-page);
+      border: 1px solid var(--fd-text-link);
+      border-radius: var(--fd-radius-sm);
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+      opacity: 0.95;
+    }
+
+    &.cdk-drag-placeholder {
+      background: var(--fd-bg-card-hover);
+      border: 1px dashed var(--fd-border-muted);
+      opacity: 0.5;
+
+      * {
+        visibility: hidden;
+      }
+    }
+
+    &.cdk-drag-animating {
+      transition: transform 0.25s ease;
+
+      @media (prefers-reduced-motion: reduce) {
+        transition: none;
+      }
+    }
+  }
+
+  &__reorder-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  &__move-stack {
     display: flex;
     flex-direction: column;
+    align-items: center;
   }
 
-  &__slug-row {
-    align-items: center;
+  &__identity {
     display: flex;
+    align-items: center;
     gap: var(--fd-spacing-sm);
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    min-width: 0;
   }
 
-  &__slug-row-end {
+  &__metadata {
+    display: contents;
+  }
+
+  &__eligibility-group {
     align-items: center;
+    border-inline-start: 1px solid var(--fd-border-muted);
     display: flex;
-    gap: var(--fd-spacing-sm);
-    margin-inline-start: auto;
+    gap: var(--fd-spacing-xs);
+    padding-inline-start: var(--fd-spacing-md);
   }
 
-  &__meta-row {
-    align-items: center;
-    display: grid;
-    gap: var(--fd-spacing-md);
-    grid-template-columns: var(--repo-meta-columns);
-    padding: 0 var(--fd-spacing-md) var(--fd-spacing-sm);
-    padding-inline-start: calc(20px + var(--fd-spacing-sm) + var(--fd-spacing-md));
+  &__eligibility {
+    flex-shrink: 0;
+  }
+
+  &__actions {
+    display: flex;
+    gap: var(--fd-spacing-xs);
+  }
+
+  fd-repository-eligibility-details {
+    grid-column: 1 / -1;
   }
 
   &__provider {
@@ -164,13 +229,7 @@
     font-family: var(--fd-font-mono);
     font-size: 0.9375rem;
     font-weight: 600;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  &__account-name {
-    color: var(--fd-text-secondary);
-    font-size: 0.75rem;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -215,19 +274,9 @@
   }
 
   &__last-polled {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.8125rem;
     white-space: nowrap;
-  }
-
-  &__eligibility-group {
-    align-items: center;
-    display: flex;
-    gap: var(--fd-spacing-xs);
-  }
-
-  &__eligibility {
-    flex-shrink: 0;
   }
 
   &__toggle-btn {
@@ -318,11 +367,11 @@
     color: var(--fd-text-secondary);
     cursor: pointer;
     display: inline-flex;
-    font-size: 0.625rem;
+    font-size: 0.5rem;
     justify-content: center;
-    min-height: 36px;
-    min-width: 36px;
-    padding: var(--fd-spacing-xs) 2px;
+    min-height: 18px;
+    min-width: 24px;
+    padding: 1px 2px;
 
     &:hover:not([disabled]) {
       background: var(--fd-bg-card-hover);
@@ -340,76 +389,11 @@
     }
   }
 
-  &__item {
-    &.cdk-drag-preview {
-      background: var(--fd-bg-page);
-      border: 1px solid var(--fd-text-link);
-      border-radius: var(--fd-radius-sm);
-      box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
-      opacity: 0.95;
-    }
-
-    &.cdk-drag-placeholder {
-      background: var(--fd-bg-card-hover);
-      border: 1px dashed var(--fd-border-muted);
-      opacity: 0.5;
-
-      * {
-        visibility: hidden;
-      }
-    }
-
-    &.cdk-drag-animating {
-      transition: transform 0.25s ease;
-
-      @media (prefers-reduced-motion: reduce) {
-        transition: none;
-      }
-    }
-  }
-
   &__list.cdk-drop-list-dragging &__item:not(.cdk-drag-placeholder) {
     transition: transform 0.25s ease;
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
-    }
-  }
-
-  &__actions {
-    display: flex;
-    gap: var(--fd-spacing-sm);
-  }
-
-  &__edit-btn,
-  &__delete-btn {
-    background: transparent;
-    border: none;
-    border-radius: var(--fd-radius-sm);
-    cursor: pointer;
-    font-size: 0.8125rem;
-    min-height: 32px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
-  }
-
-  &__edit-btn {
-    color: var(--fd-text-link);
-
-    &:hover {
-      background: var(--fd-bg-card-hover);
-    }
-  }
-
-  &__delete-btn {
-    color: var(--fd-state-failed);
-
-    &:hover {
-      background: var(--fd-bg-card-hover);
     }
   }
 }
@@ -420,20 +404,78 @@
   }
 }
 
-@media (max-width: 640px) {
+@container repo-list (max-width: 40rem) {
   .repository-list {
-    &__slug-row {
-      flex-wrap: wrap;
+    // Flat-DOM two-tier layout via row-wrap flex:
+    // Tier 1 items flow inline on the first line;
+    // Tier 2 (__metadata) breaks to its own full-width line via flex-basis: 100%.
+    &__item {
+      display: flex;
+      flex-flow: row wrap;
+      align-items: center;
+      column-gap: var(--fd-spacing-sm);
+      row-gap: var(--fd-spacing-xs);
+      padding: var(--fd-spacing-sm) var(--fd-spacing-md);
     }
 
-    &__meta-row {
-      display: flex;
-      flex-wrap: wrap;
-      padding-inline-start: var(--fd-spacing-md);
+    // Tier 1: reorder-group visible on mobile (▲▼ buttons are the WCAG 2.5.7 non-drag alternative)
+    &__reorder-group {
+      order: 1;
+      flex-shrink: 0;
+    }
+
+    // Tier 1 row: identity takes remaining width so slug truncates correctly
+    &__identity {
+      flex: 1;
+      min-width: 0;
+      order: 2;
     }
 
     &__eligibility-group {
-      flex-wrap: nowrap;
+      border-inline-start: none;
+      padding-inline-start: 0;
+      order: 3;
+      flex-shrink: 0;
+    }
+
+    &__actions {
+      order: 4;
+      flex-shrink: 0;
+    }
+
+    // Tier 2: metadata as flex-wrap inline cluster with dot separators on its own line
+    &__metadata {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0;
+      order: 5;
+      flex: 0 0 100%;
+      width: 100%;
+
+      > * + *::before {
+        content: '·';
+        color: var(--fd-text-tertiary);
+        margin-inline: var(--fd-spacing-xs);
+      }
+    }
+
+    fd-repository-eligibility-details {
+      grid-column: unset;
+      width: 100%;
+      order: 6;
+    }
+  }
+}
+
+@media (any-pointer: coarse) {
+  .repository-list {
+    &__move-up-btn,
+    &__move-down-btn,
+    &__drag-handle,
+    &__toggle-btn {
+      min-height: 2.75rem;
+      min-width: 2.75rem;
     }
   }
 }
