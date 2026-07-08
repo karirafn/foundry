@@ -2334,4 +2334,67 @@ describe('IssueService (group-rank multi-key sort)', () => {
     expect(inProgressGroup[1].id).toBe('cq-1');       // queued, server position 0
     expect(inProgressGroup[2].id).toBe('cq-2');       // queued, server position 1
   });
+
+  // Regression — AC3: Needs-attention interleave
+  // All four Needs-attention states (review, failed, continuable_failed, revision_failed) are peers
+  // in the same within-group tier. They must sort strictly by detectedAt newest-first with NO
+  // per-state clustering. A per-state block sort would produce a different ordering than the expected
+  // one below when at least 3 different states interleave by date.
+  it('should interleave all Needs-attention states strictly by detectedAt desc (no per-state grouping)', () => {
+    // Arrange — dates deliberately interleaved so any per-state block breaks the order:
+    //   review        2026-04 (second newest)
+    //   failed        2026-06 (newest)
+    //   continuable_failed  2026-02 (second oldest)
+    //   revision_failed     2026-01 (oldest)
+    // Expected newest-first order: failed → review → continuable_failed → revision_failed
+    const reviewCard: IssueSummary = { ...mockSummary, id: 'na-review', state: 'review', detectedAt: '2026-04-01T00:00:00Z' };
+    const failedCard: IssueSummary = { ...mockSummary, id: 'na-failed', state: 'failed', detectedAt: '2026-06-01T00:00:00Z' };
+    const continuableCard: IssueSummary = { ...mockSummary, id: 'na-cont-failed', state: 'continuable_failed', detectedAt: '2026-02-01T00:00:00Z' };
+    const revFailedCard: IssueSummary = { ...mockSummary, id: 'na-rev-failed', state: 'revision_failed', detectedAt: '2026-01-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([reviewCard, failedCard, continuableCard, revFailedCard]);
+
+    // Assert — Needs-attention cards in strict detectedAt desc order, not clustered by state
+    const needsAttnGroup = service.sortedIssues().filter(i =>
+      i.state === 'review' || i.state === 'failed' || i.state === 'continuable_failed' || i.state === 'revision_failed'
+    );
+    expect(needsAttnGroup.length).toBe(4);
+    expect(needsAttnGroup[0].id).toBe('na-failed');       // 2026-06, newest
+    expect(needsAttnGroup[1].id).toBe('na-review');       // 2026-04
+    expect(needsAttnGroup[2].id).toBe('na-cont-failed');  // 2026-02
+    expect(needsAttnGroup[3].id).toBe('na-rev-failed');   // 2026-01, oldest
+  });
+
+  // Regression — AC4: In-progress group ordering lock
+  // in_progress and revision_in_progress are peers (tier 0) and must sort by detectedAt desc.
+  // continuation_queued (tier 1) follows in raw server order, regardless of its detectedAt.
+  // This test uses two non-queued cards with reversed server/date order and two continuation_queued
+  // cards in a specific server order to firmly lock both dimensions.
+  it('should order In progress non-queued cards by detectedAt desc then continuation_queued in server order', () => {
+    // Arrange:
+    //   revision_in_progress  2026-06 (newer, server pos 0) → should be first in non-queued tier
+    //   in_progress           2026-01 (older, server pos 1) → should be second in non-queued tier
+    //   continuation_queued A 2026-03 (server pos 2) → third overall (queued tier, server order)
+    //   continuation_queued B 2026-09 (server pos 3, newest date) → fourth overall (queued tier keeps server order)
+    const revInProg: IssueSummary = { ...mockSummary, id: 'rev-in-prog', state: 'revision_in_progress', detectedAt: '2026-06-01T00:00:00Z' };
+    const inProg: IssueSummary = { ...mockSummary, id: 'in-prog', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+    const contQueuedA: IssueSummary = { ...mockSummary, id: 'cq-a', state: 'continuation_queued', detectedAt: '2026-03-01T00:00:00Z' };
+    const contQueuedB: IssueSummary = { ...mockSummary, id: 'cq-b', state: 'continuation_queued', detectedAt: '2026-09-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([revInProg, inProg, contQueuedA, contQueuedB]);
+
+    // Assert — full In progress group order locked
+    const inProgressGroup = service.sortedIssues().filter(i =>
+      i.state === 'in_progress' || i.state === 'revision_in_progress' || i.state === 'continuation_queued'
+    );
+    expect(inProgressGroup.length).toBe(4);
+    expect(inProgressGroup[0].id).toBe('rev-in-prog'); // non-queued, newer date → first
+    expect(inProgressGroup[1].id).toBe('in-prog');     // non-queued, older date → second
+    expect(inProgressGroup[2].id).toBe('cq-a');        // queued, server pos 2 → third
+    expect(inProgressGroup[3].id).toBe('cq-b');        // queued, server pos 3 → fourth (date would put it first, but server order wins)
+  });
 });
