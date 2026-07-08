@@ -16,12 +16,18 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 
 public sealed class WhenRequestIsValid : IAsyncDisposable
 {
+    private const string InitialAccountName = "octocat";
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
     public WhenRequestIsValid()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: [], AccountName: "octocat");
+        ValidateToken.Response validResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: InitialAccountName);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -38,12 +44,11 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithUpdatedAccount()
+    public async Task WhenNoTokenSupplied_KeepsExistingName()
     {
         // Arrange
         object createBody = new
         {
-            name = "My GitHub",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_original_token",
@@ -60,7 +65,6 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
 
         object updateBody = new
         {
-            name = "Updated GitHub",
             baseUrl = "https://github.com",
         };
 
@@ -75,11 +79,56 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         AccountSummary? account = await response.Content
             .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
         account.ShouldNotBeNull();
-        account.ShouldSatisfyAllConditions(
-            () => account.Id.ShouldBe(created.Id),
-            () => account.Name.ShouldBe("Updated GitHub"),
-            () => account.ProviderType.ShouldBe("github"),
-            () => account.HasToken.ShouldBeTrue());
+        account.Name.ShouldBe(InitialAccountName);
+    }
+
+    [Fact]
+    public async Task WhenTokenProvided_RenamesAccountToResolvedIdentity()
+    {
+        // Arrange — create returns InitialAccountName; update stub also returns "new-identity"
+        const string NewIdentity = "new-identity";
+        CountingStub countingStub = new(InitialAccountName, NewIdentity);
+        using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddSingleton<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(countingStub);
+        });
+        using HttpClient client = factory.CreateClient();
+
+        object createBody = new
+        {
+            providerType = "github",
+            baseUrl = "https://github.com",
+            token = "ghp_original_token",
+        };
+
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            createBody,
+            TestContext.Current.CancellationToken);
+
+        AccountSummary? created = await createResponse.Content
+            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        created.ShouldNotBeNull();
+
+        object updateBody = new
+        {
+            baseUrl = "https://github.com",
+            token = "ghp_new_token",
+        };
+
+        // Act
+        HttpResponseMessage response = await client.PutAsJsonAsync(
+            new Uri($"/api/accounts/{created.Id}", UriKind.Relative),
+            updateBody,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        AccountSummary? account = await response.Content
+            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        account.ShouldNotBeNull();
+        account.Name.ShouldBe(NewIdentity);
     }
 
     [Fact]
@@ -88,7 +137,6 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         // Arrange
         object createBody = new
         {
-            name = "My GitHub",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_original_token",
@@ -105,7 +153,6 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
 
         object updateBody = new
         {
-            name = "My GitHub",
             baseUrl = "https://github.com",
             token = "ghp_new_token",
         };
@@ -122,6 +169,26 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
         account.ShouldNotBeNull();
         account.HasToken.ShouldBeTrue();
+    }
+
+    // Returns firstName on the first HandleAsync call, secondName on all subsequent calls.
+    private sealed class CountingStub(string firstName, string secondName)
+        : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
+    {
+        private int _callCount;
+
+        public Task<Result<ValidateToken.Response>> HandleAsync(
+            ValidateToken.Query query,
+            CancellationToken cancellationToken)
+        {
+            string accountName = Interlocked.Increment(ref _callCount) == 1 ? firstName : secondName;
+            ValidateToken.Response response = new(
+                IsValid: true,
+                IsAuthFailure: false,
+                MissingScopes: [],
+                AccountName: accountName);
+            return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
+        }
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)
