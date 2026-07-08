@@ -1036,4 +1036,53 @@ describe('RepositoryListComponent', () => {
     expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
     expect(liveRegion?.textContent?.trim()).toBe(`${MOCK_REPO_INELIGIBLE.slug}: Re-check failed`);
   });
+
+  // AC-6: reorder controls are visually grouped in __reorder-group, separate from __actions
+  it('should render drag-handle and move buttons inside __reorder-group, separate from __actions', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+
+    // Assert
+    const reorderGroup = el.querySelector('.repository-list__reorder-group');
+    expect(reorderGroup).toBeTruthy();
+    expect(reorderGroup?.querySelector('.repository-list__drag-handle')).toBeTruthy();
+    expect(reorderGroup?.querySelector('.repository-list__move-up-btn')).toBeTruthy();
+    expect(reorderGroup?.querySelector('.repository-list__move-down-btn')).toBeTruthy();
+
+    const actions = el.querySelector('.repository-list__actions');
+    expect(actions).toBeTruthy();
+    expect(actions?.querySelector('.repository-list__drag-handle')).toBeFalsy();
+    expect(actions?.querySelector('.repository-list__move-up-btn')).toBeFalsy();
+    expect(actions?.querySelector('.repository-list__move-down-btn')).toBeFalsy();
+  });
+
+  // AC-3: slug span carries a title attribute matching the repo slug
+  it('should set the title attribute on the slug span to the full repo slug', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const slugSpan = el.querySelector('.repository-list__slug');
+    expect(slugSpan?.getAttribute('title')).toBe(MOCK_REPO.slug);
+  });
+
+  // AC-4: metadata cluster contains all four metadata children
+  it('should render all four metadata children inside __metadata', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const metadata = el.querySelector('.repository-list__metadata');
+    expect(metadata).toBeTruthy();
+    expect(metadata?.querySelector('.repository-list__account-name')).toBeTruthy();
+    expect(metadata?.querySelector('.repository-list__poll-interval')).toBeTruthy();
+    expect(metadata?.querySelector('.repository-list__status')).toBeTruthy();
+    expect(metadata?.querySelector('.repository-list__last-polled')).toBeTruthy();
+  });
 });

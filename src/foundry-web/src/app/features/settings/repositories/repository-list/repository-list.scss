@@ -1,5 +1,5 @@
 .repository-list {
-  --repo-meta-columns: minmax(8rem, 1.5fr) 6rem 7rem 7rem;
+  --repo-row-columns: auto minmax(0, 1fr) minmax(6rem, 8rem) 5rem 6rem 6rem auto auto;
 
   &__empty {
     display: flex;
@@ -127,31 +127,79 @@
     background: var(--fd-bg-page);
     border: 1px solid var(--fd-border-muted);
     border-radius: var(--fd-radius-sm);
-    display: flex;
-    flex-direction: column;
-  }
-
-  &__slug-row {
-    align-items: center;
-    display: flex;
-    gap: var(--fd-spacing-sm);
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-  }
-
-  &__slug-row-end {
-    align-items: center;
-    display: flex;
-    gap: var(--fd-spacing-sm);
-    margin-inline-start: auto;
-  }
-
-  &__meta-row {
-    align-items: center;
     display: grid;
-    gap: var(--fd-spacing-md);
-    grid-template-columns: var(--repo-meta-columns);
-    padding: 0 var(--fd-spacing-md) var(--fd-spacing-sm);
-    padding-inline-start: calc(20px + var(--fd-spacing-sm) + var(--fd-spacing-md));
+    grid-template-columns: var(--repo-row-columns);
+    align-items: center;
+    column-gap: var(--fd-spacing-md);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &.cdk-drag-preview {
+      background: var(--fd-bg-page);
+      border: 1px solid var(--fd-text-link);
+      border-radius: var(--fd-radius-sm);
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+      opacity: 0.95;
+    }
+
+    &.cdk-drag-placeholder {
+      background: var(--fd-bg-card-hover);
+      border: 1px dashed var(--fd-border-muted);
+      opacity: 0.5;
+
+      * {
+        visibility: hidden;
+      }
+    }
+
+    &.cdk-drag-animating {
+      transition: transform 0.25s ease;
+
+      @media (prefers-reduced-motion: reduce) {
+        transition: none;
+      }
+    }
+  }
+
+  &__reorder-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  &__identity {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+    min-width: 0;
+  }
+
+  &__metadata {
+    display: contents;
+  }
+
+  &__eligibility-group {
+    align-items: center;
+    border-inline-start: 1px solid var(--fd-border-muted);
+    display: flex;
+    gap: var(--fd-spacing-xs);
+    padding-inline-start: var(--fd-spacing-md);
+  }
+
+  &__eligibility {
+    flex-shrink: 0;
+  }
+
+  &__actions {
+    display: flex;
+    gap: var(--fd-spacing-xs);
+  }
+
+  fd-repository-eligibility-details {
+    grid-column: 1 / -1;
   }
 
   &__provider {
@@ -164,8 +212,10 @@
     font-family: var(--fd-font-mono);
     font-size: 0.9375rem;
     font-weight: 600;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__account-name {
@@ -218,16 +268,6 @@
     color: var(--fd-text-tertiary);
     font-size: 0.8125rem;
     white-space: nowrap;
-  }
-
-  &__eligibility-group {
-    align-items: center;
-    display: flex;
-    gap: var(--fd-spacing-xs);
-  }
-
-  &__eligibility {
-    flex-shrink: 0;
   }
 
   &__toggle-btn {
@@ -340,45 +380,12 @@
     }
   }
 
-  &__item {
-    &.cdk-drag-preview {
-      background: var(--fd-bg-page);
-      border: 1px solid var(--fd-text-link);
-      border-radius: var(--fd-radius-sm);
-      box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
-      opacity: 0.95;
-    }
-
-    &.cdk-drag-placeholder {
-      background: var(--fd-bg-card-hover);
-      border: 1px dashed var(--fd-border-muted);
-      opacity: 0.5;
-
-      * {
-        visibility: hidden;
-      }
-    }
-
-    &.cdk-drag-animating {
-      transition: transform 0.25s ease;
-
-      @media (prefers-reduced-motion: reduce) {
-        transition: none;
-      }
-    }
-  }
-
   &__list.cdk-drop-list-dragging &__item:not(.cdk-drag-placeholder) {
     transition: transform 0.25s ease;
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
     }
-  }
-
-  &__actions {
-    display: flex;
-    gap: var(--fd-spacing-sm);
   }
 
   &__edit-btn,
@@ -412,6 +419,20 @@
       background: var(--fd-bg-card-hover);
     }
   }
+
+  @media (hover: hover) {
+    &__item:not(:hover):not(:focus-within) {
+      .repository-list__edit-btn,
+      .repository-list__delete-btn,
+      .repository-list__drag-handle,
+      .repository-list__move-up-btn,
+      .repository-list__move-down-btn,
+      .repository-list__toggle-btn {
+        opacity: 0.75;
+        transition: opacity 0.15s ease;
+      }
+    }
+  }
 }
 
 @keyframes spin {
@@ -420,20 +441,77 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 56rem) {
   .repository-list {
-    &__slug-row {
-      flex-wrap: wrap;
+    &__item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--fd-spacing-xs);
+      padding: var(--fd-spacing-sm) var(--fd-spacing-md);
     }
 
-    &__meta-row {
+    &__item > * {
       display: flex;
-      flex-wrap: wrap;
-      padding-inline-start: var(--fd-spacing-md);
+      align-items: center;
+    }
+
+    // Tier 1: reorder-group hidden (folded into identity row on mobile)
+    &__reorder-group {
+      display: none;
+    }
+
+    // Tier 1 row: identity + actions pinned right
+    &__identity {
+      flex: 1;
+      min-width: 0;
+      order: 1;
     }
 
     &__eligibility-group {
-      flex-wrap: nowrap;
+      border-inline-start: none;
+      padding-inline-start: 0;
+      margin-inline-start: auto;
+      order: 2;
+    }
+
+    &__actions {
+      order: 3;
+    }
+
+    // Tier 2: metadata as flex-wrap inline cluster with dot separators
+    &__metadata {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0;
+      order: 4;
+      width: 100%;
+
+      > * + *::before {
+        content: '·';
+        color: var(--fd-text-tertiary);
+        margin-inline: var(--fd-spacing-xs);
+      }
+    }
+
+    fd-repository-eligibility-details {
+      grid-column: unset;
+      width: 100%;
+      order: 5;
+    }
+  }
+}
+
+@media (pointer: coarse) {
+  .repository-list {
+    &__edit-btn,
+    &__delete-btn,
+    &__move-up-btn,
+    &__move-down-btn,
+    &__drag-handle,
+    &__toggle-btn {
+      min-height: 2.75rem;
+      min-width: 2.75rem;
     }
   }
 }
