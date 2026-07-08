@@ -98,27 +98,37 @@ const GITHUB_BASE_URL = 'https://github.com';
           aria-live="polite"
         >
           @if (_accountService.validating()) {
-            <span class="setup-account-step__validation-message">Resolving identity…</span>
+            <span class="setup-account-step__validation-block">
+              <span class="setup-account-step__validation-message">Resolving identity…</span>
+            </span>
           } @else if (_resultVisible() && _accountService.validationResult(); as result) {
             @if (result.isValid && result.accountName) {
-              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
-              <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">
-                Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span>
+              <span class="setup-account-step__validation-block">
+                <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
+                <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">
+                  Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span>
+                </span>
               </span>
             } @else if (result.isAuthFailure) {
-              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
-              <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
-                Authentication failed — check that the token is correct
+              <span class="setup-account-step__validation-block">
+                <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                  Authentication failed — check that the token is correct
+                </span>
               </span>
             } @else if (!result.isValid && result.missingScopes.length > 0) {
-              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
-              <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
-                Missing required scopes: {{ result.missingScopes.join(', ') }}
+              <span class="setup-account-step__validation-block">
+                <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+                <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
+                  Missing required scopes: {{ result.missingScopes.join(', ') }}
+                </span>
               </span>
             } @else if (result.isValid && !result.accountName) {
-              <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
-              <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
-                Token is valid, but the account identity could not be resolved from the provider
+              <span class="setup-account-step__validation-block">
+                <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                  Token is valid, but the account identity could not be resolved from the provider
+                </span>
               </span>
             }
           }

@@ -141,40 +141,54 @@ const GITHUB_BASE_URL = 'https://github.com';
         aria-live="polite"
       >
         @if (validating()) {
-          <span class="account-form__validation-message">Resolving identity…</span>
+          <span class="account-form__validation-block">
+            <span class="account-form__validation-message">Resolving identity…</span>
+          </span>
         } @else if (_resultVisible() && validationResult(); as result) {
           @if (result.isValid && result.accountName) {
-            <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--valid">
-              Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span>
+            <span class="account-form__validation-block">
+              <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
+              <span class="account-form__validation-message account-form__validation-message--valid">
+                Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span>
+              </span>
             </span>
           } @else if (result.isAuthFailure) {
-            <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--error">
-              Authentication failed — check that the token is correct
+            <span class="account-form__validation-block">
+              <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+              <span class="account-form__validation-message account-form__validation-message--error">
+                Authentication failed — check that the token is correct
+              </span>
             </span>
           } @else if (!result.isValid && result.missingScopes.length > 0) {
-            <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--warning">
-              Missing required scopes: {{ result.missingScopes.join(', ') }}
+            <span class="account-form__validation-block">
+              <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+              <span class="account-form__validation-message account-form__validation-message--warning">
+                Missing required scopes: {{ result.missingScopes.join(', ') }}
+              </span>
             </span>
           } @else if (result.isValid && !result.accountName) {
-            <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--error">
-              Token is valid, but the account identity could not be resolved from the provider
+            <span class="account-form__validation-block">
+              <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+              <span class="account-form__validation-message account-form__validation-message--error">
+                Token is valid, but the account identity could not be resolved from the provider
+              </span>
             </span>
           }
         }
         @if (_isDuplicate()) {
-          <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-          <span class="account-form__validation-message account-form__validation-message--warning">
-            An account for "{{ _resolvedAccountName() }}" already exists on {{ _resolvedHost() }}
+          <span class="account-form__validation-block">
+            <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+            <span class="account-form__validation-message account-form__validation-message--warning">
+              An account for "{{ _resolvedAccountName() }}" already exists on {{ _resolvedHost() }}
+            </span>
           </span>
         }
         @if (_isEditMode() && _showRenameNotice()) {
-          <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-          <span class="account-form__validation-message account-form__validation-message--warning">
-            Saving will rename this account to "{{ _resolvedAccountName() }}"
+          <span class="account-form__validation-block">
+            <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+            <span class="account-form__validation-message account-form__validation-message--warning">
+              Saving will rename this account to "{{ _resolvedAccountName() }}"
+            </span>
           </span>
         }
       </div>
