@@ -2227,26 +2227,42 @@ describe('IssueService (group-rank multi-key sort)', () => {
     expect(service.sortedIssues()[1].id).toBe('waiting');
   });
 
-  // Cycle G2: within the same bucket, non-queued cards sort by detectedAt desc, then queued cards follow in server order
-  it('should sort non-queued Waiting cards by detectedAt desc, then queued Waiting cards in server order', () => {
-    // Arrange — Waiting bucket: blocked (non-queued) older, detected (non-queued) newer, queued server-first, revision_queued server-second
-    const blockedOld: IssueSummary = { ...mockSummary, id: 'blocked-old', state: 'blocked', detectedAt: '2026-01-01T00:00:00Z' };
-    const detectedNew: IssueSummary = { ...mockSummary, id: 'detected-new', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
+  // Cycle G2: within the Waiting bucket: queued-tier first (server order), then detected (detectedAt desc), then blocked (detectedAt desc)
+  it('should sort Waiting cards as: queued-tier in server order, then detected by detectedAt desc, then blocked by detectedAt desc', () => {
+    // Arrange — Waiting bucket: queued server-first, revision_queued server-second, detected newer, blocked older
     const queuedFirst: IssueSummary = { ...mockSummary, id: 'queued-first', state: 'queued', detectedAt: '2026-01-01T00:00:00Z' };
     const revQueuedSecond: IssueSummary = { ...mockSummary, id: 'rev-queued-second', state: 'revision_queued', detectedAt: '2026-06-01T00:00:00Z' };
+    const detectedNew: IssueSummary = { ...mockSummary, id: 'detected-new', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
+    const blockedOld: IssueSummary = { ...mockSummary, id: 'blocked-old', state: 'blocked', detectedAt: '2026-01-01T00:00:00Z' };
 
-    // Act — server delivers: blocked-old, detected-new, queued-first, rev-queued-second
+    // Act — server delivers: queued-first, rev-queued-second, detected-new, blocked-old
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([blockedOld, detectedNew, queuedFirst, revQueuedSecond]);
+    httpMock.expectOne('/api/issues').flush([queuedFirst, revQueuedSecond, detectedNew, blockedOld]);
 
-    // Assert — all four are in Waiting (rank 2), non-queued by date desc first, then queued in server order
+    // Assert — Waiting order: queued-tier in server order, then detected by date desc, then blocked by date desc
     const waiting = service.sortedIssues().filter(i =>
       i.state === 'blocked' || i.state === 'detected' || i.state === 'queued' || i.state === 'revision_queued'
     );
-    expect(waiting[0].id).toBe('detected-new');    // non-queued, newer date
-    expect(waiting[1].id).toBe('blocked-old');      // non-queued, older date
-    expect(waiting[2].id).toBe('queued-first');     // queued, server position 0
-    expect(waiting[3].id).toBe('rev-queued-second'); // queued, server position 1
+    expect(waiting[0].id).toBe('queued-first');      // queued-tier, server position 0
+    expect(waiting[1].id).toBe('rev-queued-second'); // queued-tier, server position 1
+    expect(waiting[2].id).toBe('detected-new');      // detected, newer date
+    expect(waiting[3].id).toBe('blocked-old');       // blocked, older date
+  });
+
+  // Cycle G2b (AC2): a blocked card with the NEWEST detectedAt still sorts after any queued-tier card
+  it('should sort a blocked card after a queued card even when blocked has the newest detectedAt', () => {
+    // Arrange — blocked has the newest detectedAt, queued has the oldest
+    const queuedOldest: IssueSummary = { ...mockSummary, id: 'queued-oldest', state: 'queued', detectedAt: '2026-01-01T00:00:00Z' };
+    const blockedNewest: IssueSummary = { ...mockSummary, id: 'blocked-newest', state: 'blocked', detectedAt: '2026-12-31T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([blockedNewest, queuedOldest]);
+
+    // Assert — queued precedes blocked despite its older detectedAt
+    const waiting = service.sortedIssues().filter(i => i.state === 'queued' || i.state === 'blocked');
+    expect(waiting[0].id).toBe('queued-oldest');
+    expect(waiting[1].id).toBe('blocked-newest');
   });
 
   // Cycle G3: queued-tier cards within a bucket stay in raw server order (not re-sorted by date)
@@ -2317,5 +2333,68 @@ describe('IssueService (group-rank multi-key sort)', () => {
     expect(inProgressGroup[0].id).toBe('in-prog');    // non-queued goes first
     expect(inProgressGroup[1].id).toBe('cq-1');       // queued, server position 0
     expect(inProgressGroup[2].id).toBe('cq-2');       // queued, server position 1
+  });
+
+  // Regression — AC3: Needs-attention interleave
+  // All four Needs-attention states (review, failed, continuable_failed, revision_failed) are peers
+  // in the same within-group tier. They must sort strictly by detectedAt newest-first with NO
+  // per-state clustering. A per-state block sort would produce a different ordering than the expected
+  // one below when at least 3 different states interleave by date.
+  it('should interleave all Needs-attention states strictly by detectedAt desc (no per-state grouping)', () => {
+    // Arrange — dates deliberately interleaved so any per-state block breaks the order:
+    //   review        2026-04 (second newest)
+    //   failed        2026-06 (newest)
+    //   continuable_failed  2026-02 (second oldest)
+    //   revision_failed     2026-01 (oldest)
+    // Expected newest-first order: failed → review → continuable_failed → revision_failed
+    const reviewCard: IssueSummary = { ...mockSummary, id: 'na-review', state: 'review', detectedAt: '2026-04-01T00:00:00Z' };
+    const failedCard: IssueSummary = { ...mockSummary, id: 'na-failed', state: 'failed', detectedAt: '2026-06-01T00:00:00Z' };
+    const continuableCard: IssueSummary = { ...mockSummary, id: 'na-cont-failed', state: 'continuable_failed', detectedAt: '2026-02-01T00:00:00Z' };
+    const revFailedCard: IssueSummary = { ...mockSummary, id: 'na-rev-failed', state: 'revision_failed', detectedAt: '2026-01-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([reviewCard, failedCard, continuableCard, revFailedCard]);
+
+    // Assert — Needs-attention cards in strict detectedAt desc order, not clustered by state
+    const needsAttnGroup = service.sortedIssues().filter(i =>
+      i.state === 'review' || i.state === 'failed' || i.state === 'continuable_failed' || i.state === 'revision_failed'
+    );
+    expect(needsAttnGroup.length).toBe(4);
+    expect(needsAttnGroup[0].id).toBe('na-failed');       // 2026-06, newest
+    expect(needsAttnGroup[1].id).toBe('na-review');       // 2026-04
+    expect(needsAttnGroup[2].id).toBe('na-cont-failed');  // 2026-02
+    expect(needsAttnGroup[3].id).toBe('na-rev-failed');   // 2026-01, oldest
+  });
+
+  // Regression — AC4: In-progress group ordering lock
+  // in_progress and revision_in_progress are peers (tier 0) and must sort by detectedAt desc.
+  // continuation_queued (tier 1) follows in raw server order, regardless of its detectedAt.
+  // This test uses two non-queued cards with reversed server/date order and two continuation_queued
+  // cards in a specific server order to firmly lock both dimensions.
+  it('should order In progress non-queued cards by detectedAt desc then continuation_queued in server order', () => {
+    // Arrange:
+    //   revision_in_progress  2026-06 (newer, server pos 0) → should be first in non-queued tier
+    //   in_progress           2026-01 (older, server pos 1) → should be second in non-queued tier
+    //   continuation_queued A 2026-03 (server pos 2) → third overall (queued tier, server order)
+    //   continuation_queued B 2026-09 (server pos 3, newest date) → fourth overall (queued tier keeps server order)
+    const revInProg: IssueSummary = { ...mockSummary, id: 'rev-in-prog', state: 'revision_in_progress', detectedAt: '2026-06-01T00:00:00Z' };
+    const inProg: IssueSummary = { ...mockSummary, id: 'in-prog', state: 'in_progress', detectedAt: '2026-01-01T00:00:00Z' };
+    const contQueuedA: IssueSummary = { ...mockSummary, id: 'cq-a', state: 'continuation_queued', detectedAt: '2026-03-01T00:00:00Z' };
+    const contQueuedB: IssueSummary = { ...mockSummary, id: 'cq-b', state: 'continuation_queued', detectedAt: '2026-09-01T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([revInProg, inProg, contQueuedA, contQueuedB]);
+
+    // Assert — full In progress group order locked
+    const inProgressGroup = service.sortedIssues().filter(i =>
+      i.state === 'in_progress' || i.state === 'revision_in_progress' || i.state === 'continuation_queued'
+    );
+    expect(inProgressGroup.length).toBe(4);
+    expect(inProgressGroup[0].id).toBe('rev-in-prog'); // non-queued, newer date → first
+    expect(inProgressGroup[1].id).toBe('in-prog');     // non-queued, older date → second
+    expect(inProgressGroup[2].id).toBe('cq-a');        // queued, server pos 2 → third
+    expect(inProgressGroup[3].id).toBe('cq-b');        // queued, server pos 3 → fourth (date would put it first, but server order wins)
   });
 });

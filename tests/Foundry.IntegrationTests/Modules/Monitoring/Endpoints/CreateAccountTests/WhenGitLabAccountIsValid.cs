@@ -16,12 +16,19 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 
 public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
 {
+    private const string ResolvedAccountName = "gitlab-user";
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
     public WhenGitLabAccountIsValid()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: []);
+        ValidateToken.Response validResponse = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: ResolvedAccountName);
+
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -43,7 +50,6 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
         // Arrange
         object body = new
         {
-            name = "My GitLab",
             providerType = "gitlab",
             baseUrl = "https://gitlab.com",
             token = "glpat_test_token",
@@ -61,7 +67,7 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
             .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
         account.ShouldNotBeNull();
         account.ShouldSatisfyAllConditions(
-            () => account.Name.ShouldBe("My GitLab"),
+            () => account.Name.ShouldBe(ResolvedAccountName),
             () => account.ProviderType.ShouldBe("gitlab"),
             () => account.BaseUrl.ShouldBe("https://gitlab.com/"),
             () => account.HasToken.ShouldBeTrue());
@@ -73,7 +79,6 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
         // Arrange
         object body = new
         {
-            name = "My GitLab Mixed",
             providerType = "GitLab",
             baseUrl = "https://gitlab.com",
             token = "glpat_test_token",
@@ -95,7 +100,6 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
         // Arrange
         object body = new
         {
-            name = "My Self-Hosted GitLab",
             providerType = "gitlab",
             baseUrl = "https://gitlab.example.com",
             token = "glpat_test_token",

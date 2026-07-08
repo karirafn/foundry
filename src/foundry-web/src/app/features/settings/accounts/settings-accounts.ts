@@ -37,6 +37,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
           }
           @case ('add') {
             <fd-account-form
+              [accounts]="accountService.accounts()"
               [saving]="accountService.saving()"
               [validating]="accountService.validating()"
               [validationResult]="accountService.validationResult()"
@@ -50,6 +51,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
           @case ('edit') {
             <fd-account-form
               [account]="_editAccount"
+              [accounts]="accountService.accounts()"
               [saving]="accountService.saving()"
               [validating]="accountService.validating()"
               [validationResult]="accountService.validationResult()"

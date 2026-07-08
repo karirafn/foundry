@@ -20,7 +20,7 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
 
     public WhenTokenIsInvalid()
     {
-        ValidateToken.Response invalidResponse = new(IsValid: false, IsAuthFailure: true, MissingScopes: []);
+        ValidateToken.Response invalidResponse = new(IsValid: false, IsAuthFailure: true, MissingScopes: [], AccountName: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -42,7 +42,6 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
         // Arrange
         object body = new
         {
-            name = "My GitHub",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_invalid_token",
@@ -62,7 +61,7 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     public async Task WhenTokenMissesScopes_ReturnsBadRequest()
     {
         // Arrange — token is valid auth but missing required scopes, so IsValid == false
-        ValidateToken.Response missingScopes = new(IsValid: false, IsAuthFailure: false, MissingScopes: ["repo"]);
+        ValidateToken.Response missingScopes = new(IsValid: false, IsAuthFailure: false, MissingScopes: ["repo"], AccountName: null);
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -73,7 +72,6 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
 
         object body = new
         {
-            name = "My GitHub",
             providerType = "github",
             baseUrl = "https://github.com",
             token = "ghp_no_scopes_token",

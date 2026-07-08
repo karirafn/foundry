@@ -185,4 +185,90 @@ public sealed class ValidateTokenAsync
             () => success.Value.IsValid.ShouldBeTrue(),
             () => success.Value.MissingScopes.ShouldBeEmpty());
     }
+
+    [Fact]
+    public async Task WhenResponseBodyContainsLogin_AccountNameIsResolved()
+    {
+        // Arrange
+        string json = """{ "login": "octocat" }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.AccountName.ShouldBe("octocat");
+    }
+
+    [Fact]
+    public async Task WhenResponseBodyHasEmptyLogin_AccountNameIsNull()
+    {
+        // Arrange
+        string json = """{ "login": "" }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.AccountName.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenResponseBodyHasAbsentLogin_AccountNameIsNull()
+    {
+        // Arrange
+        string json = """{ "id": 1 }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.AccountName.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAuthFailure_AccountNameIsNull()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.Unauthorized, string.Empty);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "ghp_bad_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.AccountName.ShouldBeNull();
+    }
 }

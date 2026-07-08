@@ -152,7 +152,6 @@ describe('AccountService', () => {
   it('should POST to /api/accounts when createAccount is called', () => {
     // Arrange
     const request: CreateAccountRequest = {
-      name: 'My GitHub',
       providerType: 'github',
       baseUrl: 'https://api.github.com',
       token: 'ghp_test',
@@ -171,7 +170,6 @@ describe('AccountService', () => {
   it('should set saving to true while createAccount is in flight', () => {
     // Arrange
     const request: CreateAccountRequest = {
-      name: 'My GitHub',
       providerType: 'github',
       baseUrl: 'https://api.github.com',
       token: 'ghp_test',
@@ -188,7 +186,6 @@ describe('AccountService', () => {
   it('should set saving to false and saveSuccess to true after createAccount succeeds', () => {
     // Arrange
     const request: CreateAccountRequest = {
-      name: 'My GitHub',
       providerType: 'github',
       baseUrl: 'https://api.github.com',
       token: 'ghp_test',
@@ -207,7 +204,6 @@ describe('AccountService', () => {
     httpMock.expectOne('/api/accounts').flush([]);
 
     const request: CreateAccountRequest = {
-      name: 'My GitHub',
       providerType: 'github',
       baseUrl: 'https://api.github.com',
       token: 'ghp_test',
@@ -224,7 +220,6 @@ describe('AccountService', () => {
   it('should set saving to false when createAccount fails', () => {
     // Arrange
     const request: CreateAccountRequest = {
-      name: 'My GitHub',
       providerType: 'github',
       baseUrl: 'https://api.github.com',
       token: 'ghp_test',
@@ -243,7 +238,6 @@ describe('AccountService', () => {
   it('should set saveError when createAccount fails with a string body', () => {
     // Arrange
     const request: CreateAccountRequest = {
-      name: 'Duplicate',
       providerType: 'github',
       baseUrl: 'https://api.github.com',
       token: 'ghp_test',
@@ -262,11 +256,11 @@ describe('AccountService', () => {
 
   it('should clear saveError at start of createAccount', () => {
     // Arrange — first call that fails
-    service.createAccount({ name: 'X', providerType: 'github', baseUrl: 'https://api.github.com', token: 'x' });
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'x' });
     httpMock.expectOne('/api/accounts').flush('Conflict', { status: 409, statusText: 'Conflict' });
 
     // Act — second call clears error immediately
-    service.createAccount({ name: 'Y', providerType: 'github', baseUrl: 'https://api.github.com', token: 'y' });
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'y' });
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
@@ -277,7 +271,6 @@ describe('AccountService', () => {
     // Arrange
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
-      name: 'Duplicate Name',
       baseUrl: 'https://api.github.com',
     };
     service.updateAccount(id, request);
@@ -294,14 +287,14 @@ describe('AccountService', () => {
 
   it('should clear saveError at start of updateAccount', () => {
     // Arrange — updateAccount call that fails
-    service.updateAccount(MOCK_ACCOUNT.id, { name: 'X', baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Conflict', {
       status: 409,
       statusText: 'Conflict',
     });
 
     // Act — second updateAccount call clears error immediately
-    service.updateAccount(MOCK_ACCOUNT.id, { name: 'Y', baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
@@ -313,7 +306,6 @@ describe('AccountService', () => {
     // Arrange
     const id = '00000000-0000-0000-0000-000000000001';
     const request: UpdateAccountRequest = {
-      name: 'Updated GitHub',
       baseUrl: 'https://api.github.com',
       token: 'ghp_updated',
     };
@@ -332,7 +324,6 @@ describe('AccountService', () => {
     // Arrange
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
-      name: 'Updated',
       baseUrl: 'https://api.github.com',
     };
 
@@ -348,7 +339,6 @@ describe('AccountService', () => {
     // Arrange
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
-      name: 'Updated',
       baseUrl: 'https://api.github.com',
     };
     service.loadAccounts();
@@ -370,7 +360,6 @@ describe('AccountService', () => {
 
     const updatedAccount: AccountSummary = { ...MOCK_ACCOUNT, name: 'Updated GitHub' };
     const request: UpdateAccountRequest = {
-      name: 'Updated GitHub',
       baseUrl: 'https://api.github.com',
     };
 

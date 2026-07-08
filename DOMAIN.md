@@ -366,7 +366,7 @@ The dashboard's `fd-log-view` component subscribes to this stream (stream source
 ## First-Run Wizard
 
 A guided setup flow (`/setup`) that runs when no accounts are configured.
-Three steps: select auth mode (API key or OAuth), add first account (provider, name, base URL, PAT), select repositories to monitor (fetched from provider API).
+Three steps: select auth mode (API key or OAuth), add first account (provider, base URL, PAT — the account name is derived from the token identity), select repositories to monitor (fetched from provider API).
 Auto-redirects from `/issues` when no accounts exist. Redirects to `/issues` on completion.
 The wizard reuses the same form components as the settings page.
 
