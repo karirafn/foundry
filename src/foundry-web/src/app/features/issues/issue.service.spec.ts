@@ -2227,26 +2227,42 @@ describe('IssueService (group-rank multi-key sort)', () => {
     expect(service.sortedIssues()[1].id).toBe('waiting');
   });
 
-  // Cycle G2: within the same bucket, non-queued cards sort by detectedAt desc, then queued cards follow in server order
-  it('should sort non-queued Waiting cards by detectedAt desc, then queued Waiting cards in server order', () => {
-    // Arrange — Waiting bucket: blocked (non-queued) older, detected (non-queued) newer, queued server-first, revision_queued server-second
-    const blockedOld: IssueSummary = { ...mockSummary, id: 'blocked-old', state: 'blocked', detectedAt: '2026-01-01T00:00:00Z' };
-    const detectedNew: IssueSummary = { ...mockSummary, id: 'detected-new', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
+  // Cycle G2: within the Waiting bucket: queued-tier first (server order), then detected (detectedAt desc), then blocked (detectedAt desc)
+  it('should sort Waiting cards as: queued-tier in server order, then detected by detectedAt desc, then blocked by detectedAt desc', () => {
+    // Arrange — Waiting bucket: queued server-first, revision_queued server-second, detected newer, blocked older
     const queuedFirst: IssueSummary = { ...mockSummary, id: 'queued-first', state: 'queued', detectedAt: '2026-01-01T00:00:00Z' };
     const revQueuedSecond: IssueSummary = { ...mockSummary, id: 'rev-queued-second', state: 'revision_queued', detectedAt: '2026-06-01T00:00:00Z' };
+    const detectedNew: IssueSummary = { ...mockSummary, id: 'detected-new', state: 'detected', detectedAt: '2026-06-01T00:00:00Z' };
+    const blockedOld: IssueSummary = { ...mockSummary, id: 'blocked-old', state: 'blocked', detectedAt: '2026-01-01T00:00:00Z' };
 
-    // Act — server delivers: blocked-old, detected-new, queued-first, rev-queued-second
+    // Act — server delivers: queued-first, rev-queued-second, detected-new, blocked-old
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([blockedOld, detectedNew, queuedFirst, revQueuedSecond]);
+    httpMock.expectOne('/api/issues').flush([queuedFirst, revQueuedSecond, detectedNew, blockedOld]);
 
-    // Assert — all four are in Waiting (rank 2), non-queued by date desc first, then queued in server order
+    // Assert — Waiting order: queued-tier in server order, then detected by date desc, then blocked by date desc
     const waiting = service.sortedIssues().filter(i =>
       i.state === 'blocked' || i.state === 'detected' || i.state === 'queued' || i.state === 'revision_queued'
     );
-    expect(waiting[0].id).toBe('detected-new');    // non-queued, newer date
-    expect(waiting[1].id).toBe('blocked-old');      // non-queued, older date
-    expect(waiting[2].id).toBe('queued-first');     // queued, server position 0
-    expect(waiting[3].id).toBe('rev-queued-second'); // queued, server position 1
+    expect(waiting[0].id).toBe('queued-first');      // queued-tier, server position 0
+    expect(waiting[1].id).toBe('rev-queued-second'); // queued-tier, server position 1
+    expect(waiting[2].id).toBe('detected-new');      // detected, newer date
+    expect(waiting[3].id).toBe('blocked-old');       // blocked, older date
+  });
+
+  // Cycle G2b (AC2): a blocked card with the NEWEST detectedAt still sorts after any queued-tier card
+  it('should sort a blocked card after a queued card even when blocked has the newest detectedAt', () => {
+    // Arrange — blocked has the newest detectedAt, queued has the oldest
+    const queuedOldest: IssueSummary = { ...mockSummary, id: 'queued-oldest', state: 'queued', detectedAt: '2026-01-01T00:00:00Z' };
+    const blockedNewest: IssueSummary = { ...mockSummary, id: 'blocked-newest', state: 'blocked', detectedAt: '2026-12-31T00:00:00Z' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([blockedNewest, queuedOldest]);
+
+    // Assert — queued precedes blocked despite its older detectedAt
+    const waiting = service.sortedIssues().filter(i => i.state === 'queued' || i.state === 'blocked');
+    expect(waiting[0].id).toBe('queued-oldest');
+    expect(waiting[1].id).toBe('blocked-newest');
   });
 
   // Cycle G3: queued-tier cards within a bucket stay in raw server order (not re-sorted by date)
