@@ -53,6 +53,10 @@ internal sealed class AccountConfiguration(
             .IsRequired()
             .HasColumnName("base_url");
 
+        builder.HasIndex(a => new { a.BaseUrl, a.Name })
+            .IsUnique()
+            .HasDatabaseName("ix_accounts_base_url_name");
+
         builder.HasDiscriminator<string>("type")
             .HasValue<GitHubAccount>(AccountDiscriminators.GitHub)
             .HasValue<GitLabAccount>(AccountDiscriminators.GitLab)

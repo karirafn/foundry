@@ -43,10 +43,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    // TODO: finalize this test in step 5 when the (BaseUrl, Name) unique index is added.
-    // The duplicate detection now relies on a DB constraint violation (DbUpdateException → 409)
-    // rather than the removed read-then-check pre-query. The index is added in step 5.
-    [Fact(Skip = "Requires the (BaseUrl, Name) unique index added in step 5")]
+    [Fact]
     public async Task ReturnsConflict()
     {
         // Arrange

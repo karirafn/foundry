@@ -42,10 +42,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    // TODO: finalize this test in step 5 when the (BaseUrl, Name) unique index is added.
-    // The duplicate detection now relies on a DB constraint violation (DbUpdateException → 409)
-    // rather than the removed read-then-check pre-query. The index is added in step 5.
-    [Fact(Skip = "Requires the (BaseUrl, Name) unique index added in step 5")]
+    [Fact]
     public async Task ReturnsConflict()
     {
         // Arrange — create two accounts with distinct names, then update the second
@@ -141,7 +138,10 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    // Returns firstName on the first HandleAsync call, secondName on all subsequent calls.
+    // Returns firstName on calls 1 and 3+, secondName only on call 2.
+    // Call 1: CreateAccount for first account → first-user
+    // Call 2: CreateAccount for second account → second-user
+    // Call 3: UpdateAccount with colliding token → first-user (triggers conflict)
     private sealed class CountingStub(string firstName, string secondName)
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {
@@ -151,7 +151,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             ValidateToken.Query query,
             CancellationToken cancellationToken)
         {
-            string accountName = Interlocked.Increment(ref _callCount) == 1 ? firstName : secondName;
+            string accountName = Interlocked.Increment(ref _callCount) == 2 ? secondName : firstName;
             ValidateToken.Response response = new(
                 IsValid: true,
                 IsAuthFailure: false,
