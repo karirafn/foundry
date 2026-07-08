@@ -429,24 +429,25 @@
 
 @media (max-width: 56rem) {
   .repository-list {
+    // Flat-DOM two-tier layout via row-wrap flex:
+    // Tier 1 items flow inline on the first line;
+    // Tier 2 (__metadata) breaks to its own full-width line via flex-basis: 100%.
     &__item {
       display: flex;
-      flex-direction: column;
-      gap: var(--fd-spacing-xs);
-      padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-    }
-
-    &__item > * {
-      display: flex;
+      flex-flow: row wrap;
       align-items: center;
+      column-gap: var(--fd-spacing-sm);
+      row-gap: var(--fd-spacing-xs);
+      padding: var(--fd-spacing-sm) var(--fd-spacing-md);
     }
 
     // Tier 1: reorder-group visible on mobile (▲▼ buttons are the WCAG 2.5.7 non-drag alternative)
     &__reorder-group {
       order: 1;
+      flex-shrink: 0;
     }
 
-    // Tier 1 row: identity + actions pinned right
+    // Tier 1 row: identity takes remaining width so slug truncates correctly
     &__identity {
       flex: 1;
       min-width: 0;
@@ -456,21 +457,23 @@
     &__eligibility-group {
       border-inline-start: none;
       padding-inline-start: 0;
-      margin-inline-start: auto;
       order: 3;
+      flex-shrink: 0;
     }
 
     &__actions {
       order: 4;
+      flex-shrink: 0;
     }
 
-    // Tier 2: metadata as flex-wrap inline cluster with dot separators
+    // Tier 2: metadata as flex-wrap inline cluster with dot separators on its own line
     &__metadata {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 0;
       order: 5;
+      flex: 0 0 100%;
       width: 100%;
 
       > * + *::before {
