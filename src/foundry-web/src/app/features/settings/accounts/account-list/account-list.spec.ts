@@ -154,16 +154,16 @@ describe('AccountListComponent', () => {
     expect(dot?.classList.contains('account-list__token-dot--not-configured')).toBe(true);
   });
 
-  // Cycle 7: edit and delete action buttons with aria-labels
-  it('should render edit and delete buttons with accessible labels', () => {
+  // Cycle 7: edit and delete action icon buttons with aria-labels (rendered via fd-row-actions)
+  it('should render edit and delete icon buttons with accessible labels', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT] });
 
     // Assert
-    const editBtn = el.querySelector('.account-list__edit-btn');
-    expect(editBtn?.getAttribute('aria-label')).toBe('Edit account my-github');
-    const deleteBtn = el.querySelector('.account-list__delete-btn');
-    expect(deleteBtn?.getAttribute('aria-label')).toBe('Delete account my-github');
+    const editBtn = el.querySelector('[aria-label="Edit account my-github"]');
+    expect(editBtn).toBeTruthy();
+    const deleteBtn = el.querySelector('[aria-label="Delete account my-github"]');
+    expect(deleteBtn).toBeTruthy();
   });
 
   // Cycle 8: populated state shows Add Account button in header
@@ -210,7 +210,7 @@ describe('AccountListComponent', () => {
     component.edit.subscribe((a: AccountSummary) => { emittedAccount = a; });
 
     // Act
-    const editBtn = el.querySelector('.account-list__edit-btn') as HTMLButtonElement;
+    const editBtn = el.querySelector('[aria-label="Edit account my-github"]') as HTMLButtonElement;
     editBtn.click();
 
     // Assert
@@ -225,7 +225,7 @@ describe('AccountListComponent', () => {
     component.delete.subscribe((a: AccountSummary) => { emittedAccount = a; });
 
     // Act
-    const deleteBtn = el.querySelector('.account-list__delete-btn') as HTMLButtonElement;
+    const deleteBtn = el.querySelector('[aria-label="Delete account my-github"]') as HTMLButtonElement;
     deleteBtn.click();
 
     // Assert

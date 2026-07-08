@@ -5,6 +5,7 @@ import { RepositoryEligibilityComponent } from '../repository-eligibility/reposi
 import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility-details/repository-eligibility-details';
 import { RepositoryService } from '../repository.service';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
+import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
 
 @Component({
   selector: 'fd-repository-list',
@@ -13,6 +14,7 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
     RepositoryEligibilityComponent,
     RepositoryEligibilityDetailsComponent,
     ProviderIconComponent,
+    RowActionsComponent,
     CdkDropList,
     CdkDrag,
     CdkDragHandle,
@@ -122,20 +124,22 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
                     <circle cx="15" cy="18" r="1.5" />
                   </svg>
                 </button>
-                <button
-                  class="repository-list__move-up-btn"
-                  type="button"
-                  [attr.disabled]="i === 0 ? '' : null"
-                  [attr.aria-label]="'Move ' + repo.slug + ' up'"
-                  (click)="onMove(i, -1)"
-                >&#9650;</button>
-                <button
-                  class="repository-list__move-down-btn"
-                  type="button"
-                  [attr.disabled]="i === repositories().length - 1 ? '' : null"
-                  [attr.aria-label]="'Move ' + repo.slug + ' down'"
-                  (click)="onMove(i, 1)"
-                >&#9660;</button>
+                <div class="repository-list__move-stack">
+                  <button
+                    class="repository-list__move-up-btn"
+                    type="button"
+                    [attr.disabled]="i === 0 ? '' : null"
+                    [attr.aria-label]="'Move ' + repo.slug + ' up'"
+                    (click)="onMove(i, -1)"
+                  >&#9650;</button>
+                  <button
+                    class="repository-list__move-down-btn"
+                    type="button"
+                    [attr.disabled]="i === repositories().length - 1 ? '' : null"
+                    [attr.aria-label]="'Move ' + repo.slug + ' down'"
+                    (click)="onMove(i, 1)"
+                  >&#9660;</button>
+                </div>
               </div>
             }
             <div class="repository-list__identity">
@@ -143,11 +147,16 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
                 [providerType]="repo.providerType"
                 class="repository-list__provider"
               />
-              <span class="repository-list__slug" [title]="repo.slug">{{ repo.slug }}</span>
+              <span
+                class="repository-list__slug"
+                [title]="repo.slug + ' — ' + repo.accountName"
+              >{{ repo.slug }}</span>
             </div>
             <div class="repository-list__metadata">
-              <span class="repository-list__account-name" [title]="repo.accountName">{{ repo.accountName }}</span>
-              <span class="repository-list__poll-interval">
+              <span
+                class="repository-list__poll-interval"
+                [title]="pollIntervalTitle(repo.pollIntervalSeconds)"
+              >
                 {{ pollIntervalLabel(repo.pollIntervalSeconds) }}
               </span>
               <div class="repository-list__status">
@@ -165,6 +174,7 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
             </div>
             @if (repo.eligibility) {
               <div class="repository-list__eligibility-group">
+                <span class="sr-only">{{ eligibilityStatusLabel(repo.eligibility.status) }}</span>
                 <fd-repository-eligibility
                   class="repository-list__eligibility"
                   [status]="repo.eligibility.status"
@@ -202,18 +212,12 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
               </div>
             }
             <div class="repository-list__actions">
-              <button
-                class="repository-list__edit-btn"
-                type="button"
-                [attr.aria-label]="'Edit repository ' + repo.slug"
-                (click)="edit.emit(repo)"
-              >Edit</button>
-              <button
-                class="repository-list__delete-btn"
-                type="button"
-                [attr.aria-label]="'Delete repository ' + repo.slug"
-                (click)="delete.emit(repo)"
-              >Delete</button>
+              <fd-row-actions
+                [editLabel]="'Edit repository ' + repo.slug"
+                [deleteLabel]="'Delete repository ' + repo.slug"
+                (edit)="edit.emit(repo)"
+                (delete)="delete.emit(repo)"
+              />
             </div>
             @if (repo.eligibility && repo.eligibility.status !== 'eligible') {
               <fd-repository-eligibility-details
@@ -252,6 +256,8 @@ export class RepositoryListComponent {
   protected readonly _announcement: WritableSignal<string> = signal('');
   protected readonly _moveError: WritableSignal<string | null> = signal(null);
   protected readonly _multipleRepos = computed(() => this.repositories().length > 1);
+
+  readonly eligibilityStatusLabel = eligibilityStatusLabel;
 
   toggleExpand(id: string): void {
     if (this._expandedId() === id) {
@@ -389,7 +395,15 @@ export class RepositoryListComponent {
       return '—';
     }
     const minutes = Math.round(pollIntervalSeconds / 60);
-    return `${minutes} min`;
+    return `${minutes}m`;
+  }
+
+  pollIntervalTitle(pollIntervalSeconds: number | null): string {
+    if (pollIntervalSeconds === null) {
+      return 'Poll interval not set';
+    }
+    const minutes = Math.round(pollIntervalSeconds / 60);
+    return `Polls every ${minutes} minute${minutes === 1 ? '' : 's'}`;
   }
 
   lastPolledLabel(lastPolledAt: string | null): string {

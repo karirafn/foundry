@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
 import { AccountSummary } from '../account.model';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
+import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
 
 @Component({
   selector: 'fd-account-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ProviderIconComponent],
+  imports: [ProviderIconComponent, RowActionsComponent],
   template: `
     @if (error()) {
       <div class="account-list__error" role="alert">
@@ -65,18 +66,12 @@ import { ProviderIconComponent } from '../../../../shared/components/provider-ic
               </span>
             </div>
             <div class="account-list__actions">
-              <button
-                class="account-list__edit-btn"
-                type="button"
-                [attr.aria-label]="'Edit account ' + account.name"
-                (click)="edit.emit(account)"
-              >Edit</button>
-              <button
-                class="account-list__delete-btn"
-                type="button"
-                [attr.aria-label]="'Delete account ' + account.name"
-                (click)="delete.emit(account)"
-              >Delete</button>
+              <fd-row-actions
+                [editLabel]="'Edit account ' + account.name"
+                [deleteLabel]="'Delete account ' + account.name"
+                (edit)="edit.emit(account)"
+                (delete)="delete.emit(account)"
+              />
             </div>
           </li>
         }

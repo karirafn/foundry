@@ -1,0 +1,43 @@
+.row-actions {
+  display: flex;
+  gap: var(--fd-spacing-xs);
+}
+
+.row-actions__edit-btn,
+.row-actions__delete-btn {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--fd-radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 32px;
+  padding: var(--fd-spacing-xs);
+
+  &:hover {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+}
+
+.row-actions__edit-btn {
+  color: var(--fd-text-link);
+}
+
+.row-actions__delete-btn {
+  color: var(--fd-text-error);
+}
+
+@media (any-pointer: coarse) {
+  .row-actions__edit-btn,
+  .row-actions__delete-btn {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+}
