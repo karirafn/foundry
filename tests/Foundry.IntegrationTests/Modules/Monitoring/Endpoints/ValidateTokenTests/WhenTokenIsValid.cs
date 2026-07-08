@@ -59,6 +59,39 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
             () => dto.MissingScopes.ShouldBeEmpty());
     }
 
+    [Fact]
+    public async Task ReturnsAccountNameResolvedFromProvider()
+    {
+        // Arrange
+        const string ResolvedLogin = "octocat";
+        ValidateToken.Response responseWithAccount = new(
+            IsValid: true,
+            IsAuthFailure: false,
+            MissingScopes: [],
+            AccountName: ResolvedLogin);
+        await using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubHandler(Result<ValidateToken.Response>.Ok(responseWithAccount)));
+        });
+        using HttpClient client = factory.CreateClient();
+        object body = new { token = "ghp_valid", baseUrl = "https://api.github.com" };
+
+        // Act
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            new Uri("/api/accounts/validate-token", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ValidateToken.Response? dto = await response.Content
+            .ReadFromJsonAsync<ValidateToken.Response>(TestContext.Current.CancellationToken);
+        dto.ShouldNotBeNull();
+        dto.AccountName.ShouldBe(ResolvedLogin);
+    }
+
     private sealed class StubHandler(Result<ValidateToken.Response> result)
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {
