@@ -68,3 +68,35 @@ const groupRankMap = new Map<IssueState, number>(
 export function groupRankFor(state: IssueState): number {
   return groupRankMap.get(state) ?? UNGROUPED_RANK;
 }
+
+// Declarative within-group tier ordering. Each nested array is a peer tier;
+// states in the same tier have equal rank. Tier index = rank.
+export const WITHIN_GROUP_ORDER: Readonly<Record<string, readonly (readonly IssueState[])[]>> = {
+  'In progress': [
+    ['in_progress', 'revision_in_progress'],
+    ['continuation_queued'],
+  ],
+  'Needs attention': [
+    ['review', 'failed', 'continuable_failed', 'revision_failed'],
+  ],
+  'Waiting': [
+    ['queued', 'revision_queued'],
+    ['detected'],
+    ['blocked'],
+  ],
+  'Resolved': [
+    ['completed', 'unchanged'],
+  ],
+} as const;
+
+const withinGroupRankMap = new Map<IssueState, number>(
+  Object.values(WITHIN_GROUP_ORDER).flatMap((tiers) =>
+    tiers.flatMap((tier, tierIndex) =>
+      tier.map((state): [IssueState, number] => [state, tierIndex])
+    )
+  )
+);
+
+export function withinGroupRankFor(state: IssueState): number {
+  return withinGroupRankMap.get(state) ?? 0;
+}
