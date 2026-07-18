@@ -32,20 +32,45 @@ namespace Foundry.WebApi.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            // Backfill host from base_url — extract the DNS host from the stored URL.
-            // base_url is stored as a full URL (e.g. "https://github.com" or "https://gitlab.example.com/").
-            // Extract the segment after "://" up to the first "/" or end-of-string.
+            // Backfill host from base_url — extract the normalized host matching the runtime behaviour.
+            // At runtime, Credential.Host is set from baseUrl.Value.Host (System.Uri.Host), which
+            // is already lowercased and port-stripped by the .NET Uri class.
+            // To match that exactly in SQL we:
+            //   1. Extract the authority (everything between "://" and the next "/" or end-of-string).
+            //   2. Lowercase it via lower(...).
+            //   3. Strip any trailing ":port" suffix — present in self-hosted URLs like
+            //      "https://gitlab.corp.example.com:8443/" — by keeping only what precedes the first ":".
+            //
+            // A CTE deduplicates the authority extraction so each step is readable in isolation.
             migrationBuilder.Sql(
                 """
+                WITH extracted AS (
+                    SELECT
+                        id,
+                        -- Raw authority: between "://" and the first "/" in the remainder (or end-of-string)
+                        lower(CASE
+                            WHEN instr(substr(base_url, instr(base_url, '://') + 3), '/') = 0
+                                THEN substr(base_url, instr(base_url, '://') + 3)
+                            ELSE
+                                substr(
+                                    base_url,
+                                    instr(base_url, '://') + 3,
+                                    instr(substr(base_url, instr(base_url, '://') + 3), '/') - 1)
+                        END) AS authority
+                    FROM accounts
+                    WHERE host = ''
+                )
                 UPDATE accounts
                 SET host = CASE
-                    WHEN instr(substr(base_url, instr(base_url, '://') + 3), '/') = 0
-                        THEN substr(base_url, instr(base_url, '://') + 3)
+                    -- Strip ":port" if present in the lowercased authority
+                    WHEN instr((SELECT authority FROM extracted WHERE extracted.id = accounts.id), ':') > 0
+                        THEN substr(
+                            (SELECT authority FROM extracted WHERE extracted.id = accounts.id),
+                            1,
+                            instr((SELECT authority FROM extracted WHERE extracted.id = accounts.id), ':') - 1)
+                    -- No port — use the lowercased authority as-is
                     ELSE
-                        substr(
-                            base_url,
-                            instr(base_url, '://') + 3,
-                            instr(substr(base_url, instr(base_url, '://') + 3), '/') - 1)
+                        (SELECT authority FROM extracted WHERE extracted.id = accounts.id)
                 END
                 WHERE host = '';
                 """);
@@ -83,16 +108,25 @@ namespace Foundry.WebApi.Migrations
 
             // Seed credential_namespaces from existing monitored_repositories.
             // For each distinct (credential_id, host, namespace) triple — where namespace is the
-            // first path segment of the repository slug's owner — insert one credential_namespace row.
+            // full owner (all slug segments except the last) — insert one credential_namespace row.
             //
             // The slug is stored as "owner/reponame" where owner may be multi-segment
             // (e.g. "efla/databridge/reponame" has owner "efla/databridge").
-            // The first path segment of the owner is always substr(slug, 1, instr(slug, '/') - 1),
-            // which gives "efla" for the example above, or the full owner for single-segment owners
-            // like "octocat" in "octocat/project".
+            // This mirrors NamespaceDerivation.FromWritableRepositories, which uses slug[..lastSlash]
+            // (i.e. everything before the LAST '/') to compute the owner.
             //
-            // This guarantees that existing repositories resolve to the same credential after the
-            // namespace model is activated in Steps 4-5.
+            // SQLite has no REVERSE or LASTINDEXOF, so we extract the full owner using the
+            // rtrim character-set trick:
+            //   rtrim(slug, replace(slug, '/', ''))
+            // strips all non-'/' characters from the right of slug until it reaches a '/', giving
+            // "owner/" (with a trailing slash). A second rtrim('/', ...) removes the slash.
+            // This handles both single-segment GitHub owners ("octocat/project" → "octocat") and
+            // multi-segment GitLab owners ("efla/databridge/repo" → "efla/databridge") correctly,
+            // ensuring distinct sub-groups under different credentials resolve independently and
+            // no cross-credential mis-routing can occur on the unique(host, namespace) constraint.
+            //
+            // De-dup uses GROUP BY on the derived owner so each (credential_id, host, owner) triple
+            // produces exactly one INSERT OR IGNORE row.
             migrationBuilder.Sql(
                 """
                 INSERT OR IGNORE INTO credential_namespaces (id, credential_id, host, value)
@@ -105,10 +139,14 @@ namespace Foundry.WebApi.Migrations
                     lower(hex(randomblob(6))),
                     r.account_id,
                     a.host,
-                    substr(r.slug, 1, instr(r.slug, '/') - 1)
+                    -- Full owner = everything before the last '/' in the slug.
+                    -- rtrim with the character set of all non-'/' slug chars strips the repo-name
+                    -- segment from the right, leaving "owner/"; a second rtrim removes the slash.
+                    rtrim(rtrim(r.slug, replace(r.slug, '/', '')), '/')
                 FROM monitored_repositories r
                 JOIN accounts a ON a.id = r.account_id
-                GROUP BY r.account_id, a.host, substr(r.slug, 1, instr(r.slug, '/') - 1);
+                WHERE instr(r.slug, '/') > 0
+                GROUP BY r.account_id, a.host, rtrim(rtrim(r.slug, replace(r.slug, '/', '')), '/');
                 """);
         }
 

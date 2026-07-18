@@ -27,6 +27,12 @@ namespace Foundry.WebApi.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Note: Down re-adds the account_id column but cannot restore the original FK values
+            // (the per-repository credential linkage is not recoverable after the column is dropped).
+            // All rows will have account_id = '00000000-0000-0000-0000-000000000000', which violates
+            // referential integrity if the accounts table is non-empty. This is lossy by design —
+            // development databases are disposable. See the same precedent in
+            // 20260708052247_AddAccountBaseUrlNameUniqueIndex.cs.
             migrationBuilder.AddColumn<Guid>(
                 name: "account_id",
                 table: "monitored_repositories",

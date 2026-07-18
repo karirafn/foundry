@@ -80,20 +80,22 @@ public sealed class WhenMigrationSeeds : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
-    public async Task MultiSegmentOwner_SeedsOnlyFirstSegment()
+    public async Task MultiSegmentOwner_SeedsFullOwnerAsNamespace()
     {
-        // Arrange — "efla/databridge" has two owner segments; first segment is "efla".
+        // Arrange — "efla/databridge" is the full owner of slug "efla/databridge/akraborg.databridge".
+        // The migration must seed the full owner (everything before the LAST '/'), matching
+        // NamespaceDerivation.FromWritableRepositories which uses slug[..lastSlash].
         Guid accountId = await InsertAccountAsync("https://gitlab.example.com");
         await InsertRepositoryAsync(accountId, "efla/databridge/akraborg.databridge", "gitlab.example.com");
 
         // Act
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
-        // Assert
+        // Assert — namespace is the FULL owner "efla/databridge", not just "efla"
         List<(Guid CredentialId, string Host, string Value)> rows = await LoadNamespacesAsync();
 
         rows.Count.ShouldBe(1);
-        rows[0].Value.ShouldBe("efla");
+        rows[0].Value.ShouldBe("efla/databridge");
     }
 
     [Fact]
@@ -115,9 +117,9 @@ public sealed class WhenMigrationSeeds : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
-    public async Task HostBackfill_ExtractsHostFromBaseUrl()
+    public async Task HostBackfill_ExtractsNormalizedHostFromBaseUrl()
     {
-        // Arrange — insert an account with a GitLab self-hosted URL.
+        // Arrange — insert an account with a standard GitLab self-hosted URL.
         Guid accountId = await InsertAccountAsync("https://gitlab.corp.example.com");
 
         // Act
@@ -126,6 +128,50 @@ public sealed class WhenMigrationSeeds : IAsyncLifetime, IAsyncDisposable
         // Assert — the host column is correctly extracted from the base_url
         string host = await LoadAccountHostAsync(accountId);
         host.ShouldBe("gitlab.corp.example.com");
+    }
+
+    [Fact]
+    public async Task HostBackfill_WithPort_StripsPortAndLowercases()
+    {
+        // Arrange — self-hosted URL with a port number (e.g. Nexus/GitLab on a non-standard port).
+        // Runtime behaviour: Credential.Host = baseUrl.Value.Host (System.Uri.Host), which is
+        // lowercased and port-stripped. The migration must produce the same value so that
+        // CredentialResolver (which filters on c.Host == host) can match post-migration rows.
+        Guid accountId = await InsertAccountAsync("https://gitlab.corp.example.com:8443");
+
+        // Act
+        await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
+
+        // Assert — host is "gitlab.corp.example.com" (no port, lowercased)
+        string host = await LoadAccountHostAsync(accountId);
+        host.ShouldBe("gitlab.corp.example.com");
+    }
+
+    [Fact]
+    public async Task TwoCredentials_WithDistinctSubGroupOwners_SeedDistinctNamespaces()
+    {
+        // Regression test for Finding 2: before the fix, the seed extracted only the FIRST segment
+        // of the owner path ("efla" from both "efla/databridge" and "efla/other"). With INSERT OR IGNORE
+        // on unique(host, namespace), the second credential's row was silently dropped — so repos under
+        // "efla/other/*" would mis-route to credential A, which cannot push there (the 403 incident class).
+        //
+        // After the fix, the full owner is seeded so "efla/databridge" and "efla/other" are distinct rows,
+        // and each credential resolves independently.
+        Guid credentialAId = await InsertAccountAsync("https://gitlab.example.com");
+        Guid credentialBId = await InsertAccountAsync("https://gitlab.example.com");
+
+        await InsertRepositoryAsync(credentialAId, "efla/databridge/akraborg.databridge", "gitlab.example.com");
+        await InsertRepositoryAsync(credentialBId, "efla/other/myrepo", "gitlab.example.com");
+
+        // Act
+        await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
+
+        // Assert — two distinct namespace rows, one per credential
+        List<(Guid CredentialId, string Host, string Value)> rows = await LoadNamespacesAsync();
+
+        rows.Count.ShouldBe(2);
+        rows.ShouldContain(r => r.CredentialId == credentialAId && r.Value == "efla/databridge");
+        rows.ShouldContain(r => r.CredentialId == credentialBId && r.Value == "efla/other");
     }
 
     [Fact]
