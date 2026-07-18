@@ -23,8 +23,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
     {
         IReadOnlyList<AvailableRepository> fakeRepositories =
         [
-            new AvailableRepository("owner/repo-a", IsPrivate: false),
-            new AvailableRepository("owner/repo-b", IsPrivate: true),
+            new AvailableRepository("owner/repo-a", IsPrivate: false, CanPush: true),
+            new AvailableRepository("owner/repo-b", IsPrivate: true, CanPush: false),
         ];
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>

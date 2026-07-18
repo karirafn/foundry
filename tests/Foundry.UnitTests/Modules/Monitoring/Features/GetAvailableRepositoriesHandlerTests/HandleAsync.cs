@@ -66,7 +66,7 @@ public sealed class HandleAsync : IAsyncDisposable
         Guid accountId = await SeedGitHubAccountAsync();
         IReadOnlyList<AvailableRepository> githubRepos =
         [
-            new AvailableRepository("owner/github-repo", IsPrivate: false),
+            new AvailableRepository("owner/github-repo", IsPrivate: false, CanPush: true),
         ];
         FakeHandler gitHubFake = new(HttpStatusCode.OK, BuildGitHubRepoJson(["owner/github-repo"]));
         FakeHandler gitLabFake = new(HttpStatusCode.OK, "[]");
@@ -116,8 +116,10 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     private static string BuildGitHubRepoJson(IReadOnlyList<string> fullNames) =>
-        "[" + string.Join(",", fullNames.Select(n => $@"{{""full_name"":""{n}"",""private"":false}}")) + "]";
+        "[" + string.Join(",", fullNames.Select(n =>
+            $@"{{""full_name"":""{n}"",""private"":false,""permissions"":{{""push"":true}}}}")) + "]";
 
     private static string BuildGitLabRepoJson(IReadOnlyList<string> paths) =>
-        "[" + string.Join(",", paths.Select(p => $@"{{""path_with_namespace"":""{p}"",""visibility"":""public""}}")) + "]";
+        "[" + string.Join(",", paths.Select(p =>
+            $@"{{""path_with_namespace"":""{p}"",""visibility"":""public"",""permissions"":{{""project_access"":{{""access_level"":40}},""group_access"":null}}}}")) + "]";
 }

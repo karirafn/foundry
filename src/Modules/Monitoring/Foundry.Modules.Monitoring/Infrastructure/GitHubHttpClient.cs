@@ -501,7 +501,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             List<GitHubRepositoryListItemDto> pageItems = dtos ?? [];
             foreach (GitHubRepositoryListItemDto dto in pageItems)
             {
-                repositories.Add(new AvailableRepository(dto.FullName, dto.Private));
+                repositories.Add(new AvailableRepository(dto.FullName, dto.Private, dto.Permissions?.Push ?? false));
             }
 
             if (pageItems.Count < RepositoriesPerPage)
@@ -879,7 +879,12 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         int? Line,
         int? OriginalLine);
 
-    private sealed record GitHubRepositoryListItemDto(string FullName, bool Private);
+    private sealed record GitHubRepositoryListItemDto(
+        string FullName,
+        bool Private,
+        GitHubRepositoryPermissionsDto? Permissions);
+
+    private sealed record GitHubRepositoryPermissionsDto(bool Push);
 
     private sealed record GitHubGitRefDto(GitHubGitObjectDto? Object);
 
@@ -900,7 +905,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
 
-internal sealed record AvailableRepository(string Slug, bool IsPrivate);
+internal sealed record AvailableRepository(string Slug, bool IsPrivate, bool CanPush);
 
 internal static class GitHubErrors
 {

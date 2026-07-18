@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
@@ -66,7 +68,9 @@ internal static partial class CreateAccount
 
     internal sealed class Handler(
         DbContext dbContext,
-        IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken)
+        IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
+        GitHubHttpClient gitHubHttpClient,
+        GitLabHttpClient gitLabHttpClient)
         : ICommandHandler<Command, CredentialSummary>
     {
         public async Task<Result<CredentialSummary>> HandleAsync(
@@ -117,15 +121,19 @@ internal static partial class CreateAccount
                 ? GitLabCredential.Create(accountName, command.Token, baseUrl)
                 : GitHubCredential.Create(accountName, command.Token, baseUrl);
 
+            IReadOnlyCollection<Namespace> namespaces = await DeriveNamespacesAsync(
+                isGitLab, apiBaseUrl, command.Token, cancellationToken);
+
+            credential.SetNamespaces(namespaces);
             dbContext.Set<Credential>().Add(credential);
 
             try
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsAccountNameDuplicateViolation(ex))
+            catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsNamespaceDuplicateViolation(ex))
             {
-                return Result<CredentialSummary>.Fail(CredentialErrors.DuplicateName(accountName));
+                return Result<CredentialSummary>.Fail(CredentialErrors.DuplicateNamespace(credential.Host));
             }
 
             string providerType = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
@@ -137,6 +145,33 @@ internal static partial class CreateAccount
                 credential.Token is not null);
 
             return Result<CredentialSummary>.Ok(summary);
+        }
+
+        private async Task<IReadOnlyCollection<Namespace>> DeriveNamespacesAsync(
+            bool isGitLab,
+            Uri apiBaseUrl,
+            string token,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                Result<IReadOnlyList<AvailableRepository>> listResult = isGitLab
+                    ? await gitLabHttpClient.ListRepositoriesAsync(apiBaseUrl, token, cancellationToken)
+                    : await gitHubHttpClient.ListRepositoriesAsync(apiBaseUrl, token, cancellationToken);
+
+                if (listResult is not Result<IReadOnlyList<AvailableRepository>>.Success listSuccess)
+                {
+                    return [];
+                }
+
+                return NamespaceDerivation.FromWritableRepositories(listSuccess.Value);
+            }
+#pragma warning disable CA1031 // Provider listing may fail with any exception — treat all as empty; namespaces are best-effort at add time
+            catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+            {
+                return [];
+            }
         }
     }
 
@@ -161,7 +196,7 @@ internal static partial class CreateAccount
                         credential => TypedResults.Created($"/api/accounts/{credential.Id}", credential),
                         error => error.Code switch
                         {
-                            CredentialErrors.DuplicateNameCode => TypedResults.Conflict(error.Message),
+                            CredentialErrors.DuplicateNamespaceCode => TypedResults.Conflict(error.Message),
                             CredentialErrors.UnresolvedIdentityCode => TypedResults.BadRequest(error.Message),
                             _ => TypedResults.BadRequest(error.Message),
                         });

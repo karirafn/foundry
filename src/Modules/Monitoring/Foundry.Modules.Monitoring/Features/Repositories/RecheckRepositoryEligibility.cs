@@ -2,7 +2,9 @@ using System.Diagnostics;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
@@ -19,7 +21,9 @@ internal static class RecheckRepositoryEligibility
 
     internal sealed class Handler(
         DbContext dbContext,
-        IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
+        IRepositoryEligibilityEvaluator eligibilityEvaluator,
+        GitHubHttpClient gitHubHttpClient,
+        GitLabHttpClient gitLabHttpClient) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
@@ -37,13 +41,17 @@ internal static class RecheckRepositoryEligibility
             }
 
             Credential? credential = await dbContext.Set<Credential>()
-                .AsNoTracking()
+                .Include(c => c.Namespaces)
                 .FirstOrDefaultAsync(a => a.Id == credentialId, cancellationToken);
 
             if (credential is null)
             {
                 return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(credentialId));
             }
+
+            // Refresh the credential's namespace set from the live writable-repo listing so that
+            // newly-granted namespaces become covered before re-evaluating eligibility.
+            await RefreshNamespacesAsync(credential, cancellationToken);
 
             await eligibilityEvaluator.EvaluateAndStoreAsync(repository, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -66,6 +74,36 @@ internal static class RecheckRepositoryEligibility
                 repository.Position);
 
             return Result<RepositorySummary>.Ok(summary);
+        }
+
+        private async Task RefreshNamespacesAsync(Credential credential, CancellationToken cancellationToken)
+        {
+            if (credential.Token is null)
+            {
+                return;
+            }
+
+            try
+            {
+                bool isGitLab = credential is GitLabCredential;
+                Result<IReadOnlyList<AvailableRepository>> listResult = isGitLab
+                    ? await gitLabHttpClient.ListRepositoriesAsync(credential.ApiBaseUrl, credential.Token, cancellationToken)
+                    : await gitHubHttpClient.ListRepositoriesAsync(credential.ApiBaseUrl, credential.Token, cancellationToken);
+
+                if (listResult is not Result<IReadOnlyList<AvailableRepository>>.Success listSuccess)
+                {
+                    return;
+                }
+
+                IReadOnlyCollection<Namespace> namespaces = NamespaceDerivation.FromWritableRepositories(listSuccess.Value);
+                credential.SetNamespaces(namespaces);
+            }
+#pragma warning disable CA1031 // Provider listing may fail with any exception — leave existing namespaces unchanged on recheck
+            catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+            {
+                // Leave namespaces unchanged if the listing call fails
+            }
         }
     }
 
