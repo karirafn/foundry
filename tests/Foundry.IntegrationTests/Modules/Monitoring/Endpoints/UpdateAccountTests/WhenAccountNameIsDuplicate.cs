@@ -14,12 +14,17 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
 
+/// <summary>
+/// Verifies that updating a credential to use a token that resolves to the same name as
+/// another credential now succeeds — the (base_url, name) unique index was dropped in
+/// favour of per-namespace scoping.
+/// </summary>
 public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
 {
     // Token-keyed routing: each token maps to a fixed account name.
     // ghp_first_token  → first-user  (create first account)
     // ghp_second_token → second-user (create second account)
-    // ghp_colliding_token → first-user (update second account; triggers conflict)
+    // ghp_colliding_token → first-user (update second account; was a conflict, now allowed)
     private const string FirstToken = "ghp_first_token";
     private const string SecondToken = "ghp_second_token";
     private const string CollidingToken = "ghp_colliding_token";
@@ -53,10 +58,11 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsConflict()
+    public async Task ReturnsOk()
     {
-        // Arrange — create two accounts with distinct names, then update the second
-        // to use a token that resolves to the first account's name.
+        // Arrange — create two accounts with distinct names, then update the second to use
+        // a token that resolves to the first account's name. This is now allowed — the
+        // unique-by-identity constraint was replaced by per-namespace scoping.
         object firstBody = new
         {
             providerType = "github",
@@ -98,8 +104,8 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             updateBody,
             TestContext.Current.CancellationToken);
 
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        // Assert — the update succeeds; same-name credentials are now valid.
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]

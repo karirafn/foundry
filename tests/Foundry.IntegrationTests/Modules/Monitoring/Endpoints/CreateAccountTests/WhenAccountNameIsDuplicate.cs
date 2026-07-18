@@ -13,6 +13,10 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
+/// <summary>
+/// Verifies that creating two credentials with the same resolved account name is now allowed —
+/// the (base_url, name) unique index was dropped in favour of per-namespace scoping.
+/// </summary>
 public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
 {
     private const string ResolvedAccountName = "octocat";
@@ -44,9 +48,9 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsConflict()
+    public async Task ReturnsCreated()
     {
-        // Arrange
+        // Arrange — same token stub always returns "octocat" as the account name.
         object body = new
         {
             providerType = "github",
@@ -54,19 +58,21 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             token = "ghp_test_token",
         };
 
-        await _client.PostAsJsonAsync(
+        HttpResponseMessage firstResponse = await _client.PostAsJsonAsync(
             new Uri("/api/accounts", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
 
-        // Act — create a second account with the same token (same AccountName returned by stub)
+        firstResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // Act — create a second credential with the same resolved name; now allowed.
         HttpResponseMessage response = await _client.PostAsJsonAsync(
             new Uri("/api/accounts", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
 
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        // Assert — both credentials are accepted; duplicate names no longer conflict.
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

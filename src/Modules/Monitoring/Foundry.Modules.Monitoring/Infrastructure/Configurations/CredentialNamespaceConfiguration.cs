@@ -37,5 +37,9 @@ internal sealed class CredentialNamespaceConfiguration : IEntityTypeConfiguratio
             .IsUnicode(false)
             .IsRequired()
             .HasColumnName("value");
+
+        builder.HasIndex(n => new { n.Host, n.Value })
+            .IsUnique()
+            .HasDatabaseName("ix_credential_namespaces_host_value");
     }
 }

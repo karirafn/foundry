@@ -13,6 +13,10 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.AccountConfigurationTests;
 
+/// <summary>
+/// Verifies that the accounts table allows multiple credentials per host — the old
+/// (base_url, name) unique index was removed in favour of per-namespace scoping.
+/// </summary>
 public sealed class EnforcesUniqueBaseUrlName : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
@@ -40,9 +44,10 @@ public sealed class EnforcesUniqueBaseUrlName : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenSecondCredentialHasSameBaseUrlAndName_ThrowsDbUpdateException()
+    public async Task WhenTwoCredentialsHaveSameBaseUrlAndName_BothPersist()
     {
-        // Arrange
+        // Arrange — the (base_url, name) unique index was removed; same-identity credentials
+        // with different namespace sets are now valid and must coexist.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
         GitHubCredential first = GitHubCredential.Create("octocat", "ghp_token_one", baseUrl);
         GitHubCredential second = GitHubCredential.Create("octocat", "ghp_token_two", baseUrl);
@@ -54,10 +59,13 @@ public sealed class EnforcesUniqueBaseUrlName : IAsyncDisposable
         _dbContext.Set<Credential>().Add(second);
 
         // Act
-        Func<Task> act = () => _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Assert
-        await Should.ThrowAsync<DbUpdateException>(act);
+        // Assert — both credentials are persisted without constraint violation
+        int count = await _dbContext.Set<Credential>()
+            .CountAsync(TestContext.Current.CancellationToken);
+
+        count.ShouldBe(2);
     }
 
     [Fact]

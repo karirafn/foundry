@@ -60,10 +60,6 @@ internal sealed class CredentialConfiguration(
             .IsRequired()
             .HasColumnName("host");
 
-        builder.HasIndex(a => new { a.BaseUrl, a.Name })
-            .IsUnique()
-            .HasDatabaseName("ix_accounts_base_url_name");
-
         builder.HasDiscriminator<string>("type")
             .HasValue<GitHubCredential>(CredentialDiscriminators.GitHub)
             .HasValue<GitLabCredential>(CredentialDiscriminators.GitLab)
