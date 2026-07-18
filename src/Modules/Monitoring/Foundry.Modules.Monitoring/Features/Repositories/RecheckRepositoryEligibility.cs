@@ -19,7 +19,6 @@ internal static class RecheckRepositoryEligibility
 
     internal sealed class Handler(
         DbContext dbContext,
-        IIssueProviderFactory providerFactory,
         IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
@@ -46,13 +45,7 @@ internal static class RecheckRepositoryEligibility
                 return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(credentialId));
             }
 
-            if (string.IsNullOrEmpty(credential.Token))
-            {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.NoToken(credentialId));
-            }
-
-            IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
-            await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
+            await eligibilityEvaluator.EvaluateAndStoreAsync(repository, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             RepositorySummary summary = new(

@@ -390,7 +390,6 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         public Task EvaluateAndStoreAsync(
             MonitoredRepository repo,
-            IIssueProvider provider,
             CancellationToken cancellationToken)
         {
             return Task.CompletedTask;

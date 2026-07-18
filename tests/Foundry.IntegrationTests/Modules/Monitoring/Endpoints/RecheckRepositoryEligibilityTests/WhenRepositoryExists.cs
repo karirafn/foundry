@@ -47,8 +47,9 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
     [Fact]
     public async Task ReturnsUpdatedEligibilityInSummary()
     {
-        // Arrange
+        // Arrange — set namespace so resolver can cover the repo
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Recheck Org");
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/recheck-repo");
 
         // Act

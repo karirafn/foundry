@@ -1424,7 +1424,6 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task EvaluateAndStoreAsync(
             MonitoredRepository repo,
-            IIssueProvider provider,
             CancellationToken cancellationToken)
         {
             EvaluateCallCount++;

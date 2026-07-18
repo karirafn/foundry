@@ -51,7 +51,6 @@ internal static class CreateRepository
 
     internal sealed class Handler(
         DbContext dbContext,
-        IIssueProviderFactory providerFactory,
         IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
         // The slug unique index name, used to identify slug-collision DbUpdateExceptions
@@ -124,12 +123,8 @@ internal static class CreateRepository
                 return Result<RepositorySummary>.Fail(RepositoryErrors.ConflictOnCreate());
             }
 
-            if (!string.IsNullOrEmpty(credential.Token))
-            {
-                IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
-                await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
+            await eligibilityEvaluator.EvaluateAndStoreAsync(repository, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             RepositorySummary summary = new(
                 repository.Id.Value,

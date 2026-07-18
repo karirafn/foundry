@@ -1,4 +1,7 @@
 using System.Net;
+using System.Net.Http.Json;
+
+using Foundry.Modules.Monitoring.Contracts;
 
 using Shouldly;
 
@@ -24,9 +27,9 @@ public sealed class WhenAccountHasNoToken : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Returns422UnprocessableEntity()
+    public async Task WhenNoNamespaceCoversRepo_ReturnsIneligibleWithNoCredentialViolation()
     {
-        // Arrange
+        // Arrange — credential has no namespaces configured, so resolver returns null for the repo
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "No Token Org", token: null);
         Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/no-token-repo");
 
@@ -37,6 +40,14 @@ public sealed class WhenAccountHasNoToken : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        RepositorySummary? repository = await response.Content
+            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        repository.ShouldNotBeNull();
+        repository.Eligibility.ShouldNotBeNull();
+        repository.Eligibility.ShouldSatisfyAllConditions(
+            () => repository.Eligibility.Status.ShouldBe("ineligible"),
+            () => repository.Eligibility.Violations.ShouldHaveSingleItem(),
+            () => repository.Eligibility.Violations[0].Rule.ShouldBe("no-credential:owner"));
     }
 }

@@ -35,4 +35,8 @@ public sealed record EligibilityViolation
 
     public static EligibilityViolation Unreachable() =>
         new(UnreachableRule, EligibilityViolationInfo.UnreachableDescription);
+
+    public static EligibilityViolation NoCredential(string namespaceName) =>
+        new(EligibilityViolationInfo.NoCredentialRule(namespaceName),
+            EligibilityViolationInfo.NoCredentialDescription(namespaceName));
 }

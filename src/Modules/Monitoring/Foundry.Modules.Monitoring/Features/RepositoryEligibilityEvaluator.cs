@@ -7,13 +7,30 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Monitoring.Features;
 
 internal sealed class RepositoryEligibilityEvaluator(
+    ICredentialResolver credentialResolver,
+    IIssueProviderFactory providerFactory,
     ILogger<RepositoryEligibilityEvaluator> logger) : IRepositoryEligibilityEvaluator
 {
     public async Task EvaluateAndStoreAsync(
         MonitoredRepository repo,
-        IIssueProvider provider,
         CancellationToken cancellationToken)
     {
+        Credential? credential = await credentialResolver.ResolveAsync(
+            repo.Host,
+            repo.Slug,
+            cancellationToken);
+
+        if (credential is null)
+        {
+            string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
+            repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                [EligibilityViolation.NoCredential(topLevelNamespace)]));
+            return;
+        }
+
+        string token = credential.Token ?? string.Empty;
+        IIssueProvider provider = providerFactory.CreateProvider(credential, token);
+
         RepositoryEligibility eligibility;
 
         try
@@ -25,7 +42,7 @@ internal sealed class RepositoryEligibilityEvaluator(
             eligibility = EvaluateEligibility(result);
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — treat all as unreachable
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogError(
