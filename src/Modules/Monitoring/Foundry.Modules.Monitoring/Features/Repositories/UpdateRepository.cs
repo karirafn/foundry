@@ -53,8 +53,7 @@ internal static class UpdateRepository
             MonitoredRepositoryId repositoryId = MonitoredRepositoryId.From(command.Id);
 
             MonitoredRepository? repository = await dbContext.Set<MonitoredRepository>()
-                .Where(r => r.Id == repositoryId)
-                .FirstOrDefaultAsync(r => r.CredentialId == credentialId, cancellationToken);
+                .FirstOrDefaultAsync(r => r.Id == repositoryId, cancellationToken);
 
             if (repository is null)
             {
@@ -81,7 +80,7 @@ internal static class UpdateRepository
             RepositorySummary summary = new(
                 repository.Id.Value,
                 repository.Slug.ToString(),
-                repository.CredentialId.Value,
+                credential.Id.Value,
                 credential.Name,
                 credential switch
                 {

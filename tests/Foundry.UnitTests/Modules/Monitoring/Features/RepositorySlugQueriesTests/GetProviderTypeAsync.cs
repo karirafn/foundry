@@ -33,7 +33,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new RepositorySlugQueries(_dbContext);
+        _sut = new RepositorySlugQueries(_dbContext, new CredentialResolver(_dbContext));
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -46,13 +46,14 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
         RepositorySlug.Create(slug).ValueOrThrow();
 
     [Fact]
-    public async Task WhenRepositoryLinkedToGitHubAccount_ReturnsGithub()
+    public async Task WhenRepositoryCoveredByGitHubCredential_ReturnsGithub()
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), credential.Id, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), "github.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -64,13 +65,14 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRepositoryLinkedToGitLabAccount_ReturnsGitlab()
+    public async Task WhenRepositoryCoveredByGitLabCredential_ReturnsGitlab()
     {
         // Arrange
         GitLabCredential credential = GitLabCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), credential.Id, "gitlab.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), "gitlab.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -89,6 +91,21 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
 
         // Act
         string? result = await _sut.GetProviderTypeAsync(nonExistentId, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenNoCoveringCredential_ReturnsNull()
+    {
+        // Arrange
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("uncovered/repo"), "github.com", null);
+        _dbContext.Set<MonitoredRepository>().Add(repo);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        string? result = await _sut.GetProviderTypeAsync(repo.Id, TestContext.Current.CancellationToken);
 
         // Assert
         result.ShouldBeNull();

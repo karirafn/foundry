@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +34,10 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
         Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId);
         MonitoredRepositoryId monitoredRepositoryId = MonitoredRepositoryId.From(repositoryId);
+
+        // RepositorySeeder uses slug "owner/repo" — seed that namespace so the resolver finds it.
+        // Namespace derivation (Step 7) is not yet implemented.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
 
         using IServiceScope scope = _factory.Services.CreateScope();
         IRepositoryDispatchQueries sut = scope.ServiceProvider.GetRequiredService<IRepositoryDispatchQueries>();
@@ -92,11 +97,18 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repository = MonitoredRepository.Create(
-            repositorySlug,
-            CredentialId.From(accountId),
-            "gitlab.com",
-            pollInterval: null);
+
+        // Set a namespace on the credential so the resolver can match this repository.
+        Credential? credential = await dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == CredentialId.From(accountId), TestContext.Current.CancellationToken);
+
+        if (credential is not null)
+        {
+            credential.SetNamespaces([Namespace.Create(repositorySlug.Owner).ValueOrThrow()]);
+        }
+
+        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, "gitlab.com", pollInterval: null);
 
         dbContext.Set<MonitoredRepository>().Add(repository);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

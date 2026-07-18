@@ -42,7 +42,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
 
         _dispatcher = new CapturingIntegrationEventDispatcher();
-        RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext);
+        RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext, new CredentialResolver(_dbContext));
         _sut = new WorkerCapacityAvailableHandler(
             _dbContext,
             repositoryDispatchQueries,
@@ -73,12 +73,11 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             token,
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
-        RepositorySlug repositorySlug =
-            RepositorySlug.Create(slug).ValueOrThrow();
+        RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
+        credential.SetNamespaces([Namespace.Create(repositorySlug.Owner).ValueOrThrow()]);
 
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
-            credential.Id,
             "github.com",
             pollInterval: null);
 

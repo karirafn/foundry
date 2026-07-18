@@ -130,7 +130,6 @@ public sealed class GetEligibilityAsync : IAsyncDisposable
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
-            CredentialId.From(accountId),
             "github.com",
             pollInterval: null);
 

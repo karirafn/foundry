@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Repositories;
@@ -19,7 +18,6 @@ public sealed class HandleAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
-    private readonly CredentialId _accountId;
 
     public HandleAsync()
     {
@@ -32,11 +30,6 @@ public sealed class HandleAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-
-        GitHubCredential account = GitHubCredential.Create("org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Credential>().Add(account);
-        _dbContext.SaveChanges();
-        _accountId = account.Id;
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -49,7 +42,6 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         MonitoredRepository repo = MonitoredRepository.Create(
             RepositorySlug.Create($"{owner}/repo").ValueOrThrow(),
-            _accountId,
             "github.com",
             null,
             position);
@@ -72,7 +64,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(_accountId.Value, repoB.Id.Value),
+            new DeleteRepository.Command(Guid.NewGuid(), repoB.Id.Value),
             CancellationToken.None);
 
         // Assert

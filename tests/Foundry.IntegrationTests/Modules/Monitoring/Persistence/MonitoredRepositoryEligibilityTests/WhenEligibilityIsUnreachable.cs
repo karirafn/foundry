@@ -69,7 +69,7 @@ public sealed class WhenEligibilityIsUnreachable : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         RepositorySlug slug = RepositorySlug.Create("owner/unreachable-repo").ValueOrThrow();
-        MonitoredRepository repository = MonitoredRepository.Create(slug, CredentialId.From(accountId), "github.com", pollInterval: null);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", pollInterval: null);
         repository.SetEligibility(eligibility);
 
         dbContext.Set<MonitoredRepository>().Add(repository);

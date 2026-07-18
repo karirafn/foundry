@@ -9,7 +9,8 @@ namespace Foundry.Modules.Monitoring.Features;
 
 internal sealed class PostExitProviderQueries(
     DbContext dbContext,
-    IIssueProviderFactory providerFactory) : IPostExitProviderQueries
+    IIssueProviderFactory providerFactory,
+    ICredentialResolver credentialResolver) : IPostExitProviderQueries
 {
     public async Task<Result<bool>> CreateBranchAsync(
         MonitoredRepositoryId repositoryId,
@@ -97,14 +98,15 @@ internal sealed class PostExitProviderQueries(
                 PostExitProviderQueriesErrors.RepositoryNotFound(repositoryId));
         }
 
-        Credential? credential = await dbContext.Set<Credential>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Id == repo.CredentialId, cancellationToken);
+        Credential? credential = await credentialResolver.ResolveAsync(
+            repo.Host,
+            repo.Slug,
+            cancellationToken);
 
         if (credential is null)
         {
             return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.AccountNotFound(repo.CredentialId));
+                PostExitProviderQueriesErrors.CredentialNotFound(repositoryId));
         }
 
         if (string.IsNullOrEmpty(credential.Token))
@@ -124,9 +126,9 @@ internal static class PostExitProviderQueriesErrors
         new("PostExitProviderQueries.RepositoryNotFound",
             $"No monitored repository found with id '{id.Value}'.");
 
-    public static Error AccountNotFound(CredentialId id) =>
+    public static Error CredentialNotFound(MonitoredRepositoryId id) =>
         new("PostExitProviderQueries.AccountNotFound",
-            $"No account found with id '{id.Value}'.");
+            $"No credential covers the repository with id '{id.Value}'.");
 
     public static Error AccountTokenNotConfigured(CredentialId id) =>
         new("PostExitProviderQueries.AccountTokenNotConfigured",

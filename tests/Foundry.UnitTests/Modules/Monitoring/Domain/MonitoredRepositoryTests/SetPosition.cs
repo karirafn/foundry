@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -15,7 +14,7 @@ public sealed class SetPosition
         RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
     private static MonitoredRepository CreateRepository() =>
-        MonitoredRepository.Create(ValidSlug, CredentialId.New(), "github.com", null);
+        MonitoredRepository.Create(ValidSlug, "github.com", null);
 
     [Fact]
     public void WhenPositionIsNegative_ThrowsArgumentOutOfRangeException()

@@ -51,10 +51,6 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
             .IsRequired()
             .HasColumnName("host");
 
-        builder.Property(r => r.CredentialId)
-            .HasConversion(new StronglyTypedIdValueConverter<CredentialId>())
-            .HasColumnName("account_id");
-
         builder.Property(r => r.PollInterval)
             .HasColumnName("poll_interval");
 
@@ -99,13 +95,6 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
             .IsUnique()
             .HasDatabaseName("ix_monitored_repositories_host_slug");
 
-        builder.HasIndex(r => r.CredentialId)
-            .HasDatabaseName("ix_monitored_repositories_account_id");
-
-        builder.HasOne<Credential>()
-            .WithMany()
-            .HasForeignKey(r => r.CredentialId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 
     private static RepositorySlug ParseSlug(string value)

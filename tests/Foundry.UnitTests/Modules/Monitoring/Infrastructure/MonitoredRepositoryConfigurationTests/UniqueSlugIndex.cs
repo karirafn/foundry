@@ -44,12 +44,8 @@ public sealed class UniqueSlugIndex : IAsyncDisposable
     public async Task WhenDuplicateSlugOnSameHost_ThrowsOnSave()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Credential>().Add(credential);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        MonitoredRepository first = MonitoredRepository.Create(ValidSlug, credential.Id, "github.com", pollInterval: null);
-        MonitoredRepository duplicate = MonitoredRepository.Create(ValidSlug, credential.Id, "github.com", pollInterval: null);
+        MonitoredRepository first = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null);
+        MonitoredRepository duplicate = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null);
 
         _dbContext.Set<MonitoredRepository>().Add(first);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -67,12 +63,8 @@ public sealed class UniqueSlugIndex : IAsyncDisposable
     public async Task WhenSameSlugOnDifferentHosts_SavesSuccessfully()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Credential>().Add(credential);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        MonitoredRepository github = MonitoredRepository.Create(ValidSlug, credential.Id, "github.com", pollInterval: null, position: 0);
-        MonitoredRepository gitlab = MonitoredRepository.Create(ValidSlug, credential.Id, "gitlab.com", pollInterval: null, position: 1);
+        MonitoredRepository github = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null, position: 0);
+        MonitoredRepository gitlab = MonitoredRepository.Create(ValidSlug, "gitlab.com", pollInterval: null, position: 1);
 
         _dbContext.Set<MonitoredRepository>().Add(github);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

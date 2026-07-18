@@ -52,6 +52,9 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
         Guid repoAId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, "owner-a/repo");
         Guid repoBId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, "owner-b/repo");
 
+        // Namespace derivation (Step 7) is not yet implemented — seed namespaces directly.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner-a", "owner-b");
+
         // Act — move repoA from position 0 to position 1
         await _client.PatchAsJsonAsync(
             new Uri($"/api/repositories/{repoAId}/position", UriKind.Relative),

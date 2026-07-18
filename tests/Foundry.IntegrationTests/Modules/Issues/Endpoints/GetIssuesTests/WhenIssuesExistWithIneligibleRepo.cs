@@ -57,7 +57,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         int position = await dbContext.Set<MonitoredRepository>().CountAsync(TestContext.Current.CancellationToken);
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, credential.Id, "github.com", null, position);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null, position);
         repo.SetEligibility(eligibility);
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -138,7 +138,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(slug, credential.Id, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null);
         dbContext.Set<MonitoredRepository>().Add(repo);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

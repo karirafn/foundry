@@ -49,7 +49,6 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
 
         MonitoredRepository repository = MonitoredRepository.Create(
             ValidSlug,
-            credential.Id,
             "github.com",
             pollInterval: TimeSpan.FromMinutes(5));
 
@@ -69,7 +68,6 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
             () => loaded.Slug.Owner.ShouldBe("octocat"),
             () => loaded.Slug.Name.ShouldBe("hello-world"),
             () => loaded.Host.ShouldBe("github.com"),
-            () => loaded.CredentialId.ShouldBe(credential.Id),
             () => loaded.PollInterval.ShouldBe(TimeSpan.FromMinutes(5)),
             () => loaded.IsActive.ShouldBeTrue());
     }

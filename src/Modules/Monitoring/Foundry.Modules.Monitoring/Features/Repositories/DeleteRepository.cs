@@ -21,12 +21,10 @@ internal static class DeleteRepository
             Command command,
             CancellationToken cancellationToken)
         {
-            CredentialId credentialId = CredentialId.From(command.AccountId);
             MonitoredRepositoryId repositoryId = MonitoredRepositoryId.From(command.Id);
 
             if (await dbContext.Set<MonitoredRepository>()
-                    .Where(r => r.Id == repositoryId)
-                    .FirstOrDefaultAsync(r => r.CredentialId == credentialId, cancellationToken)
+                    .FirstOrDefaultAsync(r => r.Id == repositoryId, cancellationToken)
                 is not MonitoredRepository repository)
             {
                 return Result<bool>.Fail(RepositoryErrors.NotFound(repositoryId));

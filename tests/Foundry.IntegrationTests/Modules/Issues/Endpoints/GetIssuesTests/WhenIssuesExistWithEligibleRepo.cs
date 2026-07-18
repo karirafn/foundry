@@ -51,7 +51,7 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
         GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, credential.Id, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, "github.com", null);
         repo.SetEligibility(new RepositoryEligibility.Eligible());
         dbContext.Set<MonitoredRepository>().Add(repo);
 

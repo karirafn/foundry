@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
@@ -44,5 +45,29 @@ internal static class AccountSeeder
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
         return credential.Id.Value;
+    }
+
+    // Sets namespaces on a credential so the resolver can match repositories under those owners.
+    // No HTTP endpoint exists for this yet (Step 7 will add derivation); seed via DbContext.
+    internal static async Task SetOwnerNamespacesAsync(
+        FoundryWebAppFactory factory,
+        Guid accountId,
+        params string[] owners)
+    {
+        using IServiceScope scope = factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        Credential? credential = await dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == CredentialId.From(accountId), CancellationToken.None);
+
+        if (credential is null)
+        {
+            return;
+        }
+
+        IEnumerable<Namespace> namespaces = owners.Select(o => Namespace.Create(o).ValueOrThrow());
+        credential.SetNamespaces(namespaces);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
     }
 }

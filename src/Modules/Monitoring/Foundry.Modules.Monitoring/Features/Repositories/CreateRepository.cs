@@ -104,7 +104,6 @@ internal static class CreateRepository
 
             MonitoredRepository repository = MonitoredRepository.Create(
                 repositorySlug,
-                credentialId,
                 credential.BaseUrl.Value.Host,
                 pollInterval,
                 position);
@@ -135,7 +134,7 @@ internal static class CreateRepository
             RepositorySummary summary = new(
                 repository.Id.Value,
                 repository.Slug.ToString(),
-                repository.CredentialId.Value,
+                credential.Id.Value,
                 credential.Name,
                 credential switch
                 {
