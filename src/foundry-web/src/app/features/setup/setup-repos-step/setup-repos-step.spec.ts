@@ -9,9 +9,9 @@ import { AvailableRepository } from '../../settings/repositories/repository.mode
 const ACCOUNT_ID = 'account-1';
 
 const AVAILABLE_REPOS: AvailableRepository[] = [
-  { slug: 'org/repo-alpha', isPrivate: false },
-  { slug: 'org/repo-beta', isPrivate: true },
-  { slug: 'org/repo-gamma', isPrivate: false },
+  { slug: 'org/repo-alpha', isPrivate: false, canPush: true },
+  { slug: 'org/repo-beta', isPrivate: true, canPush: true },
+  { slug: 'org/repo-gamma', isPrivate: false, canPush: false },
 ];
 
 @Component({ template: '', standalone: true })
