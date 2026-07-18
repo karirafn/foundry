@@ -1,8 +1,3 @@
+// This file is intentionally empty — AccountSummary was renamed to CredentialSummary.
+// See CredentialSummary.cs.
 namespace Foundry.Modules.Monitoring.Contracts;
-
-public sealed record AccountSummary(
-    Guid Id,
-    string Name,
-    string ProviderType,
-    string BaseUrl,
-    bool HasToken);

@@ -94,7 +94,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
-            AccountId.From(accountId),
+            CredentialId.From(accountId),
             "gitlab.com",
             pollInterval: null);
 

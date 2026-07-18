@@ -1,10 +1,3 @@
-using Foundry.Shared;
-
+// This file is intentionally empty — AccountId was renamed to CredentialId.
+// See CredentialId.cs.
 namespace Foundry.Modules.Monitoring.Contracts;
-
-public readonly record struct AccountId(Guid Value) : IStronglyTypedId<AccountId>
-{
-    public static AccountId New() => new(Guid.NewGuid());
-
-    public static AccountId From(Guid value) => new(value);
-}

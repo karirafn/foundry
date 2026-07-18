@@ -20,7 +20,7 @@ internal static partial class CreateAccount
     internal sealed record Command(
         string ProviderType,
         string BaseUrl,
-        string Token) : ICommand<AccountSummary>;
+        string Token) : ICommand<CredentialSummary>;
 
     internal sealed partial class Validator : ICommandValidator<Command>
     {
@@ -67,9 +67,9 @@ internal static partial class CreateAccount
     internal sealed class Handler(
         DbContext dbContext,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken)
-        : ICommandHandler<Command, AccountSummary>
+        : ICommandHandler<Command, CredentialSummary>
     {
-        public async Task<Result<AccountSummary>> HandleAsync(
+        public async Task<Result<CredentialSummary>> HandleAsync(
             Command command,
             CancellationToken cancellationToken)
         {
@@ -81,8 +81,8 @@ internal static partial class CreateAccount
             bool isGitLab = string.Equals(command.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase);
 
             Uri apiBaseUrl = isGitLab
-                ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
-                : GitHubAccount.DeriveApiBaseUrl(baseUrl);
+                ? GitLabCredential.DeriveApiBaseUrl(baseUrl)
+                : GitHubCredential.DeriveApiBaseUrl(baseUrl);
 
             ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl, command.ProviderType);
             Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
@@ -92,32 +92,32 @@ internal static partial class CreateAccount
             if (tokenResult is not Result<ValidateToken.Response>.Success tokenSuccess)
             {
                 Error error = ((Result<ValidateToken.Response>.Failure)tokenResult).Error;
-                return Result<AccountSummary>.Fail(error);
+                return Result<CredentialSummary>.Fail(error);
             }
 
             ValidateToken.Response tokenResponse = tokenSuccess.Value;
             if (!tokenResponse.IsValid)
             {
-                return Result<AccountSummary>.Fail(AccountErrors.InvalidToken);
+                return Result<CredentialSummary>.Fail(CredentialErrors.InvalidToken);
             }
 
             if (string.IsNullOrWhiteSpace(tokenResponse.AccountName))
             {
-                return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+                return Result<CredentialSummary>.Fail(CredentialErrors.UnresolvedIdentity);
             }
 
             string accountName = tokenResponse.AccountName;
 
             if (accountName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || accountName.Any(char.IsControl))
             {
-                return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+                return Result<CredentialSummary>.Fail(CredentialErrors.UnresolvedIdentity);
             }
 
-            Account account = isGitLab
-                ? GitLabAccount.Create(accountName, command.Token, baseUrl)
-                : GitHubAccount.Create(accountName, command.Token, baseUrl);
+            Credential credential = isGitLab
+                ? GitLabCredential.Create(accountName, command.Token, baseUrl)
+                : GitHubCredential.Create(accountName, command.Token, baseUrl);
 
-            dbContext.Set<Account>().Add(account);
+            dbContext.Set<Credential>().Add(credential);
 
             try
             {
@@ -125,18 +125,18 @@ internal static partial class CreateAccount
             }
             catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsAccountNameDuplicateViolation(ex))
             {
-                return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(accountName));
+                return Result<CredentialSummary>.Fail(CredentialErrors.DuplicateName(accountName));
             }
 
             string providerType = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
-            AccountSummary summary = new(
-                account.Id.Value,
-                account.Name,
+            CredentialSummary summary = new(
+                credential.Id.Value,
+                credential.Name,
                 providerType,
-                account.BaseUrl.Value.ToString(),
-                account.Token is not null);
+                credential.BaseUrl.Value.ToString(),
+                credential.Token is not null);
 
-            return Result<AccountSummary>.Ok(summary);
+            return Result<CredentialSummary>.Ok(summary);
         }
     }
 
@@ -151,24 +151,24 @@ internal static partial class CreateAccount
         {
             group.MapPost(string.Empty, static async (
                     RequestBody body,
-                    ICommandHandler<Command, AccountSummary> handler,
+                    ICommandHandler<Command, CredentialSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
                     Command command = new(body.ProviderType, body.BaseUrl, body.Token);
-                    Result<AccountSummary> result = await handler.HandleAsync(command, cancellationToken);
+                    Result<CredentialSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Created<AccountSummary>, Conflict<string>, BadRequest<string>>>(
-                        account => TypedResults.Created($"/api/accounts/{account.Id}", account),
+                    return result.Match<Results<Created<CredentialSummary>, Conflict<string>, BadRequest<string>>>(
+                        credential => TypedResults.Created($"/api/accounts/{credential.Id}", credential),
                         error => error.Code switch
                         {
-                            AccountErrors.DuplicateNameCode => TypedResults.Conflict(error.Message),
-                            AccountErrors.UnresolvedIdentityCode => TypedResults.BadRequest(error.Message),
+                            CredentialErrors.DuplicateNameCode => TypedResults.Conflict(error.Message),
+                            CredentialErrors.UnresolvedIdentityCode => TypedResults.BadRequest(error.Message),
                             _ => TypedResults.BadRequest(error.Message),
                         });
                 })
                 .WithName("CreateAccount")
                 .WithSummary("Creates a new account")
-                .Produces<AccountSummary>(StatusCodes.Status201Created)
+                .Produces<CredentialSummary>(StatusCodes.Status201Created)
                 .ProducesProblem(StatusCodes.Status400BadRequest)
                 .ProducesProblem(StatusCodes.Status409Conflict);
         }

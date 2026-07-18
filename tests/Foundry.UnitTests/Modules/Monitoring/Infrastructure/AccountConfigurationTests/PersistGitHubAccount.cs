@@ -40,48 +40,49 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGitHubAccountPersisted_CanBeReloadedAsGitHubAccount()
+    public async Task WhenGitHubCredentialPersisted_CanBeReloadedAsGitHubCredential()
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubAccount account = GitHubAccount.Create("my-org", "ghp_mytoken", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_mytoken", baseUrl);
 
-        _dbContext.Set<Account>().Add(account);
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        Account? result = await _dbContext
-            .Set<Account>()
-            .FindAsync([account.Id], TestContext.Current.CancellationToken);
+        Credential? result = await _dbContext
+            .Set<Credential>()
+            .FindAsync([credential.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        GitHubAccount gitHub = result.ShouldBeOfType<GitHubAccount>();
+        GitHubCredential gitHub = result.ShouldBeOfType<GitHubCredential>();
         gitHub.ShouldSatisfyAllConditions(
-            () => gitHub.Id.ShouldBe(account.Id),
+            () => gitHub.Id.ShouldBe(credential.Id),
             () => gitHub.Name.ShouldBe("my-org"),
             () => gitHub.Token.ShouldBe("ghp_mytoken"),
-            () => gitHub.BaseUrl.Value.ShouldBe(new Uri("https://github.com")));
+            () => gitHub.BaseUrl.Value.ShouldBe(new Uri("https://github.com")),
+            () => gitHub.Host.ShouldBe("github.com"));
     }
 
     [Fact]
-    public async Task WhenGitHubAccountPersistedWithNullToken_CanBeReloadedWithNullToken()
+    public async Task WhenGitHubCredentialPersistedWithNullToken_CanBeReloadedWithNullToken()
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubAccount account = GitHubAccount.Create("my-org", null, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create("my-org", null, baseUrl);
 
-        _dbContext.Set<Account>().Add(account);
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        Account? result = await _dbContext
-            .Set<Account>()
-            .FindAsync([account.Id], TestContext.Current.CancellationToken);
+        Credential? result = await _dbContext
+            .Set<Credential>()
+            .FindAsync([credential.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        GitHubAccount gitHub = result.ShouldBeOfType<GitHubAccount>();
+        GitHubCredential gitHub = result.ShouldBeOfType<GitHubCredential>();
         gitHub.Token.ShouldBeNull();
     }
 }

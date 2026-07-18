@@ -21,22 +21,22 @@ internal static class GetRepositories
             Query query,
             CancellationToken cancellationToken)
         {
-            AccountId accountId = AccountId.From(query.AccountId);
+            CredentialId credentialId = CredentialId.From(query.AccountId);
 
             // Project into an anonymous type first to avoid EF limitations with
             // strongly-typed IDs and nullable TimeSpan arithmetic in the SELECT clause.
             var repositorySummaryRows = await dbContext.Set<MonitoredRepository>()
                 .AsNoTracking()
-                .Where(r => r.AccountId == accountId)
+                .Where(r => r.CredentialId == credentialId)
                 .Join(
-                    dbContext.Set<Account>(),
-                    r => r.AccountId,
+                    dbContext.Set<Credential>(),
+                    r => r.CredentialId,
                     a => a.Id,
                     (r, a) => new
                     {
                         r.Id,
                         Slug = r.Slug.ToString(),
-                        r.AccountId,
+                        r.CredentialId,
                         AccountName = a.Name,
                         AccountType = EF.Property<string>(a, "type"),
                         r.PollInterval,
@@ -52,7 +52,7 @@ internal static class GetRepositories
                 .Select(r => new RepositorySummary(
                     r.Id.Value,
                     r.Slug,
-                    r.AccountId.Value,
+                    r.CredentialId.Value,
                     r.AccountName,
                     r.AccountType,
                     RepositoryMappings.ToSeconds(r.PollInterval),

@@ -15,7 +15,7 @@ public sealed class From
         Guid guid = Guid.NewGuid();
 
         // Act
-        AccountId id = AccountId.From(guid);
+        CredentialId id = CredentialId.From(guid);
 
         // Assert
         id.Value.ShouldBe(guid);

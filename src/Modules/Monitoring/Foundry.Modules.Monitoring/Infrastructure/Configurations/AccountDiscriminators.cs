@@ -1,7 +1,3 @@
+// This file is intentionally empty — AccountDiscriminators was renamed to CredentialDiscriminators.
+// See CredentialDiscriminators.cs.
 namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
-
-internal static class AccountDiscriminators
-{
-    internal const string GitHub = "github";
-    internal const string GitLab = "gitlab";
-}

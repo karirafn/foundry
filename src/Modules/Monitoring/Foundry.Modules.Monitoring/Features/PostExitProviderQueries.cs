@@ -97,23 +97,23 @@ internal sealed class PostExitProviderQueries(
                 PostExitProviderQueriesErrors.RepositoryNotFound(repositoryId));
         }
 
-        Account? account = await dbContext.Set<Account>()
+        Credential? credential = await dbContext.Set<Credential>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Id == repo.AccountId, cancellationToken);
+            .FirstOrDefaultAsync(a => a.Id == repo.CredentialId, cancellationToken);
 
-        if (account is null)
+        if (credential is null)
         {
             return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.AccountNotFound(repo.AccountId));
+                PostExitProviderQueriesErrors.AccountNotFound(repo.CredentialId));
         }
 
-        if (string.IsNullOrEmpty(account.Token))
+        if (string.IsNullOrEmpty(credential.Token))
         {
             return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.AccountTokenNotConfigured(account.Id));
+                PostExitProviderQueriesErrors.AccountTokenNotConfigured(credential.Id));
         }
 
-        IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
+        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
         return Result<(IIssueProvider, MonitoredRepository)>.Ok((provider, repo));
     }
 }
@@ -124,11 +124,11 @@ internal static class PostExitProviderQueriesErrors
         new("PostExitProviderQueries.RepositoryNotFound",
             $"No monitored repository found with id '{id.Value}'.");
 
-    public static Error AccountNotFound(AccountId id) =>
+    public static Error AccountNotFound(CredentialId id) =>
         new("PostExitProviderQueries.AccountNotFound",
             $"No account found with id '{id.Value}'.");
 
-    public static Error AccountTokenNotConfigured(AccountId id) =>
+    public static Error AccountTokenNotConfigured(CredentialId id) =>
         new("PostExitProviderQueries.AccountTokenNotConfigured",
             $"Account with id '{id.Value}' has no token configured.");
 }

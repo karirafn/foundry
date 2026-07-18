@@ -60,11 +60,11 @@ public sealed class PollAsync : IAsyncDisposable
 
     private MonitoredRepository SeedRepository()
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        _dbContext.Set<Credential>().Add(credential);
         _dbContext.SaveChanges();
 
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, credential.Id, "github.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repository);
         _dbContext.SaveChanges();
         return repository;

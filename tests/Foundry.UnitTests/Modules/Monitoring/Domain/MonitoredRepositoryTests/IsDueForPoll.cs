@@ -15,7 +15,7 @@ public sealed class IsDueForPoll
         RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
     private static MonitoredRepository CreateRepository(TimeSpan? pollInterval = null) =>
-        MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", pollInterval);
+        MonitoredRepository.Create(ValidSlug, CredentialId.New(), "github.com", pollInterval);
 
     [Fact]
     public void WhenLastPolledAtIsNull_ReturnsTrue()

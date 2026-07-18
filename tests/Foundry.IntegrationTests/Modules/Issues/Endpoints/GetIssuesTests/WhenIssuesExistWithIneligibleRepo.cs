@@ -52,12 +52,12 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
 
         // Use slug-derived name to avoid (base_url, name) unique constraint violations when
         // seeding multiple accounts with the same base URL.
-        GitHubAccount account = GitHubAccount.Create(slug.Replace("/", "-", StringComparison.Ordinal), "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create(slug.Replace("/", "-", StringComparison.Ordinal), "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         int position = await dbContext.Set<MonitoredRepository>().CountAsync(TestContext.Current.CancellationToken);
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, account.Id, "github.com", null, position);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, credential.Id, "github.com", null, position);
         repo.SetEligibility(eligibility);
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -134,11 +134,11 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(slug, account.Id, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(slug, credential.Id, "github.com", null);
         dbContext.Set<MonitoredRepository>().Add(repo);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

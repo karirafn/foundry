@@ -14,8 +14,8 @@ public sealed class New
         // Arrange
 
         // Act
-        AccountId a = AccountId.New();
-        AccountId b = AccountId.New();
+        CredentialId a = CredentialId.New();
+        CredentialId b = CredentialId.New();
 
         // Assert
         a.ShouldNotBe(b);

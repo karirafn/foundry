@@ -55,14 +55,14 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
 
         // Use slug-derived name to avoid (base_url, name) unique constraint violations when
         // seeding multiple accounts with the same base URL.
-        GitHubAccount account = GitHubAccount.Create(
+        GitHubCredential credential = GitHubCredential.Create(
             slug.Replace("/", "-", StringComparison.Ordinal),
             "TOKEN",
             BaseUrl.Create("https://github.com").ValueOrThrow());
-        dbContext.Set<Account>().Add(account);
+        dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, account.Id, "github.com", null, position);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, credential.Id, "github.com", null, position);
         repo.SetEligibility(new RepositoryEligibility.Eligible());
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -78,15 +78,15 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
 
         // Use slug-derived name to avoid (base_url, name) unique constraint violations when
         // seeding multiple accounts with the same base URL.
-        GitHubAccount account = GitHubAccount.Create(
+        GitHubCredential credential = GitHubCredential.Create(
             slug.Replace("/", "-", StringComparison.Ordinal),
             "TOKEN",
             BaseUrl.Create("https://github.com").ValueOrThrow());
-        dbContext.Set<Account>().Add(account);
+        dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         RepositoryEligibility.Ineligible ineligible = new([EligibilityViolation.AllowDirectPushes()]);
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, account.Id, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, credential.Id, "github.com", null);
         repo.SetEligibility(ineligible);
         dbContext.Set<MonitoredRepository>().Add(repo);
 

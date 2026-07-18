@@ -51,8 +51,8 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
             .IsRequired()
             .HasColumnName("host");
 
-        builder.Property(r => r.AccountId)
-            .HasConversion(new StronglyTypedIdValueConverter<AccountId>())
+        builder.Property(r => r.CredentialId)
+            .HasConversion(new StronglyTypedIdValueConverter<CredentialId>())
             .HasColumnName("account_id");
 
         builder.Property(r => r.PollInterval)
@@ -99,12 +99,12 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
             .IsUnique()
             .HasDatabaseName("ix_monitored_repositories_host_slug");
 
-        builder.HasIndex(r => r.AccountId)
+        builder.HasIndex(r => r.CredentialId)
             .HasDatabaseName("ix_monitored_repositories_account_id");
 
-        builder.HasOne<Account>()
+        builder.HasOne<Credential>()
             .WithMany()
-            .HasForeignKey(r => r.AccountId)
+            .HasForeignKey(r => r.CredentialId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 

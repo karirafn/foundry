@@ -33,14 +33,14 @@ internal sealed class MonitoringService(
         IIssueProviderFactory providerFactory = scope.ServiceProvider.GetRequiredService<IIssueProviderFactory>();
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
 
-        ILookup<AccountId, MonitoredRepository> reposByAccount = await LoadActiveReposAsync(
+        ILookup<CredentialId, MonitoredRepository> reposByCredential = await LoadActiveReposAsync(
             dbContext,
             cancellationToken);
 
-        foreach (IGrouping<AccountId, MonitoredRepository> accountGroup in reposByAccount)
+        foreach (IGrouping<CredentialId, MonitoredRepository> credentialGroup in reposByCredential)
         {
-            await ProcessAccountGroupAsync(
-                accountGroup,
+            await ProcessCredentialGroupAsync(
+                credentialGroup,
                 dbContext,
                 providerFactory,
                 poller,
@@ -49,7 +49,7 @@ internal sealed class MonitoringService(
         }
     }
 
-    private static async Task<ILookup<AccountId, MonitoredRepository>> LoadActiveReposAsync(
+    private static async Task<ILookup<CredentialId, MonitoredRepository>> LoadActiveReposAsync(
         DbContext dbContext,
         CancellationToken cancellationToken)
     {
@@ -57,42 +57,42 @@ internal sealed class MonitoringService(
             .Where(r => r.IsActive)
             .ToListAsync(cancellationToken);
 
-        return repos.ToLookup(r => r.AccountId);
+        return repos.ToLookup(r => r.CredentialId);
     }
 
-    private async Task ProcessAccountGroupAsync(
-        IGrouping<AccountId, MonitoredRepository> accountGroup,
+    private async Task ProcessCredentialGroupAsync(
+        IGrouping<CredentialId, MonitoredRepository> credentialGroup,
         DbContext dbContext,
         IIssueProviderFactory providerFactory,
         RepositoryPoller poller,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        AccountId accountId = accountGroup.Key;
-        Account? account = await dbContext.Set<Account>()
-            .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+        CredentialId credentialId = credentialGroup.Key;
+        Credential? credential = await dbContext.Set<Credential>()
+            .FirstOrDefaultAsync(a => a.Id == credentialId, cancellationToken);
 
-        if (account is null)
+        if (credential is null)
         {
             logger.LogWarning(
-                "Account with id {AccountId} not found; skipping {Count} repo(s).",
-                accountGroup.Key,
-                accountGroup.Count());
+                "Credential with id {CredentialId} not found; skipping {Count} repo(s).",
+                credentialGroup.Key,
+                credentialGroup.Count());
             return;
         }
 
-        if (string.IsNullOrEmpty(account.Token))
+        if (string.IsNullOrEmpty(credential.Token))
         {
             logger.LogWarning(
-                "Account '{AccountName}' has no token configured; skipping {Count} repo(s).",
-                account.Name,
-                accountGroup.Count());
+                "Credential '{CredentialName}' has no token configured; skipping {Count} repo(s).",
+                credential.Name,
+                credentialGroup.Count());
             return;
         }
 
-        IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
+        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
 
-        foreach (MonitoredRepository repo in accountGroup)
+        foreach (MonitoredRepository repo in credentialGroup)
         {
             if (!repo.IsDueForPoll(_defaultPollInterval, now))
             {

@@ -9,13 +9,13 @@ namespace Foundry.UnitTests.Modules.Monitoring.Contracts.AccountIdTests;
 public sealed class From
 {
     [Fact]
-    public void WhenGivenGuid_ReturnsAccountIdWithSameValue()
+    public void WhenGivenGuid_ReturnsCredentialIdWithSameValue()
     {
         // Arrange
         Guid guid = Guid.NewGuid();
 
         // Act
-        AccountId id = AccountId.From(guid);
+        CredentialId id = CredentialId.From(guid);
 
         // Assert
         id.Value.ShouldBe(guid);

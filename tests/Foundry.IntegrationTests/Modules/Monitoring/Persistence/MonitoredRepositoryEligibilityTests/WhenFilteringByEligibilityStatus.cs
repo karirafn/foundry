@@ -80,7 +80,7 @@ public sealed class WhenFilteringByEligibilityStatus : IAsyncDisposable
 
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
         int position = await dbContext.Set<MonitoredRepository>().CountAsync(TestContext.Current.CancellationToken);
-        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, AccountId.From(accountId), "github.com", pollInterval: null, position);
+        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, CredentialId.From(accountId), "github.com", pollInterval: null, position);
         repository.SetEligibility(eligibility);
 
         dbContext.Set<MonitoredRepository>().Add(repository);

@@ -26,45 +26,45 @@ internal static class RecheckRepositoryEligibility
             Command command,
             CancellationToken cancellationToken)
         {
-            AccountId accountId = AccountId.From(command.AccountId);
+            CredentialId credentialId = CredentialId.From(command.AccountId);
             MonitoredRepositoryId repositoryId = MonitoredRepositoryId.From(command.Id);
 
             MonitoredRepository? repository = await dbContext.Set<MonitoredRepository>()
                 .Where(r => r.Id == repositoryId)
-                .FirstOrDefaultAsync(r => r.AccountId == accountId, cancellationToken);
+                .FirstOrDefaultAsync(r => r.CredentialId == credentialId, cancellationToken);
 
             if (repository is null)
             {
                 return Result<RepositorySummary>.Fail(RepositoryErrors.NotFound(repositoryId));
             }
 
-            Account? account = await dbContext.Set<Account>()
+            Credential? credential = await dbContext.Set<Credential>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+                .FirstOrDefaultAsync(a => a.Id == credentialId, cancellationToken);
 
-            if (account is null)
+            if (credential is null)
             {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(accountId));
+                return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(credentialId));
             }
 
-            if (string.IsNullOrEmpty(account.Token))
+            if (string.IsNullOrEmpty(credential.Token))
             {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.NoToken(accountId));
+                return Result<RepositorySummary>.Fail(RepositoryErrors.NoToken(credentialId));
             }
 
-            IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
+            IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
             await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             RepositorySummary summary = new(
                 repository.Id.Value,
                 repository.Slug.ToString(),
-                repository.AccountId.Value,
-                account.Name,
-                account switch
+                repository.CredentialId.Value,
+                credential.Name,
+                credential switch
                 {
-                    GitHubAccount => ProviderTypes.GitHub,
-                    GitLabAccount => ProviderTypes.GitLab,
+                    GitHubCredential => ProviderTypes.GitHub,
+                    GitLabCredential => ProviderTypes.GitLab,
                     _ => throw new UnreachableException(),
                 },
                 RepositoryMappings.ToSeconds(repository.PollInterval),

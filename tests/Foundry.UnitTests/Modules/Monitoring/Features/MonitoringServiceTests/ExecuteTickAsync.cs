@@ -99,8 +99,8 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         await using FoundryDbContext db = CreateDbContext();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
-        db.Set<Account>().Add(account);
+        GitHubCredential account = GitHubCredential.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
+        db.Set<Credential>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         MonitoredRepository repo = MonitoredRepository.Create(ValidSlug(slug), account.Id, "github.com", null);
@@ -197,7 +197,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
     private sealed class EmptyIssueProviderFactory : IIssueProviderFactory
     {
-        public IIssueProvider CreateProvider(Account account, string token)
+        public IIssueProvider CreateProvider(Credential credential, string token)
         {
             return new EmptyIssueProvider();
         }

@@ -18,7 +18,7 @@ public sealed class EvaluateAndStoreAsync
     private static MonitoredRepository CreateRepo()
     {
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
-        return MonitoredRepository.Create(slug, AccountId.New(), "github.com", pollInterval: null);
+        return MonitoredRepository.Create(slug, CredentialId.New(), "github.com", pollInterval: null);
     }
 
     private static RepositoryEligibilityEvaluator CreateSut() =>

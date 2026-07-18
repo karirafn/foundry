@@ -18,7 +18,7 @@ public sealed class MarkPolled
     public void WhenCalled_SetsLastPolledAt()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, CredentialId.New(), "github.com", null);
         DateTimeOffset polledAt = DateTimeOffset.UtcNow;
 
         // Act

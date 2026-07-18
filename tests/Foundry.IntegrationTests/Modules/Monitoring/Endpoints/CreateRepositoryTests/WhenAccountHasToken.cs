@@ -154,7 +154,7 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
 
     private sealed class StubProviderFactory(Result<BranchProtection> branchProtectionResult) : IIssueProviderFactory
     {
-        public IIssueProvider CreateProvider(Account account, string token) =>
+        public IIssueProvider CreateProvider(Credential credential, string token) =>
             new StubProvider(branchProtectionResult);
     }
 

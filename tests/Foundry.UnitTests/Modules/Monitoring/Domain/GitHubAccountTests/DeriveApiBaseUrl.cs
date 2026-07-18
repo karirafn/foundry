@@ -17,7 +17,7 @@ public sealed class DeriveApiBaseUrl
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
+        Uri apiBaseUrl = GitHubCredential.DeriveApiBaseUrl(baseUrl);
 
         // Assert
         apiBaseUrl.ShouldBe(new Uri("https://api.github.com"));
@@ -30,7 +30,7 @@ public sealed class DeriveApiBaseUrl
         BaseUrl baseUrl = BaseUrl.Create("https://github.example.com").ValueOrThrow();
 
         // Act
-        Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
+        Uri apiBaseUrl = GitHubCredential.DeriveApiBaseUrl(baseUrl);
 
         // Assert
         apiBaseUrl.ShouldBe(new Uri("https://github.example.com/api/v3/"));
@@ -43,7 +43,7 @@ public sealed class DeriveApiBaseUrl
         BaseUrl baseUrl = BaseUrl.Create("https://corp.example.com/github").ValueOrThrow();
 
         // Act
-        Uri apiBaseUrl = GitHubAccount.DeriveApiBaseUrl(baseUrl);
+        Uri apiBaseUrl = GitHubCredential.DeriveApiBaseUrl(baseUrl);
 
         // Assert
         apiBaseUrl.ShouldBe(new Uri("https://corp.example.com/github/api/v3/"));

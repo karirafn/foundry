@@ -17,7 +17,7 @@ public sealed class DeriveApiBaseUrl
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
 
         // Act
-        Uri result = GitLabAccount.DeriveApiBaseUrl(baseUrl);
+        Uri result = GitLabCredential.DeriveApiBaseUrl(baseUrl);
 
         // Assert
         result.ShouldBe(new Uri("https://gitlab.com/api/v4"));
@@ -30,7 +30,7 @@ public sealed class DeriveApiBaseUrl
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.example.com").ValueOrThrow();
 
         // Act
-        Uri result = GitLabAccount.DeriveApiBaseUrl(baseUrl);
+        Uri result = GitLabCredential.DeriveApiBaseUrl(baseUrl);
 
         // Assert
         result.ShouldBe(new Uri("https://gitlab.example.com/api/v4"));
@@ -43,7 +43,7 @@ public sealed class DeriveApiBaseUrl
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.example.com/").ValueOrThrow();
 
         // Act
-        Uri result = GitLabAccount.DeriveApiBaseUrl(baseUrl);
+        Uri result = GitLabCredential.DeriveApiBaseUrl(baseUrl);
 
         // Assert
         result.ShouldBe(new Uri("https://gitlab.example.com/api/v4"));

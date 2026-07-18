@@ -96,7 +96,7 @@ public sealed class WhenExistingRepositoriesAreBackfilled : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, AccountId.From(accountId), "github.com", null, position);
+        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, CredentialId.From(accountId), "github.com", null, position);
         dbContext.Set<MonitoredRepository>().Add(repository);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

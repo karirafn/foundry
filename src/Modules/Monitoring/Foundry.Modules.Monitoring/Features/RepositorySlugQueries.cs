@@ -32,8 +32,8 @@ internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueri
             .AsNoTracking()
             .Where(r => r.Id == repositoryId)
             .Join(
-                db.Set<Account>().AsNoTracking(),
-                r => r.AccountId,
+                db.Set<Credential>().AsNoTracking(),
+                r => r.CredentialId,
                 a => a.Id,
                 (r, a) => EF.Property<string>(a, "type"))
             .FirstOrDefaultAsync(cancellationToken);

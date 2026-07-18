@@ -9,7 +9,7 @@ namespace Foundry.IntegrationTests.Modules.Monitoring;
 
 internal static class AccountSeeder
 {
-    // Seeds a GitHubAccount directly via DbContext when the POST endpoint cannot be used
+    // Seeds a GitHubCredential directly via DbContext when the POST endpoint cannot be used
     // (e.g., because the token validation handler stub would block the request).
     internal static async Task<Guid> SeedGitHubAccountAsync(
         FoundryWebAppFactory factory,
@@ -21,14 +21,14 @@ internal static class AccountSeeder
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitHubAccount account = GitHubAccount.Create(name, token, parsedBaseUrl);
-        dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create(name, token, parsedBaseUrl);
+        dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
-        return account.Id.Value;
+        return credential.Id.Value;
     }
 
-    // Seeds a GitLabAccount directly via DbContext when the POST endpoint cannot be used.
+    // Seeds a GitLabCredential directly via DbContext when the POST endpoint cannot be used.
     internal static async Task<Guid> SeedGitLabAccountAsync(
         FoundryWebAppFactory factory,
         string name = "My GitLab",
@@ -39,10 +39,10 @@ internal static class AccountSeeder
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitLabAccount account = GitLabAccount.Create(name, token, parsedBaseUrl);
-        dbContext.Set<Account>().Add(account);
+        GitLabCredential credential = GitLabCredential.Create(name, token, parsedBaseUrl);
+        dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
-        return account.Id.Value;
+        return credential.Id.Value;
     }
 }

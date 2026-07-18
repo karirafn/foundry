@@ -40,48 +40,49 @@ public sealed class PersistGitLabAccount : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGitLabAccountPersisted_CanBeReloadedAsGitLabAccount()
+    public async Task WhenGitLabCredentialPersisted_CanBeReloadedAsGitLabCredential()
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitLabAccount account = GitLabAccount.Create("my-org", "glpat_mytoken", baseUrl);
+        GitLabCredential credential = GitLabCredential.Create("my-org", "glpat_mytoken", baseUrl);
 
-        _dbContext.Set<Account>().Add(account);
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        Account? result = await _dbContext
-            .Set<Account>()
-            .FindAsync([account.Id], TestContext.Current.CancellationToken);
+        Credential? result = await _dbContext
+            .Set<Credential>()
+            .FindAsync([credential.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        GitLabAccount gitLab = result.ShouldBeOfType<GitLabAccount>();
+        GitLabCredential gitLab = result.ShouldBeOfType<GitLabCredential>();
         gitLab.ShouldSatisfyAllConditions(
-            () => gitLab.Id.ShouldBe(account.Id),
+            () => gitLab.Id.ShouldBe(credential.Id),
             () => gitLab.Name.ShouldBe("my-org"),
             () => gitLab.Token.ShouldBe("glpat_mytoken"),
-            () => gitLab.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.com")));
+            () => gitLab.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.com")),
+            () => gitLab.Host.ShouldBe("gitlab.com"));
     }
 
     [Fact]
-    public async Task WhenGitLabAccountPersistedWithNullToken_CanBeReloadedWithNullToken()
+    public async Task WhenGitLabCredentialPersistedWithNullToken_CanBeReloadedWithNullToken()
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitLabAccount account = GitLabAccount.Create("my-org", null, baseUrl);
+        GitLabCredential credential = GitLabCredential.Create("my-org", null, baseUrl);
 
-        _dbContext.Set<Account>().Add(account);
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        Account? result = await _dbContext
-            .Set<Account>()
-            .FindAsync([account.Id], TestContext.Current.CancellationToken);
+        Credential? result = await _dbContext
+            .Set<Credential>()
+            .FindAsync([credential.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        GitLabAccount gitLab = result.ShouldBeOfType<GitLabAccount>();
+        GitLabCredential gitLab = result.ShouldBeOfType<GitLabCredential>();
         gitLab.Token.ShouldBeNull();
     }
 }

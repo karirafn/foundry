@@ -81,8 +81,8 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             secondBody,
             TestContext.Current.CancellationToken);
 
-        AccountSummary? second = await secondResponse.Content
-            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        CredentialSummary? second = await secondResponse.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
         second.ShouldNotBeNull();
 
         // Update second account with a token that resolves to the first account's name
@@ -132,8 +132,8 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             createBody,
             TestContext.Current.CancellationToken);
 
-        AccountSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        CredentialSummary? created = await createResponse.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
         created.ShouldNotBeNull();
 
         object updateBody = new { baseUrl = "https://github.com" };

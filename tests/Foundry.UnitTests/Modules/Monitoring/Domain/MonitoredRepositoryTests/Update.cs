@@ -15,7 +15,7 @@ public sealed class Update
         RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
     private static MonitoredRepository CreateRepository(TimeSpan? pollInterval = null) =>
-        MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", pollInterval);
+        MonitoredRepository.Create(ValidSlug, CredentialId.New(), "github.com", pollInterval);
 
     [Fact]
     public void WhenPollIntervalAndActiveStatusProvided_UpdatesBothProperties()
@@ -34,12 +34,12 @@ public sealed class Update
     }
 
     [Fact]
-    public void WhenUpdated_PreservesSlugAndAccountId()
+    public void WhenUpdated_PreservesSlugAndCredentialId()
     {
         // Arrange
         RepositorySlug slug = ValidSlug;
-        AccountId accountId = AccountId.New();
-        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, "github.com", null);
+        CredentialId credentialId = CredentialId.New();
+        MonitoredRepository repository = MonitoredRepository.Create(slug, credentialId, "github.com", null);
 
         // Act
         repository.Update(TimeSpan.FromMinutes(15), isActive: true);
@@ -47,7 +47,7 @@ public sealed class Update
         // Assert
         repository.ShouldSatisfyAllConditions(
             () => repository.Slug.ShouldBe(slug),
-            () => repository.AccountId.ShouldBe(accountId));
+            () => repository.CredentialId.ShouldBe(credentialId));
     }
 
     [Fact]

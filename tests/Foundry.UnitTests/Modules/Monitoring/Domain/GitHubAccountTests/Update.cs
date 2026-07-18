@@ -14,36 +14,37 @@ public sealed class Update
     public void WhenAllParametersAreValid_UpdatesProperties()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create(
+        GitHubCredential credential = GitHubCredential.Create(
             "original-name",
             "original-token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
-        account.Update("updated-name", "new-token", BaseUrl.Create("https://github.example.com").ValueOrThrow());
+        credential.Update("updated-name", "new-token", BaseUrl.Create("https://github.example.com").ValueOrThrow());
 
         // Assert
-        account.ShouldSatisfyAllConditions(
-            () => account.Name.ShouldBe("updated-name"),
-            () => account.Token.ShouldBe("new-token"),
-            () => account.BaseUrl.Value.ShouldBe(new Uri("https://github.example.com")));
+        credential.ShouldSatisfyAllConditions(
+            () => credential.Name.ShouldBe("updated-name"),
+            () => credential.Token.ShouldBe("new-token"),
+            () => credential.BaseUrl.Value.ShouldBe(new Uri("https://github.example.com")),
+            () => credential.Host.ShouldBe("github.example.com"));
     }
 
     [Fact]
     public void WhenTokenIsNull_DoesNotUpdateToken()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create(
+        GitHubCredential credential = GitHubCredential.Create(
             "my-account",
             "existing-token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
-        account.Update("updated-name", null, BaseUrl.Create("https://github.com").ValueOrThrow());
+        credential.Update("updated-name", null, BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Assert
-        account.ShouldSatisfyAllConditions(
-            () => account.Name.ShouldBe("updated-name"),
-            () => account.Token.ShouldBe("existing-token"));
+        credential.ShouldSatisfyAllConditions(
+            () => credential.Name.ShouldBe("updated-name"),
+            () => credential.Token.ShouldBe("existing-token"));
     }
 }

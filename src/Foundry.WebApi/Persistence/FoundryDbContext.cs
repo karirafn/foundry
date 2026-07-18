@@ -34,7 +34,8 @@ public sealed class FoundryDbContext(
 
         modelBuilder.ApplyConfiguration(new MonitoredRepositoryConfiguration());
         modelBuilder.ApplyConfiguration(
-            new AccountConfiguration(_dataProtectionProvider, monitoringConverterLogger));
+            new CredentialConfiguration(_dataProtectionProvider, monitoringConverterLogger));
+        modelBuilder.ApplyConfiguration(new CredentialNamespaceConfiguration());
 
         modelBuilder.ApplyConfiguration(new GlobalSettingsConfiguration());
 

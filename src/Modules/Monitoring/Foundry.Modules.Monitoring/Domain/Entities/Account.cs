@@ -1,20 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
-
+// This file is intentionally empty — the Account aggregate was renamed to Credential.
+// See Credential.cs, GitHubCredential.cs, GitLabCredential.cs.
 namespace Foundry.Modules.Monitoring.Domain.Entities;
-
-public abstract class Account : AggregateRoot<AccountId>
-{
-    protected Account(AccountId id) : base(id)
-    {
-    }
-
-    public string Name { get; private protected set; } = string.Empty;
-
-    public string? Token { get; private protected set; }
-
-    public BaseUrl BaseUrl { get; private protected set; } = null!;
-
-    public abstract Uri ApiBaseUrl { get; }
-}

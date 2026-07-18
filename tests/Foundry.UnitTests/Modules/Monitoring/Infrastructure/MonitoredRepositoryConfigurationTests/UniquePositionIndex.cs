@@ -44,11 +44,11 @@ public sealed class UniquePositionIndex : IAsyncDisposable
     public async Task WhenRepositoryPersisted_PositionRoundTrips()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        MonitoredRepository repository = MonitoredRepository.Create(SlugFor("owner1"), account.Id, "github.com", null, position: 7);
+        MonitoredRepository repository = MonitoredRepository.Create(SlugFor("owner1"), credential.Id, "github.com", null, position: 7);
         _dbContext.Set<MonitoredRepository>().Add(repository);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -67,12 +67,12 @@ public sealed class UniquePositionIndex : IAsyncDisposable
     public async Task WhenDuplicatePosition_ThrowsOnSave()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org2", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create("my-org2", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        MonitoredRepository first = MonitoredRepository.Create(SlugFor("owner-a"), account.Id, "github.com", null, position: 0);
-        MonitoredRepository second = MonitoredRepository.Create(SlugFor("owner-b"), account.Id, "github.com", null, position: 0);
+        MonitoredRepository first = MonitoredRepository.Create(SlugFor("owner-a"), credential.Id, "github.com", null, position: 0);
+        MonitoredRepository second = MonitoredRepository.Create(SlugFor("owner-b"), credential.Id, "github.com", null, position: 0);
 
         _dbContext.Set<MonitoredRepository>().Add(first);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

@@ -51,8 +51,8 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
             createBody,
             TestContext.Current.CancellationToken);
 
-        AccountSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        CredentialSummary? created = await createResponse.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
         created.ShouldNotBeNull();
         return created.Id;
     }

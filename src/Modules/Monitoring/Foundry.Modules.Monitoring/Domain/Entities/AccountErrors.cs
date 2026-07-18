@@ -1,24 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-
+// This file is intentionally empty — AccountErrors was renamed to CredentialErrors.
+// See CredentialErrors.cs.
 namespace Foundry.Modules.Monitoring.Domain.Entities;
-
-internal static class AccountErrors
-{
-    internal const string NotFoundCode = "Account.NotFound";
-    internal const string DuplicateNameCode = "Account.DuplicateName";
-    internal const string InvalidTokenCode = "Account.InvalidToken";
-    internal const string UnresolvedIdentityCode = "Account.UnresolvedIdentity";
-
-    internal static Error NotFound(AccountId id) =>
-        new(NotFoundCode, $"Account with ID '{id.Value}' was not found.");
-
-    internal static Error DuplicateName(string name) =>
-        new(DuplicateNameCode, $"An account named '{name}' already exists.");
-
-    internal static readonly Error InvalidToken =
-        new(InvalidTokenCode, "The token is not valid or is missing required scopes.");
-
-    internal static readonly Error UnresolvedIdentity =
-        new(UnresolvedIdentityCode, "Could not resolve the account identity from the provider.");
-}

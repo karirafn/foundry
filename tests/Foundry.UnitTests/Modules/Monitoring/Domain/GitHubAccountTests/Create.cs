@@ -11,7 +11,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitHubAccountTests;
 public sealed class Create
 {
     [Fact]
-    public void WhenAllParametersAreValid_ReturnsGitHubAccountWithCorrectProperties()
+    public void WhenAllParametersAreValid_ReturnsGitHubCredentialWithCorrectProperties()
     {
         // Arrange
         string name = "my-github-account";
@@ -19,13 +19,14 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        GitHubAccount account = GitHubAccount.Create(name, token, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(name, token, baseUrl);
 
         // Assert
-        account.ShouldSatisfyAllConditions(
-            () => account.Name.ShouldBe(name),
-            () => account.Token.ShouldBe(token),
-            () => account.BaseUrl.Value.ShouldBe(new Uri("https://github.com")));
+        credential.ShouldSatisfyAllConditions(
+            () => credential.Name.ShouldBe(name),
+            () => credential.Token.ShouldBe(token),
+            () => credential.BaseUrl.Value.ShouldBe(new Uri("https://github.com")),
+            () => credential.Host.ShouldBe("github.com"));
     }
 
     [Fact]
@@ -35,24 +36,24 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        GitHubAccount a = GitHubAccount.Create("account-a", "token-a", baseUrl);
-        GitHubAccount b = GitHubAccount.Create("account-b", "token-b", baseUrl);
+        GitHubCredential a = GitHubCredential.Create("account-a", "token-a", baseUrl);
+        GitHubCredential b = GitHubCredential.Create("account-b", "token-b", baseUrl);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);
     }
 
     [Fact]
-    public void WhenTokenIsNull_ReturnsGitHubAccountWithNullToken()
+    public void WhenTokenIsNull_ReturnsGitHubCredentialWithNullToken()
     {
         // Arrange
         string name = "my-github-account";
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        GitHubAccount account = GitHubAccount.Create(name, null, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(name, null, baseUrl);
 
         // Assert
-        account.Token.ShouldBeNull();
+        credential.Token.ShouldBeNull();
     }
 }

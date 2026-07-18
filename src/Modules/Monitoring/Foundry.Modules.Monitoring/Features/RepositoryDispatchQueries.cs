@@ -15,8 +15,8 @@ internal sealed class RepositoryDispatchQueries(DbContext db) : IRepositoryDispa
             .AsNoTracking()
             .Where(r => r.Id == repositoryId)
             .Join(
-                db.Set<Account>().AsNoTracking(),
-                r => r.AccountId,
+                db.Set<Credential>().AsNoTracking(),
+                r => r.CredentialId,
                 a => a.Id,
                 (r, a) => new
                 {

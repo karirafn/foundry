@@ -14,10 +14,10 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsGitLabCom_ReturnsApiV4Url()
     {
         // Arrange
-        GitLabAccount account = GitLabAccount.Create("my-account", "my-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create("my-account", "my-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
         // Act
-        Uri result = account.ApiBaseUrl;
+        Uri result = credential.ApiBaseUrl;
 
         // Assert
         result.ShouldBe(new Uri("https://gitlab.com/api/v4"));
@@ -27,10 +27,10 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsSelfHosted_ReturnsApiV4Url()
     {
         // Arrange
-        GitLabAccount account = GitLabAccount.Create("my-account", "my-token", BaseUrl.Create("https://gitlab.example.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create("my-account", "my-token", BaseUrl.Create("https://gitlab.example.com").ValueOrThrow());
 
         // Act
-        Uri result = account.ApiBaseUrl;
+        Uri result = credential.ApiBaseUrl;
 
         // Assert
         result.ShouldBe(new Uri("https://gitlab.example.com/api/v4"));

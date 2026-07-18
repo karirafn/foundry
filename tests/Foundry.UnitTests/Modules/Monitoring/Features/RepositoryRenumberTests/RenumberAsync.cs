@@ -34,7 +34,7 @@ public sealed class RenumberAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
-    private readonly AccountId _accountId;
+    private readonly CredentialId _accountId;
 
     public RenumberAsync()
     {
@@ -48,8 +48,8 @@ public sealed class RenumberAsync : IAsyncDisposable
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
 
-        GitHubAccount account = GitHubAccount.Create("org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitHubCredential account = GitHubCredential.Create("org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        _dbContext.Set<Credential>().Add(account);
         _dbContext.SaveChanges();
         _accountId = account.Id;
     }

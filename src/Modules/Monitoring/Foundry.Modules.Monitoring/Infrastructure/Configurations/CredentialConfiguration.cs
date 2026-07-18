@@ -1,0 +1,81 @@
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Shared.Infrastructure;
+
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.Extensions.Logging;
+
+namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
+
+internal sealed class CredentialConfiguration(
+    IDataProtectionProvider dataProtectionProvider,
+    ILogger<EncryptedStringConverter>? encryptedStringConverterLogger = null)
+    : IEntityTypeConfiguration<Credential>
+{
+    private const int TokenMaxLength = 2000;
+    private const int BaseUrlMaxLength = 2000;
+    private const int DiscriminatorMaxLength = 20;
+    private const int HostMaxLength = 253;
+
+    public void Configure(EntityTypeBuilder<Credential> builder)
+    {
+        builder.ToTable("accounts");
+
+        builder.HasKey(a => a.Id);
+
+        builder.Property(a => a.Id)
+            .HasConversion(new StronglyTypedIdValueConverter<CredentialId>())
+            .HasColumnName("id");
+
+        builder.Property(a => a.Name)
+            .HasMaxLength(AccountsDatabaseHelpers.AccountNameMaxLength)
+            .IsUnicode(true)
+            .IsRequired()
+            .HasColumnName("name");
+
+        EncryptedStringConverter encryptedConverter = new(dataProtectionProvider, encryptedStringConverterLogger);
+
+        builder.Property(a => a.Token)
+            .HasConversion(encryptedConverter)
+            .HasMaxLength(TokenMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("token");
+
+        builder.Property(a => a.BaseUrl)
+            .HasConversion(
+                url => url.Value.ToString(),
+                value => BaseUrl.FromPersistedString(value))
+            .HasMaxLength(BaseUrlMaxLength)
+            .IsUnicode(false)
+            .IsRequired()
+            .HasColumnName("base_url");
+
+        builder.Property(a => a.Host)
+            .HasMaxLength(HostMaxLength)
+            .IsUnicode(false)
+            .IsRequired()
+            .HasColumnName("host");
+
+        builder.HasIndex(a => new { a.BaseUrl, a.Name })
+            .IsUnique()
+            .HasDatabaseName("ix_accounts_base_url_name");
+
+        builder.HasDiscriminator<string>("type")
+            .HasValue<GitHubCredential>(CredentialDiscriminators.GitHub)
+            .HasValue<GitLabCredential>(CredentialDiscriminators.GitLab)
+            .IsComplete(true);
+
+        builder.Property<string>("type")
+            .HasMaxLength(DiscriminatorMaxLength)
+            .HasColumnName("type");
+
+        builder.HasMany(a => a.Namespaces)
+            .WithOne()
+            .HasForeignKey(n => n.CredentialId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}

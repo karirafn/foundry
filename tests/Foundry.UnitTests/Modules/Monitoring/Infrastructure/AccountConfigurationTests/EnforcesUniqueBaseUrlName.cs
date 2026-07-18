@@ -40,18 +40,18 @@ public sealed class EnforcesUniqueBaseUrlName : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenSecondAccountHasSameBaseUrlAndName_ThrowsDbUpdateException()
+    public async Task WhenSecondCredentialHasSameBaseUrlAndName_ThrowsDbUpdateException()
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubAccount first = GitHubAccount.Create("octocat", "ghp_token_one", baseUrl);
-        GitHubAccount second = GitHubAccount.Create("octocat", "ghp_token_two", baseUrl);
+        GitHubCredential first = GitHubCredential.Create("octocat", "ghp_token_one", baseUrl);
+        GitHubCredential second = GitHubCredential.Create("octocat", "ghp_token_two", baseUrl);
 
-        _dbContext.Set<Account>().Add(first);
+        _dbContext.Set<Credential>().Add(first);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
-        _dbContext.Set<Account>().Add(second);
+        _dbContext.Set<Credential>().Add(second);
 
         // Act
         Func<Task> act = () => _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -61,19 +61,19 @@ public sealed class EnforcesUniqueBaseUrlName : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenSecondAccountHasSameNameButDifferentBaseUrl_Succeeds()
+    public async Task WhenSecondCredentialHasSameNameButDifferentBaseUrl_Succeeds()
     {
         // Arrange
         BaseUrl githubUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
         BaseUrl gitlabUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitHubAccount github = GitHubAccount.Create("octocat", "ghp_token", githubUrl);
-        GitLabAccount gitlab = GitLabAccount.Create("octocat", "glpat_token", gitlabUrl);
+        GitHubCredential github = GitHubCredential.Create("octocat", "ghp_token", githubUrl);
+        GitLabCredential gitlab = GitLabCredential.Create("octocat", "glpat_token", gitlabUrl);
 
-        _dbContext.Set<Account>().Add(github);
+        _dbContext.Set<Credential>().Add(github);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
-        _dbContext.Set<Account>().Add(gitlab);
+        _dbContext.Set<Credential>().Add(gitlab);
 
         // Act
         Func<Task> act = () => _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
