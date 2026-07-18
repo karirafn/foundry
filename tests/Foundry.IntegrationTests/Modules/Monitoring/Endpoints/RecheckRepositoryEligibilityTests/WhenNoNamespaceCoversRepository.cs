@@ -9,12 +9,12 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.RecheckRepositoryEligibilityTests;
 
-public sealed class WhenAccountHasNoToken : IAsyncDisposable
+public sealed class WhenNoNamespaceCoversRepository : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenAccountHasNoToken()
+    public WhenNoNamespaceCoversRepository()
     {
         _factory = new FoundryWebAppFactory();
         _client = _factory.CreateClient();

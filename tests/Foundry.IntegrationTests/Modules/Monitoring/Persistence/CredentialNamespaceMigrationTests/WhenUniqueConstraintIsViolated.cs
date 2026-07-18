@@ -88,9 +88,10 @@ public sealed class WhenUniqueConstraintIsViolated : IAsyncDisposable
 
         gitLabCredential.SetNamespaces([ns]);
 
-        // Act & Assert — no exception; different hosts allow the same namespace value
+        // Act — no exception; different hosts allow the same namespace value
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
+        // Assert
         int count = await dbContext.Set<CredentialNamespace>()
             .Where(n => n.Value == "sharedorg")
             .CountAsync(TestContext.Current.CancellationToken);

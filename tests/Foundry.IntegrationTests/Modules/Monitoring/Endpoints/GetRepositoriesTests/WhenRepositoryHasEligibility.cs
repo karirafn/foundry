@@ -125,7 +125,7 @@ public sealed class WhenRepositoryHasEligibility : IAsyncDisposable
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
 
         // Set a namespace on the credential so the resolver can match this repository.
-        // Namespace derivation (Step 7) is not yet implemented — seed directly.
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
         Credential? credential = await dbContext.Set<Credential>()
             .Include(c => c.Namespaces)
             .FirstOrDefaultAsync(c => c.Id == CredentialId.From(accountId), TestContext.Current.CancellationToken);

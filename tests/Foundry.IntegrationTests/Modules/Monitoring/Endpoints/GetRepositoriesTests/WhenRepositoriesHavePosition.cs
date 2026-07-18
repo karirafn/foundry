@@ -38,7 +38,7 @@ public sealed class WhenRepositoriesHavePosition : IAsyncDisposable
         Guid repoBId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/repo-b");
         Guid repoCId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/repo-c");
 
-        // Namespace derivation (Step 7) is not yet implemented — seed namespaces directly.
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
 
         // Act
@@ -70,7 +70,7 @@ public sealed class WhenRepositoriesHavePosition : IAsyncDisposable
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Single Position Org");
         await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/single-repo");
 
-        // Namespace derivation (Step 7) is not yet implemented — seed namespaces directly.
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
 
         // Act

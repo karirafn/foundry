@@ -6,7 +6,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitHubAccountTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitHubCredentialTests;
 
 public sealed class Update
 {

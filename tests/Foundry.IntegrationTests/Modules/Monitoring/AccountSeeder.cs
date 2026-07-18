@@ -48,7 +48,8 @@ internal static class AccountSeeder
     }
 
     // Sets namespaces on a credential so the resolver can match repositories under those owners.
-    // No HTTP endpoint exists for this yet (Step 7 will add derivation); seed via DbContext.
+    // No endpoint exposes namespace seeding directly — namespace derivation is handled internally;
+    // seed via DbContext to simulate the state that derivation would produce.
     internal static async Task SetOwnerNamespacesAsync(
         FoundryWebAppFactory factory,
         Guid accountId,

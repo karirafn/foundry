@@ -4,7 +4,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Contracts.AccountIdTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Contracts.CredentialIdTests;
 
 public sealed class From
 {

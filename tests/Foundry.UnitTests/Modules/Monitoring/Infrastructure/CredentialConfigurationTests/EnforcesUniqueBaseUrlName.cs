@@ -11,7 +11,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.AccountConfigurationTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.CredentialConfigurationTests;
 
 /// <summary>
 /// Verifies that the accounts table allows multiple credentials per host — the old

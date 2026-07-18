@@ -101,7 +101,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
         MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
 
         // RepositorySeeder uses slug "owner/repo" — seed that namespace so the resolver finds it.
-        // Namespace derivation (Step 7) is not yet implemented.
+        // No endpoint exposes namespace seeding directly; seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
 
         DetectedIssue issue = await SeedDetectedIssueAsync(repoId);
@@ -128,7 +128,7 @@ public sealed class WhenIssueExists : IAsyncDisposable
         MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
 
         // Seed namespace so the resolver can match "owner/gitlab-repo".
-        // Namespace derivation (Step 7) is not yet implemented.
+        // No endpoint exposes namespace seeding directly; seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         ProviderUrl gitlabUrl =
             ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7").ValueOrThrow();

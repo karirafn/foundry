@@ -36,7 +36,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         MonitoredRepositoryId monitoredRepositoryId = MonitoredRepositoryId.From(repositoryId);
 
         // RepositorySeeder uses slug "owner/repo" — seed that namespace so the resolver finds it.
-        // Namespace derivation (Step 7) is not yet implemented.
+        // No endpoint exposes namespace seeding directly; seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
 
         using IServiceScope scope = _factory.Services.CreateScope();

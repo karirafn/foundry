@@ -11,14 +11,14 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.AccountConfigurationTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.CredentialConfigurationTests;
 
-public sealed class PersistGitHubAccount : IAsyncDisposable
+public sealed class PersistGitLabAccount : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
-    public PersistGitHubAccount()
+    public PersistGitLabAccount()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -40,11 +40,11 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGitHubCredentialPersisted_CanBeReloadedAsGitHubCredential()
+    public async Task WhenGitLabCredentialPersisted_CanBeReloadedAsGitLabCredential()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_mytoken", baseUrl);
+        BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
+        GitLabCredential credential = GitLabCredential.Create("my-org", "glpat_mytoken", baseUrl);
 
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -56,21 +56,21 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
             .FindAsync([credential.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        GitHubCredential gitHub = result.ShouldBeOfType<GitHubCredential>();
-        gitHub.ShouldSatisfyAllConditions(
-            () => gitHub.Id.ShouldBe(credential.Id),
-            () => gitHub.Name.ShouldBe("my-org"),
-            () => gitHub.Token.ShouldBe("ghp_mytoken"),
-            () => gitHub.BaseUrl.Value.ShouldBe(new Uri("https://github.com")),
-            () => gitHub.Host.ShouldBe("github.com"));
+        GitLabCredential gitLab = result.ShouldBeOfType<GitLabCredential>();
+        gitLab.ShouldSatisfyAllConditions(
+            () => gitLab.Id.ShouldBe(credential.Id),
+            () => gitLab.Name.ShouldBe("my-org"),
+            () => gitLab.Token.ShouldBe("glpat_mytoken"),
+            () => gitLab.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.com")),
+            () => gitLab.Host.ShouldBe("gitlab.com"));
     }
 
     [Fact]
-    public async Task WhenGitHubCredentialPersistedWithNullToken_CanBeReloadedWithNullToken()
+    public async Task WhenGitLabCredentialPersistedWithNullToken_CanBeReloadedWithNullToken()
     {
         // Arrange
-        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", null, baseUrl);
+        BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
+        GitLabCredential credential = GitLabCredential.Create("my-org", null, baseUrl);
 
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -82,7 +82,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
             .FindAsync([credential.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        GitHubCredential gitHub = result.ShouldBeOfType<GitHubCredential>();
-        gitHub.Token.ShouldBeNull();
+        GitLabCredential gitLab = result.ShouldBeOfType<GitLabCredential>();
+        gitLab.Token.ShouldBeNull();
     }
 }

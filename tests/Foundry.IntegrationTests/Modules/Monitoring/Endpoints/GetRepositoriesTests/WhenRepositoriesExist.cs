@@ -37,7 +37,7 @@ public sealed class WhenRepositoriesExist : IAsyncDisposable
         await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/repo-b");
         await RepositorySeeder.SeedRepositoryAsync(_factory, otherAccountId, slug: "other/repo-other");
 
-        // Namespace derivation (Step 7) is not yet implemented — seed namespaces directly.
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, otherAccountId, "other");
 
@@ -66,7 +66,7 @@ public sealed class WhenRepositoriesExist : IAsyncDisposable
             slug: "acme/awesome-repo",
             pollIntervalSeconds: 300);
 
-        // Namespace derivation (Step 7) is not yet implemented — seed namespaces directly.
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "acme");
 
         // Act
@@ -97,7 +97,7 @@ public sealed class WhenRepositoriesExist : IAsyncDisposable
         Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory, name: "My GitLab");
         await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "group/repo");
 
-        // Namespace derivation (Step 7) is not yet implemented — seed namespaces directly.
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "group");
 
         // Act

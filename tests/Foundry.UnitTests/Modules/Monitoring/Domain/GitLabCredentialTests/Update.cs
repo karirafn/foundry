@@ -8,7 +8,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitLabAccountTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Domain.GitLabCredentialTests;
 
 public sealed class Update
 {
