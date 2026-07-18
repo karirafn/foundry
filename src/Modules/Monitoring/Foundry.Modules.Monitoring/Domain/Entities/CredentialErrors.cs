@@ -13,8 +13,8 @@ internal static class CredentialErrors
     internal static Error NotFound(CredentialId id) =>
         new(NotFoundCode, $"Credential with ID '{id.Value}' was not found.");
 
-    internal static Error DuplicateNamespace(string ns) =>
-        new(DuplicateNamespaceCode, $"Namespace '{ns}' is already claimed by another credential on this host.");
+    internal static Error DuplicateNamespace(string host) =>
+        new(DuplicateNamespaceCode, $"One or more namespaces derived for this token are already claimed by another credential on host '{host}'.");
 
     internal static readonly Error InvalidToken =
         new(InvalidTokenCode, "The token is not valid or is missing required scopes.");

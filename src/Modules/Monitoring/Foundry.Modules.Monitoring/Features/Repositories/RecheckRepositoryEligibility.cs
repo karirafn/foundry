@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
 
@@ -19,11 +20,14 @@ internal static class RecheckRepositoryEligibility
 {
     internal sealed record Command(Guid AccountId, Guid Id) : ICommand<RepositorySummary>;
 
+    // NOTE: 5 constructor dependencies — exceeds the 4-cap, but ILogger takes priority over operational
+    // visibility. GitHubHttpClient and GitLabHttpClient cannot be consolidated without a shared interface.
     internal sealed class Handler(
         DbContext dbContext,
         IRepositoryEligibilityEvaluator eligibilityEvaluator,
         GitHubHttpClient gitHubHttpClient,
-        GitLabHttpClient gitLabHttpClient) : ICommandHandler<Command, RepositorySummary>
+        GitLabHttpClient gitLabHttpClient,
+        ILogger<Handler> logger) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
@@ -102,7 +106,10 @@ internal static class RecheckRepositoryEligibility
             catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
             {
-                // Leave namespaces unchanged if the listing call fails
+                logger.LogWarning(
+                    ex,
+                    "Namespace refresh failed for credential {CredentialId}; evaluating eligibility against cached namespaces.",
+                    credential.Id);
             }
         }
     }

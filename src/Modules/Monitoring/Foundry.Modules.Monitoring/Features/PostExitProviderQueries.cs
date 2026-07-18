@@ -112,7 +112,7 @@ internal sealed class PostExitProviderQueries(
         if (string.IsNullOrEmpty(credential.Token))
         {
             return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.AccountTokenNotConfigured(credential.Id));
+                PostExitProviderQueriesErrors.CredentialTokenNotConfigured(credential.Id));
         }
 
         IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
@@ -127,10 +127,10 @@ internal static class PostExitProviderQueriesErrors
             $"No monitored repository found with id '{id.Value}'.");
 
     public static Error CredentialNotFound(MonitoredRepositoryId id) =>
-        new("PostExitProviderQueries.AccountNotFound",
+        new("PostExitProviderQueries.CredentialNotFound",
             $"No credential covers the repository with id '{id.Value}'.");
 
-    public static Error AccountTokenNotConfigured(CredentialId id) =>
-        new("PostExitProviderQueries.AccountTokenNotConfigured",
-            $"Account with id '{id.Value}' has no token configured.");
+    public static Error CredentialTokenNotConfigured(CredentialId id) =>
+        new("PostExitProviderQueries.CredentialTokenNotConfigured",
+            $"Credential with id '{id.Value}' has no token configured.");
 }

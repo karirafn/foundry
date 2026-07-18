@@ -99,7 +99,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         // Assert
         result.IsFailure.ShouldBeTrue();
         Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
-        failure.Error.Code.ShouldBe("PostExitProviderQueries.AccountNotFound");
+        failure.Error.Code.ShouldBe("PostExitProviderQueries.CredentialNotFound");
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         // Assert
         result.IsFailure.ShouldBeTrue();
         Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
-        failure.Error.Code.ShouldBe("PostExitProviderQueries.AccountTokenNotConfigured");
+        failure.Error.Code.ShouldBe("PostExitProviderQueries.CredentialTokenNotConfigured");
     }
 
     [Fact]
