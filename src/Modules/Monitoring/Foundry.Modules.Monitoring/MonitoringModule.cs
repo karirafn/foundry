@@ -25,6 +25,7 @@ public static class MonitoringModule
         services.AddHttpClient<GitLabHttpClient>();
 
         services.AddScoped<INamespaceDeriver, NamespaceDeriver>();
+        services.AddScoped<CredentialRotationService>();
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
@@ -36,7 +37,7 @@ public static class MonitoringModule
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
         services.AddCommandHandler<CreateAccount.Command, CredentialSummary, CreateAccount.Handler, CreateAccount.Validator>();
-        services.AddCommandHandler<UpdateAccount.Command, CredentialSummary, UpdateAccount.Handler, UpdateAccount.Validator>();
+        services.AddCommandHandler<UpdateAccount.Command, CredentialUpdateResult, UpdateAccount.Handler, UpdateAccount.Validator>();
         services.AddCommandHandler<DeleteAccount.Command, bool, DeleteAccount.Handler>();
         services.AddQueryHandler<ValidateToken.Query, ValidateToken.Response, ValidateToken.Handler>();
 
