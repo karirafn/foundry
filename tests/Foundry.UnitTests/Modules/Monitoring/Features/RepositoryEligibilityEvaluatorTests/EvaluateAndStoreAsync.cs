@@ -101,6 +101,103 @@ public sealed class EvaluateAndStoreAsync
     }
 
     [Fact]
+    public async Task WhenCanPushReturnsFalse_SetsEligibilityToIneligibleWithCannotPushViolation()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo("owner/repo");
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        StubProviderFactory factory = new(
+            Result<BranchProtection>.Ok(protection),
+            canPushResult: Result<bool>.Ok(false));
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: factory);
+
+        // Act
+        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem();
+        ineligible.Violations[0].Rule.ShouldBe("cannot-push:owner/repo");
+        factory.CreatedProvider.ShouldNotBeNull();
+        factory.CreatedProvider!.BranchProtectionWasCalled.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenCanPushFails_SetsEligibilityToUnreachable()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new StubProviderFactory(
+                Result<BranchProtection>.Ok(protection),
+                canPushResult: Result<bool>.Fail(new Error("Provider.Error", "Upstream error"))));
+
+        // Act
+        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+    }
+
+    [Fact]
+    public async Task WhenCanPushThrows_SetsEligibilityToUnreachable()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new ThrowingCanPushProviderFactory());
+
+        // Act
+        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+    }
+
+    [Fact]
+    public async Task WhenCanPushReturnsTrue_AndBranchProtectionPasses_SetsEligibilityToEligible()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        StubProviderFactory factory = new(
+            Result<BranchProtection>.Ok(protection),
+            canPushResult: Result<bool>.Ok(true));
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: factory);
+
+        // Act
+        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
+        factory.CreatedProvider.ShouldNotBeNull();
+        factory.CreatedProvider!.BranchProtectionWasCalled.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task WhenCredentialCoversRepo_AndProviderReturnsDirectPushesViolation_SetsEligibilityToIneligible()
     {
         // Arrange
@@ -188,7 +285,7 @@ public sealed class EvaluateAndStoreAsync
     }
 
     [Fact]
-    public async Task WhenCredentialCoversRepo_AndProviderThrows_SetsEligibilityToUnreachable()
+    public async Task WhenGetBranchProtectionThrows_SetsEligibilityToUnreachable()
     {
         // Arrange
         MonitoredRepository repo = CreateRepo();
@@ -198,7 +295,7 @@ public sealed class EvaluateAndStoreAsync
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
-            providerFactory: new ThrowingProviderFactory());
+            providerFactory: new ThrowingBranchProtectionProviderFactory());
 
         // Act
         await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
@@ -305,23 +402,44 @@ public sealed class EvaluateAndStoreAsync
                 CancellationToken cancellationToken)
                 => Task.FromResult(
                     Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+
+            public Task<Result<bool>> CanPushAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<bool>.Ok(true));
         }
     }
 
-    private sealed class StubProviderFactory(Result<BranchProtection> branchProtectionResult) : IIssueProviderFactory
+    private sealed class StubProviderFactory(
+        Result<BranchProtection> branchProtectionResult,
+        Result<bool>? canPushResult = null) : IIssueProviderFactory
     {
-        public IIssueProvider CreateProvider(Credential credential, string token) =>
-            new StubProvider(branchProtectionResult);
+        private readonly Result<bool> _canPushResult = canPushResult ?? Result<bool>.Ok(true);
+
+        public StubProvider? CreatedProvider { get; private set; }
+
+        public IIssueProvider CreateProvider(Credential credential, string token)
+        {
+            StubProvider provider = new(branchProtectionResult, _canPushResult);
+            CreatedProvider = provider;
+            return provider;
+        }
     }
 
-    private sealed class ThrowingProviderFactory : IIssueProviderFactory
+    private sealed class ThrowingBranchProtectionProviderFactory : IIssueProviderFactory
     {
         public IIssueProvider CreateProvider(Credential credential, string token) =>
-            new ThrowingProvider();
+            new ThrowingBranchProtectionProvider();
     }
 
-    private sealed class StubProvider(Result<BranchProtection> branchProtectionResult) : IIssueProvider
+    private sealed class StubProvider(
+        Result<BranchProtection> branchProtectionResult,
+        Result<bool>? canPushResult = null) : IIssueProvider
     {
+        private readonly Result<bool> _canPushResult = canPushResult ?? Result<bool>.Ok(true);
+
+        public bool BranchProtectionWasCalled { get; private set; }
+
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
@@ -355,7 +473,10 @@ public sealed class EvaluateAndStoreAsync
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
-            => Task.FromResult(branchProtectionResult);
+        {
+            BranchProtectionWasCalled = true;
+            return Task.FromResult(branchProtectionResult);
+        }
 
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,
@@ -382,9 +503,14 @@ public sealed class EvaluateAndStoreAsync
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+
+        public Task<Result<bool>> CanPushAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+            => Task.FromResult(_canPushResult);
     }
 
-    private sealed class ThrowingProvider : IIssueProvider
+    private sealed class ThrowingBranchProtectionProvider : IIssueProvider
     {
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -446,5 +572,86 @@ public sealed class EvaluateAndStoreAsync
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+
+        public Task<Result<bool>> CanPushAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
+    }
+
+    private sealed class ThrowingCanPushProviderFactory : IIssueProviderFactory
+    {
+        public IIssueProvider CreateProvider(Credential credential, string token) =>
+            new ThrowingCanPushProvider();
+
+        private sealed class ThrowingCanPushProvider : IIssueProvider
+        {
+            public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+
+            public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+                RepositorySlug slug,
+                int issueNumber,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
+
+            public Task<Result<bool>> IsIssueClosedAsync(
+                RepositorySlug slug,
+                int issueNumber,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<bool>.Ok(false));
+
+            public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+                RepositorySlug slug,
+                string pullRequestUrl,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+
+            public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+                RepositorySlug slug,
+                string pullRequestUrl,
+                DateTimeOffset since,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+
+            public Task<Result<BranchProtection>> GetBranchProtectionAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<BranchProtection>.Ok(
+                    new BranchProtection("main", true, true, true)));
+
+            public Task<Result<bool>> CreateBranchAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<bool>.Ok(true));
+
+            public Task<Result<bool>> HasBranchCommitsAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<bool>.Ok(false));
+
+            public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+                => Task.FromResult(
+                    Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+
+            public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+                RepositorySlug slug,
+                string branchName,
+                CancellationToken cancellationToken)
+                => Task.FromResult(
+                    Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+
+            public Task<Result<bool>> CanPushAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken)
+                => throw new HttpRequestException("Connection refused");
+        }
     }
 }

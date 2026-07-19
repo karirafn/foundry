@@ -18,4 +18,12 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
 
     public static string NoCredentialDescription(string namespaceName) =>
         $"no credential for namespace {namespaceName}";
+
+    public const string CannotPushRulePrefix = "cannot-push";
+
+    public static string CannotPushRule(string slug) =>
+        $"{CannotPushRulePrefix}:{slug}";
+
+    public static string CannotPushDescription(string slug) =>
+        $"token cannot push to {slug}";
 }

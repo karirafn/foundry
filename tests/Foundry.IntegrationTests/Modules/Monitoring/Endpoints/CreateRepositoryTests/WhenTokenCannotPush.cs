@@ -13,26 +13,20 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.RecheckRepositoryEligibilityTests;
+namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateRepositoryTests;
 
-public sealed class WhenRepositoryExists : IAsyncDisposable
+public sealed class WhenTokenCannotPush : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenRepositoryExists()
+    public WhenTokenCannotPush()
     {
-        BranchProtection eligibleProtection = new(
-            DefaultBranch: "main",
-            RejectDirectPushes: true,
-            RejectForcePushes: true,
-            RejectDeletion: true);
-
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IIssueProviderFactory>();
             services.AddScoped<IIssueProviderFactory>(_ =>
-                new StubProviderFactory(Result<BranchProtection>.Ok(eligibleProtection)));
+                new StubProviderFactory(canPush: false));
         });
 
         _client = _factory.CreateClient();
@@ -45,42 +39,52 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsUpdatedEligibilityInSummary()
+    public async Task ReturnsIneligibleWithCannotPushViolation()
     {
         // Arrange — set namespace so resolver can cover the repo
-        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Recheck Org");
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "No Push Org");
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
-        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/recheck-repo");
+        object body = new
+        {
+            slug = "owner/no-push-repo",
+            pollIntervalSeconds = 300,
+        };
 
         // Act
-        HttpResponseMessage response = await _client.PostAsync(
-            new Uri($"/api/accounts/{accountId}/repositories/{repositoryId}/recheck", UriKind.Relative),
-            content: null,
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
             TestContext.Current.CancellationToken);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
         RepositorySummary? repository = await response.Content
             .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
         repository.ShouldNotBeNull();
         repository.Eligibility.ShouldNotBeNull();
         repository.Eligibility.ShouldSatisfyAllConditions(
-            () => repository.Eligibility.Status.ShouldBe("eligible"),
-            () => repository.Eligibility.Violations.ShouldBeEmpty());
+            () => repository.Eligibility.Status.ShouldBe("ineligible"),
+            () => repository.Eligibility.Violations.ShouldHaveSingleItem(),
+            () => repository.Eligibility.Violations[0].Rule.ShouldBe("cannot-push:owner/no-push-repo"),
+            () => repository.Eligibility.Violations[0].Description.ShouldBe("token cannot push to owner/no-push-repo"));
     }
 
-    private sealed class StubProviderFactory(Result<BranchProtection> branchProtectionResult) : IIssueProviderFactory
+    private sealed class StubProviderFactory(bool canPush) : IIssueProviderFactory
     {
         public IIssueProvider CreateProvider(Credential credential, string token) =>
-            new StubProvider(branchProtectionResult);
+            new StubProvider(canPush);
     }
 
-    private sealed class StubProvider(Result<BranchProtection> branchProtectionResult) : IIssueProvider
+    private sealed class StubProvider(bool canPush) : IIssueProvider
     {
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken) =>
-            Task.FromResult(branchProtectionResult);
+            Task.FromResult(Result<BranchProtection>.Ok(new BranchProtection(
+                DefaultBranch: "main",
+                RejectDirectPushes: true,
+                RejectForcePushes: true,
+                RejectDeletion: true)));
 
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -140,7 +144,7 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
 
         public Task<Result<bool>> CanPushAsync(
             RepositorySlug slug,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(true));
+            CancellationToken cancellationToken) =>
+            Task.FromResult(Result<bool>.Ok(canPush));
     }
 }

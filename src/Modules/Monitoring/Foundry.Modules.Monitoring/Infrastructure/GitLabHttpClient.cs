@@ -615,6 +615,42 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<string>.Ok(infoSuccess.Value.DefaultBranch ?? string.Empty);
     }
 
+    public async Task<Result<bool>> GetPushPermissionAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabProjectWithPermissionsDto? dto =
+            JsonSerializer.Deserialize<GitLabProjectWithPermissionsDto>(body, JsonOptions);
+
+        int projectLevel = dto?.Permissions?.ProjectAccess?.AccessLevel ?? 0;
+        int groupLevel = dto?.Permissions?.GroupAccess?.AccessLevel ?? 0;
+        bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
+
+        return Result<bool>.Ok(canPush);
+    }
+
     public async Task<Result<BranchRules>> GetBranchProtectionAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -813,6 +849,8 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private sealed record GitLabCommitListItemDto(string Id, string? Title);
 
     private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt);
+
+    private sealed record GitLabProjectWithPermissionsDto(GitLabProjectPermissionsDto? Permissions);
 
     private sealed record GitLabProtectedBranchDto(
         bool AllowForcePush,

@@ -15,24 +15,20 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.RecheckRepositoryEligibilityTests;
 
-public sealed class WhenRepositoryExists : IAsyncDisposable
+public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
 {
+    private readonly ConfigurableStubProviderFactory _providerFactory;
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenRepositoryExists()
+    public WhenTokenRegainsPushAccess()
     {
-        BranchProtection eligibleProtection = new(
-            DefaultBranch: "main",
-            RejectDirectPushes: true,
-            RejectForcePushes: true,
-            RejectDeletion: true);
+        _providerFactory = new ConfigurableStubProviderFactory(canPush: false);
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IIssueProviderFactory>();
-            services.AddScoped<IIssueProviderFactory>(_ =>
-                new StubProviderFactory(Result<BranchProtection>.Ok(eligibleProtection)));
+            services.AddScoped<IIssueProviderFactory>(_ => _providerFactory);
         });
 
         _client = _factory.CreateClient();
@@ -45,12 +41,16 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsUpdatedEligibilityInSummary()
+    public async Task ReturnsEligibleAfterRecheck()
     {
-        // Arrange — set namespace so resolver can cover the repo
-        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Recheck Org");
+        // Arrange — seed repo while CanPushAsync returns false, leaving it ineligible
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Regained Push Org");
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
-        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/recheck-repo");
+        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(
+            _factory, accountId, slug: "owner/regained-push-repo");
+
+        // flip the stub so recheck now reports push access as granted
+        _providerFactory.CanPush = true;
 
         // Act
         HttpResponseMessage response = await _client.PostAsync(
@@ -69,18 +69,24 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
             () => repository.Eligibility.Violations.ShouldBeEmpty());
     }
 
-    private sealed class StubProviderFactory(Result<BranchProtection> branchProtectionResult) : IIssueProviderFactory
+    private sealed class ConfigurableStubProviderFactory(bool canPush) : IIssueProviderFactory
     {
+        public bool CanPush { get; set; } = canPush;
+
         public IIssueProvider CreateProvider(Credential credential, string token) =>
-            new StubProvider(branchProtectionResult);
+            new ConfigurableStubProvider(this);
     }
 
-    private sealed class StubProvider(Result<BranchProtection> branchProtectionResult) : IIssueProvider
+    private sealed class ConfigurableStubProvider(ConfigurableStubProviderFactory factory) : IIssueProvider
     {
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken) =>
-            Task.FromResult(branchProtectionResult);
+            Task.FromResult(Result<BranchProtection>.Ok(new BranchProtection(
+                DefaultBranch: "main",
+                RejectDirectPushes: true,
+                RejectForcePushes: true,
+                RejectDeletion: true)));
 
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -140,7 +146,7 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
 
         public Task<Result<bool>> CanPushAsync(
             RepositorySlug slug,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(true));
+            CancellationToken cancellationToken) =>
+            Task.FromResult(Result<bool>.Ok(factory.CanPush));
     }
 }

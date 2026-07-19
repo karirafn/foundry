@@ -35,11 +35,15 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         try
         {
-            Result<BranchProtection> result = await provider.GetBranchProtectionAsync(
-                repo.Slug,
-                cancellationToken);
+            Result<bool> canPushResult = await provider.CanPushAsync(repo.Slug, cancellationToken);
 
-            eligibility = EvaluateEligibility(result);
+            eligibility = canPushResult switch
+            {
+                Result<bool>.Failure => new RepositoryEligibility.Unreachable(),
+                Result<bool>.Success { Value: false } => new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.CannotPush(repo.Slug)]),
+                _ => EvaluateEligibility(await provider.GetBranchProtectionAsync(repo.Slug, cancellationToken)),
+            };
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — treat all as unreachable
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -47,7 +51,7 @@ internal sealed class RepositoryEligibilityEvaluator(
         {
             logger.LogError(
                 ex,
-                "Failed to fetch branch protection for repository {Slug}; marking as unreachable.",
+                "Failed to evaluate eligibility for repository {Slug}; marking as unreachable.",
                 repo.Slug);
             eligibility = new RepositoryEligibility.Unreachable();
         }
