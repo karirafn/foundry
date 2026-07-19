@@ -24,6 +24,7 @@ public static class MonitoringModule
         services.AddHttpClient<GitHubHttpClient>();
         services.AddHttpClient<GitLabHttpClient>();
 
+        services.AddScoped<INamespaceDeriver, NamespaceDeriver>();
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
