@@ -1,18 +1,20 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal sealed class CredentialRotationService(
     DbContext dbContext,
     INamespaceDeriver namespaceDeriver,
-    IRepositoryEligibilityEvaluator eligibilityEvaluator)
+    IRepositoryEligibilityEvaluator eligibilityEvaluator,
+    ILogger<CredentialRotationService> logger)
 {
-    private const int ConcurrencyBound = 4;
-
     public async Task<IReadOnlyList<AffectedRepository>> RotateAsync(
         Credential credential,
         CancellationToken cancellationToken)
@@ -33,10 +35,15 @@ internal sealed class CredentialRotationService(
                 credential.SetNamespaces(derived.Namespaces);
                 break;
             case NamespaceDerivationOutcome.Unavailable:
-                // Keep prior namespaces — do not drop coverage on transient failure
+                // Keep prior namespaces — do not drop coverage on transient failure.
+                // Log so operators know the derivation was skipped.
+                logger.LogWarning(
+                    "Namespace derivation unavailable for credential {CredentialId}; retaining prior namespaces.",
+                    credential.Id.Value);
                 break;
             default:
-                break;
+                throw new UnreachableException(
+                    $"Unhandled NamespaceDerivationOutcome variant: {outcome.GetType().Name}");
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -44,31 +51,30 @@ internal sealed class CredentialRotationService(
         // Union of repos before and after the namespace change
         List<MonitoredRepository> afterRepos = await FindResolvingReposAsync(credential, cancellationToken);
 
-        HashSet<Guid> allRepoIds = [..beforeRepos.Select(r => r.Id.Value), ..afterRepos.Select(r => r.Id.Value)];
         Dictionary<Guid, MonitoredRepository> allReposById = beforeRepos
             .Concat(afterRepos)
             .DistinctBy(r => r.Id.Value)
             .ToDictionary(r => r.Id.Value);
 
-        await EvaluateBoundedAsync(allReposById.Values.ToList(), cancellationToken);
+        // Evaluate sequentially — DbContext is not thread-safe; concurrent calls to
+        // EvaluateAndStoreAsync would access the same DbContext instance from multiple threads.
+        foreach (MonitoredRepository repo in allReposById.Values)
+        {
+            await eligibilityEvaluator.EvaluateAndStoreAsync(repo, cancellationToken);
+        }
 
-        // Reload repos to get updated eligibility status after SaveChanges inside evaluator
+        // Persist eligibility changes set by EvaluateAndStoreAsync on the tracked entities.
         await dbContext.SaveChangesAsync(cancellationToken);
 
         List<AffectedRepository> affected = [];
-        foreach (Guid repoId in allRepoIds)
+        foreach (MonitoredRepository repo in allReposById.Values)
         {
-            if (!allReposById.TryGetValue(repoId, out MonitoredRepository? repo))
-            {
-                continue;
-            }
-
-            string previous = priorStatus.TryGetValue(repoId, out string? prior) ? prior : "unreachable";
+            string previous = priorStatus.TryGetValue(repo.Id.Value, out string? prior) ? prior : "unreachable";
             string current = repo.EligibilityStatus ?? "unreachable";
 
             if (previous != current)
             {
-                affected.Add(new AffectedRepository(repoId, repo.Slug.FullPath, previous, current));
+                affected.Add(new AffectedRepository(repo.Id.Value, repo.Slug.FullPath, previous, current));
             }
         }
 
@@ -79,6 +85,8 @@ internal sealed class CredentialRotationService(
         Credential credential,
         CancellationToken cancellationToken)
     {
+        // Entities are tracked on purpose — EvaluateAndStoreAsync calls SetEligibility on them,
+        // and the outer SaveChangesAsync persists those mutations. Do not add AsNoTracking() here.
         List<MonitoredRepository> allRepos = await dbContext.Set<MonitoredRepository>()
             .Where(r => r.Host == credential.Host)
             .ToListAsync(cancellationToken);
@@ -86,27 +94,5 @@ internal sealed class CredentialRotationService(
         return allRepos
             .Where(r => credential.ResolveCoveringNamespace(r.Slug) is not null)
             .ToList();
-    }
-
-    private async Task EvaluateBoundedAsync(
-        List<MonitoredRepository> repos,
-        CancellationToken cancellationToken)
-    {
-        using SemaphoreSlim semaphore = new(ConcurrencyBound, ConcurrencyBound);
-
-        async Task EvaluateOneAsync(MonitoredRepository repo)
-        {
-            await semaphore.WaitAsync(cancellationToken);
-            try
-            {
-                await eligibilityEvaluator.EvaluateAndStoreAsync(repo, cancellationToken);
-            }
-            finally
-            {
-                semaphore.Release();
-            }
-        }
-
-        await Task.WhenAll(repos.Select(EvaluateOneAsync));
     }
 }

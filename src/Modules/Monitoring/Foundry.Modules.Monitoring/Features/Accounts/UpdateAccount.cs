@@ -27,6 +27,11 @@ internal static partial class UpdateAccount
     internal sealed partial class Validator : ICommandValidator<Command>
     {
         internal const string TokenInvalidCharsCode = "UpdateAccount.TokenInvalidChars";
+        internal const string TokenTooLongCode = "UpdateAccount.TokenTooLong";
+
+        // Real GitHub/GitLab tokens are under 200 characters; 500 gives ample headroom
+        // while preventing oversized values from bloating the encrypted column (max 2000 chars ciphertext).
+        internal const int TokenMaxLength = 500;
 
         [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
         private static partial Regex ValidTokenCharactersRegex();
@@ -37,6 +42,13 @@ internal static partial class UpdateAccount
             if (baseUrlResult is Result<BaseUrlVo>.Failure baseUrlFailure)
             {
                 return baseUrlFailure.Error;
+            }
+
+            if (command.Token is not null && command.Token.Length > TokenMaxLength)
+            {
+                return new Error(
+                    TokenTooLongCode,
+                    $"Token must not exceed {TokenMaxLength} characters.");
             }
 
             if (command.Token is not null && !ValidTokenCharactersRegex().IsMatch(command.Token))
@@ -96,8 +108,11 @@ internal static partial class UpdateAccount
                     return Result<CredentialUpdateResult>.Fail(tokenFailure.Error);
                 }
 
-                // tokenResult is guaranteed Success here — Failure was handled above.
-                ValidateToken.Response tokenResponse = ((Result<ValidateToken.Response>.Success)tokenResult).Value;
+                if (tokenResult is not Result<ValidateToken.Response>.Success { Value: ValidateToken.Response tokenResponse })
+                {
+                    throw new UnreachableException(
+                        $"Token validation returned an unexpected result type: {tokenResult.GetType().Name}");
+                }
 
                 if (!tokenResponse.IsValid)
                 {

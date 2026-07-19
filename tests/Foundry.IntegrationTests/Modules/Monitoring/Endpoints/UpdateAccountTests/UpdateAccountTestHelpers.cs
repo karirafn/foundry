@@ -35,22 +35,21 @@ internal sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Que
 internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> tokenToListing)
     : DelegatingHandler
 {
-    private string _lastTokenSeen = string.Empty;
-
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         // Extract the token from Authorization header (GitHub)
+        string lastTokenSeen = string.Empty;
         if (request.Headers.TryGetValues("Authorization", out IEnumerable<string>? authValues))
         {
             string bearer = authValues.FirstOrDefault() ?? string.Empty;
-            _lastTokenSeen = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            lastTokenSeen = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
                 ? bearer["Bearer ".Length..]
                 : string.Empty;
         }
 
-        string json = tokenToListing.TryGetValue(_lastTokenSeen, out string? listing)
+        string json = tokenToListing.TryGetValue(lastTokenSeen, out string? listing)
             ? listing
             : "[]";
 

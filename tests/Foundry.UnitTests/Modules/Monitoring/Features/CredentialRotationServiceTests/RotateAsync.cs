@@ -8,6 +8,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -46,7 +47,8 @@ public sealed class RotateAsync : IAsyncDisposable
         return new CredentialRotationService(
             _dbContext,
             deriver,
-            evaluator ?? new RecordingEligibilityEvaluator());
+            evaluator ?? new RecordingEligibilityEvaluator(),
+            NullLogger<CredentialRotationService>.Instance);
     }
 
     private async Task<(GitHubCredential Credential, MonitoredRepository RepoA, MonitoredRepository RepoB)>
@@ -200,9 +202,10 @@ public sealed class RotateAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDerived_EvaluationRespectsConcurrencyBound()
+    public async Task WhenDerived_EvaluatesEveryRepoInUnionExactlyOnce()
     {
-        // Arrange — seed many repos to exercise the semaphore bound (4)
+        // Arrange — seed 8 repos under one owner namespace
+        // Evaluation is sequential (DbContext is not thread-safe); every repo must be visited once.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
         GitHubCredential credential = GitHubCredential.Create("test-user", "ghp_original", baseUrl);
         Namespace ownerNs = Namespace.Create("owner").ValueOrThrow();
@@ -226,9 +229,9 @@ public sealed class RotateAsync : IAsyncDisposable
         // Act
         await sut.RotateAsync(credential, CancellationToken.None);
 
-        // Assert — max concurrency never exceeded bound of 4
-        evaluator.MaxConcurrency.ShouldBeLessThanOrEqualTo(4);
+        // Assert — each of the 8 repos evaluated exactly once, never more than one at a time
         evaluator.TotalCalls.ShouldBe(8);
+        evaluator.MaxConcurrency.ShouldBe(1);
     }
 
     // Stubs and fakes
@@ -265,37 +268,30 @@ public sealed class RotateAsync : IAsyncDisposable
         }
     }
 
-    private sealed class CountingEligibilityEvaluator : IRepositoryEligibilityEvaluator, IDisposable
+    private sealed class CountingEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
         private int _current;
         private int _maxConcurrency;
         private int _totalCalls;
-        private readonly SemaphoreSlim _lock = new(1, 1);
 
         public int MaxConcurrency => _maxConcurrency;
         public int TotalCalls => _totalCalls;
-
-        public void Dispose() => _lock.Dispose();
 
         public async Task EvaluateAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
         {
-            await _lock.WaitAsync(cancellationToken);
-            int current = ++_current;
-            if (current > _maxConcurrency)
+            _current++;
+            _totalCalls++;
+            if (_current > _maxConcurrency)
             {
-                _maxConcurrency = current;
+                _maxConcurrency = _current;
             }
-            Interlocked.Increment(ref _totalCalls);
-            _lock.Release();
 
-            // Simulate async work so concurrency actually develops
-            await Task.Delay(10, cancellationToken);
+            // Simulate async work — with sequential evaluation this should never overlap
+            await Task.Delay(1, cancellationToken);
 
-            await _lock.WaitAsync(cancellationToken);
             _current--;
-            _lock.Release();
         }
     }
 }
