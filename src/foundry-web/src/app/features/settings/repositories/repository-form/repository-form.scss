@@ -122,15 +122,50 @@
   }
 
   &__picker-option {
+    align-items: baseline;
     color: var(--fd-text-primary);
+    column-gap: var(--fd-spacing-sm);
     cursor: pointer;
-    font-family: var(--fd-font-mono);
+    display: flex;
+    flex-wrap: wrap;
     font-size: 0.875rem;
+    justify-content: space-between;
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
 
     &:hover,
     &--active {
       background: var(--fd-bg-card-hover);
+    }
+
+    &--disabled {
+      cursor: not-allowed;
+
+      &:hover {
+        background: transparent;
+      }
+
+      &.repository-form__picker-option--active {
+        background: var(--fd-bg-card);
+      }
+    }
+
+    &--disabled &-slug {
+      color: var(--fd-text-secondary);
+    }
+  }
+
+  &__picker-option-slug {
+    font-family: var(--fd-font-mono);
+  }
+
+  &__picker-option-reason {
+    color: var(--fd-text-ineligible);
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    text-align: right;
+
+    @media (max-width: 480px) {
+      flex-basis: 100%;
     }
   }
 

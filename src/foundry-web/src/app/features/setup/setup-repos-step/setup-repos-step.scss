@@ -128,12 +128,28 @@
     &:hover {
       background: var(--fd-bg-card-hover);
     }
+
+    &--disabled {
+      &:hover {
+        background: transparent;
+      }
+    }
+
+  }
+
+  &__repo-item--disabled &__repo-label {
+    cursor: not-allowed;
+  }
+
+  &__repo-item--disabled &__repo-slug {
+    color: var(--fd-text-secondary);
   }
 
   &__repo-label {
     align-items: center;
     cursor: pointer;
     display: flex;
+    flex-wrap: wrap;
     gap: var(--fd-spacing-sm);
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
     width: 100%;
@@ -145,6 +161,11 @@
     flex-shrink: 0;
     height: 16px;
     width: 16px;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
 
     &:focus-visible {
       @include focus-ring;
@@ -168,6 +189,14 @@
     letter-spacing: 0.05em;
     padding: 1px var(--fd-spacing-xs);
     text-transform: uppercase;
+  }
+
+  &__repo-reason {
+    color: var(--fd-text-ineligible);
+    flex-basis: 100%;
+    font-size: 0.75rem;
+    margin-left: calc(16px + var(--fd-spacing-sm));
+    order: 3;
   }
 
   &__save-error {

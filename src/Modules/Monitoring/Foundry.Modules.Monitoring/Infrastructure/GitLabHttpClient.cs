@@ -833,14 +833,14 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
     private sealed record GitLabNotePositionDto(string? NewPath);
 
+    private sealed record GitLabProjectPermissionsDto(
+        GitLabAccessLevelDto? ProjectAccess,
+        GitLabAccessLevelDto? GroupAccess);
+
     private sealed record GitLabProjectListItemDto(
         string PathWithNamespace,
         string Visibility,
         GitLabProjectPermissionsDto? Permissions);
-
-    private sealed record GitLabProjectPermissionsDto(
-        GitLabAccessLevelDto? ProjectAccess,
-        GitLabAccessLevelDto? GroupAccess);
 
     private sealed record GitLabCompareDto(IReadOnlyList<GitLabCommitDto> Commits);
 

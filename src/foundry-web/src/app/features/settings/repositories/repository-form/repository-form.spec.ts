@@ -38,6 +38,16 @@ const MOCK_AVAILABLE: AvailableRepository[] = [
   { slug: 'my-org/third-repo', isPrivate: false, canPush: false },
 ];
 
+const MOCK_AVAILABLE_MIXED: AvailableRepository[] = [
+  { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+  { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
+];
+
+const MOCK_AVAILABLE_ALL_READONLY: AvailableRepository[] = [
+  { slug: 'my-org/readonly-a', isPrivate: false, canPush: false },
+  { slug: 'my-org/readonly-b', isPrivate: false, canPush: false },
+];
+
 function setup(overrides: {
   repository?: RepositorySummary | null;
   accounts?: AccountSummary[];
@@ -775,5 +785,316 @@ describe('RepositoryFormComponent', () => {
 
     // Assert
     expect((emitted as CreateRepositoryRequest).pollIntervalSeconds).toBeNull();
+  });
+
+  // Cycle 25: writable option is selectable
+  it('should select a writable repository when clicked', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act — click the writable option (index 0)
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    options[0].click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(combobox.value).toBe('my-org/writable-repo');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(true);
+  });
+
+  // Cycle 26: non-writable option is not selectable and shows aria-disabled + reason
+  it('should not select a non-writable repository when clicked', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act — click the non-writable option (index 1)
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    options[1].click();
+    fixture.detectChanges();
+
+    // Assert — slug unchanged, picker stays open
+    expect(combobox.value).toBe('');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
+  });
+
+  it('should render aria-disabled="true" on a non-writable option', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    expect(options[0].getAttribute('aria-disabled')).toBeNull();
+    expect(options[1].getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('should render the no-write-access reason text inside a non-writable option', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    const reasonEl = options[1].querySelector('.repository-form__picker-option-reason');
+    expect(reasonEl).toBeTruthy();
+    expect(reasonEl?.textContent).toContain('no write access');
+  });
+
+  // Cycle 27: keyboard ArrowDown navigates across ALL options including disabled
+  it('should move active option to disabled option when navigating down with ArrowDown', () => {
+    // Arrange — list: [writable@0, readonly@1]
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    // First ArrowDown — lands on writable@0
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
+    // Second ArrowDown — lands on readonly@1 (disabled but navigable per ARIA APG)
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
+    const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
+    expect(activeOption).toBeTruthy();
+    expect(activeOption.getAttribute('aria-disabled')).toBe('true');
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-1');
+  });
+
+  it('should move active option back to writable option when navigating up with ArrowUp', () => {
+    // Arrange — list: [readonly@0, writable@1]
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: repos,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    // Navigate down twice to reach writable@1
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
+    // Navigate up — moves to readonly@0
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    fixture.detectChanges();
+
+    const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
+    expect(activeOption).toBeTruthy();
+    expect(activeOption.getAttribute('aria-disabled')).toBe('true');
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
+  });
+
+  // Cycle 28: Enter key on non-writable active option is a no-op; on writable it selects
+  it('should not select and keep picker open when Enter is pressed on a non-writable active option', () => {
+    // Arrange — list: [readonly@0, writable@1]
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: repos,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    // ArrowDown lands on readonly@0
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
+    // Assert active option is the non-writable one
+    const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
+    expect(activeOption?.getAttribute('aria-disabled')).toBe('true');
+
+    // Enter on non-writable — should be a no-op
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(combobox.value).toBe('');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
+  });
+
+  it('should select writable option when Enter is pressed on a writable active option', () => {
+    // Arrange — list: [readonly@0, writable@1]
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: repos,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    // Navigate down twice to land on writable@1
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
+    // Enter should select it
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(combobox.value).toBe('my-org/writable-repo');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(true);
+  });
+
+  // Cycle 29: all non-writable — arrows still move active descendant, no selection occurs
+  it('should render all entries (not empty state) when all repos are non-writable', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_ALL_READONLY,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert — all entries shown, no empty state
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    expect(options.length).toBe(2);
+    const emptyState = el.querySelector('.repository-form__picker-empty');
+    expect(emptyState).toBeNull();
+  });
+
+  it('should move active descendant to disabled option when ArrowDown is pressed on all-disabled list', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_ALL_READONLY,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
+    // Active option should move to first disabled entry
+    const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active');
+    expect(activeOption).toBeTruthy();
+    expect(activeOption?.getAttribute('aria-disabled')).toBe('true');
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
+  });
+
+  it('should not select any option when Enter is pressed on an all-disabled list', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_ALL_READONLY,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+
+    // Combobox value unchanged, listbox stays open
+    expect(combobox.value).toBe('');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
   });
 });

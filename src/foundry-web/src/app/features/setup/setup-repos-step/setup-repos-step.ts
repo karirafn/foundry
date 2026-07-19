@@ -18,6 +18,7 @@ import { RepositoryService } from '../../settings/repositories/repository.servic
 import { AvailableRepository } from '../../settings/repositories/repository.model';
 
 const ERROR_TRUNCATE_LENGTH = 200;
+const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not authorized';
 
 @Component({
   selector: 'fd-setup-repos-step',
@@ -60,19 +61,36 @@ const ERROR_TRUNCATE_LENGTH = 200;
             <li class="setup-repos-step__repo-empty">No matching repositories</li>
           }
           @for (repo of _filteredRepositories(); track repo.slug) {
-            <li class="setup-repos-step__repo-item">
+            <li
+              class="setup-repos-step__repo-item"
+              [class.setup-repos-step__repo-item--disabled]="!repo.canPush"
+            >
               <label class="setup-repos-step__repo-label">
                 <input
                   class="setup-repos-step__repo-checkbox"
                   type="checkbox"
-                  [checked]="_selectedSlugs().has(repo.slug)"
+                  [checked]="_selectedSlugs().has(repo.slug) && repo.canPush"
+                  [disabled]="!repo.canPush"
+                  [attr.aria-describedby]="repo.canPush ? null : 'repo-reason-' + repo.slug.replaceAll('/', '-')"
                   (change)="onToggle(repo.slug, $any($event.target).checked)"
                 />
                 <span class="setup-repos-step__repo-slug">{{ repo.slug }}</span>
                 @if (repo.isPrivate) {
                   <span class="setup-repos-step__repo-private-badge" aria-label="private">Private</span>
                 }
+                @if (!repo.canPush) {
+                  <span
+                    class="setup-repos-step__repo-reason"
+                    aria-hidden="true"
+                  >{{ _noWriteAccessReason }}</span>
+                }
               </label>
+              @if (!repo.canPush) {
+                <span
+                  class="sr-only"
+                  [id]="'repo-reason-' + repo.slug.replaceAll('/', '-')"
+                >{{ _noWriteAccessReason }}</span>
+              }
             </li>
           }
         </ul>
@@ -113,6 +131,7 @@ const ERROR_TRUNCATE_LENGTH = 200;
   styleUrl: './setup-repos-step.scss',
 })
 export class SetupReposStepComponent implements OnInit {
+  protected readonly _noWriteAccessReason = NO_WRITE_ACCESS_REASON;
   protected readonly _repositoryService = inject(RepositoryService);
 
   readonly accountId = input.required<string>();
@@ -146,6 +165,10 @@ export class SetupReposStepComponent implements OnInit {
   }
 
   onToggle(slug: string, checked: boolean): void {
+    const repo = this._repositoryService.availableRepositories().find(r => r.slug === slug);
+    if (!repo?.canPush) {
+      return;
+    }
     this._selectedSlugs.update(current => {
       const next = new Set(current);
       if (checked) {

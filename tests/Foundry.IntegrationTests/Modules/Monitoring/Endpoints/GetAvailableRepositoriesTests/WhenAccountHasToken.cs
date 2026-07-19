@@ -61,8 +61,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
         repositories.ShouldNotBeNull();
         repositories.Count.ShouldBe(2);
         repositories.ShouldSatisfyAllConditions(
-            () => repositories.ShouldContain(r => r.Slug == "owner/repo-a" && !r.IsPrivate),
-            () => repositories.ShouldContain(r => r.Slug == "owner/repo-b" && r.IsPrivate));
+            () => repositories.ShouldContain(r => r.Slug == "owner/repo-a" && !r.IsPrivate && r.CanPush),
+            () => repositories.ShouldContain(r => r.Slug == "owner/repo-b" && r.IsPrivate && !r.CanPush));
     }
 
     private sealed class StubHandler(Result<IReadOnlyList<AvailableRepository>> result)

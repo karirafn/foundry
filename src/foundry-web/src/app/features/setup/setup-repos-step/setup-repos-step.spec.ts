@@ -14,6 +14,11 @@ const AVAILABLE_REPOS: AvailableRepository[] = [
   { slug: 'org/repo-gamma', isPrivate: false, canPush: false },
 ];
 
+const AVAILABLE_REPOS_WITH_NON_WRITABLE: AvailableRepository[] = [
+  { slug: 'org/repo-alpha', isPrivate: false, canPush: true },
+  { slug: 'org/repo-readonly', isPrivate: false, canPush: false },
+];
+
 @Component({ template: '', standalone: true })
 class StubIssuesComponent {}
 
@@ -350,7 +355,7 @@ describe('SetupReposStepComponent', () => {
 
   // Cycle 13: error message includes partial success count when some repos fail
   it('should include a count of successful repositories in the error message on partial failure', () => {
-    // Arrange
+    // Arrange — select both writable repos; repo-gamma (index 2) is disabled so its change is ignored
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
@@ -362,8 +367,6 @@ describe('SetupReposStepComponent', () => {
     checkboxes[0].dispatchEvent(new Event('change'));
     checkboxes[1].checked = true;
     checkboxes[1].dispatchEvent(new Event('change'));
-    checkboxes[2].checked = true;
-    checkboxes[2].dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
     // Act
@@ -385,10 +388,182 @@ describe('SetupReposStepComponent', () => {
 
     // Assert
     const errorText = el.querySelector('.setup-repos-step__save-error')?.textContent?.trim() ?? '';
-    expect(errorText).toContain('1 of 3');
+    expect(errorText).toContain('1 of 2');
   });
 
-  // Cycle 14: error strings are truncated to 200 characters
+  // Cycle 15: non-writable repos render disabled with reason
+  it('should render a disabled checkbox for non-writable repositories', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    expect(checkboxes[0].disabled).toBe(false);
+    expect(checkboxes[1].disabled).toBe(true);
+  });
+
+  it('should render the no-write-access reason for non-writable repositories', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const readonlyItem = items[1];
+    const reason = readonlyItem.querySelector('.setup-repos-step__repo-reason');
+    expect(reason).toBeTruthy();
+    expect(reason?.textContent).toContain('no write access');
+  });
+
+  it('should render a disabled modifier class on non-writable repo items', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    expect(items[0].classList.contains('setup-repos-step__repo-item--disabled')).toBe(false);
+    expect(items[1].classList.contains('setup-repos-step__repo-item--disabled')).toBe(true);
+  });
+
+  it('should not add a non-writable slug to the selection when a programmatic change event fires on its checkbox', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Act — dispatch a programmatic change event on the disabled (non-writable) checkbox
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const readonlyCheckbox = checkboxes[1];
+    readonlyCheckbox.checked = true;
+    readonlyCheckbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Assert — Finish button stays disabled because nothing was added to the selection
+    const finishBtn = el.querySelector('button.setup-repos-step__finish-btn') as HTMLButtonElement;
+    expect(finishBtn.disabled).toBe(true);
+  });
+
+  // Fix C: screen-reader double-announcement — visible reason span must be aria-hidden, sr-only span carries the id
+  it('should render the visible reason span with aria-hidden="true" for non-writable repos', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const readonlyItem = items[1];
+    const visibleReason = readonlyItem.querySelector('.setup-repos-step__repo-reason');
+    expect(visibleReason?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('should render a sr-only sibling with the reason text carrying the id referenced by aria-describedby', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const disabledCheckbox = checkboxes[1];
+    const describedById = disabledCheckbox.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    const srOnlySpan = el.querySelector(`#${describedById}`);
+    expect(srOnlySpan).toBeTruthy();
+    expect(srOnlySpan?.classList.contains('sr-only')).toBe(true);
+    expect(srOnlySpan?.textContent).toContain('no write access');
+  });
+
+  // Bug fix: replaceAll — nested-group slug (two slashes) must produce a slash-free id
+  it('should produce matching, slash-free aria-describedby and id for a non-writable repo with a nested-group slug', () => {
+    // Arrange
+    const nestedGroupRepos: AvailableRepository[] = [
+      { slug: 'group/subgroup/project', isPrivate: false, canPush: false },
+    ];
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(nestedGroupRepos);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const checkbox = el.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const describedById = checkbox.getAttribute('aria-describedby') ?? '';
+    expect(describedById).toBeTruthy();
+    expect(describedById).not.toContain('/');
+    const srOnlySpan = el.querySelector(`#${describedById}`);
+    expect(srOnlySpan).toBeTruthy();
+    expect(srOnlySpan?.id).not.toContain('/');
+    expect(srOnlySpan?.id).toBe(describedById);
+  });
+
+  it('should render all non-writable repos (not empty state) when all repos lack push access', () => {
+    // Arrange
+    const allReadonly: AvailableRepository[] = [
+      { slug: 'org/readonly-a', isPrivate: false, canPush: false },
+      { slug: 'org/readonly-b', isPrivate: false, canPush: false },
+    ];
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(allReadonly);
+    fixture.detectChanges();
+
+    // Assert — both entries visible, no empty state
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]');
+    expect(checkboxes.length).toBe(2);
+    const emptyEl = el.querySelector('.setup-repos-step__repo-empty');
+    expect(emptyEl).toBeNull();
+  });
+
+  // Cycle 16: error strings are truncated to 200 characters
   it('should truncate long server error strings to at most 200 characters in the error detail', () => {
     // Arrange
     const { fixture, httpMock } = setup();

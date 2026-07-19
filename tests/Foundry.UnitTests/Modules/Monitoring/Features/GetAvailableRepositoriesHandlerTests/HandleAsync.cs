@@ -64,10 +64,6 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         Guid accountId = await SeedGitHubAccountAsync();
-        IReadOnlyList<AvailableRepository> githubRepos =
-        [
-            new AvailableRepository("owner/github-repo", IsPrivate: false, CanPush: true),
-        ];
         FakeHandler gitHubFake = new(HttpStatusCode.OK, BuildGitHubRepoJson(["owner/github-repo"]));
         FakeHandler gitLabFake = new(HttpStatusCode.OK, "[]");
         using HttpClient gitHubHttpClient = new(gitHubFake);
@@ -113,6 +109,76 @@ public sealed class HandleAsync : IAsyncDisposable
         result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>()
             .Value.ShouldContain(r => r.Slug == "owner/gitlab-repo");
         gitHubFake.LastRequest.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenGitHubRepoHasCanPush_PreservesCanPushInResult()
+    {
+        // Arrange
+        Guid accountId = await SeedGitHubAccountAsync();
+        string json = """
+            [
+              {"full_name":"owner/writable","private":false,"permissions":{"push":true}},
+              {"full_name":"owner/readonly","private":false,"permissions":{"push":false}}
+            ]
+            """;
+        FakeHandler gitHubFake = new(HttpStatusCode.OK, json);
+        FakeHandler gitLabFake = new(HttpStatusCode.OK, "[]");
+        using HttpClient gitHubHttpClient = new(gitHubFake);
+        using HttpClient gitLabHttpClient = new(gitLabFake);
+        GetAvailableRepositories.Handler sut = new(
+            _dbContext,
+            new GitHubHttpClient(gitHubHttpClient),
+            new GitLabHttpClient(gitLabHttpClient));
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.HandleAsync(
+            new GetAvailableRepositories.Query(accountId),
+            CancellationToken.None);
+
+        // Assert
+        IReadOnlyList<AvailableRepository> repos =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>().Value;
+        repos.ShouldSatisfyAllConditions(
+            () => repos.ShouldContain(r => r.Slug == "owner/writable" && r.CanPush),
+            () => repos.ShouldContain(r => r.Slug == "owner/readonly" && !r.CanPush));
+    }
+
+    [Fact]
+    public async Task WhenGitLabRepoHasCanPush_PreservesCanPushInResult()
+    {
+        // Arrange
+        Guid accountId = await SeedGitLabAccountAsync();
+        string json = """
+            [
+              {
+                "path_with_namespace": "owner/gitlab-writable",
+                "visibility": "public",
+                "permissions": {
+                  "project_access": { "access_level": 30 },
+                  "group_access": null
+                }
+              }
+            ]
+            """;
+        FakeHandler gitHubFake = new(HttpStatusCode.OK, "[]");
+        FakeHandler gitLabFake = new(HttpStatusCode.OK, json);
+        using HttpClient gitHubHttpClient = new(gitHubFake);
+        using HttpClient gitLabHttpClient = new(gitLabFake);
+        GetAvailableRepositories.Handler sut = new(
+            _dbContext,
+            new GitHubHttpClient(gitHubHttpClient),
+            new GitLabHttpClient(gitLabHttpClient));
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.HandleAsync(
+            new GetAvailableRepositories.Query(accountId),
+            CancellationToken.None);
+
+        // Assert
+        IReadOnlyList<AvailableRepository> repos =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>().Value;
+        repos.ShouldContain(r => r.Slug == "owner/gitlab-writable" && r.CanPush);
     }
 
     private static string BuildGitHubRepoJson(IReadOnlyList<string> fullNames) =>
