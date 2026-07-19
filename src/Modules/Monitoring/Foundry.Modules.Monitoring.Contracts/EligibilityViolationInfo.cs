@@ -10,4 +10,20 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
     public static readonly string AllowForcePushesDescription = "Allows force pushes to the protected branch.";
     public static readonly string AllowDeletionDescription = "Allows deletion of the protected branch.";
     public static readonly string UnreachableDescription = "Branch protection could not be verified.";
+
+    public const string NoCredentialRulePrefix = "no-credential";
+
+    public static string NoCredentialRule(string namespaceName) =>
+        $"{NoCredentialRulePrefix}:{namespaceName}";
+
+    public static string NoCredentialDescription(string namespaceName) =>
+        $"no credential for namespace {namespaceName}";
+
+    public const string CannotPushRulePrefix = "cannot-push";
+
+    public static string CannotPushRule(string slug) =>
+        $"{CannotPushRulePrefix}:{slug}";
+
+    public static string CannotPushDescription(string slug) =>
+        $"token cannot push to {slug}";
 }

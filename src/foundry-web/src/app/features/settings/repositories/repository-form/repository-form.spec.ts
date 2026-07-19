@@ -35,7 +35,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
 const MOCK_AVAILABLE: AvailableRepository[] = [
   { slug: 'my-org/my-repo', isPrivate: false, canPush: true },
   { slug: 'my-org/other-repo', isPrivate: true, canPush: true },
-  { slug: 'my-org/third-repo', isPrivate: false, canPush: true },
+  { slug: 'my-org/third-repo', isPrivate: false, canPush: false },
 ];
 
 const MOCK_AVAILABLE_MIXED: AvailableRepository[] = [

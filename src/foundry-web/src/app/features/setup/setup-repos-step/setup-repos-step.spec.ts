@@ -11,7 +11,7 @@ const ACCOUNT_ID = 'account-1';
 const AVAILABLE_REPOS: AvailableRepository[] = [
   { slug: 'org/repo-alpha', isPrivate: false, canPush: true },
   { slug: 'org/repo-beta', isPrivate: true, canPush: true },
-  { slug: 'org/repo-gamma', isPrivate: false, canPush: true },
+  { slug: 'org/repo-gamma', isPrivate: false, canPush: false },
 ];
 
 const AVAILABLE_REPOS_WITH_NON_WRITABLE: AvailableRepository[] = [
@@ -355,7 +355,7 @@ describe('SetupReposStepComponent', () => {
 
   // Cycle 13: error message includes partial success count when some repos fail
   it('should include a count of successful repositories in the error message on partial failure', () => {
-    // Arrange
+    // Arrange — select both writable repos; repo-gamma (index 2) is disabled so its change is ignored
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
@@ -367,8 +367,6 @@ describe('SetupReposStepComponent', () => {
     checkboxes[0].dispatchEvent(new Event('change'));
     checkboxes[1].checked = true;
     checkboxes[1].dispatchEvent(new Event('change'));
-    checkboxes[2].checked = true;
-    checkboxes[2].dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
     // Act
@@ -390,7 +388,7 @@ describe('SetupReposStepComponent', () => {
 
     // Assert
     const errorText = el.querySelector('.setup-repos-step__save-error')?.textContent?.trim() ?? '';
-    expect(errorText).toContain('1 of 3');
+    expect(errorText).toContain('1 of 2');
   });
 
   // Cycle 15: non-writable repos render disabled with reason

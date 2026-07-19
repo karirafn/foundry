@@ -45,18 +45,18 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private async Task<Guid> SeedGitHubAccountAsync(string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create("My GitHub", token, BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create("My GitHub", token, BaseUrl.Create("https://github.com").ValueOrThrow());
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
-        return account.Id.Value;
+        return credential.Id.Value;
     }
 
     private async Task<Guid> SeedGitLabAccountAsync(string? token = "glpat_test_token")
     {
-        GitLabAccount account = GitLabAccount.Create("My GitLab", token, BaseUrl.Create("https://gitlab.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitLabCredential credential = GitLabCredential.Create("My GitLab", token, BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
-        return account.Id.Value;
+        return credential.Id.Value;
     }
 
     [Fact]
@@ -182,8 +182,10 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     private static string BuildGitHubRepoJson(IReadOnlyList<string> fullNames) =>
-        "[" + string.Join(",", fullNames.Select(n => $@"{{""full_name"":""{n}"",""private"":false}}")) + "]";
+        "[" + string.Join(",", fullNames.Select(n =>
+            $@"{{""full_name"":""{n}"",""private"":false,""permissions"":{{""push"":true}}}}")) + "]";
 
     private static string BuildGitLabRepoJson(IReadOnlyList<string> paths) =>
-        "[" + string.Join(",", paths.Select(p => $@"{{""path_with_namespace"":""{p}"",""visibility"":""public""}}")) + "]";
+        "[" + string.Join(",", paths.Select(p =>
+            $@"{{""path_with_namespace"":""{p}"",""visibility"":""public"",""permissions"":{{""project_access"":{{""access_level"":40}},""group_access"":null}}}}")) + "]";
 }

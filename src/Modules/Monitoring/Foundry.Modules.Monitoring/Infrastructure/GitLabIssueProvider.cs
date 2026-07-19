@@ -129,6 +129,13 @@ internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string to
         return httpClient.GetLatestBranchCommitAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
     }
 
+    public Task<Result<bool>> CanPushAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetPushPermissionAsync(apiBaseUrl, slug, token, cancellationToken);
+    }
+
     private Task<Result<string>> GetDefaultBranchAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)

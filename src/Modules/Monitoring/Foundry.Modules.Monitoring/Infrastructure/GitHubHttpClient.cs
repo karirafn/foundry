@@ -464,6 +464,39 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missingScopes, accountName));
     }
 
+    public async Task<Result<bool>> GetPushPermissionAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string relativePath = $"repos/{owner}/{repo}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddGitHubHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubRepoPermissionsResponseDto? dto =
+            JsonSerializer.Deserialize<GitHubRepoPermissionsResponseDto>(body, JsonOptions);
+
+        return Result<bool>.Ok(dto?.Permissions?.Push ?? false);
+    }
+
     public async Task<Result<IReadOnlyList<AvailableRepository>>> ListRepositoriesAsync(
         Uri apiBaseUrl,
         string token,
@@ -501,10 +534,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             List<GitHubRepositoryListItemDto> pageItems = dtos ?? [];
             foreach (GitHubRepositoryListItemDto dto in pageItems)
             {
-                repositories.Add(new AvailableRepository(
-                    dto.FullName,
-                    dto.Private,
-                    CanPush: dto.Permissions?.Push ?? false));
+                repositories.Add(new AvailableRepository(dto.FullName, dto.Private, dto.Permissions?.Push ?? false));
             }
 
             if (pageItems.Count < RepositoriesPerPage)
@@ -882,12 +912,14 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         int? Line,
         int? OriginalLine);
 
-    private sealed record GitHubRepositoryPermissionsDto(bool Push);
-
     private sealed record GitHubRepositoryListItemDto(
         string FullName,
         bool Private,
         GitHubRepositoryPermissionsDto? Permissions);
+
+    private sealed record GitHubRepoPermissionsResponseDto(GitHubRepositoryPermissionsDto? Permissions);
+
+    private sealed record GitHubRepositoryPermissionsDto(bool Push);
 
     private sealed record GitHubGitRefDto(GitHubGitObjectDto? Object);
 

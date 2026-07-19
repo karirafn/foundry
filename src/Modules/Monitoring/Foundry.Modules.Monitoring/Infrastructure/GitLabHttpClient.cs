@@ -20,11 +20,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private const int RepositoriesPerPage = 100;
     private const int MaxReviewComments = 50;
     private const int MaxFilePathLength = 4096; // PATH_MAX
-    // Minimum access level that grants push rights on GitLab.
-    // permissions.project_access / group_access reflect direct membership only; deeply nested
-    // inherited group access may be absent (null → 0), which produces a conservative
-    // CanPush=false false-negative. This is safe: it never produces a false-positive.
-    private const int GitLabDeveloperAccessLevel = 30;
+    private const int GitLabMinPushAccessLevel = 30; // Developer role
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -367,6 +363,9 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         for (int page = 1; page <= MaxRepositoryPages; page++)
         {
+            // simple=false (default) returns the full project payload including the permissions
+            // object, which carries project_access.access_level and group_access.access_level.
+            // Developer (30) or above is required for push access.
             string relativePath = $"projects?membership=true&per_page={RepositoriesPerPage}&page={page}";
             Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
@@ -388,9 +387,9 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
             foreach (GitLabProjectListItemDto dto in pageItems)
             {
                 bool isPrivate = string.Equals(dto.Visibility, "private", StringComparison.OrdinalIgnoreCase);
-                int projectAccess = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
-                int groupAccess = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
-                bool canPush = Math.Max(projectAccess, groupAccess) >= GitLabDeveloperAccessLevel;
+                int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
+                int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
+                bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
                 repositories.Add(new AvailableRepository(dto.PathWithNamespace, isPrivate, canPush));
             }
 
@@ -616,6 +615,42 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<string>.Ok(infoSuccess.Value.DefaultBranch ?? string.Empty);
     }
 
+    public async Task<Result<bool>> GetPushPermissionAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabProjectWithPermissionsDto? dto =
+            JsonSerializer.Deserialize<GitLabProjectWithPermissionsDto>(body, JsonOptions);
+
+        int projectLevel = dto?.Permissions?.ProjectAccess?.AccessLevel ?? 0;
+        int groupLevel = dto?.Permissions?.GroupAccess?.AccessLevel ?? 0;
+        bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
+
+        return Result<bool>.Ok(canPush);
+    }
+
     public async Task<Result<BranchRules>> GetBranchProtectionAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -814,6 +849,8 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private sealed record GitLabCommitListItemDto(string Id, string? Title);
 
     private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt);
+
+    private sealed record GitLabProjectWithPermissionsDto(GitLabProjectPermissionsDto? Permissions);
 
     private sealed record GitLabProtectedBranchDto(
         bool AllowForcePush,

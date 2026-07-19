@@ -25,33 +25,33 @@ internal static class GetAvailableRepositories
             Query query,
             CancellationToken cancellationToken)
         {
-            AccountId accountId = AccountId.From(query.AccountId);
+            CredentialId credentialId = CredentialId.From(query.AccountId);
 
-            Account? account = await dbContext.Set<Account>()
+            Credential? credential = await dbContext.Set<Credential>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+                .FirstOrDefaultAsync(a => a.Id == credentialId, cancellationToken);
 
-            if (account is null)
+            if (credential is null)
             {
                 return Result<IReadOnlyList<AvailableRepository>>.Fail(
-                    RepositoryErrors.AccountNotFound(accountId));
+                    RepositoryErrors.AccountNotFound(credentialId));
             }
 
-            if (account.Token is null)
+            if (credential.Token is null)
             {
                 return Result<IReadOnlyList<AvailableRepository>>.Fail(
-                    RepositoryErrors.AccountHasNoToken(accountId));
+                    RepositoryErrors.AccountHasNoToken(credentialId));
             }
 
-            return account switch
+            return credential switch
             {
-                GitLabAccount => await gitLabHttpClient.ListRepositoriesAsync(
-                    account.ApiBaseUrl,
-                    account.Token,
+                GitLabCredential => await gitLabHttpClient.ListRepositoriesAsync(
+                    credential.ApiBaseUrl,
+                    credential.Token,
                     cancellationToken),
                 _ => await gitHubHttpClient.ListRepositoriesAsync(
-                    account.ApiBaseUrl,
-                    account.Token,
+                    credential.ApiBaseUrl,
+                    credential.Token,
                     cancellationToken),
             };
         }

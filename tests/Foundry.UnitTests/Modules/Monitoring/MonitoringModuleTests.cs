@@ -63,6 +63,26 @@ public sealed class MonitoringModuleTests
     }
 
     [Fact]
+    public void AddMonitoringModule_RegistersICredentialResolver()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddHttpClient();
+        services.AddDbContext<DbContext, FoundryDbContext>(opts =>
+            opts.UseSqlite(new SqliteConnectionStringBuilder { DataSource = ":memory:" }.ToString()));
+
+        // Act
+        services.AddMonitoringModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        using IServiceScope scope = provider.CreateScope();
+        ICredentialResolver resolver = scope.ServiceProvider.GetRequiredService<ICredentialResolver>();
+        resolver.ShouldNotBeNull();
+    }
+
+    [Fact]
     public void AddMonitoringModule_RegistersIRepositorySlugQueries()
     {
         // Arrange

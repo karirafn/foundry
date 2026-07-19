@@ -70,8 +70,8 @@ internal static class ValidateToken
                     }
 
                     Uri apiBaseUrl = string.Equals(body.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase)
-                        ? GitLabAccount.DeriveApiBaseUrl(parsedBaseUrl)
-                        : GitHubAccount.DeriveApiBaseUrl(parsedBaseUrl);
+                        ? GitLabCredential.DeriveApiBaseUrl(parsedBaseUrl)
+                        : GitHubCredential.DeriveApiBaseUrl(parsedBaseUrl);
 
                     Result<Response> result = await handler.HandleAsync(
                         new Query(body.Token, apiBaseUrl, body.ProviderType),

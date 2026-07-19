@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
 
@@ -19,52 +21,50 @@ internal static class RecheckRepositoryEligibility
 
     internal sealed class Handler(
         DbContext dbContext,
-        IIssueProviderFactory providerFactory,
-        IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
+        IRepositoryEligibilityEvaluator eligibilityEvaluator,
+        INamespaceDeriver namespaceDeriver,
+        ILogger<Handler> logger) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
             CancellationToken cancellationToken)
         {
-            AccountId accountId = AccountId.From(command.AccountId);
+            CredentialId credentialId = CredentialId.From(command.AccountId);
             MonitoredRepositoryId repositoryId = MonitoredRepositoryId.From(command.Id);
 
             MonitoredRepository? repository = await dbContext.Set<MonitoredRepository>()
-                .Where(r => r.Id == repositoryId)
-                .FirstOrDefaultAsync(r => r.AccountId == accountId, cancellationToken);
+                .FirstOrDefaultAsync(r => r.Id == repositoryId, cancellationToken);
 
             if (repository is null)
             {
                 return Result<RepositorySummary>.Fail(RepositoryErrors.NotFound(repositoryId));
             }
 
-            Account? account = await dbContext.Set<Account>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+            Credential? credential = await dbContext.Set<Credential>()
+                .Include(c => c.Namespaces)
+                .FirstOrDefaultAsync(a => a.Id == credentialId, cancellationToken);
 
-            if (account is null)
+            if (credential is null)
             {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(accountId));
+                return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(credentialId));
             }
 
-            if (string.IsNullOrEmpty(account.Token))
-            {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.NoToken(accountId));
-            }
+            // Refresh the credential's namespace set from the live writable-repo listing so that
+            // newly-granted namespaces become covered before re-evaluating eligibility.
+            await RefreshNamespacesAsync(credential, cancellationToken);
 
-            IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
-            await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
+            await eligibilityEvaluator.EvaluateAndStoreAsync(repository, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             RepositorySummary summary = new(
                 repository.Id.Value,
                 repository.Slug.ToString(),
-                repository.AccountId.Value,
-                account.Name,
-                account switch
+                credential.Id.Value,
+                credential.Name,
+                credential switch
                 {
-                    GitHubAccount => ProviderTypes.GitHub,
-                    GitLabAccount => ProviderTypes.GitLab,
+                    GitHubCredential => ProviderTypes.GitHub,
+                    GitLabCredential => ProviderTypes.GitLab,
                     _ => throw new UnreachableException(),
                 },
                 RepositoryMappings.ToSeconds(repository.PollInterval),
@@ -74,6 +74,22 @@ internal static class RecheckRepositoryEligibility
                 repository.Position);
 
             return Result<RepositorySummary>.Ok(summary);
+        }
+
+        private async Task RefreshNamespacesAsync(Credential credential, CancellationToken cancellationToken)
+        {
+            NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
+
+            if (outcome is NamespaceDerivationOutcome.Derived derived)
+            {
+                credential.SetNamespaces(derived.Namespaces);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "Namespace refresh unavailable for credential {CredentialId}; evaluating eligibility against cached namespaces.",
+                    credential.Id);
+            }
         }
     }
 

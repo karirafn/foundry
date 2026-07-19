@@ -18,13 +18,13 @@ internal static class RepositoryErrors
     internal static Error DuplicateSlug(string slug) =>
         new(DuplicateSlugCode, $"A repository with slug '{slug}' already exists.");
 
-    internal static Error AccountNotFound(AccountId id) =>
+    internal static Error AccountNotFound(CredentialId id) =>
         new(AccountNotFoundCode, $"Account with ID '{id.Value}' was not found.");
 
-    internal static Error AccountHasNoToken(AccountId id) =>
+    internal static Error AccountHasNoToken(CredentialId id) =>
         new(AccountHasNoTokenCode, $"Account with ID '{id.Value}' has no token configured.");
 
-    internal static Error NoToken(AccountId id) =>
+    internal static Error NoToken(CredentialId id) =>
         new(NoTokenCode, $"Account with ID '{id.Value}' has no token — eligibility cannot be re-checked.");
 
     internal static Error ConflictOnCreate() =>

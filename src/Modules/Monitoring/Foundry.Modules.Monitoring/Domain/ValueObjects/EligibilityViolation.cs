@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 
 namespace Foundry.Modules.Monitoring.Domain.ValueObjects;
 
@@ -35,4 +36,15 @@ public sealed record EligibilityViolation
 
     public static EligibilityViolation Unreachable() =>
         new(UnreachableRule, EligibilityViolationInfo.UnreachableDescription);
+
+    public static EligibilityViolation NoCredential(string namespaceName) =>
+        new(EligibilityViolationInfo.NoCredentialRule(namespaceName),
+            EligibilityViolationInfo.NoCredentialDescription(namespaceName));
+
+    public static EligibilityViolation CannotPush(string slug) =>
+        new(EligibilityViolationInfo.CannotPushRule(slug),
+            EligibilityViolationInfo.CannotPushDescription(slug));
+
+    public static EligibilityViolation CannotPush(RepositorySlug slug) =>
+        CannotPush(slug.ToString());
 }

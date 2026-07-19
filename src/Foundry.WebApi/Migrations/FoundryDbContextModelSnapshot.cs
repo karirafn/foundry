@@ -166,7 +166,7 @@ namespace Foundry.WebApi.Migrations
                     b.UseTphMappingStrategy();
                 });
 
-            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.Account", b =>
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.Credential", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT")
@@ -178,6 +178,13 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("base_url");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("host");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -200,15 +207,46 @@ namespace Foundry.WebApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BaseUrl", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("ix_accounts_base_url_name");
-
                     b.ToTable("accounts", (string)null);
 
-                    b.HasDiscriminator<string>("type").IsComplete(true).HasValue("Account");
+                    b.HasDiscriminator<string>("type").IsComplete(true).HasValue("Credential");
 
                     b.UseTphMappingStrategy();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.CredentialNamespace", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CredentialId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("credential_id");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("host");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId");
+
+                    b.HasIndex("Host", "Value")
+                        .IsUnique()
+                        .HasDatabaseName("ix_credential_namespaces_host_value");
+
+                    b.ToTable("credential_namespaces", (string)null);
                 });
 
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", b =>
@@ -216,10 +254,6 @@ namespace Foundry.WebApi.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
-
-                    b.Property<Guid>("AccountId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("account_id");
 
                     b.Property<string>("Eligibility")
                         .HasMaxLength(2147483647)
@@ -267,9 +301,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnName("slug");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AccountId")
-                        .HasDatabaseName("ix_monitored_repositories_account_id");
 
                     b.HasIndex("EligibilityStatus")
                         .HasDatabaseName("ix_monitored_repositories_eligibility_status");
@@ -1029,16 +1060,16 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator().HasValue("unchanged");
                 });
 
-            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.GitHubAccount", b =>
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.GitHubCredential", b =>
                 {
-                    b.HasBaseType("Foundry.Modules.Monitoring.Domain.Entities.Account");
+                    b.HasBaseType("Foundry.Modules.Monitoring.Domain.Entities.Credential");
 
                     b.HasDiscriminator().HasValue("github");
                 });
 
-            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.GitLabAccount", b =>
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.GitLabCredential", b =>
                 {
-                    b.HasBaseType("Foundry.Modules.Monitoring.Domain.Entities.Account");
+                    b.HasBaseType("Foundry.Modules.Monitoring.Domain.Entities.Credential");
 
                     b.HasDiscriminator().HasValue("gitlab");
                 });
@@ -1208,11 +1239,11 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator().HasValue("starting");
                 });
 
-            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", b =>
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.CredentialNamespace", b =>
                 {
-                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.Account", null)
-                        .WithMany()
-                        .HasForeignKey("AccountId")
+                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.Credential", null)
+                        .WithMany("Namespaces")
+                        .HasForeignKey("CredentialId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -1341,6 +1372,11 @@ namespace Foundry.WebApi.Migrations
                         });
 
                     b.Navigation("ResultSummary");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.Credential", b =>
+                {
+                    b.Navigation("Namespaces");
                 });
 #pragma warning restore 612, 618
         }

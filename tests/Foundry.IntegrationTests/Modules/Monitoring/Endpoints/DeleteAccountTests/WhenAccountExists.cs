@@ -54,8 +54,8 @@ public sealed class WhenAccountExists : IAsyncDisposable
             createBody,
             TestContext.Current.CancellationToken);
 
-        AccountSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        CredentialSummary? created = await createResponse.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
         created.ShouldNotBeNull();
 
         // Act
@@ -84,8 +84,8 @@ public sealed class WhenAccountExists : IAsyncDisposable
             createBody,
             TestContext.Current.CancellationToken);
 
-        AccountSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        CredentialSummary? created = await createResponse.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
         created.ShouldNotBeNull();
 
         await _client.DeleteAsync(
@@ -99,8 +99,8 @@ public sealed class WhenAccountExists : IAsyncDisposable
 
         // Assert
         getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<AccountSummary>? accounts = await getResponse.Content
-            .ReadFromJsonAsync<IReadOnlyList<AccountSummary>>(TestContext.Current.CancellationToken);
+        IReadOnlyList<CredentialSummary>? accounts = await getResponse.Content
+            .ReadFromJsonAsync<IReadOnlyList<CredentialSummary>>(TestContext.Current.CancellationToken);
         accounts.ShouldNotBeNull();
         accounts.ShouldNotContain(a => a.Id == created.Id);
     }

@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Repositories;
@@ -34,7 +33,6 @@ public sealed class RenumberAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
-    private readonly AccountId _accountId;
 
     public RenumberAsync()
     {
@@ -47,11 +45,6 @@ public sealed class RenumberAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-
-        GitHubAccount account = GitHubAccount.Create("org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
-        _dbContext.SaveChanges();
-        _accountId = account.Id;
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -64,7 +57,6 @@ public sealed class RenumberAsync : IAsyncDisposable
     {
         MonitoredRepository repo = MonitoredRepository.Create(
             RepositorySlug.Create($"{owner}/repo").ValueOrThrow(),
-            _accountId,
             "github.com",
             null,
             position);

@@ -11,7 +11,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.UpdateAccountValidatorTe
 
 public sealed class Validate
 {
-    private static readonly AccountId ValidId = AccountId.New();
+    private static readonly CredentialId ValidId = CredentialId.New();
 
     private static UpdateAccount.Command ValidCommandWithToken =>
         new(ValidId, "https://github.com", "ghp_valid_token");
@@ -49,6 +49,23 @@ public sealed class Validate
         result.IsFailure.ShouldBeTrue();
         Error error = ((Result.Failure)result).Error;
         error.Code.ShouldBe(BaseUrlErrors.ContainsCredentials.Code);
+    }
+
+    [Fact]
+    public void WhenTokenExceedsMaxLength_ReturnsTokenTooLongError()
+    {
+        // Arrange
+        UpdateAccount.Validator sut = new();
+        string oversizedToken = new('a', AccountsDatabaseHelpers.TokenMaxLength + 1);
+        UpdateAccount.Command command = ValidCommandWithToken with { Token = oversizedToken };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(UpdateAccount.Validator.TokenTooLongCode);
     }
 
     [Fact]

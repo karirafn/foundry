@@ -45,7 +45,7 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsCreatedWithAccountSummary()
+    public async Task ReturnsCreatedWithCredentialSummary()
     {
         // Arrange
         object body = new
@@ -63,8 +63,8 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        AccountSummary? account = await response.Content
-            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        CredentialSummary? account = await response.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
         account.ShouldNotBeNull();
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe(ResolvedAccountName),
@@ -113,8 +113,8 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        AccountSummary? account = await response.Content
-            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        CredentialSummary? account = await response.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
         account.ShouldNotBeNull();
         account.BaseUrl.ShouldBe("https://gitlab.example.com/");
     }

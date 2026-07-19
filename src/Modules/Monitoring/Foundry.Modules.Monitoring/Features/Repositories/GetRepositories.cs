@@ -1,5 +1,8 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
@@ -21,40 +24,41 @@ internal static class GetRepositories
             Query query,
             CancellationToken cancellationToken)
         {
-            AccountId accountId = AccountId.From(query.AccountId);
+            CredentialId credentialId = CredentialId.From(query.AccountId);
 
-            // Project into an anonymous type first to avoid EF limitations with
-            // strongly-typed IDs and nullable TimeSpan arithmetic in the SELECT clause.
-            var repositorySummaryRows = await dbContext.Set<MonitoredRepository>()
+            Credential? credential = await dbContext.Set<Credential>()
                 .AsNoTracking()
-                .Where(r => r.AccountId == accountId)
-                .Join(
-                    dbContext.Set<Account>(),
-                    r => r.AccountId,
-                    a => a.Id,
-                    (r, a) => new
-                    {
-                        r.Id,
-                        Slug = r.Slug.ToString(),
-                        r.AccountId,
-                        AccountName = a.Name,
-                        AccountType = EF.Property<string>(a, "type"),
-                        r.PollInterval,
-                        r.IsActive,
-                        r.LastPolledAt,
-                        r.Eligibility,
-                        r.Position,
-                    })
+                .Include(c => c.Namespaces)
+                .FirstOrDefaultAsync(a => a.Id == credentialId, cancellationToken);
+
+            if (credential is null)
+            {
+                return Result<IReadOnlyList<RepositorySummary>>.Ok([]);
+            }
+
+            // Load all repos for the credential's host, then filter in memory to those
+            // covered by at least one of the credential's namespaces.
+            List<MonitoredRepository> hostRepos = await dbContext.Set<MonitoredRepository>()
+                .AsNoTracking()
+                .Where(r => r.Host == credential.Host)
                 .OrderBy(r => r.Position)
                 .ToListAsync(cancellationToken);
 
-            List<RepositorySummary> repositories = repositorySummaryRows
+            string providerType = credential switch
+            {
+                GitHubCredential => ProviderTypes.GitHub,
+                GitLabCredential => ProviderTypes.GitLab,
+                _ => throw new UnreachableException(),
+            };
+
+            List<RepositorySummary> repositories = hostRepos
+                .Where(r => credential.ResolveCoveringNamespace(r.Slug) is not null)
                 .Select(r => new RepositorySummary(
                     r.Id.Value,
-                    r.Slug,
-                    r.AccountId.Value,
-                    r.AccountName,
-                    r.AccountType,
+                    r.Slug.ToString(),
+                    credential.Id.Value,
+                    credential.Name,
+                    providerType,
                     RepositoryMappings.ToSeconds(r.PollInterval),
                     r.IsActive,
                     r.LastPolledAt,
