@@ -27,7 +27,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenDockerBecamesAvailable_SetsStateIsAvailableTrue()
+    public async Task WhenDockerBecomesAvailable_SetsStateIsAvailableTrue()
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
@@ -43,7 +43,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenDockerBecamesUnavailable_SetsStateIsAvailableFalse()
+    public async Task WhenDockerBecomesUnavailable_SetsStateIsAvailableFalse()
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
@@ -59,7 +59,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenDockerBecamesAvailable_SendsDockerCategoryNotificationWithIsActiveFalse()
+    public async Task WhenDockerBecomesAvailable_SendsDockerCategoryNotificationWithIsActiveFalse()
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
@@ -79,7 +79,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenDockerBecamesUnavailable_SendsDockerCategoryNotificationWithIsActiveTrue()
+    public async Task WhenDockerBecomesUnavailable_SendsDockerCategoryNotificationWithIsActiveTrue()
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();

@@ -17,7 +17,8 @@ internal static class GetSystemStatus
                     TypedResults.Ok(new SystemStatus(state.IsAvailable)))
                 .WithName("GetSystemStatus")
                 .WithSummary("Returns system availability state, including whether the Docker daemon is reachable")
-                .Produces<SystemStatus>();
+                .Produces<SystemStatus>()
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }
 }

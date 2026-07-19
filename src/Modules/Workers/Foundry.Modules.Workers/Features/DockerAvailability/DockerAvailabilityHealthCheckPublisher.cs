@@ -1,4 +1,5 @@
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Features.Health;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -11,13 +12,12 @@ internal sealed class DockerAvailabilityHealthCheckPublisher(
     IServiceScopeFactory scopeFactory,
     ILogger<DockerAvailabilityHealthCheckPublisher> logger) : IHealthCheckPublisher
 {
-    private const string DockerDaemonCheckName = "docker-daemon";
 
     private bool? _lastPublished;
 
     public async Task PublishAsync(HealthReport report, CancellationToken cancellationToken)
     {
-        if (!report.Entries.TryGetValue(DockerDaemonCheckName, out HealthReportEntry entry))
+        if (!report.Entries.TryGetValue(DockerDaemonHealthCheck.CheckName, out HealthReportEntry entry))
         {
             return;
         }
@@ -29,12 +29,12 @@ internal sealed class DockerAvailabilityHealthCheckPublisher(
             return;
         }
 
-        _lastPublished = available;
-
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IIntegrationEventDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
         await dispatcher.DispatchAsync([new DockerAvailabilityChanged(available)], cancellationToken);
+
+        _lastPublished = available;
 
         logger.LogInformation(
             "Docker availability changed: IsAvailable={IsAvailable}.",

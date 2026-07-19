@@ -4,7 +4,7 @@ using Foundry.Shared;
 namespace Foundry.Modules.Workers.Features.DockerAvailability;
 
 internal sealed class DockerAvailabilityChangedBroadcastHandler(
-    DockerAvailabilityState state,
+    IDockerAvailabilityStateMutator state,
     ISystemNotificationBroadcaster broadcaster) : IIntegrationEventHandler<DockerAvailabilityChanged>
 {
     private const string DockerCategory = "docker";

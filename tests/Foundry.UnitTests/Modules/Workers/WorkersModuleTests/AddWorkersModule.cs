@@ -299,6 +299,22 @@ public sealed class AddWorkersModule
     }
 
     [Fact]
+    public void WhenCalled_RegistersIDockerAvailabilityStateMutator()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IDockerAvailabilityStateMutator mutator = provider.GetRequiredService<IDockerAvailabilityStateMutator>();
+        mutator.ShouldBeOfType<DockerAvailabilityState>();
+    }
+
+    [Fact]
     public void WhenCalled_RegistersDockerAvailabilityHealthCheckPublisher()
     {
         // Arrange

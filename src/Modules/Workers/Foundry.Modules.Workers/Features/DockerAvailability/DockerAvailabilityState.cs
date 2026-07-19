@@ -5,9 +5,14 @@ internal interface IDockerAvailabilityState
     bool IsAvailable { get; }
 }
 
-internal sealed class DockerAvailabilityState : IDockerAvailabilityState
+internal interface IDockerAvailabilityStateMutator
 {
-    private bool _isAvailable;
+    void Set(bool isAvailable);
+}
+
+internal sealed class DockerAvailabilityState : IDockerAvailabilityState, IDockerAvailabilityStateMutator
+{
+    private volatile bool _isAvailable;
 
     bool IDockerAvailabilityState.IsAvailable => _isAvailable;
 

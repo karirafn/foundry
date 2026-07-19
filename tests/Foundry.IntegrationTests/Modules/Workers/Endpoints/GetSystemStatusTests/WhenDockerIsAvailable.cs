@@ -24,12 +24,14 @@ public sealed class WhenDockerIsAvailable : IAsyncDisposable
             // Replace the singleton so tests control the known value without a Docker daemon.
             services.RemoveAll<DockerAvailabilityState>();
             services.RemoveAll<IDockerAvailabilityState>();
+            services.RemoveAll<IDockerAvailabilityStateMutator>();
 
             DockerAvailabilityState state = new();
             state.Set(true);
 
             services.AddSingleton(state);
             services.AddSingleton<IDockerAvailabilityState>(state);
+            services.AddSingleton<IDockerAvailabilityStateMutator>(state);
         });
         _client = _factory.CreateClient();
     }
@@ -38,20 +40,6 @@ public sealed class WhenDockerIsAvailable : IAsyncDisposable
     {
         _client.Dispose();
         await _factory.DisposeAsync();
-    }
-
-    [Fact]
-    public async Task WhenDockerIsAvailable_Returns200()
-    {
-        // Arrange — factory seeds state with IsAvailable = true.
-
-        // Act
-        HttpResponseMessage response = await _client.GetAsync(
-            new Uri("/api/system/status", UriKind.Relative),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.DockerAvailability;
+using Foundry.Modules.Workers.Features.Health;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -14,7 +15,6 @@ namespace Foundry.UnitTests.Modules.Workers.Features.DockerAvailability.DockerAv
 
 public sealed class PublishAsync
 {
-    private const string DockerDaemonCheckName = "docker-daemon";
 
     private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
@@ -64,7 +64,7 @@ public sealed class PublishAsync
     {
         // Arrange
         (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
-        HealthReport report = BuildReport(DockerDaemonCheckName, HealthStatus.Healthy);
+        HealthReport report = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
 
         // Act
         await publisher.PublishAsync(report, CancellationToken.None);
@@ -79,7 +79,7 @@ public sealed class PublishAsync
     {
         // Arrange
         (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
-        HealthReport report = BuildReport(DockerDaemonCheckName, HealthStatus.Unhealthy);
+        HealthReport report = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Unhealthy);
 
         // Act
         await publisher.PublishAsync(report, CancellationToken.None);
@@ -94,8 +94,8 @@ public sealed class PublishAsync
     {
         // Arrange
         (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
-        HealthReport firstReport = BuildReport(DockerDaemonCheckName, HealthStatus.Healthy);
-        HealthReport secondReport = BuildReport(DockerDaemonCheckName, HealthStatus.Healthy);
+        HealthReport firstReport = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
+        HealthReport secondReport = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
 
         // Act
         await publisher.PublishAsync(firstReport, CancellationToken.None);
@@ -110,8 +110,8 @@ public sealed class PublishAsync
     {
         // Arrange
         (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
-        HealthReport healthyReport = BuildReport(DockerDaemonCheckName, HealthStatus.Healthy);
-        HealthReport unhealthyReport = BuildReport(DockerDaemonCheckName, HealthStatus.Unhealthy);
+        HealthReport healthyReport = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
+        HealthReport unhealthyReport = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Unhealthy);
 
         // Act
         await publisher.PublishAsync(healthyReport, CancellationToken.None);
@@ -135,5 +135,47 @@ public sealed class PublishAsync
 
         // Assert
         dispatcher.Captured.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenFirstDispatchThrows_SecondPublishWithSameStatusRetries()
+    {
+        // Arrange
+        bool firstCall = true;
+        CapturingIntegrationEventDispatcher successDispatcher = new();
+
+        ServiceCollection services = new();
+        services.AddScoped<IIntegrationEventDispatcher>(_ =>
+        {
+            if (firstCall)
+            {
+                firstCall = false;
+                return new ThrowingIntegrationEventDispatcher();
+            }
+
+            return successDispatcher;
+        });
+        ServiceProvider sp = services.BuildServiceProvider();
+
+        DockerAvailabilityHealthCheckPublisher publisher = new(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<DockerAvailabilityHealthCheckPublisher>.Instance);
+
+        HealthReport report = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
+
+        // Act — first publish throws, second should retry (same status) and dispatch
+        await Should.ThrowAsync<InvalidOperationException>(
+            async () => await publisher.PublishAsync(report, CancellationToken.None));
+        await publisher.PublishAsync(report, CancellationToken.None);
+
+        // Assert — the event was dispatched on the second publish (transition retried)
+        DockerAvailabilityChanged dispatched = successDispatcher.Captured.ShouldHaveSingleItem().ShouldBeOfType<DockerAvailabilityChanged>();
+        dispatched.IsAvailable.ShouldBeTrue();
+    }
+
+    private sealed class ThrowingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("Dispatch failed.");
     }
 }

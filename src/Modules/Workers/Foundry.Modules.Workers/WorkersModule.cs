@@ -38,9 +38,10 @@ public static class WorkersModule
 
         services.AddSingleton<DockerAvailabilityState>();
         services.AddSingleton<IDockerAvailabilityState>(sp => sp.GetRequiredService<DockerAvailabilityState>());
+        services.AddSingleton<IDockerAvailabilityStateMutator>(sp => sp.GetRequiredService<DockerAvailabilityState>());
 
         services.AddHealthChecks()
-            .AddCheck<DockerDaemonHealthCheck>("docker-daemon", tags: ["ready"]);
+            .AddCheck<DockerDaemonHealthCheck>(DockerDaemonHealthCheck.CheckName, tags: ["ready"]);
         services.AddSingleton<IHealthCheckPublisher, DockerAvailabilityHealthCheckPublisher>();
         services.Configure<HealthCheckPublisherOptions>(options =>
             options.Period = TimeSpan.FromSeconds(HealthCheckPublisherPeriodSeconds));
