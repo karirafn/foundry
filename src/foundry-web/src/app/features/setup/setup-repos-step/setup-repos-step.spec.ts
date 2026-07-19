@@ -472,6 +472,49 @@ describe('SetupReposStepComponent', () => {
     expect(finishBtn.disabled).toBe(true);
   });
 
+  // Fix C: screen-reader double-announcement — visible reason span must be aria-hidden, sr-only span carries the id
+  it('should render the visible reason span with aria-hidden="true" for non-writable repos', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const readonlyItem = items[1];
+    const visibleReason = readonlyItem.querySelector('.setup-repos-step__repo-reason');
+    expect(visibleReason?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('should render a sr-only sibling with the reason text carrying the id referenced by aria-describedby', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const disabledCheckbox = checkboxes[1];
+    const describedById = disabledCheckbox.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    const srOnlySpan = el.querySelector(`#${describedById}`);
+    expect(srOnlySpan).toBeTruthy();
+    expect(srOnlySpan?.classList.contains('sr-only')).toBe(true);
+    expect(srOnlySpan?.textContent).toContain('no write access');
+  });
+
   it('should render all non-writable repos (not empty state) when all repos lack push access', () => {
     // Arrange
     const allReadonly: AvailableRepository[] = [

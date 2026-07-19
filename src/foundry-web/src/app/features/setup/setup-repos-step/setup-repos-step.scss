@@ -135,13 +135,14 @@
       }
     }
 
-    &--disabled &__repo-label {
-      cursor: not-allowed;
-    }
+  }
 
-    &--disabled &__repo-slug {
-      color: var(--fd-text-secondary);
-    }
+  &__repo-item--disabled &__repo-label {
+    cursor: not-allowed;
+  }
+
+  &__repo-item--disabled &__repo-slug {
+    color: var(--fd-text-secondary);
   }
 
   &__repo-label {

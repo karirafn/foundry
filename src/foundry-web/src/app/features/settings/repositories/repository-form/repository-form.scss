@@ -140,9 +140,12 @@
     &--disabled {
       cursor: not-allowed;
 
-      &:hover,
-      &.repository-form__picker-option--active {
+      &:hover {
         background: transparent;
+      }
+
+      &.repository-form__picker-option--active {
+        background: var(--fd-bg-card);
       }
     }
 

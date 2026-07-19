@@ -71,7 +71,7 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
                   type="checkbox"
                   [checked]="_selectedSlugs().has(repo.slug) && repo.canPush"
                   [disabled]="!repo.canPush"
-                  [attr.aria-describedby]="repo.canPush ? null : 'repo-reason-' + repo.slug"
+                  [attr.aria-describedby]="repo.canPush ? null : 'repo-reason-' + repo.slug.replace('/', '-')"
                   (change)="onToggle(repo.slug, $any($event.target).checked)"
                 />
                 <span class="setup-repos-step__repo-slug">{{ repo.slug }}</span>
@@ -81,10 +81,16 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
                 @if (!repo.canPush) {
                   <span
                     class="setup-repos-step__repo-reason"
-                    [id]="'repo-reason-' + repo.slug"
+                    aria-hidden="true"
                   >{{ _noWriteAccessReason }}</span>
                 }
               </label>
+              @if (!repo.canPush) {
+                <span
+                  class="sr-only"
+                  [id]="'repo-reason-' + repo.slug.replace('/', '-')"
+                >{{ _noWriteAccessReason }}</span>
+              }
             </li>
           }
         </ul>
