@@ -23,8 +23,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
     {
         IReadOnlyList<AvailableRepository> fakeRepositories =
         [
-            new AvailableRepository("owner/repo-a", IsPrivate: false),
-            new AvailableRepository("owner/repo-b", IsPrivate: true),
+            new AvailableRepository("owner/repo-a", IsPrivate: false, CanPush: true),
+            new AvailableRepository("owner/repo-b", IsPrivate: true, CanPush: false),
         ];
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
@@ -61,8 +61,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
         repositories.ShouldNotBeNull();
         repositories.Count.ShouldBe(2);
         repositories.ShouldSatisfyAllConditions(
-            () => repositories.ShouldContain(r => r.Slug == "owner/repo-a" && !r.IsPrivate),
-            () => repositories.ShouldContain(r => r.Slug == "owner/repo-b" && r.IsPrivate));
+            () => repositories.ShouldContain(r => r.Slug == "owner/repo-a" && !r.IsPrivate && r.CanPush),
+            () => repositories.ShouldContain(r => r.Slug == "owner/repo-b" && r.IsPrivate && !r.CanPush));
     }
 
     private sealed class StubHandler(Result<IReadOnlyList<AvailableRepository>> result)

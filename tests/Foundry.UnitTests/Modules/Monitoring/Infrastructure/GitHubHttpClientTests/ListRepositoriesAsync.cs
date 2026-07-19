@@ -56,8 +56,97 @@ public sealed class ListRepositoriesAsync
             result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
         IReadOnlyList<AvailableRepository> repos = success.Value;
         repos.Count.ShouldBe(2);
-        repos.ShouldContain(r => r.Slug == "octocat/Hello-World" && !r.IsPrivate);
-        repos.ShouldContain(r => r.Slug == "octocat/my-secret" && r.IsPrivate);
+        repos.ShouldContain(r => r.Slug == "octocat/Hello-World" && !r.IsPrivate && !r.CanPush);
+        repos.ShouldContain(r => r.Slug == "octocat/my-secret" && r.IsPrivate && !r.CanPush);
+    }
+
+    [Fact]
+    public async Task WhenPermissionsPushIsTrue_SetsCanPushTrue()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "full_name": "owner/repo",
+                "private": false,
+                "permissions": { "push": true }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+            ValidBaseUrl,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<IReadOnlyList<AvailableRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        success.Value.ShouldContain(r => r.Slug == "owner/repo" && r.CanPush);
+    }
+
+    [Fact]
+    public async Task WhenPermissionsPushIsFalse_SetsCanPushFalse()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "full_name": "owner/repo",
+                "private": false,
+                "permissions": { "push": false }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+            ValidBaseUrl,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<IReadOnlyList<AvailableRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        success.Value.ShouldContain(r => r.Slug == "owner/repo" && !r.CanPush);
+    }
+
+    [Fact]
+    public async Task WhenPermissionsAreAbsent_SetsCanPushFalse()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "full_name": "owner/repo",
+                "private": false
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+            ValidBaseUrl,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<IReadOnlyList<AvailableRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        success.Value.ShouldContain(r => r.Slug == "owner/repo" && !r.CanPush);
     }
 
     [Fact]
