@@ -4,5 +4,5 @@ namespace Foundry.Modules.Monitoring.Features;
 
 public interface IIssueProviderFactory
 {
-    IIssueProvider CreateProvider(Account account, string token);
+    IIssueProvider CreateProvider(Credential credential, string token);
 }

@@ -38,8 +38,8 @@ public sealed class WhenNoAccountsExist : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<AccountSummary>? accounts = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<AccountSummary>>(TestContext.Current.CancellationToken);
+        IReadOnlyList<CredentialSummary>? accounts = await response.Content
+            .ReadFromJsonAsync<IReadOnlyList<CredentialSummary>>(TestContext.Current.CancellationToken);
         accounts.ShouldNotBeNull();
         accounts.ShouldBeEmpty();
     }

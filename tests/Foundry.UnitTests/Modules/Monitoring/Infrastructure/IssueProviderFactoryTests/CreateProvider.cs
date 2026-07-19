@@ -25,35 +25,35 @@ public sealed class CreateProvider
     }
 
     [Fact]
-    public void WhenAccountIsGitHubAccount_ReturnsIssueProvider()
+    public void WhenAccountIsGitHubCredential_ReturnsIssueProvider()
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitHubAccount account = GitHubAccount.Create("my-account", "GITHUB_TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create("my-account", "GITHUB_TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
-        IIssueProvider provider = sut.CreateProvider(account, "ghp_token123");
+        IIssueProvider provider = sut.CreateProvider(credential, "ghp_token123");
 
         // Assert
         provider.ShouldNotBeNull();
     }
 
     [Fact]
-    public void WhenAccountIsGitLabAccount_ReturnsIssueProvider()
+    public void WhenAccountIsGitLabCredential_ReturnsIssueProvider()
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitLabAccount account = GitLabAccount.Create("my-gitlab", "glpat_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create("my-gitlab", "glpat_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
         // Act
-        IIssueProvider provider = sut.CreateProvider(account, "glpat_token123");
+        IIssueProvider provider = sut.CreateProvider(credential, "glpat_token123");
 
         // Assert
         provider.ShouldNotBeNull();
     }
 
     [Fact]
-    public void WhenAccountTypeIsUnknown_ThrowsNotSupportedException()
+    public void WhenCredentialTypeIsUnknown_ThrowsNotSupportedException()
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();

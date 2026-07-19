@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features;
 
-internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueries
+internal sealed class RepositorySlugQueries(
+    DbContext db,
+    ICredentialResolver credentialResolver) : IRepositorySlugQueries
 {
     public async Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
         IReadOnlySet<MonitoredRepositoryId> repositoryIds,
@@ -28,16 +30,26 @@ internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueri
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
     {
-        string? discriminator = await db.Set<MonitoredRepository>()
+        MonitoredRepository? repo = await db.Set<MonitoredRepository>()
             .AsNoTracking()
-            .Where(r => r.Id == repositoryId)
-            .Join(
-                db.Set<Account>().AsNoTracking(),
-                r => r.AccountId,
-                a => a.Id,
-                (r, a) => EF.Property<string>(a, "type"))
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(r => r.Id == repositoryId, cancellationToken);
 
-        return discriminator;
+        if (repo is null)
+        {
+            return null;
+        }
+
+        Credential? credential = await credentialResolver.ResolveAsync(
+            repo.Host,
+            repo.Slug,
+            cancellationToken);
+
+        return credential switch
+        {
+            GitHubCredential => "github",
+            GitLabCredential => "gitlab",
+            null => null,
+            _ => null,
+        };
     }
 }

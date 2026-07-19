@@ -25,6 +25,7 @@ public static class MonitoringModule
         services.AddHttpClient<GitLabHttpClient>();
 
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
+        services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();
         services.AddScoped<IRepositoryEligibilityQuery, RepositoryEligibilityQuery>();
@@ -32,9 +33,9 @@ public static class MonitoringModule
         services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
 
-        services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<AccountSummary>, GetAccounts.Handler>();
-        services.AddCommandHandler<CreateAccount.Command, AccountSummary, CreateAccount.Handler, CreateAccount.Validator>();
-        services.AddCommandHandler<UpdateAccount.Command, AccountSummary, UpdateAccount.Handler, UpdateAccount.Validator>();
+        services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
+        services.AddCommandHandler<CreateAccount.Command, CredentialSummary, CreateAccount.Handler, CreateAccount.Validator>();
+        services.AddCommandHandler<UpdateAccount.Command, CredentialSummary, UpdateAccount.Handler, UpdateAccount.Validator>();
         services.AddCommandHandler<DeleteAccount.Command, bool, DeleteAccount.Handler>();
         services.AddQueryHandler<ValidateToken.Query, ValidateToken.Response, ValidateToken.Handler>();
 

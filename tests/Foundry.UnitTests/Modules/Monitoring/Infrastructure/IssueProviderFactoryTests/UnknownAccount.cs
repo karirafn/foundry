@@ -3,9 +3,9 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.IssueProviderFactoryTests;
 
-internal sealed class UnknownAccount : Account
+internal sealed class UnknownAccount : Credential
 {
-    public UnknownAccount() : base(AccountId.New())
+    public UnknownAccount() : base(CredentialId.New())
     {
     }
 

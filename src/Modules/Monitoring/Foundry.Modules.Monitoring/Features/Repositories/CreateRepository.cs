@@ -51,7 +51,6 @@ internal static class CreateRepository
 
     internal sealed class Handler(
         DbContext dbContext,
-        IIssueProviderFactory providerFactory,
         IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
         // The slug unique index name, used to identify slug-collision DbUpdateExceptions
@@ -70,15 +69,15 @@ internal static class CreateRepository
             Command command,
             CancellationToken cancellationToken)
         {
-            AccountId accountId = AccountId.From(command.AccountId);
+            CredentialId credentialId = CredentialId.From(command.AccountId);
 
-            Account? account = await dbContext.Set<Account>()
+            Credential? credential = await dbContext.Set<Credential>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+                .FirstOrDefaultAsync(a => a.Id == credentialId, cancellationToken);
 
-            if (account is null)
+            if (credential is null)
             {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(accountId));
+                return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(credentialId));
             }
 
             Result<RepositorySlug> slugResult = RepositorySlug.Create(command.Slug);
@@ -104,8 +103,7 @@ internal static class CreateRepository
 
             MonitoredRepository repository = MonitoredRepository.Create(
                 repositorySlug,
-                accountId,
-                account.BaseUrl.Value.Host,
+                credential.BaseUrl.Value.Host,
                 pollInterval,
                 position);
 
@@ -125,22 +123,18 @@ internal static class CreateRepository
                 return Result<RepositorySummary>.Fail(RepositoryErrors.ConflictOnCreate());
             }
 
-            if (!string.IsNullOrEmpty(account.Token))
-            {
-                IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
-                await eligibilityEvaluator.EvaluateAndStoreAsync(repository, provider, cancellationToken);
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
+            await eligibilityEvaluator.EvaluateAndStoreAsync(repository, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             RepositorySummary summary = new(
                 repository.Id.Value,
                 repository.Slug.ToString(),
-                repository.AccountId.Value,
-                account.Name,
-                account switch
+                credential.Id.Value,
+                credential.Name,
+                credential switch
                 {
-                    GitHubAccount => ProviderTypes.GitHub,
-                    GitLabAccount => ProviderTypes.GitLab,
+                    GitHubCredential => ProviderTypes.GitHub,
+                    GitLabCredential => ProviderTypes.GitLab,
                     _ => throw new UnreachableException(),
                 },
                 RepositoryMappings.ToSeconds(repository.PollInterval),

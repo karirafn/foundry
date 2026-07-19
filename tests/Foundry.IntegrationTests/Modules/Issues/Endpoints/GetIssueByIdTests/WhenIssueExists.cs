@@ -99,6 +99,11 @@ public sealed class WhenIssueExists : IAsyncDisposable
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
         Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId);
         MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
+
+        // RepositorySeeder uses slug "owner/repo" — seed that namespace so the resolver finds it.
+        // No endpoint exposes namespace seeding directly; seed via DbContext to simulate resolver state.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
+
         DetectedIssue issue = await SeedDetectedIssueAsync(repoId);
 
         // Act
@@ -121,6 +126,10 @@ public sealed class WhenIssueExists : IAsyncDisposable
         Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory);
         Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/gitlab-repo");
         MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
+
+        // Seed namespace so the resolver can match "owner/gitlab-repo".
+        // No endpoint exposes namespace seeding directly; seed via DbContext to simulate resolver state.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         ProviderUrl gitlabUrl =
             ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7").ValueOrThrow();
 

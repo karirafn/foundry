@@ -123,9 +123,20 @@ public sealed class WhenRepositoryHasEligibility : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
+
+        // Set a namespace on the credential so the resolver can match this repository.
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
+        Credential? credential = await dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == CredentialId.From(accountId), TestContext.Current.CancellationToken);
+
+        if (credential is not null)
+        {
+            credential.SetNamespaces([Namespace.Create(repositorySlug.Owner).ValueOrThrow()]);
+        }
+
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
-            AccountId.From(accountId),
             "github.com",
             pollInterval: null);
 

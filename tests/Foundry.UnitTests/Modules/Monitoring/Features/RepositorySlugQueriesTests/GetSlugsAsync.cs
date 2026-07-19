@@ -33,7 +33,7 @@ public sealed class GetSlugsAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new RepositorySlugQueries(_dbContext);
+        _sut = new RepositorySlugQueries(_dbContext, new NullCredentialResolver());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -83,11 +83,8 @@ public sealed class GetSlugsAsync : IAsyncDisposable
     public async Task WhenIdsMatchRepositories_ReturnsSlugStringsKeyedById()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
-
-        MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), account.Id, "github.com", null, position: 0);
-        MonitoredRepository repoB = MonitoredRepository.Create(ValidSlug("owner/repo-b"), account.Id, "github.com", null, position: 1);
+        MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), "github.com", null, position: 0);
+        MonitoredRepository repoB = MonitoredRepository.Create(ValidSlug("owner/repo-b"), "github.com", null, position: 1);
         _dbContext.Set<MonitoredRepository>().AddRange(repoA, repoB);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -103,5 +100,16 @@ public sealed class GetSlugsAsync : IAsyncDisposable
         result.ShouldSatisfyAllConditions(
             () => result[repoA.Id].ShouldBe("owner/repo-a"),
             () => result[repoB.Id].ShouldBe("owner/repo-b"));
+    }
+
+    private sealed class NullCredentialResolver : ICredentialResolver
+    {
+        public Task<Credential?> ResolveAsync(
+            string host,
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<Credential?>(null);
+        }
     }
 }

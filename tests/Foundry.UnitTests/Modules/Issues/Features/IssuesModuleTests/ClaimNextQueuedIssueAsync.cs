@@ -42,7 +42,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
 
         _dispatcher = new CapturingIntegrationEventDispatcher();
-        RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext);
+        RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext, new CredentialResolver(_dbContext));
         _sut = new WorkerCapacityAvailableHandler(
             _dbContext,
             repositoryDispatchQueries,
@@ -64,29 +64,28 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
     private static ProviderUrl ValidUrl =>
         ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
-    private async Task<(MonitoredRepository, GitHubAccount)> SeedRepositoryAsync(
+    private async Task<(MonitoredRepository, GitHubCredential)> SeedRepositoryAsync(
         string slug = "owner/repo",
         string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create(
+        GitHubCredential credential = GitHubCredential.Create(
             "Test Account",
             token,
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
-        RepositorySlug repositorySlug =
-            RepositorySlug.Create(slug).ValueOrThrow();
+        RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
+        credential.SetNamespaces([Namespace.Create(repositorySlug.Owner).ValueOrThrow()]);
 
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
-            account.Id,
             "github.com",
             pollInterval: null);
 
-        _dbContext.Set<GitHubAccount>().Add(account);
+        _dbContext.Set<GitHubCredential>().Add(credential);
         _dbContext.Set<MonitoredRepository>().Add(repository);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        return (repository, account);
+        return (repository, credential);
     }
 
     private async Task<QueuedIssue> SeedQueuedIssueAsync(
@@ -166,7 +165,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
     public async Task WhenQueuedIssueExists_DispatchesIssueClaimedWithCorrectProperties()
     {
         // Arrange
-        (MonitoredRepository repository, GitHubAccount account) =
+        (MonitoredRepository repository, GitHubCredential account) =
             await SeedRepositoryAsync("myorg/myrepo", token: "ghp_my_github_token");
 
         QueuedIssue queued = await SeedQueuedIssueAsync(

@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -19,16 +18,14 @@ public sealed class Create
     {
         // Arrange
         RepositorySlug slug = ValidSlug;
-        AccountId accountId = AccountId.New();
         TimeSpan pollInterval = TimeSpan.FromMinutes(5);
 
         // Act
-        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, "github.com", pollInterval);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", pollInterval);
 
         // Assert
         repository.ShouldSatisfyAllConditions(
             () => repository.Slug.ShouldBe(slug),
-            () => repository.AccountId.ShouldBe(accountId),
             () => repository.Host.ShouldBe("github.com"),
             () => repository.PollInterval.ShouldBe(pollInterval),
             () => repository.IsActive.ShouldBeTrue(),
@@ -40,10 +37,9 @@ public sealed class Create
     {
         // Arrange
         RepositorySlug slug = ValidSlug;
-        AccountId accountId = AccountId.New();
 
         // Act
-        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", null);
 
         // Assert
         repository.PollInterval.ShouldBeNull();
@@ -54,11 +50,10 @@ public sealed class Create
     {
         // Arrange
         RepositorySlug slug = ValidSlug;
-        AccountId accountId = AccountId.New();
 
         // Act
-        MonitoredRepository a = MonitoredRepository.Create(slug, accountId, "github.com", null);
-        MonitoredRepository b = MonitoredRepository.Create(slug, accountId, "github.com", null);
+        MonitoredRepository a = MonitoredRepository.Create(slug, "github.com", null);
+        MonitoredRepository b = MonitoredRepository.Create(slug, "github.com", null);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);

@@ -12,16 +12,16 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static class GetAccounts
 {
-    internal sealed record Query : IQuery<IReadOnlyList<AccountSummary>>;
+    internal sealed record Query : IQuery<IReadOnlyList<CredentialSummary>>;
 
     internal sealed class Handler(DbContext dbContext)
-        : IQueryHandler<Query, IReadOnlyList<AccountSummary>>
+        : IQueryHandler<Query, IReadOnlyList<CredentialSummary>>
     {
-        public async Task<Result<IReadOnlyList<AccountSummary>>> HandleAsync(
+        public async Task<Result<IReadOnlyList<CredentialSummary>>> HandleAsync(
             Query query,
             CancellationToken cancellationToken)
         {
-            var rows = await dbContext.Set<Account>()
+            var rows = await dbContext.Set<Credential>()
                 .AsNoTracking()
                 .Select(a => new
                 {
@@ -33,8 +33,8 @@ internal static class GetAccounts
                 })
                 .ToListAsync(cancellationToken);
 
-            List<AccountSummary> summaries = rows
-                .Select(r => new AccountSummary(
+            List<CredentialSummary> summaries = rows
+                .Select(r => new CredentialSummary(
                     r.Id.Value,
                     r.Name,
                     r.ProviderType,
@@ -42,7 +42,7 @@ internal static class GetAccounts
                     r.Token != null))
                 .ToList();
 
-            return Result<IReadOnlyList<AccountSummary>>.Ok(summaries);
+            return Result<IReadOnlyList<CredentialSummary>>.Ok(summaries);
         }
     }
 
@@ -51,20 +51,20 @@ internal static class GetAccounts
         public static void Map(RouteGroupBuilder group)
         {
             group.MapGet(string.Empty, static async (
-                    IQueryHandler<Query, IReadOnlyList<AccountSummary>> handler,
+                    IQueryHandler<Query, IReadOnlyList<CredentialSummary>> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Result<IReadOnlyList<AccountSummary>> result = await handler.HandleAsync(
+                    Result<IReadOnlyList<CredentialSummary>> result = await handler.HandleAsync(
                         new Query(),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<IReadOnlyList<AccountSummary>>, BadRequest<string>>>(
-                        accounts => TypedResults.Ok(accounts),
+                    return result.Match<Results<Ok<IReadOnlyList<CredentialSummary>>, BadRequest<string>>>(
+                        credentials => TypedResults.Ok(credentials),
                         error => TypedResults.BadRequest(error.Message));
                 })
                 .WithName("GetAccounts")
                 .WithSummary("Gets all configured accounts")
-                .Produces<IReadOnlyList<AccountSummary>>()
+                .Produces<IReadOnlyList<CredentialSummary>>()
                 .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }

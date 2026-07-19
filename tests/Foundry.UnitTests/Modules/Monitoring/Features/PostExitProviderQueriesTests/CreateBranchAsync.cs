@@ -38,7 +38,8 @@ public sealed class CreateBranchAsync : IAsyncDisposable
 
         _sut = new PostExitProviderQueries(
             _dbContext,
-            new StubProviderFactory(() => _stubProvider));
+            new StubProviderFactory(() => _stubProvider),
+            new CredentialResolver(_dbContext));
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -49,12 +50,13 @@ public sealed class CreateBranchAsync : IAsyncDisposable
 
     private async Task<MonitoredRepositoryId> SeedRepoAsync(string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
+        credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-        MonitoredRepository repo = MonitoredRepository.Create(slug, account.Id, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -80,6 +82,27 @@ public sealed class CreateBranchAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenNoCoveringCredential_ReturnsFailure()
+    {
+        // Arrange
+        RepositorySlug slug = RepositorySlug.Create("uncovered/repo").ValueOrThrow();
+        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null);
+        _dbContext.Set<MonitoredRepository>().Add(repo);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        Result<bool> result = await _sut.CreateBranchAsync(
+            repo.Id,
+            "feat/my-branch",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("PostExitProviderQueries.CredentialNotFound");
+    }
+
+    [Fact]
     public async Task WhenAccountHasNoToken_ReturnsFailure()
     {
         // Arrange
@@ -94,7 +117,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         // Assert
         result.IsFailure.ShouldBeTrue();
         Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
-        failure.Error.Code.ShouldBe("PostExitProviderQueries.AccountTokenNotConfigured");
+        failure.Error.Code.ShouldBe("PostExitProviderQueries.CredentialTokenNotConfigured");
     }
 
     [Fact]
@@ -157,7 +180,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
 
     private sealed class StubProviderFactory(Func<StubIssueProvider> providerFactory) : IIssueProviderFactory
     {
-        public IIssueProvider CreateProvider(Account account, string token) => providerFactory();
+        public IIssueProvider CreateProvider(Credential credential, string token) => providerFactory();
     }
 
     private sealed class StubIssueProvider(

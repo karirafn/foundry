@@ -91,6 +91,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryEligibilityEvaluator, NullRepositoryEligibilityEvaluator>();
         services.AddScoped<IIssueProviderFactory>(_ => providerFactory);
+        services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<RepositoryPoller>();
         return services.BuildServiceProvider();
     }
@@ -99,11 +100,13 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         await using FoundryDbContext db = CreateDbContext();
 
-        GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
-        db.Set<Account>().Add(account);
+        RepositorySlug repoSlug = ValidSlug(slug);
+        GitHubCredential account = GitHubCredential.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
+        account.SetNamespaces([Namespace.Create(repoSlug.Owner).ValueOrThrow()]);
+        db.Set<Credential>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug(slug), account.Id, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null);
         db.Set<MonitoredRepository>().Add(repo);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -197,7 +200,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
     private sealed class EmptyIssueProviderFactory : IIssueProviderFactory
     {
-        public IIssueProvider CreateProvider(Account account, string token)
+        public IIssueProvider CreateProvider(Credential credential, string token)
         {
             return new EmptyIssueProvider();
         }
@@ -387,7 +390,6 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         public Task EvaluateAndStoreAsync(
             MonitoredRepository repo,
-            IIssueProvider provider,
             CancellationToken cancellationToken)
         {
             return Task.CompletedTask;

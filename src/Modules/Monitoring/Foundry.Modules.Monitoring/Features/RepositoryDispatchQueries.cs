@@ -5,34 +5,44 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features;
 
-internal sealed class RepositoryDispatchQueries(DbContext db) : IRepositoryDispatchQueries
+internal sealed class RepositoryDispatchQueries(
+    DbContext db,
+    ICredentialResolver credentialResolver) : IRepositoryDispatchQueries
 {
     public async Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
     {
-        var rows = await db.Set<MonitoredRepository>()
+        MonitoredRepository? repo = await db.Set<MonitoredRepository>()
             .AsNoTracking()
-            .Where(r => r.Id == repositoryId)
-            .Join(
-                db.Set<Account>().AsNoTracking(),
-                r => r.AccountId,
-                a => a.Id,
-                (r, a) => new
-                {
-                    Slug = r.Slug,
-                    BaseUrl = a.BaseUrl,
-                    Token = a.Token,
-                    ProviderType = EF.Property<string>(a, "type"),
-                })
-            .ToListAsync(cancellationToken);
+            .FirstOrDefaultAsync(r => r.Id == repositoryId, cancellationToken);
 
-        return rows
-            .Select(x => new RepositoryDispatchInfo(
-                x.Slug.ToString(),
-                new Uri(x.BaseUrl.Value, $"{x.Slug}.git"),
-                x.Token,
-                x.ProviderType))
-            .FirstOrDefault();
+        if (repo is null)
+        {
+            return null;
+        }
+
+        Credential? credential = await credentialResolver.ResolveAsync(
+            repo.Host,
+            repo.Slug,
+            cancellationToken);
+
+        if (credential is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(credential.Token))
+        {
+            return null;
+        }
+
+        string providerType = credential is GitHubCredential ? "github" : "gitlab";
+
+        return new RepositoryDispatchInfo(
+            repo.Slug.ToString(),
+            new Uri(credential.BaseUrl.Value, $"{repo.Slug}.git"),
+            credential.Token,
+            providerType);
     }
 }

@@ -1,6 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -44,13 +43,12 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
     public async Task WhenMonitoredRepositoryPersisted_CanBeReloadedWithCorrectSlug()
     {
         // Arrange
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         MonitoredRepository repository = MonitoredRepository.Create(
             ValidSlug,
-            account.Id,
             "github.com",
             pollInterval: TimeSpan.FromMinutes(5));
 
@@ -70,7 +68,6 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
             () => loaded.Slug.Owner.ShouldBe("octocat"),
             () => loaded.Slug.Name.ShouldBe("hello-world"),
             () => loaded.Host.ShouldBe("github.com"),
-            () => loaded.AccountId.ShouldBe(account.Id),
             () => loaded.PollInterval.ShouldBe(TimeSpan.FromMinutes(5)),
             () => loaded.IsActive.ShouldBeTrue());
     }

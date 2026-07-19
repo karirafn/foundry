@@ -35,7 +35,11 @@ public sealed class WhenRepositoriesExist : IAsyncDisposable
 
         await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/repo-a");
         await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/repo-b");
-        await RepositorySeeder.SeedRepositoryAsync(_factory, otherAccountId, slug: "owner/repo-other");
+        await RepositorySeeder.SeedRepositoryAsync(_factory, otherAccountId, slug: "other/repo-other");
+
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, otherAccountId, "other");
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(
@@ -61,6 +65,9 @@ public sealed class WhenRepositoriesExist : IAsyncDisposable
             accountId,
             slug: "acme/awesome-repo",
             pollIntervalSeconds: 300);
+
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "acme");
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(
@@ -89,6 +96,9 @@ public sealed class WhenRepositoriesExist : IAsyncDisposable
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory, name: "My GitLab");
         await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "group/repo");
+
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "group");
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(

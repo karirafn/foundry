@@ -63,4 +63,19 @@ public sealed class FactoryMethods
             () => violation.Rule.ShouldBe(EligibilityViolation.UnreachableRule),
             () => violation.Description.ShouldBe("Branch protection could not be verified."));
     }
+
+    [Fact]
+    public void NoCredential_SetsExpectedRuleAndDescription()
+    {
+        // Arrange
+        const string namespaceName = "myorg";
+
+        // Act
+        EligibilityViolation violation = EligibilityViolation.NoCredential(namespaceName);
+
+        // Assert
+        violation.ShouldSatisfyAllConditions(
+            () => violation.Rule.ShouldBe($"no-credential:{namespaceName}"),
+            () => violation.Description.ShouldBe($"no credential for namespace {namespaceName}"));
+    }
 }
