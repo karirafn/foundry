@@ -27,6 +27,7 @@ const DEFAULT_POLL_INTERVAL_MINUTES = 5;
 const SECONDS_PER_MINUTE = 60;
 const MIN_POLL_INTERVAL_MINUTES = 1;
 const MAX_POLL_INTERVAL_MINUTES = 1440;
+const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not authorized';
 
 @Component({
   selector: 'fd-repository-form',
@@ -119,13 +120,22 @@ const MAX_POLL_INTERVAL_MINUTES = 1440;
                     <li
                       class="repository-form__picker-option"
                       [class.repository-form__picker-option--active]="i === _activeOptionIndex()"
+                      [class.repository-form__picker-option--disabled]="!repo.canPush"
                       [id]="'repo-option-' + i"
                       role="option"
                       [attr.aria-selected]="_repoSlug() === repo.slug"
-                      (click)="selectRepo(repo.slug)"
+                      [attr.aria-disabled]="repo.canPush ? null : 'true'"
+                      [attr.aria-describedby]="repo.canPush ? null : 'repo-option-reason-' + i"
+                      (click)="selectRepo(repo)"
                       (mousedown)="$event.preventDefault()"
                     >
-                      {{ repo.slug }}
+                      <span class="repository-form__picker-option-slug">{{ repo.slug }}</span>
+                      @if (!repo.canPush) {
+                        <span
+                          class="repository-form__picker-option-reason"
+                          [id]="'repo-option-reason-' + i"
+                        >{{ _noWriteAccessReason }}</span>
+                      }
                     </li>
                   }
                 </ul>
@@ -180,6 +190,8 @@ const MAX_POLL_INTERVAL_MINUTES = 1440;
   styleUrl: './repository-form.scss',
 })
 export class RepositoryFormComponent implements OnInit {
+  protected readonly _noWriteAccessReason = NO_WRITE_ACCESS_REASON;
+
   readonly repository: InputSignal<RepositorySummary | null> = input<RepositorySummary | null>(null);
   readonly accounts: InputSignal<AccountSummary[]> = input<AccountSummary[]>([]);
   readonly availableRepositories: InputSignal<AvailableRepository[]> = input<AvailableRepository[]>([]);
@@ -283,14 +295,18 @@ export class RepositoryFormComponent implements OnInit {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this._pickerOpen.set(true);
-      this._activeOptionIndex.set(Math.min(current + 1, filtered.length - 1));
+      const next = this._findNextWritableIndex(filtered, current, 1);
+      if (next !== null) {
+        this._activeOptionIndex.set(next);
+      }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      this._activeOptionIndex.set(Math.max(current - 1, -1));
+      const prev = this._findNextWritableIndex(filtered, current, -1);
+      this._activeOptionIndex.set(prev ?? -1);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (current >= 0 && current < filtered.length) {
-        this.selectRepo(filtered[current].slug);
+        this.selectRepo(filtered[current]);
       }
     } else if (event.key === 'Escape') {
       this._pickerOpen.set(false);
@@ -298,11 +314,29 @@ export class RepositoryFormComponent implements OnInit {
     }
   }
 
-  selectRepo(slug: string): void {
-    this._repoSlug.set(slug);
+  selectRepo(repo: AvailableRepository): void {
+    if (!repo.canPush) {
+      return;
+    }
+    this._repoSlug.set(repo.slug);
     this._filterText.set('');
     this._pickerOpen.set(false);
     this._activeOptionIndex.set(-1);
+  }
+
+  private _findNextWritableIndex(
+    repos: AvailableRepository[],
+    from: number,
+    direction: 1 | -1,
+  ): number | null {
+    let index = from + direction;
+    while (index >= 0 && index < repos.length) {
+      if (repos[index].canPush) {
+        return index;
+      }
+      index += direction;
+    }
+    return null;
   }
 
   onPollIntervalInput(value: string): void {

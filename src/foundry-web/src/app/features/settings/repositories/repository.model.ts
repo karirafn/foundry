@@ -37,6 +37,7 @@ export interface RepositorySummary {
 export interface AvailableRepository {
   slug: string;
   isPrivate: boolean;
+  canPush: boolean;
 }
 
 export interface CreateRepositoryRequest {

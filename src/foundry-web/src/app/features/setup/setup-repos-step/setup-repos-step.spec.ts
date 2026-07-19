@@ -9,9 +9,14 @@ import { AvailableRepository } from '../../settings/repositories/repository.mode
 const ACCOUNT_ID = 'account-1';
 
 const AVAILABLE_REPOS: AvailableRepository[] = [
-  { slug: 'org/repo-alpha', isPrivate: false },
-  { slug: 'org/repo-beta', isPrivate: true },
-  { slug: 'org/repo-gamma', isPrivate: false },
+  { slug: 'org/repo-alpha', isPrivate: false, canPush: true },
+  { slug: 'org/repo-beta', isPrivate: true, canPush: true },
+  { slug: 'org/repo-gamma', isPrivate: false, canPush: true },
+];
+
+const AVAILABLE_REPOS_WITH_NON_WRITABLE: AvailableRepository[] = [
+  { slug: 'org/repo-alpha', isPrivate: false, canPush: true },
+  { slug: 'org/repo-readonly', isPrivate: false, canPush: false },
 ];
 
 @Component({ template: '', standalone: true })
@@ -388,7 +393,87 @@ describe('SetupReposStepComponent', () => {
     expect(errorText).toContain('1 of 3');
   });
 
-  // Cycle 14: error strings are truncated to 200 characters
+  // Cycle 15: non-writable repos render disabled with reason
+  it('should render a disabled checkbox for non-writable repositories', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    expect(checkboxes[0].disabled).toBe(false);
+    expect(checkboxes[1].disabled).toBe(true);
+  });
+
+  it('should render the no-write-access reason for non-writable repositories', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const readonlyItem = items[1];
+    const reason = readonlyItem.querySelector('.setup-repos-step__repo-reason');
+    expect(reason).toBeTruthy();
+    expect(reason?.textContent).toContain('no write access');
+  });
+
+  it('should render a disabled modifier class on non-writable repo items', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    expect(items[0].classList.contains('setup-repos-step__repo-item--disabled')).toBe(false);
+    expect(items[1].classList.contains('setup-repos-step__repo-item--disabled')).toBe(true);
+  });
+
+  it('should render all non-writable repos (not empty state) when all repos lack push access', () => {
+    // Arrange
+    const allReadonly: AvailableRepository[] = [
+      { slug: 'org/readonly-a', isPrivate: false, canPush: false },
+      { slug: 'org/readonly-b', isPrivate: false, canPush: false },
+    ];
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(allReadonly);
+    fixture.detectChanges();
+
+    // Assert — both entries visible, no empty state
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]');
+    expect(checkboxes.length).toBe(2);
+    const emptyEl = el.querySelector('.setup-repos-step__repo-empty');
+    expect(emptyEl).toBeNull();
+  });
+
+  // Cycle 16: error strings are truncated to 200 characters
   it('should truncate long server error strings to at most 200 characters in the error detail', () => {
     // Arrange
     const { fixture, httpMock } = setup();
