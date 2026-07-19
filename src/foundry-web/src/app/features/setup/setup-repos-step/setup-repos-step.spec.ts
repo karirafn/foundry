@@ -515,6 +515,33 @@ describe('SetupReposStepComponent', () => {
     expect(srOnlySpan?.textContent).toContain('no write access');
   });
 
+  // Bug fix: replaceAll — nested-group slug (two slashes) must produce a slash-free id
+  it('should produce matching, slash-free aria-describedby and id for a non-writable repo with a nested-group slug', () => {
+    // Arrange
+    const nestedGroupRepos: AvailableRepository[] = [
+      { slug: 'group/subgroup/project', isPrivate: false, canPush: false },
+    ];
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(nestedGroupRepos);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const checkbox = el.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const describedById = checkbox.getAttribute('aria-describedby') ?? '';
+    expect(describedById).toBeTruthy();
+    expect(describedById).not.toContain('/');
+    const srOnlySpan = el.querySelector(`#${describedById}`);
+    expect(srOnlySpan).toBeTruthy();
+    expect(srOnlySpan?.id).not.toContain('/');
+    expect(srOnlySpan?.id).toBe(describedById);
+  });
+
   it('should render all non-writable repos (not empty state) when all repos lack push access', () => {
     // Arrange
     const allReadonly: AvailableRepository[] = [
