@@ -285,7 +285,7 @@ public sealed class EvaluateAndStoreAsync
     }
 
     [Fact]
-    public async Task WhenCredentialCoversRepo_AndProviderThrows_SetsEligibilityToUnreachable()
+    public async Task WhenGetBranchProtectionThrows_SetsEligibilityToUnreachable()
     {
         // Arrange
         MonitoredRepository repo = CreateRepo();
@@ -295,7 +295,7 @@ public sealed class EvaluateAndStoreAsync
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
-            providerFactory: new ThrowingProviderFactory());
+            providerFactory: new ThrowingBranchProtectionProviderFactory());
 
         // Act
         await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
@@ -426,10 +426,10 @@ public sealed class EvaluateAndStoreAsync
         }
     }
 
-    private sealed class ThrowingProviderFactory : IIssueProviderFactory
+    private sealed class ThrowingBranchProtectionProviderFactory : IIssueProviderFactory
     {
         public IIssueProvider CreateProvider(Credential credential, string token) =>
-            new ThrowingProvider();
+            new ThrowingBranchProtectionProvider();
     }
 
     private sealed class StubProvider(
@@ -510,7 +510,7 @@ public sealed class EvaluateAndStoreAsync
             => Task.FromResult(_canPushResult);
     }
 
-    private sealed class ThrowingProvider : IIssueProvider
+    private sealed class ThrowingBranchProtectionProvider : IIssueProvider
     {
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,

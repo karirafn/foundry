@@ -37,24 +37,13 @@ internal sealed class RepositoryEligibilityEvaluator(
         {
             Result<bool> canPushResult = await provider.CanPushAsync(repo.Slug, cancellationToken);
 
-            if (canPushResult is Result<bool>.Failure)
+            eligibility = canPushResult switch
             {
-                repo.SetEligibility(new RepositoryEligibility.Unreachable());
-                return;
-            }
-
-            if (canPushResult is Result<bool>.Success { Value: false })
-            {
-                repo.SetEligibility(new RepositoryEligibility.Ineligible(
-                    [EligibilityViolation.CannotPush(repo.Slug)]));
-                return;
-            }
-
-            Result<BranchProtection> result = await provider.GetBranchProtectionAsync(
-                repo.Slug,
-                cancellationToken);
-
-            eligibility = EvaluateEligibility(result);
+                Result<bool>.Failure => new RepositoryEligibility.Unreachable(),
+                Result<bool>.Success { Value: false } => new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.CannotPush(repo.Slug)]),
+                _ => EvaluateEligibility(await provider.GetBranchProtectionAsync(repo.Slug, cancellationToken)),
+            };
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — treat all as unreachable
         catch (Exception ex) when (ex is not OperationCanceledException)

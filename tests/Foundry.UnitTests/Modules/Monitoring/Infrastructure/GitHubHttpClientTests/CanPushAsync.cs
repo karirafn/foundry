@@ -86,6 +86,25 @@ public sealed class CanPushAsync
     }
 
     [Fact]
+    public async Task WhenGitHubReturns401_ReturnsFailure()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.Unauthorized, string.Empty);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.GetPushPermissionAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task WhenGitHubReturns403_ReturnsFailure()
     {
         // Arrange
