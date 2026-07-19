@@ -12,7 +12,6 @@ const PANEL_HEADING_ID = 'affected-repos-heading';
       [class.affected-repositories--warning]="_hasLostAccess()"
       role="region"
       [attr.aria-labelledby]="headingId"
-      aria-live="polite"
     >
       <div class="affected-repositories__header">
         <h3
@@ -20,7 +19,7 @@ const PANEL_HEADING_ID = 'affected-repos-heading';
           [id]="headingId"
         >
           @if (_hasLostAccess()) {
-            {{ repositories().length }} repositories will lose access with the new token
+            {{ _lostAccessCount() }} repositories may have lost or restricted access with the new token
           } @else {
             {{ repositories().length }} repositories changed eligibility
           }
@@ -63,6 +62,10 @@ export class AffectedRepositoriesComponent {
 
   protected readonly _hasLostAccess = computed(() =>
     this.repositories().some(r => r.newStatus === 'ineligible' || r.newStatus === 'unreachable')
+  );
+
+  protected readonly _lostAccessCount = computed(() =>
+    this.repositories().filter(r => r.newStatus === 'ineligible' || r.newStatus === 'unreachable').length
   );
 
   protected readonly _sortedRepositories = computed(() => {

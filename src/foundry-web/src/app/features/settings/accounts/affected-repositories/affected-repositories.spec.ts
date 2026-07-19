@@ -28,16 +28,24 @@ function setup(repositories: AffectedRepository[]) {
     imports: [AffectedRepositoriesComponent],
   });
   const fixture = TestBed.createComponent(AffectedRepositoriesComponent);
+
+  // Arrange
   fixture.componentRef.setInput('repositories', repositories);
+
+  // Act
   fixture.detectChanges();
+
   return { fixture, el: fixture.nativeElement as HTMLElement };
 }
 
 describe('AffectedRepositoriesComponent', () => {
   // Cycle 1: renders region with aria-labelledby
   it('should render a region element with aria-labelledby pointing to the heading', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE]);
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const region = el.querySelector('[role="region"]');
@@ -48,30 +56,39 @@ describe('AffectedRepositoriesComponent', () => {
     expect(heading).toBeTruthy();
   });
 
-  // Cycle 2: aria-live="polite"
-  it('should have aria-live="polite" on the region', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE]);
+  // Cycle 2: no aria-live on the component root (live region moved to container)
+  it('should not have aria-live on the panel region itself', () => {
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const region = el.querySelector('[role="region"]');
-    expect(region?.getAttribute('aria-live')).toBe('polite');
+    expect(region?.getAttribute('aria-live')).toBeNull();
   });
 
-  // Cycle 3: warning heading when any lost-access repo present
-  it('should show warning heading when repos lose access', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE]);
+  // Cycle 3: warning heading uses lost-access count only, not total
+  it('should show warning heading with lost-access count when repos lose access', () => {
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const heading = el.querySelector('.affected-repositories__heading');
-    expect(heading?.textContent).toContain('will lose access');
+    expect(heading?.textContent).toContain('may have lost or restricted access');
   });
 
   // Cycle 4: neutral heading when no lost-access repos
   it('should show neutral heading when no repos lose access', () => {
-    // Arrange / Act
-    const { el } = setup([INELIGIBLE_TO_ELIGIBLE]);
+    // Arrange
+    const repositories = [INELIGIBLE_TO_ELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const heading = el.querySelector('.affected-repositories__heading');
@@ -80,8 +97,11 @@ describe('AffectedRepositoriesComponent', () => {
 
   // Cycle 5: warning affordance class applied when lost-access
   it('should apply warning modifier class when repos lose access', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE]);
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const panel = el.querySelector('.affected-repositories');
@@ -90,8 +110,11 @@ describe('AffectedRepositoriesComponent', () => {
 
   // Cycle 6: no warning class when no lost-access repos
   it('should not apply warning modifier class when no repos lose access', () => {
-    // Arrange / Act
-    const { el } = setup([INELIGIBLE_TO_ELIGIBLE]);
+    // Arrange
+    const repositories = [INELIGIBLE_TO_ELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const panel = el.querySelector('.affected-repositories');
@@ -100,8 +123,11 @@ describe('AffectedRepositoriesComponent', () => {
 
   // Cycle 7: renders rows for each repository
   it('should render a row for each repository', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE, INELIGIBLE_TO_ELIGIBLE]);
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE, INELIGIBLE_TO_ELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const rows = el.querySelectorAll('.affected-repositories__row');
@@ -110,8 +136,11 @@ describe('AffectedRepositoriesComponent', () => {
 
   // Cycle 8: row contains slug
   it('should render the repository slug in each row', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE]);
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const row = el.querySelector('.affected-repositories__row');
@@ -120,8 +149,11 @@ describe('AffectedRepositoriesComponent', () => {
 
   // Cycle 9: row aria-label spells the transition
   it('should set aria-label on each row spelling the transition', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE]);
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const row = el.querySelector('.affected-repositories__row');
@@ -134,7 +166,10 @@ describe('AffectedRepositoriesComponent', () => {
   // Cycle 10: lost-access rows sorted first
   it('should sort lost-access rows before other changes', () => {
     // Arrange — regained first in input, lost-access second
-    const { el } = setup([INELIGIBLE_TO_ELIGIBLE, ELIGIBLE_TO_INELIGIBLE]);
+    const repositories = [INELIGIBLE_TO_ELIGIBLE, ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert — lost-access (org/api) should appear first in the DOM
     const rows = el.querySelectorAll('.affected-repositories__row');
@@ -142,14 +177,18 @@ describe('AffectedRepositoriesComponent', () => {
     expect(rows[1].textContent).toContain('org/regained');
   });
 
-  // Cycle 11: heading count reflects total repositories
-  it('should include the count in the warning heading', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE, ELIGIBLE_TO_UNREACHABLE]);
+  // Cycle 11: warning heading count reflects only lost-access repos, not total
+  it('should use the lost-access count (not total) in the warning heading for mixed changes', () => {
+    // Arrange — 2 lose access, 1 gains
+    const repositories = [ELIGIBLE_TO_INELIGIBLE, ELIGIBLE_TO_UNREACHABLE, INELIGIBLE_TO_ELIGIBLE];
 
-    // Assert
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert — heading should say "2", not "3"
     const heading = el.querySelector('.affected-repositories__heading');
-    expect(heading?.textContent).toContain('2');
+    expect(heading?.textContent?.trim()).toMatch(/^2\s/);
+    expect(heading?.textContent).not.toContain('3');
   });
 
   // Cycle 12: dismiss button present and emits dismiss event
@@ -170,8 +209,11 @@ describe('AffectedRepositoriesComponent', () => {
 
   // Cycle 13: dismiss button is a real <button> element
   it('should render dismiss as a real button element', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE]);
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const btn = el.querySelector('.affected-repositories__dismiss');
@@ -180,8 +222,11 @@ describe('AffectedRepositoriesComponent', () => {
 
   // Cycle 14: status dots are aria-hidden
   it('should mark status dots as aria-hidden', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_INELIGIBLE]);
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const dots = el.querySelectorAll('.affected-repositories__dot');
@@ -192,8 +237,11 @@ describe('AffectedRepositoriesComponent', () => {
 
   // Cycle 15: unreachable status — label displayed
   it('should display the unreachable label for unreachable newStatus', () => {
-    // Arrange / Act
-    const { el } = setup([ELIGIBLE_TO_UNREACHABLE]);
+    // Arrange
+    const repositories = [ELIGIBLE_TO_UNREACHABLE];
+
+    // Act
+    const { el } = setup(repositories);
 
     // Assert
     const row = el.querySelector('.affected-repositories__row');

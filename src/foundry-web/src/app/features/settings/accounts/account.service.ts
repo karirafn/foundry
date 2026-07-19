@@ -52,6 +52,9 @@ export class AccountService {
   private readonly _affectedRepositoriesSignal: WritableSignal<AffectedRepository[] | null> = signal(null);
   readonly affectedRepositories: Signal<AffectedRepository[] | null> = this._affectedRepositoriesSignal.asReadonly();
 
+  private readonly _srAnnouncementSignal: WritableSignal<string> = signal('');
+  readonly srAnnouncement: Signal<string> = this._srAnnouncementSignal.asReadonly();
+
   loadAccounts(): Promise<void> {
     this._loadErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
@@ -109,6 +112,10 @@ export class AccountService {
         this._affectedRepositoriesSignal.set(result.affectedRepositories);
         if (result.affectedRepositories.length === 0) {
           this._toastService.show(TOAST_ALL_RETAINED);
+        } else {
+          this._srAnnouncementSignal.set(
+            `Token updated. ${result.affectedRepositories.length} repositories affected — review below.`
+          );
         }
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(true);
@@ -124,6 +131,7 @@ export class AccountService {
 
   clearAffectedRepositories(): void {
     this._affectedRepositoriesSignal.set(null);
+    this._srAnnouncementSignal.set('');
   }
 
   deleteAccount(id: string): void {

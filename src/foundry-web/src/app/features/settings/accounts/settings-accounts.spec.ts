@@ -36,8 +36,10 @@ describe('SettingsAccountsComponent', () => {
   });
 
   it('should call loadAccounts on initialization', () => {
-    // Arrange / Act
+    // Arrange
     const { fixture, httpMock } = setup();
+
+    // Act
     fixture.detectChanges();
 
     // Assert
@@ -402,6 +404,43 @@ describe('SettingsAccountsComponent', () => {
     expect(panel).toBeFalsy();
   });
 
+  it('should move focus to section heading when the affected-repositories panel is dismissed', async () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setup();
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+    fixture.componentInstance.onEditAccount(account);
+    fixture.detectChanges();
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    httpMock.expectOne(`/api/accounts/${account.id}`).flush(makeUpdateResult(account, affected));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts').flush([account]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const sectionHeading = el.querySelector('.accounts-settings__section-title') as HTMLElement;
+
+    // Act
+    fixture.componentInstance.onDismissAffectedRepositories();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    expect(document.activeElement).toBe(sectionHeading);
+    document.body.removeChild(fixture.nativeElement);
+  });
+
   it('should call deleteAccount with confirmation when onDeleteAccount is invoked', () => {
     // Arrange
     const account: AccountSummary = {
@@ -424,6 +463,57 @@ describe('SettingsAccountsComponent', () => {
     const req = httpMock.expectOne(`/api/accounts/${account.id}`);
     expect(req.request.method).toBe('DELETE');
     req.flush(null);
+  });
+
+  it('should render a persistent sr-only aria-live announcer outside the @if panel', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — announcer must always be present, regardless of affected-repositories panel state
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.accounts-settings__sr-announcer');
+    expect(announcer).toBeTruthy();
+    expect(announcer?.getAttribute('aria-live')).toBe('polite');
+    expect(announcer?.getAttribute('aria-atomic')).toBe('true');
+    expect(announcer?.classList).toContain('sr-only');
+  });
+
+  it('should populate the sr-announcer when affected repositories appear', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+    fixture.componentInstance.onEditAccount(account);
+    fixture.detectChanges();
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${account.id}`).flush(makeUpdateResult(account, affected));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts').flush([account]);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.accounts-settings__sr-announcer');
+    expect(announcer?.textContent).toContain('1');
+    expect(announcer?.textContent).toContain('affected');
   });
 
   it('should not call deleteAccount when confirmation is declined', () => {
