@@ -9,7 +9,10 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Features;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
 using Foundry.WebApi.Persistence;
+
+using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -87,7 +90,10 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             return new FoundryDbContext(options);
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
-        services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
+        // Use the real DomainEventDispatcher so that the WorkerRunFailedBridgeHandler
+        // can route domain WorkerRunFailed events to the integration event dispatcher.
+        services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddScoped<IDomainEventHandler<DomainWorkerRunFailed>, WorkerRunFailedBridgeHandler>();
         services.AddScoped<IIntegrationEventDispatcher>(
             _ => integrationEventDispatcher ?? new NullIntegrationEventDispatcher());
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
@@ -173,12 +179,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
-    }
-
-    protected sealed class NullDomainEventDispatcher : IDomainEventDispatcher
-    {
-        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 
     protected sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher

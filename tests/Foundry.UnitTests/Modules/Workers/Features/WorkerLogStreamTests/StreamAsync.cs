@@ -113,7 +113,7 @@ public sealed class StreamAsync : IAsyncDisposable
             BranchName.From("feat/2-failed-stream"),
             MonitoredRepositoryId.New());
 
-        FailedRun failed = active.Fail(new FailureReason.TimedOut());
+        FailedRun failed = active.Fail(new FailureReason.TimedOut(), branchNameOrNull: null);
 
         _dbContext.Set<WorkerRun>().Add(failed);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

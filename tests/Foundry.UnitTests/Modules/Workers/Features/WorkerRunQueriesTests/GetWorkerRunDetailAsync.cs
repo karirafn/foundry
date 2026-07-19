@@ -71,6 +71,7 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
 
         FailedRun failed = active.Fail(
             new FailureReason.NonZeroExit(1),
+            branchNameOrNull: null,
             containerOutput: containerOutput,
             resultSummary: resultSummary);
 

@@ -26,7 +26,7 @@ public sealed class FromActive
         string containerOutput = "Error: something went wrong\nStack trace...";
 
         // Act
-        FailedRun failed = active.Fail(reason, containerOutput);
+        FailedRun failed = active.Fail(reason, branchNameOrNull: null, containerOutput);
 
         // Assert
         failed.ContainerOutput.ShouldBe(containerOutput);
@@ -40,7 +40,7 @@ public sealed class FromActive
         FailureReason reason = new FailureReason.NonZeroExit(1);
 
         // Act
-        FailedRun failed = active.Fail(reason);
+        FailedRun failed = active.Fail(reason, branchNameOrNull: null);
 
         // Assert
         failed.ContainerOutput.ShouldBeNull();

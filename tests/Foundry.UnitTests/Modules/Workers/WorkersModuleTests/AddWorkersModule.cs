@@ -11,6 +11,8 @@ using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.UnitTests.Fakes.Workers;
 
+using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -363,5 +365,29 @@ public sealed class AddWorkersModule
         // Assert
         IOptions<HealthCheckPublisherOptions> options = provider.GetRequiredService<IOptions<HealthCheckPublisherOptions>>();
         options.Value.Period.ShouldBe(TimeSpan.FromSeconds(15));
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersExactlyOneWorkerRunFailedBridgeHandler()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IDomainEventHandler<DomainWorkerRunFailed>> handlers =
+            provider.GetServices<IDomainEventHandler<DomainWorkerRunFailed>>();
+        handlers.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunFailedBridgeHandler>();
+    }
+
+    private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }
