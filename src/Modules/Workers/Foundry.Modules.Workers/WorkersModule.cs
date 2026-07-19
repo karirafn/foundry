@@ -4,6 +4,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.Health;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
@@ -34,6 +35,7 @@ public static class WorkersModule
 
         services.AddHealthChecks()
             .AddCheck<DockerDaemonHealthCheck>("docker-daemon", tags: ["ready"]);
+        services.AddSingleton<IHealthCheckPublisher, DockerAvailabilityHealthCheckPublisher>();
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
