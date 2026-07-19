@@ -35,6 +35,8 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private ServiceProvider? _serviceProvider;
+    private IServiceScope? _serviceScope;
 
     public PreContainerFailureBridging()
     {
@@ -51,6 +53,16 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
+        if (_serviceScope is IDisposable scopeDisposable)
+        {
+            scopeDisposable.Dispose();
+        }
+
+        if (_serviceProvider is not null)
+        {
+            await _serviceProvider.DisposeAsync();
+        }
+
         await _dbContext.DisposeAsync();
         await _connection.DisposeAsync();
     }
@@ -77,10 +89,11 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<IDomainEventHandler<DomainWorkerRunFailed>, WorkerRunFailedBridgeHandler>();
         services.AddScoped<IIntegrationEventDispatcher>(_ => integrationEventDispatcher);
-        ServiceProvider sp = services.BuildServiceProvider();
+        _serviceProvider = services.BuildServiceProvider();
+        _serviceScope = _serviceProvider.CreateScope();
 
         IDomainEventDispatcher domainDispatcher =
-            sp.CreateScope().ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
+            _serviceScope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
 
         return new IssueClaimedHandler(
             _dbContext,
@@ -111,28 +124,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBranchPreCreationFails_PublishesWorkerRunFailedIntegrationEventExactlyOnce()
-    {
-        // Arrange
-        CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
-        IssueClaimedHandler sut = BuildHandler(
-            integrationEventDispatcher,
-            postExitProviderQueries: new BranchCreationFailsQueries());
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        Foundry.Modules.Workers.Contracts.WorkerRunFailed failedEvent =
-            integrationEventDispatcher.Captured
-                .OfType<Foundry.Modules.Workers.Contracts.WorkerRunFailed>()
-                .ShouldHaveSingleItem();
-        failedEvent.BranchName.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task WhenBranchPreCreationFails_PublishedEventHasNullBranchName()
+    public async Task WhenBranchPreCreationFails_PublishesWorkerRunFailedIntegrationEventExactlyOnceWithNullBranch()
     {
         // Arrange — branch pre-creation failure is always terminal (null branch)
         CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
@@ -149,31 +141,12 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             integrationEventDispatcher.Captured
                 .OfType<Foundry.Modules.Workers.Contracts.WorkerRunFailed>()
                 .ShouldHaveSingleItem();
-        failedEvent.BranchName.ShouldBeNull();
+        failedEvent.ShouldSatisfyAllConditions(
+            () => failedEvent.BranchName.ShouldBeNull());
     }
 
     [Fact]
-    public async Task WhenContainerStartFails_PublishesWorkerRunFailedIntegrationEventExactlyOnce()
-    {
-        // Arrange — spec builds OK, but container fails to start
-        CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
-        IssueClaimedHandler sut = BuildHandler(
-            integrationEventDispatcher,
-            orchestrator: new AlwaysFailingOrchestrator(),
-            postExitProviderQueries: new BranchCreationSucceedsQueries());
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        integrationEventDispatcher.Captured
-            .OfType<Foundry.Modules.Workers.Contracts.WorkerRunFailed>()
-            .ShouldHaveSingleItem();
-    }
-
-    [Fact]
-    public async Task WhenContainerStartFails_PublishedEventHasNullBranchName()
+    public async Task WhenContainerStartFails_PublishesWorkerRunFailedIntegrationEventExactlyOnceWithNullBranch()
     {
         // Arrange — container-start failure is pre-container (always terminal, null branch)
         CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
@@ -191,7 +164,8 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             integrationEventDispatcher.Captured
                 .OfType<Foundry.Modules.Workers.Contracts.WorkerRunFailed>()
                 .ShouldHaveSingleItem();
-        failedEvent.BranchName.ShouldBeNull();
+        failedEvent.ShouldSatisfyAllConditions(
+            () => failedEvent.BranchName.ShouldBeNull());
     }
 
     private sealed class AlwaysFailingOrchestrator : IWorkerOrchestrator

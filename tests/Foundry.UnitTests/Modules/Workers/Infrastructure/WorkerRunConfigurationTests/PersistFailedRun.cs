@@ -142,7 +142,7 @@ public sealed class PersistFailedRun : IAsyncDisposable
             ContainerId.From("container-with-branch"),
             BranchName.From("feat/reported-branch"),
             MonitoredRepositoryId.New());
-        FailedRun run = active.Fail(new FailureReason.NonZeroExit(1), branchNameOrNull: null);
+        FailedRun run = active.Fail(new FailureReason.NonZeroExit(1), branchNameOrNull: BranchName.From("feat/reported-branch"));
 
         _dbContext.Set<WorkerRun>().Add(run);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

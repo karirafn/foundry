@@ -50,6 +50,12 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
+        // FaultTolerantDomainEventDispatcher is used here (rather than the raw IDomainEventDispatcher)
+        // because the tick commits state via TransitionAsync before dispatching domain events.
+        // A bridge-handler throw must not crash the BackgroundService tick — the transition is already
+        // durable so losing the notification is preferable to an indeterminate tick failure.
+        // IssueClaimedHandler deliberately uses the raw dispatcher so the integration-event bus
+        // governs its own error handling; that asymmetry is intentional.
         IDomainEventDispatcher domainEventDispatcher = new FaultTolerantDomainEventDispatcher(
             scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>(),
             logger);
@@ -610,7 +616,7 @@ internal sealed class WorkerDispatchService(
             {
                 FailedRun continuableFailed = activeRun.Fail(
                     continuable.FailureReason,
-                    continuable.BranchName.Value,
+                    continuable.BranchName,
                     continuable.ContainerOutput,
                     continuable.Summary);
                 await dbContext.TransitionAsync(
@@ -1040,32 +1046,6 @@ internal sealed class WorkerDispatchService(
             + "deferring until next tick.",
             runId,
             containerId);
-    }
-
-    /// <summary>
-    /// Wraps <see cref="IDomainEventDispatcher"/> and swallows handler exceptions so that a
-    /// failure in a domain-event handler (e.g. the bridge that publishes the integration event)
-    /// does not crash the BackgroundService tick. The transition has already committed to the
-    /// database by the time domain events are dispatched, so losing the notification is
-    /// preferable to leaving the tick in an indeterminate state.
-    /// </summary>
-    private sealed class FaultTolerantDomainEventDispatcher(
-        IDomainEventDispatcher inner,
-        ILogger logger) : IDomainEventDispatcher
-    {
-        public async Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
-        {
-            try
-            {
-                await inner.DispatchAsync(events, cancellationToken);
-            }
-#pragma warning disable CA1031 // Domain-event handler failures (e.g. bridge that publishes integration event) must not crash the BackgroundService tick; the transition has already committed and the warning log surfaces the failure.
-            catch (Exception ex) when (ex is not OperationCanceledException)
-#pragma warning restore CA1031
-            {
-                logger.LogWarning(ex, "Failed to dispatch domain events after state transition.");
-            }
-        }
     }
 
     private const int LogTailLines = 500;

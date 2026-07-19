@@ -89,7 +89,7 @@ public sealed class Fail
         FailureReason reason = new FailureReason.TimedOut();
 
         // Act
-        active.Fail(reason, branchNameOrNull: "feat/102-some-work");
+        active.Fail(reason, branchNameOrNull: BranchName.From("feat/102-some-work"));
 
         // Assert
         WorkerRunFailed domainEvent = active.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunFailed>();

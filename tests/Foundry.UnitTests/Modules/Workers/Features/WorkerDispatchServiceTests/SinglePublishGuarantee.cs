@@ -31,8 +31,7 @@ public sealed class SinglePublishGuarantee : WorkerDispatchServiceTestBase
         // Assert — exactly one WorkerRunFailed integration event, not two
         capturingDispatcher.Captured
             .OfType<WorkerRunFailed>()
-            .Count()
-            .ShouldBe(1);
+            .ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -73,8 +72,7 @@ public sealed class SinglePublishGuarantee : WorkerDispatchServiceTestBase
         // Assert — exactly one WorkerRunFailed integration event
         capturingDispatcher.Captured
             .OfType<WorkerRunFailed>()
-            .Count()
-            .ShouldBe(1);
+            .ShouldHaveSingleItem();
     }
 
     // ─── Stubs ───────────────────────────────────────────────────────────────────

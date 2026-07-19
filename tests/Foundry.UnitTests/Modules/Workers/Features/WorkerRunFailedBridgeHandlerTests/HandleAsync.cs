@@ -29,7 +29,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenHandled_DispatchesIntegrationEventExactlyOnce()
+    public async Task WhenDomainEventIsHandled_DispatchesIntegrationEventExactlyOnce()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -49,7 +49,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenHandled_DispatchedEventHasCorrectWorkerRunId()
+    public async Task WhenDomainEventIsHandled_DispatchedIntegrationEventHasMatchingWorkerRunId()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -73,7 +73,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenHandled_DispatchedEventHasCorrectIssueId()
+    public async Task WhenDomainEventIsHandled_DispatchedIntegrationEventHasMatchingIssueId()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -143,7 +143,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenHandled_DispatchedEventHasCorrectReasonDescription()
+    public async Task WhenDomainEventIsHandled_DispatchedIntegrationEventHasMatchingReasonDescription()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -166,7 +166,7 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenHandled_DispatchedEventHasCorrectCategory()
+    public async Task WhenDomainEventIsHandled_DispatchedIntegrationEventHasMatchingCategory()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
