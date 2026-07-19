@@ -33,9 +33,13 @@ public static class WorkersModule
 
         services.AddSharedDockerInfrastructure();
 
+        services.AddSingleton<DockerAvailabilityState>();
+        services.AddSingleton<IDockerAvailabilityState>(sp => sp.GetRequiredService<DockerAvailabilityState>());
+
         services.AddHealthChecks()
             .AddCheck<DockerDaemonHealthCheck>("docker-daemon", tags: ["ready"]);
         services.AddSingleton<IHealthCheckPublisher, DockerAvailabilityHealthCheckPublisher>();
+        services.AddIntegrationEventHandler<DockerAvailabilityChanged, DockerAvailabilityChangedBroadcastHandler>();
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
@@ -56,6 +60,7 @@ public static class WorkersModule
     public static IEndpointRouteBuilder MapWorkersEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapWorkerEndpoints();
+        app.MapSystemEndpoints();
         return app;
     }
 }
