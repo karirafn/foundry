@@ -216,5 +216,10 @@ public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
                 getLatestBranchCommitResult
                 ?? Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
         }
+
+        public Task<Result<bool>> CanPushAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
     }
 }

@@ -54,4 +54,8 @@ public interface IIssueProvider
         RepositorySlug slug,
         string branchName,
         CancellationToken cancellationToken);
+
+    Task<Result<bool>> CanPushAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken);
 }

@@ -142,6 +142,14 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         return httpClient.GetLatestBranchCommitAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
     }
 
+    public Task<Result<bool>> CanPushAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        // Implemented in step 2 of the write-access probe feature.
+        throw new NotImplementedException();
+    }
+
     private Task<Result<string>> GetDefaultBranchAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)

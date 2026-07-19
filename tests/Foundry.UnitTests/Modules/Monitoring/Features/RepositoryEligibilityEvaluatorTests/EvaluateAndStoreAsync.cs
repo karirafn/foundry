@@ -305,6 +305,11 @@ public sealed class EvaluateAndStoreAsync
                 CancellationToken cancellationToken)
                 => Task.FromResult(
                     Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+
+            public Task<Result<bool>> CanPushAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<bool>.Ok(true));
         }
     }
 
@@ -382,6 +387,11 @@ public sealed class EvaluateAndStoreAsync
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+
+        public Task<Result<bool>> CanPushAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
     }
 
     private sealed class ThrowingProvider : IIssueProvider
@@ -446,5 +456,10 @@ public sealed class EvaluateAndStoreAsync
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+
+        public Task<Result<bool>> CanPushAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
     }
 }
