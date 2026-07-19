@@ -52,6 +52,23 @@ public sealed class Validate
     }
 
     [Fact]
+    public void WhenTokenExceedsMaxLength_ReturnsTokenTooLongError()
+    {
+        // Arrange
+        UpdateAccount.Validator sut = new();
+        string oversizedToken = new('a', AccountsDatabaseHelpers.TokenMaxLength + 1);
+        UpdateAccount.Command command = ValidCommandWithToken with { Token = oversizedToken };
+
+        // Act
+        Result result = sut.Validate(command);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Error error = ((Result.Failure)result).Error;
+        error.Code.ShouldBe(UpdateAccount.Validator.TokenTooLongCode);
+    }
+
+    [Fact]
     public void WhenTokenContainsInvalidCharacters_ReturnsTokenInvalidCharsError()
     {
         // Arrange

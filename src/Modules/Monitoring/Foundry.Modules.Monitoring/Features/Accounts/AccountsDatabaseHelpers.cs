@@ -6,6 +6,10 @@ internal static class AccountsDatabaseHelpers
 {
     internal const int AccountNameMaxLength = 200;
 
+    // Real GitHub/GitLab tokens are under 200 characters; 500 gives ample headroom
+    // while preventing oversized values from bloating the encrypted column (max 2000 chars ciphertext).
+    internal const int TokenMaxLength = 500;
+
     // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
     // The monitoring module does not reference the SQLite provider directly,
     // so we detect the violation via the exception message instead of SqliteException.SqliteErrorCode.

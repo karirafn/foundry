@@ -1,0 +1,98 @@
+using System.Diagnostics;
+
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace Foundry.Modules.Monitoring.Features.Accounts;
+
+internal sealed class CredentialRotationService(
+    DbContext dbContext,
+    INamespaceDeriver namespaceDeriver,
+    IRepositoryEligibilityEvaluator eligibilityEvaluator,
+    ILogger<CredentialRotationService> logger)
+{
+    public async Task<IReadOnlyList<AffectedRepository>> RotateAsync(
+        Credential credential,
+        CancellationToken cancellationToken)
+    {
+        // Snapshot repos covered by the credential before namespace change
+        List<MonitoredRepository> beforeRepos = await FindResolvingReposAsync(credential, cancellationToken);
+
+        // Snapshot their eligibility before re-evaluation
+        Dictionary<Guid, string> priorStatus = beforeRepos.ToDictionary(
+            r => r.Id.Value,
+            r => r.EligibilityStatus ?? "unreachable");
+
+        NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
+
+        switch (outcome)
+        {
+            case NamespaceDerivationOutcome.Derived derived:
+                credential.SetNamespaces(derived.Namespaces);
+                break;
+            case NamespaceDerivationOutcome.Unavailable:
+                // Keep prior namespaces — do not drop coverage on transient failure.
+                // Log so operators know the derivation was skipped.
+                logger.LogWarning(
+                    "Namespace derivation unavailable for credential {CredentialId}; retaining prior namespaces.",
+                    credential.Id.Value);
+                break;
+            default:
+                throw new UnreachableException(
+                    $"Unhandled NamespaceDerivationOutcome variant: {outcome.GetType().Name}");
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        // Union of repos before and after the namespace change
+        List<MonitoredRepository> afterRepos = await FindResolvingReposAsync(credential, cancellationToken);
+
+        Dictionary<Guid, MonitoredRepository> allReposById = beforeRepos
+            .Concat(afterRepos)
+            .DistinctBy(r => r.Id.Value)
+            .ToDictionary(r => r.Id.Value);
+
+        // Evaluate sequentially — DbContext is not thread-safe; concurrent calls to
+        // EvaluateAndStoreAsync would access the same DbContext instance from multiple threads.
+        foreach (MonitoredRepository repo in allReposById.Values)
+        {
+            await eligibilityEvaluator.EvaluateAndStoreAsync(repo, cancellationToken);
+        }
+
+        // Persist eligibility changes set by EvaluateAndStoreAsync on the tracked entities.
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        List<AffectedRepository> affected = [];
+        foreach (MonitoredRepository repo in allReposById.Values)
+        {
+            string previous = priorStatus.TryGetValue(repo.Id.Value, out string? prior) ? prior : "unreachable";
+            string current = repo.EligibilityStatus ?? "unreachable";
+
+            if (previous != current)
+            {
+                affected.Add(new AffectedRepository(repo.Id.Value, repo.Slug.FullPath, previous, current));
+            }
+        }
+
+        return affected;
+    }
+
+    private async Task<List<MonitoredRepository>> FindResolvingReposAsync(
+        Credential credential,
+        CancellationToken cancellationToken)
+    {
+        // Entities are tracked on purpose — EvaluateAndStoreAsync calls SetEligibility on them,
+        // and the outer SaveChangesAsync persists those mutations. Do not add AsNoTracking() here.
+        List<MonitoredRepository> allRepos = await dbContext.Set<MonitoredRepository>()
+            .Where(r => r.Host == credential.Host)
+            .ToListAsync(cancellationToken);
+
+        return allRepos
+            .Where(r => credential.ResolveCoveringNamespace(r.Slug) is not null)
+            .ToList();
+    }
+}

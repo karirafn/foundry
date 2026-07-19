@@ -4,7 +4,6 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
@@ -29,6 +28,7 @@ internal static partial class CreateAccount
         internal const string InvalidProviderTypeCode = "CreateAccount.InvalidProviderType";
         internal const string TokenEmptyCode = "CreateAccount.TokenEmpty";
         internal const string TokenInvalidCharsCode = "CreateAccount.TokenInvalidChars";
+        internal const string TokenTooLongCode = "CreateAccount.TokenTooLong";
 
         [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
         private static partial Regex ValidTokenCharactersRegex();
@@ -44,6 +44,13 @@ internal static partial class CreateAccount
             if (string.IsNullOrWhiteSpace(command.Token))
             {
                 return new Error(TokenEmptyCode, "Token must not be empty.");
+            }
+
+            if (command.Token.Length > AccountsDatabaseHelpers.TokenMaxLength)
+            {
+                return new Error(
+                    TokenTooLongCode,
+                    $"Token must not exceed {AccountsDatabaseHelpers.TokenMaxLength} characters.");
             }
 
             if (!ValidTokenCharactersRegex().IsMatch(command.Token))
@@ -69,8 +76,7 @@ internal static partial class CreateAccount
     internal sealed class Handler(
         DbContext dbContext,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
-        GitHubHttpClient gitHubHttpClient,
-        GitLabHttpClient gitLabHttpClient)
+        INamespaceDeriver namespaceDeriver)
         : ICommandHandler<Command, CredentialSummary>
     {
         public async Task<Result<CredentialSummary>> HandleAsync(
@@ -121,8 +127,10 @@ internal static partial class CreateAccount
                 ? GitLabCredential.Create(accountName, command.Token, baseUrl)
                 : GitHubCredential.Create(accountName, command.Token, baseUrl);
 
-            IReadOnlyCollection<Namespace> namespaces = await DeriveNamespacesAsync(
-                isGitLab, apiBaseUrl, command.Token, cancellationToken);
+            NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
+            IReadOnlyCollection<Namespace> namespaces = outcome is NamespaceDerivationOutcome.Derived derived
+                ? derived.Namespaces
+                : [];
 
             credential.SetNamespaces(namespaces);
             dbContext.Set<Credential>().Add(credential);
@@ -145,33 +153,6 @@ internal static partial class CreateAccount
                 credential.Token is not null);
 
             return Result<CredentialSummary>.Ok(summary);
-        }
-
-        private async Task<IReadOnlyCollection<Namespace>> DeriveNamespacesAsync(
-            bool isGitLab,
-            Uri apiBaseUrl,
-            string token,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                Result<IReadOnlyList<AvailableRepository>> listResult = isGitLab
-                    ? await gitLabHttpClient.ListRepositoriesAsync(apiBaseUrl, token, cancellationToken)
-                    : await gitHubHttpClient.ListRepositoriesAsync(apiBaseUrl, token, cancellationToken);
-
-                if (listResult is not Result<IReadOnlyList<AvailableRepository>>.Success listSuccess)
-                {
-                    return [];
-                }
-
-                return NamespaceDerivation.FromWritableRepositories(listSuccess.Value);
-            }
-#pragma warning disable CA1031 // Provider listing may fail with any exception — treat all as empty; namespaces are best-effort at add time
-            catch (Exception ex) when (ex is not OperationCanceledException)
-#pragma warning restore CA1031
-            {
-                return [];
-            }
         }
     }
 
