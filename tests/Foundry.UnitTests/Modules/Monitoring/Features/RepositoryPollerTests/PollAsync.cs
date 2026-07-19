@@ -60,11 +60,7 @@ public sealed class PollAsync : IAsyncDisposable
 
     private MonitoredRepository SeedRepository()
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
-        _dbContext.SaveChanges();
-
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, account.Id, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repository);
         _dbContext.SaveChanges();
         return repository;
@@ -1428,7 +1424,6 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task EvaluateAndStoreAsync(
             MonitoredRepository repo,
-            IIssueProvider provider,
             CancellationToken cancellationToken)
         {
             EvaluateCallCount++;

@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
@@ -18,9 +20,9 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 internal static partial class UpdateAccount
 {
     internal sealed record Command(
-        AccountId Id,
+        CredentialId Id,
         string BaseUrl,
-        string? Token) : ICommand<AccountSummary>;
+        string? Token) : ICommand<CredentialSummary>;
 
     internal sealed partial class Validator : ICommandValidator<Command>
     {
@@ -50,18 +52,21 @@ internal static partial class UpdateAccount
 
     internal sealed class Handler(
         DbContext dbContext,
-        IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken)
-        : ICommandHandler<Command, AccountSummary>
+        IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
+        GitHubHttpClient gitHubHttpClient,
+        GitLabHttpClient gitLabHttpClient)
+        : ICommandHandler<Command, CredentialSummary>
     {
-        public async Task<Result<AccountSummary>> HandleAsync(
+        public async Task<Result<CredentialSummary>> HandleAsync(
             Command command,
             CancellationToken cancellationToken)
         {
-            if (await dbContext.Set<Account>()
+            if (await dbContext.Set<Credential>()
+                    .Include(c => c.Namespaces)
                     .FirstOrDefaultAsync(a => a.Id == command.Id, cancellationToken)
-                is not Account account)
+                is not Credential credential)
             {
-                return Result<AccountSummary>.Fail(AccountErrors.NotFound(command.Id));
+                return Result<CredentialSummary>.Fail(CredentialErrors.NotFound(command.Id));
             }
 
             if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
@@ -69,17 +74,15 @@ internal static partial class UpdateAccount
                 throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
             }
 
-            string accountName = account.Name;
+            bool isGitLab = credential is GitLabCredential;
+            string accountName = credential.Name;
+            Uri apiBaseUrl = isGitLab
+                ? GitLabCredential.DeriveApiBaseUrl(baseUrl)
+                : GitHubCredential.DeriveApiBaseUrl(baseUrl);
 
             if (command.Token is not null)
             {
-                string providerTypeForValidation = account is GitLabAccount
-                    ? ProviderTypes.GitLab
-                    : ProviderTypes.GitHub;
-
-                Uri apiBaseUrl = account is GitLabAccount
-                    ? GitLabAccount.DeriveApiBaseUrl(baseUrl)
-                    : GitHubAccount.DeriveApiBaseUrl(baseUrl);
+                string providerTypeForValidation = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
 
                 ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl, providerTypeForValidation);
                 Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
@@ -88,7 +91,7 @@ internal static partial class UpdateAccount
 
                 if (tokenResult is Result<ValidateToken.Response>.Failure tokenFailure)
                 {
-                    return Result<AccountSummary>.Fail(tokenFailure.Error);
+                    return Result<CredentialSummary>.Fail(tokenFailure.Error);
                 }
 
                 // tokenResult is guaranteed Success here — Failure was handled above.
@@ -96,55 +99,89 @@ internal static partial class UpdateAccount
 
                 if (!tokenResponse.IsValid)
                 {
-                    return Result<AccountSummary>.Fail(AccountErrors.InvalidToken);
+                    return Result<CredentialSummary>.Fail(CredentialErrors.InvalidToken);
                 }
 
                 if (string.IsNullOrWhiteSpace(tokenResponse.AccountName))
                 {
-                    return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+                    return Result<CredentialSummary>.Fail(CredentialErrors.UnresolvedIdentity);
                 }
 
                 string resolvedName = tokenResponse.AccountName;
 
                 if (resolvedName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || resolvedName.Any(char.IsControl))
                 {
-                    return Result<AccountSummary>.Fail(AccountErrors.UnresolvedIdentity);
+                    return Result<CredentialSummary>.Fail(CredentialErrors.UnresolvedIdentity);
                 }
 
                 accountName = resolvedName;
+
+                // Re-derive namespace set from the new token's writable-repo listing.
+                // The set may shrink if the new token has narrower scope.
+                string tokenForListing = command.Token;
+                IReadOnlyCollection<Namespace> namespaces = await DeriveNamespacesAsync(
+                    isGitLab, apiBaseUrl, tokenForListing, cancellationToken);
+                credential.SetNamespaces(namespaces);
             }
 
-            switch (account)
+            switch (credential)
             {
-                case GitHubAccount gitHubAccount:
-                    gitHubAccount.Update(accountName, command.Token, baseUrl);
+                case GitHubCredential gitHubCredential:
+                    gitHubCredential.Update(accountName, command.Token, baseUrl);
                     break;
-                case GitLabAccount gitLabAccount:
-                    gitLabAccount.Update(accountName, command.Token, baseUrl);
+                case GitLabCredential gitLabCredential:
+                    gitLabCredential.Update(accountName, command.Token, baseUrl);
                     break;
                 default:
                     throw new UnreachableException(
-                        $"No Update handler for account type '{account.GetType().Name}'.");
+                        $"No Update handler for credential type '{credential.GetType().Name}'.");
             }
 
             try
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsAccountNameDuplicateViolation(ex))
+            catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsNamespaceDuplicateViolation(ex))
             {
-                return Result<AccountSummary>.Fail(AccountErrors.DuplicateName(accountName));
+                return Result<CredentialSummary>.Fail(CredentialErrors.DuplicateNamespace(credential.Host));
             }
 
-            string providerType = account is GitLabAccount ? ProviderTypes.GitLab : ProviderTypes.GitHub;
-            AccountSummary summary = new(
-                account.Id.Value,
-                account.Name,
+            string providerType = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
+            CredentialSummary summary = new(
+                credential.Id.Value,
+                credential.Name,
                 providerType,
-                account.BaseUrl.Value.ToString(),
-                account.Token is not null);
+                credential.BaseUrl.Value.ToString(),
+                credential.Token is not null);
 
-            return Result<AccountSummary>.Ok(summary);
+            return Result<CredentialSummary>.Ok(summary);
+        }
+
+        private async Task<IReadOnlyCollection<Namespace>> DeriveNamespacesAsync(
+            bool isGitLab,
+            Uri apiBaseUrl,
+            string token,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                Result<IReadOnlyList<AvailableRepository>> listResult = isGitLab
+                    ? await gitLabHttpClient.ListRepositoriesAsync(apiBaseUrl, token, cancellationToken)
+                    : await gitHubHttpClient.ListRepositoriesAsync(apiBaseUrl, token, cancellationToken);
+
+                if (listResult is not Result<IReadOnlyList<AvailableRepository>>.Success listSuccess)
+                {
+                    return [];
+                }
+
+                return NamespaceDerivation.FromWritableRepositories(listSuccess.Value);
+            }
+#pragma warning disable CA1031 // Provider listing may fail with any exception — treat all as empty; namespaces are best-effort at rotate time
+            catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+            {
+                return [];
+            }
         }
     }
 
@@ -157,25 +194,25 @@ internal static partial class UpdateAccount
             group.MapPut("{id:guid}", static async (
                     Guid id,
                     RequestBody body,
-                    ICommandHandler<Command, AccountSummary> handler,
+                    ICommandHandler<Command, CredentialSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    AccountId accountId = AccountId.From(id);
-                    Command command = new(accountId, body.BaseUrl, body.Token);
-                    Result<AccountSummary> result = await handler.HandleAsync(command, cancellationToken);
+                    CredentialId credentialId = CredentialId.From(id);
+                    Command command = new(credentialId, body.BaseUrl, body.Token);
+                    Result<CredentialSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<AccountSummary>, NotFound, Conflict<string>, BadRequest<string>>>(
-                        account => TypedResults.Ok(account),
+                    return result.Match<Results<Ok<CredentialSummary>, NotFound, Conflict<string>, BadRequest<string>>>(
+                        credential => TypedResults.Ok(credential),
                         error => error.Code switch
                         {
-                            AccountErrors.NotFoundCode => TypedResults.NotFound(),
-                            AccountErrors.DuplicateNameCode => TypedResults.Conflict(error.Message),
+                            CredentialErrors.NotFoundCode => TypedResults.NotFound(),
+                            CredentialErrors.DuplicateNamespaceCode => TypedResults.Conflict(error.Message),
                             _ => TypedResults.BadRequest(error.Message),
                         });
                 })
                 .WithName("UpdateAccount")
                 .WithSummary("Updates an existing account")
-                .Produces<AccountSummary>()
+                .Produces<CredentialSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

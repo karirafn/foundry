@@ -12,7 +12,7 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static class DeleteAccount
 {
-    internal sealed record Command(AccountId Id) : ICommand<bool>;
+    internal sealed record Command(CredentialId Id) : ICommand<bool>;
 
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, bool>
     {
@@ -20,14 +20,14 @@ internal static class DeleteAccount
             Command command,
             CancellationToken cancellationToken)
         {
-            if (await dbContext.Set<Account>()
+            if (await dbContext.Set<Credential>()
                     .FirstOrDefaultAsync(a => a.Id == command.Id, cancellationToken)
-                is not Account account)
+                is not Credential credential)
             {
-                return Result<bool>.Fail(AccountErrors.NotFound(command.Id));
+                return Result<bool>.Fail(CredentialErrors.NotFound(command.Id));
             }
 
-            dbContext.Set<Account>().Remove(account);
+            dbContext.Set<Credential>().Remove(credential);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             return Result<bool>.Ok(true);
@@ -43,8 +43,8 @@ internal static class DeleteAccount
                     ICommandHandler<Command, bool> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    AccountId accountId = AccountId.From(id);
-                    Command command = new(accountId);
+                    CredentialId credentialId = CredentialId.From(id);
+                    Command command = new(credentialId);
                     Result<bool> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<NoContent, NotFound>>(

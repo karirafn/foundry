@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -15,7 +14,7 @@ public sealed class Update
         RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
     private static MonitoredRepository CreateRepository(TimeSpan? pollInterval = null) =>
-        MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", pollInterval);
+        MonitoredRepository.Create(ValidSlug, "github.com", pollInterval);
 
     [Fact]
     public void WhenPollIntervalAndActiveStatusProvided_UpdatesBothProperties()
@@ -34,20 +33,17 @@ public sealed class Update
     }
 
     [Fact]
-    public void WhenUpdated_PreservesSlugAndAccountId()
+    public void WhenUpdated_PreservesSlug()
     {
         // Arrange
         RepositorySlug slug = ValidSlug;
-        AccountId accountId = AccountId.New();
-        MonitoredRepository repository = MonitoredRepository.Create(slug, accountId, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", null);
 
         // Act
         repository.Update(TimeSpan.FromMinutes(15), isActive: true);
 
         // Assert
-        repository.ShouldSatisfyAllConditions(
-            () => repository.Slug.ShouldBe(slug),
-            () => repository.AccountId.ShouldBe(accountId));
+        repository.Slug.ShouldBe(slug);
     }
 
     [Fact]

@@ -33,9 +33,9 @@ const MOCK_REPOSITORY: RepositorySummary = {
 };
 
 const MOCK_AVAILABLE: AvailableRepository[] = [
-  { slug: 'my-org/my-repo', isPrivate: false },
-  { slug: 'my-org/other-repo', isPrivate: true },
-  { slug: 'my-org/third-repo', isPrivate: false },
+  { slug: 'my-org/my-repo', isPrivate: false, canPush: true },
+  { slug: 'my-org/other-repo', isPrivate: true, canPush: true },
+  { slug: 'my-org/third-repo', isPrivate: false, canPush: false },
 ];
 
 function setup(overrides: {

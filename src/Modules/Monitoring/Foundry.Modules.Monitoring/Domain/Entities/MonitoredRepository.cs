@@ -25,8 +25,6 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public string Host { get; private set; } = string.Empty;
 
-    public AccountId AccountId { get; private set; }
-
     public TimeSpan? PollInterval { get; private set; }
 
     public bool IsActive { get; private set; }
@@ -41,7 +39,6 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public static MonitoredRepository Create(
         RepositorySlug slug,
-        AccountId accountId,
         string host,
         TimeSpan? pollInterval,
         int position = 0)
@@ -49,7 +46,6 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         return new MonitoredRepository(MonitoredRepositoryId.New())
         {
             Slug = slug,
-            AccountId = accountId,
             Host = host,
             PollInterval = pollInterval,
             IsActive = true,

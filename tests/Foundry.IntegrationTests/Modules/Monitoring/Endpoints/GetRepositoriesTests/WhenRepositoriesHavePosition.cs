@@ -38,6 +38,9 @@ public sealed class WhenRepositoriesHavePosition : IAsyncDisposable
         Guid repoBId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/repo-b");
         Guid repoCId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/repo-c");
 
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
+
         // Act
         HttpResponseMessage response = await _client.GetAsync(
             new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
@@ -66,6 +69,9 @@ public sealed class WhenRepositoriesHavePosition : IAsyncDisposable
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Single Position Org");
         await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/single-repo");
+
+        // No endpoint exposes namespace seeding directly — seed via DbContext to simulate resolver state.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(

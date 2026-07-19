@@ -45,7 +45,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsCreatedWithAccountSummary()
+    public async Task ReturnsCreatedWithCredentialSummary()
     {
         // Arrange
         object body = new
@@ -63,8 +63,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        AccountSummary? account = await response.Content
-            .ReadFromJsonAsync<AccountSummary>(TestContext.Current.CancellationToken);
+        CredentialSummary? account = await response.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
         account.ShouldNotBeNull();
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe(ResolvedAccountName),
@@ -117,8 +117,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
 
         // Assert
         getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<AccountSummary>? accounts = await getResponse.Content
-            .ReadFromJsonAsync<IReadOnlyList<AccountSummary>>(TestContext.Current.CancellationToken);
+        IReadOnlyList<CredentialSummary>? accounts = await getResponse.Content
+            .ReadFromJsonAsync<IReadOnlyList<CredentialSummary>>(TestContext.Current.CancellationToken);
         accounts.ShouldNotBeNull();
         accounts.ShouldContain(a => a.Name == ResolvedAccountName);
     }

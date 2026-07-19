@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -18,7 +17,7 @@ public sealed class MarkPolled
     public void WhenCalled_SetsLastPolledAt()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
         DateTimeOffset polledAt = DateTimeOffset.UtcNow;
 
         // Act

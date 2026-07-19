@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -31,83 +30,79 @@ internal sealed class MonitoringService(
 
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         IIssueProviderFactory providerFactory = scope.ServiceProvider.GetRequiredService<IIssueProviderFactory>();
+        ICredentialResolver credentialResolver = scope.ServiceProvider.GetRequiredService<ICredentialResolver>();
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
 
-        ILookup<AccountId, MonitoredRepository> reposByAccount = await LoadActiveReposAsync(
-            dbContext,
-            cancellationToken);
+        List<MonitoredRepository> repos = await LoadActiveReposAsync(dbContext, cancellationToken);
 
-        foreach (IGrouping<AccountId, MonitoredRepository> accountGroup in reposByAccount)
-        {
-            await ProcessAccountGroupAsync(
-                accountGroup,
-                dbContext,
-                providerFactory,
-                poller,
-                now,
-                cancellationToken);
-        }
-    }
-
-    private static async Task<ILookup<AccountId, MonitoredRepository>> LoadActiveReposAsync(
-        DbContext dbContext,
-        CancellationToken cancellationToken)
-    {
-        List<MonitoredRepository> repos = await dbContext.Set<MonitoredRepository>()
-            .Where(r => r.IsActive)
-            .ToListAsync(cancellationToken);
-
-        return repos.ToLookup(r => r.AccountId);
-    }
-
-    private async Task ProcessAccountGroupAsync(
-        IGrouping<AccountId, MonitoredRepository> accountGroup,
-        DbContext dbContext,
-        IIssueProviderFactory providerFactory,
-        RepositoryPoller poller,
-        DateTimeOffset now,
-        CancellationToken cancellationToken)
-    {
-        AccountId accountId = accountGroup.Key;
-        Account? account = await dbContext.Set<Account>()
-            .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
-
-        if (account is null)
-        {
-            logger.LogWarning(
-                "Account with id {AccountId} not found; skipping {Count} repo(s).",
-                accountGroup.Key,
-                accountGroup.Count());
-            return;
-        }
-
-        if (string.IsNullOrEmpty(account.Token))
-        {
-            logger.LogWarning(
-                "Account '{AccountName}' has no token configured; skipping {Count} repo(s).",
-                account.Name,
-                accountGroup.Count());
-            return;
-        }
-
-        IIssueProvider provider = providerFactory.CreateProvider(account, account.Token);
-
-        foreach (MonitoredRepository repo in accountGroup)
+        foreach (MonitoredRepository repo in repos)
         {
             if (!repo.IsDueForPoll(_defaultPollInterval, now))
             {
                 continue;
             }
 
-            Result pollResult = await poller.PollAsync(repo, provider, now, cancellationToken);
+            await PollRepoAsync(
+                repo,
+                dbContext,
+                providerFactory,
+                credentialResolver,
+                poller,
+                now,
+                cancellationToken);
+        }
+    }
 
-            if (pollResult is Result.Failure pollFailure)
-            {
-                logger.LogWarning(
-                    "Poll failed for repo '{Slug}': {Error}",
-                    repo.Slug,
-                    pollFailure.Error.Message);
-            }
+    private static async Task<List<MonitoredRepository>> LoadActiveReposAsync(
+        DbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.Set<MonitoredRepository>()
+            .Where(r => r.IsActive)
+            .ToListAsync(cancellationToken);
+    }
+
+    private async Task PollRepoAsync(
+        MonitoredRepository repo,
+        DbContext dbContext,
+        IIssueProviderFactory providerFactory,
+        ICredentialResolver credentialResolver,
+        RepositoryPoller poller,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        Credential? credential = await credentialResolver.ResolveAsync(
+            repo.Host,
+            repo.Slug,
+            cancellationToken);
+
+        if (credential is null)
+        {
+            logger.LogDebug(
+                "No credential covers repository '{Slug}'; skipping poll.",
+                repo.Slug);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(credential.Token))
+        {
+            logger.LogWarning(
+                "Credential '{CredentialName}' has no token configured; skipping repo '{Slug}'.",
+                credential.Name,
+                repo.Slug);
+            return;
+        }
+
+        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
+
+        Result pollResult = await poller.PollAsync(repo, provider, now, cancellationToken);
+
+        if (pollResult is Result.Failure pollFailure)
+        {
+            logger.LogWarning(
+                "Poll failed for repo '{Slug}': {Error}",
+                repo.Slug,
+                pollFailure.Error.Message);
         }
     }
 }

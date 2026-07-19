@@ -7,14 +7,14 @@ internal sealed class IssueProviderFactory(
     GitHubHttpClient gitHubHttpClient,
     GitLabHttpClient gitLabHttpClient) : IIssueProviderFactory
 {
-    public IIssueProvider CreateProvider(Account account, string token)
+    public IIssueProvider CreateProvider(Credential credential, string token)
     {
-        return account switch
+        return credential switch
         {
-            GitHubAccount gitHub => new GitHubIssueProvider(gitHubHttpClient, token, gitHub.ApiBaseUrl),
-            GitLabAccount gitLab => new GitLabIssueProvider(gitLabHttpClient, token, gitLab.ApiBaseUrl),
+            GitHubCredential gitHub => new GitHubIssueProvider(gitHubHttpClient, token, gitHub.ApiBaseUrl),
+            GitLabCredential gitLab => new GitLabIssueProvider(gitLabHttpClient, token, gitLab.ApiBaseUrl),
             _ => throw new NotSupportedException(
-                $"No issue provider is registered for account type '{account.GetType().Name}'."),
+                $"No issue provider is registered for credential type '{credential.GetType().Name}'."),
         };
     }
 }

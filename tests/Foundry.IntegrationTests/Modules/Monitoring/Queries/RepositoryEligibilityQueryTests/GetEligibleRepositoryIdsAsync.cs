@@ -122,7 +122,6 @@ public sealed class GetEligibleRepositoriesAsync : IAsyncDisposable
         int position = await dbContext.Set<MonitoredRepository>().CountAsync(TestContext.Current.CancellationToken);
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
-            AccountId.From(accountId),
             "github.com",
             pollInterval: null,
             position);

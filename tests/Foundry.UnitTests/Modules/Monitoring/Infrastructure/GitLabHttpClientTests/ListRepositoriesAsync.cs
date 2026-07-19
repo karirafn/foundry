@@ -20,7 +20,7 @@ public sealed class ListRepositoriesAsync
             ",",
             Enumerable
                 .Range(startIndex, count)
-                .Select(i => $$"""{"path_with_namespace":"group/project-{{i}}","visibility":"public"}"""));
+                .Select(i => $$$"""{"path_with_namespace":"group/project-{{{i}}}","visibility":"public","permissions":{"project_access":{"access_level":40},"group_access":null}}"""));
         return $"[{items}]";
     }
 
@@ -32,11 +32,13 @@ public sealed class ListRepositoriesAsync
             [
               {
                 "path_with_namespace": "alice/public-project",
-                "visibility": "public"
+                "visibility": "public",
+                "permissions": { "project_access": { "access_level": 40 }, "group_access": null }
               },
               {
                 "path_with_namespace": "alice/secret-project",
-                "visibility": "private"
+                "visibility": "private",
+                "permissions": { "project_access": { "access_level": 20 }, "group_access": null }
               }
             ]
             """;
@@ -56,8 +58,128 @@ public sealed class ListRepositoriesAsync
             result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
         IReadOnlyList<AvailableRepository> repos = success.Value;
         repos.Count.ShouldBe(2);
-        repos.ShouldContain(r => r.Slug == "alice/public-project" && !r.IsPrivate);
-        repos.ShouldContain(r => r.Slug == "alice/secret-project" && r.IsPrivate);
+        repos.ShouldContain(r => r.Slug == "alice/public-project" && !r.IsPrivate && r.CanPush);
+        repos.ShouldContain(r => r.Slug == "alice/secret-project" && r.IsPrivate && !r.CanPush);
+    }
+
+    [Fact]
+    public async Task WhenAccessLevelIsExactlyDeveloper_CanPushIsTrue()
+    {
+        // Arrange — access_level 30 = Developer (threshold)
+        string json = """
+            [
+              {
+                "path_with_namespace": "org/repo",
+                "visibility": "public",
+                "permissions": { "project_access": { "access_level": 30 }, "group_access": null }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+            ValidBaseUrl,
+            "glpat_token123",
+            CancellationToken.None);
+
+        // Assert
+        Result<IReadOnlyList<AvailableRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        success.Value.ShouldContain(r => r.CanPush);
+    }
+
+    [Fact]
+    public async Task WhenAccessLevelIsReporter_CanPushIsFalse()
+    {
+        // Arrange — access_level 20 = Reporter (below Developer)
+        string json = """
+            [
+              {
+                "path_with_namespace": "org/repo",
+                "visibility": "public",
+                "permissions": { "project_access": { "access_level": 20 }, "group_access": null }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+            ValidBaseUrl,
+            "glpat_token123",
+            CancellationToken.None);
+
+        // Assert
+        Result<IReadOnlyList<AvailableRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        success.Value.ShouldContain(r => !r.CanPush);
+    }
+
+    [Fact]
+    public async Task WhenGroupAccessMeetsThreshold_CanPushIsTrue()
+    {
+        // Arrange — project_access null, group_access Developer
+        string json = """
+            [
+              {
+                "path_with_namespace": "org/repo",
+                "visibility": "public",
+                "permissions": { "project_access": null, "group_access": { "access_level": 30 } }
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+            ValidBaseUrl,
+            "glpat_token123",
+            CancellationToken.None);
+
+        // Assert
+        Result<IReadOnlyList<AvailableRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        success.Value.ShouldContain(r => r.CanPush);
+    }
+
+    [Fact]
+    public async Task WhenPermissionsAbsent_CanPushIsFalse()
+    {
+        // Arrange — null permissions object
+        string json = """
+            [
+              {
+                "path_with_namespace": "org/repo",
+                "visibility": "public",
+                "permissions": null
+              }
+            ]
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient);
+
+        // Act
+        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+            ValidBaseUrl,
+            "glpat_token123",
+            CancellationToken.None);
+
+        // Assert
+        Result<IReadOnlyList<AvailableRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        success.Value.ShouldContain(r => !r.CanPush);
     }
 
     [Fact]
@@ -131,7 +253,7 @@ public sealed class ListRepositoriesAsync
         request.RequestUri.IsAbsoluteUri.ShouldBeTrue();
         request.RequestUri.AbsolutePath.ShouldBe("/api/v4/projects");
         request.RequestUri.Query.ShouldContain("membership=true");
-        request.RequestUri.Query.ShouldContain("simple=true");
+        request.RequestUri.Query.ShouldNotContain("simple=true");
         request.RequestUri.Query.ShouldContain("per_page=100");
         request.RequestUri.Query.ShouldContain("page=1");
     }

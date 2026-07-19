@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
@@ -16,7 +15,7 @@ public sealed class SetEligibility
         RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
     private static MonitoredRepository CreateRepository() =>
-        MonitoredRepository.Create(ValidSlug, AccountId.New(), "github.com", null);
+        MonitoredRepository.Create(ValidSlug, "github.com", null);
 
     [Fact]
     public void WhenEligibleSet_EligibilityStatusIsEligible()

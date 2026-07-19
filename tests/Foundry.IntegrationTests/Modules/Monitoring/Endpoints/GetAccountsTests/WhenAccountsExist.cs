@@ -39,8 +39,8 @@ public sealed class WhenAccountsExist : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitHubAccount account = GitHubAccount.Create(name, token, parsedBaseUrl);
-        dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create(name, token, parsedBaseUrl);
+        dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
@@ -58,8 +58,8 @@ public sealed class WhenAccountsExist : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<AccountSummary>? accounts = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<AccountSummary>>(TestContext.Current.CancellationToken);
+        IReadOnlyList<CredentialSummary>? accounts = await response.Content
+            .ReadFromJsonAsync<IReadOnlyList<CredentialSummary>>(TestContext.Current.CancellationToken);
         accounts.ShouldNotBeNull();
         accounts.Count.ShouldBe(2);
     }
@@ -77,10 +77,10 @@ public sealed class WhenAccountsExist : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<AccountSummary>? accounts = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<AccountSummary>>(TestContext.Current.CancellationToken);
+        IReadOnlyList<CredentialSummary>? accounts = await response.Content
+            .ReadFromJsonAsync<IReadOnlyList<CredentialSummary>>(TestContext.Current.CancellationToken);
         accounts.ShouldNotBeNull();
-        AccountSummary account = accounts.ShouldHaveSingleItem();
+        CredentialSummary account = accounts.ShouldHaveSingleItem();
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe("My GitHub"),
             () => account.ProviderType.ShouldBe("github"),

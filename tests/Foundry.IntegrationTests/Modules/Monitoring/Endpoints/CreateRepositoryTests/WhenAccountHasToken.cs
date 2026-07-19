@@ -47,8 +47,9 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
     [Fact]
     public async Task ReturnsEligibilityInSummary()
     {
-        // Arrange
+        // Arrange — set namespace so resolver can cover the repo
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Eligible Org");
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         object body = new
         {
             slug = "owner/protected-repo",
@@ -92,6 +93,7 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
         {
             using HttpClient client = factory.CreateClient();
             Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(factory, name: "Ineligible Org");
+            await AccountSeeder.SetOwnerNamespacesAsync(factory, accountId, "owner");
             object body = new
             {
                 slug = "owner/unprotected-repo",
@@ -116,45 +118,36 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAccountHasNoToken_EligibilityIsUnreachable()
+    public async Task WhenNoNamespaceCoversRepo_EligibilityIsIneligibleWithNoCredentialViolation()
     {
-        // Arrange
-        FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        // Arrange — account has a token but no namespaces configured, so the resolver returns null
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "No Namespace Org");
+        object body = new
         {
-            services.RemoveAll<IIssueProviderFactory>();
-            services.AddScoped<IIssueProviderFactory>(_ =>
-                new StubProviderFactory(Result<BranchProtection>.Ok(
-                    new BranchProtection("main", true, true, true))));
-        });
-        await using (factory.ConfigureAwait(false))
-        {
-            using HttpClient client = factory.CreateClient();
-            Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(factory, name: "No Token Org", token: null);
-            object body = new
-            {
-                slug = "owner/no-token-repo",
-            };
+            slug = "owner/no-namespace-repo",
+        };
 
-            // Act
-            HttpResponseMessage response = await client.PostAsJsonAsync(
-                new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
-                body,
-                TestContext.Current.CancellationToken);
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
 
-            // Assert
-            // No token — eligibility evaluator is skipped; Create() initializes to Unreachable.
-            response.StatusCode.ShouldBe(HttpStatusCode.Created);
-            RepositorySummary? repository = await response.Content
-                .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
-            repository.ShouldNotBeNull();
-            repository.Eligibility.ShouldNotBeNull();
-            repository.Eligibility.Status.ShouldBe("unreachable");
-        }
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        RepositorySummary? repository = await response.Content
+            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        repository.ShouldNotBeNull();
+        repository.Eligibility.ShouldNotBeNull();
+        repository.Eligibility.ShouldSatisfyAllConditions(
+            () => repository.Eligibility.Status.ShouldBe("ineligible"),
+            () => repository.Eligibility.Violations.ShouldHaveSingleItem(),
+            () => repository.Eligibility.Violations[0].Rule.ShouldBe("no-credential:owner"));
     }
 
     private sealed class StubProviderFactory(Result<BranchProtection> branchProtectionResult) : IIssueProviderFactory
     {
-        public IIssueProvider CreateProvider(Account account, string token) =>
+        public IIssueProvider CreateProvider(Credential credential, string token) =>
             new StubProvider(branchProtectionResult);
     }
 

@@ -38,7 +38,8 @@ public sealed class HasBranchCommitsAsync : IAsyncDisposable
 
         _sut = new PostExitProviderQueries(
             _dbContext,
-            new StubProviderFactory(() => _stubProvider));
+            new StubProviderFactory(() => _stubProvider),
+            new CredentialResolver(_dbContext));
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -49,12 +50,13 @@ public sealed class HasBranchCommitsAsync : IAsyncDisposable
 
     private async Task<MonitoredRepositoryId> SeedRepoAsync(string? token = "ghp_test_token")
     {
-        GitHubAccount account = GitHubAccount.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
-        _dbContext.Set<Account>().Add(account);
+        GitHubCredential credential = GitHubCredential.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
+        credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-        MonitoredRepository repo = MonitoredRepository.Create(slug, account.Id, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null);
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -119,7 +121,7 @@ public sealed class HasBranchCommitsAsync : IAsyncDisposable
 
     private sealed class StubProviderFactory(Func<StubIssueProvider> providerFactory) : IIssueProviderFactory
     {
-        public IIssueProvider CreateProvider(Account account, string token) => providerFactory();
+        public IIssueProvider CreateProvider(Credential credential, string token) => providerFactory();
     }
 
     private sealed class StubIssueProvider(

@@ -11,7 +11,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.UpdateAccountValidatorTe
 
 public sealed class Validate
 {
-    private static readonly AccountId ValidId = AccountId.New();
+    private static readonly CredentialId ValidId = CredentialId.New();
 
     private static UpdateAccount.Command ValidCommandWithToken =>
         new(ValidId, "https://github.com", "ghp_valid_token");

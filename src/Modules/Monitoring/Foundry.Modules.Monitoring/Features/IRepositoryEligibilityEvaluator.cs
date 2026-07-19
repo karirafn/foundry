@@ -6,6 +6,5 @@ internal interface IRepositoryEligibilityEvaluator
 {
     Task EvaluateAndStoreAsync(
         MonitoredRepository repo,
-        IIssueProvider provider,
         CancellationToken cancellationToken);
 }

@@ -37,11 +37,13 @@ const MOCK_REPOSITORY_2: RepositorySummary = {
 const MOCK_AVAILABLE: AvailableRepository = {
   slug: 'my-org/my-repo',
   isPrivate: false,
+  canPush: true,
 };
 
 const MOCK_AVAILABLE_2: AvailableRepository = {
   slug: 'my-org/private-repo',
   isPrivate: true,
+  canPush: false,
 };
 
 function setupService() {

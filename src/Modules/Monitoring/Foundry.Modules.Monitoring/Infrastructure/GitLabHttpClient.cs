@@ -20,6 +20,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private const int RepositoriesPerPage = 100;
     private const int MaxReviewComments = 50;
     private const int MaxFilePathLength = 4096; // PATH_MAX
+    private const int GitLabMinPushAccessLevel = 30; // Developer role
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -362,7 +363,10 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         for (int page = 1; page <= MaxRepositoryPages; page++)
         {
-            string relativePath = $"projects?membership=true&simple=true&per_page={RepositoriesPerPage}&page={page}";
+            // simple=false (default) returns the full project payload including the permissions
+            // object, which carries project_access.access_level and group_access.access_level.
+            // Developer (30) or above is required for push access.
+            string relativePath = $"projects?membership=true&per_page={RepositoriesPerPage}&page={page}";
             Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
             using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
@@ -383,7 +387,10 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
             foreach (GitLabProjectListItemDto dto in pageItems)
             {
                 bool isPrivate = string.Equals(dto.Visibility, "private", StringComparison.OrdinalIgnoreCase);
-                repositories.Add(new AvailableRepository(dto.PathWithNamespace, isPrivate));
+                int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
+                int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
+                bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
+                repositories.Add(new AvailableRepository(dto.PathWithNamespace, isPrivate, canPush));
             }
 
             if (pageItems.Count < RepositoriesPerPage)
@@ -792,7 +799,12 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
     private sealed record GitLabProjectListItemDto(
         string PathWithNamespace,
-        string Visibility);
+        string Visibility,
+        GitLabProjectPermissionsDto? Permissions);
+
+    private sealed record GitLabProjectPermissionsDto(
+        GitLabAccessLevelDto? ProjectAccess,
+        GitLabAccessLevelDto? GroupAccess);
 
     private sealed record GitLabCompareDto(IReadOnlyList<GitLabCommitDto> Commits);
 
