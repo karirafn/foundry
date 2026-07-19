@@ -90,7 +90,7 @@ public sealed class HandleAsync : IAsyncDisposable
         CredentialUpdateResult updateResult = result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>().Value;
         updateResult.ShouldSatisfyAllConditions(
             () => updateResult.Credential.Id.ShouldBe(credential.Id.Value),
-            () => updateResult.AffectedRepositories.ShouldNotBeNull());
+            () => updateResult.AffectedRepositories.ShouldBeEmpty());
     }
 
     [Fact]

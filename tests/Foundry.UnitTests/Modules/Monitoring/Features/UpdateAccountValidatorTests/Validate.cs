@@ -56,7 +56,7 @@ public sealed class Validate
     {
         // Arrange
         UpdateAccount.Validator sut = new();
-        string oversizedToken = new('a', UpdateAccount.Validator.TokenMaxLength + 1);
+        string oversizedToken = new('a', AccountsDatabaseHelpers.TokenMaxLength + 1);
         UpdateAccount.Command command = ValidCommandWithToken with { Token = oversizedToken };
 
         // Act

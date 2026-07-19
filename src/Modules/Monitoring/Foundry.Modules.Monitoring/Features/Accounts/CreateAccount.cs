@@ -30,10 +30,6 @@ internal static partial class CreateAccount
         internal const string TokenInvalidCharsCode = "CreateAccount.TokenInvalidChars";
         internal const string TokenTooLongCode = "CreateAccount.TokenTooLong";
 
-        // Real GitHub/GitLab tokens are under 200 characters; 500 gives ample headroom
-        // while preventing oversized values from bloating the encrypted column (max 2000 chars ciphertext).
-        internal const int TokenMaxLength = 500;
-
         [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
         private static partial Regex ValidTokenCharactersRegex();
 
@@ -50,11 +46,11 @@ internal static partial class CreateAccount
                 return new Error(TokenEmptyCode, "Token must not be empty.");
             }
 
-            if (command.Token.Length > TokenMaxLength)
+            if (command.Token.Length > AccountsDatabaseHelpers.TokenMaxLength)
             {
                 return new Error(
                     TokenTooLongCode,
-                    $"Token must not exceed {TokenMaxLength} characters.");
+                    $"Token must not exceed {AccountsDatabaseHelpers.TokenMaxLength} characters.");
             }
 
             if (!ValidTokenCharactersRegex().IsMatch(command.Token))
