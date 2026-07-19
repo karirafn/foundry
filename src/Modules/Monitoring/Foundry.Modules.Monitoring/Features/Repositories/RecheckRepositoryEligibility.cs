@@ -4,7 +4,6 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
-using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
@@ -20,13 +19,10 @@ internal static class RecheckRepositoryEligibility
 {
     internal sealed record Command(Guid AccountId, Guid Id) : ICommand<RepositorySummary>;
 
-    // NOTE: 5 constructor dependencies — exceeds the 4-cap, but ILogger takes priority over operational
-    // visibility. GitHubHttpClient and GitLabHttpClient cannot be consolidated without a shared interface.
     internal sealed class Handler(
         DbContext dbContext,
         IRepositoryEligibilityEvaluator eligibilityEvaluator,
-        GitHubHttpClient gitHubHttpClient,
-        GitLabHttpClient gitLabHttpClient,
+        INamespaceDeriver namespaceDeriver,
         ILogger<Handler> logger) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
@@ -82,33 +78,16 @@ internal static class RecheckRepositoryEligibility
 
         private async Task RefreshNamespacesAsync(Credential credential, CancellationToken cancellationToken)
         {
-            if (credential.Token is null)
+            NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
+
+            if (outcome is NamespaceDerivationOutcome.Derived derived)
             {
-                return;
+                credential.SetNamespaces(derived.Namespaces);
             }
-
-            try
-            {
-                bool isGitLab = credential is GitLabCredential;
-                Result<IReadOnlyList<AvailableRepository>> listResult = isGitLab
-                    ? await gitLabHttpClient.ListRepositoriesAsync(credential.ApiBaseUrl, credential.Token, cancellationToken)
-                    : await gitHubHttpClient.ListRepositoriesAsync(credential.ApiBaseUrl, credential.Token, cancellationToken);
-
-                if (listResult is not Result<IReadOnlyList<AvailableRepository>>.Success listSuccess)
-                {
-                    return;
-                }
-
-                IReadOnlyCollection<Namespace> namespaces = NamespaceDerivation.FromWritableRepositories(listSuccess.Value);
-                credential.SetNamespaces(namespaces);
-            }
-#pragma warning disable CA1031 // Provider listing may fail with any exception — leave existing namespaces unchanged on recheck
-            catch (Exception ex) when (ex is not OperationCanceledException)
-#pragma warning restore CA1031
+            else
             {
                 logger.LogWarning(
-                    ex,
-                    "Namespace refresh failed for credential {CredentialId}; evaluating eligibility against cached namespaces.",
+                    "Namespace refresh unavailable for credential {CredentialId}; evaluating eligibility against cached namespaces.",
                     credential.Id);
             }
         }

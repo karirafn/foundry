@@ -2,6 +2,7 @@ import { Component, ChangeDetectionStrategy, OnInit, Signal, WritableSignal, com
 import { AccountService } from './account.service';
 import { AccountListComponent } from './account-list/account-list';
 import { AccountFormComponent } from './account-form/account-form';
+import { AffectedRepositoriesComponent } from './affected-repositories/affected-repositories';
 import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from './account.model';
 
 type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account: AccountSummary };
@@ -9,7 +10,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
 @Component({
   selector: 'fd-settings-accounts',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AccountListComponent, AccountFormComponent],
+  imports: [AccountListComponent, AccountFormComponent, AffectedRepositoriesComponent],
   template: `
     <div class="accounts-settings">
       <section class="accounts-settings__section">
@@ -18,8 +19,23 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
           Manage provider accounts for repository monitoring.
         </p>
 
+        <!-- Persistent live region: always mounted so announcements are heard by screen readers. -->
+        <div
+          class="accounts-settings__sr-announcer sr-only"
+          aria-live="polite"
+          aria-atomic="true"
+        >{{ accountService.srAnnouncement() }}</div>
+
         @switch (_accountView().kind) {
           @case ('list') {
+            @if (accountService.affectedRepositories(); as affected) {
+              @if (affected.length > 0) {
+                <fd-affected-repositories
+                  [repositories]="affected"
+                  (dismiss)="onDismissAffectedRepositories()"
+                />
+              }
+            }
             <fd-account-list
               [accounts]="accountService.accounts()"
               [loading]="accountService.loading()"
@@ -128,6 +144,15 @@ export class SettingsAccountsComponent implements OnInit {
 
   onAccountCancelled(): void {
     this._accountView.set({ kind: 'list' });
+    runInInjectionContext(this._injector, () => {
+      afterNextRender(() => {
+        this._sectionHeading?.nativeElement.focus();
+      });
+    });
+  }
+
+  onDismissAffectedRepositories(): void {
+    this.accountService.clearAffectedRepositories();
     runInInjectionContext(this._injector, () => {
       afterNextRender(() => {
         this._sectionHeading?.nativeElement.focus();

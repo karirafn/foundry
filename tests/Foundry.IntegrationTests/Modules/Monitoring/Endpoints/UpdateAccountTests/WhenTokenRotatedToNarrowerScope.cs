@@ -1,9 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
@@ -19,7 +20,8 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
 
 /// <summary>
-/// Verifies that rotating a credential to a narrower token shrinks the namespace set.
+/// Verifies that rotating a credential to a narrower token shrinks the namespace set,
+/// re-evaluates affected repositories, and reports the changed repos in the response (AC2, AC4).
 /// </summary>
 public sealed class WhenTokenRotatedToNarrowerScope : IAsyncDisposable
 {
@@ -62,6 +64,20 @@ public sealed class WhenTokenRotatedToNarrowerScope : IAsyncDisposable
             // The HttpClient takes ownership of the handler, so no separate disposal needed here.
             services.AddSingleton(
                 new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing))));
+
+            // The real RepositoryEligibilityEvaluator resolves the credential via ICredentialResolver.
+            // After dropping bob's namespace, bob/repo-b has no credential → ineligible (no-credential).
+            // alice/repo-a still has a credential but the fake HTTP handler returns listing JSON for
+            // branch-protection calls, which fails to parse → Unreachable.
+            // Use AssignedEligibilityEvaluator to control the outcome precisely for test clarity.
+            services.RemoveAll<IRepositoryEligibilityEvaluator>();
+            services.AddScoped<IRepositoryEligibilityEvaluator>(_ =>
+                new AssignedEligibilityEvaluator(new Dictionary<string, RepositoryEligibility>
+                {
+                    ["alice/repo-a"] = new RepositoryEligibility.Eligible(),
+                    ["bob/repo-b"] = new RepositoryEligibility.Ineligible(
+                        [EligibilityViolation.NoCredential("bob")]),
+                }));
         });
         _client = _factory.CreateClient();
     }
@@ -132,49 +148,70 @@ public sealed class WhenTokenRotatedToNarrowerScope : IAsyncDisposable
         credentialAfter.Namespaces.ShouldNotContain(ns => ns.Value == "bob");
     }
 
-    private sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
+    [Fact]
+    public async Task WhenRotatedToNarrowerToken_DroppedOwnerRepoBecomesIneligibleAndAppearsInAffectedList()
     {
-        public Task<Result<ValidateToken.Response>> HandleAsync(
-            ValidateToken.Query query,
-            CancellationToken cancellationToken)
+        // Arrange — create with broad token (alice + bob namespaces)
+        object createBody = new
         {
-            ValidateToken.Response response = new(
-                IsValid: true,
-                IsAuthFailure: false,
-                MissingScopes: [],
-                AccountName: "test-user");
-            return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
-        }
-    }
+            providerType = "github",
+            baseUrl = "https://github.com",
+            token = OriginalToken,
+        };
 
-    private sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> tokenToListing)
-        : DelegatingHandler
-    {
-        private string _lastTokenSeen = string.Empty;
+        HttpResponseMessage createResponse = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            createBody,
+            TestContext.Current.CancellationToken);
 
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        CredentialSummary? created = await createResponse.Content
+            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
+        created.ShouldNotBeNull();
+
+        // Seed monitored repos under both owners
+        Guid aliceRepoId = await RepositorySeeder.SeedRepositoryAsync(
+            _factory,
+            created.Id,
+            slug: "alice/repo-a");
+        Guid bobRepoId = await RepositorySeeder.SeedRepositoryAsync(
+            _factory,
+            created.Id,
+            slug: "bob/repo-b");
+
+        // Set both repos to eligible before rotation
+        await RepositoryEligibilitySeeder.SetEligibleAsync(
+            _factory,
+            aliceRepoId,
+            bobRepoId);
+
+        // Act — rotate to narrower token (alice only)
+        object updateBody = new
         {
-            // Extract the token from PRIVATE-TOKEN header (GitLab) or Authorization header (GitHub)
-            if (request.Headers.TryGetValues("Authorization", out IEnumerable<string>? authValues))
-            {
-                string bearer = authValues.FirstOrDefault() ?? string.Empty;
-                // Format: "Bearer <token>"
-                _lastTokenSeen = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-                    ? bearer["Bearer ".Length..]
-                    : string.Empty;
-            }
+            baseUrl = "https://github.com",
+            token = NarrowerToken,
+        };
 
-            string json = tokenToListing.TryGetValue(_lastTokenSeen, out string? listing)
-                ? listing
-                : "[]";
+        HttpResponseMessage updateResponse = await _client.PutAsJsonAsync(
+            new Uri($"/api/accounts/{created.Id}", UriKind.Relative),
+            updateBody,
+            TestContext.Current.CancellationToken);
 
-            HttpResponseMessage response = new(HttpStatusCode.OK)
-            {
-                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
-            };
-            return Task.FromResult(response);
-        }
+        // Assert — response contains the affected repositories
+        updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        CredentialUpdateResult? result = await updateResponse.Content
+            .ReadFromJsonAsync<CredentialUpdateResult>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+
+        // bob/repo-b lost its credential (AC4); only bob changed (AC2)
+        result.AffectedRepositories.ShouldContain(r => r.Slug == "bob/repo-b");
+        AffectedRepository bobResult = result.AffectedRepositories.Single(r => r.Slug == "bob/repo-b");
+        bobResult.ShouldSatisfyAllConditions(
+            () => bobResult.Id.ShouldBe(bobRepoId),
+            () => bobResult.PreviousStatus.ShouldBe("eligible"),
+            () => bobResult.NewStatus.ShouldBe("ineligible"));
+
+        // alice/repo-a stays eligible — not in affected list
+        result.AffectedRepositories.ShouldNotContain(r => r.Slug == "alice/repo-a");
     }
 }

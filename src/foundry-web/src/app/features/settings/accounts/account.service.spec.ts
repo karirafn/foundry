@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AccountService } from './account.service';
-import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialUpdateResult, UpdateAccountRequest } from './account.model';
+import { ToastService } from '../../../core/services/toast.service';
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -19,6 +20,10 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   baseUrl: 'https://api.github.com/',
   hasToken: true,
 };
+
+function makeUpdateResult(account: AccountSummary, affected: AffectedRepository[] = []): CredentialUpdateResult {
+  return { credential: account, affectedRepositories: affected };
+}
 
 function setupService() {
   TestBed.configureTestingModule({
@@ -298,7 +303,7 @@ describe('AccountService', () => {
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
-    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(MOCK_ACCOUNT);
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT));
   });
 
   // Cycle 6: updateAccount calls PUT /api/accounts/{id}
@@ -317,7 +322,7 @@ describe('AccountService', () => {
     // Assert
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual(request);
-    req.flush({ ...MOCK_ACCOUNT, name: 'Updated GitHub' });
+    req.flush(makeUpdateResult({ ...MOCK_ACCOUNT, name: 'Updated GitHub' }));
   });
 
   it('should set saving to true while updateAccount is in flight', () => {
@@ -332,7 +337,7 @@ describe('AccountService', () => {
 
     // Assert — before flush
     expect(service.saving()).toBe(true);
-    httpMock.expectOne(`/api/accounts/${id}`).flush(MOCK_ACCOUNT);
+    httpMock.expectOne(`/api/accounts/${id}`).flush(makeUpdateResult(MOCK_ACCOUNT));
   });
 
   it('should set saving to false and saveSuccess to true after updateAccount succeeds', () => {
@@ -346,7 +351,7 @@ describe('AccountService', () => {
 
     // Act
     service.updateAccount(id, request);
-    httpMock.expectOne(`/api/accounts/${id}`).flush({ ...MOCK_ACCOUNT, name: 'Updated' });
+    httpMock.expectOne(`/api/accounts/${id}`).flush(makeUpdateResult({ ...MOCK_ACCOUNT, name: 'Updated' }));
 
     // Assert
     expect(service.saving()).toBe(false);
@@ -365,7 +370,7 @@ describe('AccountService', () => {
 
     // Act
     service.updateAccount(MOCK_ACCOUNT.id, request);
-    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(updatedAccount);
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(updatedAccount));
 
     // Assert
     const accounts = service.accounts();
@@ -463,6 +468,113 @@ describe('AccountService', () => {
     const accounts = service.accounts();
     expect(accounts.length).toBe(1);
     expect(accounts[0].id).toBe(MOCK_ACCOUNT_2.id);
+  });
+
+  // Cycle 7b: affectedRepositories signal
+  it('should start with affectedRepositories as null', () => {
+    // Arrange / Act — no calls yet
+
+    // Assert
+    expect(service.affectedRepositories()).toBeNull();
+  });
+
+  it('should set affectedRepositories signal after updateAccount succeeds with affected repos', () => {
+    // Arrange
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+
+    // Act
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
+
+    // Assert
+    expect(service.affectedRepositories()).toEqual(affected);
+  });
+
+  it('should set affectedRepositories to empty array when no repos are affected', () => {
+    // Arrange / Act
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, []));
+
+    // Assert
+    expect(service.affectedRepositories()).toEqual([]);
+  });
+
+  it('should show confirmation toast when updateAccount succeeds with no affected repos', () => {
+    // Arrange
+    const toastService = TestBed.inject(ToastService);
+    const showSpy = vi.spyOn(toastService, 'show');
+
+    // Act
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, []));
+
+    // Assert
+    expect(showSpy).toHaveBeenCalledWith('Token updated. All repositories retained their access.');
+  });
+
+  it('should not show toast when updateAccount succeeds with affected repos', () => {
+    // Arrange
+    const toastService = TestBed.inject(ToastService);
+    const showSpy = vi.spyOn(toastService, 'show');
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+
+    // Act
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
+
+    // Assert
+    expect(showSpy).not.toHaveBeenCalled();
+  });
+
+  it('should reset affectedRepositories to null at start of updateAccount', () => {
+    // Arrange — first call that sets affected repos
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
+
+    // Act — second call resets signal before response
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+
+    // Assert — signal reset immediately
+    expect(service.affectedRepositories()).toBeNull();
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT));
+  });
+
+  it('should reset affectedRepositories to null at start of createAccount', () => {
+    // Arrange — first set affected repos via updateAccount
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
+
+    // Act — createAccount resets signal before response
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_new' });
+
+    // Assert — signal reset immediately
+    expect(service.affectedRepositories()).toBeNull();
+    httpMock.expectOne('/api/accounts').flush(MOCK_ACCOUNT_2, { status: 201, statusText: 'Created' });
+  });
+
+  it('should clear affectedRepositories when clearAffectedRepositories is called', () => {
+    // Arrange — set affected repos
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
+
+    // Act
+    service.clearAffectedRepositories();
+
+    // Assert
+    expect(service.affectedRepositories()).toBeNull();
   });
 
   // Cycle 8: validateToken calls POST /api/accounts/validate-token
