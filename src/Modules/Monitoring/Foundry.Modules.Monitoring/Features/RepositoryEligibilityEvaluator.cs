@@ -35,6 +35,21 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         try
         {
+            Result<bool> canPushResult = await provider.CanPushAsync(repo.Slug, cancellationToken);
+
+            if (canPushResult is Result<bool>.Failure)
+            {
+                repo.SetEligibility(new RepositoryEligibility.Unreachable());
+                return;
+            }
+
+            if (canPushResult is Result<bool>.Success { Value: false })
+            {
+                repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.CannotPush(repo.Slug)]));
+                return;
+            }
+
             Result<BranchProtection> result = await provider.GetBranchProtectionAsync(
                 repo.Slug,
                 cancellationToken);
@@ -47,7 +62,7 @@ internal sealed class RepositoryEligibilityEvaluator(
         {
             logger.LogError(
                 ex,
-                "Failed to fetch branch protection for repository {Slug}; marking as unreachable.",
+                "Failed to evaluate eligibility for repository {Slug}; marking as unreachable.",
                 repo.Slug);
             eligibility = new RepositoryEligibility.Unreachable();
         }
