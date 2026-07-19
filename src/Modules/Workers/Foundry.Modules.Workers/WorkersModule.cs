@@ -21,6 +21,9 @@ namespace Foundry.Modules.Workers;
 
 public static class WorkersModule
 {
+    // This period is process-global — all health-check publishers ride this cadence.
+    private const int HealthCheckPublisherPeriodSeconds = 15;
+
     public static IServiceCollection AddWorkersModule(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -39,6 +42,8 @@ public static class WorkersModule
         services.AddHealthChecks()
             .AddCheck<DockerDaemonHealthCheck>("docker-daemon", tags: ["ready"]);
         services.AddSingleton<IHealthCheckPublisher, DockerAvailabilityHealthCheckPublisher>();
+        services.Configure<HealthCheckPublisherOptions>(options =>
+            options.Period = TimeSpan.FromSeconds(HealthCheckPublisherPeriodSeconds));
         services.AddIntegrationEventHandler<DockerAvailabilityChanged, DockerAvailabilityChangedBroadcastHandler>();
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();

@@ -5,6 +5,7 @@ using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
@@ -279,5 +280,72 @@ public sealed class AddWorkersModule
         options.Registrations.ShouldContain(r => r.Name == "docker-daemon");
         HealthCheckRegistration registration = options.Registrations.Single(r => r.Name == "docker-daemon");
         registration.Tags.ShouldContain("ready");
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersIDockerAvailabilityState()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IDockerAvailabilityState state = provider.GetRequiredService<IDockerAvailabilityState>();
+        state.ShouldBeOfType<DockerAvailabilityState>();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersDockerAvailabilityHealthCheckPublisher()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddLogging();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IHealthCheckPublisher> publishers = provider.GetServices<IHealthCheckPublisher>();
+        publishers.ShouldContain(p => p is DockerAvailabilityHealthCheckPublisher);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersDockerAvailabilityChangedBroadcastHandler()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IIntegrationEventHandler<DockerAvailabilityChanged>> handlers =
+            provider.GetServices<IIntegrationEventHandler<DockerAvailabilityChanged>>();
+        handlers.ShouldContain(h => h is DockerAvailabilityChangedBroadcastHandler);
+    }
+
+    [Fact]
+    public void WhenCalled_SetsHealthCheckPublisherPeriodTo15Seconds()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IOptions<HealthCheckPublisherOptions> options = provider.GetRequiredService<IOptions<HealthCheckPublisherOptions>>();
+        options.Value.Period.ShouldBe(TimeSpan.FromSeconds(15));
     }
 }
