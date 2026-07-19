@@ -146,8 +146,7 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         RepositorySlug slug,
         CancellationToken cancellationToken)
     {
-        // Implemented in step 2 of the write-access probe feature.
-        throw new NotImplementedException();
+        return httpClient.GetPushPermissionAsync(apiBaseUrl, slug, token, cancellationToken);
     }
 
     private Task<Result<string>> GetDefaultBranchAsync(
