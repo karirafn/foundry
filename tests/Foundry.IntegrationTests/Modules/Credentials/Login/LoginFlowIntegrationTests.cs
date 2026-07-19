@@ -378,8 +378,8 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Verifies the startup reap behavior: a container labeled <c>foundry.transient=true</c>
-    /// that is stopped and removed by <see cref="LoginContainerReaper"/> logic no longer
+    /// Verifies the reap behavior: a container labeled <c>foundry.transient=true</c>
+    /// that is stopped and removed no longer
     /// appears in <see cref="CredentialsOrchestrator.ListTransientContainersAsync"/>.
     /// </summary>
     [Fact]
