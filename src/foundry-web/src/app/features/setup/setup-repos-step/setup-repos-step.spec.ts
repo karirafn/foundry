@@ -450,6 +450,28 @@ describe('SetupReposStepComponent', () => {
     expect(items[1].classList.contains('setup-repos-step__repo-item--disabled')).toBe(true);
   });
 
+  it('should not add a non-writable slug to the selection when a programmatic change event fires on its checkbox', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+    fixture.detectChanges();
+
+    // Act — dispatch a programmatic change event on the disabled (non-writable) checkbox
+    const el = fixture.nativeElement as HTMLElement;
+    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const readonlyCheckbox = checkboxes[1];
+    readonlyCheckbox.checked = true;
+    readonlyCheckbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Assert — Finish button stays disabled because nothing was added to the selection
+    const finishBtn = el.querySelector('button.setup-repos-step__finish-btn') as HTMLButtonElement;
+    expect(finishBtn.disabled).toBe(true);
+  });
+
   it('should render all non-writable repos (not empty state) when all repos lack push access', () => {
     // Arrange
     const allReadonly: AvailableRepository[] = [

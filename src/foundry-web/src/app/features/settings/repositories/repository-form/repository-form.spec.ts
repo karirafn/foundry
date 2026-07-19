@@ -841,6 +841,8 @@ describe('RepositoryFormComponent', () => {
 
     // Assert — slug unchanged, picker stays open
     expect(combobox.value).toBe('');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
   });
 
   it('should render aria-disabled="true" on a non-writable option', () => {
@@ -890,9 +892,9 @@ describe('RepositoryFormComponent', () => {
     expect(reasonEl?.textContent).toContain('no write access');
   });
 
-  // Cycle 27: keyboard ArrowDown skips non-writable options
-  it('should skip disabled options when navigating down with ArrowDown', () => {
-    // Arrange
+  // Cycle 27: keyboard ArrowDown navigates across ALL options including disabled
+  it('should move active option to disabled option when navigating down with ArrowDown', () => {
+    // Arrange — list: [writable@0, readonly@1]
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
@@ -905,20 +907,21 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
-    // First ArrowDown — should land on index 0 (writable)
+    // First ArrowDown — lands on writable@0
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
 
-    // Second ArrowDown — index 1 is non-writable, should skip to -1 (no next writable)
-    // Actually with MIXED: [writable@0, readonly@1], from 0 next writable is none → stays at 0
-    // Let me assert the active option is still only on writable ones
-    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    // Second ArrowDown — lands on readonly@1 (disabled but navigable per ARIA APG)
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
     const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
     expect(activeOption).toBeTruthy();
-    expect(activeOption.getAttribute('aria-disabled')).toBeNull();
+    expect(activeOption.getAttribute('aria-disabled')).toBe('true');
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-1');
   });
 
-  it('should skip disabled options when navigating up with ArrowUp', () => {
+  it('should move active option back to writable option when navigating up with ArrowUp', () => {
     // Arrange — list: [readonly@0, writable@1]
     const repos: AvailableRepository[] = [
       { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
@@ -936,23 +939,24 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
-    // Navigate down twice to land on index 1 (the only writable)
+    // Navigate down twice to reach writable@1
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
 
-    // Navigate up — should skip readonly@0 and land at -1 (no prior writable)
+    // Navigate up — moves to readonly@0
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
     fixture.detectChanges();
 
     const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
-    // No active option because going up from 1 skips readonly@0, reaching start → -1
-    expect(activeOption).toBeNull();
+    expect(activeOption).toBeTruthy();
+    expect(activeOption.getAttribute('aria-disabled')).toBe('true');
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
   });
 
-  // Cycle 28: Enter key does not select non-writable active option
-  it('should not select when Enter is pressed and active option is non-writable', () => {
+  // Cycle 28: Enter key on non-writable active option is a no-op; on writable it selects
+  it('should not select and keep picker open when Enter is pressed on a non-writable active option', () => {
     // Arrange — list: [readonly@0, writable@1]
     const repos: AvailableRepository[] = [
       { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
@@ -970,21 +974,57 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
-    // ArrowDown should skip readonly@0 and land on writable@1
+    // ArrowDown lands on readonly@0
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
 
-    // Assert active is the writable one
+    // Assert active option is the non-writable one
     const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
-    expect(activeOption?.getAttribute('aria-disabled')).toBeNull();
+    expect(activeOption?.getAttribute('aria-disabled')).toBe('true');
+
+    // Enter on non-writable — should be a no-op
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(combobox.value).toBe('');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
+  });
+
+  it('should select writable option when Enter is pressed on a writable active option', () => {
+    // Arrange — list: [readonly@0, writable@1]
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: repos,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    // Navigate down twice to land on writable@1
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
 
     // Enter should select it
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     fixture.detectChanges();
+
     expect(combobox.value).toBe('my-org/writable-repo');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(true);
   });
 
-  // Cycle 29: all non-writable — active index stays -1, picker shows all entries
+  // Cycle 29: all non-writable — arrows still move active descendant, no selection occurs
   it('should render all entries (not empty state) when all repos are non-writable', () => {
     // Arrange
     const { el, fixture } = setup({
@@ -1009,7 +1049,7 @@ describe('RepositoryFormComponent', () => {
     expect(emptyState).toBeNull();
   });
 
-  it('should not move active index off -1 when ArrowDown is pressed and all entries are non-writable', () => {
+  it('should move active descendant to disabled option when ArrowDown is pressed on all-disabled list', () => {
     // Arrange
     const { el, fixture } = setup({
       repository: null,
@@ -1026,8 +1066,35 @@ describe('RepositoryFormComponent', () => {
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
 
-    // No option should be active
+    // Active option should move to first disabled entry
     const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active');
-    expect(activeOption).toBeNull();
+    expect(activeOption).toBeTruthy();
+    expect(activeOption?.getAttribute('aria-disabled')).toBe('true');
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
+  });
+
+  it('should not select any option when Enter is pressed on an all-disabled list', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_ALL_READONLY,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+
+    // Combobox value unchanged, listbox stays open
+    expect(combobox.value).toBe('');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
   });
 });

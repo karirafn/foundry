@@ -125,7 +125,7 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
                       role="option"
                       [attr.aria-selected]="_repoSlug() === repo.slug"
                       [attr.aria-disabled]="repo.canPush ? null : 'true'"
-                      [attr.aria-describedby]="repo.canPush ? null : 'repo-option-reason-' + i"
+                      [attr.aria-describedby]="repo.canPush ? null : 'repo-option-reason-sr-' + i"
                       (click)="selectRepo(repo)"
                       (mousedown)="$event.preventDefault()"
                     >
@@ -133,7 +133,11 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
                       @if (!repo.canPush) {
                         <span
                           class="repository-form__picker-option-reason"
-                          [id]="'repo-option-reason-' + i"
+                          aria-hidden="true"
+                        >{{ _noWriteAccessReason }}</span>
+                        <span
+                          class="sr-only"
+                          [id]="'repo-option-reason-sr-' + i"
                         >{{ _noWriteAccessReason }}</span>
                       }
                     </li>
@@ -295,14 +299,14 @@ export class RepositoryFormComponent implements OnInit {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this._pickerOpen.set(true);
-      const next = this._findNextWritableIndex(filtered, current, 1);
-      if (next !== null) {
+      const next = current + 1;
+      if (next < filtered.length) {
         this._activeOptionIndex.set(next);
       }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      const prev = this._findNextWritableIndex(filtered, current, -1);
-      this._activeOptionIndex.set(prev ?? -1);
+      const prev = current - 1;
+      this._activeOptionIndex.set(prev >= 0 ? prev : -1);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (current >= 0 && current < filtered.length) {
@@ -322,21 +326,6 @@ export class RepositoryFormComponent implements OnInit {
     this._filterText.set('');
     this._pickerOpen.set(false);
     this._activeOptionIndex.set(-1);
-  }
-
-  private _findNextWritableIndex(
-    repos: AvailableRepository[],
-    from: number,
-    direction: 1 | -1,
-  ): number | null {
-    let index = from + direction;
-    while (index >= 0 && index < repos.length) {
-      if (repos[index].canPush) {
-        return index;
-      }
-      index += direction;
-    }
-    return null;
   }
 
   onPollIntervalInput(value: string): void {

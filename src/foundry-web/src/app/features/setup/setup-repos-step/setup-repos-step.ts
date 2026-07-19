@@ -159,6 +159,10 @@ export class SetupReposStepComponent implements OnInit {
   }
 
   onToggle(slug: string, checked: boolean): void {
+    const repo = this._repositoryService.availableRepositories().find(r => r.slug === slug);
+    if (!repo?.canPush) {
+      return;
+    }
     this._selectedSlugs.update(current => {
       const next = new Set(current);
       if (checked) {

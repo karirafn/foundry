@@ -20,6 +20,10 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     private const int RepositoriesPerPage = 100;
     private const int MaxReviewComments = 50;
     private const int MaxFilePathLength = 4096; // PATH_MAX
+    // Minimum access level that grants push rights on GitLab.
+    // permissions.project_access / group_access reflect direct membership only; deeply nested
+    // inherited group access may be absent (null → 0), which produces a conservative
+    // CanPush=false false-negative. This is safe: it never produces a false-positive.
     private const int GitLabDeveloperAccessLevel = 30;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
