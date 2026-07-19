@@ -1,8 +1,10 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { AccountSummary, CreateAccountRequest, TokenValidationResult, UpdateAccountRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialUpdateResult, TokenValidationResult, UpdateAccountRequest } from './account.model';
+import { ToastService } from '../../../core/services/toast.service';
 
 const API_BASE = '/api/accounts';
+const TOAST_ALL_RETAINED = 'Token updated. All repositories retained their access.';
 
 interface ValidateTokenRequest {
   token: string;
@@ -12,6 +14,7 @@ interface ValidateTokenRequest {
 @Injectable({ providedIn: 'root' })
 export class AccountService {
   private readonly _http = inject(HttpClient);
+  private readonly _toastService = inject(ToastService);
 
   private readonly _accountsSignal: WritableSignal<AccountSummary[]> = signal([]);
   readonly accounts: Signal<AccountSummary[]> = this._accountsSignal.asReadonly();
@@ -46,6 +49,9 @@ export class AccountService {
   private readonly _validationErrorSignal: WritableSignal<string | null> = signal(null);
   readonly validationError: Signal<string | null> = this._validationErrorSignal.asReadonly();
 
+  private readonly _affectedRepositoriesSignal: WritableSignal<AffectedRepository[] | null> = signal(null);
+  readonly affectedRepositories: Signal<AffectedRepository[] | null> = this._affectedRepositoriesSignal.asReadonly();
+
   loadAccounts(): Promise<void> {
     this._loadErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
@@ -71,6 +77,7 @@ export class AccountService {
   createAccount(request: CreateAccountRequest): void {
     this._saveErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
+    this._affectedRepositoriesSignal.set(null);
     this._savingSignal.set(true);
 
     this._http.post<AccountSummary>(API_BASE, request).subscribe({
@@ -91,13 +98,18 @@ export class AccountService {
   updateAccount(id: string, request: UpdateAccountRequest): void {
     this._saveErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
+    this._affectedRepositoriesSignal.set(null);
     this._savingSignal.set(true);
 
-    this._http.put<AccountSummary>(`${API_BASE}/${id}`, request).subscribe({
-      next: (updated) => {
+    this._http.put<CredentialUpdateResult>(`${API_BASE}/${id}`, request).subscribe({
+      next: (result) => {
         this._accountsSignal.update(accounts =>
-          accounts.map(a => a.id === updated.id ? updated : a)
+          accounts.map(a => a.id === result.credential.id ? result.credential : a)
         );
+        this._affectedRepositoriesSignal.set(result.affectedRepositories);
+        if (result.affectedRepositories.length === 0) {
+          this._toastService.show(TOAST_ALL_RETAINED);
+        }
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(true);
       },
@@ -108,6 +120,10 @@ export class AccountService {
         this._saveSuccessSignal.set(false);
       },
     });
+  }
+
+  clearAffectedRepositories(): void {
+    this._affectedRepositoriesSignal.set(null);
   }
 
   deleteAccount(id: string): void {

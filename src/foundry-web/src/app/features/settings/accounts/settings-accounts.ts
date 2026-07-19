@@ -2,6 +2,7 @@ import { Component, ChangeDetectionStrategy, OnInit, Signal, WritableSignal, com
 import { AccountService } from './account.service';
 import { AccountListComponent } from './account-list/account-list';
 import { AccountFormComponent } from './account-form/account-form';
+import { AffectedRepositoriesComponent } from './affected-repositories/affected-repositories';
 import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from './account.model';
 
 type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account: AccountSummary };
@@ -9,7 +10,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
 @Component({
   selector: 'fd-settings-accounts',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AccountListComponent, AccountFormComponent],
+  imports: [AccountListComponent, AccountFormComponent, AffectedRepositoriesComponent],
   template: `
     <div class="accounts-settings">
       <section class="accounts-settings__section">
@@ -20,6 +21,14 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
 
         @switch (_accountView().kind) {
           @case ('list') {
+            @if (accountService.affectedRepositories(); as affected) {
+              @if (affected.length > 0) {
+                <fd-affected-repositories
+                  [repositories]="affected"
+                  (dismiss)="accountService.clearAffectedRepositories()"
+                />
+              }
+            }
             <fd-account-list
               [accounts]="accountService.accounts()"
               [loading]="accountService.loading()"

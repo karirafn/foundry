@@ -3,7 +3,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { SettingsAccountsComponent } from './settings-accounts';
 import { AccountService } from './account.service';
-import { AccountSummary } from './account.model';
+import { AccountSummary, AffectedRepository, CredentialUpdateResult } from './account.model';
+
+function makeUpdateResult(account: AccountSummary, affected: AffectedRepository[] = []): CredentialUpdateResult {
+  return { credential: account, affectedRepositories: affected };
+}
 
 function setup() {
   TestBed.resetTestingModule();
@@ -260,13 +264,13 @@ describe('SettingsAccountsComponent', () => {
     expect(req.request.body).toEqual({
       baseUrl: 'https://github.com',
     });
-    req.flush({
+    req.flush(makeUpdateResult({
       id: '1',
       name: 'Updated Org',
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
-    });
+    }));
   });
 
   it('should return to list view and reload accounts after successful save', () => {
@@ -303,6 +307,99 @@ describe('SettingsAccountsComponent', () => {
     // Flush the reload request
     const reloadReq = httpMock.expectOne('/api/accounts');
     reloadReq.flush([]);
+  });
+
+  it('should render fd-affected-repositories panel when affected repos are present', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+    fixture.componentInstance.onEditAccount(account);
+    fixture.detectChanges();
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    httpMock.expectOne(`/api/accounts/${account.id}`).flush(makeUpdateResult(account, affected));
+    fixture.detectChanges();
+    // flush reload
+    httpMock.expectOne('/api/accounts').flush([account]);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const panel = el.querySelector('fd-affected-repositories');
+    expect(panel).toBeTruthy();
+  });
+
+  it('should not render fd-affected-repositories panel when no repos are affected', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+    fixture.componentInstance.onEditAccount(account);
+    fixture.detectChanges();
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    httpMock.expectOne(`/api/accounts/${account.id}`).flush(makeUpdateResult(account, []));
+    fixture.detectChanges();
+    // flush reload
+    httpMock.expectOne('/api/accounts').flush([account]);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const panel = el.querySelector('fd-affected-repositories');
+    expect(panel).toBeFalsy();
+  });
+
+  it('should dismiss affected repositories panel when clearAffectedRepositories is called', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+    };
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+    fixture.componentInstance.onEditAccount(account);
+    fixture.detectChanges();
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    httpMock.expectOne(`/api/accounts/${account.id}`).flush(makeUpdateResult(account, affected));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts').flush([account]);
+    fixture.detectChanges();
+
+    // Act
+    TestBed.inject(AccountService).clearAffectedRepositories();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const panel = el.querySelector('fd-affected-repositories');
+    expect(panel).toBeFalsy();
   });
 
   it('should call deleteAccount with confirmation when onDeleteAccount is invoked', () => {
