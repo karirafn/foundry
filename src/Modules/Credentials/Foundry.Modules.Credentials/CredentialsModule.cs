@@ -33,7 +33,6 @@ public static class CredentialsModule
         services.AddSingleton<ILoginSuccessCommitter, LoginSuccessCommitter>();
         services.AddSingleton<LoginSessionService>();
         services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
-        services.AddHostedService<LoginContainerReaper>();
         services.AddHostedService<TransientContainerReaper>();
 
         return services;

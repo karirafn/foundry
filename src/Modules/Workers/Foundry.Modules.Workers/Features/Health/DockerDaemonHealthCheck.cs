@@ -8,6 +8,8 @@ internal sealed class DockerDaemonHealthCheck(
     ISystemOperations systemOperations,
     TimeSpan timeout) : IHealthCheck
 {
+    public const string CheckName = "docker-daemon";
+
     private const string UnhealthyMessage = "Docker daemon connectivity check failed.";
 
     /// <summary>
