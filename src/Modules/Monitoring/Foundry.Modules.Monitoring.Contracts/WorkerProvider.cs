@@ -1,7 +1,12 @@
+using System.Text.Json.Serialization;
+
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Contracts;
 
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+[JsonDerivedType(typeof(GitHub), typeDiscriminator: "github")]
+[JsonDerivedType(typeof(GitLab), typeDiscriminator: "gitlab")]
 public abstract record WorkerProvider
 {
     private const string GitHubDiscriminator = "github";
