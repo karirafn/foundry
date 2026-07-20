@@ -89,6 +89,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
 
         FailedRun failed = active.Fail(
             new FailureReason.NonZeroExit(1),
+            branchNameOrNull: null,
             resultSummary: resultSummary);
 
         _dbContext.Set<WorkerRun>().Add(failed);

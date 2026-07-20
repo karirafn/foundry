@@ -33,7 +33,7 @@ public sealed class RunResultSummaryTests
             outputTokens: 50);
 
         // Act
-        FailedRun failed = active.Fail(new FailureReason.NonZeroExit(1), containerOutput: null, resultSummary: summary);
+        FailedRun failed = active.Fail(new FailureReason.NonZeroExit(1), branchNameOrNull: null, containerOutput: null, resultSummary: summary);
 
         // Assert
         failed.ResultSummary.ShouldNotBeNull();
@@ -55,7 +55,7 @@ public sealed class RunResultSummaryTests
         ActiveRun active = CreateActiveRun();
 
         // Act
-        FailedRun failed = active.Fail(new FailureReason.NonZeroExit(1), containerOutput: null, resultSummary: null);
+        FailedRun failed = active.Fail(new FailureReason.NonZeroExit(1), branchNameOrNull: null, containerOutput: null, resultSummary: null);
 
         // Assert
         failed.ResultSummary.ShouldBeNull();

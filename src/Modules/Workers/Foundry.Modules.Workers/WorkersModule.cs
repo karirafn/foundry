@@ -55,6 +55,7 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
+        services.AddDomainEventHandler<Domain.Events.WorkerRunFailed, WorkerRunFailedBridgeHandler>();
 
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddHostedService<WorkerDispatchService>();

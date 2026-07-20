@@ -60,6 +60,7 @@ public sealed class PersistFailedRunSummary : IAsyncDisposable
 
         FailedRun run = active.Fail(
             new FailureReason.NonZeroExit(1),
+            branchNameOrNull: null,
             containerOutput: "some output",
             resultSummary: summary);
 

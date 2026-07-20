@@ -16,8 +16,6 @@ using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.DispatchResumed;
 
 using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.WorkerAuthenticationFailed;
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
-using WorkerRunFailedEvent = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -52,8 +50,15 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
-        IDomainEventDispatcher domainEventDispatcher =
-            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
+        // FaultTolerantDomainEventDispatcher is used here (rather than the raw IDomainEventDispatcher)
+        // because the tick commits state via TransitionAsync before dispatching domain events.
+        // A bridge-handler throw must not crash the BackgroundService tick — the transition is already
+        // durable so losing the notification is preferable to an indeterminate tick failure.
+        // IssueClaimedHandler deliberately uses the raw dispatcher so the integration-event bus
+        // governs its own error handling; that asymmetry is intentional.
+        IDomainEventDispatcher domainEventDispatcher = new FaultTolerantDomainEventDispatcher(
+            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>(),
+            logger);
         IGlobalSettingsQueries settingsQueries =
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         IPostExitProviderQueries postExitProviderQueries =
@@ -165,8 +170,9 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
-        IDomainEventDispatcher domainEventDispatcher =
-            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
+        IDomainEventDispatcher domainEventDispatcher = new FaultTolerantDomainEventDispatcher(
+            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>(),
+            logger);
         IGlobalSettingsQueries settingsQueries =
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         IPostExitProviderQueries postExitProviderQueries =
@@ -610,6 +616,7 @@ internal sealed class WorkerDispatchService(
             {
                 FailedRun continuableFailed = activeRun.Fail(
                     continuable.FailureReason,
+                    continuable.BranchName,
                     continuable.ContainerOutput,
                     continuable.Summary);
                 await dbContext.TransitionAsync(
@@ -627,16 +634,6 @@ internal sealed class WorkerDispatchService(
                     activeRun,
                     continuable.FailureReason,
                     cancellationToken);
-                await TryDispatchAsync(
-                    integrationEventDispatcher,
-                    [new WorkerRunFailedEvent(
-                        activeRun.Id.Value,
-                        activeRun.IssueId.Value,
-                        continuable.FailureReason.Summary,
-                        Category: continuable.FailureReason.CategoryToken,
-                        BranchName: continuable.BranchName.Value)],
-                    activeRun.Id.Value,
-                    cancellationToken);
                 logger.LogWarning(
                     "Worker run {WorkerRunId} failed with commits (reason: {Reason}, branch: {BranchName}).",
                     activeRun.Id,
@@ -649,6 +646,7 @@ internal sealed class WorkerDispatchService(
             {
                 FailedRun failedRun = activeRun.Fail(
                     failure.FailureReason,
+                    branchNameOrNull: null,
                     failure.ContainerOutput,
                     failure.Summary);
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
@@ -661,16 +659,6 @@ internal sealed class WorkerDispatchService(
                     integrationEventDispatcher,
                     activeRun,
                     failure.FailureReason,
-                    cancellationToken);
-                await TryDispatchAsync(
-                    integrationEventDispatcher,
-                    [new WorkerRunFailedEvent(
-                        activeRun.Id.Value,
-                        activeRun.IssueId.Value,
-                        failure.FailureReason.Summary,
-                        Category: failure.FailureReason.CategoryToken,
-                        BranchName: null)],
-                    activeRun.Id.Value,
                     cancellationToken);
                 logger.LogWarning(
                     "Worker run {WorkerRunId} failed (reason: {Reason}).",

@@ -26,7 +26,7 @@ public sealed class Fail
         FailureReason reason = new FailureReason.NonZeroExit(1);
 
         // Act
-        FailedRun failed = active.Fail(reason);
+        FailedRun failed = active.Fail(reason, branchNameOrNull: null);
 
         // Assert
         failed.Id.ShouldBe(active.Id);
@@ -41,7 +41,7 @@ public sealed class Fail
         FailureReason reason = new FailureReason.NonZeroExit(1);
 
         // Act
-        FailedRun failed = active.Fail(reason);
+        FailedRun failed = active.Fail(reason, branchNameOrNull: null);
 
         // Assert
         failed.ShouldSatisfyAllConditions(
@@ -57,7 +57,7 @@ public sealed class Fail
         FailureReason reason = new FailureReason.TimedOut();
 
         // Act
-        FailedRun failed = active.Fail(reason);
+        FailedRun failed = active.Fail(reason, branchNameOrNull: null);
 
         // Assert
         failed.Reason.ShouldBe(reason);
@@ -72,7 +72,7 @@ public sealed class Fail
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        FailedRun failed = active.Fail(reason);
+        FailedRun failed = active.Fail(reason, branchNameOrNull: null);
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;
@@ -80,7 +80,7 @@ public sealed class Fail
     }
 
     [Fact]
-    public void WhenCalled_RaisesWorkerRunFailedOnActiveRun()
+    public void WhenCalledWithBranchName_RaisesWorkerRunFailedWithBranchName()
     {
         // Arrange
         IssueId issueId = IssueId.New();
@@ -89,7 +89,7 @@ public sealed class Fail
         FailureReason reason = new FailureReason.TimedOut();
 
         // Act
-        active.Fail(reason);
+        active.Fail(reason, branchNameOrNull: BranchName.From("feat/102-some-work"));
 
         // Assert
         WorkerRunFailed domainEvent = active.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunFailed>();
@@ -99,6 +99,23 @@ public sealed class Fail
             () => domainEvent.ReasonDescription.ShouldBe(reason.Summary),
             () => domainEvent.Category.ShouldBe(reason.CategoryToken),
             () => domainEvent.BranchName.ShouldBe("feat/102-some-work"));
+    }
+
+    [Fact]
+    public void WhenCalledWithNullBranchName_RaisesWorkerRunFailedWithNullBranchName()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        BranchName branchName = BranchName.From("feat/103-terminal-work");
+        ActiveRun active = CreateActiveRun(issueId, branchName);
+        FailureReason reason = new FailureReason.NonZeroExit(1);
+
+        // Act
+        active.Fail(reason, branchNameOrNull: null);
+
+        // Assert
+        WorkerRunFailed domainEvent = active.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<WorkerRunFailed>();
+        domainEvent.BranchName.ShouldBeNull();
     }
 
 }

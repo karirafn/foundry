@@ -47,6 +47,7 @@ public sealed class WhenRunLogRequested : IAsyncDisposable
 
         FailedRun failed = active.Fail(
             new FailureReason.NonZeroExit(1),
+            branchNameOrNull: null,
             containerOutput: containerOutput);
 
         dbContext.Set<WorkerRun>().Add(failed);
