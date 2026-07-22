@@ -2,8 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
-import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Subject } from 'rxjs';
 import { SystemBannerComponent } from './system-banner';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
@@ -67,8 +65,6 @@ function setup() {
     imports: [SystemBannerComponent],
     providers: [
       provideRouter([]),
-      provideHttpClient(),
-      provideHttpClientTesting(),
       { provide: SystemSignalRService, useValue: mockSignalR },
       { provide: DispatchService, useValue: mockDispatch },
       { provide: SettingsService, useValue: mockSettings },

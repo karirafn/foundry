@@ -36,20 +36,19 @@ function setup(notifications: SystemNotification[] = []) {
 }
 
 describe('DockerBannerComponent', () => {
-  // Cycle 1: banner is hidden when there are no docker notifications
-  it('should be hidden when no docker notification is present', () => {
+  // Cycle 1: banner is absent from DOM when there are no docker notifications
+  it('should not be present in the DOM when no docker notification is present', () => {
     // Arrange / Act
     const { fixture } = setup([]);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const wrapper = el.querySelector('.system-banner--docker-only') as HTMLElement;
-    expect(wrapper).toBeTruthy();
-    expect(wrapper.hidden).toBe(true);
+    const wrapper = el.querySelector('.system-banner--docker-only');
+    expect(wrapper).toBeNull();
   });
 
-  // Cycle 2: banner is visible when a docker notification is present
-  it('should be visible when a docker notification with isActive: true is present', () => {
+  // Cycle 2: banner is present in the DOM when a docker notification is present
+  it('should be present in the DOM when a docker notification with isActive: true is present', () => {
     // Arrange
     const notification: SystemNotification = {
       category: 'docker',
@@ -62,13 +61,12 @@ describe('DockerBannerComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const wrapper = el.querySelector('.system-banner--docker-only') as HTMLElement;
-    expect(wrapper).toBeTruthy();
-    expect(wrapper.hidden).toBe(false);
+    const wrapper = el.querySelector('.system-banner--docker-only');
+    expect(wrapper).not.toBeNull();
   });
 
-  // Cycle 3: banner clears when the docker notification is removed from signal
-  it('should hide when the docker notification is cleared from the notifications signal', () => {
+  // Cycle 3: banner is removed from DOM when the docker notification is cleared from signal
+  it('should be removed from the DOM when the docker notification is cleared from the notifications signal', () => {
     // Arrange
     const notification: SystemNotification = {
       category: 'docker',
@@ -77,15 +75,14 @@ describe('DockerBannerComponent', () => {
     };
     const { fixture, mockSignalR } = setup([notification]);
     const el = fixture.nativeElement as HTMLElement;
-    const wrapper = el.querySelector('.system-banner--docker-only') as HTMLElement;
-    expect(wrapper.hidden).toBe(false);
+    expect(el.querySelector('.system-banner--docker-only')).not.toBeNull();
 
     // Act
     mockSignalR._signal.set([]);
     fixture.detectChanges();
 
     // Assert
-    expect(wrapper.hidden).toBe(true);
+    expect(el.querySelector('.system-banner--docker-only')).toBeNull();
   });
 
   // Cycle 4: banner renders the exact copy
@@ -145,8 +142,15 @@ describe('DockerBannerComponent', () => {
 
   // Cycle 7: outer wrapper has role="region" and aria-label="Docker status"
   it('should have role="region" and aria-label="Docker status" on the wrapper', () => {
-    // Arrange / Act
-    const { fixture } = setup([]);
+    // Arrange
+    const notification: SystemNotification = {
+      category: 'docker',
+      isActive: true,
+      message: DOCKER_UNAVAILABLE_MESSAGE,
+    };
+
+    // Act
+    const { fixture } = setup([notification]);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -154,8 +158,8 @@ describe('DockerBannerComponent', () => {
     expect(wrapper?.getAttribute('role')).toBe('region');
   });
 
-  // Cycle 8: non-docker notifications do not make the banner visible
-  it('should not show banner for non-docker category notifications', () => {
+  // Cycle 8: non-docker notifications do not render the banner in the DOM
+  it('should not render the banner in the DOM for non-docker category notifications', () => {
     // Arrange
     const notification: SystemNotification = {
       category: 'image-build',
@@ -168,7 +172,7 @@ describe('DockerBannerComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const wrapper = el.querySelector('.system-banner--docker-only') as HTMLElement;
-    expect(wrapper.hidden).toBe(true);
+    const wrapper = el.querySelector('.system-banner--docker-only');
+    expect(wrapper).toBeNull();
   });
 });
