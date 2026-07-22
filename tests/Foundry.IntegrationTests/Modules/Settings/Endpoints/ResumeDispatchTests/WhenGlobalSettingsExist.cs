@@ -69,28 +69,26 @@ public sealed class WhenGlobalSettingsExist : IAsyncDisposable
     /// Pre-ship integration test for the transactional outbox.
     ///
     /// Proves the crash-between-commit-and-delivery acceptance criterion:
-    /// a DispatchResumed integration event written to outbox_messages before delivery is picked up
-    /// and fully processed on the next relay pass — even if the process crashed between the commit
-    /// and the in-process dispatch attempt.
+    /// a DispatchResumed integration event written to outbox_messages atomically with the settings
+    /// change is picked up and fully processed on the next relay pass — even if the process crashed
+    /// between the commit and the in-process dispatch attempt.
     ///
-    /// The outbox row is seeded directly because the ResumeDispatch handler still uses the
-    /// pre-migration dispatch-after-save pattern (step 9 migrates it). Seeding directly is the
-    /// correct approach per integration-tests.md: "Use DbContext directly only when no endpoint can
-    /// produce the required state."
+    /// The outbox row is produced by the real endpoint after step 9a migrates ResumeDispatch
+    /// to enqueue-before-save.
     /// </summary>
     [Fact]
     public async Task WhenOutboxMessageExists_RelayDeliversEventAndStampsProcessedAt()
     {
-        // Arrange — write a DispatchResumed outbox row as if the interceptor had persisted it.
-        using IServiceScope seedScope = _factory.Services.CreateScope();
-        DbContext seedContext = seedScope.ServiceProvider.GetRequiredService<DbContext>();
+        // Arrange — seed paused settings and call the real endpoint to produce the outbox row.
+        await SeedPausedSettingsAsync();
 
-        OutboxMessage message = OutboxMessage.Create(new DispatchResumed(), DateTimeOffset.UtcNow);
-        seedContext.Set<OutboxMessage>().Add(message);
-        await seedContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        Guid messageId = message.Id;
+        HttpResponseMessage resumeResponse = await _client.PostAsync(
+            new Uri("/api/settings/dispatch/resume", UriKind.Relative),
+            content: null,
+            TestContext.Current.CancellationToken);
+        resumeResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // Assert — exactly one row exists and is NOT yet delivered (crash-window proof).
+        // Assert — exactly one outbox row exists and is NOT yet delivered (crash-window proof).
         using IServiceScope preTickScope = _factory.Services.CreateScope();
         DbContext preTickContext = preTickScope.ServiceProvider.GetRequiredService<DbContext>();
 
@@ -100,6 +98,8 @@ public sealed class WhenGlobalSettingsExist : IAsyncDisposable
 
         preTick.Count.ShouldBe(1);
         preTick[0].ProcessedAt.ShouldBeNull("message must be undelivered before the relay runs");
+
+        Guid messageId = preTick[0].Id;
 
         // Act — drive exactly one relay tick via the TickForTest seam.
         // OutboxRelayService is registered as a plain singleton (not IHostedService) in the test
