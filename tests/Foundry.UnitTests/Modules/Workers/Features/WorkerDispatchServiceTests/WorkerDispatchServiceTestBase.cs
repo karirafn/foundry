@@ -74,6 +74,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IWorkerOrchestrator orchestrator,
         WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
+        IIntegrationEventProcessor? integrationEventProcessor = null,
         IGlobalSettingsQueries? settingsQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null,
         IContainerOutputParser? containerOutputParser = null,
@@ -96,6 +97,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IDomainEventHandler<DomainWorkerRunFailed>, WorkerRunFailedBridgeHandler>();
         services.AddScoped<IIntegrationEventDispatcher>(
             _ => integrationEventDispatcher ?? new NullIntegrationEventDispatcher());
+        services.AddScoped<IIntegrationEventProcessor>(
+            _ => integrationEventProcessor ?? new NullIntegrationEventProcessor());
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
         services.AddScoped<IGlobalSettingsQueries>(
             _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
@@ -196,6 +199,25 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
         {
             _captured.AddRange(events);
+            return Task.CompletedTask;
+        }
+    }
+
+    protected sealed class NullIntegrationEventProcessor : IIntegrationEventProcessor
+    {
+        public Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    protected sealed class CapturingIntegrationEventProcessor : IIntegrationEventProcessor
+    {
+        private readonly List<IIntegrationEvent> _captured = [];
+
+        public IReadOnlyList<IIntegrationEvent> Captured => _captured;
+
+        public Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
+        {
+            _captured.Add(@event);
             return Task.CompletedTask;
         }
     }
