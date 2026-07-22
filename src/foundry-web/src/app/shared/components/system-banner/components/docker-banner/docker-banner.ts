@@ -14,11 +14,12 @@ import { DOCKER_UNAVAILABLE_MESSAGE } from '../../../../../core/models/system-st
 })
 export class DockerBannerComponent {
   private readonly _systemSignalR = inject(SystemSignalRService);
+  // Injected for its construction side effect: seeds docker availability and subscribes to reconnect. Do not remove.
   private readonly _systemStatusService = inject(SystemStatusService);
 
   protected readonly dockerUnavailableMessage = DOCKER_UNAVAILABLE_MESSAGE;
 
-  readonly isDockerBannerVisible: Signal<boolean> = computed(() =>
+  protected readonly isDockerBannerVisible: Signal<boolean> = computed(() =>
     this._systemSignalR.notifications().some((n) => n.category === DOCKER_NOTIFICATION_CATEGORY)
   );
 }
