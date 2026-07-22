@@ -215,6 +215,7 @@ public sealed class HandleAsync : IAsyncDisposable
             ValidateToken.Response response = new(
                 IsValid: true,
                 IsAuthFailure: false,
+                ScopesVerified: true,
                 MissingScopes: [],
                 AccountName: accountName);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));

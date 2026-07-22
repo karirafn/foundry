@@ -20,7 +20,7 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
 
     public WhenTokenLacksScopes()
     {
-        ValidateToken.Response missingRepoResponse = new(IsValid: false, IsAuthFailure: false, MissingScopes: ["repo"], AccountName: null);
+        ValidateToken.Response missingRepoResponse = new(IsValid: false, IsAuthFailure: false, ScopesVerified: true, MissingScopes: ["repo"], AccountName: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
