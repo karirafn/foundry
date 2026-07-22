@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
@@ -59,7 +60,36 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
         string? accountName = DeserializeUsername(responseBody);
 
-        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated([], accountName));
+        return await ValidateScopesAsync(apiBaseUrl, token, accountName, cancellationToken);
+    }
+
+    private async Task<Result<TokenValidationResult>> ValidateScopesAsync(
+        Uri apiBaseUrl,
+        string token,
+        string? accountName,
+        CancellationToken cancellationToken)
+    {
+        Uri selfUri = new(EnsureTrailingSlash(apiBaseUrl), "personal_access_tokens/self");
+
+        using HttpRequestMessage selfRequest = new(HttpMethod.Get, selfUri);
+        AddCommonHeaders(selfRequest, token);
+
+        using HttpResponseMessage selfResponse = await httpClient.SendAsync(selfRequest, cancellationToken);
+
+        if (!selfResponse.IsSuccessStatusCode)
+        {
+            return Result<TokenValidationResult>.Ok(TokenValidationResult.ScopesUnverifiable(accountName));
+        }
+
+        string selfBody = await selfResponse.Content.ReadAsStringAsync(cancellationToken);
+        GitLabTokenSelfDto? dto = JsonSerializer.Deserialize<GitLabTokenSelfDto>(selfBody, JsonOptions);
+
+        IReadOnlyList<string> granted = dto?.Scopes ?? [];
+        List<string> missing = RequiredScopes.For(ProviderTypes.GitLab)
+            .Where(s => !granted.Contains(s))
+            .ToList();
+
+        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missing, accountName));
     }
 
     public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
@@ -799,6 +829,8 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
     }
 
     private sealed record GitLabUserDto([property: JsonPropertyName("username")] string Username);
+
+    private sealed record GitLabTokenSelfDto([property: JsonPropertyName("scopes")] IReadOnlyList<string> Scopes);
 
     private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
 

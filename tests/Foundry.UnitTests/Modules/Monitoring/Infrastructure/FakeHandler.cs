@@ -6,8 +6,10 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 internal sealed class FakeHandler(HttpStatusCode statusCode, string responseBody) : DelegatingHandler
 {
     private readonly List<(string PathContains, HttpStatusCode StatusCode, string Body)> _routes = [];
+    private readonly List<HttpRequestMessage> _allRequests = [];
 
     public HttpRequestMessage? LastRequest { get; private set; }
+    public IReadOnlyList<HttpRequestMessage> AllRequests => _allRequests;
     public Dictionary<string, string> ResponseHeaders { get; } = new();
 
     public FakeHandler WithRoute(string pathContains, HttpStatusCode routeStatusCode, string body)
@@ -21,6 +23,7 @@ internal sealed class FakeHandler(HttpStatusCode statusCode, string responseBody
         CancellationToken cancellationToken)
     {
         LastRequest = request;
+        _allRequests.Add(request);
 
         string path = request.RequestUri?.AbsolutePath ?? string.Empty;
 
