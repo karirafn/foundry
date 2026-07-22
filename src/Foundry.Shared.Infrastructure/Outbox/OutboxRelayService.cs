@@ -91,7 +91,7 @@ public sealed class OutboxRelayService(
 
         try
         {
-            await processor.ProcessAsync(@event, cancellationToken);
+            await processor.ProcessAsync(message.Id, @event, cancellationToken);
             message.MarkPublished(DateTimeOffset.UtcNow);
             await dbContext.SaveChangesAsync(cancellationToken);
         }

@@ -299,7 +299,7 @@ public sealed class TickAsync : IAsyncDisposable
     {
         private int _callCount;
 
-        public async Task ProcessAsync(IIntegrationEvent @event, CancellationToken cancellationToken)
+        public async Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
         {
             int call = System.Threading.Interlocked.Increment(ref _callCount);
 

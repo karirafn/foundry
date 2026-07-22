@@ -18,4 +18,14 @@ internal static class OutboxDbContextExtensions
             .Take(batchSize)
             .ToListAsync(cancellationToken);
     }
+
+    internal static Task<bool> IsProcessedAsync(
+        this DbContext dbContext,
+        Guid eventId,
+        string handler,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.Set<ProcessedEvent>()
+            .AnyAsync(p => p.EventId == eventId && p.Handler == handler, cancellationToken);
+    }
 }

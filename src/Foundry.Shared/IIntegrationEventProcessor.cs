@@ -2,5 +2,5 @@ namespace Foundry.Shared;
 
 public interface IIntegrationEventProcessor
 {
-    Task ProcessAsync(IIntegrationEvent @event, CancellationToken cancellationToken);
+    Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken);
 }

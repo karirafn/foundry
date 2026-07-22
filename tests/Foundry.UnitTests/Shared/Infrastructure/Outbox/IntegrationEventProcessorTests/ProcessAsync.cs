@@ -1,6 +1,9 @@
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
+using Foundry.WebApi.Persistence;
 
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using Shouldly;
@@ -9,8 +12,30 @@ using Xunit;
 
 namespace Foundry.UnitTests.Shared.Infrastructure.Outbox.IntegrationEventProcessorTests;
 
-public sealed class ProcessAsync
+public sealed class ProcessAsync : IDisposable
 {
+    private readonly SqliteConnection _connection;
+    private readonly FoundryDbContext _dbContext;
+
+    public ProcessAsync()
+    {
+        _connection = new SqliteConnection("Data Source=:memory:");
+        _connection.Open();
+
+        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+
+        _dbContext = new FoundryDbContext(options);
+        _dbContext.Database.EnsureCreated();
+    }
+
+    public void Dispose()
+    {
+        _dbContext.Dispose();
+        _connection.Dispose();
+    }
+
     [Fact]
     public async Task WhenHandlerRegistered_HandlerReceivesEvent()
     {
@@ -20,11 +45,11 @@ public sealed class ProcessAsync
         services.AddSingleton<IIntegrationEventHandler<TestProcessorEvent>>(handler);
         IServiceProvider provider = services.BuildServiceProvider();
 
-        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider);
+        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext);
         TestProcessorEvent @event = new("SomethingHappened");
 
         // Act
-        await sut.ProcessAsync(@event, CancellationToken.None);
+        await sut.ProcessAsync(Guid.NewGuid(), @event, CancellationToken.None);
 
         // Assert
         handler.ReceivedEvents.ShouldContain(@event);
@@ -33,19 +58,19 @@ public sealed class ProcessAsync
     [Fact]
     public async Task WhenMultipleHandlersRegisteredForSameEvent_AllHandlersReceiveEvent()
     {
-        // Arrange
+        // Arrange — use distinct handler types so each has a unique FullName for dedup keying
         RecordingProcessorEventHandler handlerA = new();
-        RecordingProcessorEventHandler handlerB = new();
+        SecondRecordingProcessorEventHandler handlerB = new();
         ServiceCollection services = new();
         services.AddSingleton<IIntegrationEventHandler<TestProcessorEvent>>(handlerA);
         services.AddSingleton<IIntegrationEventHandler<TestProcessorEvent>>(handlerB);
         IServiceProvider provider = services.BuildServiceProvider();
 
-        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider);
+        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext);
         TestProcessorEvent @event = new("SomethingHappened");
 
         // Act
-        await sut.ProcessAsync(@event, CancellationToken.None);
+        await sut.ProcessAsync(Guid.NewGuid(), @event, CancellationToken.None);
 
         // Assert
         handlerA.ReceivedEvents.ShouldContain(@event);
@@ -58,11 +83,11 @@ public sealed class ProcessAsync
         // Arrange — a provider that returns an enumerable containing null, simulating a non-conforming DI registration
         IServiceProvider provider = new NullItemServiceProvider();
 
-        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider);
+        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext);
         TestProcessorEvent @event = new("SomethingHappened");
 
         // Act
-        Task act = sut.ProcessAsync(@event, CancellationToken.None);
+        Task act = sut.ProcessAsync(Guid.NewGuid(), @event, CancellationToken.None);
 
         // Assert
         await Should.NotThrowAsync(act);

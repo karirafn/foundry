@@ -14,3 +14,14 @@ internal sealed class RecordingProcessorEventHandler : IIntegrationEventHandler<
         return Task.CompletedTask;
     }
 }
+
+internal sealed class SecondRecordingProcessorEventHandler : IIntegrationEventHandler<TestProcessorEvent>
+{
+    public List<TestProcessorEvent> ReceivedEvents { get; } = [];
+
+    public Task HandleAsync(TestProcessorEvent @event, CancellationToken cancellationToken)
+    {
+        ReceivedEvents.Add(@event);
+        return Task.CompletedTask;
+    }
+}
