@@ -48,6 +48,7 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
             .HasColumnName("processed_at");
 
         builder.Property(m => m.Error)
+            .HasMaxLength(2000)
             .HasColumnType("TEXT")
             .HasColumnName("error");
 

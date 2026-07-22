@@ -10,7 +10,7 @@ namespace Foundry.UnitTests.Shared.Infrastructure.Outbox.OutboxMessageTests;
 public sealed class RecordFailure
 {
     [Fact]
-    public void WhenCalled_IncrementsAttempts()
+    public void WhenRecordFailureCalled_AttemptsIncrementsByOne()
     {
         // Arrange
         OutboxMessage message = OutboxMessage.Create(MakeEvent(), DateTimeOffset.UtcNow);
@@ -23,7 +23,7 @@ public sealed class RecordFailure
     }
 
     [Fact]
-    public void WhenCalledTwice_IncrementsTwice()
+    public void WhenRecordFailureCalledTwice_AttemptsEqualsTwo()
     {
         // Arrange
         OutboxMessage message = OutboxMessage.Create(MakeEvent(), DateTimeOffset.UtcNow);
@@ -37,7 +37,7 @@ public sealed class RecordFailure
     }
 
     [Fact]
-    public void WhenCalled_SetsError()
+    public void WhenRecordFailureCalled_SetsErrorToProvidedMessage()
     {
         // Arrange
         OutboxMessage message = OutboxMessage.Create(MakeEvent(), DateTimeOffset.UtcNow);
@@ -51,7 +51,7 @@ public sealed class RecordFailure
     }
 
     [Fact]
-    public void WhenCalledTwice_OverwritesErrorWithLatest()
+    public void WhenRecordFailureCalledTwice_ErrorReflectsSecondMessage()
     {
         // Arrange
         OutboxMessage message = OutboxMessage.Create(MakeEvent(), DateTimeOffset.UtcNow);
@@ -65,7 +65,7 @@ public sealed class RecordFailure
     }
 
     [Fact]
-    public void WhenCalled_DoesNotSetProcessedAt()
+    public void WhenRecordFailureCalled_ProcessedAtRemainsNull()
     {
         // Arrange
         OutboxMessage message = OutboxMessage.Create(MakeEvent(), DateTimeOffset.UtcNow);
@@ -75,6 +75,35 @@ public sealed class RecordFailure
 
         // Assert
         message.ProcessedAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenErrorExceedsMaxLength_TruncatesToMaxLength()
+    {
+        // Arrange
+        OutboxMessage message = OutboxMessage.Create(MakeEvent(), DateTimeOffset.UtcNow);
+        string longError = new('x', 2001);
+
+        // Act
+        message.RecordFailure(longError);
+
+        // Assert
+        message.Error.ShouldNotBeNull();
+        message.Error.Length.ShouldBe(2000);
+    }
+
+    [Fact]
+    public void WhenErrorIsExactlyMaxLength_StoresUnchanged()
+    {
+        // Arrange
+        OutboxMessage message = OutboxMessage.Create(MakeEvent(), DateTimeOffset.UtcNow);
+        string exactError = new('x', 2000);
+
+        // Act
+        message.RecordFailure(exactError);
+
+        // Assert
+        message.Error.ShouldBe(exactError);
     }
 
     private static IssueDetected MakeEvent() =>

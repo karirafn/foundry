@@ -48,6 +48,8 @@ public sealed class OutboxMessage
     public void RecordFailure(string error)
     {
         Attempts++;
-        Error = error;
+        Error = error.Length > MaxErrorLength ? error[..MaxErrorLength] : error;
     }
+
+    private const int MaxErrorLength = 2000;
 }

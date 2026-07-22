@@ -443,6 +443,7 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnName("attempts");
 
                     b.Property<string>("Error")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT")
                         .HasColumnName("error");
 
