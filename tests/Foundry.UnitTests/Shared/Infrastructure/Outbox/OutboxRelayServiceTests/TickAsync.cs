@@ -291,6 +291,40 @@ public sealed class TickAsync : IAsyncDisposable
         _handler.ReceivedEvents.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task WhenMessageTypeResolvesButIsNotIIntegrationEvent_ErrorMentionsNonEventType()
+    {
+        // Arrange — insert a message whose type resolves but does not implement IIntegrationEvent
+        await using AsyncServiceScope seedScope = _serviceProvider.CreateAsyncScope();
+        FoundryDbContext seedContext = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+
+        OutboxMessage validMessage = OutboxMessage.Create(new TestRelayEvent("Dummy"), DateTimeOffset.UtcNow);
+        seedContext.Set<OutboxMessage>().Add(validMessage);
+        await seedContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Overwrite the type column with a resolvable non-event type (System.String)
+        string nonEventType = typeof(string).AssemblyQualifiedName!;
+        await seedContext.Database.ExecuteSqlAsync(
+            $"UPDATE outbox_messages SET type = {nonEventType} WHERE id = {validMessage.Id}",
+            TestContext.Current.CancellationToken);
+
+        OutboxRelayService sut = CreateSut();
+
+        // Act
+        await sut.TickForTest(TestContext.Current.CancellationToken);
+
+        // Assert — row is dead-lettered and error message identifies the non-event type
+        await using AsyncServiceScope verifyScope = _serviceProvider.CreateAsyncScope();
+        FoundryDbContext verifyContext = verifyScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+        OutboxMessage? msg = await verifyContext.Set<OutboxMessage>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        msg.ShouldNotBeNull();
+        msg.ProcessedAt.ShouldBeNull();
+        msg.Attempts.ShouldBe(1);
+        msg.Error.ShouldNotBeNull();
+        msg.Error.ShouldContain("does not implement IIntegrationEvent");
+    }
+
     /// <summary>
     /// A processor that throws <see cref="InvalidOperationException"/> on the first call,
     /// then delegates to the real handler on subsequent calls.

@@ -86,6 +86,17 @@ public sealed class OutboxRelayService(
             return;
         }
 
+        if (!typeof(IIntegrationEvent).IsAssignableFrom(eventType))
+        {
+            message.RecordFailure($"Type '{message.Type}' does not implement IIntegrationEvent.");
+            await dbContext.SaveChangesAsync(cancellationToken);
+            logger.LogWarning(
+                "Outbox message {MessageId} resolved to non-event type '{Type}'; dead-lettering.",
+                message.Id,
+                message.Type);
+            return;
+        }
+
         IIntegrationEvent? @event;
 
         try
