@@ -15,6 +15,7 @@ public sealed class OutboxRelayService(
     ILogger<OutboxRelayService> logger) : PeriodicBackgroundService(logger)
 {
     private readonly OutboxOptions _options = options.Value;
+    private DateTimeOffset _lastPruneAt = DateTimeOffset.MinValue;
 
     protected override TimeSpan TickInterval => _options.TickInterval;
 
@@ -39,6 +40,30 @@ public sealed class OutboxRelayService(
         foreach (OutboxMessage message in batch)
         {
             await ProcessMessageAsync(dbContext, processor, message, cancellationToken);
+        }
+
+        await RunRetentionSweepIfDueAsync(dbContext, cancellationToken);
+    }
+
+    private async Task RunRetentionSweepIfDueAsync(DbContext dbContext, CancellationToken cancellationToken)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        if (now - _lastPruneAt < _options.RetentionSweepInterval)
+        {
+            return;
+        }
+
+        DateTimeOffset olderThan = now - _options.RetentionWindow;
+        int deleted = await dbContext.PrunePublishedAsync(olderThan, cancellationToken);
+        _lastPruneAt = now;
+
+        if (deleted > 0)
+        {
+            logger.LogInformation(
+                "Outbox retention sweep deleted {Count} published message(s) older than {OlderThan:O}.",
+                deleted,
+                olderThan);
         }
     }
 

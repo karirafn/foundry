@@ -4,6 +4,17 @@ namespace Foundry.Shared.Infrastructure.Outbox;
 
 internal static class OutboxDbContextExtensions
 {
+    internal static Task<int> PrunePublishedAsync(
+        this DbContext dbContext,
+        DateTimeOffset olderThan,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.Set<OutboxMessage>()
+            .Where(m => m.ProcessedAt != null)
+            .Where(m => m.ProcessedAt < olderThan)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     internal static Task<List<OutboxMessage>> FindUnpublishedBatchAsync(
         this DbContext dbContext,
         int batchSize,
