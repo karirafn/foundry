@@ -73,11 +73,11 @@ internal sealed class RepositoryPoller(
         }
 
         repository.MarkPolled(now);
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
+        repository.ClearIntegrationEvents();
         await dbContext.SaveChangesAsync(cancellationToken);
         await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
-        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearDomainEvents();
-        repository.ClearIntegrationEvents();
 
         // Pass 3: detect dependencies for all known non-terminal issues.
         // Re-query known numbers so newly detected issues from pass 1 are included.
@@ -87,17 +87,18 @@ internal sealed class RepositoryPoller(
 
         await DetectDependenciesAsync(repository, provider, knownNumbersForDependencies, cancellationToken);
 
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
+        repository.ClearIntegrationEvents();
         await dbContext.SaveChangesAsync(cancellationToken);
         await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
-        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearDomainEvents();
-        repository.ClearIntegrationEvents();
 
         // Pass 4: check provider-side status of all review issues.
         await DetectReviewStatusChangesAsync(repository, provider, cancellationToken);
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         return Result.Ok();
     }
