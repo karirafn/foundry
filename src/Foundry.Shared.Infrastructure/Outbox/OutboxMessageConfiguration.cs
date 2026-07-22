@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -25,8 +27,13 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
             .HasColumnType("TEXT")
             .HasColumnName("payload");
 
+        // Stored as ISO 8601 TEXT so that SQLite can sort by it lexicographically.
         builder.Property(m => m.OccurredAt)
             .IsRequired()
+            .HasConversion(
+                dto => dto.UtcDateTime.ToString("O"),
+                s => DateTimeOffset.Parse(s, null, DateTimeStyles.RoundtripKind))
+            .HasColumnType("TEXT")
             .HasColumnName("occurred_at");
 
         builder.Property(m => m.Attempts)
@@ -34,6 +41,10 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
             .HasColumnName("attempts");
 
         builder.Property(m => m.ProcessedAt)
+            .HasConversion(
+                dto => dto.HasValue ? dto.Value.UtcDateTime.ToString("O") : null,
+                s => s != null ? (DateTimeOffset?)DateTimeOffset.Parse(s, null, DateTimeStyles.RoundtripKind) : null)
+            .HasColumnType("TEXT")
             .HasColumnName("processed_at");
 
         builder.Property(m => m.Error)
