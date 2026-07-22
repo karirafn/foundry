@@ -8,11 +8,11 @@ internal sealed record TokenValidationResult(
     string? AccountName)
 {
     public static TokenValidationResult Validated(IReadOnlyList<string> missingScopes, string? accountName) =>
-        new(missingScopes.Count == 0, false, true, missingScopes, accountName);
+        new(IsValid: missingScopes.Count == 0, IsAuthFailure: false, ScopesVerified: true, MissingScopes: missingScopes, AccountName: accountName);
 
     public static TokenValidationResult AuthFailure() =>
-        new(false, true, false, [], null);
+        new(IsValid: false, IsAuthFailure: true, ScopesVerified: false, MissingScopes: [], AccountName: null);
 
     public static TokenValidationResult ScopesUnverifiable(string? accountName) =>
-        new(false, false, false, [], accountName);
+        new(IsValid: false, IsAuthFailure: false, ScopesVerified: false, MissingScopes: [], AccountName: accountName);
 }

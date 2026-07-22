@@ -84,7 +84,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         string selfBody = await selfResponse.Content.ReadAsStringAsync(cancellationToken);
         GitLabTokenSelfDto? dto = JsonSerializer.Deserialize<GitLabTokenSelfDto>(selfBody, JsonOptions);
 
-        IReadOnlyList<string> granted = dto?.Scopes ?? [];
+        HashSet<string> granted = new(dto?.Scopes ?? [], StringComparer.OrdinalIgnoreCase);
         List<string> missing = RequiredScopes.For(ProviderTypes.GitLab)
             .Where(s => !granted.Contains(s))
             .ToList();

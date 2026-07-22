@@ -774,7 +774,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
     private static List<string> ParseMissingScopes(IEnumerable<string> scopeHeaders)
     {
-        HashSet<string> grantedScopes = [];
+        HashSet<string> grantedScopes = new(StringComparer.OrdinalIgnoreCase);
         foreach (string header in scopeHeaders)
         {
             foreach (string scope in header.Split(','))

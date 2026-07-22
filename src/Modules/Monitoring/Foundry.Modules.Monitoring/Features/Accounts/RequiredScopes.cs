@@ -5,7 +5,7 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 internal static class RequiredScopes
 {
     private static readonly FrozenDictionary<string, IReadOnlyList<string>> Scopes =
-        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        new Dictionary<string, IReadOnlyList<string>>
         {
             [ProviderTypes.GitHub] = ["repo"],
             [ProviderTypes.GitLab] = ["api"],

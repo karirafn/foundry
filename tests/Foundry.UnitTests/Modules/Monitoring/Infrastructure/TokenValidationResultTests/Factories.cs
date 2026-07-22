@@ -9,55 +9,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.TokenValidationRes
 public sealed class Factories
 {
     [Fact]
-    public void ScopesUnverifiable_WhenCalled_IsNotValid()
-    {
-        // Arrange
-
-        // Act
-        TokenValidationResult result = TokenValidationResult.ScopesUnverifiable("octocat");
-
-        // Assert
-        result.IsValid.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void ScopesUnverifiable_WhenCalled_IsNotAuthFailure()
-    {
-        // Arrange
-
-        // Act
-        TokenValidationResult result = TokenValidationResult.ScopesUnverifiable("octocat");
-
-        // Assert
-        result.IsAuthFailure.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void ScopesUnverifiable_WhenCalled_ScopesVerifiedIsFalse()
-    {
-        // Arrange
-
-        // Act
-        TokenValidationResult result = TokenValidationResult.ScopesUnverifiable("octocat");
-
-        // Assert
-        result.ScopesVerified.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void ScopesUnverifiable_WhenCalled_MissingScopesIsEmpty()
-    {
-        // Arrange
-
-        // Act
-        TokenValidationResult result = TokenValidationResult.ScopesUnverifiable("octocat");
-
-        // Assert
-        result.MissingScopes.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public void ScopesUnverifiable_WhenCalled_AccountNameIsPreserved()
+    public void ScopesUnverifiable_WhenAccountNameIsProvided_SetsExpectedProperties()
     {
         // Arrange
         const string AccountName = "octocat";
@@ -66,7 +18,12 @@ public sealed class Factories
         TokenValidationResult result = TokenValidationResult.ScopesUnverifiable(AccountName);
 
         // Assert
-        result.AccountName.ShouldBe(AccountName);
+        result.ShouldSatisfyAllConditions(
+            () => result.IsValid.ShouldBeFalse(),
+            () => result.IsAuthFailure.ShouldBeFalse(),
+            () => result.ScopesVerified.ShouldBeFalse(),
+            () => result.MissingScopes.ShouldBeEmpty(),
+            () => result.AccountName.ShouldBe(AccountName));
     }
 
     [Fact]
@@ -82,7 +39,7 @@ public sealed class Factories
     }
 
     [Fact]
-    public void Validated_WhenNoMissingScopes_ScopesVerifiedIsTrue()
+    public void Validated_WhenNoMissingScopes_SetsExpectedProperties()
     {
         // Arrange
 
@@ -90,11 +47,16 @@ public sealed class Factories
         TokenValidationResult result = TokenValidationResult.Validated([], "octocat");
 
         // Assert
-        result.ScopesVerified.ShouldBeTrue();
+        result.ShouldSatisfyAllConditions(
+            () => result.IsValid.ShouldBeTrue(),
+            () => result.IsAuthFailure.ShouldBeFalse(),
+            () => result.ScopesVerified.ShouldBeTrue(),
+            () => result.MissingScopes.ShouldBeEmpty(),
+            () => result.AccountName.ShouldBe("octocat"));
     }
 
     [Fact]
-    public void Validated_WhenHasMissingScopes_ScopesVerifiedIsTrue()
+    public void Validated_WhenHasMissingScopes_SetsExpectedProperties()
     {
         // Arrange
 
@@ -102,11 +64,16 @@ public sealed class Factories
         TokenValidationResult result = TokenValidationResult.Validated(["repo"], "octocat");
 
         // Assert
-        result.ScopesVerified.ShouldBeTrue();
+        result.ShouldSatisfyAllConditions(
+            () => result.IsValid.ShouldBeFalse(),
+            () => result.IsAuthFailure.ShouldBeFalse(),
+            () => result.ScopesVerified.ShouldBeTrue(),
+            () => result.MissingScopes.ShouldContain("repo"),
+            () => result.AccountName.ShouldBe("octocat"));
     }
 
     [Fact]
-    public void AuthFailure_ScopesVerifiedIsFalse()
+    public void AuthFailure_SetsExpectedProperties()
     {
         // Arrange
 
@@ -114,6 +81,11 @@ public sealed class Factories
         TokenValidationResult result = TokenValidationResult.AuthFailure();
 
         // Assert
-        result.ScopesVerified.ShouldBeFalse();
+        result.ShouldSatisfyAllConditions(
+            () => result.IsValid.ShouldBeFalse(),
+            () => result.IsAuthFailure.ShouldBeTrue(),
+            () => result.ScopesVerified.ShouldBeFalse(),
+            () => result.MissingScopes.ShouldBeEmpty(),
+            () => result.AccountName.ShouldBeNull());
     }
 }
