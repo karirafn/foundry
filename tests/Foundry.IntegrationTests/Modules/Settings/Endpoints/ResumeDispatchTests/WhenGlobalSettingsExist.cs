@@ -121,13 +121,16 @@ public sealed class WhenGlobalSettingsExist : IAsyncDisposable
 
         // Assert — processed_events rows exist for each registered DispatchResumed handler,
         // proving inbox deduplication records were committed (at-least-once + idempotent delivery).
-        // Two handlers are registered: DispatchResumedHandler (Issues) and
-        // DispatchResumedBroadcastHandler (Workers).
+        const int DispatchResumedHandlerCount = 2;
+        // DispatchResumedHandler (Issues) + DispatchResumedBroadcastHandler (Workers)
+
         List<ProcessedEvent> processedEvents = await postTickContext
             .Set<ProcessedEvent>()
             .Where(p => p.EventId == messageId)
             .ToListAsync(TestContext.Current.CancellationToken);
 
-        processedEvents.Count.ShouldBe(2, "both DispatchResumed handlers must record a processed_events row");
+        processedEvents.Count.ShouldBe(
+            DispatchResumedHandlerCount,
+            "both DispatchResumed handlers must record a processed_events row");
     }
 }
