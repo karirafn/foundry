@@ -1,3 +1,4 @@
+using System.Data;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -103,10 +104,13 @@ public sealed class WhenTokenRotatedWithLowercaseNamespaceIds : IAsyncDisposable
         // bug — the backfill SQL used lower(hex(randomblob(...))) which produced lowercase ids.
         await LowercaseNamespaceIdsAsync(created.Id);
 
-        // Simulate the NormalizeCredentialNamespaceIds corrective migration by running the
-        // same UPDATE statement it executes. This is the fix that allows token rotation to
-        // succeed without DbUpdateConcurrencyException.
-        await NormalizeNamespaceIdsToUppercaseAsync();
+        // Apply the same normalization SQL as the NormalizeCredentialNamespaceIds corrective
+        // migration. Driving the real EF migration here would require modifying
+        // FoundryWebAppFactory (an untouched infrastructure file), so this test is a regression
+        // guard for the EF-layer rotation behavior *given* correct normalization. Migration-SQL
+        // correctness (that the shipped migration actually normalizes lowercase → uppercase) is
+        // covered by WhenNormalizationMigrationRuns in the Persistence test suite.
+        await ApplyNamespaceIdNormalizationAsync();
 
         // Act — rotate the token; this exercises CredentialRotationService.RotateAsync which
         // calls SetNamespaces (clearing old namespaces) then SaveChangesAsync.
@@ -148,46 +152,43 @@ public sealed class WhenTokenRotatedWithLowercaseNamespaceIds : IAsyncDisposable
     /// </summary>
     private async Task LowercaseNamespaceIdsAsync(Guid credentialId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-
-        SqliteConnection connection = (SqliteConnection)dbContext.Database.GetDbConnection();
-
-        bool wasOpen = connection.State == System.Data.ConnectionState.Open;
-        if (!wasOpen)
-        {
-            await connection.OpenAsync(TestContext.Current.CancellationToken);
-        }
-
-        try
+        await ExecuteOnConnectionAsync(async connection =>
         {
             using SqliteCommand command = connection.CreateCommand();
             command.CommandText =
                 "UPDATE credential_namespaces SET id = lower(id) WHERE credential_id = $credentialId;";
             command.Parameters.AddWithValue("$credentialId", credentialId.ToString("D").ToUpperInvariant());
             await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
-        }
-        finally
-        {
-            if (!wasOpen)
-            {
-                await connection.CloseAsync();
-            }
-        }
+        });
     }
 
     /// <summary>
     /// Applies the same normalization SQL as the NormalizeCredentialNamespaceIds corrective
     /// migration — normalizes all credential_namespaces.id values to uppercase.
     /// </summary>
-    private async Task NormalizeNamespaceIdsToUppercaseAsync()
+    private async Task ApplyNamespaceIdNormalizationAsync()
+    {
+        await ExecuteOnConnectionAsync(async connection =>
+        {
+            using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "UPDATE credential_namespaces SET id = upper(id);";
+            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        });
+    }
+
+    /// <summary>
+    /// Opens the DbContext's underlying SQLite connection if it is not already open,
+    /// executes <paramref name="action"/>, then closes it if it was closed on entry.
+    /// This avoids the need for each raw-SQL helper to repeat the open/close lifecycle.
+    /// </summary>
+    private async Task ExecuteOnConnectionAsync(Func<SqliteConnection, Task> action)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
 
         SqliteConnection connection = (SqliteConnection)dbContext.Database.GetDbConnection();
 
-        bool wasOpen = connection.State == System.Data.ConnectionState.Open;
+        bool wasOpen = connection.State == ConnectionState.Open;
         if (!wasOpen)
         {
             await connection.OpenAsync(TestContext.Current.CancellationToken);
@@ -195,9 +196,7 @@ public sealed class WhenTokenRotatedWithLowercaseNamespaceIds : IAsyncDisposable
 
         try
         {
-            using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "UPDATE credential_namespaces SET id = upper(id);";
-            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            await action(connection);
         }
         finally
         {

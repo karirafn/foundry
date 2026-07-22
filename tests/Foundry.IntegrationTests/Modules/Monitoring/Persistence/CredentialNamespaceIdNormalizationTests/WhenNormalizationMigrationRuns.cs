@@ -24,6 +24,10 @@ public sealed class WhenNormalizationMigrationRuns : IAsyncLifetime, IAsyncDispo
     private const string DropFkMigrationId = "20260718213128_DropMonitoredRepositoryAccountIdFk";
     private const string NormalizeMigrationId = "20260722225513_NormalizeCredentialNamespaceIds";
 
+    // Uppercase UUID-v4 pattern as emitted by Microsoft.Data.Sqlite when binding a Guid parameter.
+    private const string UppercaseGuidV4Pattern =
+        @"^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$";
+
     private readonly string _dbPath;
     private SqliteConnection _connection = null!;
     private FoundryDbContext _dbContext = null!;
@@ -113,12 +117,16 @@ public sealed class WhenNormalizationMigrationRuns : IAsyncLifetime, IAsyncDispo
         // Act — apply the backfill migration (which seeds credential_namespaces).
         await _dbContext.Database.MigrateAsync(BackfillMigrationId, TestContext.Current.CancellationToken);
 
-        // Assert — the seeded id is uppercase (matching Microsoft.Data.Sqlite's Guid binding format).
+        // Assert — the seeded id is uppercase and matches the UUID-v4 TEXT format that
+        // Microsoft.Data.Sqlite emits when binding Guid parameters. This proves both that
+        // all hex letters are uppercase and that the id is a well-formed Guid v4.
         List<string> rawIds = await LoadRawNamespaceIdsAsync();
         rawIds.Count.ShouldBe(1);
 
         string seededId = rawIds[0];
-        seededId.ShouldBe(seededId.ToUpperInvariant(), "seeded id must be uppercase to match Microsoft.Data.Sqlite Guid binding");
+        seededId.ShouldMatch(
+            UppercaseGuidV4Pattern,
+            customMessage: "seeded id must be an uppercase UUID-v4 string matching Microsoft.Data.Sqlite's Guid binding format");
     }
 
     /// <summary>
@@ -158,6 +166,7 @@ public sealed class WhenNormalizationMigrationRuns : IAsyncLifetime, IAsyncDispo
 
     /// <summary>
     /// Inserts a monitored_repository row before the account_id FK column is dropped.
+    /// The position column is INTEGER — bind an integer, not a Guid string.
     /// </summary>
     private async Task InsertRepositoryPreBackfillAsync(Guid accountId, string slug, string host)
     {
@@ -170,7 +179,7 @@ public sealed class WhenNormalizationMigrationRuns : IAsyncLifetime, IAsyncDispo
         command.Parameters.AddWithValue("$accountId", accountId.ToString().ToUpperInvariant());
         command.Parameters.AddWithValue("$slug", slug);
         command.Parameters.AddWithValue("$host", host);
-        command.Parameters.AddWithValue("$position", id.ToString().ToUpperInvariant());
+        command.Parameters.AddWithValue("$position", 0);
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
@@ -217,7 +226,9 @@ public sealed class WhenNormalizationMigrationRuns : IAsyncLifetime, IAsyncDispo
 
     /// <summary>
     /// Reads the raw TEXT id stored for a namespace row, looked up by the Guid value
-    /// regardless of case (using SQLite's case-insensitive LIKE for the lookup).
+    /// regardless of case (using SQLite's upper() for the lookup).
+    /// Throws <see cref="InvalidOperationException"/> when no row is found for the given id,
+    /// so callers get a clear failure message rather than an empty-string assertion.
     /// </summary>
     private async Task<string> ReadRawIdAsync(Guid id)
     {
@@ -225,7 +236,13 @@ public sealed class WhenNormalizationMigrationRuns : IAsyncLifetime, IAsyncDispo
         command.CommandText = "SELECT id FROM credential_namespaces WHERE upper(id) = upper($id);";
         command.Parameters.AddWithValue("$id", id.ToString("D"));
         object? result = await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
-        return result?.ToString() ?? string.Empty;
+
+        if (result is null)
+        {
+            throw new InvalidOperationException($"Namespace row not found for id {id}");
+        }
+
+        return result.ToString()!;
     }
 
     private async Task<List<string>> LoadRawNamespaceIdsAsync()
