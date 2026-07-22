@@ -6,12 +6,18 @@ namespace Foundry.Shared.Infrastructure;
 
 /// <summary>
 /// Wraps <see cref="IDomainEventDispatcher"/> and swallows handler exceptions so that a
-/// failure in a domain-event handler does not crash the caller. The tick commits state via
-/// <c>TransitionAsync</c> before dispatching domain events, so a bridge-handler throw must
-/// not crash the BackgroundService tick. Contrast with <see cref="DomainEventDispatcher"/>
-/// used in <c>IssueClaimedHandler</c>, which deliberately uses the raw dispatcher so the
-/// integration-event bus governs its own error handling.
+/// failure in a domain-event handler does not crash the caller.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Step 9 will replace or remove this wrapper once all bridge handlers enqueue into the
+/// transactional outbox. With the D2 ordering in <c>TransitionAsync</c>, domain events are
+/// dispatched <em>inside</em> the transaction: a handler throw rolls back the entire
+/// transaction (state change + outbox row). Swallowing the throw here prevents the rollback,
+/// so the state change commits but no outbox message is written — integration event is silently
+/// lost. Until step 9 completes, this wrapper is kept as-is for backward compatibility.
+/// </para>
+/// </remarks>
 public sealed class FaultTolerantDomainEventDispatcher(
     IDomainEventDispatcher inner,
     ILogger logger) : IDomainEventDispatcher
@@ -24,7 +30,7 @@ public sealed class FaultTolerantDomainEventDispatcher(
         {
             await inner.DispatchAsync(eventList, cancellationToken);
         }
-#pragma warning disable CA1031 // Domain-event handler failures (e.g. bridge that publishes integration event) must not crash the BackgroundService tick; the transition has already committed and the warning log surfaces the failure.
+#pragma warning disable CA1031 // Swallowing bridge-handler failures is intentional for backward compatibility until step 9 migrates all bridge handlers to the outbox; see remarks on FaultTolerantDomainEventDispatcher.
         catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {

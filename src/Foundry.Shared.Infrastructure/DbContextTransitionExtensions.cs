@@ -25,9 +25,18 @@ public static class DbContextTransitionExtensions
         db.Add(next);
         await db.SaveChangesAsync(cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken);
-
+        // Dispatch domain events inside the transaction so that any integration events
+        // enqueued by bridge handlers are captured by the OutboxSaveChangesInterceptor
+        // on the harvest SaveChanges below. A handler throw rolls back the entire
+        // transaction — no state change, no outbox row.
         await dispatcher.DispatchAsync(old.DomainEvents, cancellationToken);
         old.ClearDomainEvents();
+
+        // Harvest: the interceptor drains any enqueued integration events into
+        // outbox_messages atomically with the state change committed above.
+        // When no events were enqueued, the collector is empty and this is a no-op.
+        await db.SaveChangesAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
     }
 }

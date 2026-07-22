@@ -50,12 +50,11 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
-        // FaultTolerantDomainEventDispatcher is used here (rather than the raw IDomainEventDispatcher)
-        // because the tick commits state via TransitionAsync before dispatching domain events.
-        // A bridge-handler throw must not crash the BackgroundService tick — the transition is already
-        // durable so losing the notification is preferable to an indeterminate tick failure.
-        // IssueClaimedHandler deliberately uses the raw dispatcher so the integration-event bus
-        // governs its own error handling; that asymmetry is intentional.
+        // FaultTolerantDomainEventDispatcher is kept here for backward compatibility until step 9
+        // migrates all bridge handlers to the outbox. With the D2 ordering, domain events are
+        // dispatched inside the TransitionAsync transaction; using this wrapper here means a
+        // bridge-handler throw is swallowed, leaving the state change committed but no outbox row
+        // written. Step 9 will remove this wrapper so throws roll back atomically.
         IDomainEventDispatcher domainEventDispatcher = new FaultTolerantDomainEventDispatcher(
             scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>(),
             logger);
@@ -66,7 +65,8 @@ internal sealed class WorkerDispatchService(
         IContainerOutputParser containerOutputParser =
             scope.ServiceProvider.GetRequiredService<IContainerOutputParser>();
         WorkerOutcomeResolver resolver = scope.ServiceProvider.GetRequiredService<WorkerOutcomeResolver>();
-        ICredentialGate credentialGate = scope.ServiceProvider.GetRequiredService<ICredentialGate>();
+        ICredentialGate credentialGate =
+            scope.ServiceProvider.GetRequiredService<ICredentialGate>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
