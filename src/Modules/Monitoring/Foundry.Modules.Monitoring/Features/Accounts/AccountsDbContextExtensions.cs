@@ -18,43 +18,26 @@ internal static class AccountsDbContextExtensions
         Guid? excludingCredentialId = null,
         CancellationToken cancellationToken = default)
     {
-        IQueryable<CredentialNamespace> query = dbContext.Set<CredentialNamespace>()
+        IQueryable<CredentialNamespace> namespaceQuery = dbContext.Set<CredentialNamespace>()
             .AsNoTracking()
             .Where(n => n.Host == host);
 
         if (excludingCredentialId.HasValue)
         {
             CredentialId excludedId = CredentialId.From(excludingCredentialId.Value);
-            query = query.Where(n => n.CredentialId != excludedId);
+            namespaceQuery = namespaceQuery.Where(n => n.CredentialId != excludedId);
         }
 
-        List<CredentialNamespace> rows = await query.ToListAsync(cancellationToken);
+        var rows = await namespaceQuery
+            .Join(
+                dbContext.Set<Credential>().AsNoTracking(),
+                n => n.CredentialId,
+                c => c.Id,
+                (n, c) => new { n.Value, HolderCredentialId = n.CredentialId.Value, HolderName = c.Name })
+            .ToListAsync(cancellationToken);
 
-        if (rows.Count == 0)
-        {
-            return [];
-        }
-
-        HashSet<CredentialId> holderIds = rows
-            .Select(n => n.CredentialId)
-            .ToHashSet();
-
-        Dictionary<CredentialId, string> holderNames = await dbContext.Set<Credential>()
-            .AsNoTracking()
-            .Where(c => holderIds.Contains(c.Id))
-            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
-
-        Dictionary<string, (Guid HolderCredentialId, string HolderName)> result = [];
-
-        foreach (CredentialNamespace ns in rows)
-        {
-            string holderName = holderNames.TryGetValue(ns.CredentialId, out string? name)
-                ? name
-                : string.Empty;
-
-            result[ns.Value] = (ns.CredentialId.Value, holderName);
-        }
-
-        return result;
+        return rows.ToDictionary(
+            r => r.Value,
+            r => (r.HolderCredentialId, r.HolderName));
     }
 }

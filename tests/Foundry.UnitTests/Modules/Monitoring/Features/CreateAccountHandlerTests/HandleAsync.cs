@@ -199,6 +199,48 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenPartialTakeover_DerivedSetIncludesOtherHoldersNamespace_NewCredentialOnlyReceivesTakenOverNamespaces()
+    {
+        // Arrange — credential A holds ns-b and ns-x; user requests takeover of only ns-x;
+        // derivation returns [ns-x, ns-b] (both are in the derived set).
+        // The new credential must NOT steal ns-b (no takeover requested), so it only gets ns-x.
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential holderA = GitHubCredential.Create("holder-a", "ghp_holder_a", baseUrl);
+        holderA.SetNamespaces([
+            Namespace.Create("ns-b").ValueOrThrow(),
+            Namespace.Create("ns-x").ValueOrThrow(),
+        ]);
+        _dbContext.Set<Credential>().Add(holderA);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([
+            Namespace.Create("ns-x").ValueOrThrow(),
+            Namespace.Create("ns-b").ValueOrThrow(),
+        ]);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new(
+            "github",
+            "https://github.com",
+            "ghp_test",
+            TakeoverNamespaces: ["ns-x"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — new credential gets ns-x only; holder A retains ns-b
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        created.Value.Credential.Namespaces.ShouldContain("ns-x");
+        created.Value.Credential.Namespaces.ShouldNotContain("ns-b");
+
+        Credential? holderAfter = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == holderA.Id, TestContext.Current.CancellationToken);
+        holderAfter.ShouldNotBeNull();
+        holderAfter.Namespaces.ShouldNotContain(n => n.Value == "ns-x");
+        holderAfter.Namespaces.ShouldContain(n => n.Value == "ns-b");
+    }
+
+    [Fact]
     public async Task WhenConflictMeanwhileVanishes_ClaimsNormally()
     {
         // Arrange — no other credential claims the namespace; takeover lists it but it's not actually conflicted
@@ -216,6 +258,43 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert — no error, credential created normally
         result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+    }
+
+    [Fact]
+    public async Task WhenTakeoverTransfersPreviouslyEligibleRepo_PriorStatusIsEligible()
+    {
+        // Arrange — holder owns "octocat"; repo octocat/hello-world was eligible under the holder.
+        // After takeover the evaluator marks it eligible again.
+        // With correct prior-status snapshotting, prior == current == "eligible" → repo is NOT affected.
+        // With the bug (empty priorStatus), prior == "unreachable" != "eligible" → repo IS wrongly affected.
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential holder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        holder.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(holder);
+
+        RepositorySlug slug = RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
+        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", pollInterval: null);
+        repo.SetEligibility(new RepositoryEligibility.Eligible());
+        _dbContext.Set<MonitoredRepository>().Add(repo);
+
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
+            [Namespace.Create("octocat").ValueOrThrow()]);
+        EligibleEvaluator evaluator = new();
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), evaluator);
+        CreateAccount.Command command = new(
+            "github",
+            "https://github.com",
+            "ghp_test",
+            TakeoverNamespaces: ["octocat"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — no affected repos because eligible → eligible is not a status change
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        created.Value.AffectedRepositories.ShouldBeEmpty();
     }
 
     private sealed class StubValidateTokenHandler
@@ -249,5 +328,15 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepository repo,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
+    }
+
+    /// <summary>Marks every repo eligible — simulates a healthy credential that can reach all repos.</summary>
+    private sealed class EligibleEvaluator : IRepositoryEligibilityEvaluator
+    {
+        public Task EvaluateAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
+        {
+            repo.SetEligibility(new RepositoryEligibility.Eligible());
+            return Task.CompletedTask;
+        }
     }
 }

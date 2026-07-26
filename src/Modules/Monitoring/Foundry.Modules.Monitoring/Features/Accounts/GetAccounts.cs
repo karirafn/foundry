@@ -21,20 +21,18 @@ internal static class GetAccounts
             Query query,
             CancellationToken cancellationToken)
         {
-            List<Credential> credentials = await dbContext.Set<Credential>()
+            // Project directly to avoid materializing Credential entities, which would decrypt
+            // the encrypted Token column via the value converter even when only HasToken is needed.
+            List<CredentialSummary> summaries = await dbContext.Set<Credential>()
                 .AsNoTracking()
-                .Include(a => a.Namespaces)
+                .Select(a => new CredentialSummary(
+                    a.Id.Value,
+                    a.Name,
+                    a is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub,
+                    a.BaseUrl.Value.ToString(),
+                    a.Token != null,
+                    a.Namespaces.Select(n => n.Value).ToList()))
                 .ToListAsync(cancellationToken);
-
-            List<CredentialSummary> summaries = credentials
-                .Select(r => new CredentialSummary(
-                    r.Id.Value,
-                    r.Name,
-                    r is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub,
-                    r.BaseUrl.Value.ToString(),
-                    r.Token is not null,
-                    r.Namespaces.Select(n => n.Value).ToList()))
-                .ToList();
 
             return Result<IReadOnlyList<CredentialSummary>>.Ok(summaries);
         }

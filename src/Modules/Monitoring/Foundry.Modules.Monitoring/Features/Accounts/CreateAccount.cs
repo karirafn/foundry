@@ -192,12 +192,17 @@ internal static partial class CreateAccount
                     return new Outcome.InvalidTakeover(new TakeoverValidationResponse(invalidNamespaces));
                 }
 
+                HashSet<string> takeoverSet = takeoverList.ToHashSet(StringComparer.Ordinal);
+
+                // Snapshot prior eligibility of repos covered by the namespaces being taken over,
+                // before any holder rows are deleted, so DiffAsync can reflect the true prior status.
+                Dictionary<Guid, string> priorStatusSnapshot =
+                    await SnapshotPriorEligibilityAsync(credential.Host, takeoverSet, cancellationToken);
+
                 // Execute takeover in one explicit transaction:
                 // delete transferred holder rows + insert the new credential
                 await using IDbContextTransaction transaction =
                     await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-                HashSet<string> takeoverSet = takeoverList.ToHashSet(StringComparer.Ordinal);
 
                 // Delete CredentialNamespace rows from holders for all takeover namespaces
                 List<CredentialNamespace> holderRows = await dbContext.Set<CredentialNamespace>()
@@ -213,8 +218,12 @@ internal static partial class CreateAccount
                     dbContext.Set<CredentialNamespace>().RemoveRange(rowsToDelete);
                 }
 
-                // Insert the new credential with the full derived namespace set
-                credential.SetNamespaces(derivedNamespaces);
+                // Insert the new credential with only the namespaces not still owned by others
+                // (i.e. the derived set minus any claimed namespace not in the takeover list).
+                HashSet<string> claimedExcludingTakeover = claimedByOthers.Keys
+                    .Where(k => !takeoverSet.Contains(k))
+                    .ToHashSet(StringComparer.Ordinal);
+                credential.SetNamespaces(derivedNamespaces, claimedExcludingTakeover);
                 dbContext.Set<Credential>().Add(credential);
                 await dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -223,6 +232,7 @@ internal static partial class CreateAccount
                 // and return them as affected repositories.
                 IReadOnlyList<AffectedRepository> affectedRepositories = await RecheckTransferredReposAsync(
                     credential,
+                    priorStatusSnapshot,
                     cancellationToken);
 
                 string providerTypeAfterTakeover = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
@@ -263,6 +273,7 @@ internal static partial class CreateAccount
 
         private async Task<IReadOnlyList<AffectedRepository>> RecheckTransferredReposAsync(
             Credential credential,
+            Dictionary<Guid, string> priorStatus,
             CancellationToken cancellationToken)
         {
             // Find repos now covered by the new credential (under transferred namespaces)
@@ -273,11 +284,33 @@ internal static partial class CreateAccount
                 return [];
             }
 
-            // All repos in the transferred set are "new" — their prior status was "unreachable"
-            // since no credential previously covered them through this ownership path.
-            Dictionary<Guid, string> priorStatus = [];
-
             return await differ.DiffAsync([], resolvedRepos, priorStatus, cancellationToken);
+        }
+
+        private async Task<Dictionary<Guid, string>> SnapshotPriorEligibilityAsync(
+            string host,
+            HashSet<string> takeoverNamespaces,
+            CancellationToken cancellationToken)
+        {
+            List<MonitoredRepository> repos = await dbContext.Set<MonitoredRepository>()
+                .Where(r => r.Host == host)
+                .ToListAsync(cancellationToken);
+
+            Dictionary<Guid, string> snapshot = [];
+
+            foreach (MonitoredRepository repo in repos)
+            {
+                bool coveredByTakeover = takeoverNamespaces.Any(ns =>
+                    Namespace.Create(ns) is Result<Namespace>.Success nsResult
+                    && nsResult.Value.IsPrefixOf(repo.Slug));
+
+                if (coveredByTakeover && repo.EligibilityStatus is not null)
+                {
+                    snapshot[repo.Id.Value] = repo.EligibilityStatus;
+                }
+            }
+
+            return snapshot;
         }
     }
 
@@ -317,11 +350,7 @@ internal static partial class CreateAccount
                             (IResult)TypedResults.Conflict(conflict.Conflicts),
                         Outcome.InvalidTakeover invalid =>
                             TypedResults.BadRequest(invalid.Invalid),
-                        Outcome.Failure failure => failure.Error.Code switch
-                        {
-                            CredentialErrors.UnresolvedIdentityCode => TypedResults.BadRequest(failure.Error.Message),
-                            _ => TypedResults.BadRequest(failure.Error.Message),
-                        },
+                        Outcome.Failure failure => TypedResults.BadRequest(failure.Error.Message),
                         _ => throw new UnreachableException($"Unhandled CreateAccount.Outcome: {outcome.GetType().Name}"),
                     };
                 })
@@ -330,7 +359,7 @@ internal static partial class CreateAccount
                 .Produces<CredentialCreationResult>(StatusCodes.Status201Created)
                 .Produces<NamespaceConflictResponse>(StatusCodes.Status409Conflict)
                 .Produces<TakeoverValidationResponse>(StatusCodes.Status400BadRequest)
-                .ProducesProblem(StatusCodes.Status400BadRequest);
+                .Produces<string>(StatusCodes.Status400BadRequest);
         }
     }
 }

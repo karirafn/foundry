@@ -89,6 +89,7 @@ public sealed class WhenTakeoverTransfersNamespaces : IAsyncDisposable
         result.ShouldNotBeNull();
         result.Credential.Name.ShouldBe(NewAccountName);
         result.Credential.Namespaces.ShouldContain("octocat");
+        result.AffectedRepositories.ShouldNotBeNull();
 
         // Verify holder no longer owns "octocat"
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -128,5 +129,6 @@ public sealed class WhenTakeoverTransfersNamespaces : IAsyncDisposable
             .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
         result.ShouldNotBeNull();
         result.Credential.Namespaces.ShouldContain("octocat");
+        result.AffectedRepositories.ShouldNotBeNull();
     }
 }
