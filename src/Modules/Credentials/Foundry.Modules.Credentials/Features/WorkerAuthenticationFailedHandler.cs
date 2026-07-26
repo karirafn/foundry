@@ -30,7 +30,6 @@ internal sealed class WorkerAuthenticationFailedHandler(
         }
 
         bool stateChanged = account.Invalidate(@event.Reason);
-        await dbContext.SaveChangesAsync(cancellationToken);
 
         if (stateChanged)
         {
@@ -38,5 +37,7 @@ internal sealed class WorkerAuthenticationFailedHandler(
                 [new CredentialsInvalidated(@event.Reason)],
                 cancellationToken);
         }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

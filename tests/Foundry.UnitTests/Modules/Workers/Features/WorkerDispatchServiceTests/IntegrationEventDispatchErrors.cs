@@ -29,48 +29,55 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         await Should.NotThrowAsync(act);
 
         // Assert — WorkerRun still transitioned to CompletedRun
+        // WorkerRunCompleted is enqueued via TryDispatchAsync (which catches) BEFORE TransitionAsync;
+        // the throw is swallowed and the transition succeeds.
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         run.ShouldBeOfType<CompletedRun>();
     }
 
     [Fact]
-    public async Task WhenDispatchThrowsOnContainerFailure_TickCompletesAndRunIsStillTransitioned()
+    public async Task WhenDispatchThrowsInsideBridgeHandler_TransactionRollsBackAndTickThrows()
     {
-        // Arrange
+        // Arrange — exited with non-zero exit: WorkerRunFailed domain event is raised,
+        // WorkerRunFailedBridgeHandler calls DispatchAsync which throws.
+        // Because the bridge handler runs inside the TransitionAsync transaction, the throw
+        // rolls back the transaction — state change is reverted (run stays ActiveRun) and
+        // the tick propagates the exception rather than silently swallowing it.
         SeedActiveRun("failed-dispatch-error");
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         StubWorkerOrchestrator orchestrator = new(status: failedStatus);
         ThrowingIntegrationEventDispatcher dispatcher = new();
         WorkerDispatchService sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
 
-        // Act — must not throw even though dispatcher throws
+        // Act — dispatcher throws inside TransitionAsync → transaction rolls back → tick throws
         Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await Should.NotThrowAsync(act);
+        await Should.ThrowAsync<InvalidOperationException>(act);
 
-        // Assert — WorkerRun still transitioned to FailedRun
+        // Assert — transaction rolled back; run remains ActiveRun (state change was not committed)
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        run.ShouldBeOfType<FailedRun>();
+        run.ShouldBeOfType<ActiveRun>();
     }
 
     [Fact]
-    public async Task WhenDispatchThrowsOnOrphanedContainer_TickCompletesAndRunIsStillTransitioned()
+    public async Task WhenDispatchThrowsInsideBridgeHandlerOnOrphanedContainer_TransactionRollsBackAndTickThrows()
     {
-        // Arrange — seed before first tick so reconciliation processes it
+        // Arrange — orphaned container (NotFound status): outcome resolver returns Failure,
+        // WorkerRunFailed domain event → bridge handler → dispatcher throws.
         SeedActiveRun("orphaned-dispatch-error");
         StubWorkerOrchestrator orchestrator = new(status: null);
         ThrowingIntegrationEventDispatcher dispatcher = new();
         WorkerDispatchService sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
 
-        // Act — must not throw even though dispatcher throws
+        // Act — dispatcher throws inside TransitionAsync → transaction rolls back → tick throws
         Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await Should.NotThrowAsync(act);
+        await Should.ThrowAsync<InvalidOperationException>(act);
 
-        // Assert — WorkerRun still transitioned to FailedRun
+        // Assert — run stays ActiveRun (transaction was rolled back)
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        run.ShouldBeOfType<FailedRun>();
+        run.ShouldBeOfType<ActiveRun>();
     }
 
     [Fact]

@@ -36,11 +36,12 @@ internal sealed class LoginSuccessCommitter(
         }
 
         account.RecordSuccessfulLogin(identity.Email, identity.OrgName, identity.SubscriptionType);
-        await dbContext.SaveChangesAsync(cancellationToken);
 
         await eventDispatcher.DispatchAsync(
             [new CredentialsValidated(identity.Email, identity.OrgName, identity.SubscriptionType)],
             cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
             "OAuth login succeeded: ClaudeAccount updated for {Email}, CredentialsValidated published.",

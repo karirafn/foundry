@@ -50,15 +50,15 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
-        // FaultTolerantDomainEventDispatcher is used here (rather than the raw IDomainEventDispatcher)
-        // because the tick commits state via TransitionAsync before dispatching domain events.
-        // A bridge-handler throw must not crash the BackgroundService tick — the transition is already
-        // durable so losing the notification is preferable to an indeterminate tick failure.
-        // IssueClaimedHandler deliberately uses the raw dispatcher so the integration-event bus
-        // governs its own error handling; that asymmetry is intentional.
-        IDomainEventDispatcher domainEventDispatcher = new FaultTolerantDomainEventDispatcher(
-            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>(),
-            logger);
+        // Bridge handlers (WorkerRunFailedBridgeHandler) enqueue integration events inside the
+        // TransitionAsync transaction via the outbox interceptor. Using the raw dispatcher means
+        // a bridge-handler throw rolls back the entire transaction (state + outbox row) atomically.
+        // In production, OutboxIntegrationEventDispatcher only enqueues into a list and never throws,
+        // so the bridge handler path is safe without any fault-tolerant wrapper.
+        IDomainEventDispatcher domainEventDispatcher =
+            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
+        IIntegrationEventProcessor integrationEventProcessor =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventProcessor>();
         IGlobalSettingsQueries settingsQueries =
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         IPostExitProviderQueries postExitProviderQueries =
@@ -66,7 +66,8 @@ internal sealed class WorkerDispatchService(
         IContainerOutputParser containerOutputParser =
             scope.ServiceProvider.GetRequiredService<IContainerOutputParser>();
         WorkerOutcomeResolver resolver = scope.ServiceProvider.GetRequiredService<WorkerOutcomeResolver>();
-        ICredentialGate credentialGate = scope.ServiceProvider.GetRequiredService<ICredentialGate>();
+        ICredentialGate credentialGate =
+            scope.ServiceProvider.GetRequiredService<ICredentialGate>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
@@ -80,6 +81,7 @@ internal sealed class WorkerDispatchService(
                 dbContext,
                 orchestrator,
                 integrationEventDispatcher,
+                integrationEventProcessor,
                 domainEventDispatcher,
                 resolver,
                 postExitProviderQueries,
@@ -94,6 +96,7 @@ internal sealed class WorkerDispatchService(
             dbContext,
             orchestrator,
             integrationEventDispatcher,
+            integrationEventProcessor,
             domainEventDispatcher,
             resolver,
             postExitProviderQueries,
@@ -156,6 +159,11 @@ internal sealed class WorkerDispatchService(
             [new WorkerCapacityAvailable(workerRunId)],
             workerRunId,
             cancellationToken);
+
+        // Harvest: enqueue-before-save ensures WorkerCapacityAvailable is written atomically
+        // to outbox_messages. Without this save the scoped collector holds the event but it is
+        // never drained and the IssueClaimed downstream transition is silently lost.
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>
@@ -170,9 +178,10 @@ internal sealed class WorkerDispatchService(
         IWorkerOrchestrator orchestrator = scope.ServiceProvider.GetRequiredService<IWorkerOrchestrator>();
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
-        IDomainEventDispatcher domainEventDispatcher = new FaultTolerantDomainEventDispatcher(
-            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>(),
-            logger);
+        IDomainEventDispatcher domainEventDispatcher =
+            scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
+        IIntegrationEventProcessor integrationEventProcessor =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventProcessor>();
         IGlobalSettingsQueries settingsQueries =
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         IPostExitProviderQueries postExitProviderQueries =
@@ -191,6 +200,7 @@ internal sealed class WorkerDispatchService(
             dbContext,
             orchestrator,
             integrationEventDispatcher,
+            integrationEventProcessor,
             domainEventDispatcher,
             resolver,
             postExitProviderQueries,
@@ -205,6 +215,7 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
+        IIntegrationEventProcessor integrationEventProcessor,
         IDomainEventDispatcher domainEventDispatcher,
         WorkerOutcomeResolver resolver,
         IPostExitProviderQueries postExitProviderQueries,
@@ -256,6 +267,7 @@ internal sealed class WorkerDispatchService(
                         dbContext,
                         orchestrator,
                         integrationEventDispatcher,
+                        integrationEventProcessor,
                         domainEventDispatcher,
                         cancellationToken);
 
@@ -271,6 +283,7 @@ internal sealed class WorkerDispatchService(
                         dbContext,
                         orchestrator,
                         integrationEventDispatcher,
+                        integrationEventProcessor,
                         domainEventDispatcher,
                         resolver,
                         postExitProviderQueries,
@@ -304,6 +317,7 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
+        IIntegrationEventProcessor integrationEventProcessor,
         IDomainEventDispatcher domainEventDispatcher,
         WorkerOutcomeResolver resolver,
         IPostExitProviderQueries postExitProviderQueries,
@@ -319,6 +333,7 @@ internal sealed class WorkerDispatchService(
                 dbContext,
                 orchestrator,
                 integrationEventDispatcher,
+                integrationEventProcessor,
                 domainEventDispatcher,
                 resolver,
                 postExitProviderQueries,
@@ -334,6 +349,7 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
+        IIntegrationEventProcessor integrationEventProcessor,
         IDomainEventDispatcher domainEventDispatcher,
         WorkerOutcomeResolver resolver,
         IPostExitProviderQueries postExitProviderQueries,
@@ -379,6 +395,7 @@ internal sealed class WorkerDispatchService(
                     dbContext,
                     orchestrator,
                     integrationEventDispatcher,
+                    integrationEventProcessor,
                     domainEventDispatcher,
                     cancellationToken);
 
@@ -428,6 +445,7 @@ internal sealed class WorkerDispatchService(
                             dbContext,
                             orchestrator,
                             integrationEventDispatcher,
+                            integrationEventProcessor,
                             domainEventDispatcher,
                             cancellationToken);
 
@@ -484,6 +502,7 @@ internal sealed class WorkerDispatchService(
                             dbContext,
                             orchestrator,
                             integrationEventDispatcher,
+                            integrationEventProcessor,
                             domainEventDispatcher,
                             cancellationToken);
 
@@ -508,6 +527,7 @@ internal sealed class WorkerDispatchService(
                     dbContext,
                     orchestrator,
                     integrationEventDispatcher,
+                    integrationEventProcessor,
                     domainEventDispatcher,
                     cancellationToken);
                 return;
@@ -530,6 +550,7 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher integrationEventDispatcher,
+        IIntegrationEventProcessor integrationEventProcessor,
         IDomainEventDispatcher domainEventDispatcher,
         CancellationToken cancellationToken)
     {
@@ -542,7 +563,8 @@ internal sealed class WorkerDispatchService(
                     completed.BranchName,
                     completed.PullRequestUrl,
                     completed.Summary);
-                await dbContext.TransitionAsync(activeRun, completedRun, domainEventDispatcher, cancellationToken);
+                // Enqueue before TransitionAsync: the trailing harvest SaveChangesAsync inside
+                // TransitionAsync drains the outbox collector atomically with the state change.
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunCompletedEvent(
@@ -553,6 +575,7 @@ internal sealed class WorkerDispatchService(
                         WorkerRunMergeState.Merged)],
                     activeRun.Id.Value,
                     cancellationToken);
+                await dbContext.TransitionAsync(activeRun, completedRun, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
                     "Worker run {WorkerRunId} completed (merged, PR: {PrUrl}, branch: {BranchName}).",
                     activeRun.Id,
@@ -568,7 +591,6 @@ internal sealed class WorkerDispatchService(
                     review.BranchName,
                     review.PullRequestUrl,
                     review.Summary);
-                await dbContext.TransitionAsync(activeRun, reviewRun, domainEventDispatcher, cancellationToken);
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunCompletedEvent(
@@ -579,6 +601,7 @@ internal sealed class WorkerDispatchService(
                         WorkerRunMergeState.Open)],
                     activeRun.Id.Value,
                     cancellationToken);
+                await dbContext.TransitionAsync(activeRun, reviewRun, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
                     "Worker run {WorkerRunId} completed with open PR: {PrUrl} (branch: {BranchName}).",
                     activeRun.Id,
@@ -594,7 +617,6 @@ internal sealed class WorkerDispatchService(
                     unchanged.BranchName,
                     null,
                     unchanged.Summary);
-                await dbContext.TransitionAsync(activeRun, unchangedRun, domainEventDispatcher, cancellationToken);
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunCompletedEvent(
@@ -605,6 +627,7 @@ internal sealed class WorkerDispatchService(
                         WorkerRunMergeState.None)],
                     activeRun.Id.Value,
                     cancellationToken);
+                await dbContext.TransitionAsync(activeRun, unchangedRun, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
                     "Worker run {WorkerRunId} completed with no commits (unchanged, branch: {BranchName}).",
                     activeRun.Id,
@@ -626,10 +649,11 @@ internal sealed class WorkerDispatchService(
                     cancellationToken);
                 await PersistUsageLimitIfNeededAsync(
                     dbContext,
-                    integrationEventDispatcher,
+                    integrationEventProcessor,
                     continuable.FailureReason,
                     cancellationToken);
                 await PublishAuthFailedIfNeededAsync(
+                    dbContext,
                     integrationEventDispatcher,
                     activeRun,
                     continuable.FailureReason,
@@ -652,10 +676,11 @@ internal sealed class WorkerDispatchService(
                 await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
                 await PersistUsageLimitIfNeededAsync(
                     dbContext,
-                    integrationEventDispatcher,
+                    integrationEventProcessor,
                     failure.FailureReason,
                     cancellationToken);
                 await PublishAuthFailedIfNeededAsync(
+                    dbContext,
                     integrationEventDispatcher,
                     activeRun,
                     failure.FailureReason,
@@ -723,7 +748,7 @@ internal sealed class WorkerDispatchService(
     /// </summary>
     private async Task PersistUsageLimitIfNeededAsync(
         DbContext dbContext,
-        IIntegrationEventDispatcher integrationEventDispatcher,
+        IIntegrationEventProcessor integrationEventProcessor,
         FailureReason failureReason,
         CancellationToken cancellationToken)
     {
@@ -750,8 +775,11 @@ internal sealed class WorkerDispatchService(
 
         if (resetsAtChanged)
         {
-            await TryDispatchAsync(
-                integrationEventDispatcher,
+            // DispatchPaused has only a SignalR broadcast handler (no durable DB consumer).
+            // Route via IIntegrationEventProcessor for direct in-process delivery — no outbox
+            // row needed, no extra DB save, and no relay latency on a transient notification.
+            await TryDeliverDirectAsync(
+                integrationEventProcessor,
                 new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value),
                 cancellationToken);
         }
@@ -816,6 +844,7 @@ internal sealed class WorkerDispatchService(
     /// can transition the account state and broadcast the dispatch-paused notification.
     /// </summary>
     private async Task PublishAuthFailedIfNeededAsync(
+        DbContext dbContext,
         IIntegrationEventDispatcher integrationEventDispatcher,
         ActiveRun activeRun,
         FailureReason failureReason,
@@ -826,6 +855,9 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
+        // Enqueue first, then save so the outbox interceptor harvests WorkerAuthenticationFailed
+        // atomically. Without this save the event is enqueued into the scoped collector but never
+        // drained — the Credentials module's state mutation would be silently lost.
         await TryDispatchAsync(
             integrationEventDispatcher,
             new WorkerAuthenticationFailedEvent(
@@ -833,6 +865,8 @@ internal sealed class WorkerDispatchService(
                 activeRun.IssueId.Value,
                 failureReason.Summary),
             cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogWarning("Auth-invalid exit detected; WorkerAuthenticationFailed published.");
     }
@@ -864,9 +898,11 @@ internal sealed class WorkerDispatchService(
         }
 
         settings.ResumeDispatch();
-        await dbContext.SaveChangesAsync(cancellationToken);
-
+        // Enqueue before save so the outbox interceptor harvests DispatchResumed atomically
+        // with the settings change. DispatchResumed has a durable consumer (DispatchResumedHandler
+        // in Issues re-queues failed issues), so it must go through the outbox.
         await integrationEventDispatcher.DispatchAsync([new DispatchResumedEvent()], cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
             "Usage limit reset time has passed; dispatch auto-resumed (was paused until {ResetsAt}).",
@@ -959,6 +995,32 @@ internal sealed class WorkerDispatchService(
             logger.LogWarning(
                 ex,
                 "Failed to dispatch system integration event {EventType}",
+                systemEvent.GetType().Name);
+        }
+    }
+
+    /// <summary>
+    /// Delivers an event directly via <see cref="IIntegrationEventProcessor"/> without writing
+    /// an outbox row. Use only for pure ephemeral notifications whose sole consumers are
+    /// transient SignalR broadcasts (no durable side-effects). A fresh <see cref="Guid"/> is
+    /// used as the event-id because inbox dedup is a no-op for one-shot delivery.
+    /// </summary>
+    private async Task TryDeliverDirectAsync(
+        IIntegrationEventProcessor processor,
+        IIntegrationEvent systemEvent,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await processor.ProcessAsync(Guid.NewGuid(), systemEvent, cancellationToken);
+        }
+#pragma warning disable CA1031 // Direct broadcast delivery failures (e.g. SignalR connection error) must not crash the BackgroundService tick; the warning is sufficient for triage.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to deliver ephemeral integration event {EventType} directly.",
                 systemEvent.GetType().Name);
         }
     }

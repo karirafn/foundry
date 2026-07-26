@@ -1,6 +1,8 @@
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Outbox;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.Shared.Infrastructure;
 
@@ -57,6 +59,12 @@ public static class ServiceCollectionExtensions
         where THandler : class, IIntegrationEventHandler<TEvent>
     {
         services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
+        return services;
+    }
+
+    public static IServiceCollection AddOutboxOptionsValidation(this IServiceCollection services)
+    {
+        services.AddSingleton<IValidateOptions<OutboxOptions>, OutboxOptionsValidator>();
         return services;
     }
 }

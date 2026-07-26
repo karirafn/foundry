@@ -9,6 +9,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.ServiceDefaults;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Hubs;
 using Foundry.WebApi.Persistence;
 
@@ -22,11 +23,20 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo("data/dp-keys"));
-builder.Services.AddDbContext<FoundryDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db"));
+builder.Services.AddScoped<IntegrationEventCollector>();
+builder.Services.AddScoped<OutboxSaveChangesInterceptor>();
+builder.Services.AddDbContext<FoundryDbContext>((sp, options) =>
+{
+    options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db");
+    options.AddInterceptors(sp.GetRequiredService<OutboxSaveChangesInterceptor>());
+});
 builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
-builder.Services.AddScoped<IIntegrationEventDispatcher, IntegrationEventDispatcher>();
+builder.Services.AddScoped<IIntegrationEventDispatcher, OutboxIntegrationEventDispatcher>();
+builder.Services.AddScoped<IIntegrationEventProcessor, IntegrationEventProcessor>();
+builder.Services.Configure<OutboxOptions>(builder.Configuration.GetSection("Outbox"));
+builder.Services.AddOutboxOptionsValidation();
+builder.Services.AddHostedService<OutboxRelayService>();
 builder.Services.AddCredentialsModule();
 builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule(builder.Configuration);
