@@ -150,7 +150,8 @@ internal static partial class CreateAccount
                 credential.Name,
                 providerType,
                 credential.BaseUrl.Value.ToString(),
-                credential.Token is not null);
+                credential.Token is not null,
+                credential.Namespaces.Select(n => n.Value).ToList());
 
             return Result<CredentialSummary>.Ok(summary);
         }

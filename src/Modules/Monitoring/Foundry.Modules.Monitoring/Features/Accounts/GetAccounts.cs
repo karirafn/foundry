@@ -21,25 +21,19 @@ internal static class GetAccounts
             Query query,
             CancellationToken cancellationToken)
         {
-            var rows = await dbContext.Set<Credential>()
+            List<Credential> credentials = await dbContext.Set<Credential>()
                 .AsNoTracking()
-                .Select(a => new
-                {
-                    a.Id,
-                    a.Name,
-                    ProviderType = EF.Property<string>(a, "type"),
-                    a.BaseUrl,
-                    a.Token,
-                })
+                .Include(a => a.Namespaces)
                 .ToListAsync(cancellationToken);
 
-            List<CredentialSummary> summaries = rows
+            List<CredentialSummary> summaries = credentials
                 .Select(r => new CredentialSummary(
                     r.Id.Value,
                     r.Name,
-                    r.ProviderType,
+                    r is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub,
                     r.BaseUrl.Value.ToString(),
-                    r.Token != null))
+                    r.Token is not null,
+                    r.Namespaces.Select(n => n.Value).ToList()))
                 .ToList();
 
             return Result<IReadOnlyList<CredentialSummary>>.Ok(summaries);
