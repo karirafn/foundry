@@ -17,6 +17,70 @@ public sealed class SetNamespaces
     private static Namespace Ns(string value) =>
         Namespace.Create(value).ValueOrThrow();
 
+    // Tests for SetNamespaces(derived, claimedByOthers) overload
+
+    [Fact]
+    public void WhenClaimedByOthersIsEmpty_BehavesLikeSingleArgOverload()
+    {
+        // Arrange
+        GitHubCredential credential = CreateCredential();
+        HashSet<string> claimedByOthers = [];
+
+        // Act
+        credential.SetNamespaces([Ns("org-a"), Ns("org-b")], claimedByOthers);
+
+        // Assert
+        credential.Namespaces.Count.ShouldBe(2);
+        credential.Namespaces.ShouldContain(n => n.Value == "org-a");
+        credential.Namespaces.ShouldContain(n => n.Value == "org-b");
+    }
+
+    [Fact]
+    public void WhenDerivedContainsClaimedNamespace_ExcludesClaimedFromResult()
+    {
+        // Arrange
+        GitHubCredential credential = CreateCredential();
+        HashSet<string> claimedByOthers = ["org-b"];
+
+        // Act
+        credential.SetNamespaces([Ns("org-a"), Ns("org-b")], claimedByOthers);
+
+        // Assert
+        credential.Namespaces.Count.ShouldBe(1);
+        credential.Namespaces.ShouldContain(n => n.Value == "org-a");
+        credential.Namespaces.ShouldNotContain(n => n.Value == "org-b");
+    }
+
+    [Fact]
+    public void WhenAllDerivedAreClaimed_ResultIsEmpty()
+    {
+        // Arrange
+        GitHubCredential credential = CreateCredential();
+        HashSet<string> claimedByOthers = ["org-a", "org-b"];
+
+        // Act
+        credential.SetNamespaces([Ns("org-a"), Ns("org-b")], claimedByOthers);
+
+        // Assert
+        credential.Namespaces.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WhenDuplicatesInDerivedAfterSubtraction_Deduplicates()
+    {
+        // Arrange
+        GitHubCredential credential = CreateCredential();
+        HashSet<string> claimedByOthers = ["org-b"];
+        Namespace nsA = Ns("org-a");
+
+        // Act
+        credential.SetNamespaces([nsA, nsA, Ns("org-b")], claimedByOthers);
+
+        // Assert
+        credential.Namespaces.Count.ShouldBe(1);
+        credential.Namespaces.ShouldContain(n => n.Value == "org-a");
+    }
+
     [Fact]
     public void WhenEmptyList_NamespacesCollectionIsEmpty()
     {
