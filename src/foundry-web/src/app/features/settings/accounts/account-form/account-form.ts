@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  Injector,
   InputSignal,
   OnInit,
   OutputEmitterRef,
@@ -10,14 +11,17 @@ import {
   WritableSignal,
   afterNextRender,
   computed,
+  effect,
   inject,
   input,
   output,
+  runInInjectionContext,
   signal,
 } from '@angular/core';
 import {
   AccountSummary,
   CreateAccountRequest,
+  NamespaceConflict,
   ProviderType,
   TokenRequirements,
   TokenValidationResult,
@@ -27,6 +31,7 @@ import { ProviderSelectorComponent } from '../provider-selector/provider-selecto
 import { AccountService } from '../account.service';
 
 const GITHUB_BASE_URL = 'https://github.com';
+const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
 
 @Component({
   selector: 'fd-account-form',
@@ -57,7 +62,7 @@ const GITHUB_BASE_URL = 'https://github.com';
           <span id="account-form-provider-label" class="account-form__field-label">Provider</span>
           <fd-provider-selector
             [provider]="_provider()"
-            (providerChange)="onProviderChange($event)"
+            (providerChange)="_onProviderChange($event)"
             (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
             [ariaLabelledBy]="'account-form-provider-label'"
           />
@@ -241,12 +246,43 @@ const GITHUB_BASE_URL = 'https://github.com';
         role="alert"
       >{{ saveError() ?? '' }}</div>
 
+      @if (_visibleConflicts().length > 0) {
+        <div
+          class="account-form__conflict-panel"
+          role="region"
+          [attr.aria-labelledby]="conflictPanelHeadingId"
+        >
+          <h3
+            class="account-form__conflict-heading"
+            [id]="conflictPanelHeadingId"
+            #conflictHeading
+            tabindex="-1"
+          >Namespace conflicts — select namespaces to transfer</h3>
+          <ul class="account-form__conflict-list" role="list">
+            @for (conflict of _visibleConflicts(); track conflict.namespace) {
+              <li class="account-form__conflict-item" role="listitem">
+                <label class="account-form__conflict-label">
+                  <input
+                    class="account-form__conflict-checkbox"
+                    type="checkbox"
+                    [checked]="_selectedConflicts().has(conflict.namespace)"
+                    (change)="onConflictToggle(conflict.namespace, $any($event.target).checked)"
+                  />
+                  <span class="account-form__conflict-namespace">{{ conflict.namespace }}</span>
+                  <span class="account-form__conflict-holder">held by {{ conflict.holderName }}</span>
+                </label>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
       <button
         class="account-form__save-btn"
         type="button"
         [disabled]="!_canSave()"
         (click)="onSave()"
-      >Save</button>
+      >{{ _saveLabel() }}</button>
     </div>
   `,
   styleUrl: './account-form.scss',
@@ -261,12 +297,18 @@ export class AccountFormComponent implements OnInit {
   readonly validationResult: InputSignal<TokenValidationResult | null> = input<TokenValidationResult | null>(null);
   readonly saveError: InputSignal<string | null> = input<string | null>(null);
   readonly validationError: InputSignal<string | null> = input<string | null>(null);
+  readonly conflicts: InputSignal<NamespaceConflict[]> = input<NamespaceConflict[]>([]);
 
   readonly save: OutputEmitterRef<CreateAccountRequest | UpdateAccountRequest> = output<CreateAccountRequest | UpdateAccountRequest>();
   readonly validateToken: OutputEmitterRef<{ token: string; baseUrl: string }> = output<{ token: string; baseUrl: string }>();
   readonly cancel: OutputEmitterRef<void> = output<void>();
 
   @ViewChild('formHeading') readonly formHeading?: ElementRef<HTMLElement>;
+  @ViewChild('conflictHeading') readonly conflictHeading?: ElementRef<HTMLElement>;
+
+  protected readonly conflictPanelHeadingId = CONFLICT_PANEL_HEADING_ID;
+
+  private readonly _injector = inject(Injector);
 
   protected readonly _isEditMode: Signal<boolean> = computed(() => this.account() !== null);
 
@@ -276,6 +318,12 @@ export class AccountFormComponent implements OnInit {
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
   protected readonly _tokenRequirements: WritableSignal<TokenRequirements | null> = signal(null);
+
+  /** Tracks visible conflicts (cleared when inputs change). */
+  protected readonly _visibleConflicts: WritableSignal<NamespaceConflict[]> = signal([]);
+
+  /** Selected conflict namespaces (default: all). */
+  protected readonly _selectedConflicts: WritableSignal<Set<string>> = signal(new Set<string>());
 
   /** Tracks the last (token, baseUrl) pair that was sent to resolution to avoid duplicate calls. */
   private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string } | null> = signal(null);
@@ -399,6 +447,12 @@ export class AccountFormComponent implements OnInit {
     return !!this._token();
   });
 
+  protected readonly _saveLabel: Signal<string> = computed(() => {
+    return this._visibleConflicts().length > 0
+      ? 'Transfer selected & add account'
+      : 'Save';
+  });
+
   protected readonly _tokenAriaDescribedBy: Signal<string> = computed(() => {
     const parts: string[] = ['account-token-validation', 'account-form-validation-error', 'account-token-error'];
     if (this._isEditMode()) {
@@ -413,6 +467,20 @@ export class AccountFormComponent implements OnInit {
   constructor() {
     afterNextRender(() => {
       this.formHeading?.nativeElement.focus();
+    });
+
+    // Sync incoming conflicts from service into local state; focus conflict heading on 409.
+    effect(() => {
+      const incoming = this.conflicts();
+      if (incoming.length > 0) {
+        this._visibleConflicts.set(incoming);
+        this._selectedConflicts.set(new Set(incoming.map(c => c.namespace)));
+        runInInjectionContext(this._injector, () => {
+          afterNextRender(() => {
+            this.conflictHeading?.nativeElement.focus();
+          });
+        });
+      }
     });
   }
 
@@ -460,12 +528,6 @@ export class AccountFormComponent implements OnInit {
     }
   }
 
-  onProviderChange(provider: ProviderType): void {
-    this._provider.set(provider);
-    this._tokenRequirements.set(null);
-    this._fetchTokenRequirements(provider);
-  }
-
   onDefaultBaseUrlChange(defaultUrl: string): void {
     if (!this._baseUrlManuallyEdited()) {
       this._baseUrl.set(defaultUrl);
@@ -501,8 +563,20 @@ export class AccountFormComponent implements OnInit {
     }, 0);
   }
 
+  onConflictToggle(namespace: string, checked: boolean): void {
+    const current = new Set(this._selectedConflicts());
+    if (checked) {
+      current.add(namespace);
+    } else {
+      current.delete(namespace);
+    }
+    this._selectedConflicts.set(current);
+  }
+
   private _clearResolution(): void {
     this._lastResolvedPair.set(null);
+    this._visibleConflicts.set([]);
+    this._selectedConflicts.set(new Set<string>());
   }
 
   private _triggerResolution(): void {
@@ -516,6 +590,13 @@ export class AccountFormComponent implements OnInit {
     this.validateToken.emit({ token, baseUrl });
   }
 
+  protected _onProviderChange(provider: ProviderType): void {
+    this._provider.set(provider);
+    this._tokenRequirements.set(null);
+    this._fetchTokenRequirements(provider);
+    this._clearResolution();
+  }
+
   onSave(): void {
     const acc = this.account();
     if (acc !== null) {
@@ -526,10 +607,12 @@ export class AccountFormComponent implements OnInit {
       };
       this.save.emit(request);
     } else {
+      const selectedNamespaces = Array.from(this._selectedConflicts());
       const request: CreateAccountRequest = {
         providerType: this._provider(),
         baseUrl: this._baseUrl(),
         token: this._token(),
+        ...(selectedNamespaces.length > 0 ? { takeoverNamespaces: selectedNamespaces } : {}),
       };
       this.save.emit(request);
     }

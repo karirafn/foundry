@@ -106,7 +106,11 @@ export class AccountService {
       error: (err: HttpErrorResponse) => {
         console.error(err);
         if (err.status === 409 && this._isNamespaceConflictResponse(err.error)) {
-          this._conflictsSignal.set((err.error as NamespaceConflictResponse).conflicts);
+          const conflictBody = err.error as NamespaceConflictResponse;
+          this._conflictsSignal.set(conflictBody.conflicts);
+          this._srAnnouncementSignal.set(
+            `${conflictBody.conflicts.length} namespace conflict${conflictBody.conflicts.length === 1 ? '' : 's'} — select namespaces to transfer and retry.`
+          );
           this._savingSignal.set(false);
           return;
         }

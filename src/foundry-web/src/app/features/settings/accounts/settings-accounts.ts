@@ -59,6 +59,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
               [validationResult]="accountService.validationResult()"
               [validationError]="accountService.validationError()"
               [saveError]="accountService.saveError()"
+              [conflicts]="accountService.conflicts()"
               (save)="onSaveNewAccount($event)"
               (validateToken)="onValidateToken($event)"
               (cancel)="onAccountCancelled()"
