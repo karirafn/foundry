@@ -2,6 +2,7 @@ import { Component, Signal, computed, inject } from '@angular/core';
 import { SystemSignalRService } from '../../../../../core/services/system-signalr.service';
 import {
   DISPATCH_NOTIFICATION_CATEGORY,
+  DOCKER_NOTIFICATION_CATEGORY,
   IMAGE_BUILD_NOTIFICATION_CATEGORY,
   SystemNotification,
 } from '../../../../../core/models/system-notification.model';
@@ -20,7 +21,10 @@ export class SystemNotificationsComponent {
     this._systemSignalR
       .notifications()
       .filter(
-        (n) => n.category !== IMAGE_BUILD_NOTIFICATION_CATEGORY && n.category !== DISPATCH_NOTIFICATION_CATEGORY
+        (n) =>
+          n.category !== IMAGE_BUILD_NOTIFICATION_CATEGORY &&
+          n.category !== DISPATCH_NOTIFICATION_CATEGORY &&
+          n.category !== DOCKER_NOTIFICATION_CATEGORY
       )
   );
 }

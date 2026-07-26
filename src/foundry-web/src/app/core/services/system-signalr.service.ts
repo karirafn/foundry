@@ -1,7 +1,8 @@
 import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
-import { DISPATCH_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
+import { DISPATCH_NOTIFICATION_CATEGORY, DOCKER_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
+import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
 import { LoginSessionUpdate } from '../../features/settings/settings.model';
 
 export interface SystemHub {
@@ -54,10 +55,7 @@ export class SystemSignalRService {
         this._dispatchStateChanged.next();
       }
 
-      this._notifications.update((current) => {
-        const filtered = current.filter((n) => n.category !== notification.category);
-        return notification.isActive ? [...filtered, notification] : filtered;
-      });
+      this._applyNotification(notification);
     });
 
     hub.on('LoginSessionUpdated', (update: LoginSessionUpdate) => {
@@ -70,6 +68,22 @@ export class SystemSignalRService {
 
     hub.start().catch(() => {
       console.warn('[SystemSignalRService] Failed to connect to /hubs/system');
+    });
+  }
+
+  applyDockerAvailability(available: boolean): void {
+    const notification: SystemNotification = {
+      category: DOCKER_NOTIFICATION_CATEGORY,
+      isActive: !available,
+      message: DOCKER_UNAVAILABLE_MESSAGE,
+    };
+    this._applyNotification(notification);
+  }
+
+  private _applyNotification(notification: SystemNotification): void {
+    this._notifications.update((current) => {
+      const filtered = current.filter((n) => n.category !== notification.category);
+      return notification.isActive ? [...filtered, notification] : filtered;
     });
   }
 }
