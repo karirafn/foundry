@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AccountService } from './account.service';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialUpdateResult, UpdateAccountRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialUpdateResult, TokenRequirements, UpdateAccountRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 
 const MOCK_ACCOUNT: AccountSummary = {
@@ -673,5 +673,108 @@ describe('AccountService', () => {
       isAuthFailure: false,
       missingScopes: [],
     });
+  });
+
+  // Cycle 9: getTokenRequirements fetches from correct lowercased URL
+  it('should GET /api/providers/github/token-requirements for GitHub provider', async () => {
+    // Arrange
+    const mockRequirements: TokenRequirements = {
+      providerType: 'github',
+      tokenTypeLabel: 'GitHub classic personal access token',
+      scopes: ['repo'],
+      creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
+    };
+
+    // Act
+    const promise = service.getTokenRequirements('GitHub');
+    const req = httpMock.expectOne('/api/providers/github/token-requirements');
+
+    // Assert request
+    expect(req.request.method).toBe('GET');
+    req.flush(mockRequirements);
+
+    const result = await promise;
+    expect(result).toEqual(mockRequirements);
+  });
+
+  // Cycle 10: getTokenRequirements uses correct URL for GitLab
+  it('should GET /api/providers/gitlab/token-requirements for GitLab provider', async () => {
+    // Arrange
+    const mockRequirements: TokenRequirements = {
+      providerType: 'gitlab',
+      tokenTypeLabel: 'GitLab personal access token',
+      scopes: ['api'],
+      creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+    };
+
+    // Act
+    const promise = service.getTokenRequirements('GitLab');
+    const req = httpMock.expectOne('/api/providers/gitlab/token-requirements');
+
+    // Assert
+    expect(req.request.method).toBe('GET');
+    req.flush(mockRequirements);
+
+    const result = await promise;
+    expect(result).toEqual(mockRequirements);
+  });
+
+  // Cycle 11: second call for same provider serves cache, no new HTTP request
+  it('should serve cached TokenRequirements on a second call for the same provider', async () => {
+    // Arrange
+    const mockRequirements: TokenRequirements = {
+      providerType: 'github',
+      tokenTypeLabel: 'GitHub classic personal access token',
+      scopes: ['repo'],
+      creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
+    };
+
+    // Act — first call fetches
+    const firstPromise = service.getTokenRequirements('GitHub');
+    httpMock.expectOne('/api/providers/github/token-requirements').flush(mockRequirements);
+    await firstPromise;
+
+    // Act — second call should resolve from cache
+    const secondResult = await service.getTokenRequirements('GitHub');
+
+    // Assert — no second HTTP request was made
+    httpMock.expectNone('/api/providers/github/token-requirements');
+    expect(secondResult).toEqual(mockRequirements);
+  });
+
+  // Cycle 12: different providers each fetch once independently
+  it('should fetch each provider independently without cross-provider cache sharing', async () => {
+    // Arrange
+    const githubRequirements: TokenRequirements = {
+      providerType: 'github',
+      tokenTypeLabel: 'GitHub classic personal access token',
+      scopes: ['repo'],
+      creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
+    };
+    const gitlabRequirements: TokenRequirements = {
+      providerType: 'gitlab',
+      tokenTypeLabel: 'GitLab personal access token',
+      scopes: ['api'],
+      creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+    };
+
+    // Act — fetch GitHub
+    const githubPromise = service.getTokenRequirements('GitHub');
+    httpMock.expectOne('/api/providers/github/token-requirements').flush(githubRequirements);
+    await githubPromise;
+
+    // Act — fetch GitLab (must still make its own HTTP request)
+    const gitlabPromise = service.getTokenRequirements('GitLab');
+    httpMock.expectOne('/api/providers/gitlab/token-requirements').flush(gitlabRequirements);
+    const gitlabResult = await gitlabPromise;
+
+    // Assert — GitLab was fetched, not served from GitHub cache
+    expect(gitlabResult).toEqual(gitlabRequirements);
+
+    // Assert — subsequent calls are now cached for both
+    await service.getTokenRequirements('GitHub');
+    await service.getTokenRequirements('GitLab');
+    httpMock.expectNone('/api/providers/github/token-requirements');
+    httpMock.expectNone('/api/providers/gitlab/token-requirements');
   });
 });
