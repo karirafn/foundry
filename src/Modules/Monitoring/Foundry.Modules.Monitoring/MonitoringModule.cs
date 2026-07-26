@@ -38,7 +38,8 @@ public static class MonitoringModule
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
         services.AddQueryHandler<GetTokenRequirements.Query, TokenRequirements, GetTokenRequirements.Handler>();
-        services.AddCommandHandler<CreateAccount.Command, CredentialSummary, CreateAccount.Handler, CreateAccount.Validator>();
+        services.AddScoped<CreateAccount.Handler>();
+        services.AddScoped<ICommandValidator<CreateAccount.Command>, CreateAccount.Validator>();
         services.AddCommandHandler<UpdateAccount.Command, CredentialUpdateResult, UpdateAccount.Handler, UpdateAccount.Validator>();
         services.AddCommandHandler<DeleteAccount.Command, bool, DeleteAccount.Handler>();
         services.AddQueryHandler<ValidateToken.Query, ValidateToken.Response, ValidateToken.Handler>();

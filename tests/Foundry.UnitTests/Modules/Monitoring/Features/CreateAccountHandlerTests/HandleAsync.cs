@@ -55,14 +55,14 @@ public sealed class HandleAsync : IAsyncDisposable
         CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
 
         // Act
-        Result<CredentialSummary> result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
         // Assert
-        CredentialSummary summary = result.ShouldBeOfType<Result<CredentialSummary>.Success>().Value;
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
         Credential? stored = await _dbContext.Set<Credential>()
             .Include(c => c.Namespaces)
             .FirstOrDefaultAsync(
-                c => c.Id == CredentialId.From(summary.Id),
+                c => c.Id == CredentialId.From(created.Value.Credential.Id),
                 TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
         stored.Namespaces.Count.ShouldBe(1);
@@ -78,17 +78,138 @@ public sealed class HandleAsync : IAsyncDisposable
         CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
 
         // Act
-        Result<CredentialSummary> result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
         // Assert
-        CredentialSummary summary = result.ShouldBeOfType<Result<CredentialSummary>.Success>().Value;
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
         Credential? stored = await _dbContext.Set<Credential>()
             .Include(c => c.Namespaces)
             .FirstOrDefaultAsync(
-                c => c.Id == CredentialId.From(summary.Id),
+                c => c.Id == CredentialId.From(created.Value.Credential.Id),
                 TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
         stored.Namespaces.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenNamespaceAlreadyClaimed_AndNoTakeover_ReturnsConflict()
+    {
+        // Arrange — seed an existing credential that claims "octocat"
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existing = GitHubCredential.Create("other-user", "ghp_other", baseUrl);
+        existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existing);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test", TakeoverNamespaces: null);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Conflict conflict = result.ShouldBeOfType<CreateAccount.Outcome.Conflict>();
+        conflict.Conflicts.Conflicts.Count.ShouldBe(1);
+        conflict.Conflicts.Conflicts[0].ShouldSatisfyAllConditions(
+            () => conflict.Conflicts.Conflicts[0].Namespace.ShouldBe("octocat"),
+            () => conflict.Conflicts.Conflicts[0].HolderCredentialId.ShouldBe(existing.Id.Value),
+            () => conflict.Conflicts.Conflicts[0].HolderName.ShouldBe("other-user"));
+    }
+
+    [Fact]
+    public async Task WhenTakeoverNamespaceOutsideDerivedSet_ReturnsInvalidTakeover()
+    {
+        // Arrange — derived set is only "octocat"; requesting takeover of "other-org"
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new(
+            "github",
+            "https://github.com",
+            "ghp_test",
+            TakeoverNamespaces: ["other-org"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.InvalidTakeover invalid = result.ShouldBeOfType<CreateAccount.Outcome.InvalidTakeover>();
+        invalid.Invalid.InvalidNamespaces.ShouldContain("other-org");
+    }
+
+    [Fact]
+    public async Task WhenTakeoverRequested_AndDerivationUnavailable_AllRequestedNamespacesAreInvalid()
+    {
+        // Arrange — derivation unavailable means empty derived set; all requested takeover namespaces invalid
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Unavailable();
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new(
+            "github",
+            "https://github.com",
+            "ghp_test",
+            TakeoverNamespaces: ["org-a"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.InvalidTakeover invalid = result.ShouldBeOfType<CreateAccount.Outcome.InvalidTakeover>();
+        invalid.Invalid.InvalidNamespaces.ShouldContain("org-a");
+    }
+
+    [Fact]
+    public async Task WhenValidTakeover_TransfersNamespaceOwnership()
+    {
+        // Arrange — seed existing credential that owns "octocat"
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existingHolder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        existingHolder.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existingHolder);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new(
+            "github",
+            "https://github.com",
+            "ghp_test",
+            TakeoverNamespaces: ["octocat"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — new credential created, holder lost the namespace
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        created.Value.Credential.Namespaces.ShouldContain("octocat");
+
+        Credential? holder = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == existingHolder.Id, TestContext.Current.CancellationToken);
+        holder.ShouldNotBeNull();
+        holder.Namespaces.ShouldNotContain(n => n.Value == "octocat");
+    }
+
+    [Fact]
+    public async Task WhenConflictMeanwhileVanishes_ClaimsNormally()
+    {
+        // Arrange — no other credential claims the namespace; takeover lists it but it's not actually conflicted
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new(
+            "github",
+            "https://github.com",
+            "ghp_test",
+            TakeoverNamespaces: ["octocat"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — no error, credential created normally
+        result.ShouldBeOfType<CreateAccount.Outcome.Created>();
     }
 
     private sealed class StubValidateTokenHandler
