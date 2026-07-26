@@ -13,15 +13,15 @@ namespace Foundry.Modules.Monitoring.Features.Repositories;
 
 internal static class GetAvailableRepositories
 {
-    internal sealed record Query(Guid AccountId) : IQuery<IReadOnlyList<ProviderRepository>>;
+    internal sealed record Query(Guid AccountId) : IQuery<AvailableRepositoriesResponse>;
 
     internal sealed class Handler(
         DbContext dbContext,
         GitHubHttpClient gitHubHttpClient,
         GitLabHttpClient gitLabHttpClient)
-        : IQueryHandler<Query, IReadOnlyList<ProviderRepository>>
+        : IQueryHandler<Query, AvailableRepositoriesResponse>
     {
-        public async Task<Result<IReadOnlyList<ProviderRepository>>> HandleAsync(
+        public async Task<Result<AvailableRepositoriesResponse>> HandleAsync(
             Query query,
             CancellationToken cancellationToken)
         {
@@ -29,21 +29,22 @@ internal static class GetAvailableRepositories
 
             Credential? credential = await dbContext.Set<Credential>()
                 .AsNoTracking()
+                .Include(c => c.Namespaces)
                 .FirstOrDefaultAsync(a => a.Id == credentialId, cancellationToken);
 
             if (credential is null)
             {
-                return Result<IReadOnlyList<ProviderRepository>>.Fail(
+                return Result<AvailableRepositoriesResponse>.Fail(
                     RepositoryErrors.AccountNotFound(credentialId));
             }
 
             if (credential.Token is null)
             {
-                return Result<IReadOnlyList<ProviderRepository>>.Fail(
+                return Result<AvailableRepositoriesResponse>.Fail(
                     RepositoryErrors.AccountHasNoToken(credentialId));
             }
 
-            return credential switch
+            Result<IReadOnlyList<ProviderRepository>> providerResult = credential switch
             {
                 GitLabCredential => await gitLabHttpClient.ListRepositoriesAsync(
                     credential.ApiBaseUrl,
@@ -54,6 +55,59 @@ internal static class GetAvailableRepositories
                     credential.Token,
                     cancellationToken),
             };
+
+            if (providerResult is Result<IReadOnlyList<ProviderRepository>>.Failure failure)
+            {
+                return Result<AvailableRepositoriesResponse>.Fail(failure.Error);
+            }
+
+            IReadOnlyList<ProviderRepository> providerRepos =
+                ((Result<IReadOnlyList<ProviderRepository>>.Success)providerResult).Value;
+
+            HashSet<string> monitoredSlugs = await LoadMonitoredSlugsAsync(credential.Host, cancellationToken);
+
+            bool hasClaims = credential.Namespaces.Count > 0;
+
+            List<AvailableRepository> repositories = [];
+
+            foreach (ProviderRepository providerRepo in providerRepos)
+            {
+                Result<RepositorySlug> slugResult = RepositorySlug.Create(providerRepo.Slug);
+
+                if (slugResult is not Result<RepositorySlug>.Success slugSuccess)
+                {
+                    continue;
+                }
+
+                RepositorySlug slug = slugSuccess.Value;
+
+                if (!credential.Covers(slug))
+                {
+                    continue;
+                }
+
+                bool isMonitored = monitoredSlugs.Contains(slug.FullPath);
+
+                repositories.Add(new AvailableRepository(
+                    providerRepo.Slug,
+                    providerRepo.IsPrivate,
+                    providerRepo.CanPush,
+                    isMonitored));
+            }
+
+            return Result<AvailableRepositoriesResponse>.Ok(new AvailableRepositoriesResponse(hasClaims, repositories));
+        }
+
+        private async Task<HashSet<string>> LoadMonitoredSlugsAsync(string host, CancellationToken cancellationToken)
+        {
+            List<MonitoredRepository> hostRepos = await dbContext.Set<MonitoredRepository>()
+                .AsNoTracking()
+                .Where(r => r.Host == host)
+                .ToListAsync(cancellationToken);
+
+            return hostRepos
+                .Select(r => r.Slug.FullPath)
+                .ToHashSet(StringComparer.Ordinal);
         }
     }
 
@@ -63,15 +117,15 @@ internal static class GetAvailableRepositories
         {
             group.MapGet("available-repositories", static async (
                     Guid accountId,
-                    IQueryHandler<Query, IReadOnlyList<ProviderRepository>> handler,
+                    IQueryHandler<Query, AvailableRepositoriesResponse> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Result<IReadOnlyList<ProviderRepository>> result = await handler.HandleAsync(
+                    Result<AvailableRepositoriesResponse> result = await handler.HandleAsync(
                         new Query(accountId),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<IReadOnlyList<ProviderRepository>>, NotFound<string>, BadRequest<string>>>(
-                        repositories => TypedResults.Ok(repositories),
+                    return result.Match<Results<Ok<AvailableRepositoriesResponse>, NotFound<string>, BadRequest<string>>>(
+                        response => TypedResults.Ok(response),
                         error => error.Code switch
                         {
                             RepositoryErrors.AccountNotFoundCode => TypedResults.NotFound(error.Message),
@@ -80,7 +134,7 @@ internal static class GetAvailableRepositories
                 })
                 .WithName("GetAvailableRepositories")
                 .WithSummary("Gets all repositories available for a given account")
-                .Produces<IReadOnlyList<ProviderRepository>>()
+                .Produces<AvailableRepositoriesResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);
         }

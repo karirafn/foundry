@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Foundry.Modules.Monitoring.Features.Repositories;
-using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -21,17 +20,19 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
 
     public WhenAccountHasToken()
     {
-        IReadOnlyList<ProviderRepository> fakeRepositories =
-        [
-            new ProviderRepository("owner/repo-a", IsPrivate: false, CanPush: true),
-            new ProviderRepository("owner/repo-b", IsPrivate: true, CanPush: false),
-        ];
+        AvailableRepositoriesResponse fakeResponse = new(
+            HasClaims: true,
+            Repositories:
+            [
+                new AvailableRepository("owner/repo-a", IsPrivate: false, CanPush: true, IsMonitored: false),
+                new AvailableRepository("owner/repo-b", IsPrivate: true, CanPush: false, IsMonitored: false),
+            ]);
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
-            services.RemoveAll<IQueryHandler<GetAvailableRepositories.Query, IReadOnlyList<ProviderRepository>>>();
-            services.AddScoped<IQueryHandler<GetAvailableRepositories.Query, IReadOnlyList<ProviderRepository>>>(
-                _ => new StubHandler(Result<IReadOnlyList<ProviderRepository>>.Ok(fakeRepositories)));
+            services.RemoveAll<IQueryHandler<GetAvailableRepositories.Query, AvailableRepositoriesResponse>>();
+            services.AddScoped<IQueryHandler<GetAvailableRepositories.Query, AvailableRepositoriesResponse>>(
+                _ => new StubHandler(Result<AvailableRepositoriesResponse>.Ok(fakeResponse)));
         });
 
         _client = _factory.CreateClient();
@@ -56,19 +57,19 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<ProviderRepository>? repositories = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<ProviderRepository>>(TestContext.Current.CancellationToken);
-        repositories.ShouldNotBeNull();
-        repositories.Count.ShouldBe(2);
-        repositories.ShouldSatisfyAllConditions(
-            () => repositories.ShouldContain(r => r.Slug == "owner/repo-a" && !r.IsPrivate && r.CanPush),
-            () => repositories.ShouldContain(r => r.Slug == "owner/repo-b" && r.IsPrivate && !r.CanPush));
+        AvailableRepositoriesResponse? result = await response.Content
+            .ReadFromJsonAsync<AvailableRepositoriesResponse>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Repositories.Count.ShouldBe(2);
+        result.Repositories.ShouldSatisfyAllConditions(
+            () => result.Repositories.ShouldContain(r => r.Slug == "owner/repo-a" && !r.IsPrivate && r.CanPush),
+            () => result.Repositories.ShouldContain(r => r.Slug == "owner/repo-b" && r.IsPrivate && !r.CanPush));
     }
 
-    private sealed class StubHandler(Result<IReadOnlyList<ProviderRepository>> result)
-        : IQueryHandler<GetAvailableRepositories.Query, IReadOnlyList<ProviderRepository>>
+    private sealed class StubHandler(Result<AvailableRepositoriesResponse> result)
+        : IQueryHandler<GetAvailableRepositories.Query, AvailableRepositoriesResponse>
     {
-        public Task<Result<IReadOnlyList<ProviderRepository>>> HandleAsync(
+        public Task<Result<AvailableRepositoriesResponse>> HandleAsync(
             GetAvailableRepositories.Query query,
             CancellationToken cancellationToken) =>
             Task.FromResult(result);
