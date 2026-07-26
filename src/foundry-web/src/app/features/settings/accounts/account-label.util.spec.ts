@@ -68,7 +68,6 @@ describe('accountOptionLabel', () => {
 
     // Assert
     expect(result).toBe('My GitHub — ns-a, ns-b, ns-c, ns-d (github.com)');
-    expect(result).not.toContain('more');
   });
 
   it('should append "+N more" inline when namespaces exceed 4', () => {
@@ -113,8 +112,7 @@ describe('accountOptionLabel', () => {
     // Act
     const result = accountOptionLabel(account);
 
-    // Assert — no "https://"
-    expect(result).toContain('(gitlab.example.com)');
-    expect(result).not.toContain('https://');
+    // Assert
+    expect(result).toBe('My GitHub — team (gitlab.example.com)');
   });
 });
