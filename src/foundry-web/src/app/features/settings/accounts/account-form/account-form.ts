@@ -274,6 +274,9 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
               </li>
             }
           </ul>
+          <p class="account-form__conflict-notice">
+            Transferring removes the namespace claim from its current holder; that account will stop monitoring repositories under it.
+          </p>
         </div>
       }
 
@@ -426,6 +429,9 @@ export class AccountFormComponent implements OnInit {
     if (this._isDuplicate()) {
       return false;
     }
+    if (this._visibleConflicts().length > 0 && this._selectedConflicts().size === 0) {
+      return false;
+    }
     if (this._isEditMode()) {
       const hasNewToken = !!this._token();
       if (!hasNewToken) {
@@ -448,9 +454,12 @@ export class AccountFormComponent implements OnInit {
   });
 
   protected readonly _saveLabel: Signal<string> = computed(() => {
-    return this._visibleConflicts().length > 0
-      ? 'Transfer selected & add account'
-      : 'Save';
+    if (this._visibleConflicts().length === 0) {
+      return 'Save';
+    }
+    return this._selectedConflicts().size === 0
+      ? 'Select namespaces to transfer'
+      : 'Transfer selected & add account';
   });
 
   protected readonly _tokenAriaDescribedBy: Signal<string> = computed(() => {

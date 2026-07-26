@@ -35,7 +35,8 @@ $text-warning: #d29922;
     margin: 0 0 var(--fd-spacing-xs) 0;
 
     &:focus-visible {
-      outline: none;
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
     }
   }
 
@@ -266,7 +267,8 @@ $text-warning: #d29922;
     margin: 0 0 var(--fd-spacing-sm) 0;
 
     &:focus-visible {
-      outline: none;
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
     }
   }
 
@@ -351,6 +353,12 @@ $text-warning: #d29922;
   &__conflict-holder {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
+  }
+
+  &__conflict-notice {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    margin: var(--fd-spacing-sm) 0 0 0;
   }
 
   &__save-btn {

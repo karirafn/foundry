@@ -105,11 +105,11 @@
     margin-top: 2px;
   }
 
-  &__namespace {
+  &__namespace,
+  &__namespace--overflow {
     background: transparent;
     border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-secondary);
     display: inline-block;
     font-family: var(--fd-font-mono);
     font-size: 0.6875rem;
@@ -118,17 +118,12 @@
     padding: 2px var(--fd-spacing-xs);
   }
 
+  &__namespace {
+    color: var(--fd-text-secondary);
+  }
+
   &__namespace--overflow {
-    background: transparent;
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-tertiary);
-    display: inline-block;
-    font-family: var(--fd-font-mono);
-    font-size: 0.6875rem;
-    font-weight: 500;
-    line-height: 1;
-    padding: 2px var(--fd-spacing-xs);
+    color: var(--fd-text-secondary);
   }
 
   &__token-status {

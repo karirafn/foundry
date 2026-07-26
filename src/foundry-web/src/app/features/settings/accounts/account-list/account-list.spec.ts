@@ -334,6 +334,19 @@ describe('AccountListComponent', () => {
     expect(overflow?.getAttribute('aria-label')).toBe('2 more namespaces: ns5, ns6');
   });
 
+  // Cycle 18b: overflow chip title attribute mirrors aria-label for sighted hover
+  it('should set title on the overflow chip matching its aria-label', () => {
+    // Arrange
+    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6'] };
+
+    // Act
+    const { el } = setup({ accounts: [account] });
+
+    // Assert
+    const overflow = el.querySelector('.account-list__namespace--overflow') as HTMLElement;
+    expect(overflow?.getAttribute('title')).toBe('2 more namespaces: ns5, ns6');
+  });
+
   // Cycle 19: exactly 4 namespaces — no overflow chip
   it('should not render an overflow chip when there are exactly 4 namespaces', () => {
     // Arrange
