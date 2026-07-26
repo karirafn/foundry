@@ -6,3 +6,4 @@ export interface SystemNotification {
 
 export const DISPATCH_NOTIFICATION_CATEGORY = 'dispatch';
 export const IMAGE_BUILD_NOTIFICATION_CATEGORY = 'image-build';
+export const DOCKER_NOTIFICATION_CATEGORY = 'docker';

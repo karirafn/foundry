@@ -40,6 +40,8 @@ internal static class RetryImageBuild
                 [new WorkerImageConfigurationChanged()],
                 cancellationToken);
 
+            await dbContext.SaveChangesAsync(cancellationToken);
+
             return GlobalSettingsMapper.ToSummary(settings);
         }
     }

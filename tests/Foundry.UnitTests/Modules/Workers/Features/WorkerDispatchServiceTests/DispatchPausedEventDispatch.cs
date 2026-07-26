@@ -15,6 +15,8 @@ namespace Foundry.UnitTests.Modules.Workers.Features.WorkerDispatchServiceTests;
 
 /// <summary>
 /// Tests for the DispatchPaused integration event dispatched when a usage limit is newly persisted.
+/// DispatchPaused has only a SignalR broadcast consumer — it is delivered directly via
+/// IIntegrationEventProcessor rather than routed through the durable outbox.
 /// </summary>
 public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
 {
@@ -47,62 +49,62 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
     private WorkerDispatchService BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
-        IIntegrationEventDispatcher? integrationEventDispatcher = null)
+        IIntegrationEventProcessor? integrationEventProcessor = null)
     {
         IContainerOutputParser outputParser = new ContainerOutputParser();
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, containerLogs);
 
         return BuildService(
             orchestrator,
-            integrationEventDispatcher: integrationEventDispatcher,
+            integrationEventProcessor: integrationEventProcessor,
             containerOutputParser: outputParser);
     }
 
     [Fact]
-    public async Task WhenUsageLimitIsNewlyPersisted_DispatchesDispatchPausedWithCorrectResetsAt()
+    public async Task WhenUsageLimitIsNewlyPersisted_DeliversDispatchPausedWithCorrectResetsAt()
     {
         // Arrange
         SeedGlobalSettings();
         SeedActiveRun("container-dispatch-paused-new");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        CapturingIntegrationEventDispatcher dispatcher = new();
+        CapturingIntegrationEventProcessor processor = new();
         WorkerDispatchService sut = BuildServiceWithParser(
             UsageLimitedFutureOutput,
             exitedStatus,
-            integrationEventDispatcher: dispatcher);
+            integrationEventProcessor: processor);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert
-        DispatchPaused pausedEvent = dispatcher.Captured
+        // Assert — DispatchPaused delivered directly (transient SignalR-only consumer)
+        DispatchPaused pausedEvent = processor.Captured
             .OfType<DispatchPaused>()
             .ShouldHaveSingleItem();
         pausedEvent.ResetsAt.ShouldBeGreaterThan(DateTimeOffset.UtcNow);
     }
 
     [Fact]
-    public async Task WhenUsageLimitResetsAtIsInPastAndNoOpOccurs_DoesNotDispatchDispatchPaused()
+    public async Task WhenUsageLimitResetsAtIsInPastAndNoOpOccurs_DoesNotDeliverDispatchPaused()
     {
         // Arrange — past reset time triggers the no-op path in SetUsageLimitResetsAt
         SeedGlobalSettings();
         SeedActiveRun("container-dispatch-paused-past");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        CapturingIntegrationEventDispatcher dispatcher = new();
+        CapturingIntegrationEventProcessor processor = new();
         WorkerDispatchService sut = BuildServiceWithParser(
             UsageLimitedPastOutput,
             exitedStatus,
-            integrationEventDispatcher: dispatcher);
+            integrationEventProcessor: processor);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        dispatcher.Captured.OfType<DispatchPaused>().ShouldBeEmpty();
+        processor.Captured.OfType<DispatchPaused>().ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task WhenNewResetTimeShorterThanExisting_DoesNotDispatchDispatchPaused()
+    public async Task WhenNewResetTimeShorterThanExisting_DoesNotDeliverDispatchPaused()
     {
         // Arrange — existing reset is longer than the new one; extend-only semantics no-op
         DateTimeOffset longerExistingReset = DateTimeOffset.UtcNow.AddDays(6);
@@ -121,7 +123,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
 
         SeedActiveRun("container-dispatch-paused-shorter");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        CapturingIntegrationEventDispatcher dispatcher = new();
+        CapturingIntegrationEventProcessor processor = new();
 
         // The output has reset time of 2099 which is ~73 years — but we cap at 7 days.
         // Use a shorter future time to ensure it's less than longerExistingReset.
@@ -132,32 +134,32 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         WorkerDispatchService sut = BuildServiceWithParser(
             shorterOutput,
             exitedStatus,
-            integrationEventDispatcher: dispatcher);
+            integrationEventProcessor: processor);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        dispatcher.Captured.OfType<DispatchPaused>().ShouldBeEmpty();
+        processor.Captured.OfType<DispatchPaused>().ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task WhenNoGlobalSettingsRow_DoesNotDispatchDispatchPaused()
+    public async Task WhenNoGlobalSettingsRow_DoesNotDeliverDispatchPaused()
     {
         // Arrange — deliberately NO SeedGlobalSettings() call
         SeedActiveRun("container-dispatch-paused-no-settings");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        CapturingIntegrationEventDispatcher dispatcher = new();
+        CapturingIntegrationEventProcessor processor = new();
         WorkerDispatchService sut = BuildServiceWithParser(
             UsageLimitedFutureOutput,
             exitedStatus,
-            integrationEventDispatcher: dispatcher);
+            integrationEventProcessor: processor);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        dispatcher.Captured.OfType<DispatchPaused>().ShouldBeEmpty();
+        processor.Captured.OfType<DispatchPaused>().ShouldBeEmpty();
     }
 
     private sealed class ExitedWorkerOrchestrator(WorkerStatus exitedStatus, string? logs) : IWorkerOrchestrator

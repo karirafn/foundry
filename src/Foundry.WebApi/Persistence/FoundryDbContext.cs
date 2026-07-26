@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Infrastructure.Configurations;
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Modules.Settings.Infrastructure.Configurations;
 using Foundry.Modules.Workers.Infrastructure.Configurations;
+using Foundry.Shared.Infrastructure.Outbox;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,9 @@ public sealed class FoundryDbContext(
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IssueConfiguration).Assembly);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(WorkerRunConfiguration).Assembly);
+
+        modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
+        modelBuilder.ApplyConfiguration(new ProcessedEventConfiguration());
 
         ILogger<MonitoringInfrastructure.EncryptedStringConverter>? monitoringConverterLogger =
             loggerFactory?.CreateLogger<MonitoringInfrastructure.EncryptedStringConverter>();

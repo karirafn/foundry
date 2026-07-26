@@ -30,9 +30,15 @@ internal sealed class DockerAvailabilityHealthCheckPublisher(
         }
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        IIntegrationEventDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        await dispatcher.DispatchAsync([new DockerAvailabilityChanged(available)], cancellationToken);
+        // DockerAvailabilityChanged has only one consumer: DockerAvailabilityChangedBroadcastHandler,
+        // which mutates in-memory state and sends a SignalR notification. There is no durable DB
+        // consumer, so routing through the outbox would require an unnecessary DB save and add
+        // relay latency to a purely transient signal. Deliver directly via IIntegrationEventProcessor.
+        IIntegrationEventProcessor processor =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventProcessor>();
+
+        await processor.ProcessAsync(Guid.NewGuid(), new DockerAvailabilityChanged(available), cancellationToken);
 
         _lastPublished = available;
 

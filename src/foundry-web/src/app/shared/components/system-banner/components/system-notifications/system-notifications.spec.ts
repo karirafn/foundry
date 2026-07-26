@@ -141,5 +141,33 @@ describe('SystemNotificationsComponent', () => {
       const bars = el.querySelectorAll('.system-banner__bar');
       expect(bars.length).toBe(0);
     });
+
+    // Cycle 9: docker notification must not render a general alert bar
+    it('should not render a general alert bar when the only notification is a docker notification', () => {
+      // Arrange
+      const notification: SystemNotification = { category: 'docker', isActive: true, message: 'Docker is unavailable' };
+
+      // Act
+      const { fixture } = setup([notification]);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — docker notifications are excluded from generalNotifications (rendered by fd-docker-banner instead)
+      const bars = el.querySelectorAll('.system-banner__bar');
+      expect(bars.length).toBe(0);
+    });
+
+    // Cycle 10: docker notification does not produce an element with role="alert"
+    it('should produce zero elements with role="alert" when the only notification is a docker notification', () => {
+      // Arrange
+      const notification: SystemNotification = { category: 'docker', isActive: true, message: 'Docker is unavailable' };
+
+      // Act
+      const { fixture } = setup([notification]);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const alerts = el.querySelectorAll('[role="alert"]');
+      expect(alerts.length).toBe(0);
+    });
   });
 });
