@@ -3,6 +3,7 @@ using System;
 using Foundry.WebApi.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Foundry.WebApi.Migrations
 {
     [DbContext(typeof(FoundryDbContext))]
-    partial class FoundryDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260722225513_NormalizeCredentialNamespaceIds")]
+    partial class NormalizeCredentialNamespaceIds
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
@@ -426,69 +429,6 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator<string>("state").IsComplete(true).HasValue("WorkerRun");
 
                     b.UseTphMappingStrategy();
-                });
-
-            modelBuilder.Entity("Foundry.Shared.Infrastructure.Outbox.OutboxMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<int>("Attempts")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("attempts");
-
-                    b.Property<string>("Error")
-                        .HasMaxLength(2000)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("error");
-
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("occurred_at");
-
-                    b.Property<string>("Payload")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("payload");
-
-                    b.Property<DateTimeOffset?>("ProcessedAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("processed_at");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("type");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProcessedAt", "OccurredAt")
-                        .HasDatabaseName("ix_outbox_messages_processed_at_occurred_at");
-
-                    b.ToTable("outbox_messages", (string)null);
-                });
-
-            modelBuilder.Entity("Foundry.Shared.Infrastructure.Outbox.ProcessedEvent", b =>
-                {
-                    b.Property<Guid>("EventId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("event_id");
-
-                    b.Property<string>("Handler")
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("handler");
-
-                    b.Property<DateTimeOffset>("ProcessedAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("processed_at");
-
-                    b.HasKey("EventId", "Handler");
-
-                    b.ToTable("processed_events", (string)null);
                 });
 
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.BlockedIssue", b =>

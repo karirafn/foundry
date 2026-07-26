@@ -24,6 +24,7 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
         ValidateToken.Response unresolvedResponse = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: null);
 
@@ -70,6 +71,7 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
         ValidateToken.Response whitespaceResponse = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: "   ");
 
@@ -106,6 +108,7 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
         ValidateToken.Response oversizedResponse = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: oversizedName);
 
@@ -141,6 +144,7 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
         ValidateToken.Response controlCharResponse = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: "valid-prefix\ninjected");
 

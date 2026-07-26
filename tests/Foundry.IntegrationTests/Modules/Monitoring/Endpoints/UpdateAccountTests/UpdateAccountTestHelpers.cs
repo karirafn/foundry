@@ -22,6 +22,7 @@ internal sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Que
         ValidateToken.Response response = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: "test-user");
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));

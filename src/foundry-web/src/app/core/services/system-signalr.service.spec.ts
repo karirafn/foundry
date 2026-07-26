@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { SystemSignalRService, SYSTEM_HUB_FACTORY, SystemHub } from './system-signalr.service';
-import { DISPATCH_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
+import { DISPATCH_NOTIFICATION_CATEGORY, DOCKER_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
+import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
 import { LoginSessionUpdate } from '../../features/settings/settings.model';
 
 interface CapturedHubCallbacks {
@@ -273,5 +274,52 @@ describe('SystemSignalRService', () => {
     expect(updates.length).toBe(2);
     expect(updates[0].phase).toBe('Starting');
     expect(updates[1].phase).toBe('WaitingForAuthorization');
+  });
+
+  // Cycle 16: applyDockerAvailability(false) — Docker down — adds a docker notification
+  it('should add a docker notification slot when applyDockerAvailability is called with false', () => {
+    // Arrange
+    const { svc } = setup();
+
+    // Act
+    svc.applyDockerAvailability(false);
+
+    // Assert
+    const notifications = svc.notifications();
+    expect(notifications.length).toBe(1);
+    expect(notifications[0].category).toBe(DOCKER_NOTIFICATION_CATEGORY);
+    expect(notifications[0].isActive).toBe(true);
+    expect(notifications[0].message).toBe(DOCKER_UNAVAILABLE_MESSAGE);
+  });
+
+  // Cycle 17: applyDockerAvailability(true) — Docker recovered — clears the docker notification slot
+  it('should clear the docker notification slot when applyDockerAvailability is called with true', () => {
+    // Arrange
+    const { svc } = setup();
+    svc.applyDockerAvailability(false);
+    expect(svc.notifications().length).toBe(1);
+
+    // Act
+    svc.applyDockerAvailability(true);
+
+    // Assert
+    expect(svc.notifications().length).toBe(0);
+  });
+
+  // Cycle 18: applyDockerAvailability does not affect other notification categories
+  it('should not remove other category notifications when applying docker availability', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const authNotification: SystemNotification = { category: 'auth', isActive: true, message: 'Auth invalid' };
+    captured.onSystemNotificationReceived!(authNotification);
+    expect(svc.notifications().length).toBe(1);
+
+    // Act
+    svc.applyDockerAvailability(false);
+
+    // Assert
+    expect(svc.notifications().length).toBe(2);
+    expect(svc.notifications().some((n) => n.category === 'auth')).toBe(true);
+    expect(svc.notifications().some((n) => n.category === DOCKER_NOTIFICATION_CATEGORY)).toBe(true);
   });
 });
