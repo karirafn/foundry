@@ -55,6 +55,7 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; repos
             <fd-repository-form
               [accounts]="accountService.accounts()"
               [availableRepositories]="repositoryService.availableRepositories()"
+              [hasClaims]="repositoryService.availableHasClaims()"
               [loadingAvailable]="repositoryService.loadingAvailable()"
               [loadAvailableError]="repositoryService.loadAvailableError()"
               [saving]="repositoryService.saving()"
@@ -69,6 +70,7 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; repos
               [repository]="_editRepository"
               [accounts]="accountService.accounts()"
               [availableRepositories]="repositoryService.availableRepositories()"
+              [hasClaims]="repositoryService.availableHasClaims()"
               [loadingAvailable]="repositoryService.loadingAvailable()"
               [loadAvailableError]="repositoryService.loadAvailableError()"
               [saving]="repositoryService.saving()"

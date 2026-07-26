@@ -114,24 +114,42 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
                   role="listbox"
                   [hidden]="!_pickerOpen()"
                 >
-                  @if (_filteredRepositories().length === 0) {
+                  @if (!hasClaims() && availableRepositories().length === 0 && !loadAvailableError()) {
+                    <li class="repository-form__picker-empty-status" role="status">
+                      This account has no claimed namespaces.
+                      <span class="repository-form__picker-empty-status-hint">Add a namespace claim to this account to monitor its repositories.</span>
+                    </li>
+                  } @else if (hasClaims() && availableRepositories().length === 0 && !loadAvailableError()) {
+                    <li class="repository-form__picker-empty-status" role="status">
+                      No repositories under this account's claimed namespaces.
+                    </li>
+                  } @else if (_filteredRepositories().length === 0) {
                     <li class="repository-form__picker-empty">No matching repositories</li>
                   }
                   @for (repo of _filteredRepositories(); track repo.slug; let i = $index) {
                     <li
                       class="repository-form__picker-option"
                       [class.repository-form__picker-option--active]="i === _activeOptionIndex()"
-                      [class.repository-form__picker-option--disabled]="!repo.canPush"
+                      [class.repository-form__picker-option--disabled]="repo.isMonitored || !repo.canPush"
+                      [class.repository-form__picker-option--monitored]="repo.isMonitored"
                       [id]="'repo-option-' + i"
                       role="option"
-                      [attr.aria-selected]="_repoSlug() === repo.slug"
-                      [attr.aria-disabled]="repo.canPush ? null : 'true'"
-                      [attr.aria-describedby]="repo.canPush ? null : 'repo-option-reason-sr-' + i"
+                      [attr.aria-selected]="(!repo.isMonitored && repo.canPush) ? (_repoSlug() === repo.slug) : null"
+                      [attr.aria-disabled]="(repo.isMonitored || !repo.canPush) ? 'true' : null"
+                      [attr.aria-describedby]="(!repo.isMonitored && !repo.canPush) ? 'repo-option-reason-sr-' + i : null"
                       (click)="selectRepo(repo)"
                       (mousedown)="$event.preventDefault()"
                     >
+                      <span class="repository-form__picker-option-gutter" aria-hidden="true">
+                        @if (repo.isMonitored) {
+                          <span class="repository-form__picker-check">✓</span>
+                        }
+                      </span>
                       <span class="repository-form__picker-option-slug">{{ repo.slug }}</span>
-                      @if (!repo.canPush) {
+                      @if (repo.isMonitored) {
+                        <span class="sr-only">, already monitored</span>
+                      }
+                      @if (!repo.isMonitored && !repo.canPush) {
                         <span
                           class="repository-form__picker-option-reason"
                           aria-hidden="true"
@@ -205,6 +223,7 @@ export class RepositoryFormComponent implements OnInit {
   readonly loadAvailableError: InputSignal<string | null> = input<string | null>(null);
   readonly saving: InputSignal<boolean> = input<boolean>(false);
   readonly saveError: InputSignal<string | null> = input<string | null>(null);
+  readonly hasClaims: InputSignal<boolean> = input<boolean>(false);
 
   readonly save: OutputEmitterRef<CreateRepositoryRequest | UpdateRepositoryRequest> =
     output<CreateRepositoryRequest | UpdateRepositoryRequest>();
@@ -321,7 +340,7 @@ export class RepositoryFormComponent implements OnInit {
   }
 
   selectRepo(repo: AvailableRepository): void {
-    if (!repo.canPush) {
+    if (repo.isMonitored || !repo.canPush) {
       return;
     }
     this._repoSlug.set(repo.slug);
