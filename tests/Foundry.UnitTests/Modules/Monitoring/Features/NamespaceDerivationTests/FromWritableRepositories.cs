@@ -14,7 +14,7 @@ public sealed class FromWritableRepositories
     public void WhenNoRepositories_ReturnsEmptySet()
     {
         // Arrange
-        IReadOnlyList<AvailableRepository> repos = [];
+        IReadOnlyList<ProviderRepository> repos = [];
 
         // Act
         IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
@@ -27,10 +27,10 @@ public sealed class FromWritableRepositories
     public void WhenAllRepositoriesNotWritable_ReturnsEmptySet()
     {
         // Arrange
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("alice/repo-a", IsPrivate: false, CanPush: false),
-            new AvailableRepository("bob/repo-b", IsPrivate: true, CanPush: false),
+            new ProviderRepository("alice/repo-a", IsPrivate: false, CanPush: false),
+            new ProviderRepository("bob/repo-b", IsPrivate: true, CanPush: false),
         ];
 
         // Act
@@ -44,9 +44,9 @@ public sealed class FromWritableRepositories
     public void WhenSingleWritableRepository_ReturnsOwnerNamespace()
     {
         // Arrange
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("octocat/hello-world", IsPrivate: false, CanPush: true),
+            new ProviderRepository("octocat/hello-world", IsPrivate: false, CanPush: true),
         ];
 
         // Act
@@ -61,11 +61,11 @@ public sealed class FromWritableRepositories
     public void WhenMultipleWritableRepositoriesUnderSameOwner_DeduplicatesNamespace()
     {
         // Arrange
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("octocat/repo-a", IsPrivate: false, CanPush: true),
-            new AvailableRepository("octocat/repo-b", IsPrivate: false, CanPush: true),
-            new AvailableRepository("octocat/repo-c", IsPrivate: false, CanPush: true),
+            new ProviderRepository("octocat/repo-a", IsPrivate: false, CanPush: true),
+            new ProviderRepository("octocat/repo-b", IsPrivate: false, CanPush: true),
+            new ProviderRepository("octocat/repo-c", IsPrivate: false, CanPush: true),
         ];
 
         // Act
@@ -80,11 +80,11 @@ public sealed class FromWritableRepositories
     public void WhenMultipleWritableRepositoriesUnderDifferentOwners_ReturnsAllOwnerNamespaces()
     {
         // Arrange — classic GitHub PAT covering many owners
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("alice/repo-a", IsPrivate: false, CanPush: true),
-            new AvailableRepository("bob/repo-b", IsPrivate: true, CanPush: true),
-            new AvailableRepository("org-name/repo-c", IsPrivate: false, CanPush: true),
+            new ProviderRepository("alice/repo-a", IsPrivate: false, CanPush: true),
+            new ProviderRepository("bob/repo-b", IsPrivate: true, CanPush: true),
+            new ProviderRepository("org-name/repo-c", IsPrivate: false, CanPush: true),
         ];
 
         // Act
@@ -101,11 +101,11 @@ public sealed class FromWritableRepositories
     public void WhenMixOfWritableAndNonWritable_OnlyIncludesWritableOwners()
     {
         // Arrange
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("alice/writable-repo", IsPrivate: false, CanPush: true),
-            new AvailableRepository("bob/read-only-repo", IsPrivate: false, CanPush: false),
-            new AvailableRepository("alice/another-repo", IsPrivate: false, CanPush: true),
+            new ProviderRepository("alice/writable-repo", IsPrivate: false, CanPush: true),
+            new ProviderRepository("bob/read-only-repo", IsPrivate: false, CanPush: false),
+            new ProviderRepository("alice/another-repo", IsPrivate: false, CanPush: true),
         ];
 
         // Act
@@ -121,9 +121,9 @@ public sealed class FromWritableRepositories
     public void WhenGitLabNestedGroupPath_ReturnsFullGroupOwnerAsNamespace()
     {
         // Arrange — GitLab slug owner is the full group path (e.g. "company/team")
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("company/team/project", IsPrivate: false, CanPush: true),
+            new ProviderRepository("company/team/project", IsPrivate: false, CanPush: true),
         ];
 
         // Act
@@ -138,10 +138,10 @@ public sealed class FromWritableRepositories
     public void WhenGitLabNestedGroupMultipleProjects_DeduplicatesGroupOwner()
     {
         // Arrange
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("company/team/project-a", IsPrivate: false, CanPush: true),
-            new AvailableRepository("company/team/project-b", IsPrivate: false, CanPush: true),
+            new ProviderRepository("company/team/project-a", IsPrivate: false, CanPush: true),
+            new ProviderRepository("company/team/project-b", IsPrivate: false, CanPush: true),
         ];
 
         // Act
@@ -156,9 +156,9 @@ public sealed class FromWritableRepositories
     public void WhenGitLabAccessLevelIsDeveloper_IncludesOwner()
     {
         // Arrange — access_level 30 = Developer threshold
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("group/project", IsPrivate: false, CanPush: true),
+            new ProviderRepository("group/project", IsPrivate: false, CanPush: true),
         ];
 
         // Act
@@ -172,9 +172,9 @@ public sealed class FromWritableRepositories
     public void WhenGitLabAccessLevelBelowDeveloper_ExcludesOwner()
     {
         // Arrange — CanPush=false captures "below Developer" from the caller
-        IReadOnlyList<AvailableRepository> repos =
+        IReadOnlyList<ProviderRepository> repos =
         [
-            new AvailableRepository("group/project", IsPrivate: false, CanPush: false),
+            new ProviderRepository("group/project", IsPrivate: false, CanPush: false),
         ];
 
         // Act

@@ -13,15 +13,15 @@ namespace Foundry.Modules.Monitoring.Features.Repositories;
 
 internal static class GetAvailableRepositories
 {
-    internal sealed record Query(Guid AccountId) : IQuery<IReadOnlyList<AvailableRepository>>;
+    internal sealed record Query(Guid AccountId) : IQuery<IReadOnlyList<ProviderRepository>>;
 
     internal sealed class Handler(
         DbContext dbContext,
         GitHubHttpClient gitHubHttpClient,
         GitLabHttpClient gitLabHttpClient)
-        : IQueryHandler<Query, IReadOnlyList<AvailableRepository>>
+        : IQueryHandler<Query, IReadOnlyList<ProviderRepository>>
     {
-        public async Task<Result<IReadOnlyList<AvailableRepository>>> HandleAsync(
+        public async Task<Result<IReadOnlyList<ProviderRepository>>> HandleAsync(
             Query query,
             CancellationToken cancellationToken)
         {
@@ -33,13 +33,13 @@ internal static class GetAvailableRepositories
 
             if (credential is null)
             {
-                return Result<IReadOnlyList<AvailableRepository>>.Fail(
+                return Result<IReadOnlyList<ProviderRepository>>.Fail(
                     RepositoryErrors.AccountNotFound(credentialId));
             }
 
             if (credential.Token is null)
             {
-                return Result<IReadOnlyList<AvailableRepository>>.Fail(
+                return Result<IReadOnlyList<ProviderRepository>>.Fail(
                     RepositoryErrors.AccountHasNoToken(credentialId));
             }
 
@@ -63,14 +63,14 @@ internal static class GetAvailableRepositories
         {
             group.MapGet("available-repositories", static async (
                     Guid accountId,
-                    IQueryHandler<Query, IReadOnlyList<AvailableRepository>> handler,
+                    IQueryHandler<Query, IReadOnlyList<ProviderRepository>> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Result<IReadOnlyList<AvailableRepository>> result = await handler.HandleAsync(
+                    Result<IReadOnlyList<ProviderRepository>> result = await handler.HandleAsync(
                         new Query(accountId),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<IReadOnlyList<AvailableRepository>>, NotFound<string>, BadRequest<string>>>(
+                    return result.Match<Results<Ok<IReadOnlyList<ProviderRepository>>, NotFound<string>, BadRequest<string>>>(
                         repositories => TypedResults.Ok(repositories),
                         error => error.Code switch
                         {
@@ -80,7 +80,7 @@ internal static class GetAvailableRepositories
                 })
                 .WithName("GetAvailableRepositories")
                 .WithSummary("Gets all repositories available for a given account")
-                .Produces<IReadOnlyList<AvailableRepository>>()
+                .Produces<IReadOnlyList<ProviderRepository>>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);
         }

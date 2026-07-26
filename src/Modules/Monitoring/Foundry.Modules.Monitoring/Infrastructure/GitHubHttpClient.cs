@@ -498,17 +498,17 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<bool>.Ok(dto?.Permissions?.Push ?? false);
     }
 
-    public async Task<Result<IReadOnlyList<AvailableRepository>>> ListRepositoriesAsync(
+    public async Task<Result<IReadOnlyList<ProviderRepository>>> ListRepositoriesAsync(
         Uri apiBaseUrl,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<IReadOnlyList<AvailableRepository>>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<IReadOnlyList<ProviderRepository>>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
-        List<AvailableRepository> repositories = [];
+        List<ProviderRepository> repositories = [];
 
         for (int page = 1; page <= MaxRepositoryPages; page++)
         {
@@ -525,7 +525,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
             if (!response.IsSuccessStatusCode)
             {
-                return Result<IReadOnlyList<AvailableRepository>>.Fail(ErrorFromNonSuccess(response));
+                return Result<IReadOnlyList<ProviderRepository>>.Fail(ErrorFromNonSuccess(response));
             }
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -535,7 +535,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             List<GitHubRepositoryListItemDto> pageItems = dtos ?? [];
             foreach (GitHubRepositoryListItemDto dto in pageItems)
             {
-                repositories.Add(new AvailableRepository(dto.FullName, dto.Private, dto.Permissions?.Push ?? false));
+                repositories.Add(new ProviderRepository(dto.FullName, dto.Private, dto.Permissions?.Push ?? false));
             }
 
             if (pageItems.Count < RepositoriesPerPage)
@@ -544,7 +544,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             }
         }
 
-        return Result<IReadOnlyList<AvailableRepository>>.Ok(repositories);
+        return Result<IReadOnlyList<ProviderRepository>>.Ok(repositories);
     }
 
     public async Task<Result<bool>> CreateBranchAsync(
@@ -943,8 +943,6 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
-
-internal sealed record AvailableRepository(string Slug, bool IsPrivate, bool CanPush);
 
 internal static class GitHubErrors
 {

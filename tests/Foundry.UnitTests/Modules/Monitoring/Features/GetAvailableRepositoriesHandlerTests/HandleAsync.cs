@@ -74,13 +74,13 @@ public sealed class HandleAsync : IAsyncDisposable
             new GitLabHttpClient(gitLabHttpClient));
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.HandleAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.HandleAsync(
             new GetAvailableRepositories.Query(accountId),
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>()
+        result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>()
             .Value.ShouldContain(r => r.Slug == "owner/github-repo");
         gitLabFake.LastRequest.ShouldBeNull();
     }
@@ -100,13 +100,13 @@ public sealed class HandleAsync : IAsyncDisposable
             new GitLabHttpClient(gitLabHttpClient));
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.HandleAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.HandleAsync(
             new GetAvailableRepositories.Query(accountId),
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>()
+        result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>()
             .Value.ShouldContain(r => r.Slug == "owner/gitlab-repo");
         gitHubFake.LastRequest.ShouldBeNull();
     }
@@ -132,13 +132,13 @@ public sealed class HandleAsync : IAsyncDisposable
             new GitLabHttpClient(gitLabHttpClient));
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.HandleAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.HandleAsync(
             new GetAvailableRepositories.Query(accountId),
             CancellationToken.None);
 
         // Assert
-        IReadOnlyList<AvailableRepository> repos =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>().Value;
+        IReadOnlyList<ProviderRepository> repos =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>().Value;
         repos.ShouldSatisfyAllConditions(
             () => repos.ShouldContain(r => r.Slug == "owner/writable" && r.CanPush),
             () => repos.ShouldContain(r => r.Slug == "owner/readonly" && !r.CanPush));
@@ -171,13 +171,13 @@ public sealed class HandleAsync : IAsyncDisposable
             new GitLabHttpClient(gitLabHttpClient));
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.HandleAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.HandleAsync(
             new GetAvailableRepositories.Query(accountId),
             CancellationToken.None);
 
         // Assert
-        IReadOnlyList<AvailableRepository> repos =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>().Value;
+        IReadOnlyList<ProviderRepository> repos =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>().Value;
         repos.ShouldContain(r => r.Slug == "owner/gitlab-writable" && r.CanPush);
     }
 
