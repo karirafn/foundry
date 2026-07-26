@@ -42,7 +42,7 @@ public sealed class WhenProviderIsGitLab : IAsyncDisposable
             .ReadFromJsonAsync<TokenRequirements>(TestContext.Current.CancellationToken);
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
-            () => dto.Scopes.ShouldContain("api"),
+            () => dto.Scopes.ShouldBe(["api"]),
             () => dto.CreationUrlTemplate.ShouldContain("/-/user_settings/personal_access_tokens"));
     }
 }

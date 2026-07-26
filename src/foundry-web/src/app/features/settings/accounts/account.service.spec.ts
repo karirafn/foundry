@@ -732,7 +732,7 @@ describe('AccountService', () => {
     // Act — first call fetches
     const firstPromise = service.getTokenRequirements('GitHub');
     httpMock.expectOne('/api/providers/github/token-requirements').flush(mockRequirements);
-    await firstPromise;
+    const firstResult = await firstPromise;
 
     // Act — second call should resolve from cache
     const secondResult = await service.getTokenRequirements('GitHub');
@@ -740,6 +740,8 @@ describe('AccountService', () => {
     // Assert — no second HTTP request was made
     httpMock.expectNone('/api/providers/github/token-requirements');
     expect(secondResult).toEqual(mockRequirements);
+    // Assert — same object reference proves the cache returned the stored instance
+    expect(secondResult).toBe(firstResult);
   });
 
   // Cycle 12: different providers each fetch once independently

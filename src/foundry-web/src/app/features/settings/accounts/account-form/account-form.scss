@@ -220,7 +220,7 @@ $text-warning: #d29922;
     align-items: center;
     color: var(--fd-text-secondary);
     display: flex;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     gap: var(--fd-spacing-xs);
     margin: 0;
@@ -284,9 +284,13 @@ $text-warning: #d29922;
   }
 
   &__requirements-link-hint {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.8125rem;
     margin: 0;
+  }
+
+  &__requirements-link-icon {
+    flex-shrink: 0;
   }
 
   &__save-btn {

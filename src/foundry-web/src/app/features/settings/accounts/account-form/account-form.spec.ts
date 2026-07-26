@@ -2,7 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { AccountFormComponent } from './account-form';
 import { AccountSummary, CreateAccountRequest, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from '../account.model';
 import { AccountService } from '../account.service';
-import { WritableSignal } from '@angular/core';
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -49,32 +48,22 @@ const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
 };
 
 const GITHUB_REQUIREMENTS: TokenRequirements = {
-  providerType: 'GitHub',
+  providerType: 'github',
   tokenTypeLabel: 'Personal Access Token',
-  scopes: ['repo', 'workflow'],
-  creationUrlTemplate: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=Foundry',
+  scopes: ['repo'],
+  creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
 };
 
 const GITLAB_REQUIREMENTS: TokenRequirements = {
-  providerType: 'GitLab',
+  providerType: 'gitlab',
   tokenTypeLabel: 'Personal Access Token',
-  scopes: ['api', 'read_user'],
+  scopes: ['api'],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
 };
 
 class FakeAccountService {
-  private readonly _requirementsMap: Map<string, TokenRequirements>;
-
-  constructor(requirementsMap: Map<string, TokenRequirements>) {
-    this._requirementsMap = requirementsMap;
-  }
-
-  getTokenRequirements(provider: string): Promise<TokenRequirements> {
-    const req = this._requirementsMap.get(provider);
-    if (req !== undefined) {
-      return Promise.resolve(req);
-    }
-    return Promise.reject(new Error(`Unknown provider: ${provider}`));
+  getTokenRequirements(_provider: string): Promise<TokenRequirements> {
+    return Promise.reject(new Error('Not implemented — override via spy'));
   }
 }
 
@@ -106,7 +95,7 @@ function setup(overrides: {
       return Promise.reject(new Error(`Unknown provider: ${p}`));
     });
 
-  const fakeService = new FakeAccountService(makeDefaultRequirementsMap());
+  const fakeService = new FakeAccountService();
   const getTokenRequirementsSpy = vi.spyOn(fakeService, 'getTokenRequirements').mockImplementation(requirementsProvider);
 
   TestBed.overrideProvider(AccountService, { useValue: fakeService });
@@ -1087,9 +1076,8 @@ describe('AccountFormComponent', () => {
     const text = section!.querySelector('.account-form__requirements-text');
     expect(text?.textContent).toContain('Personal Access Token');
     const scopes = section!.querySelectorAll('.account-form__requirements-scope code');
-    expect(scopes.length).toBe(2);
+    expect(scopes.length).toBe(1);
     expect(scopes[0].textContent).toBe('repo');
-    expect(scopes[1].textContent).toBe('workflow');
   });
 
   // Cycle 57: provider radio change refetches requirements and updates displayed label/scope
@@ -1109,9 +1097,8 @@ describe('AccountFormComponent', () => {
 
     // Assert
     const scopes = el.querySelectorAll('.account-form__requirements-scope code');
-    expect(scopes.length).toBe(2);
+    expect(scopes.length).toBe(1);
     expect(scopes[0].textContent).toBe('api');
-    expect(scopes[1].textContent).toBe('read_user');
   });
 
   // Cycle 58: edit mode — block shows provider requirements normalized from lowercase stored value
@@ -1130,7 +1117,7 @@ describe('AccountFormComponent', () => {
     const text = section!.querySelector('.account-form__requirements-text');
     expect(text?.textContent).toContain('Personal Access Token');
     const scopes = section!.querySelectorAll('.account-form__requirements-scope code');
-    expect(scopes.length).toBe(2);
+    expect(scopes.length).toBe(1);
     expect(scopes[0].textContent).toBe('repo');
   });
 
@@ -1169,19 +1156,15 @@ describe('AccountFormComponent', () => {
 
   // Cycle 60: empty/invalid base URL — no anchor rendered; fallback hint text present
   it('should render fallback hint text (no anchor) when base URL is empty', async () => {
-    // Arrange — use a template with {baseUrl} placeholder so empty base URL triggers fallback
-    const githubWithTemplate: TokenRequirements = {
-      ...GITHUB_REQUIREMENTS,
-      creationUrlTemplate: '{baseUrl}/settings/tokens/new',
-    };
-    const requirementsMap = new Map([
-      ['GitHub', githubWithTemplate],
-      ['GitLab', GITLAB_REQUIREMENTS],
-    ]);
-    const { el, fixture, component } = setup({ account: null, requirementsMap });
-    // Clear base URL
-    (component as unknown as { _baseUrl: WritableSignal<string> })._baseUrl.set('');
+    // Arrange — GITHUB_REQUIREMENTS uses {baseUrl} template; empty base URL triggers fallback
+    const { el, fixture } = setup({ account: null });
     await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Clear base URL the way a user would
+    const baseUrlInput = el.querySelector('#account-form-base-url') as HTMLInputElement;
+    baseUrlInput.value = '';
+    baseUrlInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
     // Assert — no link

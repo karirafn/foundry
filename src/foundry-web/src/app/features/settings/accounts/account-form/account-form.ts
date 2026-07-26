@@ -98,7 +98,7 @@ const GITHUB_BASE_URL = 'https://github.com';
           </ul>
           @if (_createTokenUrl(); as url) {
             <a class="account-form__requirements-link" [href]="url" target="_blank" rel="noopener noreferrer">
-              Create token on {{ _createTokenHost() }}
+              Create token on {{ _resolvedHost() }}
               <span class="account-form__requirements-link-icon" aria-hidden="true">↗</span>
               <span class="sr-only">(opens in a new tab)</span>
             </a>
@@ -307,7 +307,7 @@ export class AccountFormComponent implements OnInit {
     }
     const template = requirements.creationUrlTemplate;
     if (!template.includes('{baseUrl}')) {
-      return template;
+      return this._isHttpUrl(template) ? template : null;
     }
     const rawBaseUrl = this._baseUrl().trim();
     if (!rawBaseUrl) {
@@ -315,19 +315,24 @@ export class AccountFormComponent implements OnInit {
     }
     try {
       const parsed = new URL(rawBaseUrl);
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      if (!this._isHttpUrl(parsed.origin)) {
         return null;
       }
-      const baseUrl = rawBaseUrl.replace(/\/$/, '');
-      return template.replace('{baseUrl}', baseUrl);
+      const url = template.replace('{baseUrl}', parsed.origin);
+      return this._isHttpUrl(url) ? url : null;
     } catch {
       return null;
     }
   });
 
-  protected readonly _createTokenHost: Signal<string> = computed(() => {
-    return this._resolvedHost();
-  });
+  private _isHttpUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
 
   protected readonly _isDuplicate: Signal<boolean> = computed(() => {
     const name = this._resolvedAccountName();

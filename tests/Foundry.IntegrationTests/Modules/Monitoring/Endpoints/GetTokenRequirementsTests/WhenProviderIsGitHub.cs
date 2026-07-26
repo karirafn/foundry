@@ -43,7 +43,7 @@ public sealed class WhenProviderIsGitHub : IAsyncDisposable
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
             () => dto.TokenTypeLabel.ShouldBe("GitHub classic personal access token"),
-            () => dto.Scopes.ShouldContain("repo"),
+            () => dto.Scopes.ShouldBe(["repo"]),
             () => dto.CreationUrlTemplate.ShouldContain("/settings/tokens/new?scopes=repo"));
     }
 }
