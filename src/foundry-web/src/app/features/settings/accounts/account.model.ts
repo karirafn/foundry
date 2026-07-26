@@ -40,6 +40,13 @@ export interface CredentialUpdateResult {
   affectedRepositories: AffectedRepository[];
 }
 
+export interface TokenRequirements {
+  readonly providerType: string;
+  readonly tokenTypeLabel: string;
+  readonly scopes: readonly string[];
+  readonly creationUrlTemplate: string;
+}
+
 export function affectedStatusLabel(status: AffectedRepositoryStatus): string {
   switch (status) {
     case 'eligible':

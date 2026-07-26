@@ -1,9 +1,11 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialUpdateResult, TokenValidationResult, UpdateAccountRequest } from './account.model';
+import { firstValueFrom } from 'rxjs';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialUpdateResult, ProviderType, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 
 const API_BASE = '/api/accounts';
+const PROVIDERS_API_BASE = '/api/providers';
 const TOAST_ALL_RETAINED = 'Token updated. All repositories retained their access.';
 
 interface ValidateTokenRequest {
@@ -54,6 +56,8 @@ export class AccountService {
 
   private readonly _srAnnouncementSignal: WritableSignal<string> = signal('');
   readonly srAnnouncement: Signal<string> = this._srAnnouncementSignal.asReadonly();
+
+  private readonly _tokenRequirementsCache = new Map<ProviderType, Promise<TokenRequirements>>();
 
   loadAccounts(): Promise<void> {
     this._loadErrorSignal.set(null);
@@ -149,6 +153,23 @@ export class AccountService {
         this._deletingSignal.set(false);
       },
     });
+  }
+
+  getTokenRequirements(provider: ProviderType): Promise<TokenRequirements> {
+    const cached = this._tokenRequirementsCache.get(provider);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const request = firstValueFrom(
+      this._http.get<TokenRequirements>(`${PROVIDERS_API_BASE}/${provider.toLowerCase()}/token-requirements`)
+    ).catch((err: HttpErrorResponse) => {
+      this._tokenRequirementsCache.delete(provider);
+      return Promise.reject(err);
+    });
+
+    this._tokenRequirementsCache.set(provider, request);
+    return request;
   }
 
   private _extractErrorMessage(err: HttpErrorResponse): string {
