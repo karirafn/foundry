@@ -2,7 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { RepositoryFormComponent } from './repository-form';
 import { AccountSummary } from '../../accounts/account.model';
 import { AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from '../repository.model';
-import { accountOptionLabel } from '../../accounts/account-label.util';
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -160,8 +159,8 @@ describe('RepositoryFormComponent', () => {
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
     const options = select.querySelectorAll('option:not([disabled])');
     expect(options.length).toBe(2);
-    expect(options[0].textContent?.trim()).toBe(accountOptionLabel(MOCK_ACCOUNT));
-    expect(options[1].textContent?.trim()).toBe(accountOptionLabel(MOCK_ACCOUNT_2));
+    expect(options[0].textContent?.trim()).toBe('My GitHub (github.com)');
+    expect(options[1].textContent?.trim()).toBe('Work GitHub (github.com)');
   });
 
   it('should not render account dropdown in edit mode', () => {
@@ -1132,7 +1131,6 @@ describe('RepositoryFormComponent', () => {
     const textB = options[1].textContent?.trim();
     expect(textA).toBe('Shared Name — team-alpha (github.com)');
     expect(textB).toBe('Shared Name — team-beta (github.com)');
-    expect(textA).not.toBe(textB);
   });
 
   // Cycle 31: edit mode still shows plain accountName (not the util output)
@@ -1145,6 +1143,5 @@ describe('RepositoryFormComponent', () => {
 
     // Assert — plain name from RepositorySummary.accountName, not the util label
     expect(accountField?.textContent?.trim()).toBe('My GitHub');
-    expect(accountField?.textContent).not.toContain('(github.com)');
   });
 });

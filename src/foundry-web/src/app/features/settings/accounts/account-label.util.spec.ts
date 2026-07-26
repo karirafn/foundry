@@ -103,9 +103,6 @@ describe('accountOptionLabel', () => {
     const result = accountOptionLabel(account);
 
     // Assert — separator is the em dash (U+2014), not en dash or hyphen-minus
-    expect(result).toContain('—'); // em dash
-    expect(result).not.toContain('–'); // en dash U+2013
-    // Verify the em dash appears between name and namespace (not as part of name or host)
     expect(result).toBe('MyGitHub — myorg (github.com)');
   });
 
