@@ -36,6 +36,7 @@ public static class MonitoringModule
         services.AddScoped<RepositoryPoller>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
+        services.AddQueryHandler<GetTokenRequirements.Query, TokenRequirements, GetTokenRequirements.Handler>();
         services.AddCommandHandler<CreateAccount.Command, CredentialSummary, CreateAccount.Handler, CreateAccount.Validator>();
         services.AddCommandHandler<UpdateAccount.Command, CredentialUpdateResult, UpdateAccount.Handler, UpdateAccount.Validator>();
         services.AddCommandHandler<DeleteAccount.Command, bool, DeleteAccount.Handler>();
@@ -57,6 +58,7 @@ public static class MonitoringModule
     public static IEndpointRouteBuilder MapMonitoringEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapAccountEndpoints();
+        app.MapProviderEndpoints();
         app.MapRepositoryEndpoints();
         return app;
     }
