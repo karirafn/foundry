@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
@@ -17,7 +18,7 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 
 /// <summary>
 /// Verifies that adding a second credential claiming a namespace already owned by an existing
-/// credential on the same host results in a 409 Conflict.
+/// credential on the same host results in a structured 409 Conflict listing the holder details.
 /// </summary>
 public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
 {
@@ -60,7 +61,7 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenSecondCredentialClaimsAlreadyClaimedNamespace_ReturnsConflict()
+    public async Task WhenSecondCredentialClaimsAlreadyClaimedNamespace_Returns409WithStructuredBody()
     {
         // Arrange — create first credential that claims "octocat" namespace
         object firstBody = new
@@ -76,6 +77,9 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         firstResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        CredentialCreationResult? firstResult = await firstResponse.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        firstResult.ShouldNotBeNull();
 
         // Act — try to add a second credential that would also claim "octocat"
         object secondBody = new
@@ -90,8 +94,19 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
             secondBody,
             TestContext.Current.CancellationToken);
 
-        // Assert
+        // Assert — structured 409 with holder details
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        NamespaceConflictResponse? conflictBody = await response.Content
+            .ReadFromJsonAsync<NamespaceConflictResponse>(TestContext.Current.CancellationToken);
+        conflictBody.ShouldNotBeNull();
+        conflictBody.Conflicts.Count.ShouldBe(1);
+
+        NamespaceConflict conflict = conflictBody.Conflicts[0];
+        conflict.ShouldSatisfyAllConditions(
+            () => conflict.Namespace.ShouldBe("octocat"),
+            () => conflict.HolderCredentialId.ShouldBe(firstResult.Credential.Id),
+            () => conflict.HolderName.ShouldBe("first-user"));
     }
 
     private sealed class TokenKeyedStub(Dictionary<string, string> tokenToName)

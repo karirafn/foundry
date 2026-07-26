@@ -64,9 +64,10 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        CredentialSummary? account = await response.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        account.ShouldNotBeNull();
+        CredentialCreationResult? result = await response.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        CredentialSummary account = result.Credential;
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe(ResolvedAccountName),
             () => account.ProviderType.ShouldBe("gitlab"),
@@ -114,10 +115,10 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        CredentialSummary? account = await response.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        account.ShouldNotBeNull();
-        account.BaseUrl.ShouldBe("https://gitlab.example.com/");
+        CredentialCreationResult? result = await response.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Credential.BaseUrl.ShouldBe("https://gitlab.example.com/");
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

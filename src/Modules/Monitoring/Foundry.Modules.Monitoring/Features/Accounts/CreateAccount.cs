@@ -107,7 +107,8 @@ internal static partial class CreateAccount
     internal sealed class Handler(
         DbContext dbContext,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
-        INamespaceDeriver namespaceDeriver)
+        INamespaceDeriver namespaceDeriver,
+        RepositoryEligibilityDiffer differ)
     {
         public async Task<Outcome> HandleAsync(
             Command command,
@@ -217,6 +218,23 @@ internal static partial class CreateAccount
                 dbContext.Set<Credential>().Add(credential);
                 await dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+
+                // After the transaction, re-evaluate repos under the transferred namespaces
+                // and return them as affected repositories.
+                IReadOnlyList<AffectedRepository> affectedRepositories = await RecheckTransferredReposAsync(
+                    credential,
+                    cancellationToken);
+
+                string providerTypeAfterTakeover = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
+                CredentialSummary summaryAfterTakeover = new(
+                    credential.Id.Value,
+                    credential.Name,
+                    providerTypeAfterTakeover,
+                    credential.BaseUrl.Value.ToString(),
+                    credential.Token is not null,
+                    credential.Namespaces.Select(n => n.Value).ToList());
+
+                return new Outcome.Created(new CredentialCreationResult(summaryAfterTakeover, affectedRepositories));
             }
             else if (conflicts.Count > 0)
             {
@@ -241,6 +259,25 @@ internal static partial class CreateAccount
                 credential.Namespaces.Select(n => n.Value).ToList());
 
             return new Outcome.Created(new CredentialCreationResult(summary, []));
+        }
+
+        private async Task<IReadOnlyList<AffectedRepository>> RecheckTransferredReposAsync(
+            Credential credential,
+            CancellationToken cancellationToken)
+        {
+            // Find repos now covered by the new credential (under transferred namespaces)
+            List<MonitoredRepository> resolvedRepos = await differ.FindResolvingReposAsync(credential, cancellationToken);
+
+            if (resolvedRepos.Count == 0)
+            {
+                return [];
+            }
+
+            // All repos in the transferred set are "new" — their prior status was "unreachable"
+            // since no credential previously covered them through this ownership path.
+            Dictionary<Guid, string> priorStatus = [];
+
+            return await differ.DiffAsync([], resolvedRepos, priorStatus, cancellationToken);
         }
     }
 

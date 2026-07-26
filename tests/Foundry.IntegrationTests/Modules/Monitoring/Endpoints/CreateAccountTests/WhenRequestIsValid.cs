@@ -64,9 +64,10 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        CredentialSummary? account = await response.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        account.ShouldNotBeNull();
+        CredentialCreationResult? result = await response.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        CredentialSummary account = result.Credential;
         account.ShouldSatisfyAllConditions(
             () => account.Name.ShouldBe(ResolvedAccountName),
             () => account.ProviderType.ShouldBe("github"),

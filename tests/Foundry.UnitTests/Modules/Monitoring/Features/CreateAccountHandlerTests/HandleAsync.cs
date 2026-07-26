@@ -40,9 +40,15 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private CreateAccount.Handler BuildHandler(INamespaceDeriver namespaceDeriver)
+    private CreateAccount.Handler BuildHandler(
+        INamespaceDeriver namespaceDeriver,
+        IRepositoryEligibilityEvaluator? evaluator = null)
     {
-        return new CreateAccount.Handler(_dbContext, new StubValidateTokenHandler(), namespaceDeriver);
+        RepositoryEligibilityDiffer differ = new(
+            _dbContext,
+            evaluator ?? new NoOpEligibilityEvaluator());
+
+        return new CreateAccount.Handler(_dbContext, new StubValidateTokenHandler(), namespaceDeriver, differ);
     }
 
     [Fact]
@@ -235,5 +241,13 @@ public sealed class HandleAsync : IAsyncDisposable
             Credential credential,
             CancellationToken cancellationToken) =>
             Task.FromResult(outcome);
+    }
+
+    private sealed class NoOpEligibilityEvaluator : IRepositoryEligibilityEvaluator
+    {
+        public Task EvaluateAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 }

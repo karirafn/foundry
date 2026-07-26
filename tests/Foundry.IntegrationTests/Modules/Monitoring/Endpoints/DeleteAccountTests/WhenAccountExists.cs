@@ -54,9 +54,10 @@ public sealed class WhenAccountExists : IAsyncDisposable
             createBody,
             TestContext.Current.CancellationToken);
 
-        CredentialSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        created.ShouldNotBeNull();
+        CredentialCreationResult? createdResult = await createResponse.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        createdResult.ShouldNotBeNull();
+        CredentialSummary created = createdResult.Credential;
 
         // Act
         HttpResponseMessage response = await _client.DeleteAsync(
@@ -84,9 +85,10 @@ public sealed class WhenAccountExists : IAsyncDisposable
             createBody,
             TestContext.Current.CancellationToken);
 
-        CredentialSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        created.ShouldNotBeNull();
+        CredentialCreationResult? createdResult = await createResponse.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        createdResult.ShouldNotBeNull();
+        CredentialSummary created = createdResult.Credential;
 
         await _client.DeleteAsync(
             new Uri($"/api/accounts/{created.Id}", UriKind.Relative),

@@ -89,9 +89,10 @@ public sealed class WhenTokenRotatedRetainsCoverage : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-        CredentialSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        created.ShouldNotBeNull();
+        CredentialCreationResult? createdResult = await createResponse.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        createdResult.ShouldNotBeNull();
+        CredentialSummary created = createdResult.Credential;
 
         // Seed monitored repos and set both eligible
         Guid aliceRepoId = await RepositorySeeder.SeedRepositoryAsync(

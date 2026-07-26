@@ -87,9 +87,9 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             secondBody,
             TestContext.Current.CancellationToken);
 
-        CredentialSummary? second = await secondResponse.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        second.ShouldNotBeNull();
+        CredentialCreationResult? secondResult = await secondResponse.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        secondResult.ShouldNotBeNull();
 
         // Update second account with a token that resolves to the first account's name
         object updateBody = new
@@ -100,7 +100,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
-            new Uri($"/api/accounts/{second.Id}", UriKind.Relative),
+            new Uri($"/api/accounts/{secondResult.Credential.Id}", UriKind.Relative),
             updateBody,
             TestContext.Current.CancellationToken);
 
@@ -139,15 +139,15 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             createBody,
             TestContext.Current.CancellationToken);
 
-        CredentialSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        created.ShouldNotBeNull();
+        CredentialCreationResult? createdResult = await createResponse.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        createdResult.ShouldNotBeNull();
 
         object updateBody = new { baseUrl = "https://github.com" };
 
         // Act
         HttpResponseMessage response = await client.PutAsJsonAsync(
-            new Uri($"/api/accounts/{created.Id}", UriKind.Relative),
+            new Uri($"/api/accounts/{createdResult.Credential.Id}", UriKind.Relative),
             updateBody,
             TestContext.Current.CancellationToken);
 
