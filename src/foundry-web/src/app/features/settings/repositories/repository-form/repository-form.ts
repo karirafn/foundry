@@ -16,6 +16,7 @@ import {
   signal,
 } from '@angular/core';
 import { AccountSummary } from '../../accounts/account.model';
+import { accountOptionLabel } from '../../accounts/account-label.util';
 import {
   AvailableRepository,
   CreateRepositoryRequest,
@@ -66,7 +67,7 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
           >
             <option value="" disabled>Select an account...</option>
             @for (account of accounts(); track account.id) {
-              <option [value]="account.id">{{ account.name }}</option>
+              <option [value]="account.id">{{ accountOptionLabel(account) }}</option>
             }
           </select>
         </div>
@@ -195,6 +196,7 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
 })
 export class RepositoryFormComponent implements OnInit {
   protected readonly _noWriteAccessReason = NO_WRITE_ACCESS_REASON;
+  protected readonly accountOptionLabel = accountOptionLabel;
 
   readonly repository: InputSignal<RepositorySummary | null> = input<RepositorySummary | null>(null);
   readonly accounts: InputSignal<AccountSummary[]> = input<AccountSummary[]>([]);

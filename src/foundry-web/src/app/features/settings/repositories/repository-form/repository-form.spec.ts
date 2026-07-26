@@ -159,8 +159,8 @@ describe('RepositoryFormComponent', () => {
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
     const options = select.querySelectorAll('option:not([disabled])');
     expect(options.length).toBe(2);
-    expect(options[0].textContent?.trim()).toBe('My GitHub');
-    expect(options[1].textContent?.trim()).toBe('Work GitHub');
+    expect(options[0].textContent?.trim()).toBe('My GitHub (github.com)');
+    expect(options[1].textContent?.trim()).toBe('Work GitHub (github.com)');
   });
 
   it('should not render account dropdown in edit mode', () => {
@@ -1098,5 +1098,50 @@ describe('RepositoryFormComponent', () => {
     expect(combobox.value).toBe('');
     const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
     expect(listbox.hidden).toBe(false);
+  });
+
+  // Cycle 30: add-mode options disambiguate accounts sharing name and host by namespaces
+  it('should render distinct option text for accounts with the same name and host but disjoint namespaces', () => {
+    // Arrange — two accounts with the same name and baseUrl but different namespaces
+    const accountA: AccountSummary = {
+      id: '00000000-0000-0000-0000-000000000003',
+      name: 'Shared Name',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+      namespaces: ['team-alpha'],
+    };
+    const accountB: AccountSummary = {
+      id: '00000000-0000-0000-0000-000000000004',
+      name: 'Shared Name',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+      namespaces: ['team-beta'],
+    };
+
+    // Act
+    const { el } = setup({ repository: null, accounts: [accountA, accountB] });
+
+    // Assert — option text includes namespaces, making them distinct
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    const options = select.querySelectorAll('option:not([disabled])');
+    expect(options.length).toBe(2);
+    const textA = options[0].textContent?.trim();
+    const textB = options[1].textContent?.trim();
+    expect(textA).toBe('Shared Name — team-alpha (github.com)');
+    expect(textB).toBe('Shared Name — team-beta (github.com)');
+  });
+
+  // Cycle 31: edit mode still shows plain accountName (not the util output)
+  it('should show plain accountName in read-only account field in edit mode', () => {
+    // Arrange
+    const { el } = setup({ repository: MOCK_REPOSITORY });
+
+    // Act
+    const accountField = el.querySelector('.repository-form__read-only-account');
+
+    // Assert — plain name from RepositorySummary.accountName, not the util label
+    expect(accountField?.textContent?.trim()).toBe('My GitHub');
   });
 });
