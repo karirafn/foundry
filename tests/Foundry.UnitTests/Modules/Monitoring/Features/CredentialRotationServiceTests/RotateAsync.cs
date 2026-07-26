@@ -175,6 +175,39 @@ public sealed class RotateAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDerivedContainsNamespaceClaimedByOther_ExcludesClaimedNamespace()
+    {
+        // Arrange — seed two credentials: alice (existing), bob (existing holder of "bob")
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential alice = GitHubCredential.Create("alice", "ghp_alice", baseUrl);
+        Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
+        alice.SetNamespaces([aliceNs]);
+        _dbContext.Set<Credential>().Add(alice);
+
+        GitHubCredential bob = GitHubCredential.Create("bob", "ghp_bob", baseUrl);
+        Namespace bobNs = Namespace.Create("bob").ValueOrThrow();
+        bob.SetNamespaces([bobNs]);
+        _dbContext.Set<Credential>().Add(bob);
+
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Derivation returns both "alice" and "bob" — but "bob" is held by another credential
+        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs, bobNs]);
+        CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived));
+
+        // Act
+        await sut.RotateAsync(alice, CancellationToken.None);
+
+        // Assert — alice must NOT steal "bob" from bob
+        Credential? stored = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == alice.Id, CancellationToken.None);
+        stored.ShouldNotBeNull();
+        stored.Namespaces.ShouldContain(n => n.Value == "alice");
+        stored.Namespaces.ShouldNotContain(n => n.Value == "bob");
+    }
+
+    [Fact]
     public async Task WhenUnavailable_MarksResolvingReposUnreachable()
     {
         // Arrange

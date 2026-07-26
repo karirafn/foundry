@@ -32,7 +32,13 @@ internal sealed class CredentialRotationService(
         switch (outcome)
         {
             case NamespaceDerivationOutcome.Derived derived:
-                credential.SetNamespaces(derived.Namespaces);
+                Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
+                    await dbContext.FindClaimedNamespacesAsync(
+                        credential.Host,
+                        excludingCredentialId: credential.Id.Value,
+                        cancellationToken);
+                HashSet<string> claimedValues = [..claimedByOthers.Keys];
+                credential.SetNamespaces(derived.Namespaces, claimedValues);
                 break;
             case NamespaceDerivationOutcome.Unavailable:
                 // Keep prior namespaces — do not drop coverage on transient failure.
