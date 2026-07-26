@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { AccountFormComponent } from './account-form';
-import { AccountSummary, CreateAccountRequest, TokenValidationResult, UpdateAccountRequest } from '../account.model';
+import { AccountSummary, CreateAccountRequest, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from '../account.model';
+import { AccountService } from '../account.service';
+import { WritableSignal } from '@angular/core';
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -46,6 +48,43 @@ const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
   accountName: null,
 };
 
+const GITHUB_REQUIREMENTS: TokenRequirements = {
+  providerType: 'GitHub',
+  tokenTypeLabel: 'Personal Access Token',
+  scopes: ['repo', 'workflow'],
+  creationUrlTemplate: 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=Foundry',
+};
+
+const GITLAB_REQUIREMENTS: TokenRequirements = {
+  providerType: 'GitLab',
+  tokenTypeLabel: 'Personal Access Token',
+  scopes: ['api', 'read_user'],
+  creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+};
+
+class FakeAccountService {
+  private readonly _requirementsMap: Map<string, TokenRequirements>;
+
+  constructor(requirementsMap: Map<string, TokenRequirements>) {
+    this._requirementsMap = requirementsMap;
+  }
+
+  getTokenRequirements(provider: string): Promise<TokenRequirements> {
+    const req = this._requirementsMap.get(provider);
+    if (req !== undefined) {
+      return Promise.resolve(req);
+    }
+    return Promise.reject(new Error(`Unknown provider: ${provider}`));
+  }
+}
+
+function makeDefaultRequirementsMap(): Map<string, TokenRequirements> {
+  return new Map([
+    ['GitHub', GITHUB_REQUIREMENTS],
+    ['GitLab', GITLAB_REQUIREMENTS],
+  ]);
+}
+
 function setup(overrides: {
   account?: AccountSummary | null;
   accounts?: AccountSummary[];
@@ -54,7 +93,24 @@ function setup(overrides: {
   validationResult?: TokenValidationResult | null;
   saveError?: string | null;
   validationError?: string | null;
+  requirementsMap?: Map<string, TokenRequirements>;
+  requirementsProvider?: (provider: string) => Promise<TokenRequirements>;
 } = {}) {
+  const requirementsProvider = overrides.requirementsProvider
+    ?? ((p: string) => {
+      const map = overrides.requirementsMap ?? makeDefaultRequirementsMap();
+      const req = map.get(p);
+      if (req !== undefined) {
+        return Promise.resolve(req);
+      }
+      return Promise.reject(new Error(`Unknown provider: ${p}`));
+    });
+
+  const fakeService = new FakeAccountService(makeDefaultRequirementsMap());
+  const getTokenRequirementsSpy = vi.spyOn(fakeService, 'getTokenRequirements').mockImplementation(requirementsProvider);
+
+  TestBed.overrideProvider(AccountService, { useValue: fakeService });
+
   const fixture = TestBed.createComponent(AccountFormComponent);
   fixture.componentRef.setInput('account', overrides.account ?? null);
   fixture.componentRef.setInput('accounts', overrides.accounts ?? []);
@@ -64,7 +120,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('saveError', overrides.saveError ?? null);
   fixture.componentRef.setInput('validationError', overrides.validationError ?? null);
   fixture.detectChanges();
-  return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
+  return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement, getTokenRequirementsSpy };
 }
 
 describe('AccountFormComponent', () => {
@@ -1014,5 +1070,142 @@ describe('AccountFormComponent', () => {
     const errorEl = el.querySelector('#account-form-validation-error');
     expect(errorEl).toBeTruthy();
     expect(errorEl?.getAttribute('role')).toBe('alert');
+  });
+
+  // Cycle 56: add mode — requirements block renders token type label and scope chips
+  it('should render token requirements block with label and scope chips in add mode', async () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null });
+
+    // Act — wait for async fetch
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    const section = el.querySelector('.account-form__requirements');
+    expect(section).toBeTruthy();
+    const text = section!.querySelector('.account-form__requirements-text');
+    expect(text?.textContent).toContain('Personal Access Token');
+    const scopes = section!.querySelectorAll('.account-form__requirements-scope code');
+    expect(scopes.length).toBe(2);
+    expect(scopes[0].textContent).toBe('repo');
+    expect(scopes[1].textContent).toBe('workflow');
+  });
+
+  // Cycle 57: provider radio change refetches requirements and updates displayed label/scope
+  it('should refetch and display GitLab requirements when provider changes from GitHub to GitLab', async () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Act — switch to GitLab
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    const scopes = el.querySelectorAll('.account-form__requirements-scope code');
+    expect(scopes.length).toBe(2);
+    expect(scopes[0].textContent).toBe('api');
+    expect(scopes[1].textContent).toBe('read_user');
+  });
+
+  // Cycle 58: edit mode — block shows provider requirements normalized from lowercase stored value
+  it('should render requirements block for account provider in edit mode (lowercase normalization)', async () => {
+    // Arrange — providerType stored as lowercase 'github'
+    const account: AccountSummary = { ...MOCK_ACCOUNT, providerType: 'github' };
+    const { el, fixture } = setup({ account });
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    const section = el.querySelector('.account-form__requirements');
+    expect(section).toBeTruthy();
+    const text = section!.querySelector('.account-form__requirements-text');
+    expect(text?.textContent).toContain('Personal Access Token');
+    const scopes = section!.querySelectorAll('.account-form__requirements-scope code');
+    expect(scopes.length).toBe(2);
+    expect(scopes[0].textContent).toBe('repo');
+  });
+
+  // Cycle 59: valid base URL — "Create token" anchor is rendered with correct href
+  it('should render "Create token" anchor with substituted href when base URL is valid', async () => {
+    // Arrange — GitLab uses {baseUrl} template; account has a GitLab base URL
+    const account: AccountSummary = {
+      id: '00000000-0000-0000-0000-000000000003',
+      name: 'gl-account',
+      providerType: 'gitlab',
+      baseUrl: 'https://gitlab.example.com',
+      hasToken: true,
+    };
+    const gitlabRequirements: TokenRequirements = {
+      ...GITLAB_REQUIREMENTS,
+      creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+    };
+    const requirementsMap = new Map([
+      ['GitHub', GITHUB_REQUIREMENTS],
+      ['GitLab', gitlabRequirements],
+    ]);
+    const { el, fixture } = setup({ account, requirementsMap });
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.href).toContain('https://gitlab.example.com/-/user_settings/personal_access_tokens');
+    expect(link.target).toBe('_blank');
+    expect(link.rel).toContain('noopener');
+    expect(link.rel).toContain('noreferrer');
+  });
+
+  // Cycle 60: empty/invalid base URL — no anchor rendered; fallback hint text present
+  it('should render fallback hint text (no anchor) when base URL is empty', async () => {
+    // Arrange — use a template with {baseUrl} placeholder so empty base URL triggers fallback
+    const githubWithTemplate: TokenRequirements = {
+      ...GITHUB_REQUIREMENTS,
+      creationUrlTemplate: '{baseUrl}/settings/tokens/new',
+    };
+    const requirementsMap = new Map([
+      ['GitHub', githubWithTemplate],
+      ['GitLab', GITLAB_REQUIREMENTS],
+    ]);
+    const { el, fixture, component } = setup({ account: null, requirementsMap });
+    // Clear base URL
+    (component as unknown as { _baseUrl: WritableSignal<string> })._baseUrl.set('');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — no link
+    const link = el.querySelector('.account-form__requirements-link');
+    expect(link).toBeNull();
+    // Fallback hint present
+    const hint = el.querySelector('.account-form__requirements-link-hint');
+    expect(hint?.textContent).toContain('Enter a Base URL above');
+  });
+
+  // Cycle 61: requirements block absent when fetch rejects (unknown provider)
+  it('should not render requirements block when fetch rejects', async () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: null,
+      requirementsProvider: () => Promise.reject(new Error('Unknown provider')),
+    });
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    const section = el.querySelector('.account-form__requirements');
+    expect(section).toBeNull();
   });
 });

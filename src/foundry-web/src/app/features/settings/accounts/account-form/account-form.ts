@@ -10,6 +10,7 @@ import {
   WritableSignal,
   afterNextRender,
   computed,
+  inject,
   input,
   output,
   signal,
@@ -18,10 +19,12 @@ import {
   AccountSummary,
   CreateAccountRequest,
   ProviderType,
+  TokenRequirements,
   TokenValidationResult,
   UpdateAccountRequest,
 } from '../account.model';
 import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
+import { AccountService } from '../account.service';
 
 const GITHUB_BASE_URL = 'https://github.com';
 
@@ -54,7 +57,7 @@ const GITHUB_BASE_URL = 'https://github.com';
           <span id="account-form-provider-label" class="account-form__field-label">Provider</span>
           <fd-provider-selector
             [provider]="_provider()"
-            (providerChange)="_provider.set($event)"
+            (providerChange)="onProviderChange($event)"
             (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
             [ariaLabelledBy]="'account-form-provider-label'"
           />
@@ -73,6 +76,39 @@ const GITHUB_BASE_URL = 'https://github.com';
           autocomplete="off"
         />
       </div>
+
+      @if (_tokenRequirements(); as req) {
+        <section class="account-form__requirements" aria-labelledby="account-form-req-heading">
+          <h3 id="account-form-req-heading" class="account-form__requirements-heading">
+            <svg class="account-form__requirements-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            Token requirements
+          </h3>
+          <p class="account-form__requirements-text">
+            Create a <strong>{{ req.tokenTypeLabel }}</strong> with the following
+            scope{{ req.scopes.length === 1 ? '' : 's' }}:
+          </p>
+          <ul class="account-form__requirements-scopes" aria-label="Required scopes">
+            @for (scope of req.scopes; track scope) {
+              <li class="account-form__requirements-scope"><code>{{ scope }}</code></li>
+            }
+          </ul>
+          @if (_createTokenUrl(); as url) {
+            <a class="account-form__requirements-link" [href]="url" target="_blank" rel="noopener noreferrer">
+              Create token on {{ _createTokenHost() }}
+              <span class="account-form__requirements-link-icon" aria-hidden="true">↗</span>
+              <span class="sr-only">(opens in a new tab)</span>
+            </a>
+          } @else {
+            <p class="account-form__requirements-link-hint">
+              Enter a Base URL above to get a direct link to the token creation page.
+            </p>
+          }
+        </section>
+      }
 
       @if (_isEditMode() && account()!.hasToken) {
         <div
@@ -216,6 +252,8 @@ const GITHUB_BASE_URL = 'https://github.com';
   styleUrl: './account-form.scss',
 })
 export class AccountFormComponent implements OnInit {
+  private readonly _accountService: AccountService = inject(AccountService);
+
   readonly account: InputSignal<AccountSummary | null> = input<AccountSummary | null>(null);
   readonly accounts: InputSignal<AccountSummary[]> = input<AccountSummary[]>([]);
   readonly saving: InputSignal<boolean> = input<boolean>(false);
@@ -237,6 +275,7 @@ export class AccountFormComponent implements OnInit {
   protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
+  protected readonly _tokenRequirements: WritableSignal<TokenRequirements | null> = signal(null);
 
   /** Tracks the last (token, baseUrl) pair that was sent to resolution to avoid duplicate calls. */
   private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string } | null> = signal(null);
@@ -259,6 +298,35 @@ export class AccountFormComponent implements OnInit {
     } catch {
       return this._baseUrl();
     }
+  });
+
+  protected readonly _createTokenUrl: Signal<string | null> = computed(() => {
+    const requirements = this._tokenRequirements();
+    if (!requirements) {
+      return null;
+    }
+    const template = requirements.creationUrlTemplate;
+    if (!template.includes('{baseUrl}')) {
+      return template;
+    }
+    const rawBaseUrl = this._baseUrl().trim();
+    if (!rawBaseUrl) {
+      return null;
+    }
+    try {
+      const parsed = new URL(rawBaseUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return null;
+      }
+      const baseUrl = rawBaseUrl.replace(/\/$/, '');
+      return template.replace('{baseUrl}', baseUrl);
+    } catch {
+      return null;
+    }
+  });
+
+  protected readonly _createTokenHost: Signal<string> = computed(() => {
+    return this._resolvedHost();
   });
 
   protected readonly _isDuplicate: Signal<boolean> = computed(() => {
@@ -347,7 +415,31 @@ export class AccountFormComponent implements OnInit {
     const acc = this.account();
     if (acc !== null) {
       this._baseUrl.set(acc.baseUrl);
+      const provider = this._normalizeProviderType(acc.providerType);
+      if (provider !== null) {
+        this._fetchTokenRequirements(provider);
+      }
+    } else {
+      this._fetchTokenRequirements(this._provider());
     }
+  }
+
+  private _normalizeProviderType(raw: string): ProviderType | null {
+    const lower = raw.toLowerCase();
+    if (lower === 'github') {
+      return 'GitHub';
+    }
+    if (lower === 'gitlab') {
+      return 'GitLab';
+    }
+    return null;
+  }
+
+  private _fetchTokenRequirements(provider: ProviderType): void {
+    this._accountService.getTokenRequirements(provider).then(
+      (requirements) => { this._tokenRequirements.set(requirements); },
+      () => { this._tokenRequirements.set(null); }
+    );
   }
 
   onBaseUrlInput(value: string): void {
@@ -361,6 +453,12 @@ export class AccountFormComponent implements OnInit {
       this._pendingResolution.set(false);
       this._triggerResolution();
     }
+  }
+
+  onProviderChange(provider: ProviderType): void {
+    this._provider.set(provider);
+    this._tokenRequirements.set(null);
+    this._fetchTokenRequirements(provider);
   }
 
   onDefaultBaseUrlChange(defaultUrl: string): void {
