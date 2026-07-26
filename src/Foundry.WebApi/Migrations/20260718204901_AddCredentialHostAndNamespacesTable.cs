@@ -131,12 +131,14 @@ namespace Foundry.WebApi.Migrations
                 """
                 INSERT OR IGNORE INTO credential_namespaces (id, credential_id, host, value)
                 SELECT
-                    lower(hex(randomblob(4))) || '-' ||
-                    lower(hex(randomblob(2))) || '-' ||
-                    '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
-                    substr('89ab', abs(random()) % 4 + 1, 1) ||
-                    substr(lower(hex(randomblob(2))), 2) || '-' ||
-                    lower(hex(randomblob(6))),
+                    upper(
+                        hex(randomblob(4)) || '-' ||
+                        hex(randomblob(2)) || '-' ||
+                        '4' || substr(hex(randomblob(2)), 2) || '-' ||
+                        substr('89AB', abs(random()) % 4 + 1, 1) ||
+                        substr(hex(randomblob(2)), 2) || '-' ||
+                        hex(randomblob(6))
+                    ),
                     r.account_id,
                     a.host,
                     -- Full owner = everything before the last '/' in the slug.
