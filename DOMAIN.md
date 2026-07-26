@@ -76,10 +76,16 @@ Validated per repository on each poll cycle and at repository creation, with the
 
 ## Account
 
-Credentials for accessing a specific provider's API.
-Modeled as polymorphic variants (`GitHubAccount`, `GitLabAccount`) — each provider may carry provider-specific configuration (e.g., API base URL for self-hosted instances).
+A credential for accessing a specific provider's API — one Account per PAT ("Account" in the UI, `Credential` in the domain).
+Modeled as polymorphic variants (`GitHubCredential`, `GitLabCredential`) — each provider may carry provider-specific configuration (e.g., API base URL for self-hosted instances).
 The PAT is stored encrypted in the database using Data Protection API + EF Core Value Converters.
-Multiple accounts can exist per provider. A Monitored Repository references a specific Account.
+Multiple accounts can exist per provider and per host — including multiple PATs authenticating as the same provider user. Accounts do not reference repositories; repositories resolve to an account through Namespace Claims.
+
+## Namespace Claim
+
+The exclusive association between an Account and an owner namespace on a host — stored in `credential_namespaces` with a unique `(host, namespace)` constraint, so each namespace is served by exactly one account.
+Claims are derived from the token's writable-repository listing (every distinct owner of a repo the token can push to) at account creation, token rotation, and repository recheck.
+A Monitored Repository carries no account reference; on each eligibility evaluation the covering account is resolved by matching the repository's owner against claims (`ICredentialResolver`). A repository whose owner no account claims is Ineligible (`no-credential:<namespace>`).
 
 ## Global Settings
 
@@ -109,8 +115,8 @@ Used by `BranchName.Generate()` to derive the branch prefix (`feat/`, `fix/`, `r
 ## Monitored Repository
 
 A repository configured for Foundry to poll.
-References an Account (for credentials) and specifies an optional per-repo poll interval.
-Uniquely identified by the pair (Host, Repository Slug) — the same repo on the same host cannot be monitored through multiple accounts (prevents duplicate issue detection), while the same path on different hosts (e.g. github.com vs gitlab.com, or self-hosted instances) refers to distinct repositories. The Host is denormalized from the account's base URL at creation.
+Resolves its serving Account through the Namespace Claim on its owner (no stored account reference) and specifies an optional per-repo poll interval.
+Uniquely identified by the pair (Host, Repository Slug) — the same repo on the same host cannot be monitored twice (prevents duplicate issue detection), while the same path on different hosts (e.g. github.com vs gitlab.com, or self-hosted instances) refers to distinct repositories.
 Tracks `LastPolledAt` for per-repo poll timing.
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
 
