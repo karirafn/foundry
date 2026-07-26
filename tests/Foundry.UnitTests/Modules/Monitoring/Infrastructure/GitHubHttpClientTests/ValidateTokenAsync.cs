@@ -1,5 +1,6 @@
 using System.Net;
 
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -270,5 +271,29 @@ public sealed class ValidateTokenAsync
         result.IsSuccess.ShouldBeTrue();
         Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
         success.Value.AccountName.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenNoScopesGranted_MissingScopesMatchCanonicalListForGitHub()
+    {
+        // Arrange
+        string json = """{ "login": "octocat" }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        handler.ResponseHeaders["X-OAuth-Scopes"] = string.Empty;
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        IReadOnlyList<string> expectedMissing = RequiredScopes.For(ProviderTypes.GitHub);
+
+        // Act
+        Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "ghp_no_scopes_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
+        success.Value.MissingScopes.ShouldBe(expectedMissing);
     }
 }

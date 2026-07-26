@@ -2,19 +2,28 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
+import { Subject } from 'rxjs';
 import { SystemBannerComponent } from './system-banner';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { SystemNotification } from '../../../core/models/system-notification.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
 import { SettingsService } from '../../../features/settings/settings.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { SystemStatusService } from '../../../core/services/system-status.service';
 
 function createMockSignalRService(notifications: SystemNotification[]) {
   const notificationsSignal = signal(notifications);
+  const reconnected$ = new Subject<void>();
   return {
     notifications: notificationsSignal.asReadonly(),
     _signal: notificationsSignal,
+    reconnected: reconnected$.asObservable(),
+    applyDockerAvailability: vi.fn(),
   };
+}
+
+function createMockSystemStatusService() {
+  return {};
 }
 
 function createMockDispatchService() {
@@ -50,6 +59,7 @@ function setup() {
   const mockDispatch = createMockDispatchService();
   const mockSettings = createMockSettingsService();
   const mockToast = createMockToastService();
+  const mockSystemStatus = createMockSystemStatusService();
 
   TestBed.configureTestingModule({
     imports: [SystemBannerComponent],
@@ -59,6 +69,7 @@ function setup() {
       { provide: DispatchService, useValue: mockDispatch },
       { provide: SettingsService, useValue: mockSettings },
       { provide: ToastService, useValue: mockToast },
+      { provide: SystemStatusService, useValue: mockSystemStatus },
     ],
   });
 
@@ -94,6 +105,27 @@ describe('SystemBannerComponent', () => {
 
       // Assert
       expect(el.querySelector('fd-dispatch-banner')).not.toBeNull();
+    });
+
+    it('should render fd-docker-banner child component', () => {
+      // Arrange / Act
+      const { fixture } = setup();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('fd-docker-banner')).not.toBeNull();
+    });
+
+    it('should render fd-docker-banner before fd-image-build-banner', () => {
+      // Arrange / Act
+      const { fixture } = setup();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const children = Array.from(el.children).map((c) => c.tagName.toLowerCase());
+      const dockerIndex = children.indexOf('fd-docker-banner');
+      const imageBuildIndex = children.indexOf('fd-image-build-banner');
+      expect(dockerIndex).toBeLessThan(imageBuildIndex);
     });
   });
 });

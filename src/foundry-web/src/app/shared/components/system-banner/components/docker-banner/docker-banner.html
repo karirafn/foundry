@@ -1,0 +1,7 @@
+@if (isDockerBannerVisible()) {
+  <div class="system-banner system-banner--docker-only" role="region" aria-label="Docker status">
+    <div class="system-banner__bar system-banner__bar--docker" role="alert">
+      <span class="system-banner__message">{{ dockerUnavailableMessage }}</span>
+    </div>
+  </div>
+}

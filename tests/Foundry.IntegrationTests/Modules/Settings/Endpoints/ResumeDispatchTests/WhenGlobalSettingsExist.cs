@@ -1,0 +1,136 @@
+using System.Net;
+using System.Net.Http.Json;
+
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared.Infrastructure.Outbox;
+using Foundry.WebApi.Persistence;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.ResumeDispatchTests;
+
+public sealed class WhenGlobalSettingsExist : IAsyncDisposable
+{
+    private readonly FoundryWebAppFactory _factory;
+    private readonly HttpClient _client;
+
+    public WhenGlobalSettingsExist()
+    {
+        _factory = new FoundryWebAppFactory();
+        _client = _factory.CreateClient();
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    private async Task SeedPausedSettingsAsync()
+    {
+        // SettingsSeeder is a hosted service stripped in tests — seed directly via DbContext.
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.PauseDispatch();
+        dbContext.Set<GlobalSettings>().Add(settings);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ReturnsOkWithDispatchResumed()
+    {
+        // Arrange
+        await SeedPausedSettingsAsync();
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsync(
+            new Uri("/api/settings/dispatch/resume", UriKind.Relative),
+            content: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        GlobalSettingsSummary? summary = await response.Content
+            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+        summary.ShouldNotBeNull();
+        summary.IsDispatchPaused.ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// Pre-ship integration test for the transactional outbox.
+    ///
+    /// Proves the crash-between-commit-and-delivery acceptance criterion:
+    /// a DispatchResumed integration event written to outbox_messages atomically with the settings
+    /// change is picked up and fully processed on the next relay pass — even if the process crashed
+    /// between the commit and the in-process dispatch attempt.
+    ///
+    /// The outbox row is produced by the real endpoint after step 9a migrates ResumeDispatch
+    /// to enqueue-before-save.
+    /// </summary>
+    [Fact]
+    public async Task WhenOutboxMessageExists_RelayDeliversEventAndStampsProcessedAt()
+    {
+        // Arrange — seed paused settings and call the real endpoint to produce the outbox row.
+        await SeedPausedSettingsAsync();
+
+        HttpResponseMessage resumeResponse = await _client.PostAsync(
+            new Uri("/api/settings/dispatch/resume", UriKind.Relative),
+            content: null,
+            TestContext.Current.CancellationToken);
+        resumeResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Assert — exactly one outbox row exists and is NOT yet delivered (crash-window proof).
+        using IServiceScope preTickScope = _factory.Services.CreateScope();
+        DbContext preTickContext = preTickScope.ServiceProvider.GetRequiredService<DbContext>();
+
+        List<OutboxMessage> preTick = await preTickContext
+            .Set<OutboxMessage>()
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        preTick.Count.ShouldBe(1);
+        preTick[0].ProcessedAt.ShouldBeNull("message must be undelivered before the relay runs");
+
+        Guid messageId = preTick[0].Id;
+
+        // Act — drive exactly one relay tick via the TickForTest seam.
+        // OutboxRelayService is registered as a plain singleton (not IHostedService) in the test
+        // factory so the background timer does not run, but the service is still resolvable here.
+        OutboxRelayService relay = _factory.Services.GetRequiredService<OutboxRelayService>();
+        await relay.TickForTest(TestContext.Current.CancellationToken);
+
+        // Assert — the outbox row is now published (ProcessedAt stamped by the relay).
+        using IServiceScope postTickScope = _factory.Services.CreateScope();
+        DbContext postTickContext = postTickScope.ServiceProvider.GetRequiredService<DbContext>();
+
+        OutboxMessage? published = await postTickContext
+            .Set<OutboxMessage>()
+            .FirstOrDefaultAsync(m => m.Id == messageId, TestContext.Current.CancellationToken);
+
+        published.ShouldNotBeNull();
+        published.ProcessedAt.ShouldNotBeNull(
+            "relay must have stamped ProcessedAt after delivering the event");
+
+        // Assert — processed_events rows exist for each registered DispatchResumed handler,
+        // proving inbox deduplication records were committed (at-least-once + idempotent delivery).
+        const int DispatchResumedHandlerCount = 2;
+        // DispatchResumedHandler (Issues) + DispatchResumedBroadcastHandler (Workers)
+
+        List<ProcessedEvent> processedEvents = await postTickContext
+            .Set<ProcessedEvent>()
+            .Where(p => p.EventId == messageId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        processedEvents.Count.ShouldBe(
+            DispatchResumedHandlerCount,
+            "both DispatchResumed handlers must record a processed_events row");
+    }
+}

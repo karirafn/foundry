@@ -26,6 +26,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         ValidateToken.Response validResponse = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: InitialAccountName);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
@@ -196,6 +197,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             ValidateToken.Response response = new(
                 IsValid: true,
                 IsAuthFailure: false,
+                ScopesVerified: true,
                 MissingScopes: [],
                 AccountName: accountName);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));

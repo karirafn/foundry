@@ -33,9 +33,10 @@ internal static class ResumeDispatch
             }
 
             settings.ResumeDispatch();
-            await dbContext.SaveChangesAsync(cancellationToken);
 
             await integrationEventDispatcher.DispatchAsync([new DispatchResumed()], cancellationToken);
+
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             return GlobalSettingsMapper.ToSummary(settings);
         }

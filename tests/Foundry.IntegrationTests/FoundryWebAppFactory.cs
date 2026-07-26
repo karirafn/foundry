@@ -1,3 +1,4 @@
+using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.AspNetCore.DataProtection;
@@ -37,10 +38,18 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<FoundryDbContext>>();
-            services.AddDbContext<FoundryDbContext>(options =>
-                options.UseSqlite(_connection));
+            services.AddDbContext<FoundryDbContext>((sp, options) =>
+            {
+                options.UseSqlite(_connection);
+                options.AddInterceptors(sp.GetRequiredService<OutboxSaveChangesInterceptor>());
+            });
 
             services.RemoveAll<IHostedService>();
+
+            // Re-register OutboxRelayService as a plain singleton so integration tests can resolve
+            // it and call TickForTest to drive one relay pass deterministically, without starting
+            // the background timer loop (R1 from the outbox design).
+            services.AddSingleton<OutboxRelayService>();
 
             // Use ephemeral data protection keys so tests do not depend on
             // a persistent key store and encryption works within a single test run.

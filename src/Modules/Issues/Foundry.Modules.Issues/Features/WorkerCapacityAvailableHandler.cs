@@ -129,7 +129,6 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
-        await db.TransitionAsync(revisionQueued, revisionInProgress, domainEventDispatcher, cancellationToken);
 
         RevisionContext revision = new(
             revisionQueued.BranchName,
@@ -153,6 +152,8 @@ internal sealed class WorkerCapacityAvailableHandler(
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],
             cancellationToken);
+
+        await db.TransitionAsync(revisionQueued, revisionInProgress, domainEventDispatcher, cancellationToken);
     }
 
     private async Task ClaimContinuationQueuedAsync(
@@ -184,7 +185,6 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
-        await db.TransitionAsync(continuationQueued, inProgress, domainEventDispatcher, cancellationToken);
 
         ContinuationContext continuation = new(continuationQueued.BranchName, continuationQueued.FailureReason);
 
@@ -205,6 +205,8 @@ internal sealed class WorkerCapacityAvailableHandler(
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],
             cancellationToken);
+
+        await db.TransitionAsync(continuationQueued, inProgress, domainEventDispatcher, cancellationToken);
     }
 
     private async Task ClaimQueuedAsync(
@@ -236,7 +238,6 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         InProgressIssue inProgress = queued.Claim(workerRunId);
-        await db.TransitionAsync(queued, inProgress, domainEventDispatcher, cancellationToken);
 
         string branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title).Value;
 
@@ -256,5 +257,7 @@ internal sealed class WorkerCapacityAvailableHandler(
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],
             cancellationToken);
+
+        await db.TransitionAsync(queued, inProgress, domainEventDispatcher, cancellationToken);
     }
 }

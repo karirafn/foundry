@@ -13,35 +13,39 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.DockerAvailability.DockerAvailabilityHealthCheckPublisherTests;
 
+/// <summary>
+/// DockerAvailabilityChanged has only one consumer (DockerAvailabilityChangedBroadcastHandler:
+/// in-memory state + SignalR). It is delivered directly via IIntegrationEventProcessor — no
+/// outbox row, no relay latency.
+/// </summary>
 public sealed class PublishAsync
 {
-
-    private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    private sealed class CapturingIntegrationEventProcessor : IIntegrationEventProcessor
     {
         private readonly List<IIntegrationEvent> _captured = [];
 
         public IReadOnlyList<IIntegrationEvent> Captured => _captured;
 
-        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+        public Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
         {
-            _captured.AddRange(events);
+            _captured.Add(@event);
             return Task.CompletedTask;
         }
     }
 
-    private static (DockerAvailabilityHealthCheckPublisher Publisher, CapturingIntegrationEventDispatcher Dispatcher) Build()
+    private static (DockerAvailabilityHealthCheckPublisher Publisher, CapturingIntegrationEventProcessor Processor) Build()
     {
-        CapturingIntegrationEventDispatcher dispatcher = new();
+        CapturingIntegrationEventProcessor processor = new();
 
         ServiceCollection services = new();
-        services.AddScoped<IIntegrationEventDispatcher>(_ => dispatcher);
+        services.AddScoped<IIntegrationEventProcessor>(_ => processor);
         ServiceProvider sp = services.BuildServiceProvider();
 
         DockerAvailabilityHealthCheckPublisher publisher = new(
             sp.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<DockerAvailabilityHealthCheckPublisher>.Instance);
 
-        return (publisher, dispatcher);
+        return (publisher, processor);
     }
 
     private static HealthReport BuildReport(string checkName, HealthStatus status)
@@ -60,40 +64,40 @@ public sealed class PublishAsync
     }
 
     [Fact]
-    public async Task WhenFirstPublishAndDockerDaemonHealthy_DispatchesAvailableTrueEvent()
+    public async Task WhenFirstPublishAndDockerDaemonHealthy_DeliversAvailableTrueEvent()
     {
         // Arrange
-        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
+        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventProcessor processor) = Build();
         HealthReport report = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
 
         // Act
         await publisher.PublishAsync(report, CancellationToken.None);
 
         // Assert
-        DockerAvailabilityChanged dispatched = dispatcher.Captured.ShouldHaveSingleItem().ShouldBeOfType<DockerAvailabilityChanged>();
-        dispatched.IsAvailable.ShouldBeTrue();
+        DockerAvailabilityChanged delivered = processor.Captured.ShouldHaveSingleItem().ShouldBeOfType<DockerAvailabilityChanged>();
+        delivered.IsAvailable.ShouldBeTrue();
     }
 
     [Fact]
-    public async Task WhenFirstPublishAndDockerDaemonUnhealthy_DispatchesAvailableFalseEvent()
+    public async Task WhenFirstPublishAndDockerDaemonUnhealthy_DeliversAvailableFalseEvent()
     {
         // Arrange
-        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
+        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventProcessor processor) = Build();
         HealthReport report = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Unhealthy);
 
         // Act
         await publisher.PublishAsync(report, CancellationToken.None);
 
         // Assert
-        DockerAvailabilityChanged dispatched = dispatcher.Captured.ShouldHaveSingleItem().ShouldBeOfType<DockerAvailabilityChanged>();
-        dispatched.IsAvailable.ShouldBeFalse();
+        DockerAvailabilityChanged delivered = processor.Captured.ShouldHaveSingleItem().ShouldBeOfType<DockerAvailabilityChanged>();
+        delivered.IsAvailable.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task WhenSecondPublishWithSameStatus_DispatchesNothing()
+    public async Task WhenSecondPublishWithSameStatus_DeliversNothing()
     {
         // Arrange
-        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
+        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventProcessor processor) = Build();
         HealthReport firstReport = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
         HealthReport secondReport = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
 
@@ -102,14 +106,14 @@ public sealed class PublishAsync
         await publisher.PublishAsync(secondReport, CancellationToken.None);
 
         // Assert
-        dispatcher.Captured.Count.ShouldBe(1);
+        processor.Captured.Count.ShouldBe(1);
     }
 
     [Fact]
-    public async Task WhenStatusFlipsFromHealthyToUnhealthy_DispatchesAvailableFalseEvent()
+    public async Task WhenStatusFlipsFromHealthyToUnhealthy_DeliversAvailableFalseEvent()
     {
         // Arrange
-        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
+        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventProcessor processor) = Build();
         HealthReport healthyReport = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
         HealthReport unhealthyReport = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Unhealthy);
 
@@ -118,42 +122,42 @@ public sealed class PublishAsync
         await publisher.PublishAsync(unhealthyReport, CancellationToken.None);
 
         // Assert
-        dispatcher.Captured.Count.ShouldBe(2);
-        DockerAvailabilityChanged secondEvent = dispatcher.Captured[1].ShouldBeOfType<DockerAvailabilityChanged>();
+        processor.Captured.Count.ShouldBe(2);
+        DockerAvailabilityChanged secondEvent = processor.Captured[1].ShouldBeOfType<DockerAvailabilityChanged>();
         secondEvent.IsAvailable.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task WhenReportHasNoDockerDaemonEntry_DispatchesNothing()
+    public async Task WhenReportHasNoDockerDaemonEntry_DeliversNothing()
     {
         // Arrange
-        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventDispatcher dispatcher) = Build();
+        (DockerAvailabilityHealthCheckPublisher publisher, CapturingIntegrationEventProcessor processor) = Build();
         HealthReport report = BuildReport("some-other-check", HealthStatus.Healthy);
 
         // Act
         await publisher.PublishAsync(report, CancellationToken.None);
 
         // Assert
-        dispatcher.Captured.ShouldBeEmpty();
+        processor.Captured.ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task WhenFirstDispatchThrows_SecondPublishWithSameStatusRetries()
+    public async Task WhenFirstDeliveryThrows_SecondPublishWithSameStatusRetries()
     {
         // Arrange
         bool firstCall = true;
-        CapturingIntegrationEventDispatcher successDispatcher = new();
+        CapturingIntegrationEventProcessor successProcessor = new();
 
         ServiceCollection services = new();
-        services.AddScoped<IIntegrationEventDispatcher>(_ =>
+        services.AddScoped<IIntegrationEventProcessor>(_ =>
         {
             if (firstCall)
             {
                 firstCall = false;
-                return new ThrowingIntegrationEventDispatcher();
+                return new ThrowingIntegrationEventProcessor();
             }
 
-            return successDispatcher;
+            return successProcessor;
         });
         ServiceProvider sp = services.BuildServiceProvider();
 
@@ -163,19 +167,19 @@ public sealed class PublishAsync
 
         HealthReport report = BuildReport(DockerDaemonHealthCheck.CheckName, HealthStatus.Healthy);
 
-        // Act — first publish throws, second should retry (same status) and dispatch
+        // Act — first delivery throws, second should retry (same status) and deliver
         await Should.ThrowAsync<InvalidOperationException>(
             async () => await publisher.PublishAsync(report, CancellationToken.None));
         await publisher.PublishAsync(report, CancellationToken.None);
 
-        // Assert — the event was dispatched on the second publish (transition retried)
-        DockerAvailabilityChanged dispatched = successDispatcher.Captured.ShouldHaveSingleItem().ShouldBeOfType<DockerAvailabilityChanged>();
-        dispatched.IsAvailable.ShouldBeTrue();
+        // Assert — the event was delivered on the second publish (transition retried)
+        DockerAvailabilityChanged delivered = successProcessor.Captured.ShouldHaveSingleItem().ShouldBeOfType<DockerAvailabilityChanged>();
+        delivered.IsAvailable.ShouldBeTrue();
     }
 
-    private sealed class ThrowingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    private sealed class ThrowingIntegrationEventProcessor : IIntegrationEventProcessor
     {
-        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
-            => throw new InvalidOperationException("Dispatch failed.");
+        public Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("Delivery failed.");
     }
 }
