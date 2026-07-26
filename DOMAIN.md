@@ -81,6 +81,11 @@ Modeled as polymorphic variants (`GitHubCredential`, `GitLabCredential`) — eac
 The PAT is stored encrypted in the database using Data Protection API + EF Core Value Converters.
 Multiple accounts can exist per provider and per host — including multiple PATs authenticating as the same provider user. Accounts do not reference repositories; repositories resolve to an account through Namespace Claims.
 
+### PAT Owner
+
+The provider username the token authenticates as — resolved from the provider's `/user` endpoint at token validation and stored as the account's name (`Credential.Name`).
+Not user-chosen: the account's display name *is* the PAT owner. Because multiple accounts may share one PAT owner, the name alone does not identify an account; UI surfaces disambiguate with the account's Namespace Claims and host.
+
 ## Namespace Claim
 
 The exclusive association between an Account and an owner namespace on a host — stored in `credential_namespaces` with a unique `(host, namespace)` constraint, so each namespace is served by exactly one account.
