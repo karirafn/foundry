@@ -44,10 +44,14 @@ public sealed class RotateAsync : IAsyncDisposable
         INamespaceDeriver deriver,
         IRepositoryEligibilityEvaluator? evaluator = null)
     {
+        RepositoryEligibilityDiffer differ = new(
+            _dbContext,
+            evaluator ?? new RecordingEligibilityEvaluator());
+
         return new CredentialRotationService(
             _dbContext,
             deriver,
-            evaluator ?? new RecordingEligibilityEvaluator(),
+            differ,
             NullLogger<CredentialRotationService>.Instance);
     }
 

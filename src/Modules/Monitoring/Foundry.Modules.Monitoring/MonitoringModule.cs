@@ -25,6 +25,7 @@ public static class MonitoringModule
         services.AddHttpClient<GitLabHttpClient>();
 
         services.AddScoped<INamespaceDeriver, NamespaceDeriver>();
+        services.AddScoped<RepositoryEligibilityDiffer>();
         services.AddScoped<CredentialRotationService>();
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<ICredentialResolver, CredentialResolver>();
