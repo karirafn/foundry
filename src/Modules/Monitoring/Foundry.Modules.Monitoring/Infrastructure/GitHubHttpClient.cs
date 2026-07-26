@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
@@ -773,7 +774,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
     private static List<string> ParseMissingScopes(IEnumerable<string> scopeHeaders)
     {
-        HashSet<string> grantedScopes = [];
+        HashSet<string> grantedScopes = new(StringComparer.OrdinalIgnoreCase);
         foreach (string header in scopeHeaders)
         {
             foreach (string scope in header.Split(','))
@@ -783,9 +784,12 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         List<string> missing = [];
-        if (!grantedScopes.Contains("repo"))
+        foreach (string required in RequiredScopes.For(ProviderTypes.GitHub))
         {
-            missing.Add("repo");
+            if (!grantedScopes.Contains(required))
+            {
+                missing.Add(required);
+            }
         }
 
         return missing;

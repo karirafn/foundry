@@ -20,7 +20,7 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
 
     public WhenTokenIsValid()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, MissingScopes: [], AccountName: null);
+        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, ScopesVerified: true, MissingScopes: [], AccountName: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -67,6 +67,7 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
         ValidateToken.Response responseWithAccount = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: ResolvedLogin);
         await using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>

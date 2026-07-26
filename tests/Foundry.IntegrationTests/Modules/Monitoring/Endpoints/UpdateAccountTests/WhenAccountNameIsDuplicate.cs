@@ -115,6 +115,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         ValidateToken.Response validResponse = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: "octocat");
 
@@ -169,6 +170,7 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             ValidateToken.Response response = new(
                 IsValid: true,
                 IsAuthFailure: false,
+                ScopesVerified: true,
                 MissingScopes: [],
                 AccountName: accountName);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));

@@ -26,6 +26,7 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
         ValidateToken.Response validResponse = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: ResolvedAccountName);
 

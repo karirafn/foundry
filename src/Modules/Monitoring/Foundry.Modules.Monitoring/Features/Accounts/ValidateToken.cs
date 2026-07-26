@@ -18,6 +18,7 @@ internal static class ValidateToken
     internal sealed record Response(
         bool IsValid,
         bool IsAuthFailure,
+        bool ScopesVerified,
         IReadOnlyList<string> MissingScopes,
         string? AccountName);
 
@@ -37,6 +38,7 @@ internal static class ValidateToken
                 validation => Result<Response>.Ok(new Response(
                     IsValid: validation.IsValid,
                     IsAuthFailure: validation.IsAuthFailure,
+                    ScopesVerified: validation.ScopesVerified,
                     MissingScopes: validation.MissingScopes,
                     AccountName: validation.AccountName)),
                 error => Result<Response>.Fail(error));

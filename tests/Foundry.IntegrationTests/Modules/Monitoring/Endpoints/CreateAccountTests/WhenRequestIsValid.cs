@@ -26,6 +26,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         ValidateToken.Response validResponse = new(
             IsValid: true,
             IsAuthFailure: false,
+            ScopesVerified: true,
             MissingScopes: [],
             AccountName: ResolvedAccountName);
 
