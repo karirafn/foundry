@@ -57,35 +57,54 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
         </div>
 
         <ul class="setup-repos-step__repo-list" role="list">
-          @if (_filteredRepositories().length === 0) {
+          @if (!_repositoryService.availableHasClaims() && _repositoryService.availableRepositories().length === 0) {
+            <li class="setup-repos-step__empty-status" role="status">
+              This account has no claimed namespaces.
+              <span class="setup-repos-step__empty-status-hint">Add a namespace claim to this account to monitor its repositories.</span>
+            </li>
+          } @else if (_repositoryService.availableHasClaims() && _repositoryService.availableRepositories().length === 0) {
+            <li class="setup-repos-step__empty-status" role="status">
+              No repositories under this account's claimed namespaces.
+            </li>
+          } @else if (_filteredRepositories().length === 0) {
             <li class="setup-repos-step__repo-empty">No matching repositories</li>
           }
           @for (repo of _filteredRepositories(); track repo.slug) {
             <li
               class="setup-repos-step__repo-item"
-              [class.setup-repos-step__repo-item--disabled]="!repo.canPush"
+              [class.setup-repos-step__repo-item--disabled]="repo.isMonitored || !repo.canPush"
+              [class.setup-repos-step__repo-item--monitored]="repo.isMonitored"
             >
               <label class="setup-repos-step__repo-label">
-                <input
-                  class="setup-repos-step__repo-checkbox"
-                  type="checkbox"
-                  [checked]="_selectedSlugs().has(repo.slug) && repo.canPush"
-                  [disabled]="!repo.canPush"
-                  [attr.aria-describedby]="repo.canPush ? null : 'repo-reason-' + repo.slug.replaceAll('/', '-')"
-                  (change)="onToggle(repo.slug, $any($event.target).checked)"
-                />
+                <span class="setup-repos-step__repo-gutter" aria-hidden="true">
+                  @if (repo.isMonitored) {
+                    <span class="setup-repos-step__repo-check">✓</span>
+                  } @else {
+                    <input
+                      class="setup-repos-step__repo-checkbox"
+                      type="checkbox"
+                      [checked]="_selectedSlugs().has(repo.slug) && repo.canPush"
+                      [disabled]="!repo.canPush"
+                      [attr.aria-describedby]="(!repo.canPush && !repo.isMonitored) ? 'repo-reason-' + repo.slug.replaceAll('/', '-') : null"
+                      (change)="onToggle(repo.slug, $any($event.target).checked)"
+                    />
+                  }
+                </span>
                 <span class="setup-repos-step__repo-slug">{{ repo.slug }}</span>
+                @if (repo.isMonitored) {
+                  <span class="sr-only">, already monitored</span>
+                }
                 @if (repo.isPrivate) {
                   <span class="setup-repos-step__repo-private-badge" aria-label="private">Private</span>
                 }
-                @if (!repo.canPush) {
+                @if (!repo.canPush && !repo.isMonitored) {
                   <span
                     class="setup-repos-step__repo-reason"
                     aria-hidden="true"
                   >{{ _noWriteAccessReason }}</span>
                 }
               </label>
-              @if (!repo.canPush) {
+              @if (!repo.canPush && !repo.isMonitored) {
                 <span
                   class="sr-only"
                   [id]="'repo-reason-' + repo.slug.replaceAll('/', '-')"
@@ -166,7 +185,7 @@ export class SetupReposStepComponent implements OnInit {
 
   onToggle(slug: string, checked: boolean): void {
     const repo = this._repositoryService.availableRepositories().find(r => r.slug === slug);
-    if (!repo?.canPush) {
+    if (repo?.isMonitored || !repo?.canPush) {
       return;
     }
     this._selectedSlugs.update(current => {

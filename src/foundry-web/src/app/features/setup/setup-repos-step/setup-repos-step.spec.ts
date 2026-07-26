@@ -19,6 +19,17 @@ const AVAILABLE_REPOS_WITH_NON_WRITABLE: AvailableRepository[] = [
   { slug: 'org/repo-readonly', isPrivate: false, canPush: false, isMonitored: false },
 ];
 
+const AVAILABLE_REPOS_WITH_MONITORED: AvailableRepository[] = [
+  { slug: 'org/repo-monitored', isPrivate: false, canPush: true, isMonitored: true },
+  { slug: 'org/repo-selectable', isPrivate: false, canPush: true, isMonitored: false },
+  { slug: 'org/repo-readonly', isPrivate: false, canPush: false, isMonitored: false },
+];
+
+const AVAILABLE_REPOS_MONITORED_NO_PUSH: AvailableRepository[] = [
+  { slug: 'org/repo-monitored-nopush', isPrivate: false, canPush: false, isMonitored: true },
+  { slug: 'org/repo-selectable', isPrivate: false, canPush: true, isMonitored: false },
+];
+
 @Component({ template: '', standalone: true })
 class StubIssuesComponent {}
 
@@ -561,6 +572,184 @@ describe('SetupReposStepComponent', () => {
     expect(checkboxes.length).toBe(2);
     const emptyEl = el.querySelector('.setup-repos-step__repo-empty');
     expect(emptyEl).toBeNull();
+  });
+
+  // Cycle 17: monitored row — check replaces checkbox, sr-only "already monitored", non-toggleable
+  it('should render a green check (not a checkbox) for a monitored repository', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_WITH_MONITORED });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const monitoredItem = items[0];
+
+    // Assert — no checkbox inside gutter for monitored row
+    const gutter = monitoredItem.querySelector('.setup-repos-step__repo-gutter');
+    expect(gutter).toBeTruthy();
+    const checkbox = gutter?.querySelector('input[type="checkbox"]');
+    expect(checkbox).toBeNull();
+    // Check mark element rendered instead
+    const check = gutter?.querySelector('.setup-repos-step__repo-check');
+    expect(check).toBeTruthy();
+  });
+
+  it('should render sr-only "already monitored" text for a monitored repository', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_WITH_MONITORED });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const monitoredItem = items[0];
+
+    // Assert
+    const srOnlySpan = monitoredItem.querySelector('.sr-only');
+    expect(srOnlySpan?.textContent).toContain('already monitored');
+  });
+
+  it('should not toggle a monitored repository when its onToggle is invoked programmatically', () => {
+    // Arrange
+    const { fixture, httpMock, component } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_WITH_MONITORED });
+    fixture.detectChanges();
+
+    // Act — programmatically call onToggle for the monitored repo
+    component.onToggle('org/repo-monitored', true);
+    fixture.detectChanges();
+
+    // Assert — Finish button stays disabled because monitored repo can't be selected
+    const el = fixture.nativeElement as HTMLElement;
+    const finishBtn = el.querySelector('button.setup-repos-step__finish-btn') as HTMLButtonElement;
+    expect(finishBtn.disabled).toBe(true);
+  });
+
+  // Cycle 18: read-only row gating — existing "no write access" reason still appears when !isMonitored
+  it('should render disabled checkbox and reason for a read-only non-monitored repository', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_WITH_MONITORED });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const readonlyItem = items[2]; // 3rd item: org/repo-readonly (canPush=false, isMonitored=false)
+
+    // Assert — has disabled checkbox in gutter, has reason text, no check mark
+    const gutter = readonlyItem.querySelector('.setup-repos-step__repo-gutter');
+    expect(gutter).toBeTruthy();
+    const checkbox = gutter?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox).toBeTruthy();
+    expect(checkbox.disabled).toBe(true);
+    const check = gutter?.querySelector('.setup-repos-step__repo-check');
+    expect(check).toBeNull();
+    const reason = readonlyItem.querySelector('.setup-repos-step__repo-reason');
+    expect(reason).toBeTruthy();
+    expect(reason?.textContent).toContain('no write access');
+  });
+
+  // Cycle 19: monitored wins precedence — !canPush && isMonitored shows check + sr-text, no reason
+  it('should show check and sr-text (not reason) for a !canPush && isMonitored repository', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_MONITORED_NO_PUSH });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const monitoredNoPushItem = items[0];
+
+    // Assert — monitored wins: check rendered, no "no write access" reason
+    const check = monitoredNoPushItem.querySelector('.setup-repos-step__repo-check');
+    expect(check).toBeTruthy();
+    const reason = monitoredNoPushItem.querySelector('.setup-repos-step__repo-reason');
+    expect(reason).toBeNull();
+    const srText = monitoredNoPushItem.querySelector('.sr-only');
+    expect(srText?.textContent).toContain('already monitored');
+  });
+
+  // Cycle 20: gutter alignment — all rows (monitored, selectable, read-only) have gutter cell
+  it('should render gutter cells on all row types for alignment', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_WITH_MONITORED });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+
+    // Assert — every row has a gutter element with aria-hidden
+    items.forEach(item => {
+      const gutter = item.querySelector('.setup-repos-step__repo-gutter');
+      expect(gutter).toBeTruthy();
+      expect(gutter?.getAttribute('aria-hidden')).toBe('true');
+    });
+  });
+
+  // Cycle 21: no-claims empty state
+  it('should show "no claimed namespaces" empty state when hasClaims is false and list is empty', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: false, repositories: [] });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const emptyStatus = el.querySelector('.setup-repos-step__empty-status');
+    expect(emptyStatus).toBeTruthy();
+    expect(emptyStatus?.getAttribute('role')).toBe('status');
+    expect(emptyStatus?.textContent).toContain('no claimed namespaces');
+  });
+
+  // Cycle 22: claims-but-empty state
+  it('should show "no repositories under claimed namespaces" when hasClaims is true but list is empty', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: [] });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const emptyStatus = el.querySelector('.setup-repos-step__empty-status');
+    expect(emptyStatus).toBeTruthy();
+    expect(emptyStatus?.getAttribute('role')).toBe('status');
+    expect(emptyStatus?.textContent).toContain('claimed namespaces');
+    expect(emptyStatus?.textContent).not.toContain('no claimed namespaces');
   });
 
   // Cycle 16: error strings are truncated to 200 characters
