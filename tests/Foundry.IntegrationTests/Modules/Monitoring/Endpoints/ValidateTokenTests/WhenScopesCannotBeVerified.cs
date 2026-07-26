@@ -13,19 +13,24 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.ValidateTokenTests;
 
-public sealed class WhenTokenIsUnauthorized : IAsyncDisposable
+public sealed class WhenScopesCannotBeVerified : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenTokenIsUnauthorized()
+    public WhenScopesCannotBeVerified()
     {
-        ValidateToken.Response authFailureResponse = new(IsValid: false, IsAuthFailure: true, ScopesVerified: false, MissingScopes: [], AccountName: null);
+        ValidateToken.Response scopesUnverifiableResponse = new(
+            IsValid: false,
+            IsAuthFailure: false,
+            ScopesVerified: false,
+            MissingScopes: [],
+            AccountName: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
-                _ => new StubHandler(Result<ValidateToken.Response>.Ok(authFailureResponse)));
+                _ => new StubHandler(Result<ValidateToken.Response>.Ok(scopesUnverifiableResponse)));
         });
         _client = _factory.CreateClient();
     }
@@ -37,10 +42,10 @@ public sealed class WhenTokenIsUnauthorized : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithAuthFailureResult()
+    public async Task ReturnsOkWithScopesVerifiedFalseAndIsValidFalse()
     {
         // Arrange
-        object body = new { token = "ghp_bad_token", baseUrl = "https://api.github.com" };
+        object body = new { token = "glpat_unverifiable", baseUrl = "https://gitlab.com" };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(
@@ -55,7 +60,7 @@ public sealed class WhenTokenIsUnauthorized : IAsyncDisposable
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
             () => dto.IsValid.ShouldBeFalse(),
-            () => dto.IsAuthFailure.ShouldBeTrue(),
+            () => dto.ScopesVerified.ShouldBeFalse(),
             () => dto.MissingScopes.ShouldBeEmpty());
     }
 
