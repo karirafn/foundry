@@ -5,4 +5,5 @@ public sealed record CredentialSummary(
     string Name,
     string ProviderType,
     string BaseUrl,
-    bool HasToken);
+    bool HasToken,
+    IReadOnlyList<string> Namespaces);

@@ -6,12 +6,33 @@ export interface AccountSummary {
   providerType: string;
   baseUrl: string;
   hasToken: boolean;
+  namespaces: string[];
+}
+
+export interface NamespaceConflict {
+  namespace: string;
+  holderCredentialId: string;
+  holderName: string;
+}
+
+export interface NamespaceConflictResponse {
+  conflicts: NamespaceConflict[];
+}
+
+export interface TakeoverValidationResponse {
+  invalidNamespaces: string[];
+}
+
+export interface CredentialCreationResult {
+  credential: AccountSummary;
+  affectedRepositories: AffectedRepository[];
 }
 
 export interface CreateAccountRequest {
   providerType: string;
   baseUrl: string;
   token: string;
+  takeoverNamespaces?: string[];
 }
 
 export interface UpdateAccountRequest {

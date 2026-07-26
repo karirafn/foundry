@@ -46,10 +46,14 @@ public sealed class HandleAsync : IAsyncDisposable
         INamespaceDeriver? deriver = null,
         IRepositoryEligibilityEvaluator? evaluator = null)
     {
+        RepositoryEligibilityDiffer differ = new(
+            _dbContext,
+            evaluator ?? new NoOpEligibilityEvaluator());
+
         CredentialRotationService rotationService = new(
             _dbContext,
             deriver ?? new StubNamespaceDeriver(new NamespaceDerivationOutcome.Unavailable()),
-            evaluator ?? new NoOpEligibilityEvaluator(),
+            differ,
             NullLogger<CredentialRotationService>.Instance);
 
         return new UpdateAccount.Handler(
@@ -154,13 +158,15 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDuplicateNamespaceOnRotate_ReturnsDuplicateNamespaceError()
+    public async Task WhenDerivedNamespaceClaimedByOtherOnRotate_SubtractsItSilently()
     {
-        // Arrange — seed two credentials; rotate the second to claim the first's namespace
+        // Arrange — seed two credentials; rotate the second whose derived set overlaps first's namespace.
+        // Never-steal semantics: the shared namespace is subtracted, not an error.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         GitHubCredential first = GitHubCredential.Create("first-user", "ghp_first", baseUrl);
         Namespace sharedNs = Namespace.Create("shared-org").ValueOrThrow();
+        Namespace ownNs = Namespace.Create("second-org").ValueOrThrow();
         first.SetNamespaces([sharedNs]);
         _dbContext.Set<Credential>().Add(first);
 
@@ -169,9 +175,9 @@ public sealed class HandleAsync : IAsyncDisposable
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
 
-        // The deriver will try to assign the same namespace that first already owns
+        // The deriver returns both namespaces; "shared-org" is already held by first
         UpdateAccount.Handler handler = BuildHandler(
-            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([sharedNs])));
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([sharedNs, ownNs])));
 
         UpdateAccount.Command command = new(second.Id, "https://github.com", "ghp_newtoken");
 
@@ -180,9 +186,14 @@ public sealed class HandleAsync : IAsyncDisposable
             command,
             TestContext.Current.CancellationToken);
 
-        // Assert
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.DuplicateNamespaceCode);
+        // Assert — rotation succeeds; second only ends up with its own namespace
+        Result<CredentialUpdateResult>.Success success = result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+        Credential? stored = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == second.Id, CancellationToken.None);
+        stored.ShouldNotBeNull();
+        stored.Namespaces.ShouldContain(n => n.Value == "second-org");
+        stored.Namespaces.ShouldNotContain(n => n.Value == "shared-org");
     }
 
     [Fact]

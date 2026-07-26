@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { AccountFormComponent } from './account-form';
-import { AccountSummary, CreateAccountRequest, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from '../account.model';
+import { AccountSummary, CreateAccountRequest, NamespaceConflict, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from '../account.model';
 import { AccountService } from '../account.service';
 
 const MOCK_ACCOUNT: AccountSummary = {
@@ -9,6 +9,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_2: AccountSummary = {
@@ -17,6 +18,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const VALID_RESULT: TokenValidationResult = {
@@ -82,6 +84,7 @@ function setup(overrides: {
   validationResult?: TokenValidationResult | null;
   saveError?: string | null;
   validationError?: string | null;
+  conflicts?: NamespaceConflict[];
   requirementsMap?: Map<string, TokenRequirements>;
   requirementsProvider?: (provider: string) => Promise<TokenRequirements>;
 } = {}) {
@@ -108,6 +111,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('validationResult', overrides.validationResult ?? null);
   fixture.componentRef.setInput('saveError', overrides.saveError ?? null);
   fixture.componentRef.setInput('validationError', overrides.validationError ?? null);
+  fixture.componentRef.setInput('conflicts', overrides.conflicts ?? []);
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement, getTokenRequirementsSpy };
 }
@@ -1130,6 +1134,7 @@ describe('AccountFormComponent', () => {
       providerType: 'gitlab',
       baseUrl: 'https://gitlab.example.com',
       hasToken: true,
+      namespaces: [],
     };
     const gitlabRequirements: TokenRequirements = {
       ...GITLAB_REQUIREMENTS,
@@ -1190,5 +1195,315 @@ describe('AccountFormComponent', () => {
     // Assert
     const section = el.querySelector('.account-form__requirements');
     expect(section).toBeNull();
+  });
+
+  // Conflict panel — Cycle 62: no conflict panel when conflicts is empty
+  it('should not render the conflict panel when there are no conflicts', () => {
+    // Arrange / Act
+    const { el } = setup({ conflicts: [] });
+
+    // Assert
+    const panel = el.querySelector('.account-form__conflict-panel');
+    expect(panel).toBeNull();
+  });
+
+  // Conflict panel — Cycle 63: conflict panel rendered when conflicts present
+  it('should render the conflict panel when conflicts are provided', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+
+    // Act
+    const { el } = setup({ conflicts });
+
+    // Assert
+    const panel = el.querySelector('.account-form__conflict-panel');
+    expect(panel).toBeTruthy();
+    expect(panel?.getAttribute('role')).toBe('region');
+  });
+
+  // Conflict panel — Cycle 64: each conflict has a default-checked checkbox
+  it('should render a default-checked checkbox for each conflict namespace', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+      { namespace: 'myorg2', holderCredentialId: 'cred-2', holderName: 'Other Account' },
+    ];
+
+    // Act
+    const { el } = setup({ conflicts });
+
+    // Assert
+    const checkboxes = el.querySelectorAll('.account-form__conflict-panel input[type="checkbox"]');
+    expect(checkboxes.length).toBe(2);
+    checkboxes.forEach(cb => expect((cb as HTMLInputElement).checked).toBe(true));
+  });
+
+  // Conflict panel — Cycle 65: conflict shows namespace and holder name
+  it('should display namespace and holder name for each conflict', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+
+    // Act
+    const { el } = setup({ conflicts });
+
+    // Assert
+    const panel = el.querySelector('.account-form__conflict-panel');
+    expect(panel?.textContent).toContain('myorg');
+    expect(panel?.textContent).toContain('Old Account');
+  });
+
+  // Conflict panel — Cycle 66: submit label becomes "Transfer selected & add account" when conflicts present
+  it('should show "Transfer selected & add account" label when conflicts are present', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+
+    // Act
+    const { el } = setup({ conflicts });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn');
+    expect(btn?.textContent?.trim()).toBe('Transfer selected & add account');
+  });
+
+  // Conflict panel — Cycle 67: submit label is "Save" when no conflicts
+  it('should show "Save" label when no conflicts are present', () => {
+    // Arrange / Act
+    const { el } = setup({ conflicts: [] });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn');
+    expect(btn?.textContent?.trim()).toBe('Save');
+  });
+
+  // Conflict panel — Cycle 70: editing token clears conflict panel
+  it('should clear conflict panel when token input is edited', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+    const { el, fixture } = setup({ conflicts });
+
+    // Act
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'new_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert
+    const panel = el.querySelector('.account-form__conflict-panel');
+    expect(panel).toBeNull();
+  });
+
+  // Conflict panel — Cycle 71: editing baseUrl clears conflict panel
+  it('should clear conflict panel when base URL input is edited', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+    const { el, fixture } = setup({ conflicts });
+
+    // Act
+    const baseUrlInput = el.querySelector('#account-form-base-url') as HTMLInputElement;
+    baseUrlInput.value = 'https://github.example.com';
+    baseUrlInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert
+    const panel = el.querySelector('.account-form__conflict-panel');
+    expect(panel).toBeNull();
+  });
+
+  // Conflict panel — Cycle 72: panel has aria-labelledby
+  it('should give the conflict panel an aria-labelledby heading', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+
+    // Act
+    const { el } = setup({ conflicts });
+
+    // Assert
+    const panel = el.querySelector('.account-form__conflict-panel[role="region"]');
+    const labelledBy = panel?.getAttribute('aria-labelledby');
+    expect(labelledBy).toBeTruthy();
+    const heading = el.querySelector(`#${labelledBy}`);
+    expect(heading).toBeTruthy();
+  });
+
+  // Conflict panel — Cycle 62 (revised): unchecking a conflict omits it from takeoverNamespaces on save
+  // Production path: token resolved first, then conflicts pushed in by parent (simulating 409 response)
+  it('should omit unchecked namespace from takeoverNamespaces — production path', () => {
+    // Arrange — start without conflicts; token resolution happens first
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+      { namespace: 'myorg2', holderCredentialId: 'cred-2', holderName: 'Other Account' },
+    ];
+    const { el, component, fixture } = setup({
+      conflicts: [],
+      account: null,
+      validationResult: VALID_RESULT,
+    });
+    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
+    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
+
+    // Resolve token (simulates user typing and blurring token field)
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Parent pushes conflicts (simulates 409 response from server)
+    fixture.componentRef.setInput('conflicts', conflicts);
+    fixture.detectChanges();
+
+    // Uncheck the first checkbox
+    const checkboxes = el.querySelectorAll('.account-form__conflict-panel input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    checkboxes[0].click();
+    fixture.detectChanges();
+
+    // Act
+    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    const req = emitted as CreateAccountRequest;
+    expect(req.takeoverNamespaces).toEqual(['myorg2']);
+  });
+
+  // Conflict panel — Cycle 63 (revised): all checked sends all takeoverNamespaces — production path
+  it('should include all conflict namespaces in takeoverNamespaces when all checked — production path', () => {
+    // Arrange — start without conflicts; token resolution happens first
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+      { namespace: 'myorg2', holderCredentialId: 'cred-2', holderName: 'Other Account' },
+    ];
+    const { el, component, fixture } = setup({
+      conflicts: [],
+      account: null,
+      validationResult: VALID_RESULT,
+    });
+    let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
+    component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
+
+    // Resolve token (simulates user typing and blurring token field)
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Parent pushes conflicts (simulates 409 response from server)
+    fixture.componentRef.setInput('conflicts', conflicts);
+    fixture.detectChanges();
+
+    // Act — all checkboxes remain checked
+    const saveBtn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    const req = emitted as CreateAccountRequest;
+    expect(req.takeoverNamespaces).toEqual(['myorg', 'myorg2']);
+  });
+
+  // F-1: save button disabled when conflict panel visible but no namespaces selected
+  it('should disable save button when conflicts are visible but none are selected', () => {
+    // Arrange — token resolution first, then conflicts pushed in
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+      { namespace: 'myorg2', holderCredentialId: 'cred-2', holderName: 'Other Account' },
+    ];
+    const { el, fixture } = setup({ conflicts: [], account: null, validationResult: VALID_RESULT });
+
+    // Resolve token via production path
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Parent pushes conflicts (simulates 409 response)
+    fixture.componentRef.setInput('conflicts', conflicts);
+    fixture.detectChanges();
+
+    // Uncheck all checkboxes
+    const checkboxes = el.querySelectorAll('.account-form__conflict-panel input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    checkboxes.forEach(cb => { cb.click(); });
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // F-6: save label accurate when conflicts visible but zero selected
+  it('should show "Select namespaces to transfer" label when conflicts visible but none selected', () => {
+    // Arrange — token resolution first, then conflicts pushed in
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+    const { el, fixture } = setup({ conflicts: [], account: null, validationResult: VALID_RESULT });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Parent pushes conflicts (simulates 409 response)
+    fixture.componentRef.setInput('conflicts', conflicts);
+    fixture.detectChanges();
+
+    // Uncheck the only checkbox
+    const checkbox = el.querySelector('.account-form__conflict-panel input[type="checkbox"]') as HTMLInputElement;
+    checkbox.click();
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toBe('Select namespaces to transfer');
+  });
+
+  // F-9: conflict checkbox label contains both namespace and holder name
+  it('should have a wrapping label whose text contains the namespace and holder name', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+
+    // Act
+    const { el } = setup({ conflicts });
+
+    // Assert
+    const label = el.querySelector('.account-form__conflict-label') as HTMLLabelElement;
+    expect(label).toBeTruthy();
+    expect(label.textContent).toContain('myorg');
+    expect(label.textContent).toContain('Old Account');
+  });
+
+  // F-5: conflict panel contains transfer-consequence explanation
+  it('should render a transfer-consequence explanation inside the conflict panel', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+
+    // Act
+    const { el } = setup({ conflicts });
+
+    // Assert
+    const panel = el.querySelector('.account-form__conflict-panel');
+    expect(panel?.textContent).toContain('current holder');
   });
 });

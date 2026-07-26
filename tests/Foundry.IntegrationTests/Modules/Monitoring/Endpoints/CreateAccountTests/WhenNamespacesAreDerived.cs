@@ -86,9 +86,9 @@ public sealed class WhenNamespacesAreDerived : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        CredentialSummary? account = await response.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        account.ShouldNotBeNull();
+        CredentialCreationResult? result = await response.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
 
         // Verify "octocat" namespace was derived (both writable repos share this owner)
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -96,7 +96,7 @@ public sealed class WhenNamespacesAreDerived : IAsyncDisposable
 
         Credential? credential = await dbContext.Set<Credential>()
             .Include(c => c.Namespaces)
-            .FirstOrDefaultAsync(c => c.Id == CredentialId.From(account.Id), TestContext.Current.CancellationToken);
+            .FirstOrDefaultAsync(c => c.Id == CredentialId.From(result.Credential.Id), TestContext.Current.CancellationToken);
 
         credential.ShouldNotBeNull();
         credential.Namespaces.Count.ShouldBe(1);

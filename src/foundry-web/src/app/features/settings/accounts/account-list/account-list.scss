@@ -98,6 +98,34 @@
     white-space: nowrap;
   }
 
+  &__namespaces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-xs);
+    margin-top: 2px;
+  }
+
+  &__namespace,
+  &__namespace--overflow {
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    display: inline-block;
+    font-family: var(--fd-font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1;
+    padding: 2px var(--fd-spacing-xs);
+  }
+
+  &__namespace {
+    color: var(--fd-text-secondary);
+  }
+
+  &__namespace--overflow {
+    color: var(--fd-text-secondary);
+  }
+
   &__token-status {
     align-items: center;
     display: flex;

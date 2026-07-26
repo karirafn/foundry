@@ -3,6 +3,8 @@ import { AccountSummary } from '../account.model';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
 
+const MAX_VISIBLE_NAMESPACES = 4;
+
 @Component({
   selector: 'fd-account-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,11 +52,28 @@ import { RowActionsComponent } from '../../../../shared/components/row-actions/r
       </div>
       <ul class="account-list__list" role="list">
         @for (account of accounts(); track account.id) {
+          @let visibleNs = account.namespaces.slice(0, MAX_VISIBLE_NAMESPACES);
+          @let overflowNs = account.namespaces.slice(MAX_VISIBLE_NAMESPACES);
+          @let overflowLabel = overflowNs.length + ' more namespace' + (overflowNs.length === 1 ? '' : 's') + ': ' + overflowNs.join(', ');
           <li class="account-list__item" role="listitem">
             <fd-provider-icon [providerType]="account.providerType" />
             <div class="account-list__info">
               <span class="account-list__name">{{ account.name }}</span>
               <span class="account-list__url">{{ account.baseUrl }}</span>
+              @if (account.namespaces.length > 0) {
+                <div class="account-list__namespaces">
+                  @for (ns of visibleNs; track ns) {
+                    <span class="account-list__namespace">{{ ns }}</span>
+                  }
+                  @if (overflowNs.length > 0) {
+                    <span
+                      class="account-list__namespace--overflow"
+                      [attr.aria-label]="overflowLabel"
+                      [title]="overflowLabel"
+                    >+{{ overflowNs.length }}</span>
+                  }
+                </div>
+              }
             </div>
             <div class="account-list__token-status">
               <span
@@ -89,4 +108,6 @@ export class AccountListComponent {
   readonly edit: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly delete: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
+
+  protected readonly MAX_VISIBLE_NAMESPACES = MAX_VISIBLE_NAMESPACES;
 }

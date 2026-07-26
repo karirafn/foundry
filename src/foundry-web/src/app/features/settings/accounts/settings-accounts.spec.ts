@@ -140,6 +140,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -185,6 +186,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -245,11 +247,15 @@ describe('SettingsAccountsComponent', () => {
       token: 'ghp_test',
     });
     req.flush({
-      id: '2',
-      name: 'New Account',
-      providerType: 'GitHub',
-      baseUrl: 'https://github.com',
-      hasToken: true,
+      credential: {
+        id: '2',
+        name: 'New Account',
+        providerType: 'GitHub',
+        baseUrl: 'https://github.com',
+        hasToken: true,
+        namespaces: [],
+      },
+      affectedRepositories: [],
     });
   });
 
@@ -261,6 +267,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -287,6 +294,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     }));
   });
 
@@ -307,11 +315,15 @@ describe('SettingsAccountsComponent', () => {
       token: 'ghp_test',
     });
     httpMock.expectOne('/api/accounts').flush({
-      id: '2',
-      name: 'New Account',
-      providerType: 'GitHub',
-      baseUrl: 'https://github.com',
-      hasToken: true,
+      credential: {
+        id: '2',
+        name: 'New Account',
+        providerType: 'GitHub',
+        baseUrl: 'https://github.com',
+        hasToken: true,
+        namespaces: [],
+      },
+      affectedRepositories: [],
     });
     fixture.detectChanges();
 
@@ -335,6 +347,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -367,6 +380,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -396,6 +410,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -431,6 +446,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     document.body.appendChild(fixture.nativeElement);
@@ -469,6 +485,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -511,6 +528,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -545,6 +563,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -567,6 +586,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -595,6 +615,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      namespaces: [],
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();

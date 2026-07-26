@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { SetupAccountStepComponent } from './setup-account-step';
-import { AccountSummary, TokenValidationResult } from '../../settings/accounts/account.model';
+import { AccountSummary, CredentialCreationResult, TokenValidationResult } from '../../settings/accounts/account.model';
 
 function setup() {
   TestBed.resetTestingModule();
@@ -22,6 +22,12 @@ const CREATED_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
+};
+
+const CREATED_ACCOUNT_RESULT: CredentialCreationResult = {
+  credential: CREATED_ACCOUNT,
+  affectedRepositories: [],
 };
 
 const VALID_RESULT: TokenValidationResult = {
@@ -245,7 +251,7 @@ describe('SetupAccountStepComponent', () => {
     });
 
     // Cleanup
-    req.flush(CREATED_ACCOUNT);
+    req.flush(CREATED_ACCOUNT_RESULT);
   });
 
   // Selecting GitLab sends correct providerType and baseUrl
@@ -283,7 +289,7 @@ describe('SetupAccountStepComponent', () => {
     });
 
     // Cleanup
-    req.flush({ ...CREATED_ACCOUNT, providerType: 'GitLab' });
+    req.flush({ credential: { ...CREATED_ACCOUNT, providerType: 'GitLab' }, affectedRepositories: [] });
   });
 
   // Emits complete with account ID on successful create
@@ -309,7 +315,7 @@ describe('SetupAccountStepComponent', () => {
     const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
     btn.click();
     fixture.detectChanges();
-    httpMock.expectOne('/api/accounts').flush(CREATED_ACCOUNT);
+    httpMock.expectOne('/api/accounts').flush(CREATED_ACCOUNT_RESULT);
     fixture.detectChanges();
 
     // Assert

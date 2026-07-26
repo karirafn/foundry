@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AccountService } from './account.service';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialUpdateResult, TokenRequirements, UpdateAccountRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, TokenRequirements, UpdateAccountRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 
 const MOCK_ACCOUNT: AccountSummary = {
@@ -11,6 +11,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'github',
   baseUrl: 'https://api.github.com/',
   hasToken: true,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_2: AccountSummary = {
@@ -19,6 +20,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   providerType: 'github',
   baseUrl: 'https://api.github.com/',
   hasToken: true,
+  namespaces: [],
 };
 
 function makeUpdateResult(account: AccountSummary, affected: AffectedRepository[] = []): CredentialUpdateResult {
@@ -66,6 +68,7 @@ describe('AccountService', () => {
     expect(service.saveError()).toBeNull();
     expect(service.deleteError()).toBeNull();
     expect(service.loadError()).toBeNull();
+    expect(service.conflicts()).toEqual([]);
   });
 
   // Cycle 2: loadAccounts populates accounts signal
@@ -153,6 +156,10 @@ describe('AccountService', () => {
     expect(service.accounts()[1].name).toBe('Work GitHub');
   });
 
+  function makeCreationResult(account: AccountSummary, affected: AffectedRepository[] = []): CredentialCreationResult {
+    return { credential: account, affectedRepositories: affected };
+  }
+
   // Cycle 5: createAccount calls POST /api/accounts
   it('should POST to /api/accounts when createAccount is called', () => {
     // Arrange
@@ -169,7 +176,7 @@ describe('AccountService', () => {
     // Assert
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(request);
-    req.flush(MOCK_ACCOUNT, { status: 201, statusText: 'Created' });
+    req.flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
   });
 
   it('should set saving to true while createAccount is in flight', () => {
@@ -185,7 +192,7 @@ describe('AccountService', () => {
 
     // Assert — before flush
     expect(service.saving()).toBe(true);
-    httpMock.expectOne('/api/accounts').flush(MOCK_ACCOUNT, { status: 201, statusText: 'Created' });
+    httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
   });
 
   it('should set saving to false and saveSuccess to true after createAccount succeeds', () => {
@@ -196,7 +203,7 @@ describe('AccountService', () => {
       token: 'ghp_test',
     };
     service.createAccount(request);
-    httpMock.expectOne('/api/accounts').flush(MOCK_ACCOUNT, { status: 201, statusText: 'Created' });
+    httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
 
     // Assert
     expect(service.saving()).toBe(false);
@@ -216,7 +223,7 @@ describe('AccountService', () => {
 
     // Act
     service.createAccount(request);
-    httpMock.expectOne('/api/accounts').flush(MOCK_ACCOUNT, { status: 201, statusText: 'Created' });
+    httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
 
     // Assert
     expect(service.accounts()).toContain(MOCK_ACCOUNT);
@@ -251,8 +258,8 @@ describe('AccountService', () => {
 
     // Act
     httpMock.expectOne('/api/accounts').flush('An account with this name already exists.', {
-      status: 409,
-      statusText: 'Conflict',
+      status: 400,
+      statusText: 'Bad Request',
     });
 
     // Assert
@@ -262,14 +269,93 @@ describe('AccountService', () => {
   it('should clear saveError at start of createAccount', () => {
     // Arrange — first call that fails
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'x' });
-    httpMock.expectOne('/api/accounts').flush('Conflict', { status: 409, statusText: 'Conflict' });
+    httpMock.expectOne('/api/accounts').flush('Bad Request', { status: 400, statusText: 'Bad Request' });
 
     // Act — second call clears error immediately
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'y' });
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
-    httpMock.expectOne('/api/accounts').flush(MOCK_ACCOUNT, { status: 201, statusText: 'Created' });
+    httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
+  });
+
+  // Conflict (409) handling
+  it('should set conflicts signal when createAccount returns 409 with NamespaceConflictResponse', () => {
+    // Arrange
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush({ conflicts }, { status: 409, statusText: 'Conflict' });
+
+    // Assert
+    expect(service.conflicts()).toEqual(conflicts);
+    expect(service.saveError()).toBeNull();
+    expect(service.saving()).toBe(false);
+  });
+
+  it('should clear conflicts at start of createAccount', () => {
+    // Arrange — first call returns conflicts
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_x' });
+    httpMock.expectOne('/api/accounts').flush({ conflicts }, { status: 409, statusText: 'Conflict' });
+    expect(service.conflicts().length).toBe(1);
+
+    // Act — second call should clear conflicts immediately
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_y' });
+
+    // Assert — conflicts cleared before response
+    expect(service.conflicts()).toEqual([]);
+    httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
+  });
+
+  it('should set saveError for 400 TakeoverValidationResponse listing invalid namespaces', () => {
+    // Arrange
+    const body = { invalidNamespaces: ['ns-a', 'ns-b'] };
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush(body, { status: 400, statusText: 'Bad Request' });
+
+    // Assert
+    expect(service.saveError()).toBe('Invalid namespaces for takeover: ns-a, ns-b.');
+    expect(service.conflicts()).toEqual([]);
+  });
+
+  it('should set affectedRepositories when createAccount succeeds with affected repos', () => {
+    // Arrange
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT, affected), { status: 201, statusText: 'Created' });
+
+    // Assert
+    expect(service.affectedRepositories()).toEqual(affected);
+  });
+
+  it('should include takeoverNamespaces in POST body when provided', () => {
+    // Arrange
+    const request: CreateAccountRequest = {
+      providerType: 'github',
+      baseUrl: 'https://api.github.com',
+      token: 'ghp_test',
+      takeoverNamespaces: ['myorg'],
+    };
+
+    // Act
+    service.createAccount(request);
+    const req = httpMock.expectOne('/api/accounts');
+
+    // Assert
+    expect(req.request.body.takeoverNamespaces).toEqual(['myorg']);
+    req.flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
   });
 
   it('should set saveError when updateAccount fails with a string body', () => {
@@ -559,7 +645,7 @@ describe('AccountService', () => {
 
     // Assert — signal reset immediately
     expect(service.affectedRepositories()).toBeNull();
-    httpMock.expectOne('/api/accounts').flush(MOCK_ACCOUNT_2, { status: 201, statusText: 'Created' });
+    httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT_2), { status: 201, statusText: 'Created' });
   });
 
   it('should clear affectedRepositories when clearAffectedRepositories is called', () => {

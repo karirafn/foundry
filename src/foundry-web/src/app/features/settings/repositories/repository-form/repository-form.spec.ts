@@ -9,6 +9,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_2: AccountSummary = {
@@ -17,6 +18,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const MOCK_REPOSITORY: RepositorySummary = {

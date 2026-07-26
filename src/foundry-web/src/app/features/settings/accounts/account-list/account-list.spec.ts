@@ -8,6 +8,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_2: AccountSummary = {
@@ -16,6 +17,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   providerType: 'GitLab',
   baseUrl: 'https://gitlab.com',
   hasToken: false,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
@@ -24,6 +26,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
   providerType: 'github',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
@@ -32,6 +35,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
   providerType: 'gitlab',
   baseUrl: 'https://gitlab.com',
   hasToken: true,
+  namespaces: [],
 };
 
 function setup(overrides: {
@@ -274,5 +278,87 @@ describe('AccountListComponent', () => {
     // Assert
     const icon = el.querySelector('fd-provider-icon');
     expect(icon?.getAttribute('aria-label')).toBe('GitLab');
+  });
+
+  // Cycle 15: namespace chips — zero claims renders nothing
+  it('should not render any namespace chips when account has no namespaces', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] }); // namespaces: []
+
+    // Assert
+    const chips = el.querySelectorAll('.account-list__namespace');
+    expect(chips.length).toBe(0);
+  });
+
+  // Cycle 16: namespace chips — one namespace renders one chip
+  it('should render one namespace chip for each claimed namespace', () => {
+    // Arrange
+    const account = { ...MOCK_ACCOUNT, namespaces: ['myorg'] };
+
+    // Act
+    const { el } = setup({ accounts: [account] });
+
+    // Assert
+    const chips = el.querySelectorAll('.account-list__namespace');
+    expect(chips.length).toBe(1);
+    expect(chips[0].textContent?.trim()).toBe('myorg');
+  });
+
+  // Cycle 17: namespace chips — up to 4 visible, overflow chip for remainder
+  it('should show at most 4 namespace chips and a +N overflow chip for more than 4 namespaces', () => {
+    // Arrange
+    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4', 'ns5'] };
+
+    // Act
+    const { el } = setup({ accounts: [account] });
+
+    // Assert
+    const chips = el.querySelectorAll('.account-list__namespace');
+    expect(chips.length).toBe(4);
+
+    const overflow = el.querySelector('.account-list__namespace--overflow');
+    expect(overflow).toBeTruthy();
+    expect(overflow?.textContent?.trim()).toBe('+1');
+  });
+
+  // Cycle 18: overflow chip aria-label lists hidden namespaces
+  it('should set aria-label on the overflow chip listing the hidden namespaces', () => {
+    // Arrange
+    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6'] };
+
+    // Act
+    const { el } = setup({ accounts: [account] });
+
+    // Assert
+    const overflow = el.querySelector('.account-list__namespace--overflow') as HTMLElement;
+    expect(overflow?.getAttribute('aria-label')).toBe('2 more namespaces: ns5, ns6');
+  });
+
+  // Cycle 18b: overflow chip title attribute mirrors aria-label for sighted hover
+  it('should set title on the overflow chip matching its aria-label', () => {
+    // Arrange
+    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6'] };
+
+    // Act
+    const { el } = setup({ accounts: [account] });
+
+    // Assert
+    const overflow = el.querySelector('.account-list__namespace--overflow') as HTMLElement;
+    expect(overflow?.getAttribute('title')).toBe('2 more namespaces: ns5, ns6');
+  });
+
+  // Cycle 19: exactly 4 namespaces — no overflow chip
+  it('should not render an overflow chip when there are exactly 4 namespaces', () => {
+    // Arrange
+    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4'] };
+
+    // Act
+    const { el } = setup({ accounts: [account] });
+
+    // Assert
+    const chips = el.querySelectorAll('.account-list__namespace');
+    expect(chips.length).toBe(4);
+    const overflow = el.querySelector('.account-list__namespace--overflow');
+    expect(overflow).toBeNull();
   });
 });

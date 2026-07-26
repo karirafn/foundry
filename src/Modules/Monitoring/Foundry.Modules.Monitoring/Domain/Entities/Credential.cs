@@ -39,6 +39,21 @@ public abstract class Credential : AggregateRoot<CredentialId>
         }
     }
 
+    public void SetNamespaces(IEnumerable<Namespace> derived, IReadOnlySet<string> claimedByOthers)
+    {
+        _namespaces.Clear();
+
+        HashSet<string> seen = [];
+
+        foreach (Namespace ns in derived)
+        {
+            if (!claimedByOthers.Contains(ns.Value) && seen.Add(ns.Value))
+            {
+                _namespaces.Add(CredentialNamespace.Create(Id, Host, ns));
+            }
+        }
+    }
+
     public Namespace? ResolveCoveringNamespace(RepositorySlug slug)
     {
         HashSet<string> ownedValues = _namespaces

@@ -96,9 +96,10 @@ public sealed class WhenTokenRotatedWithLowercaseNamespaceIds : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-        CredentialSummary? created = await createResponse.Content
-            .ReadFromJsonAsync<CredentialSummary>(TestContext.Current.CancellationToken);
-        created.ShouldNotBeNull();
+        CredentialCreationResult? createdResult = await createResponse.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        createdResult.ShouldNotBeNull();
+        CredentialSummary created = createdResult.Credential;
 
         // Corrupt the credential_namespaces.id values to lowercase to reproduce the migration
         // bug — the backfill SQL used lower(hex(randomblob(...))) which produced lowercase ids.
