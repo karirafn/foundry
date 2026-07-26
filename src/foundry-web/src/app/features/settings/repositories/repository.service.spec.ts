@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { RepositoryService } from './repository.service';
-import { AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
+import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
 
 const ACCOUNT_ID = '00000000-0000-0000-0000-000000000001';
 const REPO_ID = '00000000-0000-0000-0000-000000000010';
@@ -38,12 +38,19 @@ const MOCK_AVAILABLE: AvailableRepository = {
   slug: 'my-org/my-repo',
   isPrivate: false,
   canPush: true,
+  isMonitored: false,
 };
 
 const MOCK_AVAILABLE_2: AvailableRepository = {
   slug: 'my-org/private-repo',
   isPrivate: true,
   canPush: false,
+  isMonitored: true,
+};
+
+const MOCK_AVAILABLE_RESPONSE: AvailableRepositoriesResponse = {
+  hasClaims: true,
+  repositories: [MOCK_AVAILABLE, MOCK_AVAILABLE_2],
 };
 
 function setupService() {
@@ -87,6 +94,7 @@ describe('RepositoryService', () => {
     expect(service.deleting()).toBe(false);
     expect(service.deleteError()).toBeNull();
     expect(service.availableRepositories()).toEqual([]);
+    expect(service.availableHasClaims()).toBe(false);
     expect(service.loadingAvailable()).toBe(false);
     expect(service.loadAvailableError()).toBeNull();
   });
@@ -192,21 +200,49 @@ describe('RepositoryService', () => {
 
     // Assert
     expect(req.request.method).toBe('GET');
-    req.flush([MOCK_AVAILABLE]);
+    req.flush(MOCK_AVAILABLE_RESPONSE);
   });
 
-  it('should populate availableRepositories after loadAvailableRepositories succeeds', () => {
+  it('should populate availableRepositories from response.repositories after loadAvailableRepositories succeeds', () => {
     // Arrange
 
     // Act
     service.loadAvailableRepositories(ACCOUNT_ID);
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush([MOCK_AVAILABLE, MOCK_AVAILABLE_2]);
+      .flush(MOCK_AVAILABLE_RESPONSE);
 
     // Assert
     expect(service.availableRepositories()).toEqual([MOCK_AVAILABLE, MOCK_AVAILABLE_2]);
     expect(service.loadingAvailable()).toBe(false);
+  });
+
+  it('should set availableHasClaims to true when response.hasClaims is true', () => {
+    // Arrange
+    const response: AvailableRepositoriesResponse = { hasClaims: true, repositories: [MOCK_AVAILABLE] };
+
+    // Act
+    service.loadAvailableRepositories(ACCOUNT_ID);
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(response);
+
+    // Assert
+    expect(service.availableHasClaims()).toBe(true);
+  });
+
+  it('should set availableHasClaims to false when response.hasClaims is false', () => {
+    // Arrange
+    const response: AvailableRepositoriesResponse = { hasClaims: false, repositories: [MOCK_AVAILABLE] };
+
+    // Act
+    service.loadAvailableRepositories(ACCOUNT_ID);
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush(response);
+
+    // Assert
+    expect(service.availableHasClaims()).toBe(false);
   });
 
   it('should set loadingAvailable to true while loadAvailableRepositories is in flight', () => {
@@ -217,7 +253,9 @@ describe('RepositoryService', () => {
 
     // Assert — before flush
     expect(service.loadingAvailable()).toBe(true);
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush([]);
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: false, repositories: [] });
   });
 
   it('should set loadAvailableError when loadAvailableRepositories fails with a string body', () => {
@@ -234,6 +272,20 @@ describe('RepositoryService', () => {
     expect(service.loadingAvailable()).toBe(false);
   });
 
+  it('should leave availableHasClaims as false and set loadAvailableError when loadAvailableRepositories fails', () => {
+    // Arrange
+    service.loadAvailableRepositories(ACCOUNT_ID);
+
+    // Act
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert
+    expect(service.availableHasClaims()).toBe(false);
+    expect(service.loadAvailableError()).toBeTruthy();
+  });
+
   it('should clear loadAvailableError at start of loadAvailableRepositories', () => {
     // Arrange — first call that fails
     service.loadAvailableRepositories(ACCOUNT_ID);
@@ -246,7 +298,9 @@ describe('RepositoryService', () => {
 
     // Assert — error is cleared before response
     expect(service.loadAvailableError()).toBeNull();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush([]);
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: false, repositories: [] });
   });
 
   // Cycle 4: createRepository calls POST

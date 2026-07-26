@@ -9,14 +9,14 @@ import { AvailableRepository } from '../../settings/repositories/repository.mode
 const ACCOUNT_ID = 'account-1';
 
 const AVAILABLE_REPOS: AvailableRepository[] = [
-  { slug: 'org/repo-alpha', isPrivate: false, canPush: true },
-  { slug: 'org/repo-beta', isPrivate: true, canPush: true },
-  { slug: 'org/repo-gamma', isPrivate: false, canPush: false },
+  { slug: 'org/repo-alpha', isPrivate: false, canPush: true, isMonitored: false },
+  { slug: 'org/repo-beta', isPrivate: true, canPush: true, isMonitored: false },
+  { slug: 'org/repo-gamma', isPrivate: false, canPush: false, isMonitored: false },
 ];
 
 const AVAILABLE_REPOS_WITH_NON_WRITABLE: AvailableRepository[] = [
-  { slug: 'org/repo-alpha', isPrivate: false, canPush: true },
-  { slug: 'org/repo-readonly', isPrivate: false, canPush: false },
+  { slug: 'org/repo-alpha', isPrivate: false, canPush: true, isMonitored: false },
+  { slug: 'org/repo-readonly', isPrivate: false, canPush: false, isMonitored: false },
 ];
 
 @Component({ template: '', standalone: true })
@@ -49,7 +49,7 @@ describe('SetupReposStepComponent', () => {
 
     // Act
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     // Assert
@@ -74,7 +74,7 @@ describe('SetupReposStepComponent', () => {
     expect(el.querySelector('.setup-repos-step__loading')).toBeTruthy();
 
     // Cleanup
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush([]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
   });
 
   // Cycle 3: Finish button is disabled when no repos are selected
@@ -84,7 +84,7 @@ describe('SetupReposStepComponent', () => {
 
     // Act
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     // Assert
@@ -98,7 +98,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     // Act
@@ -118,7 +118,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     // Act
@@ -139,7 +139,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -176,7 +176,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -203,7 +203,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, component, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     let emitted = false;
@@ -224,7 +224,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, component, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     let emitted = false;
@@ -246,7 +246,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, component, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     let emitted = false;
@@ -302,7 +302,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -329,7 +329,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -358,7 +358,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange — select both writable repos; repo-gamma (index 2) is disabled so its change is ignored
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -400,7 +400,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE });
     fixture.detectChanges();
 
     // Assert
@@ -418,7 +418,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE });
     fixture.detectChanges();
 
     // Assert
@@ -438,7 +438,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE });
     fixture.detectChanges();
 
     // Assert
@@ -454,7 +454,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE });
     fixture.detectChanges();
 
     // Act — dispatch a programmatic change event on the disabled (non-writable) checkbox
@@ -479,7 +479,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE });
     fixture.detectChanges();
 
     // Assert
@@ -498,7 +498,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush(AVAILABLE_REPOS_WITH_NON_WRITABLE);
+      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE });
     fixture.detectChanges();
 
     // Assert
@@ -517,7 +517,7 @@ describe('SetupReposStepComponent', () => {
   it('should produce matching, slash-free aria-describedby and id for a non-writable repo with a nested-group slug', () => {
     // Arrange
     const nestedGroupRepos: AvailableRepository[] = [
-      { slug: 'group/subgroup/project', isPrivate: false, canPush: false },
+      { slug: 'group/subgroup/project', isPrivate: false, canPush: false, isMonitored: false },
     ];
     const { fixture, httpMock } = setup();
 
@@ -525,7 +525,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush(nestedGroupRepos);
+      .flush({ hasClaims: false, repositories: nestedGroupRepos });
     fixture.detectChanges();
 
     // Assert
@@ -543,8 +543,8 @@ describe('SetupReposStepComponent', () => {
   it('should render all non-writable repos (not empty state) when all repos lack push access', () => {
     // Arrange
     const allReadonly: AvailableRepository[] = [
-      { slug: 'org/readonly-a', isPrivate: false, canPush: false },
-      { slug: 'org/readonly-b', isPrivate: false, canPush: false },
+      { slug: 'org/readonly-a', isPrivate: false, canPush: false, isMonitored: false },
+      { slug: 'org/readonly-b', isPrivate: false, canPush: false, isMonitored: false },
     ];
     const { fixture, httpMock } = setup();
 
@@ -552,7 +552,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush(allReadonly);
+      .flush({ hasClaims: false, repositories: allReadonly });
     fixture.detectChanges();
 
     // Assert — both entries visible, no empty state
@@ -568,7 +568,7 @@ describe('SetupReposStepComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush(AVAILABLE_REPOS);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;

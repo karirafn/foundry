@@ -35,19 +35,19 @@ const MOCK_REPOSITORY: RepositorySummary = {
 };
 
 const MOCK_AVAILABLE: AvailableRepository[] = [
-  { slug: 'my-org/my-repo', isPrivate: false, canPush: true },
-  { slug: 'my-org/other-repo', isPrivate: true, canPush: true },
-  { slug: 'my-org/third-repo', isPrivate: false, canPush: false },
+  { slug: 'my-org/my-repo', isPrivate: false, canPush: true, isMonitored: false },
+  { slug: 'my-org/other-repo', isPrivate: true, canPush: true, isMonitored: false },
+  { slug: 'my-org/third-repo', isPrivate: false, canPush: false, isMonitored: false },
 ];
 
 const MOCK_AVAILABLE_MIXED: AvailableRepository[] = [
-  { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
-  { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
+  { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
+  { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
 ];
 
 const MOCK_AVAILABLE_ALL_READONLY: AvailableRepository[] = [
-  { slug: 'my-org/readonly-a', isPrivate: false, canPush: false },
-  { slug: 'my-org/readonly-b', isPrivate: false, canPush: false },
+  { slug: 'my-org/readonly-a', isPrivate: false, canPush: false, isMonitored: false },
+  { slug: 'my-org/readonly-b', isPrivate: false, canPush: false, isMonitored: false },
 ];
 
 function setup(overrides: {
@@ -926,8 +926,8 @@ describe('RepositoryFormComponent', () => {
   it('should move active option back to writable option when navigating up with ArrowUp', () => {
     // Arrange — list: [readonly@0, writable@1]
     const repos: AvailableRepository[] = [
-      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
-      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
     ];
     const { el, fixture } = setup({
       repository: null,
@@ -961,8 +961,8 @@ describe('RepositoryFormComponent', () => {
   it('should not select and keep picker open when Enter is pressed on a non-writable active option', () => {
     // Arrange — list: [readonly@0, writable@1]
     const repos: AvailableRepository[] = [
-      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
-      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
     ];
     const { el, fixture } = setup({
       repository: null,
@@ -996,8 +996,8 @@ describe('RepositoryFormComponent', () => {
   it('should select writable option when Enter is pressed on a writable active option', () => {
     // Arrange — list: [readonly@0, writable@1]
     const repos: AvailableRepository[] = [
-      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
-      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
     ];
     const { el, fixture } = setup({
       repository: null,

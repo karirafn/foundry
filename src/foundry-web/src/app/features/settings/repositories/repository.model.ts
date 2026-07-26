@@ -38,6 +38,12 @@ export interface AvailableRepository {
   slug: string;
   isPrivate: boolean;
   canPush: boolean;
+  isMonitored: boolean;
+}
+
+export interface AvailableRepositoriesResponse {
+  hasClaims: boolean;
+  repositories: AvailableRepository[];
 }
 
 export interface CreateRepositoryRequest {
