@@ -13,6 +13,7 @@ const ACCOUNT_1: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const ACCOUNT_2: AccountSummary = {
@@ -21,6 +22,7 @@ const ACCOUNT_2: AccountSummary = {
   providerType: 'GitLab',
   baseUrl: 'https://gitlab.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const REPO_1: RepositorySummary = {

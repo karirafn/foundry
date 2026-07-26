@@ -14,6 +14,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://api.github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 function setup() {

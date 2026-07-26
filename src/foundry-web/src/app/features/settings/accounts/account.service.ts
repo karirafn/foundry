@@ -1,7 +1,7 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialUpdateResult, ProviderType, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, NamespaceConflictResponse, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 
 const API_BASE = '/api/accounts';
@@ -57,6 +57,9 @@ export class AccountService {
   private readonly _srAnnouncementSignal: WritableSignal<string> = signal('');
   readonly srAnnouncement: Signal<string> = this._srAnnouncementSignal.asReadonly();
 
+  private readonly _conflictsSignal: WritableSignal<NamespaceConflict[]> = signal([]);
+  readonly conflicts: Signal<NamespaceConflict[]> = this._conflictsSignal.asReadonly();
+
   private readonly _tokenRequirementsCache = new Map<ProviderType, Promise<TokenRequirements>>();
 
   loadAccounts(): Promise<void> {
@@ -85,16 +88,35 @@ export class AccountService {
     this._saveErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
     this._affectedRepositoriesSignal.set(null);
+    this._conflictsSignal.set([]);
     this._savingSignal.set(true);
 
-    this._http.post<AccountSummary>(API_BASE, request).subscribe({
-      next: (account) => {
-        this._accountsSignal.update(accounts => [...accounts, account]);
+    this._http.post<CredentialCreationResult>(API_BASE, request).subscribe({
+      next: (result) => {
+        this._accountsSignal.update(accounts => [...accounts, result.credential]);
+        this._affectedRepositoriesSignal.set(result.affectedRepositories);
+        if (result.affectedRepositories.length > 0) {
+          this._srAnnouncementSignal.set(
+            `Account added. ${result.affectedRepositories.length} repositories affected — review below.`
+          );
+        }
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(true);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
+        if (err.status === 409 && this._isNamespaceConflictResponse(err.error)) {
+          this._conflictsSignal.set((err.error as NamespaceConflictResponse).conflicts);
+          this._savingSignal.set(false);
+          return;
+        }
+        if (err.status === 400 && this._isTakeoverValidationResponse(err.error)) {
+          const body = err.error as TakeoverValidationResponse;
+          this._saveErrorSignal.set(`Invalid namespaces for takeover: ${body.invalidNamespaces.join(', ')}.`);
+          this._savingSignal.set(false);
+          this._saveSuccessSignal.set(false);
+          return;
+        }
         this._saveErrorSignal.set(this._extractErrorMessage(err));
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(false);
@@ -177,6 +199,24 @@ export class AccountService {
       return err.error;
     }
     return err.message;
+  }
+
+  private _isNamespaceConflictResponse(body: unknown): boolean {
+    return (
+      typeof body === 'object' &&
+      body !== null &&
+      'conflicts' in body &&
+      Array.isArray((body as NamespaceConflictResponse).conflicts)
+    );
+  }
+
+  private _isTakeoverValidationResponse(body: unknown): boolean {
+    return (
+      typeof body === 'object' &&
+      body !== null &&
+      'invalidNamespaces' in body &&
+      Array.isArray((body as TakeoverValidationResponse).invalidNamespaces)
+    );
   }
 
   validateToken(request: ValidateTokenRequest): void {

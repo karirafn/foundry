@@ -8,6 +8,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_2: AccountSummary = {
@@ -16,6 +17,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   providerType: 'GitLab',
   baseUrl: 'https://gitlab.com',
   hasToken: false,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
@@ -24,6 +26,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
   providerType: 'github',
   baseUrl: 'https://github.com',
   hasToken: true,
+  namespaces: [],
 };
 
 const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
@@ -32,6 +35,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
   providerType: 'gitlab',
   baseUrl: 'https://gitlab.com',
   hasToken: true,
+  namespaces: [],
 };
 
 function setup(overrides: {
