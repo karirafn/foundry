@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, computed, input, output } from '@angular/core';
 import { AccountSummary } from '../account.model';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
+
+const MAX_VISIBLE_NAMESPACES = 4;
 
 @Component({
   selector: 'fd-account-list',
@@ -55,6 +57,19 @@ import { RowActionsComponent } from '../../../../shared/components/row-actions/r
             <div class="account-list__info">
               <span class="account-list__name">{{ account.name }}</span>
               <span class="account-list__url">{{ account.baseUrl }}</span>
+              @if (account.namespaces.length > 0) {
+                <div class="account-list__namespaces">
+                  @for (ns of _visibleNamespaces(account); track ns) {
+                    <span class="account-list__namespace">{{ ns }}</span>
+                  }
+                  @if (_overflowCount(account) > 0) {
+                    <span
+                      class="account-list__namespace--overflow"
+                      [attr.aria-label]="_overflowAriaLabel(account)"
+                    >+{{ _overflowCount(account) }}</span>
+                  }
+                </div>
+              }
             </div>
             <div class="account-list__token-status">
               <span
@@ -89,4 +104,17 @@ export class AccountListComponent {
   readonly edit: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly delete: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
+
+  protected _visibleNamespaces(account: AccountSummary): string[] {
+    return account.namespaces.slice(0, MAX_VISIBLE_NAMESPACES);
+  }
+
+  protected _overflowCount(account: AccountSummary): number {
+    return Math.max(0, account.namespaces.length - MAX_VISIBLE_NAMESPACES);
+  }
+
+  protected _overflowAriaLabel(account: AccountSummary): string {
+    const hidden = account.namespaces.slice(MAX_VISIBLE_NAMESPACES);
+    return `${hidden.length} more namespace${hidden.length === 1 ? '' : 's'}: ${hidden.join(', ')}`;
+  }
 }
