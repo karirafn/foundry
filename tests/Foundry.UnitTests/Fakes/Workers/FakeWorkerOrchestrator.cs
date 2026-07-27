@@ -5,6 +5,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
 
 namespace Foundry.UnitTests.Fakes.Workers;

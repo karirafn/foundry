@@ -1,12 +1,13 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.SystemPromptBuilderTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.SystemPromptBuilderTests;
 
 public sealed class Build
 {

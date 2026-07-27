@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.ContainerSpec;
 
 internal sealed record WorkerContainerSpec(
     string Image,

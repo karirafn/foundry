@@ -1,10 +1,11 @@
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.WorkerContainerSpecTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.WorkerContainerSpecTests;
 
 public sealed class VolumeMounts
 {

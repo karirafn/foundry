@@ -1,5 +1,6 @@
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Shared;
 

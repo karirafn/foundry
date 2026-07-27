@@ -1,10 +1,11 @@
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.VolumeMountTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.BindMountTests;
 
 public sealed class ReadOnly
 {
@@ -14,7 +15,7 @@ public sealed class ReadOnly
         // Arrange
 
         // Act
-        VolumeMount mount = new("foundry-claude-credentials", "/home/node/.claude");
+        BindMount mount = new("/host/path", "/container/path");
 
         // Assert
         mount.ReadOnly.ShouldBeFalse();
@@ -26,7 +27,7 @@ public sealed class ReadOnly
         // Arrange
 
         // Act
-        VolumeMount mount = new("foundry-claude-credentials", "/home/node/.claude", ReadOnly: true);
+        BindMount mount = new("/host/path", "/container/path", ReadOnly: true);
 
         // Assert
         mount.ReadOnly.ShouldBeTrue();

@@ -1,12 +1,13 @@
 using System.Text.Json;
 
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.WorkerSettingsBuilderTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.WorkerSettingsBuilderTests;
 
 public sealed class Build
 {

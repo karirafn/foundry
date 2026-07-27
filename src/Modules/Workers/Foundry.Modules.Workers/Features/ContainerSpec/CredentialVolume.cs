@@ -1,6 +1,6 @@
 using Foundry.Modules.Workers.Contracts;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.ContainerSpec;
 
 internal static class CredentialVolume
 {

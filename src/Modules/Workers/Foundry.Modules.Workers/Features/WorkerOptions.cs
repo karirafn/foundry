@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.ImageBuild;
 
 namespace Foundry.Modules.Workers.Features;

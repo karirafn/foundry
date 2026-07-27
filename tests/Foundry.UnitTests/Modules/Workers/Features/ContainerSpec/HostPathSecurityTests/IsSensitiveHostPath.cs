@@ -1,10 +1,11 @@
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.HostPathSecurityTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.HostPathSecurityTests;
 
 public sealed class IsSensitiveHostPathTests
 {

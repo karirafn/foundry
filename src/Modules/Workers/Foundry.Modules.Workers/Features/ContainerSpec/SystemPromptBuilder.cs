@@ -4,7 +4,7 @@ using System.Text;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.ContainerSpec;
 
 internal static class SystemPromptBuilder
 {
