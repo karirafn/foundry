@@ -1,6 +1,6 @@
 namespace Foundry.Modules.Monitoring.Features.Polling;
 
-public sealed class MonitoringOptions
+internal sealed class MonitoringOptions
 {
     public int DefaultPollIntervalSeconds { get; set; } = 30;
 }

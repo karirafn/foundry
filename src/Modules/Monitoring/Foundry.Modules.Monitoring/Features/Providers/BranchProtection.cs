@@ -1,6 +1,6 @@
 namespace Foundry.Modules.Monitoring.Features.Providers;
 
-public sealed record BranchProtection(
+internal sealed record BranchProtection(
     string DefaultBranch,
     bool RejectDirectPushes,
     bool RejectForcePushes,

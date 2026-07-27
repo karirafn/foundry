@@ -1,6 +1,6 @@
 namespace Foundry.Modules.Monitoring.Features.Providers;
 
-public sealed record ProviderIssue(
+internal sealed record ProviderIssue(
     int Number,
     string Title,
     string Body,

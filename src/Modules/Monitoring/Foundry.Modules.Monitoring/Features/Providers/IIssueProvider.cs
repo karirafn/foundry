@@ -4,7 +4,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Features.Providers;
 
-public interface IIssueProvider
+internal interface IIssueProvider
 {
     Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
         RepositorySlug slug,
