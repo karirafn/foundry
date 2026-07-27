@@ -12,9 +12,10 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
 
-internal sealed partial class GitHubHttpClient(HttpClient httpClient)
+internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubWriteProber
 {
     private const string ApiVersion = "2026-03-10";
+    private const string AllZerosSha = "0000000000000000000000000000000000000000";
     private const int MaxComments = 50;
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
@@ -472,6 +473,122 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missingScopes, accountName));
     }
 
+    public async Task<Result<WritePermissionProbeResult>> ProbeContentsWriteAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string probeName = $"foundry-probe-{Guid.NewGuid():N}";
+        string relativePath = $"repos/{owner}/{repo}/git/refs";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        string body = JsonSerializer.Serialize(
+            new { @ref = $"refs/heads/{probeName}", sha = AllZerosSha },
+            JsonOptions);
+
+        using HttpRequestMessage request = new(HttpMethod.Post, requestUri);
+        AddGitHubHeaders(request, token);
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        return ClassifyProbeResponse(response, WritePermission.Contents);
+    }
+
+    public async Task<Result<WritePermissionProbeResult>> ProbeIssuesWriteAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string relativePath = $"repos/{owner}/{repo}/issues";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Post, requestUri);
+        AddGitHubHeaders(request, token);
+        request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        return ClassifyProbeResponse(response, WritePermission.Issues);
+    }
+
+    public async Task<Result<WritePermissionProbeResult>> ProbePullRequestsWriteAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string relativePath = $"repos/{owner}/{repo}/pulls";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Post, requestUri);
+        AddGitHubHeaders(request, token);
+        request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        return ClassifyProbeResponse(response, WritePermission.PullRequests);
+    }
+
+    public async Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        Result<WritePermissionProbeResult> contentsResult = await ProbeContentsWriteAsync(
+            apiBaseUrl, slug, token, cancellationToken);
+
+        if (!IsGranted(contentsResult))
+        {
+            return contentsResult;
+        }
+
+        Result<WritePermissionProbeResult> issuesResult = await ProbeIssuesWriteAsync(
+            apiBaseUrl, slug, token, cancellationToken);
+
+        if (!IsGranted(issuesResult))
+        {
+            return issuesResult;
+        }
+
+        Result<WritePermissionProbeResult> pullsResult = await ProbePullRequestsWriteAsync(
+            apiBaseUrl, slug, token, cancellationToken);
+
+        if (!IsGranted(pullsResult))
+        {
+            return pullsResult;
+        }
+
+        return Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted());
+    }
+
+    private static bool IsGranted(Result<WritePermissionProbeResult> result) =>
+        result is Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult.Granted };
+
     public async Task<Result<bool>> GetPushPermissionAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -764,6 +881,23 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
                 : MergeRequestPresence.Closed;
 
         return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.HtmlUrl));
+    }
+
+    private static Result<WritePermissionProbeResult> ClassifyProbeResponse(
+        HttpResponseMessage response,
+        WritePermission permission)
+    {
+        return response.StatusCode switch
+        {
+            HttpStatusCode.UnprocessableEntity => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            HttpStatusCode.NotFound => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            HttpStatusCode.Forbidden => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permission)),
+            // Any other status — including 401 (token expired or revoked mid-probe) and any
+            // unexpected 2xx (which would mean the probe actually created an object) — is
+            // indeterminate and fails closed to preserve non-destructiveness and fail-closed
+            // semantics. Never map these to Granted.
+            _ => Result<WritePermissionProbeResult>.Fail(ErrorFromNonSuccess(response)),
+        };
     }
 
     private static void AddGitHubHeaders(HttpRequestMessage request, string token)

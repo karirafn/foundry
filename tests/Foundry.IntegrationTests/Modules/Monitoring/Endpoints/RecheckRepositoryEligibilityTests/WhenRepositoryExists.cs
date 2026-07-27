@@ -1,9 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +37,13 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
             services.RemoveAll<IIssueProviderFactory>();
             services.AddScoped<IIssueProviderFactory>(_ =>
                 new StubProviderFactory(Result<BranchProtection>.Ok(eligibleProtection)));
+
+            // Probe-aware: probe POSTs return 422 (Granted) so eligibility proceeds to
+            // branch-protection evaluation via the stub provider factory.
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new ProbeGrantedFakeHandler())));
         });
 
         _client = _factory.CreateClient();
@@ -143,4 +154,5 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
     }
+
 }

@@ -1,10 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints;
+
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Features;
-using Foundry.Shared;
+using Foundry.Modules.Monitoring.Infrastructure;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -24,9 +25,13 @@ public sealed class WhenTokenCannotPush : IAsyncDisposable
     {
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
-            services.RemoveAll<IIssueProviderFactory>();
-            services.AddScoped<IIssueProviderFactory>(_ =>
-                new StubProviderFactory(canPush: false));
+            // For GitHub accounts, write-permission is probed via IGitHubWriteProber (backed by
+            // GitHubHttpClient). Return 403 from all probe POSTs so the evaluator classifies the
+            // repo as Ineligible with a cannot-push violation — no IIssueProviderFactory needed.
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new ProbeBlockedFakeHandler())));
         });
 
         _client = _factory.CreateClient();
@@ -69,82 +74,4 @@ public sealed class WhenTokenCannotPush : IAsyncDisposable
             () => repository.Eligibility.Violations[0].Description.ShouldBe("token cannot push to owner/no-push-repo"));
     }
 
-    private sealed class StubProviderFactory(bool canPush) : IIssueProviderFactory
-    {
-        public IIssueProvider CreateProvider(Credential credential, string token) =>
-            new StubProvider(canPush);
-    }
-
-    private sealed class StubProvider(bool canPush) : IIssueProvider
-    {
-        public Task<Result<BranchProtection>> GetBranchProtectionAsync(
-            RepositorySlug slug,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<BranchProtection>.Ok(new BranchProtection(
-                DefaultBranch: "main",
-                RejectDirectPushes: true,
-                RejectForcePushes: true,
-                RejectDeletion: true)));
-
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
-            RepositorySlug slug,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
-
-        public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
-            RepositorySlug slug,
-            int issueNumber,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
-
-        public Task<Result<bool>> IsIssueClosedAsync(
-            RepositorySlug slug,
-            int issueNumber,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<bool>.Ok(false));
-
-        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-            RepositorySlug slug,
-            string pullRequestUrl,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(false, false)));
-
-        public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
-            RepositorySlug slug,
-            string pullRequestUrl,
-            DateTimeOffset since,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
-
-        public Task<Result<bool>> CreateBranchAsync(
-            RepositorySlug slug,
-            string branchName,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<bool>.Ok(true));
-
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            RepositorySlug slug,
-            string branchName,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<bool>.Ok(false));
-
-        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
-            RepositorySlug slug,
-            string branchName,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(
-                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
-
-        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
-            RepositorySlug slug,
-            string branchName,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(
-                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
-
-        public Task<Result<bool>> CanPushAsync(
-            RepositorySlug slug,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<bool>.Ok(canPush));
-    }
 }

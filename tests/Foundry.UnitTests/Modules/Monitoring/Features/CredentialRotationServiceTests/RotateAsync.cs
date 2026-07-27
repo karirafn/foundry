@@ -85,7 +85,7 @@ public sealed class RotateAsync : IAsyncDisposable
         // Arrange
         (GitHubCredential credential, _, _) = await SeedTwoOwnerScenarioAsync();
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs]);
+        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs], []);
         CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived));
 
         // Act
@@ -107,7 +107,7 @@ public sealed class RotateAsync : IAsyncDisposable
         (GitHubCredential credential, MonitoredRepository repoA, MonitoredRepository repoB) =
             await SeedTwoOwnerScenarioAsync();
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs]);
+        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs], []);
 
         // Evaluator: repoA stays eligible (no-op), repoB loses credential → ineligible
         AssignedEligibilityEvaluator evaluator = new(new Dictionary<string, RepositoryEligibility>
@@ -139,7 +139,7 @@ public sealed class RotateAsync : IAsyncDisposable
         (GitHubCredential credential, _, _) = await SeedTwoOwnerScenarioAsync();
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
         Namespace bobNs = Namespace.Create("bob").ValueOrThrow();
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs, bobNs]);
+        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs, bobNs], []);
 
         AssignedEligibilityEvaluator evaluator = new(new Dictionary<string, RepositoryEligibility>
         {
@@ -196,7 +196,7 @@ public sealed class RotateAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(CancellationToken.None);
 
         // Derivation returns both "alice" and "bob" — but "bob" is held by another credential
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs, bobNs]);
+        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs, bobNs], []);
         CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived));
 
         // Act
@@ -259,7 +259,7 @@ public sealed class RotateAsync : IAsyncDisposable
         }
         await _dbContext.SaveChangesAsync(CancellationToken.None);
 
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([ownerNs]);
+        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([ownerNs], []);
         CountingEligibilityEvaluator evaluator = new();
         CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived), evaluator);
 

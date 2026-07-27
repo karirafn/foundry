@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
@@ -108,7 +109,8 @@ internal static partial class CreateAccount
         DbContext dbContext,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
         INamespaceDeriver namespaceDeriver,
-        RepositoryEligibilityDiffer differ)
+        RepositoryEligibilityDiffer differ,
+        IGitHubWriteProber writeProber)
     {
         public async Task<Outcome> HandleAsync(
             Command command,
@@ -159,9 +161,34 @@ internal static partial class CreateAccount
                 : GitHubCredential.Create(accountName, command.Token, baseUrl);
 
             NamespaceDerivationOutcome derivationOutcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
-            IReadOnlyCollection<Namespace> derivedNamespaces = derivationOutcome is NamespaceDerivationOutcome.Derived derived
-                ? derived.Namespaces
-                : [];
+            IReadOnlyCollection<Namespace> derivedNamespaces;
+            IReadOnlyList<ProviderRepository> writableRepositories;
+
+            if (derivationOutcome is NamespaceDerivationOutcome.Derived derivedOutcome)
+            {
+                derivedNamespaces = derivedOutcome.Namespaces;
+                writableRepositories = derivedOutcome.WritableRepositories;
+            }
+            else
+            {
+                derivedNamespaces = [];
+                writableRepositories = [];
+            }
+
+            if (!isGitLab)
+            {
+                Outcome? probeFailure = await ProbeWriteAccessAsync(
+                    apiBaseUrl,
+                    derivedNamespaces,
+                    writableRepositories,
+                    command.Token,
+                    cancellationToken);
+
+                if (probeFailure is not null)
+                {
+                    return probeFailure;
+                }
+            }
 
             // Compute conflicts: namespaces in the derived set already claimed by another credential
             Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
@@ -270,6 +297,67 @@ internal static partial class CreateAccount
 
             return new Outcome.Created(new CredentialCreationResult(summary, []));
         }
+
+        private async Task<Outcome?> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            IReadOnlyCollection<Namespace> derivedNamespaces,
+            IReadOnlyList<ProviderRepository> writableRepositories,
+            string token,
+            CancellationToken cancellationToken)
+        {
+            RepositorySlug? probeSlug = FindProbeTarget(derivedNamespaces, writableRepositories);
+
+            if (probeSlug is null)
+            {
+                return new Outcome.Failure(CredentialErrors.NoNamespaceRepositories);
+            }
+
+            Result<WritePermissionProbeResult> probeResult = await writeProber.ProbeWriteAccessAsync(
+                apiBaseUrl, probeSlug, token, cancellationToken);
+
+            if (probeResult is not Result<WritePermissionProbeResult>.Success probeSuccess)
+            {
+                return new Outcome.Failure(CredentialErrors.WriteAccessVerificationFailed);
+            }
+
+            if (probeSuccess.Value is WritePermissionProbeResult.Missing missing)
+            {
+                string permissionName = ToDisplayName(missing.Permission);
+                return new Outcome.Failure(CredentialErrors.MissingWritePermission(permissionName));
+            }
+
+            return null;
+        }
+
+        private static RepositorySlug? FindProbeTarget(
+            IReadOnlyCollection<Namespace> derivedNamespaces,
+            IReadOnlyList<ProviderRepository> writableRepositories)
+        {
+            foreach (ProviderRepository repo in writableRepositories)
+            {
+                if (RepositorySlug.Create(repo.Slug) is not Result<RepositorySlug>.Success { Value: RepositorySlug slug })
+                {
+                    continue;
+                }
+
+                bool underDerivedNamespace = derivedNamespaces.Any(ns => ns.IsPrefixOf(slug));
+                if (underDerivedNamespace)
+                {
+                    return slug;
+                }
+            }
+
+            return null;
+        }
+
+        private static string ToDisplayName(WritePermission permission) =>
+            permission switch
+            {
+                WritePermission.Contents => "Contents",
+                WritePermission.Issues => "Issues",
+                WritePermission.PullRequests => "Pull requests",
+                _ => permission.ToString(),
+            };
 
         private async Task<IReadOnlyList<AffectedRepository>> RecheckTransferredReposAsync(
             Credential credential,

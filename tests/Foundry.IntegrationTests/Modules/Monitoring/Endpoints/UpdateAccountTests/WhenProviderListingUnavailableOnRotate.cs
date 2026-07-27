@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -151,6 +153,8 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
     /// <summary>
     /// Returns a successful listing for the original token but a 401 for any other token,
     /// simulating a transient provider failure for the new token.
+    /// Probe POSTs always return 422 (Granted) so the write-permission probe passes during
+    /// account creation regardless of which token is in use.
     /// </summary>
     private sealed class FailNewTokenListingHandler(
         string validToken,
@@ -160,6 +164,13 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            // Probe POSTs (/git/refs, /issues, /pulls) always return 422 (Granted)
+            // so write-permission probing succeeds regardless of the token used.
+            if (StaticListingFakeHandler.IsProbePost(request))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            }
+
             string token = string.Empty;
             if (request.Headers.TryGetValues("Authorization", out IEnumerable<string>? authValues))
             {

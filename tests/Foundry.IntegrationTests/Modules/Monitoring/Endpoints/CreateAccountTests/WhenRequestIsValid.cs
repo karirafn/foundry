@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +18,13 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 public sealed class WhenRequestIsValid : IAsyncDisposable
 {
     private const string ResolvedAccountName = "octocat";
+
+    // One writable repo under "octocat" so namespace derivation succeeds and the probe has a target.
+    private const string OctocatListingJson = """
+        [
+          { "full_name": "octocat/hello-world", "private": false, "permissions": { "push": true } }
+        ]
+        """;
 
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
@@ -35,6 +43,12 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
                 _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(validResponse)));
+
+            // Probe-aware: listing GETs return repos; probe POSTs return 422 (Granted).
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson))));
         });
         _client = _factory.CreateClient();
     }

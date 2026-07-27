@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -22,14 +25,22 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
 {
     // Token-keyed routing: each token maps to a fixed account name.
-    // ghp_first_token  → first-user  (create first account)
-    // ghp_second_token → second-user (create second account)
+    // ghp_first_token  → first-user  (create first account, namespace "first-user")
+    // ghp_second_token → second-user (create second account, namespace "second-user")
     // ghp_colliding_token → first-user (update second account; was a conflict, now allowed)
     private const string FirstToken = "ghp_first_token";
     private const string SecondToken = "ghp_second_token";
     private const string CollidingToken = "ghp_colliding_token";
     private const string FirstAccountName = "first-user";
     private const string SecondAccountName = "second-user";
+
+    // Each token returns repos under a different namespace so derivation does not conflict.
+    private static readonly Dictionary<string, string> TokenToListing = new()
+    {
+        [FirstToken] = """[{"full_name":"first-user/repo","private":false,"permissions":{"push":true}}]""",
+        [SecondToken] = """[{"full_name":"second-user/repo","private":false,"permissions":{"push":true}}]""",
+        [CollidingToken] = """[{"full_name":"first-user/repo","private":false,"permissions":{"push":true}}]""",
+    };
 
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
@@ -47,6 +58,12 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(_ => _stub);
+
+            // Probe-aware: each token returns a different listing; probe POSTs return 422 (Granted).
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new TokenKeyedListingFakeHandler(TokenToListing))));
         });
         _client = _factory.CreateClient();
     }
@@ -124,6 +141,14 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
                 _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(validResponse)));
+
+            // Probe-aware: listing GETs return repos; probe POSTs return 422 (Granted).
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new StaticListingFakeHandler(
+                        System.Net.HttpStatusCode.OK,
+                        """[{"full_name":"octocat/repo","private":false,"permissions":{"push":true}}]"""))));
         });
         using HttpClient client = factory.CreateClient();
 

@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +20,11 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 public sealed class WhenRequestIsValid : IAsyncDisposable
 {
     private const string InitialAccountName = "octocat";
+
+    // One writable repo under "octocat" so namespace derivation and probing succeed during seeding.
+    private const string OctocatListingJson = """
+        [{"full_name":"octocat/repo","private":false,"permissions":{"push":true}}]
+        """;
 
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
@@ -34,6 +42,12 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
                 _ => new StubValidateTokenHandler(Result<ValidateToken.Response>.Ok(validResponse)));
+
+            // Probe-aware: listing GETs return repos; probe POSTs return 422 (Granted).
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson))));
         });
         _client = _factory.CreateClient();
     }
@@ -98,10 +112,23 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             [NewToken] = NewIdentity,
         });
 
+        // Each token returns repos under a distinct namespace so derivation does not conflict.
+        Dictionary<string, string> tokenToListing = new()
+        {
+            [OriginalToken] = """[{"full_name":"octocat/repo","private":false,"permissions":{"push":true}}]""",
+            [NewToken] = """[{"full_name":"new-identity/repo","private":false,"permissions":{"push":true}}]""",
+        };
+
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddSingleton<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(tokenKeyedStub);
+
+            // Probe-aware: each token returns a different listing; probe POSTs return 422 (Granted).
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing))));
         });
         using HttpClient client = factory.CreateClient();
 

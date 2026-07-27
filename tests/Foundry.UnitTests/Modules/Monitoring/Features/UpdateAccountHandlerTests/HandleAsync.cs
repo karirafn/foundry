@@ -80,7 +80,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         AssignedEligibilityEvaluator evaluator = new(new Dictionary<string, RepositoryEligibility>());
         UpdateAccount.Handler handler = BuildHandler(
-            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([aliceNs])),
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([aliceNs], [])),
             evaluator: evaluator);
 
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
@@ -177,7 +177,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // The deriver returns both namespaces; "shared-org" is already held by first
         UpdateAccount.Handler handler = BuildHandler(
-            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([sharedNs, ownNs])));
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([sharedNs, ownNs], [])));
 
         UpdateAccount.Command command = new(second.Id, "https://github.com", "ghp_newtoken");
 

@@ -1,5 +1,7 @@
 using System.Net;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
@@ -31,7 +33,8 @@ internal sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Que
 
 /// <summary>
 /// Returns the repo listing JSON keyed by the Bearer token in the Authorization header.
-/// Falls back to "[]" for unknown tokens.
+/// Returns 422 (Granted) for probe POSTs so that write-permission probing passes.
+/// Falls back to "[]" for unknown tokens on listing requests.
 /// </summary>
 internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> tokenToListing)
     : DelegatingHandler
@@ -40,6 +43,11 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        if (StaticListingFakeHandler.IsProbePost(request))
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+        }
+
         // Extract the token from Authorization header (GitHub)
         string lastTokenSeen = string.Empty;
         if (request.Headers.TryGetValues("Authorization", out IEnumerable<string>? authValues))

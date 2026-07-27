@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -42,13 +43,19 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private CreateAccount.Handler BuildHandler(
         INamespaceDeriver namespaceDeriver,
-        IRepositoryEligibilityEvaluator? evaluator = null)
+        IRepositoryEligibilityEvaluator? evaluator = null,
+        IGitHubWriteProber? writeProber = null)
     {
         RepositoryEligibilityDiffer differ = new(
             _dbContext,
             evaluator ?? new NoOpEligibilityEvaluator());
 
-        return new CreateAccount.Handler(_dbContext, new StubValidateTokenHandler(), namespaceDeriver, differ);
+        return new CreateAccount.Handler(
+            _dbContext,
+            new StubValidateTokenHandler(),
+            namespaceDeriver,
+            differ,
+            writeProber ?? new GrantedWriteProber());
     }
 
     [Fact]
@@ -56,7 +63,8 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
 
@@ -76,12 +84,12 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDeriverReturnsUnavailable_SetsEmptyNamespaces()
+    public async Task WhenGitLabDeriverReturnsUnavailable_SetsEmptyNamespaces()
     {
-        // Arrange
+        // Arrange — GitLab skips the write probe entirely; unavailable derivation still creates the credential
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Unavailable();
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
-        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+        CreateAccount.Command command = new("gitlab", "https://gitlab.com", "glpat_test");
 
         // Act
         CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -108,7 +116,8 @@ public sealed class HandleAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new("github", "https://github.com", "ghp_test", TakeoverNamespaces: null);
 
@@ -129,7 +138,8 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — derived set is only "octocat"; requesting takeover of "other-org"
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
             "github",
@@ -146,15 +156,16 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTakeoverRequested_AndDerivationUnavailable_AllRequestedNamespacesAreInvalid()
+    public async Task WhenGitLabTakeoverRequested_AndDerivationUnavailable_AllRequestedNamespacesAreInvalid()
     {
-        // Arrange — derivation unavailable means empty derived set; all requested takeover namespaces invalid
+        // Arrange — GitLab skips the probe; unavailable derivation means empty derived set;
+        // all requested takeover namespaces are therefore outside the derived set.
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Unavailable();
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
-            "github",
-            "https://github.com",
-            "ghp_test",
+            "gitlab",
+            "https://gitlab.com",
+            "glpat_test",
             TakeoverNamespaces: ["org-a"]);
 
         // Act
@@ -176,7 +187,8 @@ public sealed class HandleAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
             "github",
@@ -213,10 +225,15 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.Set<Credential>().Add(holderA);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([
-            Namespace.Create("ns-x").ValueOrThrow(),
-            Namespace.Create("ns-b").ValueOrThrow(),
-        ]);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
+            [
+                Namespace.Create("ns-x").ValueOrThrow(),
+                Namespace.Create("ns-b").ValueOrThrow(),
+            ],
+            [
+                new ProviderRepository("ns-x/repo-a", IsPrivate: false, CanPush: true),
+                new ProviderRepository("ns-b/repo-b", IsPrivate: false, CanPush: true),
+            ]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
             "github",
@@ -245,7 +262,8 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — no other credential claims the namespace; takeover lists it but it's not actually conflicted
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns]);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
             "github",
@@ -279,8 +297,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
-            [Namespace.Create("octocat").ValueOrThrow()]);
+            [Namespace.Create("octocat").ValueOrThrow()],
+            [writableRepo]);
         EligibleEvaluator evaluator = new();
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), evaluator);
         CreateAccount.Command command = new(
@@ -295,6 +315,130 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert — no affected repos because eligible → eligible is not a status change
         CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
         created.Value.AffectedRepositories.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenGitHubProbeReturnsMissingContents_ReturnsFailureNamingPermission()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        MissingWriteProber missingProber = new(WritePermission.Contents);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: missingProber);
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.MissingWritePermissionCode);
+        failure.Error.Message.ShouldContain("Contents");
+        long credentialCount = await _dbContext.Set<Credential>().LongCountAsync(TestContext.Current.CancellationToken);
+        credentialCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenGitHubTokenHasNoRepositoriesUnderDerivedNamespace_ReturnsNoNamespaceRepositoriesFailure()
+    {
+        // Arrange — derived namespace is "octocat" but no writable repos have that prefix
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository unrelatedRepo = new("other-org/repo", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [unrelatedRepo]);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.NoNamespaceRepositoriesCode);
+        long credentialCount = await _dbContext.Set<Credential>().LongCountAsync(TestContext.Current.CancellationToken);
+        credentialCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenGitHubTokenHasEmptyWritableRepositoryList_ReturnsNoNamespaceRepositoriesFailure()
+    {
+        // Arrange — derivation returns no writable repos at all (zero-repo case)
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], []);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.NoNamespaceRepositoriesCode);
+        long credentialCount = await _dbContext.Set<Credential>().LongCountAsync(TestContext.Current.CancellationToken);
+        credentialCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenGitHubProbeGranted_CreatesCredential()
+    {
+        // Arrange — simulates a classic PAT whose repo scope makes all three probes return Granted
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            writeProber: new GrantedWriteProber());
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_classic_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        long credentialCount = await _dbContext.Set<Credential>().LongCountAsync(TestContext.Current.CancellationToken);
+        credentialCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenGitHubProbeTransportFails_BlocksAdd_NothingPersisted()
+    {
+        // Arrange — transport failure must not silently pass
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        FailingWriteProber failingProber = new();
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: failingProber);
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.WriteAccessVerificationFailedCode);
+        long credentialCount = await _dbContext.Set<Credential>().LongCountAsync(TestContext.Current.CancellationToken);
+        credentialCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenGitLabCredential_ProbeSkippedAndCredentialCreated()
+    {
+        // Arrange — GitLab skips the GitHub write probe entirely
+        Namespace ns = Namespace.Create("my-group").ValueOrThrow();
+        ProviderRepository writableRepo = new("my-group/project", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        NeverCalledWriteProber neverCalledProber = new();
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            writeProber: neverCalledProber);
+        CreateAccount.Command command = new("gitlab", "https://gitlab.com", "glpat_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — credential created without probe being called
+        result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        neverCalledProber.WasCalled.ShouldBeFalse();
     }
 
     private sealed class StubValidateTokenHandler
@@ -320,6 +464,54 @@ public sealed class HandleAsync : IAsyncDisposable
             Credential credential,
             CancellationToken cancellationToken) =>
             Task.FromResult(outcome);
+    }
+
+    private sealed class GrantedWriteProber : IGitHubWriteProber
+    {
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()));
+    }
+
+    private sealed class MissingWriteProber(WritePermission permission) : IGitHubWriteProber
+    {
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permission)));
+    }
+
+    private sealed class FailingWriteProber : IGitHubWriteProber
+    {
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                Result<WritePermissionProbeResult>.Fail(
+                    new Error("GitHub.UnexpectedStatusCode", "Simulated transport failure.")));
+    }
+
+    private sealed class NeverCalledWriteProber : IGitHubWriteProber
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
+            CancellationToken cancellationToken)
+        {
+            WasCalled = true;
+            return Task.FromResult(Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()));
+        }
     }
 
     private sealed class NoOpEligibilityEvaluator : IRepositoryEligibilityEvaluator

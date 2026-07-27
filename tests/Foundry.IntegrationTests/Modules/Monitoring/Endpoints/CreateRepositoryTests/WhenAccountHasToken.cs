@@ -4,7 +4,11 @@ using System.Net.Http.Json;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -33,6 +37,13 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
             services.RemoveAll<IIssueProviderFactory>();
             services.AddScoped<IIssueProviderFactory>(_ =>
                 new StubProviderFactory(Result<BranchProtection>.Ok(eligibleProtection)));
+
+            // Probe-aware: probe POSTs return 422 (Granted) so eligibility evaluator passes
+            // the write-permission check and proceeds to branch-protection evaluation.
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new ProbeGrantedFakeHandler())));
         });
 
         _client = _factory.CreateClient();
@@ -88,6 +99,13 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
             services.RemoveAll<IIssueProviderFactory>();
             services.AddScoped<IIssueProviderFactory>(_ =>
                 new StubProviderFactory(Result<BranchProtection>.Ok(ineligibleProtection)));
+
+            // Probe-aware: probe POSTs return 422 (Granted) so the evaluator proceeds to
+            // branch-protection evaluation, which then surfaces the violation.
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new ProbeGrantedFakeHandler())));
         });
         await using (factory.ConfigureAwait(false))
         {
@@ -219,4 +237,5 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
     }
+
 }
