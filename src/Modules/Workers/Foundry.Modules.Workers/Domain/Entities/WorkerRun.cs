@@ -2,7 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Shared;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Modules.Workers.Domain.Entities;
 
 public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<WorkerRun>
 {

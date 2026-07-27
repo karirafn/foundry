@@ -1,10 +1,11 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Events;
-using Foundry.Shared;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Shared;
 
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Modules.Workers.Domain.Entities.States;
 
 public sealed class ActiveRun : WorkerRun
 {

@@ -1,5 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Domain.Events;
 
@@ -7,7 +9,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Domain.StartingRunTests;
+namespace Foundry.UnitTests.Modules.Workers.Domain.Entities.States.StartingRunTests;
 
 public sealed class Fail
 {

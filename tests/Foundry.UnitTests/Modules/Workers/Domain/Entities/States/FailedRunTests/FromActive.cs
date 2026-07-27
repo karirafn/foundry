@@ -1,6 +1,8 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -8,7 +10,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Domain.FailedRunTests;
+namespace Foundry.UnitTests.Modules.Workers.Domain.Entities.States.FailedRunTests;
 
 public sealed class FromActive
 {

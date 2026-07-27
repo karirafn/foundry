@@ -1,7 +1,7 @@
 using Foundry.Shared;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Modules.Workers.Domain.Entities;
 
 internal static class WorkerRunErrors
 {
