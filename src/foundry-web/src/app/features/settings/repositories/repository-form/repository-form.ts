@@ -20,6 +20,7 @@ import { accountOptionLabel } from '../../accounts/account-label.util';
 import {
   AvailableRepository,
   CreateRepositoryRequest,
+  NO_WRITE_ACCESS_REASON,
   RepositorySummary,
   UpdateRepositoryRequest,
 } from '../repository.model';
@@ -28,7 +29,6 @@ const DEFAULT_POLL_INTERVAL_MINUTES = 5;
 const SECONDS_PER_MINUTE = 60;
 const MIN_POLL_INTERVAL_MINUTES = 1;
 const MAX_POLL_INTERVAL_MINUTES = 1440;
-const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not authorized';
 
 @Component({
   selector: 'fd-repository-form',
@@ -108,30 +108,47 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
                   (keydown)="onPickerKeydown($event)"
                 />
 
+                <div
+                  class="repository-form__picker-empty-status"
+                  [class.sr-only]="_emptyStatusText() === ''"
+                  role="status"
+                >{{ _emptyStatusText() }}@if (_showNoClaims()) {
+                    <span class="repository-form__picker-empty-status-hint">Add a namespace claim to this account to monitor its repositories.</span>
+                  }</div>
+
                 <ul
                   class="repository-form__picker-listbox"
                   id="repository-picker-listbox"
                   role="listbox"
                   [hidden]="!_pickerOpen()"
                 >
-                  @if (_filteredRepositories().length === 0) {
+                  @if (_filteredRepositories().length === 0 && _emptyStatusText() === '') {
                     <li class="repository-form__picker-empty">No matching repositories</li>
                   }
                   @for (repo of _filteredRepositories(); track repo.slug; let i = $index) {
                     <li
                       class="repository-form__picker-option"
                       [class.repository-form__picker-option--active]="i === _activeOptionIndex()"
-                      [class.repository-form__picker-option--disabled]="!repo.canPush"
+                      [class.repository-form__picker-option--disabled]="repo.isMonitored || !repo.canPush"
+                      [class.repository-form__picker-option--monitored]="repo.isMonitored"
                       [id]="'repo-option-' + i"
                       role="option"
-                      [attr.aria-selected]="_repoSlug() === repo.slug"
-                      [attr.aria-disabled]="repo.canPush ? null : 'true'"
-                      [attr.aria-describedby]="repo.canPush ? null : 'repo-option-reason-sr-' + i"
+                      [attr.aria-selected]="(!repo.isMonitored && repo.canPush) && (_repoSlug() === repo.slug)"
+                      [attr.aria-disabled]="(repo.isMonitored || !repo.canPush) ? 'true' : null"
+                      [attr.aria-describedby]="(!repo.isMonitored && !repo.canPush) ? 'repo-option-reason-sr-' + i : null"
                       (click)="selectRepo(repo)"
                       (mousedown)="$event.preventDefault()"
                     >
+                      <span class="repository-form__picker-option-gutter" aria-hidden="true">
+                        @if (repo.isMonitored) {
+                          <span class="repository-form__picker-check">✓</span>
+                        }
+                      </span>
                       <span class="repository-form__picker-option-slug">{{ repo.slug }}</span>
-                      @if (!repo.canPush) {
+                      @if (repo.isMonitored) {
+                        <span class="sr-only">already monitored</span>
+                      }
+                      @if (!repo.isMonitored && !repo.canPush) {
                         <span
                           class="repository-form__picker-option-reason"
                           aria-hidden="true"
@@ -205,6 +222,7 @@ export class RepositoryFormComponent implements OnInit {
   readonly loadAvailableError: InputSignal<string | null> = input<string | null>(null);
   readonly saving: InputSignal<boolean> = input<boolean>(false);
   readonly saveError: InputSignal<string | null> = input<string | null>(null);
+  readonly hasClaims: InputSignal<boolean> = input<boolean>(false);
 
   readonly save: OutputEmitterRef<CreateRepositoryRequest | UpdateRepositoryRequest> =
     output<CreateRepositoryRequest | UpdateRepositoryRequest>();
@@ -229,6 +247,23 @@ export class RepositoryFormComponent implements OnInit {
       return this.availableRepositories();
     }
     return this.availableRepositories().filter(r => r.slug.toLowerCase().includes(filter));
+  });
+
+  protected readonly _showNoClaims: Signal<boolean> = computed(
+    () => this._pickerOpen() && !this.hasClaims()
+  );
+
+  protected readonly _emptyStatusText: Signal<string> = computed(() => {
+    if (!this._pickerOpen()) {
+      return '';
+    }
+    if (!this.hasClaims()) {
+      return 'This account has no claimed namespaces.';
+    }
+    if (this.availableRepositories().length === 0) {
+      return "No repositories under this account's claimed namespaces.";
+    }
+    return '';
   });
 
   protected readonly _activeOptionId: Signal<string | null> = computed(() => {
@@ -301,14 +336,14 @@ export class RepositoryFormComponent implements OnInit {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this._pickerOpen.set(true);
-      const next = current + 1;
-      if (next < filtered.length) {
+      const next = this._nextSelectableIndex(filtered, current, 1);
+      if (next !== -1) {
         this._activeOptionIndex.set(next);
       }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      const prev = current - 1;
-      this._activeOptionIndex.set(prev >= 0 ? prev : -1);
+      const next = this._nextSelectableIndex(filtered, current, -1);
+      this._activeOptionIndex.set(next);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (current >= 0 && current < filtered.length) {
@@ -320,8 +355,19 @@ export class RepositoryFormComponent implements OnInit {
     }
   }
 
+  private _nextSelectableIndex(repos: AvailableRepository[], from: number, direction: 1 | -1): number {
+    let i = from + direction;
+    while (i >= 0 && i < repos.length) {
+      if (!repos[i].isMonitored && repos[i].canPush) {
+        return i;
+      }
+      i += direction;
+    }
+    return -1;
+  }
+
   selectRepo(repo: AvailableRepository): void {
-    if (!repo.canPush) {
+    if (repo.isMonitored || !repo.canPush) {
       return;
     }
     this._repoSlug.set(repo.slug);

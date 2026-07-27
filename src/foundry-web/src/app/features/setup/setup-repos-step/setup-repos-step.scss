@@ -145,6 +145,24 @@
     color: var(--fd-text-secondary);
   }
 
+  &__repo-item--monitored &__repo-label {
+    cursor: default;
+  }
+
+  &__empty-status {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    padding: var(--fd-spacing-md);
+    text-align: center;
+  }
+
+  &__empty-status-hint {
+    color: var(--fd-text-secondary);
+    display: block;
+    font-size: 0.8125rem;
+    margin-top: var(--fd-spacing-xs);
+  }
+
   &__repo-label {
     align-items: center;
     cursor: pointer;
@@ -191,11 +209,24 @@
     text-transform: uppercase;
   }
 
+  &__repo-gutter {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 var(--fd-gutter);
+    flex-shrink: 0;
+    justify-content: center;
+    width: var(--fd-gutter);
+  }
+
+  &__repo-check {
+    color: var(--fd-text-success);
+  }
+
   &__repo-reason {
     color: var(--fd-text-ineligible);
     flex-basis: 100%;
     font-size: 0.75rem;
-    margin-left: calc(16px + var(--fd-spacing-sm));
+    margin-left: var(--fd-gutter);
     order: 3;
   }
 

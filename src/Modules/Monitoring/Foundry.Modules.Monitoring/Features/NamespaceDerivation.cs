@@ -8,16 +8,16 @@ internal static class NamespaceDerivation
 {
     /// <summary>
     /// Derives the set of owner namespaces from a writable-repository listing.
-    /// For each repository where <see cref="AvailableRepository.CanPush"/> is true,
+    /// For each repository where <see cref="ProviderRepository.CanPush"/> is true,
     /// extracts the owner (all slug segments except the last) and de-duplicates.
     /// </summary>
     public static IReadOnlyCollection<Namespace> FromWritableRepositories(
-        IEnumerable<AvailableRepository> repositories)
+        IEnumerable<ProviderRepository> repositories)
     {
         HashSet<string> seen = [];
         List<Namespace> namespaces = [];
 
-        foreach (AvailableRepository repo in repositories)
+        foreach (ProviderRepository repo in repositories)
         {
             if (!repo.CanPush)
             {

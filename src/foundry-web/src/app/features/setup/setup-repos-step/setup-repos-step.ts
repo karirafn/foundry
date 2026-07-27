@@ -15,10 +15,9 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { from } from 'rxjs';
 import { concatMap } from 'rxjs/operators';
 import { RepositoryService } from '../../settings/repositories/repository.service';
-import { AvailableRepository } from '../../settings/repositories/repository.model';
+import { AvailableRepository, NO_WRITE_ACCESS_REASON } from '../../settings/repositories/repository.model';
 
 const ERROR_TRUNCATE_LENGTH = 200;
-const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not authorized';
 
 @Component({
   selector: 'fd-setup-repos-step',
@@ -56,40 +55,69 @@ const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not 
           />
         </div>
 
+        <div
+          class="setup-repos-step__empty-status"
+          [class.sr-only]="_emptyStatusMessage() === ''"
+          role="status"
+        >
+          @if (!_repositoryService.availableHasClaims()) {
+            This account has no claimed namespaces.
+            <span class="setup-repos-step__empty-status-hint">Add a namespace claim to this account to monitor its repositories.</span>
+          } @else if (_repositoryService.availableRepositories().length === 0) {
+            No repositories under this account's claimed namespaces.
+          }
+        </div>
+
         <ul class="setup-repos-step__repo-list" role="list">
-          @if (_filteredRepositories().length === 0) {
+          @if (_repositoryService.availableHasClaims() && _repositoryService.availableRepositories().length > 0 && _filteredRepositories().length === 0) {
             <li class="setup-repos-step__repo-empty">No matching repositories</li>
           }
           @for (repo of _filteredRepositories(); track repo.slug) {
             <li
               class="setup-repos-step__repo-item"
-              [class.setup-repos-step__repo-item--disabled]="!repo.canPush"
+              [class.setup-repos-step__repo-item--disabled]="repo.isMonitored || !repo.canPush"
+              [class.setup-repos-step__repo-item--monitored]="repo.isMonitored"
             >
-              <label class="setup-repos-step__repo-label">
-                <input
-                  class="setup-repos-step__repo-checkbox"
-                  type="checkbox"
-                  [checked]="_selectedSlugs().has(repo.slug) && repo.canPush"
-                  [disabled]="!repo.canPush"
-                  [attr.aria-describedby]="repo.canPush ? null : 'repo-reason-' + repo.slug.replaceAll('/', '-')"
-                  (change)="onToggle(repo.slug, $any($event.target).checked)"
-                />
-                <span class="setup-repos-step__repo-slug">{{ repo.slug }}</span>
-                @if (repo.isPrivate) {
-                  <span class="setup-repos-step__repo-private-badge" aria-label="private">Private</span>
-                }
+              @if (repo.isMonitored) {
+                <div class="setup-repos-step__repo-label">
+                  <span class="setup-repos-step__repo-gutter" aria-hidden="true">
+                    <span class="setup-repos-step__repo-check">✓</span>
+                  </span>
+                  <span class="setup-repos-step__repo-slug">{{ repo.slug }}</span>
+                  <span class="sr-only">already monitored</span>
+                  @if (repo.isPrivate) {
+                    <span class="setup-repos-step__repo-private-badge" aria-label="private">Private</span>
+                  }
+                </div>
+              } @else {
+                <label class="setup-repos-step__repo-label">
+                  <span class="setup-repos-step__repo-gutter" aria-hidden="true">
+                    <input
+                      class="setup-repos-step__repo-checkbox"
+                      type="checkbox"
+                      [checked]="_selectedSlugs().has(repo.slug) && repo.canPush"
+                      [disabled]="!repo.canPush"
+                      [attr.aria-describedby]="(!repo.canPush) ? 'repo-reason-' + repo.slug.replaceAll('/', '-') : null"
+                      (change)="onToggle(repo.slug, $any($event.target).checked)"
+                    />
+                  </span>
+                  <span class="setup-repos-step__repo-slug">{{ repo.slug }}</span>
+                  @if (repo.isPrivate) {
+                    <span class="setup-repos-step__repo-private-badge" aria-label="private">Private</span>
+                  }
+                  @if (!repo.canPush) {
+                    <span
+                      class="setup-repos-step__repo-reason"
+                      aria-hidden="true"
+                    >{{ _noWriteAccessReason }}</span>
+                  }
+                </label>
                 @if (!repo.canPush) {
                   <span
-                    class="setup-repos-step__repo-reason"
-                    aria-hidden="true"
+                    class="sr-only"
+                    [id]="'repo-reason-' + repo.slug.replaceAll('/', '-')"
                   >{{ _noWriteAccessReason }}</span>
                 }
-              </label>
-              @if (!repo.canPush) {
-                <span
-                  class="sr-only"
-                  [id]="'repo-reason-' + repo.slug.replaceAll('/', '-')"
-                >{{ _noWriteAccessReason }}</span>
               }
             </li>
           }
@@ -153,6 +181,16 @@ export class SetupReposStepComponent implements OnInit {
     return repos.filter(r => r.slug.toLowerCase().includes(filter));
   });
 
+  protected readonly _emptyStatusMessage: Signal<string> = computed(() => {
+    if (!this._repositoryService.availableHasClaims()) {
+      return 'This account has no claimed namespaces.';
+    }
+    if (this._repositoryService.availableRepositories().length === 0) {
+      return "No repositories under this account's claimed namespaces.";
+    }
+    return '';
+  });
+
   protected readonly _canFinish: Signal<boolean> = computed(() => {
     if (this._saving()) {
       return false;
@@ -166,7 +204,7 @@ export class SetupReposStepComponent implements OnInit {
 
   onToggle(slug: string, checked: boolean): void {
     const repo = this._repositoryService.availableRepositories().find(r => r.slug === slug);
-    if (!repo?.canPush) {
+    if (repo?.isMonitored || !repo?.canPush) {
       return;
     }
     this._selectedSlugs.update(current => {

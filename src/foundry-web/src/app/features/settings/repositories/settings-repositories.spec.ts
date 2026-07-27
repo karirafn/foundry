@@ -207,7 +207,7 @@ describe('SettingsRepositoriesComponent', () => {
     fixture.componentInstance.onAdd();
     fixture.detectChanges();
     fixture.componentInstance.onAccountSelected(ACCOUNT_1.id);
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/available-repositories`).flush([]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
 
     // Act
     fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300 });
@@ -255,7 +255,7 @@ describe('SettingsRepositoriesComponent', () => {
     fixture.componentInstance.onAdd();
     fixture.detectChanges();
     fixture.componentInstance.onAccountSelected(ACCOUNT_1.id);
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/available-repositories`).flush([]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
 
     // Act
     fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300 });
