@@ -4,12 +4,13 @@ using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Runs;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.WorkerActivityObservedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Runs.WorkerActivityObservedHandlerTests;
 
 public sealed class HandleAsync
 {

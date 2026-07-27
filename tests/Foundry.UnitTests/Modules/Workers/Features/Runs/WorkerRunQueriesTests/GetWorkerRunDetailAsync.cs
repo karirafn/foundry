@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -16,7 +17,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.WorkerRunQueriesTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Runs.WorkerRunQueriesTests;
 
 public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
 {

@@ -2,7 +2,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Runs;
 
 internal sealed class WorkerActivityObservedHandler(IWorkerActivityBroadcaster broadcaster)
     : IDomainEventHandler<WorkerActivityObserved>

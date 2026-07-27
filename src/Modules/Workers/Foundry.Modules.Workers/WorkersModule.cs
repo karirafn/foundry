@@ -10,6 +10,7 @@ using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.Health;
 using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;

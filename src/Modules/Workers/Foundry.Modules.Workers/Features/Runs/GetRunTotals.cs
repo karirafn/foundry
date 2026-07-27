@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Runs;
 
 internal static class GetRunTotals
 {

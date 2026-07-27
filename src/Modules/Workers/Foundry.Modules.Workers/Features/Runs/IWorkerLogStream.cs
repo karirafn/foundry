@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Runs;
 
 // Must be public: WorkerHub (in Foundry.WebApi) injects this interface.
 // CA1711 suppressed: the 'Stream' suffix describes the feature (async log streaming), not a Stream subclass.

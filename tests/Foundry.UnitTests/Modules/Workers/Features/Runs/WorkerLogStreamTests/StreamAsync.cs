@@ -5,6 +5,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
@@ -17,7 +18,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.WorkerLogStreamTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Runs.WorkerLogStreamTests;
 
 public sealed class StreamAsync : IAsyncDisposable
 {

@@ -6,7 +6,7 @@ using Foundry.Modules.Workers.Features.Orchestration;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Runs;
 
 internal sealed class WorkerLogStream(DbContext db, IWorkerOrchestrator orchestrator) : IWorkerLogStream
 {

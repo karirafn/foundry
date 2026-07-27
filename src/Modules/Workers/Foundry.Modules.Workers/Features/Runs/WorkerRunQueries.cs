@@ -11,7 +11,7 @@ using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Runs;
 
 internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 {
