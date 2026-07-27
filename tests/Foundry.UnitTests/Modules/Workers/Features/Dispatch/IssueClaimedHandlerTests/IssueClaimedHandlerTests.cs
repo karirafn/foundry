@@ -3,7 +3,6 @@ using System.Text.Json;
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;

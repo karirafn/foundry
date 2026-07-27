@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Monitoring.Contracts.Events;
+namespace Foundry.Modules.Monitoring.Contracts;
 
 public sealed record IssueDependenciesDetected(
     MonitoredRepositoryId MonitoredRepositoryId,

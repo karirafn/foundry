@@ -1,7 +1,6 @@
 using System.Reflection;
 
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Contracts.Queries;
 using Foundry.Modules.Monitoring.Contracts;
 
 using Shouldly;

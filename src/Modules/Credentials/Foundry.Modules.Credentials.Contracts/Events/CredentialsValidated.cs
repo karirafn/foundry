@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Credentials.Contracts.Events;
+namespace Foundry.Modules.Credentials.Contracts;
 
 public sealed record CredentialsValidated(
     string? Email,

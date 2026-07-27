@@ -1,9 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Events;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;

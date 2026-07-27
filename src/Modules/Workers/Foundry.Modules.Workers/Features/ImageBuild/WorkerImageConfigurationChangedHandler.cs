@@ -1,5 +1,4 @@
 using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Events;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Features.ImageBuild;

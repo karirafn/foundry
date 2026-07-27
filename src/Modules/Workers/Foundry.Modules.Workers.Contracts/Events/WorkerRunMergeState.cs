@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Contracts.Events;
+namespace Foundry.Modules.Workers.Contracts;
 
 public enum WorkerRunMergeState
 {

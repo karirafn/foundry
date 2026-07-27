@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Workers.Contracts.Events;
+namespace Foundry.Modules.Workers.Contracts;
 
 public sealed record WorkerAuthenticationFailed(
     Guid WorkerRunId,

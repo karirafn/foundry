@@ -1,7 +1,6 @@
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Events;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
@@ -93,7 +92,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerImageConfigurationChanged), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerImageConfigurationChanged)));
     }
 
     [Fact]

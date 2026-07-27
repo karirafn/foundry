@@ -7,7 +7,7 @@ using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
 
 using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
-using IntegrationWorkerRunFailed = Foundry.Modules.Workers.Contracts.Events.WorkerRunFailed;
+using IntegrationWorkerRunFailed = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
 
 using Shouldly;
 

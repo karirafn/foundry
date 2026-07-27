@@ -4,7 +4,6 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;

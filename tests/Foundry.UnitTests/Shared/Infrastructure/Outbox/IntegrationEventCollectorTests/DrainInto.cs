@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
 

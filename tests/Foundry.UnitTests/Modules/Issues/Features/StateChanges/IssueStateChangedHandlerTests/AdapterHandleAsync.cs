@@ -1,5 +1,4 @@
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Contracts.Queries;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.StateChanges;

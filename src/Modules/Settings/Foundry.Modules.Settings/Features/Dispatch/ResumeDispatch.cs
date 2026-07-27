@@ -1,7 +1,6 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;

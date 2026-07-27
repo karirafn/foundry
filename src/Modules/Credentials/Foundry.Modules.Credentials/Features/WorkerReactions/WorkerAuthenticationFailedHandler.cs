@@ -1,8 +1,6 @@
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Credentials.Contracts.Events;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;

@@ -1,5 +1,4 @@
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Credentials.Contracts.Events;
 using Foundry.Modules.Credentials.Features.Broadcasts;
 using Foundry.Shared;
 

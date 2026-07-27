@@ -1,5 +1,4 @@
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
@@ -7,7 +6,6 @@ using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Outbox;
@@ -134,7 +132,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(IssueClaimed), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(IssueClaimed)));
     }
 
     [Fact]
@@ -178,7 +176,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(IssueClaimed), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(IssueClaimed)));
     }
 
     [Fact]
@@ -222,7 +220,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(IssueClaimed), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(IssueClaimed)));
     }
 
     [Fact]

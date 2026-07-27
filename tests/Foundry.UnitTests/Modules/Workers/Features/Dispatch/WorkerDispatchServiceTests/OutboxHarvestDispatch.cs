@@ -6,7 +6,6 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -115,7 +114,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         FoundryDbContext assertDb = assertScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
         List<OutboxMessage> messages = await assertDb.Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerRunCompleted), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerRunCompleted)));
     }
 
     [Fact]
@@ -150,7 +149,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         FoundryDbContext assertDb = assertScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
         List<OutboxMessage> messages = await assertDb.Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(DispatchResumed), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(DispatchResumed)));
     }
 
     [Fact]
@@ -168,7 +167,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         FoundryDbContext assertDb = assertScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
         List<OutboxMessage> messages = await assertDb.Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerCapacityAvailable), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerCapacityAvailable)));
     }
 
     [Fact]
@@ -197,7 +196,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         FoundryDbContext assertDb = assertScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
         List<OutboxMessage> messages = await assertDb.Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerAuthenticationFailed), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerAuthenticationFailed)));
     }
 
     private const string AuthInvalidOutput =

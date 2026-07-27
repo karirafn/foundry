@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;

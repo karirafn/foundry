@@ -1,5 +1,4 @@
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Credentials.Contracts.Events;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
@@ -92,7 +91,7 @@ public sealed class OutboxHarvestCommitAsync : IAsyncDisposable
         List<OutboxMessage> messages = await assertDb
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(CredentialsValidated), StringComparison.Ordinal));
+        messages.ShouldContain(m => m.Type.Contains(nameof(CredentialsValidated)));
     }
 
     [Fact]
