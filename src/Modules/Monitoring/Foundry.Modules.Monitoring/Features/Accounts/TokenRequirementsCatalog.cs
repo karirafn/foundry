@@ -11,14 +11,16 @@ internal static class TokenRequirementsCatalog
         {
             [ProviderTypes.GitHub] = new(
                 ProviderType: ProviderTypes.GitHub,
-                TokenTypeLabel: "GitHub classic personal access token",
+                TokenTypeLabel: "GitHub fine-grained personal access token",
                 Scopes: RequiredScopes.For(ProviderTypes.GitHub),
-                CreationUrlTemplate: "{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry"),
+                CreationUrlTemplate: "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write",
+                ResourceOwnerHint: "Fine-grained tokens are bound to a single resource owner. To reach an organization's repositories, choose that organization as the token's resource owner when creating the token."),
             [ProviderTypes.GitLab] = new(
                 ProviderType: ProviderTypes.GitLab,
                 TokenTypeLabel: "GitLab personal access token",
                 Scopes: RequiredScopes.For(ProviderTypes.GitLab),
-                CreationUrlTemplate: "{baseUrl}/-/user_settings/personal_access_tokens"),
+                CreationUrlTemplate: "{baseUrl}/-/user_settings/personal_access_tokens",
+                ResourceOwnerHint: null),
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     internal static TokenRequirements? For(string providerType) =>
