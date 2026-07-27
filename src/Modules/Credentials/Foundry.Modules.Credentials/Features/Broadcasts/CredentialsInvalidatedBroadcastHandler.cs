@@ -1,7 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Credentials.Features;
+namespace Foundry.Modules.Credentials.Features.Broadcasts;
 
 internal sealed class CredentialsInvalidatedBroadcastHandler(
     ISystemNotificationBroadcaster broadcaster) : IIntegrationEventHandler<CredentialsInvalidated>

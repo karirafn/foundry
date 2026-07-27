@@ -1,7 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
-using Foundry.Modules.Credentials.Features;
+using Foundry.Modules.Credentials.Features.WorkerReactions;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -16,7 +16,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Credentials.Features.WorkerAuthenticationFailedHandlerTests;
+namespace Foundry.UnitTests.Modules.Credentials.Features.WorkerReactions.WorkerAuthenticationFailedHandlerTests;
 
 public sealed class HandleAsync : IAsyncDisposable
 {

@@ -6,7 +6,7 @@ using Foundry.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.Modules.Credentials.Features;
+namespace Foundry.Modules.Credentials.Features.WorkerReactions;
 
 // Concurrency note: validity is persisted state, login-in-progress is transient.
 // Invalidate() is a no-op when already invalid, so duplicate auth-fail events are idempotent.

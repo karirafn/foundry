@@ -1,12 +1,12 @@
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Credentials.Features;
+using Foundry.Modules.Credentials.Features.Broadcasts;
 using Foundry.Shared;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Credentials.Features.CredentialsValidatedBroadcastHandlerTests;
+namespace Foundry.UnitTests.Modules.Credentials.Features.Broadcasts.CredentialsInvalidatedBroadcastHandlerTests;
 
 public sealed class HandleAsync
 {
@@ -31,8 +31,8 @@ public sealed class HandleAsync
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
-        CredentialsValidatedBroadcastHandler sut = new(broadcaster);
-        CredentialsValidated @event = new("user@example.com", "Org", "Pro");
+        CredentialsInvalidatedBroadcastHandler sut = new(broadcaster);
+        CredentialsInvalidated @event = new("Worker authentication failed");
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -46,8 +46,8 @@ public sealed class HandleAsync
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
-        CredentialsValidatedBroadcastHandler sut = new(broadcaster);
-        CredentialsValidated @event = new("user@example.com", "Org", "Pro");
+        CredentialsInvalidatedBroadcastHandler sut = new(broadcaster);
+        CredentialsInvalidated @event = new("Worker authentication failed");
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -58,19 +58,19 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenHandled_SendsIsActiveFalseNotification()
+    public async Task WhenHandled_SendsIsActiveTrueNotification()
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
-        CredentialsValidatedBroadcastHandler sut = new(broadcaster);
-        CredentialsValidated @event = new("user@example.com", "Org", "Pro");
+        CredentialsInvalidatedBroadcastHandler sut = new(broadcaster);
+        CredentialsInvalidated @event = new("Worker authentication failed");
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
         SystemNotification notification = broadcaster.SentNotifications.ShouldHaveSingleItem();
-        notification.IsActive.ShouldBeFalse();
+        notification.IsActive.ShouldBeTrue();
     }
 
     [Fact]
@@ -78,8 +78,8 @@ public sealed class HandleAsync
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
-        CredentialsValidatedBroadcastHandler sut = new(broadcaster);
-        CredentialsValidated @event = new("user@example.com", "Org", "Pro");
+        CredentialsInvalidatedBroadcastHandler sut = new(broadcaster);
+        CredentialsInvalidated @event = new("Worker authentication failed");
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -94,8 +94,8 @@ public sealed class HandleAsync
     {
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
-        CredentialsValidatedBroadcastHandler sut = new(broadcaster);
-        CredentialsValidated @event = new("user@example.com", "Org", "Pro");
+        CredentialsInvalidatedBroadcastHandler sut = new(broadcaster);
+        CredentialsInvalidated @event = new("Worker authentication failed");
         using CancellationTokenSource cts = new();
         CancellationToken token = cts.Token;
 
