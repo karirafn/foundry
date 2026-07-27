@@ -17,19 +17,21 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.RecheckRepositoryEligibilityTests;
+namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateRepositoryTests;
 
-public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
+/// <summary>
+/// Verifies the wiring between the write-permission probe and repository eligibility.
+/// When the probe returns 403 (Missing) for the repository, eligibility is Ineligible
+/// with a cannot-push violation. When the probe returns 422 (Granted) and branch
+/// protection is fully configured, eligibility is Eligible.
+/// </summary>
+public sealed class WhenProbeReportsMissingWrite : IAsyncDisposable
 {
-    private readonly ConfigurableProbeHandler _probeHandler;
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenTokenRegainsPushAccess()
+    public WhenProbeReportsMissingWrite()
     {
-        // Start with probes blocked (403) — eligibility evaluator sees Missing and marks Ineligible.
-        _probeHandler = new ConfigurableProbeHandler(probeGranted: false);
-
         BranchProtection eligibleProtection = new(
             DefaultBranch: "main",
             RejectDirectPushes: true,
@@ -38,15 +40,15 @@ public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
-            // Provide eligible branch protection so the test can reach Eligible after probe is granted.
             services.RemoveAll<IIssueProviderFactory>();
             services.AddScoped<IIssueProviderFactory>(_ =>
                 new StubProviderFactory(Result<BranchProtection>.Ok(eligibleProtection)));
 
-            // Use a configurable probe handler; state is toggled between initial seeding and recheck.
+            // Probe returns 403 — write access missing; eligibility evaluator marks as Ineligible.
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(_probeHandler)));
+                new GitHubHttpClient(
+                    new HttpClient(new ProbeBlockedFakeHandler())));
         });
 
         _client = _factory.CreateClient();
@@ -55,48 +57,89 @@ public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
         _client.Dispose();
-        _probeHandler.Dispose();
         await _factory.DisposeAsync();
     }
 
     [Fact]
-    public async Task ReturnsEligibleAfterRecheck()
+    public async Task WhenProbeForbidden_ReturnsIneligibleWithCannotPushViolation()
     {
-        // Arrange — seed repo while probe returns 403, leaving it ineligible (cannot-push)
-        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Regained Push Org");
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Probe Blocked Org");
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
-        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(
-            _factory, accountId, slug: "owner/regained-push-repo");
-
-        // Flip the probe handler so recheck now grants write access.
-        _probeHandler.ProbeGranted = true;
+        object body = new { slug = "owner/probe-blocked-repo" };
 
         // Act
-        HttpResponseMessage response = await _client.PostAsync(
-            new Uri($"/api/accounts/{accountId}/repositories/{repositoryId}/recheck", UriKind.Relative),
-            content: null,
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
             TestContext.Current.CancellationToken);
 
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        // Assert — 201 is still returned; the eligibility is evaluated and stored, not a 4xx
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
         RepositorySummary? repository = await response.Content
             .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
         repository.ShouldNotBeNull();
         repository.Eligibility.ShouldNotBeNull();
         repository.Eligibility.ShouldSatisfyAllConditions(
-            () => repository.Eligibility.Status.ShouldBe("eligible"),
-            () => repository.Eligibility.Violations.ShouldBeEmpty());
+            () => repository.Eligibility.Status.ShouldBe("ineligible"),
+            () => repository.Eligibility.Violations.ShouldHaveSingleItem(),
+            () => repository.Eligibility.Violations[0].Rule.ShouldBe("cannot-push:owner/probe-blocked-repo"));
+    }
+
+    [Fact]
+    public async Task WhenProbeGrantedAndBranchProtected_ReturnsEligible()
+    {
+        // Arrange — use a factory where the probe returns 422 (Granted)
+        BranchProtection eligibleProtection = new(
+            DefaultBranch: "main",
+            RejectDirectPushes: true,
+            RejectForcePushes: true,
+            RejectDeletion: true);
+
+        FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IIssueProviderFactory>();
+            services.AddScoped<IIssueProviderFactory>(_ =>
+                new StubProviderFactory(Result<BranchProtection>.Ok(eligibleProtection)));
+
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new ProbeGrantedFakeHandler())));
+        });
+
+        await using (factory.ConfigureAwait(false))
+        {
+            using HttpClient client = factory.CreateClient();
+            Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(factory, name: "Probe Granted Org");
+            await AccountSeeder.SetOwnerNamespacesAsync(factory, accountId, "owner");
+            object body = new { slug = "owner/probe-granted-repo" };
+
+            // Act
+            HttpResponseMessage response = await client.PostAsJsonAsync(
+                new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+                body,
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            response.StatusCode.ShouldBe(HttpStatusCode.Created);
+            RepositorySummary? repository = await response.Content
+                .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+            repository.ShouldNotBeNull();
+            repository.Eligibility.ShouldNotBeNull();
+            repository.Eligibility.ShouldSatisfyAllConditions(
+                () => repository.Eligibility.Status.ShouldBe("eligible"),
+                () => repository.Eligibility.Violations.ShouldBeEmpty());
+        }
     }
 
     /// <summary>
-    /// Returns 403 or 422 for probe POSTs based on the current ProbeGranted state.
-    /// Non-probe requests receive an empty listing.
+    /// Returns 403 for all probe POSTs so the eligibility evaluator marks the repository
+    /// as Ineligible with a cannot-push violation.
     /// </summary>
-    private sealed class ConfigurableProbeHandler(bool probeGranted) : DelegatingHandler
+    private sealed class ProbeBlockedFakeHandler : DelegatingHandler
     {
         private const string EmptyListingJson = "[]";
-
-        public bool ProbeGranted { get; set; } = probeGranted;
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -104,10 +147,32 @@ public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
         {
             if (StaticListingFakeHandler.IsProbePost(request))
             {
-                HttpStatusCode statusCode = ProbeGranted
-                    ? HttpStatusCode.UnprocessableEntity
-                    : HttpStatusCode.Forbidden;
-                return Task.FromResult(new HttpResponseMessage(statusCode));
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+            }
+
+            HttpResponseMessage response = new(HttpStatusCode.OK)
+            {
+                Content = new StringContent(EmptyListingJson, Encoding.UTF8, "application/json"),
+            };
+            return Task.FromResult(response);
+        }
+    }
+
+    /// <summary>
+    /// Returns 422 for all probe POSTs (Granted) so the eligibility evaluator proceeds
+    /// to branch-protection evaluation via the stub provider factory.
+    /// </summary>
+    private sealed class ProbeGrantedFakeHandler : DelegatingHandler
+    {
+        private const string EmptyListingJson = "[]";
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (StaticListingFakeHandler.IsProbePost(request))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
             }
 
             HttpResponseMessage response = new(HttpStatusCode.OK)

@@ -31,7 +31,8 @@ internal sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Que
 
 /// <summary>
 /// Returns the repo listing JSON keyed by the Bearer token in the Authorization header.
-/// Falls back to "[]" for unknown tokens.
+/// Returns 422 (Granted) for probe POSTs so that write-permission probing passes.
+/// Falls back to "[]" for unknown tokens on listing requests.
 /// </summary>
 internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> tokenToListing)
     : DelegatingHandler
@@ -40,6 +41,11 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        if (IsProbePost(request))
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+        }
+
         // Extract the token from Authorization header (GitHub)
         string lastTokenSeen = string.Empty;
         if (request.Headers.TryGetValues("Authorization", out IEnumerable<string>? authValues))
@@ -59,6 +65,19 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
             Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
         };
         return Task.FromResult(response);
+    }
+
+    private static bool IsProbePost(HttpRequestMessage request)
+    {
+        if (request.Method != HttpMethod.Post)
+        {
+            return false;
+        }
+
+        string path = request.RequestUri?.AbsolutePath ?? string.Empty;
+        return path.EndsWith("/git/refs", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith("/issues", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith("/pulls", StringComparison.OrdinalIgnoreCase);
     }
 }
 

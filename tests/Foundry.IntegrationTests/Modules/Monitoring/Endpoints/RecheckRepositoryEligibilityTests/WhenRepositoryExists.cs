@@ -1,9 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
+
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +37,13 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
             services.RemoveAll<IIssueProviderFactory>();
             services.AddScoped<IIssueProviderFactory>(_ =>
                 new StubProviderFactory(Result<BranchProtection>.Ok(eligibleProtection)));
+
+            // Probe-aware: probe POSTs return 422 (Granted) so eligibility proceeds to
+            // branch-protection evaluation via the stub provider factory.
+            services.RemoveAll<GitHubHttpClient>();
+            services.AddSingleton(
+                new GitHubHttpClient(
+                    new HttpClient(new ProbeGrantedFakeHandler())));
         });
 
         _client = _factory.CreateClient();
@@ -142,5 +153,30 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
+    }
+
+    /// <summary>
+    /// Returns 422 for all probe POSTs (Granted) so the write-permission check passes
+    /// and the eligibility evaluator proceeds to branch-protection evaluation.
+    /// </summary>
+    private sealed class ProbeGrantedFakeHandler : DelegatingHandler
+    {
+        private const string EmptyListingJson = "[]";
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (StaticListingFakeHandler.IsProbePost(request))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            }
+
+            HttpResponseMessage response = new(HttpStatusCode.OK)
+            {
+                Content = new StringContent(EmptyListingJson, Encoding.UTF8, "application/json"),
+            };
+            return Task.FromResult(response);
+        }
     }
 }

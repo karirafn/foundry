@@ -119,6 +119,11 @@ public sealed class WhenNamespacesAreDerived : IAsyncDisposable
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            if (StaticListingFakeHandler.IsProbePost(request))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            }
+
             HttpResponseMessage response = new(statusCode)
             {
                 Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),

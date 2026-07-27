@@ -151,6 +151,8 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
     /// <summary>
     /// Returns a successful listing for the original token but a 401 for any other token,
     /// simulating a transient provider failure for the new token.
+    /// Probe POSTs always return 422 (Granted) so the write-permission probe passes during
+    /// account creation regardless of which token is in use.
     /// </summary>
     private sealed class FailNewTokenListingHandler(
         string validToken,
@@ -160,6 +162,13 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            // Probe POSTs (/git/refs, /issues, /pulls) always return 422 (Granted)
+            // so write-permission probing succeeds regardless of the token used.
+            if (IsProbePost(request))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            }
+
             string token = string.Empty;
             if (request.Headers.TryGetValues("Authorization", out IEnumerable<string>? authValues))
             {
@@ -183,6 +192,19 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
 
             HttpResponseMessage unauthorized = new(HttpStatusCode.Unauthorized);
             return Task.FromResult(unauthorized);
+        }
+
+        private static bool IsProbePost(HttpRequestMessage request)
+        {
+            if (request.Method != HttpMethod.Post)
+            {
+                return false;
+            }
+
+            string path = request.RequestUri?.AbsolutePath ?? string.Empty;
+            return path.EndsWith("/git/refs", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith("/issues", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith("/pulls", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

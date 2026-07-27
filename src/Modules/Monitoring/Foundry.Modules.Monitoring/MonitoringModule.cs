@@ -22,7 +22,7 @@ public static class MonitoringModule
         services.Configure<MonitoringOptions>(configuration.GetSection("Monitoring"));
 
         services.AddHttpClient<GitHubHttpClient>();
-        services.AddHttpClient<IGitHubWriteProber, GitHubHttpClient>();
+        services.AddTransient<IGitHubWriteProber>(sp => sp.GetRequiredService<GitHubHttpClient>());
         services.AddHttpClient<GitLabHttpClient>();
 
         services.AddScoped<INamespaceDeriver, NamespaceDeriver>();
