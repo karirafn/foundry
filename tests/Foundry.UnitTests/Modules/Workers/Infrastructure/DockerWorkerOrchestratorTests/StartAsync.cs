@@ -3,8 +3,12 @@ using System.Net;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities.States;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.UnitTests.Fakes.Workers;

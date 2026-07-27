@@ -1,4 +1,5 @@
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.ImageBuild;
 
 using Microsoft.Extensions.Options;

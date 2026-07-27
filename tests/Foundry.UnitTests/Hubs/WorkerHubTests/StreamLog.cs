@@ -1,4 +1,4 @@
-using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Runs;
 using Foundry.WebApi.Hubs;
 
 using Microsoft.AspNetCore.SignalR;

@@ -4,6 +4,8 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.UnitTests.Fakes.Workers;
 
