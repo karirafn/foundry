@@ -1,6 +1,6 @@
 using System.Collections.Frozen;
 
-namespace Foundry.Modules.Monitoring.Features.Accounts;
+namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 // Values here are UI display strings only — permission labels for GitHub fine-grained tokens
 // and OAuth scope identifiers for GitLab. These are shown in the account form to guide token creation.

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 

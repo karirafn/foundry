@@ -1,3 +1,5 @@
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;

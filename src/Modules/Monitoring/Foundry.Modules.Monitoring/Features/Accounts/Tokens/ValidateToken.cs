@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 
-namespace Foundry.Modules.Monitoring.Features.Accounts;
+namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 internal static class ValidateToken
 {

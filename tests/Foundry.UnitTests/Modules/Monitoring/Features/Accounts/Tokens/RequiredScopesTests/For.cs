@@ -1,10 +1,10 @@
-using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.RequiredScopesTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.Tokens.RequiredScopesTests;
 
 public sealed class For
 {

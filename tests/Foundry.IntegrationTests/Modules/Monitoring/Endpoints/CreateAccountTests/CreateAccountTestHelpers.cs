@@ -4,6 +4,7 @@ using System.Text;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;

@@ -2,7 +2,7 @@ using System.Collections.Frozen;
 
 using Foundry.Modules.Monitoring.Contracts;
 
-namespace Foundry.Modules.Monitoring.Features.Accounts;
+namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 internal static class TokenRequirementsCatalog
 {
