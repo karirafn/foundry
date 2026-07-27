@@ -125,5 +125,7 @@ public sealed class WhenTakeoverNamespaceOutsideDerivedSet : IAsyncDisposable
         // Assert — the probe finds no target (no derived namespace repos) before the
         // takeover validation can run, so the response is a 400 with the no-repos message.
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        responseBody.ShouldContain("namespace");
     }
 }

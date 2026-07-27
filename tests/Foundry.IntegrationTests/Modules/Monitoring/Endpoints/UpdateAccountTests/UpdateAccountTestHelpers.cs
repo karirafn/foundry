@@ -1,5 +1,7 @@
 using System.Net;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
@@ -41,7 +43,7 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        if (IsProbePost(request))
+        if (StaticListingFakeHandler.IsProbePost(request))
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
         }
@@ -65,19 +67,6 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
             Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
         };
         return Task.FromResult(response);
-    }
-
-    private static bool IsProbePost(HttpRequestMessage request)
-    {
-        if (request.Method != HttpMethod.Post)
-        {
-            return false;
-        }
-
-        string path = request.RequestUri?.AbsolutePath ?? string.Empty;
-        return path.EndsWith("/git/refs", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith("/issues", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith("/pulls", StringComparison.OrdinalIgnoreCase);
     }
 }
 

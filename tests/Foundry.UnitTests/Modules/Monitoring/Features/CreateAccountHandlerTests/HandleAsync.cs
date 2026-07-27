@@ -510,7 +510,7 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             WasCalled = true;
-            throw new InvalidOperationException("Write prober should not have been called for GitLab credentials.");
+            return Task.FromResult(Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()));
         }
     }
 

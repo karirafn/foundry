@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -164,7 +166,7 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
         {
             // Probe POSTs (/git/refs, /issues, /pulls) always return 422 (Granted)
             // so write-permission probing succeeds regardless of the token used.
-            if (IsProbePost(request))
+            if (StaticListingFakeHandler.IsProbePost(request))
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
             }
@@ -192,19 +194,6 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
 
             HttpResponseMessage unauthorized = new(HttpStatusCode.Unauthorized);
             return Task.FromResult(unauthorized);
-        }
-
-        private static bool IsProbePost(HttpRequestMessage request)
-        {
-            if (request.Method != HttpMethod.Post)
-            {
-                return false;
-            }
-
-            string path = request.RequestUri?.AbsolutePath ?? string.Empty;
-            return path.EndsWith("/git/refs", StringComparison.OrdinalIgnoreCase)
-                || path.EndsWith("/issues", StringComparison.OrdinalIgnoreCase)
-                || path.EndsWith("/pulls", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

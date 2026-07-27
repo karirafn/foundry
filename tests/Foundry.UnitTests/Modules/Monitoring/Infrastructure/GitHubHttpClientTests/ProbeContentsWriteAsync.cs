@@ -198,4 +198,24 @@ public sealed class ProbeContentsWriteAsync
             result.ShouldBeOfType<Result<WritePermissionProbeResult>.Success>();
         success.Value.ShouldBeOfType<WritePermissionProbeResult.Granted>();
     }
+
+    [Fact]
+    public async Task WhenGitHubReturns401_ReturnsFailure()
+    {
+        // Arrange — 401 means the token expired or was revoked mid-probe; the result is
+        // indeterminate, so the probe must fail closed rather than returning Granted.
+        FakeHandler handler = new(HttpStatusCode.Unauthorized, string.Empty);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+    }
 }

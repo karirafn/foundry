@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 
 using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -130,56 +130,6 @@ public sealed class WhenProbeReportsMissingWrite : IAsyncDisposable
             repository.Eligibility.ShouldSatisfyAllConditions(
                 () => repository.Eligibility.Status.ShouldBe("eligible"),
                 () => repository.Eligibility.Violations.ShouldBeEmpty());
-        }
-    }
-
-    /// <summary>
-    /// Returns 403 for all probe POSTs so the eligibility evaluator marks the repository
-    /// as Ineligible with a cannot-push violation.
-    /// </summary>
-    private sealed class ProbeBlockedFakeHandler : DelegatingHandler
-    {
-        private const string EmptyListingJson = "[]";
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            if (StaticListingFakeHandler.IsProbePost(request))
-            {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
-            }
-
-            HttpResponseMessage response = new(HttpStatusCode.OK)
-            {
-                Content = new StringContent(EmptyListingJson, Encoding.UTF8, "application/json"),
-            };
-            return Task.FromResult(response);
-        }
-    }
-
-    /// <summary>
-    /// Returns 422 for all probe POSTs (Granted) so the eligibility evaluator proceeds
-    /// to branch-protection evaluation via the stub provider factory.
-    /// </summary>
-    private sealed class ProbeGrantedFakeHandler : DelegatingHandler
-    {
-        private const string EmptyListingJson = "[]";
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            if (StaticListingFakeHandler.IsProbePost(request))
-            {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
-            }
-
-            HttpResponseMessage response = new(HttpStatusCode.OK)
-            {
-                Content = new StringContent(EmptyListingJson, Encoding.UTF8, "application/json"),
-            };
-            return Task.FromResult(response);
         }
     }
 

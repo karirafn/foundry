@@ -66,12 +66,10 @@ internal sealed class RepositoryEligibilityEvaluator(
             token,
             cancellationToken);
 
-        if (probeResult is Result<WritePermissionProbeResult>.Failure)
+        if (probeResult is not Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult probe })
         {
             return new RepositoryEligibility.Unreachable();
         }
-
-        WritePermissionProbeResult probe = ((Result<WritePermissionProbeResult>.Success)probeResult).Value;
 
         if (probe is WritePermissionProbeResult.Missing)
         {

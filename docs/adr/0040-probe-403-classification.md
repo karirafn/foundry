@@ -23,6 +23,10 @@ A `403` is the only status code that conclusively indicates the token lacks writ
 It may also indicate a pending org approval (SSO SAML enforcement) — the caller must surface
 both possible causes in any error message shown to the user.
 
+**`401` Unauthorized → `Result.Fail`.**
+A `401` means the token expired or was revoked mid-probe. The result is indeterminate —
+permission cannot be confirmed or denied — so the probe fails closed.
+
 **`5xx` / transport error → `Result.Fail`.**
 Server errors and network failures are indeterminate — they do not confirm or deny permission.
 Returning `Result.Fail` prevents false-positive or false-negative permission classifications.
@@ -31,5 +35,6 @@ Returning `Result.Fail` prevents false-positive or false-negative permission cla
 
 - A `403` from org SAML enforcement is indistinguishable from a `403` from missing permission;
   block messages must name both causes.
-- `2xx` responses from the probe endpoint are impossible when the payload is invalid (all-zeros
-  SHA), so no production path reaches a success arm for `2xx`.
+- `2xx` responses from the probe endpoint would mean the probe actually created an object.
+  The `_` default arm fails closed for any such unexpected status — mapping a `2xx` to Granted
+  would be non-destructive only in theory but a real creation in practice.

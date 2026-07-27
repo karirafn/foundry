@@ -884,6 +884,10 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubW
             HttpStatusCode.UnprocessableEntity => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
             HttpStatusCode.NotFound => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
             HttpStatusCode.Forbidden => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permission)),
+            // Any other status — including 401 (token expired or revoked mid-probe) and any
+            // unexpected 2xx (which would mean the probe actually created an object) — is
+            // indeterminate and fails closed to preserve non-destructiveness and fail-closed
+            // semantics. Never map these to Granted.
             _ => Result<WritePermissionProbeResult>.Fail(ErrorFromNonSuccess(response)),
         };
     }

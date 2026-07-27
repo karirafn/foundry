@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 
 using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Infrastructure;
@@ -74,28 +74,4 @@ public sealed class WhenTokenCannotPush : IAsyncDisposable
             () => repository.Eligibility.Violations[0].Description.ShouldBe("token cannot push to owner/no-push-repo"));
     }
 
-    /// <summary>
-    /// Returns 403 for all probe POSTs so the eligibility evaluator classifies
-    /// the repository as Ineligible with a cannot-push violation.
-    /// </summary>
-    private sealed class ProbeBlockedFakeHandler : DelegatingHandler
-    {
-        private const string EmptyListingJson = "[]";
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            if (StaticListingFakeHandler.IsProbePost(request))
-            {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
-            }
-
-            HttpResponseMessage response = new(HttpStatusCode.OK)
-            {
-                Content = new StringContent(EmptyListingJson, Encoding.UTF8, "application/json"),
-            };
-            return Task.FromResult(response);
-        }
-    }
 }

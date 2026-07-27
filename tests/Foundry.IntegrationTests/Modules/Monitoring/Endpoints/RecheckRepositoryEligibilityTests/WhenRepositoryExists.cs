@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 
 using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -155,28 +155,4 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
             => Task.FromResult(Result<bool>.Ok(true));
     }
 
-    /// <summary>
-    /// Returns 422 for all probe POSTs (Granted) so the write-permission check passes
-    /// and the eligibility evaluator proceeds to branch-protection evaluation.
-    /// </summary>
-    private sealed class ProbeGrantedFakeHandler : DelegatingHandler
-    {
-        private const string EmptyListingJson = "[]";
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            if (StaticListingFakeHandler.IsProbePost(request))
-            {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
-            }
-
-            HttpResponseMessage response = new(HttpStatusCode.OK)
-            {
-                Content = new StringContent(EmptyListingJson, Encoding.UTF8, "application/json"),
-            };
-            return Task.FromResult(response);
-        }
-    }
 }
