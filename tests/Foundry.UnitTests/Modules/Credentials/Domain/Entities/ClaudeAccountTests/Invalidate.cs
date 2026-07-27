@@ -1,11 +1,11 @@
-using Foundry.Modules.Credentials.Domain;
+using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Credentials.Domain.ClaudeAccountTests;
+namespace Foundry.UnitTests.Modules.Credentials.Domain.Entities.ClaudeAccountTests;
 
 public sealed class Invalidate
 {

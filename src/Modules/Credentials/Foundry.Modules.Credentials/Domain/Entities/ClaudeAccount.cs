@@ -1,7 +1,7 @@
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Credentials.Domain;
+namespace Foundry.Modules.Credentials.Domain.Entities;
 
 public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
 {

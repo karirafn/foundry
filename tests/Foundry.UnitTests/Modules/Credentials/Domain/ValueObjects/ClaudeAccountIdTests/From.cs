@@ -1,10 +1,10 @@
-using Foundry.Modules.Credentials.Domain;
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Credentials.Domain.ClaudeAccountIdTests;
+namespace Foundry.UnitTests.Modules.Credentials.Domain.ValueObjects.ClaudeAccountIdTests;
 
 public sealed class From
 {

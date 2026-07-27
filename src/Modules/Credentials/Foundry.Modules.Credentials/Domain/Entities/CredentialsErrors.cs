@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Credentials.Domain;
+namespace Foundry.Modules.Credentials.Domain.Entities;
 
 internal static class CredentialsErrors
 {

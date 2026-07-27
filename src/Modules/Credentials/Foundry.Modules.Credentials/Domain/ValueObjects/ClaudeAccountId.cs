@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Credentials.Domain;
+namespace Foundry.Modules.Credentials.Domain.ValueObjects;
 
 public readonly record struct ClaudeAccountId(Guid Value) : IStronglyTypedId<ClaudeAccountId>
 {
