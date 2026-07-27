@@ -75,7 +75,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         (Guid accountId, Guid repositoryId) = await SeedAsync(owner: "old-owner");
         Namespace newNs = Namespace.Create("new-owner").ValueOrThrow();
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([newNs]);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([newNs], []);
         RecheckRepositoryEligibility.Handler handler = BuildHandler(
             namespaceDeriver: new StubNamespaceDeriver(outcome));
         RecheckRepositoryEligibility.Command command = new(accountId, repositoryId);
