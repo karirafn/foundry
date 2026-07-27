@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Orchestration;
 
 internal sealed record WorkerStatus(
     bool IsRunning,

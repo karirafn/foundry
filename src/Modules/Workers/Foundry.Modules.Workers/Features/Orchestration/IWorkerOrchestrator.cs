@@ -5,7 +5,7 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Orchestration;
 
 internal interface IWorkerOrchestrator
 {

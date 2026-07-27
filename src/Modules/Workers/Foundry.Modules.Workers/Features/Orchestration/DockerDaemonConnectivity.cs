@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Orchestration;
 
 /// <summary>
 /// Shared predicate for classifying Docker daemon connectivity failures.

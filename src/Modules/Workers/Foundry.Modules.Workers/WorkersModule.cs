@@ -4,6 +4,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.Health;
