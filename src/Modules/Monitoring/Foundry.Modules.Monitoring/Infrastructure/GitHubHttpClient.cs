@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;

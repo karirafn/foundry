@@ -1,10 +1,10 @@
-using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Polling;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.LabelClassifierTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.LabelClassifierTests;
 
 public sealed class ClassifyKind
 {

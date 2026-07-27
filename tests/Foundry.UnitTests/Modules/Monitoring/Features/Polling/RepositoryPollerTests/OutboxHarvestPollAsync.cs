@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Outbox;
@@ -18,7 +19,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.RepositoryPollerTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.RepositoryPollerTests;
 
 /// <summary>
 /// Verifies that RepositoryPoller enqueues integration events before SaveChangesAsync

@@ -1,4 +1,4 @@
-using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Polling;
 
 using Microsoft.Extensions.Configuration;
 
@@ -6,7 +6,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.MonitoringOptionsTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.MonitoringOptionsTests;
 
 public sealed class Bind
 {

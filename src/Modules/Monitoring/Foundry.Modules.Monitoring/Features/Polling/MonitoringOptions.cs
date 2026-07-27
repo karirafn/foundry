@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.Polling;
 
 public sealed class MonitoringOptions
 {

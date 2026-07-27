@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;

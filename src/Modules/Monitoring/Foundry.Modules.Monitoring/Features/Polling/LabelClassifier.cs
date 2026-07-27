@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.Polling;
 
 internal static class LabelClassifier
 {
