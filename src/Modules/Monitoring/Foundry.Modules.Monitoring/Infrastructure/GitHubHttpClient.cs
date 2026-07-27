@@ -13,7 +13,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
 
-internal sealed partial class GitHubHttpClient(HttpClient httpClient)
+internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubWriteProber
 {
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
@@ -545,6 +545,42 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
         return ClassifyProbeResponse(response, WritePermission.PullRequests);
     }
+
+    public async Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        Result<WritePermissionProbeResult> contentsResult = await ProbeContentsWriteAsync(
+            apiBaseUrl, slug, token, cancellationToken);
+
+        if (!IsGranted(contentsResult))
+        {
+            return contentsResult;
+        }
+
+        Result<WritePermissionProbeResult> issuesResult = await ProbeIssuesWriteAsync(
+            apiBaseUrl, slug, token, cancellationToken);
+
+        if (!IsGranted(issuesResult))
+        {
+            return issuesResult;
+        }
+
+        Result<WritePermissionProbeResult> pullsResult = await ProbePullRequestsWriteAsync(
+            apiBaseUrl, slug, token, cancellationToken);
+
+        if (!IsGranted(pullsResult))
+        {
+            return pullsResult;
+        }
+
+        return Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted());
+    }
+
+    private static bool IsGranted(Result<WritePermissionProbeResult> result) =>
+        result is Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult.Granted };
 
     public async Task<Result<bool>> GetPushPermissionAsync(
         Uri apiBaseUrl,
