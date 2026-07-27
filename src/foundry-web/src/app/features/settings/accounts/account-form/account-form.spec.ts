@@ -51,9 +51,10 @@ const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
 
 const GITHUB_REQUIREMENTS: TokenRequirements = {
   providerType: 'github',
-  tokenTypeLabel: 'Personal Access Token',
-  scopes: ['repo'],
-  creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
+  tokenTypeLabel: 'GitHub fine-grained personal access token',
+  scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+  creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
+  resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
 };
 
 const GITLAB_REQUIREMENTS: TokenRequirements = {
@@ -61,6 +62,7 @@ const GITLAB_REQUIREMENTS: TokenRequirements = {
   tokenTypeLabel: 'Personal Access Token',
   scopes: ['api'],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+  resourceOwnerHint: null,
 };
 
 class FakeAccountService {
@@ -1078,10 +1080,14 @@ describe('AccountFormComponent', () => {
     const section = el.querySelector('.account-form__requirements');
     expect(section).toBeTruthy();
     const text = section!.querySelector('.account-form__requirements-text');
-    expect(text?.textContent).toContain('Personal Access Token');
+    expect(text?.textContent).toContain('GitHub fine-grained personal access token');
     const scopes = section!.querySelectorAll('.account-form__requirements-scope code');
-    expect(scopes.length).toBe(1);
-    expect(scopes[0].textContent).toBe('repo');
+    expect(scopes.length).toBe(5);
+    expect(scopes[0].textContent).toBe('Contents (read and write)');
+    expect(scopes[1].textContent).toBe('Issues (read and write)');
+    expect(scopes[2].textContent).toBe('Pull requests (read and write)');
+    expect(scopes[3].textContent).toBe('Workflows (write)');
+    expect(scopes[4].textContent).toBe('Metadata (read)');
   });
 
   // Cycle 57: provider radio change refetches requirements and updates displayed label/scope
@@ -1119,14 +1125,14 @@ describe('AccountFormComponent', () => {
     const section = el.querySelector('.account-form__requirements');
     expect(section).toBeTruthy();
     const text = section!.querySelector('.account-form__requirements-text');
-    expect(text?.textContent).toContain('Personal Access Token');
+    expect(text?.textContent).toContain('GitHub fine-grained personal access token');
     const scopes = section!.querySelectorAll('.account-form__requirements-scope code');
-    expect(scopes.length).toBe(1);
-    expect(scopes[0].textContent).toBe('repo');
+    expect(scopes.length).toBe(5);
+    expect(scopes[0].textContent).toBe('Contents (read and write)');
   });
 
-  // Cycle 59: valid base URL — "Create token" anchor is rendered with correct href
-  it('should render "Create token" anchor with substituted href when base URL is valid', async () => {
+  // Cycle 59a: valid base URL (GitLab) — "Create token" anchor is rendered with correct href
+  it('should render "Create token" anchor with substituted href when base URL is valid (GitLab)', async () => {
     // Arrange — GitLab uses {baseUrl} template; account has a GitLab base URL
     const account: AccountSummary = {
       id: '00000000-0000-0000-0000-000000000003',
@@ -1157,6 +1163,119 @@ describe('AccountFormComponent', () => {
     expect(link.target).toBe('_blank');
     expect(link.rel).toContain('noopener');
     expect(link.rel).toContain('noreferrer');
+  });
+
+  // Cycle 59b: valid base URL (GitHub fine-grained) — href contains pre-filled query params
+  it('should render "Create token" anchor with fine-grained pre-filled href for GitHub base URL', async () => {
+    // Arrange — GitHub uses {baseUrl} template with fine-grained query params
+    const { el, fixture } = setup({ account: null });
+
+    // Act — wait for requirements fetch (defaults to GitHub)
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — link points to the pre-filled fine-grained PAT creation URL
+    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.href).toBe(
+      'https://github.com/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write'
+    );
+    expect(link.target).toBe('_blank');
+    expect(link.rel).toContain('noopener');
+  });
+
+  // Cycle 59c: resource-owner hint rendered for GitHub (non-null resourceOwnerHint)
+  it('should render resource-owner hint paragraph when resourceOwnerHint is non-null (GitHub)', async () => {
+    // Arrange — GitHub requirements carry a non-null resourceOwnerHint
+    const { el, fixture } = setup({ account: null });
+
+    // Act — wait for requirements fetch
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    const hint = el.querySelector('.account-form__requirements-owner-hint');
+    expect(hint).toBeTruthy();
+    expect(hint?.textContent).toContain('Fine-grained tokens are bound to a single resource owner');
+  });
+
+  // Cycle 59d: resource-owner hint absent for GitLab (null resourceOwnerHint)
+  it('should NOT render resource-owner hint paragraph when resourceOwnerHint is null (GitLab)', async () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Act — switch to GitLab (null resourceOwnerHint)
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — no hint element rendered
+    const hint = el.querySelector('.account-form__requirements-owner-hint');
+    expect(hint).toBeNull();
+  });
+
+  // Cycle 59e: resource-owner hint sits below scope chips and above the create-token link
+  it('should render resource-owner hint between scope chip list and create-token link', async () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null });
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — DOM order: scopes ul → owner-hint p → link a
+    const section = el.querySelector('.account-form__requirements')!;
+    const children = Array.from(section.children);
+    const scopesIndex = children.findIndex(c => c.classList.contains('account-form__requirements-scopes'));
+    const hintIndex = children.findIndex(c => c.classList.contains('account-form__requirements-owner-hint'));
+    const linkIndex = children.findIndex(c => c.classList.contains('account-form__requirements-link'));
+    expect(scopesIndex).toBeGreaterThan(-1);
+    expect(hintIndex).toBeGreaterThan(scopesIndex);
+    expect(linkIndex).toBeGreaterThan(hintIndex);
+  });
+
+  // Cycle 59f: create-token link has aria-describedby pointing at the owner-hint when hint is present (GitHub)
+  it('should set aria-describedby on the create-token link to "account-form-owner-hint" for GitHub', async () => {
+    // Arrange — GitHub requirements have a non-null resourceOwnerHint
+    const { el, fixture } = setup({ account: null });
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — hint paragraph has the expected id
+    const hint = el.querySelector('#account-form-owner-hint');
+    expect(hint).toBeTruthy();
+    // Assert — create-token link is associated with the hint via aria-describedby
+    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('aria-describedby')).toBe('account-form-owner-hint');
+  });
+
+  // Cycle 59g: create-token link does NOT have aria-describedby when hint is absent (GitLab)
+  it('should NOT set aria-describedby on the create-token link when resourceOwnerHint is null (GitLab)', async () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Act — switch to GitLab (null resourceOwnerHint)
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — no aria-describedby on the create-token link
+    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('aria-describedby')).toBeNull();
   });
 
   // Cycle 60: empty/invalid base URL — no anchor rendered; fallback hint text present

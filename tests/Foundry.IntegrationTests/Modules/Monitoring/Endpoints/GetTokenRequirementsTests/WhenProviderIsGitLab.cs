@@ -43,6 +43,7 @@ public sealed class WhenProviderIsGitLab : IAsyncDisposable
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
             () => dto.Scopes.ShouldBe(["api"]),
-            () => dto.CreationUrlTemplate.ShouldContain("/-/user_settings/personal_access_tokens"));
+            () => dto.CreationUrlTemplate.ShouldContain("/-/user_settings/personal_access_tokens"),
+            () => dto.ResourceOwnerHint.ShouldBeNull());
     }
 }

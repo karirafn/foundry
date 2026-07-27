@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
@@ -21,6 +20,11 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
+
+    // Classic PATs remain accepted by design (issue #333 keeps them valid, just no longer advertised in the UI).
+    // This constant is intentionally decoupled from RequiredScopes.For(github), which now carries fine-grained
+    // permission display labels for the UI and is not a validation source for OAuth scope token checks.
+    private static readonly IReadOnlyList<string> ClassicPatOAuthScopes = ["repo"];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -784,7 +788,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         List<string> missing = [];
-        foreach (string required in RequiredScopes.For(ProviderTypes.GitHub))
+        foreach (string required in ClassicPatOAuthScopes)
         {
             if (!grantedScopes.Contains(required))
             {
