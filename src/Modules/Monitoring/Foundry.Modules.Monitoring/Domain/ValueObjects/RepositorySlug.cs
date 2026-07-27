@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 using Foundry.Shared;
 
-namespace Foundry.Modules.Monitoring.Domain.Entities;
+namespace Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 public sealed partial record RepositorySlug
 {

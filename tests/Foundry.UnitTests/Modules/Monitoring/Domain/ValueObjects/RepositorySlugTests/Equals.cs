@@ -1,4 +1,4 @@
-using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Testing;
 
@@ -6,7 +6,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Domain.RepositorySlugTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Domain.ValueObjects.RepositorySlugTests;
 
 public sealed class Equals
 {
