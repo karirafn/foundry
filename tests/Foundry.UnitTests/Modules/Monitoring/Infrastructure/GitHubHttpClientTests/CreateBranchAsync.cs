@@ -215,4 +215,231 @@ public sealed class CreateBranchAsync
         createRefRequest.RequestUri.ShouldNotBeNull();
         createRefRequest.RequestUri.AbsolutePath.ShouldBe("/repos/owner/repo/git/refs");
     }
+
+    [Fact]
+    public async Task WhenCreateRefReturns403WithPermissionsHeader_ReturnsProviderError()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string forbiddenJson = """{ "message": "Resource not accessible by personal access token" }""";
+        IReadOnlyDictionary<string, string> forbiddenHeaders = new Dictionary<string, string>
+        {
+            ["X-Accepted-GitHub-Permissions"] = "contents=write",
+        };
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson, new Dictionary<string, string>()),
+            (HttpStatusCode.Forbidden, forbiddenJson, forbiddenHeaders),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.ProviderError");
+        failure.Error.Message.ShouldContain("owner/repo");
+        failure.Error.Message.ShouldContain("403");
+        failure.Error.Message.ShouldContain("contents=write");
+        failure.Error.Message.ShouldContain("organization");
+    }
+
+    [Fact]
+    public async Task WhenCreateRefReturns403WithoutPermissionsHeader_ReturnsProviderErrorWithBodyMessage()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string forbiddenJson = """{ "message": "Resource not accessible by personal access token" }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson),
+            (HttpStatusCode.Forbidden, forbiddenJson),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.ProviderError");
+        failure.Error.Message.ShouldContain("owner/repo");
+        failure.Error.Message.ShouldContain("403");
+        failure.Error.Message.ShouldContain("Resource not accessible by personal access token");
+        failure.Error.Message.ShouldNotContain("contents=write");
+    }
+
+    [Fact]
+    public async Task WhenCreateRefReturns403WithRateLimitExhausted_ReturnsRateLimitExhausted()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string rateLimitJson = """{ "message": "API rate limit exceeded" }""";
+        IReadOnlyDictionary<string, string> rateLimitHeaders = new Dictionary<string, string>
+        {
+            ["X-RateLimit-Remaining"] = "0",
+        };
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson, new Dictionary<string, string>()),
+            (HttpStatusCode.Forbidden, rateLimitJson, rateLimitHeaders),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.RateLimitExhausted");
+    }
+
+    [Fact]
+    public async Task WhenCreateRefReturns403WithSecretInBodyMessage_ErrorMessageIsRedacted()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string tokenValue = "ghp_abcdefghijklmnopqrstuvwxyz123456";
+        string forbiddenJson = $$"""{ "message": "Resource not accessible: token {{tokenValue}} is invalid" }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson),
+            (HttpStatusCode.Forbidden, forbiddenJson),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.ProviderError");
+        failure.Error.Message.ShouldNotContain(tokenValue);
+        failure.Error.Message.ShouldContain("***");
+    }
+
+    [Fact]
+    public async Task WhenCreateRefReturns403WithOverLongBodyMessage_ErrorMessageIsBounded()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string longMessage = new string('x', 600);
+        string forbiddenJson = $$"""{ "message": "{{longMessage}}" }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson),
+            (HttpStatusCode.Forbidden, forbiddenJson),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.ProviderError");
+        failure.Error.Message.Length.ShouldBeLessThanOrEqualTo(600);
+        failure.Error.Message.ShouldEndWith("...");
+    }
+
+    [Fact]
+    public async Task WhenCreateRefReturnsNon403Failure_ReturnsUnchangedError()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson),
+            (HttpStatusCode.InternalServerError, string.Empty),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.UnexpectedStatusCode");
+        failure.Error.Message.ShouldContain("500");
+    }
+
+    [Fact]
+    public async Task WhenCreateRefReturns403WithUserinfoUrlInBodyMessage_UserinfoIsRedacted()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string forbiddenJson = """{ "message": "Access denied: https://user:supersecret@api.github.com/x" }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson),
+            (HttpStatusCode.Forbidden, forbiddenJson),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.ProviderError");
+        failure.Error.Message.ShouldNotContain("supersecret");
+        failure.Error.Message.ShouldContain("https://***@");
+    }
 }

@@ -48,15 +48,15 @@ public sealed class ListRepositoriesAsync
         GitLabHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
-        IReadOnlyList<AvailableRepository> repos = success.Value;
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
+        IReadOnlyList<ProviderRepository> repos = success.Value;
         repos.Count.ShouldBe(2);
         repos.ShouldContain(r => r.Slug == "alice/public-project" && !r.IsPrivate && r.CanPush);
         repos.ShouldContain(r => r.Slug == "alice/secret-project" && r.IsPrivate && !r.CanPush);
@@ -81,14 +81,14 @@ public sealed class ListRepositoriesAsync
         GitLabHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.ShouldContain(r => r.CanPush);
     }
 
@@ -111,14 +111,14 @@ public sealed class ListRepositoriesAsync
         GitLabHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.ShouldContain(r => !r.CanPush);
     }
 
@@ -141,14 +141,14 @@ public sealed class ListRepositoriesAsync
         GitLabHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.ShouldContain(r => r.CanPush);
     }
 
@@ -171,14 +171,14 @@ public sealed class ListRepositoriesAsync
         GitLabHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.ShouldContain(r => !r.CanPush);
     }
 
@@ -198,14 +198,14 @@ public sealed class ListRepositoriesAsync
         GitLabHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.Count.ShouldBe(150);
     }
 
@@ -225,14 +225,14 @@ public sealed class ListRepositoriesAsync
         GitLabHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.Count.ShouldBe(500);
     }
 
@@ -286,14 +286,14 @@ public sealed class ListRepositoriesAsync
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             invalidBaseUrl,
             "glpat_token",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Failure>();
+        Result<IReadOnlyList<ProviderRepository>>.Failure failure =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Failure>();
         failure.Error.Code.ShouldBe("GitLab.InvalidBaseUrl");
     }
 
@@ -306,14 +306,14 @@ public sealed class ListRepositoriesAsync
         GitLabHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "glpat_token",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Failure>();
+        Result<IReadOnlyList<ProviderRepository>>.Failure failure =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Failure>();
         failure.Error.Message.ShouldContain("500");
     }
 }

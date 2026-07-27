@@ -726,7 +726,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBranchCreationFails_CreatesFailedRunWithBranchCreationError()
+    public async Task WhenBranchCreationFails_CreatesFailedRunWithProviderError()
     {
         // Arrange
         IssueClaimedHandler sut = BuildHandler(
@@ -740,7 +740,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        FailureReason.ProviderError providerError = failedRun.Reason.ShouldBeOfType<FailureReason.ProviderError>();
+        providerError.Message.ShouldBe("Branch creation failed");
     }
 
     [Fact]

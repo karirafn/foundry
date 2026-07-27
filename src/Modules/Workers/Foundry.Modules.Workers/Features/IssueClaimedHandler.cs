@@ -47,7 +47,7 @@ internal sealed class IssueClaimedHandler(
 
         if (branchResult is Result<bool>.Failure branchFailure)
         {
-            FailedRun branchFailedRun = startingRun.Fail(new FailureReason.ContainerError(branchFailure.Error.Message));
+            FailedRun branchFailedRun = startingRun.Fail(new FailureReason.ProviderError(branchFailure.Error.Message));
             await dbContext.TransitionAsync(startingRun, branchFailedRun, domainEventDispatcher, cancellationToken);
 
             logger.LogWarning(

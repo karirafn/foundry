@@ -66,6 +66,7 @@ export interface TokenRequirements {
   readonly tokenTypeLabel: string;
   readonly scopes: readonly string[];
   readonly creationUrlTemplate: string;
+  readonly resourceOwnerHint: string | null;
 }
 
 export function affectedStatusLabel(status: AffectedRepositoryStatus): string {

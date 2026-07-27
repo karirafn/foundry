@@ -46,7 +46,7 @@ public static class MonitoringModule
         services.AddQueryHandler<ValidateToken.Query, ValidateToken.Response, ValidateToken.Handler>();
 
         services.AddQueryHandler<GetRepositories.Query, IReadOnlyList<RepositorySummary>, GetRepositories.Handler>();
-        services.AddQueryHandler<GetAvailableRepositories.Query, IReadOnlyList<AvailableRepository>, GetAvailableRepositories.Handler>();
+        services.AddQueryHandler<GetAvailableRepositories.Query, AvailableRepositoriesResponse, GetAvailableRepositories.Handler>();
         services.AddCommandHandler<CreateRepository.Command, RepositorySummary, CreateRepository.Handler, CreateRepository.Validator>();
         services.AddCommandHandler<UpdateRepository.Command, RepositorySummary, UpdateRepository.Handler, UpdateRepository.Validator>();
         services.AddCommandHandler<DeleteRepository.Command, bool, DeleteRepository.Handler>();

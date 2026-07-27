@@ -10,7 +10,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.TokenRequiremen
 public sealed class For
 {
     [Fact]
-    public void WhenProviderIsGitHub_ReturnsClassicLabelAndRepoScopeAndGitHubTemplate()
+    public void WhenProviderIsGitHub_ReturnsFineGrainedLabelAndPermissionsAndCreationTemplate()
     {
         // Arrange
 
@@ -21,9 +21,15 @@ public sealed class For
         result.ShouldNotBeNull();
         result.ShouldSatisfyAllConditions(
             () => result.ProviderType.ShouldBe("github"),
-            () => result.TokenTypeLabel.ShouldBe("GitHub classic personal access token"),
-            () => result.Scopes.ShouldBe(["repo"]),
-            () => result.CreationUrlTemplate.ShouldBe("{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry"));
+            () => result.TokenTypeLabel.ShouldBe("GitHub fine-grained personal access token"),
+            () => result.Scopes.ShouldBe([
+                "Contents (read and write)",
+                "Issues (read and write)",
+                "Pull requests (read and write)",
+                "Workflows (write)",
+                "Metadata (read)"]),
+            () => result.CreationUrlTemplate.ShouldBe(
+                "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write"));
     }
 
     [Fact]
@@ -53,6 +59,33 @@ public sealed class For
 
         // Assert
         result.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenProviderIsGitHub_ReturnsResourceOwnerHintForOrganizations()
+    {
+        // Arrange
+
+        // Act
+        TokenRequirements? result = TokenRequirementsCatalog.For("github");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.ResourceOwnerHint.ShouldBe(
+            "Fine-grained tokens are bound to a single resource owner. To reach an organization's repositories, choose that organization as the token's resource owner when creating the token.");
+    }
+
+    [Fact]
+    public void WhenProviderIsGitLab_ReturnsNullResourceOwnerHint()
+    {
+        // Arrange
+
+        // Act
+        TokenRequirements? result = TokenRequirementsCatalog.For("gitlab");
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.ResourceOwnerHint.ShouldBeNull();
     }
 
     [Fact]

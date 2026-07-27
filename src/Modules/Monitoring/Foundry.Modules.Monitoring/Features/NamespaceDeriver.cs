@@ -23,7 +23,7 @@ internal sealed class NamespaceDeriver(
         try
         {
             bool isGitLab = credential is GitLabCredential;
-            Result<IReadOnlyList<AvailableRepository>> listResult = isGitLab
+            Result<IReadOnlyList<ProviderRepository>> listResult = isGitLab
                 ? await gitLabHttpClient.ListRepositoriesAsync(
                     credential.ApiBaseUrl,
                     credential.Token,
@@ -33,7 +33,7 @@ internal sealed class NamespaceDeriver(
                     credential.Token,
                     cancellationToken);
 
-            if (listResult is not Result<IReadOnlyList<AvailableRepository>>.Success listSuccess)
+            if (listResult is not Result<IReadOnlyList<ProviderRepository>>.Success listSuccess)
             {
                 return new NamespaceDerivationOutcome.Unavailable();
             }

@@ -48,15 +48,15 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
-        IReadOnlyList<AvailableRepository> repos = success.Value;
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
+        IReadOnlyList<ProviderRepository> repos = success.Value;
         repos.Count.ShouldBe(2);
         repos.ShouldContain(r => r.Slug == "octocat/Hello-World" && !r.IsPrivate && r.CanPush);
         repos.ShouldContain(r => r.Slug == "octocat/my-secret" && r.IsPrivate && !r.CanPush);
@@ -77,14 +77,14 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.ShouldContain(r => r.Slug == "org/repo-a" && !r.CanPush);
     }
 
@@ -107,14 +107,14 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.ShouldContain(r => r.Slug == "octocat/writable-repo" && r.CanPush);
     }
 
@@ -137,14 +137,14 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.ShouldContain(r => r.Slug == "octocat/read-only-repo" && !r.CanPush);
     }
 
@@ -165,14 +165,14 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.Count.ShouldBe(150);
     }
 
@@ -231,14 +231,14 @@ public sealed class ListRepositoriesAsync
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             invalidBaseUrl,
             "ghp_token",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Failure>();
+        Result<IReadOnlyList<ProviderRepository>>.Failure failure =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.InvalidBaseUrl");
     }
 
@@ -252,14 +252,14 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Failure>();
+        Result<IReadOnlyList<ProviderRepository>>.Failure failure =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.RateLimitExhausted");
     }
 
@@ -272,13 +272,13 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token",
             CancellationToken.None);
 
         // Assert
-        result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Failure>();
+        result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Failure>();
     }
 
     [Fact]
@@ -290,14 +290,14 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Failure>();
+        Result<IReadOnlyList<ProviderRepository>>.Failure failure =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Failure>();
         failure.Error.Message.ShouldContain("500");
     }
 
@@ -318,14 +318,14 @@ public sealed class ListRepositoriesAsync
         GitHubHttpClient sut = new(httpClient);
 
         // Act
-        Result<IReadOnlyList<AvailableRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
             ValidBaseUrl,
             "ghp_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<AvailableRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<AvailableRepository>>.Success>();
+        Result<IReadOnlyList<ProviderRepository>>.Success success =
+            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
         success.Value.Count.ShouldBe(500);
     }
 }
