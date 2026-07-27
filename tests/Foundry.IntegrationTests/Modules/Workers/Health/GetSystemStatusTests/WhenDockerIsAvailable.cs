@@ -10,14 +10,14 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Workers.Endpoints.GetSystemStatusTests;
+namespace Foundry.IntegrationTests.Modules.Workers.Health.GetSystemStatusTests;
 
-public sealed class WhenDockerIsUnavailable : IAsyncDisposable
+public sealed class WhenDockerIsAvailable : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenDockerIsUnavailable()
+    public WhenDockerIsAvailable()
     {
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -27,7 +27,7 @@ public sealed class WhenDockerIsUnavailable : IAsyncDisposable
             services.RemoveAll<IDockerAvailabilityStateMutator>();
 
             DockerAvailabilityState state = new();
-            state.Set(false);
+            state.Set(true);
 
             services.AddSingleton(state);
             services.AddSingleton<IDockerAvailabilityState>(state);
@@ -43,9 +43,9 @@ public sealed class WhenDockerIsUnavailable : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerIsUnavailable_ReturnsDockerAvailableFalse()
+    public async Task WhenDockerIsAvailable_ReturnsDockerAvailableTrue()
     {
-        // Arrange — factory seeds state with IsAvailable = false (default).
+        // Arrange — factory seeds state with IsAvailable = true.
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(
@@ -57,6 +57,6 @@ public sealed class WhenDockerIsUnavailable : IAsyncDisposable
         SystemStatus? status = await response.Content.ReadFromJsonAsync<SystemStatus>(
             TestContext.Current.CancellationToken);
         status.ShouldNotBeNull();
-        status.DockerAvailable.ShouldBeFalse();
+        status.DockerAvailable.ShouldBeTrue();
     }
 }
