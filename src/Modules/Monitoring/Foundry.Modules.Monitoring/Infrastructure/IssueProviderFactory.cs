@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
 

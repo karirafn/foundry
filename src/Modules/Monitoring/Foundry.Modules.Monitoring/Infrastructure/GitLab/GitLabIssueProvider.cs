@@ -4,7 +4,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Monitoring.Infrastructure;
+namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
 internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
 {
