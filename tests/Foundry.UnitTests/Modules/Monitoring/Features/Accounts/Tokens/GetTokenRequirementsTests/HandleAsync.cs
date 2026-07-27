@@ -7,7 +7,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.GetTokenRequirementsTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.Tokens.GetTokenRequirementsTests;
 
 public sealed class HandleAsync
 {

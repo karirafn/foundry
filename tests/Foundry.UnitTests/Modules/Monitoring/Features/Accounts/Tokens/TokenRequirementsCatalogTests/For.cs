@@ -6,7 +6,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.TokenRequirementsCatalogTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.Tokens.TokenRequirementsCatalogTests;
 
 public sealed class For
 {
