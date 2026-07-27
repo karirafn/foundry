@@ -607,7 +607,8 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
         if (!createRefResponse.IsSuccessStatusCode)
         {
-            return Result<bool>.Fail(ErrorFromNonSuccess(createRefResponse));
+            Error branchError = await ErrorFromBranchCreationFailureAsync(createRefResponse, slug, cancellationToken);
+            return Result<bool>.Fail(branchError);
         }
 
         return Result<bool>.Ok(true);
@@ -854,15 +855,50 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return path;
     }
 
-    private static Error ErrorFromNonSuccess(HttpResponseMessage response)
+    private static bool IsRateLimited(HttpResponseMessage response)
     {
+        return response.Headers.TryGetValues("X-RateLimit-Remaining", out IEnumerable<string>? remaining) &&
+            remaining.FirstOrDefault() == "0";
+    }
+
+    private static async Task<Error> ErrorFromBranchCreationFailureAsync(
+        HttpResponseMessage response,
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        if (response.StatusCode == HttpStatusCode.Forbidden && IsRateLimited(response))
+        {
+            return GitHubErrors.RateLimitExhausted;
+        }
+
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
-            if (response.Headers.TryGetValues("X-RateLimit-Remaining", out IEnumerable<string>? remaining) &&
-                remaining.FirstOrDefault() == "0")
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            GitHubErrorBodyDto? errorDto = DeserializeErrorBody(body);
+            string bodyMessage = errorDto?.Message ?? body;
+
+            if (response.Headers.TryGetValues("X-Accepted-GitHub-Permissions", out IEnumerable<string>? permValues))
             {
-                return GitHubErrors.RateLimitExhausted;
+                string permissions = string.Join(", ", permValues);
+                string message = $"Branch pre-creation on {slug} returned 403 — token lacks {permissions}. " +
+                    $"Pending organization approval may also prevent access (fine-grained PATs require org approval).";
+                return GitHubErrors.ProviderError(message);
             }
+            else
+            {
+                string message = $"Branch pre-creation on {slug} returned 403 — {bodyMessage}";
+                return GitHubErrors.ProviderError(message);
+            }
+        }
+
+        return ErrorFromNonSuccess(response);
+    }
+
+    private static Error ErrorFromNonSuccess(HttpResponseMessage response)
+    {
+        if (response.StatusCode == HttpStatusCode.Forbidden && IsRateLimited(response))
+        {
+            return GitHubErrors.RateLimitExhausted;
         }
 
         int statusCode = (int)response.StatusCode;
@@ -874,6 +910,18 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         return error;
+    }
+
+    private static GitHubErrorBodyDto? DeserializeErrorBody(string body)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<GitHubErrorBodyDto>(body, JsonOptions);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
     }
 
     private sealed record GitHubRepositoryInfoDto(string DefaultBranch);
@@ -940,6 +988,8 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string State,
         string? MergedAt,
         DateTimeOffset UpdatedAt);
+
+    private sealed record GitHubErrorBodyDto(string? Message);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
@@ -966,4 +1016,7 @@ internal static class GitHubErrors
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitHub.UnexpectedStatusCode", $"GitHub API returned unexpected status code {statusCode}.");
+
+    public static Error ProviderError(string message) =>
+        new("GitHub.ProviderError", message);
 }
