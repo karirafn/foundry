@@ -1,5 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Providers;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
 

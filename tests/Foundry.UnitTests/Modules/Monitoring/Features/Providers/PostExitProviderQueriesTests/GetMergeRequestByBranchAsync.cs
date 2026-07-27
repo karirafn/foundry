@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -14,9 +15,9 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.PostExitProviderQueriesTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Providers.PostExitProviderQueriesTests;
 
-public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
+public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
@@ -24,7 +25,7 @@ public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
 
     private StubIssueProvider _stubProvider = new();
 
-    public GetLatestBranchCommitAsync()
+    public GetMergeRequestByBranchAsync()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -70,58 +71,58 @@ public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
         MonitoredRepositoryId nonExistentId = MonitoredRepositoryId.New();
 
         // Act
-        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
+        Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             nonExistentId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<LatestBranchCommit>.Failure failure = result.ShouldBeOfType<Result<LatestBranchCommit>.Failure>();
+        Result<MergeRequestByBranch>.Failure failure = result.ShouldBeOfType<Result<MergeRequestByBranch>.Failure>();
         failure.Error.Code.ShouldBe("PostExitProviderQueries.RepositoryNotFound");
     }
 
     [Fact]
-    public async Task WhenProviderReturnsCommit_ReturnsCommitDetails()
+    public async Task WhenProviderReturnsMerged_ReturnsMergedResult()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
-        LatestBranchCommit commit = new("abc1234", "feat: add something");
+        MergeRequestByBranch mergeRequest = new(MergeRequestPresence.Merged, "https://github.com/owner/repo/pull/42");
         _stubProvider = new StubIssueProvider(
-            getLatestBranchCommitResult: Result<LatestBranchCommit>.Ok(commit));
+            getMergeRequestResult: Result<MergeRequestByBranch>.Ok(mergeRequest));
 
         // Act
-        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
+        Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             repoId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<LatestBranchCommit>.Success success = result.ShouldBeOfType<Result<LatestBranchCommit>.Success>();
+        Result<MergeRequestByBranch>.Success success = result.ShouldBeOfType<Result<MergeRequestByBranch>.Success>();
         success.Value.ShouldSatisfyAllConditions(
-            () => success.Value.Sha.ShouldBe("abc1234"),
-            () => success.Value.Message.ShouldBe("feat: add something"));
+            () => success.Value.Presence.ShouldBe(MergeRequestPresence.Merged),
+            () => success.Value.WebUrl.ShouldBe("https://github.com/owner/repo/pull/42"));
     }
 
     [Fact]
-    public async Task WhenProviderIsUnreachable_ReturnsFailure()
+    public async Task WhenProviderFails_ReturnsFailure()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         Error providerError = new("Provider.Unreachable", "Provider is unreachable");
         _stubProvider = new StubIssueProvider(
-            getLatestBranchCommitResult: Result<LatestBranchCommit>.Fail(providerError));
+            getMergeRequestResult: Result<MergeRequestByBranch>.Fail(providerError));
 
         // Act
-        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
+        Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             repoId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<LatestBranchCommit>.Failure failure = result.ShouldBeOfType<Result<LatestBranchCommit>.Failure>();
+        Result<MergeRequestByBranch>.Failure failure = result.ShouldBeOfType<Result<MergeRequestByBranch>.Failure>();
         failure.Error.Code.ShouldBe("Provider.Unreachable");
     }
 
@@ -131,7 +132,7 @@ public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
     }
 
     private sealed class StubIssueProvider(
-        Result<LatestBranchCommit>? getLatestBranchCommitResult = null) : IIssueProvider
+        Result<MergeRequestByBranch>? getMergeRequestResult = null) : IIssueProvider
     {
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -178,8 +179,7 @@ public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(
-                Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
+            return Task.FromResult(Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
         }
 
         public Task<Result<bool>> CreateBranchAsync(
@@ -204,7 +204,8 @@ public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(
-                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+                getMergeRequestResult
+                ?? Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
         }
 
         public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
@@ -213,8 +214,7 @@ public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(
-                getLatestBranchCommitResult
-                ?? Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
         }
 
         public Task<Result<bool>> CanPushAsync(

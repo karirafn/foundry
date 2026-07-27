@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -14,9 +15,9 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.PostExitProviderQueriesTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Providers.PostExitProviderQueriesTests;
 
-public sealed class CreateBranchAsync : IAsyncDisposable
+public sealed class GetLatestBranchCommitAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
@@ -24,7 +25,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
 
     private StubIssueProvider _stubProvider = new();
 
-    public CreateBranchAsync()
+    public GetLatestBranchCommitAsync()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -70,112 +71,59 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         MonitoredRepositoryId nonExistentId = MonitoredRepositoryId.New();
 
         // Act
-        Result<bool> result = await _sut.CreateBranchAsync(
+        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
             nonExistentId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        Result<LatestBranchCommit>.Failure failure = result.ShouldBeOfType<Result<LatestBranchCommit>.Failure>();
         failure.Error.Code.ShouldBe("PostExitProviderQueries.RepositoryNotFound");
     }
 
     [Fact]
-    public async Task WhenNoCoveringCredential_ReturnsFailure()
-    {
-        // Arrange
-        RepositorySlug slug = RepositorySlug.Create("uncovered/repo").ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null);
-        _dbContext.Set<MonitoredRepository>().Add(repo);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        // Act
-        Result<bool> result = await _sut.CreateBranchAsync(
-            repo.Id,
-            "feat/my-branch",
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
-        failure.Error.Code.ShouldBe("PostExitProviderQueries.CredentialNotFound");
-    }
-
-    [Fact]
-    public async Task WhenAccountHasNoToken_ReturnsFailure()
-    {
-        // Arrange
-        MonitoredRepositoryId repoId = await SeedRepoAsync(token: null);
-
-        // Act
-        Result<bool> result = await _sut.CreateBranchAsync(
-            repoId,
-            "feat/my-branch",
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
-        failure.Error.Code.ShouldBe("PostExitProviderQueries.CredentialTokenNotConfigured");
-    }
-
-    [Fact]
-    public async Task WhenBranchCreatedSuccessfully_ReturnsTrue()
+    public async Task WhenProviderReturnsCommit_ReturnsCommitDetails()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
-        _stubProvider = new StubIssueProvider(createBranchResult: Result<bool>.Ok(true));
+        LatestBranchCommit commit = new("abc1234", "feat: add something");
+        _stubProvider = new StubIssueProvider(
+            getLatestBranchCommitResult: Result<LatestBranchCommit>.Ok(commit));
 
         // Act
-        Result<bool> result = await _sut.CreateBranchAsync(
+        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
             repoId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<bool>.Success success = result.ShouldBeOfType<Result<bool>.Success>();
-        success.Value.ShouldBeTrue();
+        Result<LatestBranchCommit>.Success success = result.ShouldBeOfType<Result<LatestBranchCommit>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.Sha.ShouldBe("abc1234"),
+            () => success.Value.Message.ShouldBe("feat: add something"));
     }
 
     [Fact]
-    public async Task WhenBranchAlreadyExists_ReturnsFalse()
+    public async Task WhenProviderIsUnreachable_ReturnsFailure()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
-        _stubProvider = new StubIssueProvider(createBranchResult: Result<bool>.Ok(false));
+        Error providerError = new("Provider.Unreachable", "Provider is unreachable");
+        _stubProvider = new StubIssueProvider(
+            getLatestBranchCommitResult: Result<LatestBranchCommit>.Fail(providerError));
 
         // Act
-        Result<bool> result = await _sut.CreateBranchAsync(
-            repoId,
-            "feat/my-branch",
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<bool>.Success success = result.ShouldBeOfType<Result<bool>.Success>();
-        success.Value.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task WhenProviderFails_ReturnsFailure()
-    {
-        // Arrange
-        Error providerError = new("Provider.Error", "Something went wrong");
-        MonitoredRepositoryId repoId = await SeedRepoAsync();
-        _stubProvider = new StubIssueProvider(createBranchResult: Result<bool>.Fail(providerError));
-
-        // Act
-        Result<bool> result = await _sut.CreateBranchAsync(
+        Result<LatestBranchCommit> result = await _sut.GetLatestBranchCommitAsync(
             repoId,
             "feat/my-branch",
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
-        failure.Error.Code.ShouldBe("Provider.Error");
+        Result<LatestBranchCommit>.Failure failure = result.ShouldBeOfType<Result<LatestBranchCommit>.Failure>();
+        failure.Error.Code.ShouldBe("Provider.Unreachable");
     }
 
     private sealed class StubProviderFactory(Func<StubIssueProvider> providerFactory) : IIssueProviderFactory
@@ -184,8 +132,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
     }
 
     private sealed class StubIssueProvider(
-        Result<bool>? createBranchResult = null,
-        Result<bool>? hasBranchCommitsResult = null) : IIssueProvider
+        Result<LatestBranchCommit>? getLatestBranchCommitResult = null) : IIssueProvider
     {
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -232,7 +179,8 @@ public sealed class CreateBranchAsync : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
+            return Task.FromResult(
+                Result<BranchProtection>.Ok(new BranchProtection("main", false, false, false)));
         }
 
         public Task<Result<bool>> CreateBranchAsync(
@@ -240,7 +188,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
             string branchName,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(createBranchResult ?? Result<bool>.Ok(true));
+            return Task.FromResult(Result<bool>.Ok(true));
         }
 
         public Task<Result<bool>> HasBranchCommitsAsync(
@@ -248,7 +196,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
             string branchName,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(hasBranchCommitsResult ?? Result<bool>.Ok(false));
+            return Task.FromResult(Result<bool>.Ok(false));
         }
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
@@ -266,7 +214,8 @@ public sealed class CreateBranchAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(
-                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+                getLatestBranchCommitResult
+                ?? Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
         }
 
         public Task<Result<bool>> CanPushAsync(
