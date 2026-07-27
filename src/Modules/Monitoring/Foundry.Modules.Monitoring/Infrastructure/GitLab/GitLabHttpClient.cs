@@ -1,0 +1,922 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
+using Foundry.Modules.Monitoring.Features.Polling;
+using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Shared;
+
+namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
+
+internal sealed partial class GitLabHttpClient(HttpClient httpClient)
+{
+    private const int MaxCommentBodyLength = 4000;
+    private const string TruncatedSuffix = "[truncated]";
+    private const int MaxRepositoryPages = 5;
+    private const int RepositoriesPerPage = 100;
+    private const int MaxReviewComments = 50;
+    private const int MaxFilePathLength = 4096; // PATH_MAX
+    private const int GitLabMinPushAccessLevel = 30; // Developer role
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    };
+
+    public async Task<Result<TokenValidationResult>> ValidateTokenAsync(
+        Uri apiBaseUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<TokenValidationResult>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), "user");
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        request.Headers.Add("PRIVATE-TOKEN", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode is HttpStatusCode.Unauthorized)
+        {
+            return Result<TokenValidationResult>.Ok(TokenValidationResult.AuthFailure());
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<TokenValidationResult>.Fail(GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
+        }
+
+        string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        string? accountName = DeserializeUsername(responseBody);
+
+        return await ValidateScopesAsync(apiBaseUrl, token, accountName, cancellationToken);
+    }
+
+    private async Task<Result<TokenValidationResult>> ValidateScopesAsync(
+        Uri apiBaseUrl,
+        string token,
+        string? accountName,
+        CancellationToken cancellationToken)
+    {
+        Uri selfUri = new(EnsureTrailingSlash(apiBaseUrl), "personal_access_tokens/self");
+
+        using HttpRequestMessage selfRequest = new(HttpMethod.Get, selfUri);
+        AddCommonHeaders(selfRequest, token);
+
+        using HttpResponseMessage selfResponse = await httpClient.SendAsync(selfRequest, cancellationToken);
+
+        if (!selfResponse.IsSuccessStatusCode)
+        {
+            return Result<TokenValidationResult>.Ok(TokenValidationResult.ScopesUnverifiable(accountName));
+        }
+
+        string selfBody = await selfResponse.Content.ReadAsStringAsync(cancellationToken);
+        GitLabTokenSelfDto? dto = JsonSerializer.Deserialize<GitLabTokenSelfDto>(selfBody, JsonOptions);
+
+        HashSet<string> granted = new(dto?.Scopes ?? [], StringComparer.OrdinalIgnoreCase);
+        List<string> missing = RequiredScopes.For(ProviderTypes.GitLab)
+            .Where(s => !granted.Contains(s))
+            .ToList();
+
+        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missing, accountName));
+    }
+
+    public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<IReadOnlyList<ProviderIssue>>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}/issues?labels=foundry&state=opened";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<IReadOnlyList<ProviderIssue>>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitLabIssueDto>? dtos = JsonSerializer.Deserialize<List<GitLabIssueDto>>(body, JsonOptions);
+
+        IReadOnlyList<ProviderIssue> issues = (dtos ?? [])
+            .Select(dto => new ProviderIssue(
+                Number: dto.Iid,
+                Title: dto.Title,
+                Body: dto.Description ?? string.Empty,
+                Author: dto.Author.Username,
+                Url: dto.WebUrl,
+                Labels: dto.Labels,
+                IssueKindLabel: LabelClassifier.ClassifyKind(dto.Labels)))
+            .ToList();
+
+        return Result<IReadOnlyList<ProviderIssue>>.Ok(issues);
+    }
+
+    public async Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<IReadOnlyList<int>>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        Result<int> projectIdResult = await ResolveProjectIdAsync(apiBaseUrl, slug, token, cancellationToken);
+
+        if (projectIdResult is not Result<int>.Success projectIdSuccess)
+        {
+            Error error = ((Result<int>.Failure)projectIdResult).Error;
+            return Result<IReadOnlyList<int>>.Fail(error);
+        }
+
+        int resolvedProjectId = projectIdSuccess.Value;
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}/issues/{issueNumber}/links";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+        {
+            return Result<IReadOnlyList<int>>.Ok([]);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<IReadOnlyList<int>>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitLabIssueLinkDto>? dtos = JsonSerializer.Deserialize<List<GitLabIssueLinkDto>>(body, JsonOptions);
+
+        IReadOnlyList<int> issueNumbers = (dtos ?? [])
+            .Where(dto => string.Equals(dto.LinkType, "is_blocked_by", StringComparison.OrdinalIgnoreCase))
+            .Where(dto => !string.Equals(dto.State, "closed", StringComparison.OrdinalIgnoreCase))
+            .Where(dto => dto.ProjectId is null || dto.ProjectId == resolvedProjectId)
+            .Select(dto => dto.Iid)
+            .ToList();
+
+        return Result<IReadOnlyList<int>>.Ok(issueNumbers);
+    }
+
+    private async Task<Result<int>> ResolveProjectIdAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        Result<GitLabProjectInfoDto> infoResult =
+            await GetProjectInfoAsync(apiBaseUrl, slug, token, cancellationToken);
+
+        if (infoResult is not Result<GitLabProjectInfoDto>.Success infoSuccess)
+        {
+            Error error = ((Result<GitLabProjectInfoDto>.Failure)infoResult).Error;
+            return Result<int>.Fail(error);
+        }
+
+        return Result<int>.Ok(infoSuccess.Value.Id);
+    }
+
+    private async Task<Result<GitLabProjectInfoDto>> GetProjectInfoAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<GitLabProjectInfoDto>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabProjectInfoDto? dto = JsonSerializer.Deserialize<GitLabProjectInfoDto>(body, JsonOptions);
+
+        if (dto is null)
+        {
+            return Result<GitLabProjectInfoDto>.Fail(
+                GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
+        }
+
+        return Result<GitLabProjectInfoDto>.Ok(dto);
+    }
+
+    public async Task<Result<bool>> IsIssueClosedAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}/issues/{issueNumber}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabIssueStateDto? dto = JsonSerializer.Deserialize<GitLabIssueStateDto>(body, JsonOptions);
+
+        bool isClosed = string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
+        return Result<bool>.Ok(isClosed);
+    }
+
+    public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<PullRequestStatus>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        if (!TryParseMrIid(pullRequestUrl, out int mrIid))
+        {
+            return Result<PullRequestStatus>.Fail(GitLabErrors.InvalidMergeRequestUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}/merge_requests/{mrIid}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<PullRequestStatus>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabMergeRequestDto? dto = JsonSerializer.Deserialize<GitLabMergeRequestDto>(body, JsonOptions);
+
+        bool isMerged = string.Equals(dto?.State, "merged", StringComparison.OrdinalIgnoreCase);
+        bool isClosed = isMerged ||
+            string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
+
+        return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
+    }
+
+    public async Task<Result<ReviewFeedback>> GetPullRequestReviewFeedbackAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        DateTimeOffset since,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<ReviewFeedback>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        if (!TryParseMrIid(pullRequestUrl, out int mrIid))
+        {
+            return Result<ReviewFeedback>.Fail(GitLabErrors.InvalidMergeRequestUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}/merge_requests/{mrIid}/discussions";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<ReviewFeedback>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitLabDiscussionDto>? dtos = JsonSerializer.Deserialize<List<GitLabDiscussionDto>>(body, JsonOptions);
+
+        List<ReviewComment> comments = [];
+
+        foreach (GitLabDiscussionDto discussion in dtos ?? [])
+        {
+            if (comments.Count >= MaxReviewComments)
+            {
+                break;
+            }
+
+            if (discussion.Notes.Count == 0)
+            {
+                continue;
+            }
+
+            GitLabNoteDto firstNote = discussion.Notes[0];
+            if (!firstNote.Resolvable || firstNote.Resolved)
+            {
+                continue;
+            }
+
+            if (firstNote.UpdatedAt <= since)
+            {
+                continue;
+            }
+
+            string? sanitizedPath = SanitizeFilePath(firstNote.Position?.NewPath);
+            comments.Add(new ReviewComment(TruncateBody(firstNote.Body), sanitizedPath));
+        }
+
+        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments));
+    }
+
+    public async Task<Result<IReadOnlyList<ProviderRepository>>> ListRepositoriesAsync(
+        Uri apiBaseUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<IReadOnlyList<ProviderRepository>>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        List<ProviderRepository> repositories = [];
+
+        for (int page = 1; page <= MaxRepositoryPages; page++)
+        {
+            // simple=false (default) returns the full project payload including the permissions
+            // object, which carries project_access.access_level and group_access.access_level.
+            // Developer (30) or above is required for push access.
+            string relativePath = $"projects?membership=true&per_page={RepositoriesPerPage}&page={page}";
+            Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+            using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+            AddCommonHeaders(request, token);
+
+            using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result<IReadOnlyList<ProviderRepository>>.Fail(ErrorFromNonSuccess(response));
+            }
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            List<GitLabProjectListItemDto>? dtos =
+                JsonSerializer.Deserialize<List<GitLabProjectListItemDto>>(body, JsonOptions);
+
+            List<GitLabProjectListItemDto> pageItems = dtos ?? [];
+            foreach (GitLabProjectListItemDto dto in pageItems)
+            {
+                bool isPrivate = string.Equals(dto.Visibility, "private", StringComparison.OrdinalIgnoreCase);
+                int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
+                int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
+                bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
+                repositories.Add(new ProviderRepository(dto.PathWithNamespace, isPrivate, canPush));
+            }
+
+            if (pageItems.Count < RepositoriesPerPage)
+            {
+                break;
+            }
+        }
+
+        return Result<IReadOnlyList<ProviderRepository>>.Ok(repositories);
+    }
+
+    public async Task<Result<bool>> CreateBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+
+        Result<string> defaultBranchResult = await GetDefaultBranchAsync(
+            apiBaseUrl, slug, token, cancellationToken);
+
+        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
+        {
+            Error error = ((Result<string>.Failure)defaultBranchResult).Error;
+            return Result<bool>.Fail(error);
+        }
+
+        string defaultBranch = defaultBranchSuccess.Value;
+        string createBranchPath = $"projects/{encodedPath}/repository/branches";
+        Uri createBranchUri = new(EnsureTrailingSlash(apiBaseUrl), createBranchPath);
+
+        string createBody = JsonSerializer.Serialize(
+            new { branch = branchName, @ref = defaultBranch },
+            JsonOptions);
+
+        using HttpRequestMessage createRequest = new(HttpMethod.Post, createBranchUri);
+        AddCommonHeaders(createRequest, token);
+        createRequest.Content = new StringContent(createBody, Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage createResponse = await httpClient.SendAsync(createRequest, cancellationToken);
+
+        if (createResponse.StatusCode == HttpStatusCode.BadRequest)
+        {
+            return Result<bool>.Ok(false);
+        }
+
+        if (!createResponse.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(createResponse));
+        }
+
+        return Result<bool>.Ok(true);
+    }
+
+    public async Task<Result<bool>> HasBranchCommitsAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string defaultBranch,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedDefault = Uri.EscapeDataString(defaultBranch);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"projects/{encodedPath}/repository/compare?from={encodedDefault}&to={encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabCompareDto? dto = JsonSerializer.Deserialize<GitLabCompareDto>(body, JsonOptions);
+
+        return Result<bool>.Ok((dto?.Commits ?? []).Count > 0);
+    }
+
+    public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<MergeRequestByBranch>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        // state=all is the GitLab default but made explicit here for self-documentation: we need
+        // merged MRs returned even after the source branch is deleted.
+        string relativePath = $"projects/{encodedPath}/merge_requests?source_branch={encodedBranch}&state=all";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<MergeRequestByBranch>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitLabMergeRequestStateDto>? dtos =
+            JsonSerializer.Deserialize<List<GitLabMergeRequestStateDto>>(body, JsonOptions);
+
+        List<GitLabMergeRequestStateDto> items = dtos ?? [];
+
+        if (items.Count == 0)
+        {
+            return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null));
+        }
+
+        GitLabMergeRequestStateDto? merged = items.FirstOrDefault(
+            dto => string.Equals(dto.State, "merged", StringComparison.OrdinalIgnoreCase));
+
+        GitLabMergeRequestStateDto selected = merged
+            ?? items.MaxBy(dto => dto.UpdatedAt)!;
+
+        if (string.IsNullOrEmpty(selected.State))
+        {
+            return Result<MergeRequestByBranch>.Fail(GitLabErrors.MissingMergeRequestState);
+        }
+
+        MergeRequestPresence presence = selected.State.ToLowerInvariant() switch
+        {
+            "merged" => MergeRequestPresence.Merged,
+            "opened" => MergeRequestPresence.Open,
+            _ => MergeRequestPresence.Closed,
+        };
+
+        return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.WebUrl));
+    }
+
+    public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<LatestBranchCommit>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"projects/{encodedPath}/repository/commits?ref_name={encodedBranch}&per_page=1";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<LatestBranchCommit>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        List<GitLabCommitListItemDto>? dtos =
+            JsonSerializer.Deserialize<List<GitLabCommitListItemDto>>(body, JsonOptions);
+
+        GitLabCommitListItemDto? latest = (dtos ?? []).FirstOrDefault();
+
+        if (latest is null)
+        {
+            return Result<LatestBranchCommit>.Fail(GitLabErrors.NoBranchCommits);
+        }
+
+        string shortSha = latest.Id.Length >= 7 ? latest.Id[..7] : latest.Id;
+        string commitMessage = latest.Title ?? string.Empty;
+
+        return Result<LatestBranchCommit>.Ok(new LatestBranchCommit(shortSha, commitMessage));
+    }
+
+    public async Task<Result<string>> GetDefaultBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<string>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        Result<GitLabProjectInfoDto> infoResult =
+            await GetProjectInfoAsync(apiBaseUrl, slug, token, cancellationToken);
+
+        if (infoResult is not Result<GitLabProjectInfoDto>.Success infoSuccess)
+        {
+            Error error = ((Result<GitLabProjectInfoDto>.Failure)infoResult).Error;
+            return Result<string>.Fail(error);
+        }
+
+        return Result<string>.Ok(infoSuccess.Value.DefaultBranch ?? string.Empty);
+    }
+
+    public async Task<Result<bool>> GetPushPermissionAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabProjectWithPermissionsDto? dto =
+            JsonSerializer.Deserialize<GitLabProjectWithPermissionsDto>(body, JsonOptions);
+
+        int projectLevel = dto?.Permissions?.ProjectAccess?.AccessLevel ?? 0;
+        int groupLevel = dto?.Permissions?.GroupAccess?.AccessLevel ?? 0;
+        bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
+
+        return Result<bool>.Ok(canPush);
+    }
+
+    public async Task<Result<BranchRules>> GetBranchProtectionAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branch,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<BranchRules>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedBranch = Uri.EscapeDataString(branch);
+        string relativePath = $"projects/{encodedPath}/protected_branches/{encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return Result<BranchRules>.Ok(new BranchRules(false, false, false));
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<BranchRules>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabProtectedBranchDto? dto = JsonSerializer.Deserialize<GitLabProtectedBranchDto>(body, JsonOptions);
+
+        bool rejectDirectPushes = dto?.AllowForcePush is false &&
+            (dto.PushAccessLevels ?? []).All(a => a.AccessLevel == 0);
+        bool rejectForcePushes = dto?.AllowForcePush is false;
+        bool rejectDeletion = !(dto?.AllowForcePush ?? true);
+
+        return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
+    }
+
+    private static string? DeserializeUsername(string responseBody)
+    {
+        try
+        {
+            GitLabUserDto? dto = JsonSerializer.Deserialize<GitLabUserDto>(responseBody, JsonOptions);
+            string? username = dto?.Username;
+            return string.IsNullOrEmpty(username) ? null : username;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    private static void AddCommonHeaders(HttpRequestMessage request, string token)
+    {
+        request.Headers.Add("PRIVATE-TOKEN", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
+    }
+
+    private static Uri EnsureTrailingSlash(Uri uri)
+    {
+        string uriString = uri.ToString();
+        return uriString.EndsWith('/') ? uri : new Uri(uriString + '/');
+    }
+
+    [GeneratedRegex(@"/merge_requests/(\d+)(?:[/?#]|$)")]
+    private static partial Regex MrIidRegex();
+
+    private static bool TryParseMrIid(string mergeRequestUrl, out int mrIid)
+    {
+        Match match = MrIidRegex().Match(mergeRequestUrl);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out mrIid))
+        {
+            return true;
+        }
+
+        mrIid = 0;
+        return false;
+    }
+
+    private static string TruncateBody(string body)
+    {
+        if (body.Length <= MaxCommentBodyLength)
+        {
+            return body;
+        }
+
+        return string.Concat(body.AsSpan(0, MaxCommentBodyLength), TruncatedSuffix);
+    }
+
+    private static string? SanitizeFilePath(string? path)
+    {
+        if (path is null)
+        {
+            return null;
+        }
+
+        if (path.Length > MaxFilePathLength)
+        {
+            return null;
+        }
+
+        if (path.Contains("..", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (path.StartsWith('/') || path.Contains(':', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return path;
+    }
+
+    private static Error ErrorFromNonSuccess(HttpResponseMessage response)
+    {
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            return GitLabErrors.RateLimitExhausted;
+        }
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            if (response.Headers.TryGetValues("RateLimit-Remaining", out IEnumerable<string>? remaining) &&
+                remaining.FirstOrDefault() == "0")
+            {
+                return GitLabErrors.RateLimitExhausted;
+            }
+        }
+
+        int statusCode = (int)response.StatusCode;
+        Error error = GitLabErrors.UnexpectedStatusCode(statusCode);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return error with { Kind = ErrorKind.NotFound };
+        }
+
+        return error;
+    }
+
+    private sealed record GitLabUserDto([property: JsonPropertyName("username")] string Username);
+
+    private sealed record GitLabTokenSelfDto([property: JsonPropertyName("scopes")] IReadOnlyList<string> Scopes);
+
+    private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
+
+    private sealed record GitLabIssueDto(
+        int Iid,
+        string Title,
+        string? Description,
+        GitLabAuthorDto Author,
+        string WebUrl,
+        IReadOnlyList<string> Labels);
+
+    private sealed record GitLabAuthorDto(string Username);
+
+    private sealed record GitLabIssueLinkDto(
+        int Iid,
+        string LinkType,
+        string? State,
+        int? ProjectId);
+
+    private sealed record GitLabIssueStateDto(string State);
+
+    private sealed record GitLabMergeRequestDto(string State);
+
+    private sealed record GitLabDiscussionDto(IReadOnlyList<GitLabNoteDto> Notes);
+
+    private sealed record GitLabNoteDto(
+        string Body,
+        bool Resolvable,
+        bool Resolved,
+        DateTimeOffset UpdatedAt,
+        GitLabNotePositionDto? Position);
+
+    private sealed record GitLabNotePositionDto(string? NewPath);
+
+    private sealed record GitLabProjectPermissionsDto(
+        GitLabAccessLevelDto? ProjectAccess,
+        GitLabAccessLevelDto? GroupAccess);
+
+    private sealed record GitLabProjectListItemDto(
+        string PathWithNamespace,
+        string Visibility,
+        GitLabProjectPermissionsDto? Permissions);
+
+    private sealed record GitLabCompareDto(IReadOnlyList<GitLabCommitDto> Commits);
+
+    private sealed record GitLabCommitDto(string Id);
+
+    private sealed record GitLabCommitListItemDto(string Id, string? Title);
+
+    private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt);
+
+    private sealed record GitLabProjectWithPermissionsDto(GitLabProjectPermissionsDto? Permissions);
+
+    private sealed record GitLabProtectedBranchDto(
+        bool AllowForcePush,
+        IReadOnlyList<GitLabAccessLevelDto>? PushAccessLevels);
+
+    private sealed record GitLabAccessLevelDto(int AccessLevel);
+}
+
+internal static class GitLabErrors
+{
+    public static readonly Error InvalidBaseUrl = new(
+        "GitLab.InvalidBaseUrl",
+        "The base URL must use the https scheme.");
+
+    public static readonly Error RateLimitExhausted = new(
+        "GitLab.RateLimitExhausted",
+        "GitLab API rate limit exhausted. Wait before retrying.");
+
+    public static readonly Error InvalidMergeRequestUrl = new(
+        "GitLab.InvalidMergeRequestUrl",
+        "The merge request URL does not contain a valid MR IID.");
+
+    public static readonly Error NoBranchCommits = new(
+        "GitLab.NoBranchCommits",
+        "The branch has no commits.");
+
+    public static readonly Error MissingMergeRequestState = new(
+        "GitLab.MissingMergeRequestState",
+        "A merge request in the response has a missing or empty state field.");
+
+    public static Error UnexpectedStatusCode(int statusCode) =>
+        new("GitLab.UnexpectedStatusCode", $"GitLab API returned unexpected status code {statusCode}.");
+}

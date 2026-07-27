@@ -5,7 +5,9 @@ using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;

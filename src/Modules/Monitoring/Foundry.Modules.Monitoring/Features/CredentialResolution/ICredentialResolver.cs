@@ -1,0 +1,9 @@
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+
+namespace Foundry.Modules.Monitoring.Features.CredentialResolution;
+
+internal interface ICredentialResolver
+{
+    Task<Credential?> ResolveAsync(string host, RepositorySlug slug, CancellationToken cancellationToken);
+}

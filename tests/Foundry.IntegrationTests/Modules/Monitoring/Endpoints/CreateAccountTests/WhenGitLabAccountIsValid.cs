@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;

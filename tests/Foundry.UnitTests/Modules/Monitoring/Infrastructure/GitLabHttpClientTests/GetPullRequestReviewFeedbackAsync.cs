@@ -3,8 +3,9 @@ using System.Text;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -12,6 +13,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Foundry.Modules.Monitoring.Features.Providers;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
