@@ -87,6 +87,12 @@
     color: var(--fd-text-error);
   }
 
+  &--failure-provider-error {
+    background: transparent;
+    border: 1px solid var(--fd-text-link);
+    color: var(--fd-text-link);
+  }
+
   &--failure-bootstrap {
     background: transparent;
     border: 1px solid var(--fd-state-failed);
