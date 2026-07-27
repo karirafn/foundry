@@ -1,11 +1,13 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -143,9 +145,9 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        Foundry.Modules.Workers.Contracts.WorkerRunFailed failedEvent =
+        WorkerRunFailed failedEvent =
             integrationEventDispatcher.Captured
-                .OfType<Foundry.Modules.Workers.Contracts.WorkerRunFailed>()
+                .OfType<WorkerRunFailed>()
                 .ShouldHaveSingleItem();
         failedEvent.ShouldSatisfyAllConditions(
             () => failedEvent.BranchName.ShouldBeNull());
@@ -211,9 +213,9 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        Foundry.Modules.Workers.Contracts.WorkerRunFailed failedEvent =
+        WorkerRunFailed failedEvent =
             integrationEventDispatcher.Captured
-                .OfType<Foundry.Modules.Workers.Contracts.WorkerRunFailed>()
+                .OfType<WorkerRunFailed>()
                 .ShouldHaveSingleItem();
         failedEvent.ShouldSatisfyAllConditions(
             () => failedEvent.BranchName.ShouldBeNull());

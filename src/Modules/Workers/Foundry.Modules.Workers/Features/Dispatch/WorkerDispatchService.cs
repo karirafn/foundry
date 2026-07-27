@@ -7,6 +7,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -16,11 +17,11 @@ using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
-using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
-using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.DispatchResumed;
+using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.Events.DispatchPaused;
+using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.Events.DispatchResumed;
 
-using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.WorkerAuthenticationFailed;
-using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
+using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.Events.WorkerAuthenticationFailed;
+using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.Events.WorkerRunCompleted;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

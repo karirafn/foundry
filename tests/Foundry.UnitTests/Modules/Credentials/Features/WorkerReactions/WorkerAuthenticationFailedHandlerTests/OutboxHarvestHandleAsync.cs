@@ -1,8 +1,10 @@
 using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Contracts.Events;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.WorkerReactions;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
@@ -103,7 +105,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(CredentialsInvalidated)));
+        messages.ShouldContain(m => m.Type.Contains(nameof(CredentialsInvalidated), StringComparison.Ordinal));
     }
 
     [Fact]

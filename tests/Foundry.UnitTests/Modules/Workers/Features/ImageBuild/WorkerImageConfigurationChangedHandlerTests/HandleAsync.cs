@@ -1,4 +1,5 @@
 using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Events;
 using Foundry.Modules.Workers.Features.ImageBuild;
 
 using Shouldly;

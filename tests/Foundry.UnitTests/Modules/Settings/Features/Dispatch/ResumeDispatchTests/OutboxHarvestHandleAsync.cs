@@ -1,6 +1,7 @@
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Features.Dispatch;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
@@ -93,6 +94,6 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(DispatchResumed)));
+        messages.ShouldContain(m => m.Type.Contains(nameof(DispatchResumed), StringComparison.Ordinal));
     }
 }

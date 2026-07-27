@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.DispatchReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;

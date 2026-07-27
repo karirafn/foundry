@@ -1,4 +1,5 @@
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Features.Dispatch;

@@ -1,7 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Issues.Contracts;
+namespace Foundry.Modules.Issues.Contracts.Queries;
 
 public interface IIssueQueries
 {

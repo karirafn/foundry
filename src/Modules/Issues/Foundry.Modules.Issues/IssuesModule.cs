@@ -1,5 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Contracts.Events;
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Contracts.Queries;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.CredentialReactions;
@@ -8,7 +10,9 @@ using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Events;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 

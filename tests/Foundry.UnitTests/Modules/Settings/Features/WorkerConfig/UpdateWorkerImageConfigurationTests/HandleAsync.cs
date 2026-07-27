@@ -1,4 +1,5 @@
 using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Events;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Settings.Features.WorkerConfig;

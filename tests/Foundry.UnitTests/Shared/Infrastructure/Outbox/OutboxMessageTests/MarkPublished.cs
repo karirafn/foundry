@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Shared.Infrastructure.Outbox;
 
 using Shouldly;

@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Monitoring.Contracts;
+namespace Foundry.Modules.Monitoring.Contracts.Queries;
 
 public interface IRepositoryDispatchQueries
 {

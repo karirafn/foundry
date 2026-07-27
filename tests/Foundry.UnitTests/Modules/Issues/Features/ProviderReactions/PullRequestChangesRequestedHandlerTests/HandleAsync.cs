@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Events;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;

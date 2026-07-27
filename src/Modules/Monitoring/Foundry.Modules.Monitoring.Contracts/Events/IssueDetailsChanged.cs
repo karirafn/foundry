@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Monitoring.Contracts;
+namespace Foundry.Modules.Monitoring.Contracts.Events;
 
 public sealed record IssueDetailsChanged(
     MonitoredRepositoryId MonitoredRepositoryId,

@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Contracts.Queries;
 using Foundry.Modules.Monitoring.Contracts;
 
 using Microsoft.AspNetCore.Builder;

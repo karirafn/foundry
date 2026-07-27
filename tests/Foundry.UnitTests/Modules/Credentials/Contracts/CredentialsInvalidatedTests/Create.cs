@@ -1,4 +1,5 @@
 using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Contracts.Events;
 using Foundry.Shared;
 
 using Shouldly;

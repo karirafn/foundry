@@ -1,7 +1,7 @@
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Shared;
 
-using WorkerRunFailedIntegration = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
+using WorkerRunFailedIntegration = Foundry.Modules.Workers.Contracts.Events.WorkerRunFailed;
 
 namespace Foundry.Modules.Workers.Features.Outcome;
 
