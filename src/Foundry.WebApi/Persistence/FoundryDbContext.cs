@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-using CredentialsInfrastructure = Foundry.Modules.Credentials.Infrastructure;
+using CredentialsInfrastructure = Foundry.Modules.Credentials.Infrastructure.Configurations;
 using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 namespace Foundry.WebApi.Persistence;
