@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Settings.Domain;
+namespace Foundry.Modules.Settings.Domain.ValueObjects;
 
 public readonly record struct GlobalSettingsId(Guid Value) : IStronglyTypedId<GlobalSettingsId>
 {

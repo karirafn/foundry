@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 
 namespace Foundry.Modules.Settings.Infrastructure;
 

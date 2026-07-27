@@ -1,4 +1,4 @@
-using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.Entities;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

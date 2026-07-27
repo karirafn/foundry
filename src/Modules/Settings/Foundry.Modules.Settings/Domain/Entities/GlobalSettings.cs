@@ -1,7 +1,7 @@
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Settings.Domain;
+namespace Foundry.Modules.Settings.Domain.Entities;
 
 public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 {

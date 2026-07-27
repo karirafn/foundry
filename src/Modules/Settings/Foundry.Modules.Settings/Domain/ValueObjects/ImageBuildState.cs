@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Settings.Domain;
+namespace Foundry.Modules.Settings.Domain.ValueObjects;
 
 public abstract record ImageBuildState
 {

@@ -3,7 +3,7 @@ using System.Formats.Tar;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
