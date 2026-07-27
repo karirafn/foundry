@@ -9,7 +9,7 @@ internal abstract record NamespaceDerivationOutcome
 
     internal sealed record Derived(
         IReadOnlyCollection<Namespace> Namespaces,
-        IReadOnlyList<AvailableRepository> WritableRepositories) : NamespaceDerivationOutcome;
+        IReadOnlyList<ProviderRepository> WritableRepositories) : NamespaceDerivationOutcome;
 
     internal sealed record Unavailable : NamespaceDerivationOutcome;
 }

@@ -63,7 +63,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
@@ -116,7 +116,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new("github", "https://github.com", "ghp_test", TakeoverNamespaces: null);
@@ -138,7 +138,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — derived set is only "octocat"; requesting takeover of "other-org"
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
@@ -187,7 +187,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
@@ -231,8 +231,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 Namespace.Create("ns-b").ValueOrThrow(),
             ],
             [
-                new AvailableRepository("ns-x/repo-a", IsPrivate: false, CanPush: true),
-                new AvailableRepository("ns-b/repo-b", IsPrivate: false, CanPush: true),
+                new ProviderRepository("ns-x/repo-a", IsPrivate: false, CanPush: true),
+                new ProviderRepository("ns-b/repo-b", IsPrivate: false, CanPush: true),
             ]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
@@ -262,7 +262,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — no other credential claims the namespace; takeover lists it but it's not actually conflicted
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new(
@@ -297,7 +297,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
             [Namespace.Create("octocat").ValueOrThrow()],
             [writableRepo]);
@@ -322,7 +322,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         MissingWriteProber missingProber = new(WritePermission.Contents);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: missingProber);
@@ -344,7 +344,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — derived namespace is "octocat" but no writable repos have that prefix
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository unrelatedRepo = new("other-org/repo", IsPrivate: false, CanPush: true);
+        ProviderRepository unrelatedRepo = new("other-org/repo", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [unrelatedRepo]);
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
         CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
@@ -383,7 +383,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — simulates a classic PAT whose repo scope makes all three probes return Granted
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         CreateAccount.Handler handler = BuildHandler(
             new StubNamespaceDeriver(outcome),
@@ -404,7 +404,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — transport failure must not silently pass
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        AvailableRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         FailingWriteProber failingProber = new();
         CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: failingProber);
@@ -425,7 +425,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — GitLab skips the GitHub write probe entirely
         Namespace ns = Namespace.Create("my-group").ValueOrThrow();
-        AvailableRepository writableRepo = new("my-group/project", IsPrivate: false, CanPush: true);
+        ProviderRepository writableRepo = new("my-group/project", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
         NeverCalledWriteProber neverCalledProber = new();
         CreateAccount.Handler handler = BuildHandler(

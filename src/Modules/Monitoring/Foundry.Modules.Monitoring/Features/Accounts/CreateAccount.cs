@@ -162,7 +162,7 @@ internal static partial class CreateAccount
 
             NamespaceDerivationOutcome derivationOutcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
             IReadOnlyCollection<Namespace> derivedNamespaces;
-            IReadOnlyList<AvailableRepository> writableRepositories;
+            IReadOnlyList<ProviderRepository> writableRepositories;
 
             if (derivationOutcome is NamespaceDerivationOutcome.Derived derivedOutcome)
             {
@@ -301,7 +301,7 @@ internal static partial class CreateAccount
         private async Task<Outcome?> ProbeWriteAccessAsync(
             Uri apiBaseUrl,
             IReadOnlyCollection<Namespace> derivedNamespaces,
-            IReadOnlyList<AvailableRepository> writableRepositories,
+            IReadOnlyList<ProviderRepository> writableRepositories,
             string token,
             CancellationToken cancellationToken)
         {
@@ -331,9 +331,9 @@ internal static partial class CreateAccount
 
         private static RepositorySlug? FindProbeTarget(
             IReadOnlyCollection<Namespace> derivedNamespaces,
-            IReadOnlyList<AvailableRepository> writableRepositories)
+            IReadOnlyList<ProviderRepository> writableRepositories)
         {
-            foreach (AvailableRepository repo in writableRepositories)
+            foreach (ProviderRepository repo in writableRepositories)
             {
                 if (RepositorySlug.Create(repo.Slug) is not Result<RepositorySlug>.Success { Value: RepositorySlug slug })
                 {

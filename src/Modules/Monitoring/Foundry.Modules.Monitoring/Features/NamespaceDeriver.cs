@@ -38,8 +38,8 @@ internal sealed class NamespaceDeriver(
                 return new NamespaceDerivationOutcome.Unavailable();
             }
 
-            IReadOnlyList<AvailableRepository> allRepos = listSuccess.Value;
-            IReadOnlyList<AvailableRepository> writableRepos = allRepos
+            IReadOnlyList<ProviderRepository> allRepos = listSuccess.Value;
+            IReadOnlyList<ProviderRepository> writableRepos = allRepos
                 .Where(r => r.CanPush)
                 .ToList();
             return new NamespaceDerivationOutcome.Derived(
