@@ -9,6 +9,7 @@ internal sealed class FakeHandler(HttpStatusCode statusCode, string responseBody
     private readonly List<HttpRequestMessage> _allRequests = [];
 
     public HttpRequestMessage? LastRequest { get; private set; }
+    public string? LastRequestBody { get; private set; }
     public IReadOnlyList<HttpRequestMessage> AllRequests => _allRequests;
     public Dictionary<string, string> ResponseHeaders { get; } = new();
 
@@ -18,12 +19,17 @@ internal sealed class FakeHandler(HttpStatusCode statusCode, string responseBody
         return this;
     }
 
-    protected override Task<HttpResponseMessage> SendAsync(
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         LastRequest = request;
         _allRequests.Add(request);
+
+        if (request.Content is not null)
+        {
+            LastRequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
+        }
 
         string path = request.RequestUri?.AbsolutePath ?? string.Empty;
 
@@ -39,7 +45,7 @@ internal sealed class FakeHandler(HttpStatusCode statusCode, string responseBody
             response.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
-        return Task.FromResult(response);
+        return response;
     }
 
     private (HttpStatusCode Status, string Body) ResolveResponse(string path)

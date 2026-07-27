@@ -16,6 +16,7 @@ namespace Foundry.Modules.Monitoring.Infrastructure;
 internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 {
     private const string ApiVersion = "2026-03-10";
+    private const string AllZerosSha = "0000000000000000000000000000000000000000";
     private const int MaxComments = 50;
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
@@ -463,6 +464,42 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
 
         return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missingScopes, accountName));
+    }
+
+    public async Task<Result<WritePermissionProbeResult>> ProbeContentsWriteAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string probeName = $"foundry-probe-{Guid.NewGuid():N}";
+        string relativePath = $"repos/{owner}/{repo}/git/refs";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        string body = JsonSerializer.Serialize(
+            new { @ref = $"refs/heads/{probeName}", sha = AllZerosSha },
+            JsonOptions);
+
+        using HttpRequestMessage request = new(HttpMethod.Post, requestUri);
+        AddGitHubHeaders(request, token);
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        return response.StatusCode switch
+        {
+            HttpStatusCode.UnprocessableEntity => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            HttpStatusCode.NotFound => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            HttpStatusCode.Forbidden => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(WritePermission.Contents)),
+            _ => Result<WritePermissionProbeResult>.Fail(ErrorFromNonSuccess(response)),
+        };
     }
 
     public async Task<Result<bool>> GetPushPermissionAsync(
