@@ -3,7 +3,9 @@ using System.Net.Http.Json;
 
 using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.WebApi.Persistence;
 

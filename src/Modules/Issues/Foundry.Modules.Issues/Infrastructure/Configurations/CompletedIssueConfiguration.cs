@@ -1,4 +1,4 @@
-using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Entities.States;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

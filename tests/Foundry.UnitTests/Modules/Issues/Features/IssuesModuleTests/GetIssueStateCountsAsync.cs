@@ -1,6 +1,9 @@
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;

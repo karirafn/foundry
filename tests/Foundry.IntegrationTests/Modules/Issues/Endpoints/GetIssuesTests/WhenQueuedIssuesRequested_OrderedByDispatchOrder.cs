@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
