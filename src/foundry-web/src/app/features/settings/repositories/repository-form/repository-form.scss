@@ -188,20 +188,19 @@
   }
 
   &__picker-empty {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.875rem;
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
   }
 
   &__picker-empty-status {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.875rem;
-    list-style: none;
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
   }
 
   &__picker-empty-status-hint {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     display: block;
     font-size: 0.8125rem;
     margin-top: var(--fd-spacing-xs);

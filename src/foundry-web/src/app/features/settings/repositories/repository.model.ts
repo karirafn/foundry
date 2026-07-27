@@ -1,3 +1,5 @@
+export const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not authorized';
+
 export type EligibilityStatus = 'eligible' | 'ineligible' | 'unreachable';
 
 export function eligibilityStatusLabel(status: EligibilityStatus): string {
