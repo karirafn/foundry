@@ -4,7 +4,6 @@ using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Eligibility;

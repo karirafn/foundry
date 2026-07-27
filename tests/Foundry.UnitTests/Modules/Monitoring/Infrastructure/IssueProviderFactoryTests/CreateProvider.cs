@@ -2,7 +2,6 @@ using System.Net;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Testing;
 using Foundry.Modules.Monitoring.Infrastructure;
