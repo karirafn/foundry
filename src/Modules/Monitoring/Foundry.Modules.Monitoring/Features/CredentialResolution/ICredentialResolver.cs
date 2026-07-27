@@ -1,7 +1,7 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.CredentialResolution;
 
 internal interface ICredentialResolver
 {

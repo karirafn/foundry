@@ -3,7 +3,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.CredentialResolution;
 
 internal sealed class CredentialResolver(DbContext db) : ICredentialResolver
 {

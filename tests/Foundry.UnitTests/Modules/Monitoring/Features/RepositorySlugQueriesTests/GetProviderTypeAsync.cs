@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
