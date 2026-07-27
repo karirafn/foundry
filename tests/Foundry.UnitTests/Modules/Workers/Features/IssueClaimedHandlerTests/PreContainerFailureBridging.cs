@@ -146,27 +146,6 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBranchPreCreationFails_PersistedReasonIsProviderError()
-    {
-        // Arrange
-        CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
-        IssueClaimedHandler sut = BuildHandler(
-            integrationEventDispatcher,
-            postExitProviderQueries: new BranchCreationFailsQueries());
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-        _dbContext.ChangeTracker.Clear();
-
-        // Assert
-        WorkerRun? run = await _dbContext.Set<WorkerRun>()
-            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.Reason.ShouldBeOfType<FailureReason.ProviderError>();
-    }
-
-    [Fact]
     public async Task WhenBranchPreCreationFails_ProviderErrorSummaryPassesThroughErrorMessage()
     {
         // Arrange

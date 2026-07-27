@@ -320,6 +320,70 @@ public sealed class CreateBranchAsync
     }
 
     [Fact]
+    public async Task WhenCreateRefReturns403WithSecretInBodyMessage_ErrorMessageIsRedacted()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string tokenValue = "ghp_abcdefghijklmnopqrstuvwxyz123456";
+        string forbiddenJson = $$"""{ "message": "Resource not accessible: token {{tokenValue}} is invalid" }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson),
+            (HttpStatusCode.Forbidden, forbiddenJson),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.ProviderError");
+        failure.Error.Message.ShouldNotContain(tokenValue);
+        failure.Error.Message.ShouldContain("***");
+    }
+
+    [Fact]
+    public async Task WhenCreateRefReturns403WithOverLongBodyMessage_ErrorMessageIsBounded()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string longMessage = new string('x', 600);
+        string forbiddenJson = $$"""{ "message": "{{longMessage}}" }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson),
+            (HttpStatusCode.Forbidden, forbiddenJson),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.ProviderError");
+        failure.Error.Message.Length.ShouldBeLessThanOrEqualTo(600);
+        failure.Error.Message.ShouldEndWith("...");
+    }
+
+    [Fact]
     public async Task WhenCreateRefReturnsNon403Failure_ReturnsUnchangedError()
     {
         // Arrange

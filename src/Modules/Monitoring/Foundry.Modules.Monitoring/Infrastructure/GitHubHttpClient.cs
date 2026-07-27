@@ -21,6 +21,9 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
+    private const int MaxBranchErrorBodyLength = 500;
+    private const int MaxPermissionsLength = 200;
+    private const string Ellipsis = "...";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -799,6 +802,12 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     [GeneratedRegex(@"/pull/(\d+)(?:[/?#]|$)")]
     private static partial Regex PrNumberRegex();
 
+    [GeneratedRegex(
+        @"(?:glpat-|ghp_|github_pat_|gho_|sk-ant-)\S+",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex KnownTokenPattern();
+
     private static bool TryParsePrNumber(string pullRequestUrl, out int prNumber)
     {
         Match match = PrNumberRegex().Match(pullRequestUrl);
@@ -871,28 +880,31 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             return GitHubErrors.RateLimitExhausted;
         }
 
-        if (response.StatusCode == HttpStatusCode.Forbidden)
+        if (response.StatusCode != HttpStatusCode.Forbidden)
         {
-            string body = await response.Content.ReadAsStringAsync(cancellationToken);
-            GitHubErrorBodyDto? errorDto = DeserializeErrorBody(body);
-            string bodyMessage = errorDto?.Message ?? body;
-
-            if (response.Headers.TryGetValues("X-Accepted-GitHub-Permissions", out IEnumerable<string>? permValues))
-            {
-                string permissions = string.Join(", ", permValues);
-                string message = $"Branch pre-creation on {slug} returned 403 — token lacks {permissions}. " +
-                    $"Pending organization approval may also prevent access (fine-grained PATs require org approval).";
-                return GitHubErrors.ProviderError(message);
-            }
-            else
-            {
-                string message = $"Branch pre-creation on {slug} returned 403 — {bodyMessage}";
-                return GitHubErrors.ProviderError(message);
-            }
+            return ErrorFromNonSuccess(response);
         }
 
-        return ErrorFromNonSuccess(response);
+        if (response.Headers.TryGetValues("X-Accepted-GitHub-Permissions", out IEnumerable<string>? permValues))
+        {
+            string permissions = TruncateWithEllipsis(string.Join(", ", permValues), MaxPermissionsLength);
+            string message = $"Branch pre-creation on {slug} returned 403 — token lacks {permissions}. " +
+                $"Pending organization approval may also prevent access (fine-grained PATs require org approval).";
+            return GitHubErrors.ProviderError(message);
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubErrorBodyDto? errorDto = DeserializeErrorBody(body);
+        string rawBodyMessage = errorDto?.Message ?? body;
+        string bodyMessage = TruncateWithEllipsis(RedactSecrets(rawBodyMessage), MaxBranchErrorBodyLength);
+        return GitHubErrors.ProviderError($"Branch pre-creation on {slug} returned 403 — {bodyMessage}");
     }
+
+    private static string RedactSecrets(string input) =>
+        KnownTokenPattern().Replace(input, "***");
+
+    private static string TruncateWithEllipsis(string value, int maxLength) =>
+        value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength), Ellipsis);
 
     private static Error ErrorFromNonSuccess(HttpResponseMessage response)
     {
