@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Settings.Features;
+namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
 internal static class UpdateWorkerLimits
 {

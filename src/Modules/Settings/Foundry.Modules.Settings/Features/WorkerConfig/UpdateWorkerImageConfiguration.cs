@@ -1,5 +1,6 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
@@ -8,28 +9,22 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Settings.Features;
+namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
-internal static class UpdateDispatchSettings
+internal static class UpdateWorkerImageConfiguration
 {
-    internal sealed record Command(bool AutoResumeOnUsageReset, int DefaultCooldownMinutes)
-        : ICommand<GlobalSettingsSummary>;
+    internal sealed record Command(
+        bool InstallDotnet,
+        bool InstallAngular,
+        bool InstallGlab,
+        bool InstallGh,
+        bool InstallChromium,
+        bool InstallDocker) : ICommand<GlobalSettingsSummary>;
 
-    internal sealed class Validator : ICommandValidator<Command>
-    {
-        public Result Validate(Command command)
-        {
-            if (command.DefaultCooldownMinutes < GlobalSettings.MinDefaultCooldownMinutes
-                || command.DefaultCooldownMinutes > GlobalSettings.MaxDefaultCooldownMinutes)
-            {
-                return SettingsErrors.InvalidDefaultCooldown(command.DefaultCooldownMinutes);
-            }
-
-            return Result.Ok();
-        }
-    }
-
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, GlobalSettingsSummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        IIntegrationEventDispatcher integrationEventDispatcher)
+        : ICommandHandler<Command, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
             Command command,
@@ -43,16 +38,24 @@ internal static class UpdateDispatchSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            Result updateResult = settings.UpdateDispatchSettings(
-                command.AutoResumeOnUsageReset,
-                command.DefaultCooldownMinutes);
+            WorkerImageConfiguration config = new(
+                command.InstallDotnet,
+                command.InstallAngular,
+                command.InstallGlab,
+                command.InstallGh,
+                command.InstallChromium,
+                command.InstallDocker);
 
-            if (updateResult is Result.Failure failure)
+            bool changed = settings.UpdateWorkerImageConfiguration(config);
+
+            if (changed)
             {
-                return Result<GlobalSettingsSummary>.Fail(failure.Error);
-            }
+                await integrationEventDispatcher.DispatchAsync(
+                    [new WorkerImageConfigurationChanged()],
+                    cancellationToken);
 
-            await dbContext.SaveChangesAsync(cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
 
             return GlobalSettingsMapper.ToSummary(settings);
         }
@@ -60,16 +63,29 @@ internal static class UpdateDispatchSettings
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(bool AutoResumeOnUsageReset, int DefaultCooldownMinutes);
+        private sealed record RequestBody(
+            bool InstallDotnet,
+            bool InstallAngular,
+            bool InstallGlab,
+            bool InstallGh,
+            bool InstallChromium,
+            bool InstallDocker);
 
         public static void Map(RouteGroupBuilder group)
         {
-            group.MapPut("/dispatch", static async (
+            group.MapPut("/worker-image", static async (
                     RequestBody body,
                     ICommandHandler<Command, GlobalSettingsSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(body.AutoResumeOnUsageReset, body.DefaultCooldownMinutes);
+                    Command command = new(
+                        body.InstallDotnet,
+                        body.InstallAngular,
+                        body.InstallGlab,
+                        body.InstallGh,
+                        body.InstallChromium,
+                        body.InstallDocker);
+
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, ProblemHttpResult>>(
@@ -80,8 +96,8 @@ internal static class UpdateDispatchSettings
                             _ => TypedResults.Problem(error.Message, statusCode: StatusCodes.Status400BadRequest),
                         });
                 })
-                .WithName("UpdateDispatchSettings")
-                .WithSummary("Updates the dispatch pause and cooldown settings")
+                .WithName("UpdateWorkerImageConfiguration")
+                .WithSummary("Updates the worker image build flags")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

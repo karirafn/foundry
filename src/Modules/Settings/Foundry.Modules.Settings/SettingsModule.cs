@@ -1,6 +1,8 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Features;
+using Foundry.Modules.Settings.Features.Dispatch;
+using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;

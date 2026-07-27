@@ -1,6 +1,6 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Builder;
@@ -9,9 +9,9 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Settings.Features;
+namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
-internal static class ResumeDispatch
+internal static class RetryImageBuild
 {
     internal sealed record Command : ICommand<GlobalSettingsSummary>;
 
@@ -32,9 +32,14 @@ internal static class ResumeDispatch
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            settings.ResumeDispatch();
+            if (settings.ImageBuildState is not ImageBuildState.Failed)
+            {
+                return Result<GlobalSettingsSummary>.Fail(SettingsErrors.InvalidRetryStatus);
+            }
 
-            await integrationEventDispatcher.DispatchAsync([new DispatchResumed()], cancellationToken);
+            await integrationEventDispatcher.DispatchAsync(
+                [new WorkerImageConfigurationChanged()],
+                cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -46,24 +51,25 @@ internal static class ResumeDispatch
     {
         public static void Map(RouteGroupBuilder group)
         {
-            group.MapPost("/dispatch/resume", static async (
+            group.MapPost("/worker-image/retry", static async (
                     ICommandHandler<Command, GlobalSettingsSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(new Command(), cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
                         error => error.Code switch
                         {
                             SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.NotFound(),
+                            _ => TypedResults.Problem(error.Message, statusCode: StatusCodes.Status400BadRequest),
                         });
                 })
-                .WithName("ResumeDispatch")
-                .WithSummary("Resumes worker dispatch")
+                .WithName("RetryImageBuild")
+                .WithSummary("Retries the worker image build after a failure")
                 .Produces<GlobalSettingsSummary>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }
