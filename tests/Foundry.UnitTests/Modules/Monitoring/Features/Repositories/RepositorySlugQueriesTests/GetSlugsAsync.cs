@@ -2,7 +2,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -15,7 +15,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.RepositorySlugQueriesTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Repositories.RepositorySlugQueriesTests;
 
 public sealed class GetSlugsAsync : IAsyncDisposable
 {

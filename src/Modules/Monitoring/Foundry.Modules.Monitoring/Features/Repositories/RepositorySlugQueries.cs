@@ -5,7 +5,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.Repositories;
 
 internal sealed class RepositorySlugQueries(
     DbContext db,

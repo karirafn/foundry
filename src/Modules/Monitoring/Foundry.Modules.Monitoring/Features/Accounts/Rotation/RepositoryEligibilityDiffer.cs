@@ -4,7 +4,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Monitoring.Features.Accounts;
+namespace Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 
 /// <summary>
 /// Snapshots prior eligibility for a set of repositories, re-evaluates them, and returns

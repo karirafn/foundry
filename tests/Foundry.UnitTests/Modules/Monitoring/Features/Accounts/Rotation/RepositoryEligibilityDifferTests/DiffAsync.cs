@@ -1,9 +1,8 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Eligibility;
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -14,7 +13,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.RepositoryEligibilityDifferTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.Rotation.RepositoryEligibilityDifferTests;
 
 public sealed class DiffAsync : IAsyncDisposable
 {

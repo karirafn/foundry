@@ -8,7 +8,7 @@ using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.Modules.Monitoring.Features.Accounts;
+namespace Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 
 internal sealed class CredentialRotationService(
     DbContext dbContext,
