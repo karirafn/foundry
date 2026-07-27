@@ -7,17 +7,14 @@ using Foundry.Shared.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.Modules.Issues.Features;
+namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
-internal sealed class ProviderPullRequestClosedHandler(
+internal sealed class ProviderIssueClosedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
-    ILogger<ProviderPullRequestClosedHandler> logger) : IIntegrationEventHandler<ProviderPullRequestClosed>
+    ILogger<ProviderIssueClosedHandler> logger) : IIntegrationEventHandler<ProviderIssueClosed>
 {
-    private const string FailureReason = "Pull request closed without merge";
-    private const string FailureCategory = "pr_closed";
-
-    public async Task HandleAsync(ProviderPullRequestClosed @event, CancellationToken cancellationToken)
+    public async Task HandleAsync(ProviderIssueClosed @event, CancellationToken cancellationToken)
     {
         Issue? issue = await db.Set<Issue>()
             .Where(i => i.MonitoredRepositoryId == @event.RepositoryId)
@@ -26,14 +23,14 @@ internal sealed class ProviderPullRequestClosedHandler(
         if (issue is not ReviewIssue reviewIssue)
         {
             logger.LogWarning(
-                "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue (state: {State}); ignoring.",
+                "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue (state: {State}); ignoring.",
                 @event.RepositoryId,
                 @event.IssueNumber,
                 issue?.GetType().Name ?? "not found");
             return;
         }
 
-        ContinuableFailedIssue failed = reviewIssue.Fail(FailureReason, FailureCategory, DateTimeOffset.UtcNow);
-        await db.TransitionAsync(reviewIssue, failed, domainEventDispatcher, cancellationToken);
+        CompletedIssue completed = reviewIssue.Complete(DateTimeOffset.UtcNow);
+        await db.TransitionAsync(reviewIssue, completed, domainEventDispatcher, cancellationToken);
     }
 }

@@ -1,7 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 
-namespace Foundry.Modules.Issues.Features;
+namespace Foundry.Modules.Issues.Features.StateChanges;
 
 internal sealed class IssueStateChangedHandler(IIssueQueries issueQueries, IIssueBroadcaster broadcaster)
 {

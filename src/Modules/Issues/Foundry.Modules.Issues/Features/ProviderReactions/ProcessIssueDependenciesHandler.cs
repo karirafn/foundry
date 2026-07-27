@@ -10,7 +10,7 @@ using Foundry.Shared.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.Modules.Issues.Features;
+namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
 internal sealed class ProcessIssueDependenciesHandler(
     DbContext db,

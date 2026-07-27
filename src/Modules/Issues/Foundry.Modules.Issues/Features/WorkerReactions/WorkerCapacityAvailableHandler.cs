@@ -11,7 +11,7 @@ using Foundry.Shared.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.Modules.Issues.Features;
+namespace Foundry.Modules.Issues.Features.WorkerReactions;
 
 internal sealed class WorkerCapacityAvailableHandler(
     DbContext db,

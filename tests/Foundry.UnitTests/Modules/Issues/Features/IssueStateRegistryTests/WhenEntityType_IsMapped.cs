@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.StateChanges;
 
 using Shouldly;
 

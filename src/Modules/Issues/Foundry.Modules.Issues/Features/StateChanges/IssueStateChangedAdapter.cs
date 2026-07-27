@@ -1,7 +1,7 @@
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Issues.Features;
+namespace Foundry.Modules.Issues.Features.StateChanges;
 
 internal sealed class IssueStateChangedAdapter<T>(IssueStateChangedHandler handler)
     : IDomainEventHandler<T>

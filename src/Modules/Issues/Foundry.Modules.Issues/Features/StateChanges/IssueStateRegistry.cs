@@ -2,7 +2,7 @@ using System.Collections.Frozen;
 
 using Foundry.Modules.Issues.Domain.Entities.States;
 
-namespace Foundry.Modules.Issues.Features;
+namespace Foundry.Modules.Issues.Features.StateChanges;
 
 /// <summary>
 /// Single source of truth for the issue lifecycle partition.

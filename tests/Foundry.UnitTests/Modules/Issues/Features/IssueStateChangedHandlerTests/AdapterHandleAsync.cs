@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 

@@ -4,7 +4,7 @@ using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Issues.Features;
+namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
 internal sealed class UpdateIssueDetailsHandler(
     DbContext db) : IIntegrationEventHandler<IssueDetailsChanged>
