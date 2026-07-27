@@ -734,8 +734,8 @@ describe('SetupReposStepComponent', () => {
     });
   });
 
-  // Cycle 21: no-claims empty state — persistent role="status" sibling of list
-  it('should show "no claimed namespaces" empty state when hasClaims is false and list is empty', () => {
+  // Cycle 21: no-claims empty state — always-in-tree live region, never hidden/display:none
+  it('should show "no claimed namespaces" message when hasClaims is false and list is empty', () => {
     // Arrange
     const { fixture, httpMock } = setup();
 
@@ -746,18 +746,38 @@ describe('SetupReposStepComponent', () => {
       .flush({ hasClaims: false, repositories: [] });
     fixture.detectChanges();
 
-    // Assert — persistent role="status" element (not inside the ul)
+    // Assert — persistent role="status" element, never hidden, not inside the ul
     const el = fixture.nativeElement as HTMLElement;
     const emptyStatus = el.querySelector('.setup-repos-step__empty-status');
     expect(emptyStatus).toBeTruthy();
     expect(emptyStatus?.getAttribute('role')).toBe('status');
+    // Must NOT use hidden attribute (would remove from a11y tree)
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
     expect(emptyStatus?.textContent).toContain('no claimed namespaces');
-    // Verify it is NOT inside the repo list
     const repoList = el.querySelector('.setup-repos-step__repo-list');
     expect(repoList?.contains(emptyStatus)).toBe(false);
   });
 
-  // Cycle 22: claims-but-empty state — persistent role="status" sibling
+  it('should have empty text content in the status region when repos are available (not in empty state)', () => {
+    // Arrange — hasClaims: true + non-empty repos; status region should be silent
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS });
+    fixture.detectChanges();
+
+    // Assert — status element always in DOM, never hidden, text is empty so it does not announce
+    const el = fixture.nativeElement as HTMLElement;
+    const emptyStatus = el.querySelector('.setup-repos-step__empty-status');
+    expect(emptyStatus).toBeTruthy();
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
+    expect(emptyStatus?.textContent?.trim()).toBe('');
+  });
+
+  // Cycle 22: claims-but-empty state — persistent live-region, never hidden
   it('should show "no repositories under claimed namespaces" when hasClaims is true but list is empty', () => {
     // Arrange
     const { fixture, httpMock } = setup();
@@ -769,14 +789,14 @@ describe('SetupReposStepComponent', () => {
       .flush({ hasClaims: true, repositories: [] });
     fixture.detectChanges();
 
-    // Assert — persistent role="status" element (not inside the ul)
+    // Assert — persistent role="status" element, never hidden, not inside the ul
     const el = fixture.nativeElement as HTMLElement;
     const emptyStatus = el.querySelector('.setup-repos-step__empty-status');
     expect(emptyStatus).toBeTruthy();
     expect(emptyStatus?.getAttribute('role')).toBe('status');
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
     expect(emptyStatus?.textContent).toContain('claimed namespaces');
     expect(emptyStatus?.textContent).not.toContain('no claimed namespaces');
-    // Verify it is NOT inside the repo list
     const repoList = el.querySelector('.setup-repos-step__repo-list');
     expect(repoList?.contains(emptyStatus)).toBe(false);
   });

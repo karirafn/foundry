@@ -1354,8 +1354,8 @@ describe('RepositoryFormComponent', () => {
     });
   });
 
-  // Cycle 35: no-claims empty state (hasClaims=false, no error) — persistent live-region sibling of listbox
-  it('should show "no claimed namespaces" empty state when hasClaims is false and load resolves', () => {
+  // Cycle 35: no-claims empty state — always-in-tree live region, never hidden/display:none
+  it('should show "no claimed namespaces" message when picker is open and hasClaims is false', () => {
     // Arrange
     const { el, fixture } = setup({
       repository: null,
@@ -1369,22 +1369,47 @@ describe('RepositoryFormComponent', () => {
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    // Act — open picker to make the status element visible
+    // Act — open picker
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
     combobox.click();
     fixture.detectChanges();
 
-    // Assert — persistent role="status" sibling (not inside listbox) shows no-claims message
+    // Assert — persistent role="status" sibling, never hidden, text contains message
     const emptyStatus = el.querySelector('.repository-form__picker-empty-status');
     expect(emptyStatus).toBeTruthy();
     expect(emptyStatus?.getAttribute('role')).toBe('status');
+    // Must NOT use hidden attribute (would remove from a11y tree)
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
     expect(emptyStatus?.textContent).toContain('no claimed namespaces');
     // Verify it is NOT inside the listbox
     const listbox = el.querySelector('[role="listbox"]');
     expect(listbox?.contains(emptyStatus)).toBe(false);
   });
 
-  // Cycle 36: has-claims-but-empty state — persistent live-region
+  it('should have empty text content in the status region when picker is closed', () => {
+    // Arrange — picker closed (after account selection, before click)
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: [],
+      hasClaims: false,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act — do NOT open picker
+
+    // Assert — status element always in DOM, but text is empty so it does not announce
+    const emptyStatus = el.querySelector('.repository-form__picker-empty-status');
+    expect(emptyStatus).toBeTruthy();
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
+    expect(emptyStatus?.textContent?.trim()).toBe('');
+  });
+
+  // Cycle 36: has-claims-but-empty state — persistent live-region, never hidden
   it('should show "no repositories under claimed namespaces" when hasClaims is true but list is empty', () => {
     // Arrange
     const { el, fixture } = setup({
@@ -1399,17 +1424,17 @@ describe('RepositoryFormComponent', () => {
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    // Act — open picker to make the status element visible
+    // Act — open picker
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
     combobox.click();
     fixture.detectChanges();
 
-    // Assert — persistent role="status" shows has-claims-but-empty message, not inside listbox
+    // Assert — persistent role="status", never hidden, text contains message, not inside listbox
     const emptyStatus = el.querySelector('.repository-form__picker-empty-status');
     expect(emptyStatus).toBeTruthy();
     expect(emptyStatus?.getAttribute('role')).toBe('status');
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
     expect(emptyStatus?.textContent).toContain('No repositories under this account');
-    // Verify it is NOT inside the listbox
     const listbox = el.querySelector('[role="listbox"]');
     expect(listbox?.contains(emptyStatus)).toBe(false);
   });

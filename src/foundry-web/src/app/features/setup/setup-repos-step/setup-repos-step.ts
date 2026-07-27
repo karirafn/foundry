@@ -55,7 +55,11 @@ const ERROR_TRUNCATE_LENGTH = 200;
           />
         </div>
 
-        <div class="setup-repos-step__empty-status" role="status" [hidden]="!_showEmptyStatus()">
+        <div
+          class="setup-repos-step__empty-status"
+          [class.sr-only]="_emptyStatusMessage() === ''"
+          role="status"
+        >
           @if (!_repositoryService.availableHasClaims()) {
             This account has no claimed namespaces.
             <span class="setup-repos-step__empty-status-hint">Add a namespace claim to this account to monitor its repositories.</span>
@@ -177,10 +181,15 @@ export class SetupReposStepComponent implements OnInit {
     return repos.filter(r => r.slug.toLowerCase().includes(filter));
   });
 
-  protected readonly _showEmptyStatus: Signal<boolean> = computed(() =>
-    !this._repositoryService.availableHasClaims() ||
-    this._repositoryService.availableRepositories().length === 0
-  );
+  protected readonly _emptyStatusMessage: Signal<string> = computed(() => {
+    if (!this._repositoryService.availableHasClaims()) {
+      return 'This account has no claimed namespaces.';
+    }
+    if (this._repositoryService.availableRepositories().length === 0) {
+      return "No repositories under this account's claimed namespaces.";
+    }
+    return '';
+  });
 
   protected readonly _canFinish: Signal<boolean> = computed(() => {
     if (this._saving()) {

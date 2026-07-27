@@ -110,8 +110,8 @@ const MAX_POLL_INTERVAL_MINUTES = 1440;
 
                 <div
                   class="repository-form__picker-empty-status"
+                  [class.sr-only]="_emptyStatusText() === ''"
                   role="status"
-                  [hidden]="!_pickerOpen() || _emptyStatusText() === ''"
                 >{{ _emptyStatusText() }}@if (_showNoClaims()) {
                     <span class="repository-form__picker-empty-status-hint">Add a namespace claim to this account to monitor its repositories.</span>
                   }</div>
@@ -249,9 +249,14 @@ export class RepositoryFormComponent implements OnInit {
     return this.availableRepositories().filter(r => r.slug.toLowerCase().includes(filter));
   });
 
-  protected readonly _showNoClaims: Signal<boolean> = computed(() => !this.hasClaims());
+  protected readonly _showNoClaims: Signal<boolean> = computed(
+    () => this._pickerOpen() && !this.hasClaims()
+  );
 
   protected readonly _emptyStatusText: Signal<string> = computed(() => {
+    if (!this._pickerOpen()) {
+      return '';
+    }
     if (!this.hasClaims()) {
       return 'This account has no claimed namespaces.';
     }
