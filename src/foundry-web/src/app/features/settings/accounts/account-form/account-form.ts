@@ -101,6 +101,9 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
               <li class="account-form__requirements-scope"><code>{{ scope }}</code></li>
             }
           </ul>
+          @if (req.resourceOwnerHint) {
+            <p class="account-form__requirements-owner-hint">{{ req.resourceOwnerHint }}</p>
+          }
           @if (_createTokenUrl(); as url) {
             <a class="account-form__requirements-link" [href]="url" target="_blank" rel="noopener noreferrer">
               Create token on {{ _resolvedHost() }}
