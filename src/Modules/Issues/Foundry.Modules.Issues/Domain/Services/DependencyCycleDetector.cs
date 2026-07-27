@@ -1,6 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 
-namespace Foundry.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain.Services;
 
 public static class DependencyCycleDetector
 {

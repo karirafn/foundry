@@ -1,4 +1,4 @@
-using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 
 using Shouldly;
 

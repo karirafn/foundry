@@ -1,6 +1,8 @@
 using System.Net;
 
-using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.WebApi.Persistence;
 

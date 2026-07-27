@@ -1,8 +1,10 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain.Entities;
 
 public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 {

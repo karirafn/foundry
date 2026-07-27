@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain.ValueObjects;
 
 public sealed record IssueAuthor
 {

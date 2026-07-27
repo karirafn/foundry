@@ -1,23 +1,20 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.Entities;
 
-namespace Foundry.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain.Entities.States;
 
-public sealed class ContinuableFailedIssue : Issue
+public sealed class FailedIssue : Issue
 {
     // Private parameterless constructor for EF Core materialization.
-    private ContinuableFailedIssue()
+    private FailedIssue()
     {
     }
 
-    private ContinuableFailedIssue(IssueId id) : base(id)
+    private FailedIssue(IssueId id) : base(id)
     {
     }
 
     public Guid WorkerRunId { get; private set; }
-
-    public string BranchName { get; private set; } = string.Empty;
-
-    public string PullRequestUrl { get; private set; } = string.Empty;
 
     public string FailureReason { get; private set; } = string.Empty;
 
@@ -25,15 +22,14 @@ public sealed class ContinuableFailedIssue : Issue
 
     public DateTimeOffset FailedAt { get; private set; }
 
-    internal static ContinuableFailedIssue FromInProgress(
+    internal static FailedIssue FromInProgress(
         InProgressIssue source,
         Guid workerRunId,
-        string branchName,
         string failureReason,
         string failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        FailedIssue failed = new(source.Id);
         failed.SetSharedProperties(
             source.MonitoredRepositoryId,
             source.IssueNumber,
@@ -44,20 +40,19 @@ public sealed class ContinuableFailedIssue : Issue
             source.Labels,
             source.DetectedAt);
         failed.WorkerRunId = workerRunId;
-        failed.BranchName = branchName;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
         return failed;
     }
 
-    internal static ContinuableFailedIssue FromReview(
+    internal static FailedIssue FromReview(
         ReviewIssue source,
         string failureReason,
         string failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        FailedIssue failed = new(source.Id);
         failed.SetSharedProperties(
             source.MonitoredRepositoryId,
             source.IssueNumber,
@@ -68,18 +63,16 @@ public sealed class ContinuableFailedIssue : Issue
             source.Labels,
             source.DetectedAt);
         failed.WorkerRunId = source.WorkerRunId;
-        failed.BranchName = source.BranchName;
-        failed.PullRequestUrl = source.PullRequestUrl;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
         return failed;
     }
 
-    public ContinuationQueuedIssue Retry()
+    public QueuedIssue Retry()
     {
-        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(this);
-        AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
+        QueuedIssue queued = QueuedIssue.FromRetry(this);
+        AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }
 }

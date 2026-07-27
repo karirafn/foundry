@@ -1,6 +1,6 @@
 using System.Collections.Frozen;
 
-using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.Entities.States;
 
 namespace Foundry.Modules.Issues.Features;
 

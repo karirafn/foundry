@@ -1,6 +1,8 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.Entities.States;
 
-namespace Foundry.Modules.Issues.Domain;
+namespace Foundry.Modules.Issues.Domain.ValueObjects;
 
 /// <summary>
 /// Ordering key for queued issues in dispatch priority order.

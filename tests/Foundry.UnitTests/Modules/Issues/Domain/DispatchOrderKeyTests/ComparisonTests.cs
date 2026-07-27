@@ -1,5 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Modules.Issues.Domain;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 
 using Shouldly;
 
