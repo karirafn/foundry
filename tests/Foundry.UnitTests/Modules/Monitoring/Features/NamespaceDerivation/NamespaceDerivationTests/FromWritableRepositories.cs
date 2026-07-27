@@ -1,12 +1,14 @@
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Infrastructure;
+
+using MonitoringNamespaceDerivation = Foundry.Modules.Monitoring.Features.NamespaceDerivation.NamespaceDerivation;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.NamespaceDerivationTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.NamespaceDerivation.NamespaceDerivationTests;
 
 public sealed class FromWritableRepositories
 {
@@ -17,7 +19,7 @@ public sealed class FromWritableRepositories
         IReadOnlyList<ProviderRepository> repos = [];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.ShouldBeEmpty();
@@ -34,7 +36,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.ShouldBeEmpty();
@@ -50,7 +52,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.Count.ShouldBe(1);
@@ -69,7 +71,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.Count.ShouldBe(1);
@@ -88,7 +90,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.Count.ShouldBe(3);
@@ -109,7 +111,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.Count.ShouldBe(1);
@@ -127,7 +129,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert — owner "company/team" is registered, not just "company"
         result.Count.ShouldBe(1);
@@ -145,7 +147,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.Count.ShouldBe(1);
@@ -162,7 +164,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.Count.ShouldBe(1);
@@ -178,7 +180,7 @@ public sealed class FromWritableRepositories
         ];
 
         // Act
-        IReadOnlyCollection<Namespace> result = NamespaceDerivation.FromWritableRepositories(repos);
+        IReadOnlyCollection<Namespace> result = MonitoringNamespaceDerivation.FromWritableRepositories(repos);
 
         // Assert
         result.ShouldBeEmpty();

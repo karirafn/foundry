@@ -1,7 +1,7 @@
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 
 internal abstract record NamespaceDerivationOutcome
 {

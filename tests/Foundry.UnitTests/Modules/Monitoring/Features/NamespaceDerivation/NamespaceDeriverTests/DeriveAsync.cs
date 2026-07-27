@@ -3,7 +3,7 @@ using System.Text;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features;
+using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -14,7 +14,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Monitoring.Features.NamespaceDeriverTests;
+namespace Foundry.UnitTests.Modules.Monitoring.Features.NamespaceDerivation.NamespaceDeriverTests;
 
 public sealed class DeriveAsync
 {
