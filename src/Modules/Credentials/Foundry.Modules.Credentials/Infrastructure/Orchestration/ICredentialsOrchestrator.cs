@@ -1,7 +1,7 @@
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Credentials.Infrastructure;
+namespace Foundry.Modules.Credentials.Infrastructure.Orchestration;
 
 /// <summary>
 /// Abstracts the Docker operations needed by the Credentials module:

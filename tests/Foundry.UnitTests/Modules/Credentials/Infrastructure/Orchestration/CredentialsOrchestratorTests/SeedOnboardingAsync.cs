@@ -1,7 +1,7 @@
 using Docker.DotNet.Models;
 
 using Foundry.Modules.Credentials.Features.Login;
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.UnitTests.Fakes.Workers;
 
@@ -9,7 +9,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Credentials.Infrastructure.CredentialsOrchestratorTests;
+namespace Foundry.UnitTests.Modules.Credentials.Infrastructure.Orchestration.CredentialsOrchestratorTests;
 
 public sealed class SeedOnboardingAsync
 {

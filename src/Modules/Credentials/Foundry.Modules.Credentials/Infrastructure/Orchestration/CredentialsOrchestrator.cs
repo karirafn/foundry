@@ -8,7 +8,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
-namespace Foundry.Modules.Credentials.Infrastructure;
+namespace Foundry.Modules.Credentials.Infrastructure.Orchestration;
 
 /// <summary>
 /// Docker implementation of <see cref="ICredentialsOrchestrator"/>: manages

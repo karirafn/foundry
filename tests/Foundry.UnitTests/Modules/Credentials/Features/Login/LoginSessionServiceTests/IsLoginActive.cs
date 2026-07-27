@@ -1,5 +1,5 @@
 using Foundry.Modules.Credentials.Features.Login;
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 

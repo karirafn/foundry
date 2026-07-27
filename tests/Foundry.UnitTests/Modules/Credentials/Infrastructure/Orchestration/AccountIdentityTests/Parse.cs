@@ -1,11 +1,11 @@
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Credentials.Infrastructure.AccountIdentityTests;
+namespace Foundry.UnitTests.Modules.Credentials.Infrastructure.Orchestration.AccountIdentityTests;
 
 public sealed class Parse
 {

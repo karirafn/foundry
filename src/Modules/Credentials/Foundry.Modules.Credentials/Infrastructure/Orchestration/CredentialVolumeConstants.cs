@@ -1,6 +1,6 @@
 using Foundry.Modules.Workers.Contracts;
 
-namespace Foundry.Modules.Credentials.Infrastructure;
+namespace Foundry.Modules.Credentials.Infrastructure.Orchestration;
 
 /// <summary>
 /// Constants for the Docker credential volume that holds Claude authentication state.

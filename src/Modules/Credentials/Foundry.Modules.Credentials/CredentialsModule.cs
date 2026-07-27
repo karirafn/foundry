@@ -4,7 +4,7 @@ using Foundry.Modules.Credentials.Features;
 using Foundry.Modules.Credentials.Features.Broadcasts;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Features.WorkerReactions;
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;

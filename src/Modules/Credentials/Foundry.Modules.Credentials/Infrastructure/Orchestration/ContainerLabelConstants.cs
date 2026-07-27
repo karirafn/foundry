@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Credentials.Infrastructure;
+namespace Foundry.Modules.Credentials.Infrastructure.Orchestration;
 
 /// <summary>
 /// Label constants for transient Docker containers managed by the Credentials module.

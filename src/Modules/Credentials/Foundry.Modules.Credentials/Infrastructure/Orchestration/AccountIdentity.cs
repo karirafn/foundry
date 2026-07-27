@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 
 using Foundry.Shared;
 
-namespace Foundry.Modules.Credentials.Infrastructure;
+namespace Foundry.Modules.Credentials.Infrastructure.Orchestration;
 
 /// <summary>
 /// Parsed result of <c>claude auth status --json</c>.

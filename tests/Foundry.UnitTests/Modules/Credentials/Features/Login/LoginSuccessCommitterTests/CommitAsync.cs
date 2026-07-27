@@ -2,7 +2,7 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.Login;
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 

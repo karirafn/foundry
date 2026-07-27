@@ -1,5 +1,5 @@
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Logging;
