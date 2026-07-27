@@ -1,4 +1,3 @@
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Runs;
 
 using Microsoft.AspNetCore.SignalR;

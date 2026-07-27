@@ -3,7 +3,6 @@ using System.Diagnostics;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
-using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;

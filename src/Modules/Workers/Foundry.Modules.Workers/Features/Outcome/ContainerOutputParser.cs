@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
 namespace Foundry.Modules.Workers.Features.Outcome;
