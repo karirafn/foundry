@@ -1,9 +1,10 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.Eligibility;
 
 internal sealed class RepositoryDispatchQueries(
     DbContext db,

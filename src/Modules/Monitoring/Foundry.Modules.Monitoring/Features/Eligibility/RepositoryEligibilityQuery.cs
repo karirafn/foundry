@@ -5,7 +5,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.Eligibility;
 
 internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryEligibilityQuery
 {

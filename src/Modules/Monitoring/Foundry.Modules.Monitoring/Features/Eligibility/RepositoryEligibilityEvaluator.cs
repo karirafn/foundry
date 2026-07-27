@@ -6,7 +6,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.Logging;
 
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.Eligibility;
 
 internal sealed class RepositoryEligibilityEvaluator(
     ICredentialResolver credentialResolver,

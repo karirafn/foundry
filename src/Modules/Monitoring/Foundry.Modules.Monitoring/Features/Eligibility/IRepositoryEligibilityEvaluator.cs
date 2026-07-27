@@ -1,6 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 
-namespace Foundry.Modules.Monitoring.Features;
+namespace Foundry.Modules.Monitoring.Features.Eligibility;
 
 internal interface IRepositoryEligibilityEvaluator
 {
