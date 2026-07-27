@@ -5,7 +5,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;

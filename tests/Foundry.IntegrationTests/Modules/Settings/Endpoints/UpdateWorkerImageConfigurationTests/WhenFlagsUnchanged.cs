@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
 

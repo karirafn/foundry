@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;

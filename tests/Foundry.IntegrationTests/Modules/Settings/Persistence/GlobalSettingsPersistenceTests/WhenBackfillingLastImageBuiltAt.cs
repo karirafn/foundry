@@ -1,4 +1,5 @@
-using Foundry.Modules.Settings.Domain;
+using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
