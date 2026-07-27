@@ -51,9 +51,10 @@ const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
 
 const GITHUB_REQUIREMENTS: TokenRequirements = {
   providerType: 'github',
-  tokenTypeLabel: 'Personal Access Token',
-  scopes: ['repo'],
-  creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
+  tokenTypeLabel: 'GitHub fine-grained personal access token',
+  scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+  creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
+  resourceOwnerHint: 'Select a resource owner (your user or an organization) to scope access.',
 };
 
 const GITLAB_REQUIREMENTS: TokenRequirements = {
@@ -61,6 +62,7 @@ const GITLAB_REQUIREMENTS: TokenRequirements = {
   tokenTypeLabel: 'Personal Access Token',
   scopes: ['api'],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+  resourceOwnerHint: null,
 };
 
 class FakeAccountService {

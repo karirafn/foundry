@@ -766,9 +766,10 @@ describe('AccountService', () => {
     // Arrange
     const mockRequirements: TokenRequirements = {
       providerType: 'github',
-      tokenTypeLabel: 'GitHub classic personal access token',
-      scopes: ['repo'],
-      creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
+      tokenTypeLabel: 'GitHub fine-grained personal access token',
+      scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+      creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
+      resourceOwnerHint: 'Select a resource owner (your user or an organization) to scope access.',
     };
 
     // Act
@@ -791,6 +792,7 @@ describe('AccountService', () => {
       tokenTypeLabel: 'GitLab personal access token',
       scopes: ['api'],
       creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+      resourceOwnerHint: null,
     };
 
     // Act
@@ -810,9 +812,10 @@ describe('AccountService', () => {
     // Arrange
     const mockRequirements: TokenRequirements = {
       providerType: 'github',
-      tokenTypeLabel: 'GitHub classic personal access token',
-      scopes: ['repo'],
-      creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
+      tokenTypeLabel: 'GitHub fine-grained personal access token',
+      scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+      creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
+      resourceOwnerHint: 'Select a resource owner (your user or an organization) to scope access.',
     };
 
     // Act — first call fetches
@@ -835,15 +838,17 @@ describe('AccountService', () => {
     // Arrange
     const githubRequirements: TokenRequirements = {
       providerType: 'github',
-      tokenTypeLabel: 'GitHub classic personal access token',
-      scopes: ['repo'],
-      creationUrlTemplate: '{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry',
+      tokenTypeLabel: 'GitHub fine-grained personal access token',
+      scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+      creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
+      resourceOwnerHint: 'Select a resource owner (your user or an organization) to scope access.',
     };
     const gitlabRequirements: TokenRequirements = {
       providerType: 'gitlab',
       tokenTypeLabel: 'GitLab personal access token',
       scopes: ['api'],
       creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+      resourceOwnerHint: null,
     };
 
     // Act — fetch GitHub
