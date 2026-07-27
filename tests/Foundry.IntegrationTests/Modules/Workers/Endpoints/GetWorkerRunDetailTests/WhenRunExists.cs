@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 

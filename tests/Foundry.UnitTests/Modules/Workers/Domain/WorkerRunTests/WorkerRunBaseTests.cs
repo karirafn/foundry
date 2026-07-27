@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 
 using Shouldly;

@@ -1,10 +1,10 @@
-using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Domain.WorkerRunIdTests;
+namespace Foundry.UnitTests.Modules.Workers.Domain.ValueObjects.WorkerRunIdTests;
 
 public sealed class From
 {

@@ -1,6 +1,6 @@
 using Foundry.Shared;
 
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 public readonly record struct WorkerRunId(Guid Value) : IStronglyTypedId<WorkerRunId>
 {

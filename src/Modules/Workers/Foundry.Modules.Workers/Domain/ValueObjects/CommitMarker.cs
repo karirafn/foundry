@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 public sealed record CommitMarker
 {

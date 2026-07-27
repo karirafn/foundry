@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 public readonly record struct PullRequestUrl(string Value)
 {

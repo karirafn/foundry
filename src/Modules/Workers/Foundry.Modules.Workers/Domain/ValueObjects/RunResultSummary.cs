@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 /// <summary>
 /// Parsed summary from the final JSON result line emitted by a claude --output-format json run.

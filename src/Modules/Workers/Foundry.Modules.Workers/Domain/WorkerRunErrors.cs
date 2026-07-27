@@ -1,4 +1,5 @@
 using Foundry.Shared;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 
 namespace Foundry.Modules.Workers.Domain;
 

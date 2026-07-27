@@ -1,13 +1,13 @@
 using System;
 using System.Text.Json;
 
-using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Domain.FailureReasonTests;
+namespace Foundry.UnitTests.Modules.Workers.Domain.ValueObjects.FailureReasonTests;
 
 public sealed class UsageLimited
 {

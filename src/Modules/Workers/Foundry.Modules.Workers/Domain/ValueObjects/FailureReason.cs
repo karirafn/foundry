@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
 
-namespace Foundry.Modules.Workers.Domain;
+namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 [JsonDerivedType(typeof(NonZeroExit), typeDiscriminator: FailureReason.NonZeroExitToken)]
 [JsonDerivedType(typeof(TimedOut), typeDiscriminator: FailureReason.TimedOutToken)]

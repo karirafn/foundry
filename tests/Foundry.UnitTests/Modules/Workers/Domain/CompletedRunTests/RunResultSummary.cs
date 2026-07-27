@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 
 using Shouldly;
@@ -22,7 +23,7 @@ public sealed class RunResultSummaryTests
     {
         // Arrange
         ActiveRun active = CreateActiveRun();
-        Foundry.Modules.Workers.Domain.RunResultSummary summary = Foundry.Modules.Workers.Domain.RunResultSummary.Create(
+        Foundry.Modules.Workers.Domain.ValueObjects.RunResultSummary summary = Foundry.Modules.Workers.Domain.ValueObjects.RunResultSummary.Create(
             resultText: "success",
             subtype: "final",
             isError: false,

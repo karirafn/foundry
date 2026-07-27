@@ -1,10 +1,10 @@
-using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Domain.CommitMarkerTests;
+namespace Foundry.UnitTests.Modules.Workers.Domain.ValueObjects.CommitMarkerTests;
 
 public sealed class Create
 {

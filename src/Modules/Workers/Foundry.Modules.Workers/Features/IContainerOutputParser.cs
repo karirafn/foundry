@@ -1,4 +1,5 @@
 using Foundry.Modules.Workers.Domain;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 
 namespace Foundry.Modules.Workers.Features;
 
