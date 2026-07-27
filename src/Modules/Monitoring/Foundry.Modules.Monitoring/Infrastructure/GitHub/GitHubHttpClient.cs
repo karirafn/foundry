@@ -9,9 +9,10 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Monitoring.Infrastructure;
+namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubWriteProber
 {

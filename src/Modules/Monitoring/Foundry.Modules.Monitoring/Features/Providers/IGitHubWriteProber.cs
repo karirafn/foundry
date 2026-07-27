@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Features.Providers;

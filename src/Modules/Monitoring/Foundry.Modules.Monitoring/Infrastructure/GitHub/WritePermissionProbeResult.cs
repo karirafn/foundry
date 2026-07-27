@@ -1,4 +1,4 @@
-namespace Foundry.Modules.Monitoring.Infrastructure;
+namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal abstract class WritePermissionProbeResult
 {

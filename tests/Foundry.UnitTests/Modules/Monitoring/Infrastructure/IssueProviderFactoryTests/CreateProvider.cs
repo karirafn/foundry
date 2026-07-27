@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Features;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Testing;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Shouldly;

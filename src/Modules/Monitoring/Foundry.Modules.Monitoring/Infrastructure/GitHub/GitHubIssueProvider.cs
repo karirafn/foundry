@@ -3,7 +3,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Shared;
 
-namespace Foundry.Modules.Monitoring.Infrastructure;
+namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
 {
