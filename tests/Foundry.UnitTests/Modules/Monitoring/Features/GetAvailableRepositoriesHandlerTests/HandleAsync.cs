@@ -371,6 +371,24 @@ public sealed class HandleAsync : IAsyncDisposable
             () => response.Repositories.ShouldBeEmpty());
     }
 
+    [Fact]
+    public async Task WhenProviderReturnsError_HandlerReturnsFailure()
+    {
+        // Arrange
+        (Guid accountId, _) = await SeedGitHubAccountAsync(namespaces: ["owner"]);
+        FakeHandler gitHubFake = new(HttpStatusCode.ServiceUnavailable, "error");
+        FakeHandler gitLabFake = new(HttpStatusCode.OK, "[]");
+        GetAvailableRepositories.Handler sut = BuildHandler(gitHubFake, gitLabFake);
+
+        // Act
+        Result<AvailableRepositoriesResponse> result = await sut.HandleAsync(
+            new GetAvailableRepositories.Query(accountId),
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeFalse();
+    }
+
     private static string BuildGitHubRepoJson(IReadOnlyList<string> fullNames) =>
         "[" + string.Join(",", fullNames.Select(n =>
             $@"{{""full_name"":""{n}"",""private"":false,""permissions"":{{""push"":true}}}}")) + "]";

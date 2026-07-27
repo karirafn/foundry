@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
@@ -56,17 +57,23 @@ internal static class GetAvailableRepositories
                     cancellationToken),
             };
 
-            if (providerResult is Result<IReadOnlyList<ProviderRepository>>.Failure failure)
+            if (providerResult is not Result<IReadOnlyList<ProviderRepository>>.Success providerSuccess)
             {
-                return Result<AvailableRepositoriesResponse>.Fail(failure.Error);
+                return Result<AvailableRepositoriesResponse>.Fail(
+                    ((Result<IReadOnlyList<ProviderRepository>>.Failure)providerResult).Error);
             }
 
-            IReadOnlyList<ProviderRepository> providerRepos =
-                ((Result<IReadOnlyList<ProviderRepository>>.Success)providerResult).Value;
+            IReadOnlyList<ProviderRepository> providerRepos = providerSuccess.Value;
 
             HashSet<string> monitoredSlugs = await LoadMonitoredSlugsAsync(credential.Host, cancellationToken);
 
             bool hasClaims = credential.Namespaces.Count > 0;
+
+            IReadOnlyList<Namespace> claims = credential.Namespaces
+                .Select(n => Namespace.Create(n.Value))
+                .OfType<Result<Namespace>.Success>()
+                .Select(r => r.Value)
+                .ToList();
 
             List<AvailableRepository> repositories = [];
 
@@ -81,7 +88,7 @@ internal static class GetAvailableRepositories
 
                 RepositorySlug slug = slugSuccess.Value;
 
-                if (!credential.Covers(slug))
+                if (!claims.Any(n => n.IsPrefixOf(slug)))
                 {
                     continue;
                 }
@@ -89,7 +96,7 @@ internal static class GetAvailableRepositories
                 bool isMonitored = monitoredSlugs.Contains(slug.FullPath);
 
                 repositories.Add(new AvailableRepository(
-                    providerRepo.Slug,
+                    slug.FullPath,
                     providerRepo.IsPrivate,
                     providerRepo.CanPush,
                     isMonitored));
@@ -100,14 +107,13 @@ internal static class GetAvailableRepositories
 
         private async Task<HashSet<string>> LoadMonitoredSlugsAsync(string host, CancellationToken cancellationToken)
         {
-            List<MonitoredRepository> hostRepos = await dbContext.Set<MonitoredRepository>()
+            List<string> slugs = await dbContext.Set<MonitoredRepository>()
                 .AsNoTracking()
                 .Where(r => r.Host == host)
+                .Select(r => r.Slug.FullPath)
                 .ToListAsync(cancellationToken);
 
-            return hostRepos
-                .Select(r => r.Slug.FullPath)
-                .ToHashSet(StringComparer.Ordinal);
+            return slugs.ToHashSet(StringComparer.Ordinal);
         }
     }
 
