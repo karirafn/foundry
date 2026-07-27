@@ -73,4 +73,17 @@ public sealed class CategoryToken
         // Assert
         token.ShouldBe("worker_bootstrap_failed");
     }
+
+    [Fact]
+    public void WhenProviderError_CategoryTokenIsProviderError()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.ProviderError(Message: "Branch pre-creation on acme/repo returned 403");
+
+        // Act
+        string token = reason.CategoryToken;
+
+        // Assert
+        token.ShouldBe("provider_error");
+    }
 }

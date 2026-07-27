@@ -10,6 +10,7 @@ namespace Foundry.Modules.Workers.Domain;
 [JsonDerivedType(typeof(UsageLimited), typeDiscriminator: FailureReason.UsageLimitedToken)]
 [JsonDerivedType(typeof(WorkerBootstrapFailed), typeDiscriminator: FailureReason.WorkerBootstrapFailedToken)]
 [JsonDerivedType(typeof(AuthInvalid), typeDiscriminator: FailureReason.AuthInvalidToken)]
+[JsonDerivedType(typeof(ProviderError), typeDiscriminator: FailureReason.ProviderErrorToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = "non_zero_exit";
@@ -18,6 +19,7 @@ public abstract record FailureReason
     public const string UsageLimitedToken = "usage_limited";
     public const string WorkerBootstrapFailedToken = "worker_bootstrap_failed";
     public const string AuthInvalidToken = "auth_invalid";
+    public const string ProviderErrorToken = "provider_error";
 
     private FailureReason()
     {
@@ -31,6 +33,7 @@ public abstract record FailureReason
         UsageLimited => UsageLimitedToken,
         WorkerBootstrapFailed => WorkerBootstrapFailedToken,
         AuthInvalid => AuthInvalidToken,
+        ProviderError => ProviderErrorToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -42,6 +45,7 @@ public abstract record FailureReason
         UsageLimited => "Usage limit reached",
         WorkerBootstrapFailed bootstrapFailed => $"Worker bootstrap failed: {bootstrapFailed.Detail}",
         AuthInvalid => "Worker authentication failed",
+        ProviderError providerError => providerError.Message,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -56,4 +60,6 @@ public abstract record FailureReason
     public sealed record WorkerBootstrapFailed(string Detail) : FailureReason;
 
     public sealed record AuthInvalid : FailureReason;
+
+    public sealed record ProviderError(string Message) : FailureReason;
 }
