@@ -5,6 +5,7 @@ using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Infrastructure;
