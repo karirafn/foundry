@@ -804,9 +804,17 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
     [GeneratedRegex(
         @"(?:glpat-|ghp_|github_pat_|gho_|sk-ant-)\S+",
-        RegexOptions.ExplicitCapture,
+        RegexOptions.None,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex KnownTokenPattern();
+
+    // Mirrors SecretRedactor.HttpsUserinfoPattern — scoped here to GitHub response bodies
+    // (no env-var pass needed in this context).
+    [GeneratedRegex(
+        @"https://[^@/\s]+@",
+        RegexOptions.None,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex HttpsUserinfoPattern();
 
     private static bool TryParsePrNumber(string pullRequestUrl, out int prNumber)
     {
@@ -900,8 +908,12 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return GitHubErrors.ProviderError($"Branch pre-creation on {slug} returned 403 — {bodyMessage}");
     }
 
-    private static string RedactSecrets(string input) =>
-        KnownTokenPattern().Replace(input, "***");
+    // Scoped to GitHub response bodies — no env-var pass (irrelevant here).
+    private static string RedactSecrets(string input)
+    {
+        string result = HttpsUserinfoPattern().Replace(input, "https://***@");
+        return KnownTokenPattern().Replace(result, "***");
+    }
 
     private static string TruncateWithEllipsis(string value, int maxLength) =>
         value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength), Ellipsis);

@@ -411,4 +411,35 @@ public sealed class CreateBranchAsync
         failure.Error.Code.ShouldBe("GitHub.UnexpectedStatusCode");
         failure.Error.Message.ShouldContain("500");
     }
+
+    [Fact]
+    public async Task WhenCreateRefReturns403WithUserinfoUrlInBodyMessage_UserinfoIsRedacted()
+    {
+        // Arrange
+        string refJson = """{ "object": { "sha": "abc123" } }""";
+        string forbiddenJson = """{ "message": "Access denied: https://user:supersecret@api.github.com/x" }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, refJson),
+            (HttpStatusCode.Forbidden, forbiddenJson),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient);
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.ProviderError");
+        failure.Error.Message.ShouldNotContain("supersecret");
+        failure.Error.Message.ShouldContain("https://***@");
+    }
 }
