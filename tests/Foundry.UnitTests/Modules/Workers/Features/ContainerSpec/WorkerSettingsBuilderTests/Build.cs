@@ -1,6 +1,5 @@
 using System.Text.Json;
 
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 
 using Shouldly;

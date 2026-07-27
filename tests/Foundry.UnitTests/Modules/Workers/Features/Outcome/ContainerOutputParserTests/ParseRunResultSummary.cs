@@ -1,6 +1,4 @@
-using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Outcome;
 
 using Shouldly;

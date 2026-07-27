@@ -2,7 +2,6 @@ using System.Net;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -16,7 +15,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Workers.Endpoints.GetWorkerRunLogTests;
+namespace Foundry.IntegrationTests.Modules.Workers.Runs.GetWorkerRunLogTests;
 
 public sealed class WhenRunLogRequested : IAsyncDisposable
 {

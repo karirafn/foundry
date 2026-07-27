@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -18,7 +17,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Workers.Endpoints.GetRunTotalsTests;
+namespace Foundry.IntegrationTests.Modules.Workers.Runs.GetRunTotalsTests;
 
 public sealed class WhenRunTotalsRequested : IAsyncDisposable
 {

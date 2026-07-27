@@ -2,7 +2,6 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
-using Foundry.Modules.Workers.Domain;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -16,13 +15,13 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Workers.Features.GetRunAggregatesForIssuesTests;
+namespace Foundry.IntegrationTests.Modules.Workers.Runs.GetRunAggregatesForIssuesTests;
 
-public sealed class WhenMultipleIssues : IAsyncDisposable
+public sealed class WhenIssueHasCrashedRun : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
 
-    public WhenMultipleIssues()
+    public WhenIssueHasCrashedRun()
     {
         _factory = new FoundryWebAppFactory();
         _ = _factory.CreateClient();
@@ -33,18 +32,28 @@ public sealed class WhenMultipleIssues : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task SeedCompletedRunAsync(
-        IssueId issueId,
-        long durationMs,
-        int numTurns)
+    private async Task SeedCrashedFailedRunAsync(IssueId issueId)
+    {
+        // A FailedRun with no RunResultSummary — represents a container crash before telemetry.
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
+        FailedRun crashed = starting.Fail(new FailureReason.ContainerError("exit -1"));
+
+        dbContext.Set<WorkerRun>().Add(crashed);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task SeedCompletedRunAsync(IssueId issueId, long durationMs, int numTurns)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
         ActiveRun active = starting.Activate(
-            ContainerId.From("container-multi-test"),
-            BranchName.From("feat/multi-test"),
+            ContainerId.From("container-crash-test"),
+            BranchName.From("feat/1-test"),
             MonitoredRepositoryId.New());
 
         RunResultSummary summary = RunResultSummary.Create(
@@ -63,52 +72,53 @@ public sealed class WhenMultipleIssues : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTwoIssuesBothHaveRuns_KeysEachIssueCorrectly()
+    public async Task WhenCrashedRunHasNoTelemetry_ContributesToRunCountButNotTotals()
     {
         // Arrange
-        IssueId issueA = IssueId.New();
-        IssueId issueB = IssueId.New();
-        await SeedCompletedRunAsync(issueA, durationMs: 1000, numTurns: 2);
-        await SeedCompletedRunAsync(issueB, durationMs: 9000, numTurns: 10);
+        IssueId issueId = IssueId.New();
+        await SeedCrashedFailedRunAsync(issueId);
 
         using IServiceScope scope = _factory.Services.CreateScope();
         IWorkerRunQueries sut = scope.ServiceProvider.GetRequiredService<IWorkerRunQueries>();
 
         // Act
         IReadOnlyDictionary<Guid, RunAggregate> result = await sut.GetRunAggregatesForIssuesAsync(
-            [issueA.Value, issueB.Value],
+            [issueId.Value],
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.Count.ShouldBe(2);
-        result[issueA.Value].ShouldSatisfyAllConditions(
-            () => result[issueA.Value].RunCount.ShouldBe(1),
-            () => result[issueA.Value].DurationMs.ShouldBe(1000L),
-            () => result[issueA.Value].NumTurns.ShouldBe(2));
-        result[issueB.Value].ShouldSatisfyAllConditions(
-            () => result[issueB.Value].RunCount.ShouldBe(1),
-            () => result[issueB.Value].DurationMs.ShouldBe(9000L),
-            () => result[issueB.Value].NumTurns.ShouldBe(10));
+        result.ContainsKey(issueId.Value).ShouldBeTrue();
+        RunAggregate aggregate = result[issueId.Value];
+        aggregate.ShouldSatisfyAllConditions(
+            () => aggregate.RunCount.ShouldBe(1),
+            () => aggregate.DurationMs.ShouldBeNull(),
+            () => aggregate.NumTurns.ShouldBeNull(),
+            () => aggregate.TotalCostUsd.ShouldBeNull(),
+            () => aggregate.InputTokens.ShouldBeNull(),
+            () => aggregate.OutputTokens.ShouldBeNull());
     }
 
     [Fact]
-    public async Task WhenOneIssueHasNoRuns_NotIncludedInResult()
+    public async Task WhenMixedRuns_CrashedRunCountsButDoesNotContributeToTotals()
     {
-        // Arrange
-        IssueId issueWithRun = IssueId.New();
-        IssueId issueWithoutRun = IssueId.New();
-        await SeedCompletedRunAsync(issueWithRun, durationMs: 2000, numTurns: 3);
+        // Arrange: one completed run with telemetry + one crashed run with no telemetry.
+        IssueId issueId = IssueId.New();
+        await SeedCompletedRunAsync(issueId, durationMs: 5000, numTurns: 7);
+        await SeedCrashedFailedRunAsync(issueId);
 
         using IServiceScope scope = _factory.Services.CreateScope();
         IWorkerRunQueries sut = scope.ServiceProvider.GetRequiredService<IWorkerRunQueries>();
 
         // Act
         IReadOnlyDictionary<Guid, RunAggregate> result = await sut.GetRunAggregatesForIssuesAsync(
-            [issueWithRun.Value, issueWithoutRun.Value],
+            [issueId.Value],
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.ContainsKey(issueWithRun.Value).ShouldBeTrue();
-        result.ContainsKey(issueWithoutRun.Value).ShouldBeFalse();
+        RunAggregate aggregate = result[issueId.Value];
+        aggregate.ShouldSatisfyAllConditions(
+            () => aggregate.RunCount.ShouldBe(2),
+            () => aggregate.DurationMs.ShouldBe(5000L),
+            () => aggregate.NumTurns.ShouldBe(7));
     }
 }

@@ -7,7 +7,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Workers.Features.GetRunAggregatesForIssuesTests;
+namespace Foundry.IntegrationTests.Modules.Workers.Runs.GetRunAggregatesForIssuesTests;
 
 public sealed class WhenInputIsEmpty : IAsyncDisposable
 {

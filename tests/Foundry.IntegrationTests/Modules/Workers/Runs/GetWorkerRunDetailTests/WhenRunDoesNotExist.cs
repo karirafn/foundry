@@ -4,7 +4,7 @@ using Xunit;
 
 using Shouldly;
 
-namespace Foundry.IntegrationTests.Modules.Workers.Endpoints.GetWorkerRunDetailTests;
+namespace Foundry.IntegrationTests.Modules.Workers.Runs.GetWorkerRunDetailTests;
 
 public sealed class WhenRunDoesNotExist : IAsyncDisposable
 {
