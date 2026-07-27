@@ -37,7 +37,8 @@ public sealed class HandleAsync
                 "Issues (read and write)",
                 "Pull requests (read and write)",
                 "Workflows (write)",
-                "Metadata (read)"]));
+                "Metadata (read)"]),
+            () => requirements.ResourceOwnerHint.ShouldNotBeNull());
     }
 
     [Fact]
@@ -60,7 +61,8 @@ public sealed class HandleAsync
         requirements.ShouldSatisfyAllConditions(
             () => requirements.ProviderType.ShouldBe("gitlab"),
             () => requirements.TokenTypeLabel.ShouldBe("GitLab personal access token"),
-            () => requirements.Scopes.ShouldBe(["api"]));
+            () => requirements.Scopes.ShouldBe(["api"]),
+            () => requirements.ResourceOwnerHint.ShouldBeNull());
     }
 
     [Fact]

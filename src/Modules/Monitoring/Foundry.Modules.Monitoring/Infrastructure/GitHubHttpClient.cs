@@ -21,6 +21,9 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
 
+    // Classic PATs remain accepted by design (issue #333 keeps them valid, just no longer advertised in the UI).
+    // This constant is intentionally decoupled from RequiredScopes.For(github), which now carries fine-grained
+    // permission display labels for the UI and is not a validation source for OAuth scope token checks.
     private static readonly IReadOnlyList<string> ClassicPatOAuthScopes = ["repo"];
 
     private static readonly JsonSerializerOptions JsonOptions = new()

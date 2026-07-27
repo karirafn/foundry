@@ -54,7 +54,7 @@ const GITHUB_REQUIREMENTS: TokenRequirements = {
   tokenTypeLabel: 'GitHub fine-grained personal access token',
   scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
   creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
-  resourceOwnerHint: 'Select a resource owner (your user or an organization) to scope access.',
+  resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
 };
 
 const GITLAB_REQUIREMENTS: TokenRequirements = {
@@ -1196,7 +1196,7 @@ describe('AccountFormComponent', () => {
     // Assert
     const hint = el.querySelector('.account-form__requirements-owner-hint');
     expect(hint).toBeTruthy();
-    expect(hint?.textContent).toContain('Select a resource owner');
+    expect(hint?.textContent).toContain('Fine-grained tokens are bound to a single resource owner');
   });
 
   // Cycle 59d: resource-owner hint absent for GitLab (null resourceOwnerHint)
@@ -1237,6 +1237,45 @@ describe('AccountFormComponent', () => {
     expect(scopesIndex).toBeGreaterThan(-1);
     expect(hintIndex).toBeGreaterThan(scopesIndex);
     expect(linkIndex).toBeGreaterThan(hintIndex);
+  });
+
+  // Cycle 59f: create-token link has aria-describedby pointing at the owner-hint when hint is present (GitHub)
+  it('should set aria-describedby on the create-token link to "account-form-owner-hint" for GitHub', async () => {
+    // Arrange — GitHub requirements have a non-null resourceOwnerHint
+    const { el, fixture } = setup({ account: null });
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — hint paragraph has the expected id
+    const hint = el.querySelector('#account-form-owner-hint');
+    expect(hint).toBeTruthy();
+    // Assert — create-token link is associated with the hint via aria-describedby
+    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('aria-describedby')).toBe('account-form-owner-hint');
+  });
+
+  // Cycle 59g: create-token link does NOT have aria-describedby when hint is absent (GitLab)
+  it('should NOT set aria-describedby on the create-token link when resourceOwnerHint is null (GitLab)', async () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Act — switch to GitLab (null resourceOwnerHint)
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert — no aria-describedby on the create-token link
+    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('aria-describedby')).toBeNull();
   });
 
   // Cycle 60: empty/invalid base URL — no anchor rendered; fallback hint text present

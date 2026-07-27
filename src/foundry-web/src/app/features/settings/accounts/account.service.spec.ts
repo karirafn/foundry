@@ -769,7 +769,7 @@ describe('AccountService', () => {
       tokenTypeLabel: 'GitHub fine-grained personal access token',
       scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
-      resourceOwnerHint: 'Select a resource owner (your user or an organization) to scope access.',
+      resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
     };
 
     // Act
@@ -815,7 +815,7 @@ describe('AccountService', () => {
       tokenTypeLabel: 'GitHub fine-grained personal access token',
       scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
-      resourceOwnerHint: 'Select a resource owner (your user or an organization) to scope access.',
+      resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
     };
 
     // Act — first call fetches
@@ -841,7 +841,7 @@ describe('AccountService', () => {
       tokenTypeLabel: 'GitHub fine-grained personal access token',
       scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
-      resourceOwnerHint: 'Select a resource owner (your user or an organization) to scope access.',
+      resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
     };
     const gitlabRequirements: TokenRequirements = {
       providerType: 'gitlab',

@@ -93,19 +93,19 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
             Token requirements
           </h3>
           <p class="account-form__requirements-text">
-            Create a <strong>{{ req.tokenTypeLabel }}</strong> with the following
-            scope{{ req.scopes.length === 1 ? '' : 's' }}:
+            Create a <strong>{{ req.tokenTypeLabel }}</strong> with the following:
           </p>
-          <ul class="account-form__requirements-scopes" aria-label="Required scopes">
+          <ul class="account-form__requirements-scopes" aria-label="Required token permissions">
             @for (scope of req.scopes; track scope) {
               <li class="account-form__requirements-scope"><code>{{ scope }}</code></li>
             }
           </ul>
           @if (req.resourceOwnerHint) {
-            <p class="account-form__requirements-owner-hint">{{ req.resourceOwnerHint }}</p>
+            <p id="account-form-owner-hint" class="account-form__requirements-owner-hint">{{ req.resourceOwnerHint }}</p>
           }
           @if (_createTokenUrl(); as url) {
-            <a class="account-form__requirements-link" [href]="url" target="_blank" rel="noopener noreferrer">
+            <a class="account-form__requirements-link" [href]="url" target="_blank" rel="noopener noreferrer"
+               [attr.aria-describedby]="req.resourceOwnerHint ? 'account-form-owner-hint' : null">
               Create token on {{ _resolvedHost() }}
               <span class="account-form__requirements-link-icon" aria-hidden="true">↗</span>
               <span class="sr-only">(opens in a new tab)</span>
@@ -361,7 +361,7 @@ export class AccountFormComponent implements OnInit {
     }
     const template = requirements.creationUrlTemplate;
     if (!template.includes('{baseUrl}')) {
-      return this._isHttpUrl(template) ? template : null;
+      return AccountFormComponent._isHttpUrl(template) ? template : null;
     }
     const rawBaseUrl = this._baseUrl().trim();
     if (!rawBaseUrl) {
@@ -369,17 +369,17 @@ export class AccountFormComponent implements OnInit {
     }
     try {
       const parsed = new URL(rawBaseUrl);
-      if (!this._isHttpUrl(parsed.origin)) {
+      if (!AccountFormComponent._isHttpUrl(parsed.origin)) {
         return null;
       }
       const url = template.replace('{baseUrl}', parsed.origin);
-      return this._isHttpUrl(url) ? url : null;
+      return AccountFormComponent._isHttpUrl(url) ? url : null;
     } catch {
       return null;
     }
   });
 
-  private _isHttpUrl(url: string): boolean {
+  private static _isHttpUrl(url: string): boolean {
     try {
       const parsed = new URL(url);
       return parsed.protocol === 'http:' || parsed.protocol === 'https:';
