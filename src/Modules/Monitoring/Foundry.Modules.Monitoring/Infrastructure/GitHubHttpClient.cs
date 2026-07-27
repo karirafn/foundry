@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
@@ -21,6 +20,8 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
+
+    private static readonly IReadOnlyList<string> ClassicPatOAuthScopes = ["repo"];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -784,7 +785,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         List<string> missing = [];
-        foreach (string required in RequiredScopes.For(ProviderTypes.GitHub))
+        foreach (string required in ClassicPatOAuthScopes)
         {
             if (!grantedScopes.Contains(required))
             {

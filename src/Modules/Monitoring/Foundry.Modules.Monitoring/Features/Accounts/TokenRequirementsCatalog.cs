@@ -11,9 +11,9 @@ internal static class TokenRequirementsCatalog
         {
             [ProviderTypes.GitHub] = new(
                 ProviderType: ProviderTypes.GitHub,
-                TokenTypeLabel: "GitHub classic personal access token",
+                TokenTypeLabel: "GitHub fine-grained personal access token",
                 Scopes: RequiredScopes.For(ProviderTypes.GitHub),
-                CreationUrlTemplate: "{baseUrl}/settings/tokens/new?scopes=repo&description=Foundry"),
+                CreationUrlTemplate: "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write"),
             [ProviderTypes.GitLab] = new(
                 ProviderType: ProviderTypes.GitLab,
                 TokenTypeLabel: "GitLab personal access token",

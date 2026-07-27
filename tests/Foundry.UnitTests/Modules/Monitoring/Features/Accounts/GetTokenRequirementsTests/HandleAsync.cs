@@ -31,8 +31,13 @@ public sealed class HandleAsync
 
         requirements.ShouldSatisfyAllConditions(
             () => requirements.ProviderType.ShouldBe("github"),
-            () => requirements.TokenTypeLabel.ShouldBe("GitHub classic personal access token"),
-            () => requirements.Scopes.ShouldBe(["repo"]));
+            () => requirements.TokenTypeLabel.ShouldBe("GitHub fine-grained personal access token"),
+            () => requirements.Scopes.ShouldBe([
+                "Contents (read and write)",
+                "Issues (read and write)",
+                "Pull requests (read and write)",
+                "Workflows (write)",
+                "Metadata (read)"]));
     }
 
     [Fact]
