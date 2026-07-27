@@ -1,6 +1,5 @@
 using System.Net;
 
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -274,7 +273,7 @@ public sealed class ValidateTokenAsync
     }
 
     [Fact]
-    public async Task WhenNoScopesGranted_MissingScopesMatchCanonicalListForGitHub()
+    public async Task WhenNoScopesGranted_MissingScopesContainsRepoScope()
     {
         // Arrange
         string json = """{ "login": "octocat" }""";
@@ -282,8 +281,6 @@ public sealed class ValidateTokenAsync
         handler.ResponseHeaders["X-OAuth-Scopes"] = string.Empty;
         using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient);
-
-        IReadOnlyList<string> expectedMissing = RequiredScopes.For(ProviderTypes.GitHub);
 
         // Act
         Result<TokenValidationResult> result = await sut.ValidateTokenAsync(
@@ -294,6 +291,6 @@ public sealed class ValidateTokenAsync
         // Assert
         result.IsSuccess.ShouldBeTrue();
         Result<TokenValidationResult>.Success success = result.ShouldBeOfType<Result<TokenValidationResult>.Success>();
-        success.Value.MissingScopes.ShouldBe(expectedMissing);
+        success.Value.MissingScopes.ShouldBe(["repo"]);
     }
 }

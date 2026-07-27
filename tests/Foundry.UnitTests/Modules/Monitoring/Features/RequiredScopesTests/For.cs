@@ -9,7 +9,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.RequiredScopesTests;
 public sealed class For
 {
     [Fact]
-    public void WhenProviderIsGitHub_ReturnsRepoScope()
+    public void WhenProviderIsGitHub_ReturnsFineGrainedPermissionLabels()
     {
         // Arrange
 
@@ -17,7 +17,12 @@ public sealed class For
         IReadOnlyList<string> scopes = RequiredScopes.For("github");
 
         // Assert
-        scopes.ShouldBe(["repo"]);
+        scopes.ShouldBe([
+            "Contents (read and write)",
+            "Issues (read and write)",
+            "Pull requests (read and write)",
+            "Workflows (write)",
+            "Metadata (read)"]);
     }
 
     [Fact]
@@ -33,7 +38,7 @@ public sealed class For
     }
 
     [Fact]
-    public void WhenProviderIsGitHubUppercase_ReturnsRepoScope()
+    public void WhenProviderIsGitHubUppercase_ReturnsFineGrainedPermissionLabels()
     {
         // Arrange
 
@@ -41,7 +46,12 @@ public sealed class For
         IReadOnlyList<string> scopes = RequiredScopes.For("GitHub");
 
         // Assert
-        scopes.ShouldBe(["repo"]);
+        scopes.ShouldBe([
+            "Contents (read and write)",
+            "Issues (read and write)",
+            "Pull requests (read and write)",
+            "Workflows (write)",
+            "Metadata (read)"]);
     }
 
     [Fact]

@@ -35,19 +35,29 @@ const MOCK_REPOSITORY: RepositorySummary = {
 };
 
 const MOCK_AVAILABLE: AvailableRepository[] = [
-  { slug: 'my-org/my-repo', isPrivate: false, canPush: true },
-  { slug: 'my-org/other-repo', isPrivate: true, canPush: true },
-  { slug: 'my-org/third-repo', isPrivate: false, canPush: false },
+  { slug: 'my-org/my-repo', isPrivate: false, canPush: true, isMonitored: false },
+  { slug: 'my-org/other-repo', isPrivate: true, canPush: true, isMonitored: false },
+  { slug: 'my-org/third-repo', isPrivate: false, canPush: false, isMonitored: false },
 ];
 
 const MOCK_AVAILABLE_MIXED: AvailableRepository[] = [
-  { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
-  { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
+  { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
+  { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
 ];
 
 const MOCK_AVAILABLE_ALL_READONLY: AvailableRepository[] = [
-  { slug: 'my-org/readonly-a', isPrivate: false, canPush: false },
-  { slug: 'my-org/readonly-b', isPrivate: false, canPush: false },
+  { slug: 'my-org/readonly-a', isPrivate: false, canPush: false, isMonitored: false },
+  { slug: 'my-org/readonly-b', isPrivate: false, canPush: false, isMonitored: false },
+];
+
+const MOCK_AVAILABLE_WITH_MONITORED: AvailableRepository[] = [
+  { slug: 'my-org/monitored-repo', isPrivate: false, canPush: true, isMonitored: true },
+  { slug: 'my-org/selectable-repo', isPrivate: false, canPush: true, isMonitored: false },
+];
+
+const MOCK_AVAILABLE_MONITORED_NO_PUSH: AvailableRepository[] = [
+  { slug: 'my-org/monitored-nopush', isPrivate: false, canPush: false, isMonitored: true },
+  { slug: 'my-org/selectable-repo', isPrivate: false, canPush: true, isMonitored: false },
 ];
 
 function setup(overrides: {
@@ -58,6 +68,7 @@ function setup(overrides: {
   loadAvailableError?: string | null;
   saving?: boolean;
   saveError?: string | null;
+  hasClaims?: boolean;
 } = {}) {
   const fixture = TestBed.createComponent(RepositoryFormComponent);
   fixture.componentRef.setInput('repository', overrides.repository ?? null);
@@ -67,6 +78,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('loadAvailableError', overrides.loadAvailableError ?? null);
   fixture.componentRef.setInput('saving', overrides.saving ?? false);
   fixture.componentRef.setInput('saveError', overrides.saveError ?? null);
+  fixture.componentRef.setInput('hasClaims', overrides.hasClaims ?? false);
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
@@ -335,11 +347,12 @@ describe('RepositoryFormComponent', () => {
 
   // Cycle 11: no matching repos shows empty message
   it('should show empty state when no repositories match filter', () => {
-    // Arrange
+    // Arrange — hasClaims: true so filter-empty message is shown (not the no-claims status)
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
       availableRepositories: MOCK_AVAILABLE,
+      hasClaims: true,
     });
 
     // Act — select account then open picker and type non-matching text
@@ -894,9 +907,9 @@ describe('RepositoryFormComponent', () => {
     expect(reasonEl?.textContent).toContain('no write access');
   });
 
-  // Cycle 27: keyboard ArrowDown navigates across ALL options including disabled
-  it('should move active option to disabled option when navigating down with ArrowDown', () => {
-    // Arrange — list: [writable@0, readonly@1]
+  // Cycle 27: keyboard ArrowDown skips non-selectable options
+  it('should skip disabled option and stay on writable when ArrowDown has no next selectable', () => {
+    // Arrange — list: [writable@0, readonly@1]; second ArrowDown finds no next selectable
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
@@ -912,62 +925,25 @@ describe('RepositoryFormComponent', () => {
     // First ArrowDown — lands on writable@0
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
 
-    // Second ArrowDown — lands on readonly@1 (disabled but navigable per ARIA APG)
+    // Second ArrowDown — no next selectable; active stays at writable@0
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
 
     const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
     expect(activeOption).toBeTruthy();
-    expect(activeOption.getAttribute('aria-disabled')).toBe('true');
-    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-1');
-  });
-
-  it('should move active option back to writable option when navigating up with ArrowUp', () => {
-    // Arrange — list: [readonly@0, writable@1]
-    const repos: AvailableRepository[] = [
-      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
-      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
-    ];
-    const { el, fixture } = setup({
-      repository: null,
-      accounts: [MOCK_ACCOUNT],
-      availableRepositories: repos,
-    });
-
-    const select = el.querySelector('#repository-account') as HTMLSelectElement;
-    select.value = MOCK_ACCOUNT.id;
-    select.dispatchEvent(new Event('change'));
-    fixture.detectChanges();
-
-    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
-    // Navigate down twice to reach writable@1
-    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    fixture.detectChanges();
-    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    fixture.detectChanges();
-
-    // Navigate up — moves to readonly@0
-    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
-    fixture.detectChanges();
-
-    const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
-    expect(activeOption).toBeTruthy();
-    expect(activeOption.getAttribute('aria-disabled')).toBe('true');
+    expect(activeOption.getAttribute('aria-disabled')).toBeNull();
     expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
   });
 
-  // Cycle 28: Enter key on non-writable active option is a no-op; on writable it selects
-  it('should not select and keep picker open when Enter is pressed on a non-writable active option', () => {
-    // Arrange — list: [readonly@0, writable@1]
-    const repos: AvailableRepository[] = [
-      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
-      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
-    ];
+  it('should skip a monitored row when navigating down with ArrowDown', () => {
+    // Arrange — list: [monitored@0, selectable@1]; ArrowDown skips monitored to land on selectable
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
-      availableRepositories: repos,
+      availableRepositories: MOCK_AVAILABLE_WITH_MONITORED,
+      hasClaims: true,
     });
 
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
@@ -976,33 +952,57 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
-    // ArrowDown lands on readonly@0
+    // First ArrowDown — skips monitored@0, lands on selectable@1
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
 
-    // Assert active option is the non-writable one
+    // Assert — active is the selectable option (index 1), not the monitored one (index 0)
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-1');
     const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
-    expect(activeOption?.getAttribute('aria-disabled')).toBe('true');
+    expect(activeOption).toBeTruthy();
+    expect(activeOption.getAttribute('aria-disabled')).toBeNull();
+  });
 
-    // Enter on non-writable — should be a no-op
-    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  it('should skip readonly option when navigating with ArrowDown and land on next selectable', () => {
+    // Arrange — list: [readonly@0, writable@1]; ArrowDown from -1 skips readonly, lands on writable@1
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: repos,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    expect(combobox.value).toBe('');
-    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
-    expect(listbox.hidden).toBe(false);
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    // First ArrowDown — skips readonly@0, lands on writable@1
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-1');
+    const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
+    expect(activeOption).toBeTruthy();
+    expect(activeOption.getAttribute('aria-disabled')).toBeNull();
   });
 
   it('should select writable option when Enter is pressed on a writable active option', () => {
-    // Arrange — list: [readonly@0, writable@1]
+    // Arrange — list: [readonly@0, writable@1]; arrow skips to writable, Enter selects
     const repos: AvailableRepository[] = [
-      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false },
-      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true },
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
     ];
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
       availableRepositories: repos,
+      hasClaims: true,
     });
 
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
@@ -1011,13 +1011,12 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
-    // Navigate down twice to land on writable@1
+    // ArrowDown skips readonly@0, lands on writable@1
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
-    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    fixture.detectChanges();
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-1');
 
-    // Enter should select it
+    // Enter should select the writable option
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     fixture.detectChanges();
 
@@ -1026,13 +1025,17 @@ describe('RepositoryFormComponent', () => {
     expect(listbox.hidden).toBe(true);
   });
 
-  // Cycle 29: all non-writable — arrows still move active descendant, no selection occurs
-  it('should render all entries (not empty state) when all repos are non-writable', () => {
-    // Arrange
+  // Cycle 28: Enter key selects active option when selectable; no-op when no active
+  it('should be a no-op when Enter is pressed with no active option', () => {
+    // Arrange — no ArrowDown pressed; active index is -1
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
+    ];
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
-      availableRepositories: MOCK_AVAILABLE_ALL_READONLY,
+      availableRepositories: repos,
+      hasClaims: true,
     });
 
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
@@ -1044,19 +1047,48 @@ describe('RepositoryFormComponent', () => {
     combobox.click();
     fixture.detectChanges();
 
-    // Assert — all entries shown, no empty state
+    // Enter with no active option — should be a no-op
+    combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(combobox.value).toBe('');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
+  });
+
+  // Cycle 29: all non-writable — arrows find no selectable option, active stays at -1
+  it('should render all entries (not empty state) when all repos are non-writable', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_ALL_READONLY,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert — all entries shown, no filter-empty state
     const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
     expect(options.length).toBe(2);
     const emptyState = el.querySelector('.repository-form__picker-empty');
     expect(emptyState).toBeNull();
   });
 
-  it('should move active descendant to disabled option when ArrowDown is pressed on all-disabled list', () => {
+  it('should not move active descendant when ArrowDown is pressed on an all-disabled list', () => {
     // Arrange
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
       availableRepositories: MOCK_AVAILABLE_ALL_READONLY,
+      hasClaims: true,
     });
 
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
@@ -1068,19 +1100,19 @@ describe('RepositoryFormComponent', () => {
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
 
-    // Active option should move to first disabled entry
+    // No selectable option — activeOptionIndex stays -1, no active class on any option
     const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active');
-    expect(activeOption).toBeTruthy();
-    expect(activeOption?.getAttribute('aria-disabled')).toBe('true');
-    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
+    expect(activeOption).toBeNull();
+    expect(combobox.getAttribute('aria-activedescendant')).toBeNull();
   });
 
-  it('should not select any option when Enter is pressed on an all-disabled list', () => {
+  it('should not select any option when Enter is pressed with no active option on all-disabled list', () => {
     // Arrange
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
       availableRepositories: MOCK_AVAILABLE_ALL_READONLY,
+      hasClaims: true,
     });
 
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
@@ -1094,7 +1126,7 @@ describe('RepositoryFormComponent', () => {
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     fixture.detectChanges();
 
-    // Combobox value unchanged, listbox stays open
+    // Combobox value unchanged, listbox stays open (active index is -1, Enter no-ops)
     expect(combobox.value).toBe('');
     const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
     expect(listbox.hidden).toBe(false);
@@ -1143,5 +1175,345 @@ describe('RepositoryFormComponent', () => {
 
     // Assert — plain name from RepositorySummary.accountName, not the util label
     expect(accountField?.textContent?.trim()).toBe('My GitHub');
+  });
+
+  // Cycle 32: monitored row — gutter check rendered, sr-only "already monitored" text, non-selectable
+  it('should render the gutter check mark for a monitored repository option', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_WITH_MONITORED,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+
+    // Assert — first option is monitored, has a gutter check element
+    const gutter = options[0].querySelector('.repository-form__picker-option-gutter');
+    expect(gutter).toBeTruthy();
+    const check = options[0].querySelector('.repository-form__picker-check');
+    expect(check).toBeTruthy();
+    // Second option (selectable) has gutter but no check
+    const gutterSelectable = options[1].querySelector('.repository-form__picker-option-gutter');
+    expect(gutterSelectable).toBeTruthy();
+    const checkSelectable = options[1].querySelector('.repository-form__picker-check');
+    expect(checkSelectable).toBeNull();
+  });
+
+  it('should render sr-only "already monitored" text on a monitored repository option without a leading comma', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_WITH_MONITORED,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+
+    // Assert — first (monitored) has sr-only "already monitored" with no leading comma
+    const srText = options[0].querySelector('.sr-only');
+    expect(srText?.textContent?.trim()).toBe('already monitored');
+    // Second (selectable) has no such text
+    const srTextSelectable = options[1].querySelector('.sr-only');
+    expect(srTextSelectable).toBeNull();
+  });
+
+  it('should not select a monitored repository when clicked', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_WITH_MONITORED,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act — click the monitored option (index 0)
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    options[0].click();
+    fixture.detectChanges();
+
+    // Assert — slug unchanged, picker stays open
+    expect(combobox.value).toBe('');
+    const listbox = el.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.hidden).toBe(false);
+  });
+
+  it('should render aria-disabled="true" on a monitored repository option', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_WITH_MONITORED,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    expect(options[0].getAttribute('aria-disabled')).toBe('true');
+    expect(options[1].getAttribute('aria-disabled')).toBeNull();
+  });
+
+  // Cycle 33: monitored wins precedence — !canPush && isMonitored shows check, no "no write access" reason
+  it('should show monitored check and no "no write access" reason for !canPush && isMonitored repo', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MONITORED_NO_PUSH,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+
+    // Assert — first option is monitored+noPush
+    const check = options[0].querySelector('.repository-form__picker-check');
+    expect(check).toBeTruthy();
+    const reason = options[0].querySelector('.repository-form__picker-option-reason');
+    expect(reason).toBeNull();
+    const srMonitored = options[0].querySelector('.sr-only');
+    expect(srMonitored?.textContent).toContain('already monitored');
+  });
+
+  // Cycle 34: gutter alignment — both monitored and non-monitored rows render a gutter cell
+  it('should render gutter cells on both monitored and selectable option rows', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_WITH_MONITORED,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+
+    // Assert — all rows have the gutter element for alignment
+    options.forEach(option => {
+      const gutter = option.querySelector('.repository-form__picker-option-gutter');
+      expect(gutter).toBeTruthy();
+      expect(gutter?.getAttribute('aria-hidden')).toBe('true');
+    });
+  });
+
+  // Cycle 35: no-claims empty state — always-in-tree live region, never hidden/display:none
+  it('should show "no claimed namespaces" message when picker is open and hasClaims is false', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: [],
+      hasClaims: false,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act — open picker
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert — persistent role="status" sibling, never hidden, text contains message
+    const emptyStatus = el.querySelector('.repository-form__picker-empty-status');
+    expect(emptyStatus).toBeTruthy();
+    expect(emptyStatus?.getAttribute('role')).toBe('status');
+    // Must NOT use hidden attribute (would remove from a11y tree)
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
+    expect(emptyStatus?.textContent).toContain('no claimed namespaces');
+    // Verify it is NOT inside the listbox
+    const listbox = el.querySelector('[role="listbox"]');
+    expect(listbox?.contains(emptyStatus)).toBe(false);
+  });
+
+  it('should have empty text content in the status region when picker is closed', () => {
+    // Arrange — picker closed (after account selection, before click)
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: [],
+      hasClaims: false,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act — do NOT open picker
+
+    // Assert — status element always in DOM, but text is empty so it does not announce
+    const emptyStatus = el.querySelector('.repository-form__picker-empty-status');
+    expect(emptyStatus).toBeTruthy();
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
+    expect(emptyStatus?.textContent?.trim()).toBe('');
+  });
+
+  // Cycle 36: has-claims-but-empty state — persistent live-region, never hidden
+  it('should show "no repositories under claimed namespaces" when hasClaims is true but list is empty', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: [],
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act — open picker
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert — persistent role="status", never hidden, text contains message, not inside listbox
+    const emptyStatus = el.querySelector('.repository-form__picker-empty-status');
+    expect(emptyStatus).toBeTruthy();
+    expect(emptyStatus?.getAttribute('role')).toBe('status');
+    expect(emptyStatus?.hasAttribute('hidden')).toBe(false);
+    expect(emptyStatus?.textContent).toContain('No repositories under this account');
+    const listbox = el.querySelector('[role="listbox"]');
+    expect(listbox?.contains(emptyStatus)).toBe(false);
+  });
+
+  // Cycle 37: read-only row still shows reason when !isMonitored
+  it('should show "no write access" reason on a read-only (canPush=false, isMonitored=false) option', () => {
+    // Arrange
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: repos,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+
+    // Assert — read-only option shows reason text, no check, no "already monitored" sr-text
+    const reason = options[0].querySelector('.repository-form__picker-option-reason');
+    expect(reason).toBeTruthy();
+    expect(reason?.textContent).toContain('no write access');
+    const check = options[0].querySelector('.repository-form__picker-check');
+    expect(check).toBeNull();
+    // The sr-only for "already monitored" must not be present (only the reason sr-only is allowed)
+    const srTexts = Array.from(options[0].querySelectorAll('.sr-only'));
+    const hasMonitoredSr = srTexts.some(el => el.textContent?.includes('already monitored'));
+    expect(hasMonitoredSr).toBe(false);
+  });
+
+  // Cycle 38: aria-selected is always a boolean on every role="option" (WCAG 4.1.2)
+  it('should render aria-selected as "false" (not absent) on disabled and monitored options', () => {
+    // Arrange — list: [monitored@0, selectable@1, readonly@2]
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/monitored-repo', isPrivate: false, canPush: true, isMonitored: true },
+      { slug: 'my-org/selectable-repo', isPrivate: false, canPush: true, isMonitored: false },
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: repos,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+
+    // Assert — every option carries aria-selected (never null/absent)
+    options.forEach(option => {
+      const ariaSelected = option.getAttribute('aria-selected');
+      expect(ariaSelected).not.toBeNull();
+      expect(ariaSelected === 'true' || ariaSelected === 'false').toBe(true);
+    });
+    // Monitored option: aria-selected="false" (not selected, not selectable)
+    expect(options[0].getAttribute('aria-selected')).toBe('false');
+    // Selectable option (not yet selected): aria-selected="false"
+    expect(options[1].getAttribute('aria-selected')).toBe('false');
+    // Readonly option: aria-selected="false"
+    expect(options[2].getAttribute('aria-selected')).toBe('false');
   });
 });

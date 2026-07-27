@@ -379,17 +379,17 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments));
     }
 
-    public async Task<Result<IReadOnlyList<AvailableRepository>>> ListRepositoriesAsync(
+    public async Task<Result<IReadOnlyList<ProviderRepository>>> ListRepositoriesAsync(
         Uri apiBaseUrl,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<IReadOnlyList<AvailableRepository>>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<IReadOnlyList<ProviderRepository>>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
-        List<AvailableRepository> repositories = [];
+        List<ProviderRepository> repositories = [];
 
         for (int page = 1; page <= MaxRepositoryPages; page++)
         {
@@ -406,7 +406,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
             if (!response.IsSuccessStatusCode)
             {
-                return Result<IReadOnlyList<AvailableRepository>>.Fail(ErrorFromNonSuccess(response));
+                return Result<IReadOnlyList<ProviderRepository>>.Fail(ErrorFromNonSuccess(response));
             }
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -420,7 +420,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
                 int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
                 int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
                 bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
-                repositories.Add(new AvailableRepository(dto.PathWithNamespace, isPrivate, canPush));
+                repositories.Add(new ProviderRepository(dto.PathWithNamespace, isPrivate, canPush));
             }
 
             if (pageItems.Count < RepositoriesPerPage)
@@ -429,7 +429,7 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
             }
         }
 
-        return Result<IReadOnlyList<AvailableRepository>>.Ok(repositories);
+        return Result<IReadOnlyList<ProviderRepository>>.Ok(repositories);
     }
 
     public async Task<Result<bool>> CreateBranchAsync(

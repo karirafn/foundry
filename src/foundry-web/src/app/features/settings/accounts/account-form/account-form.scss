@@ -246,7 +246,7 @@ $text-warning: #d29922;
   &__requirements-scopes {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--fd-spacing-xs);
+    gap: var(--fd-spacing-sm);
     list-style: none;
     margin: 0;
     padding: 0;
@@ -290,7 +290,15 @@ $text-warning: #d29922;
       font-family: var(--fd-font-mono);
       font-size: 0.8125rem;
       padding: 2px var(--fd-spacing-sm);
+      word-break: break-word;
     }
+  }
+
+  &__requirements-owner-hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    margin: 0;
   }
 
   &__requirements-link {

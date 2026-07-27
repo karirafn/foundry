@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features;
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure;
@@ -24,6 +23,11 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private const int MaxBranchErrorBodyLength = 500;
     private const int MaxPermissionsLength = 200;
     private const string Ellipsis = "...";
+
+    // Classic PATs remain accepted by design (issue #333 keeps them valid, just no longer advertised in the UI).
+    // This constant is intentionally decoupled from RequiredScopes.For(github), which now carries fine-grained
+    // permission display labels for the UI and is not a validation source for OAuth scope token checks.
+    private static readonly IReadOnlyList<string> ClassicPatOAuthScopes = ["repo"];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -501,17 +505,17 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return Result<bool>.Ok(dto?.Permissions?.Push ?? false);
     }
 
-    public async Task<Result<IReadOnlyList<AvailableRepository>>> ListRepositoriesAsync(
+    public async Task<Result<IReadOnlyList<ProviderRepository>>> ListRepositoriesAsync(
         Uri apiBaseUrl,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<IReadOnlyList<AvailableRepository>>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<IReadOnlyList<ProviderRepository>>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
-        List<AvailableRepository> repositories = [];
+        List<ProviderRepository> repositories = [];
 
         for (int page = 1; page <= MaxRepositoryPages; page++)
         {
@@ -528,7 +532,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
             if (!response.IsSuccessStatusCode)
             {
-                return Result<IReadOnlyList<AvailableRepository>>.Fail(ErrorFromNonSuccess(response));
+                return Result<IReadOnlyList<ProviderRepository>>.Fail(ErrorFromNonSuccess(response));
             }
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -538,7 +542,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             List<GitHubRepositoryListItemDto> pageItems = dtos ?? [];
             foreach (GitHubRepositoryListItemDto dto in pageItems)
             {
-                repositories.Add(new AvailableRepository(dto.FullName, dto.Private, dto.Permissions?.Push ?? false));
+                repositories.Add(new ProviderRepository(dto.FullName, dto.Private, dto.Permissions?.Push ?? false));
             }
 
             if (pageItems.Count < RepositoriesPerPage)
@@ -547,7 +551,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
             }
         }
 
-        return Result<IReadOnlyList<AvailableRepository>>.Ok(repositories);
+        return Result<IReadOnlyList<ProviderRepository>>.Ok(repositories);
     }
 
     public async Task<Result<bool>> CreateBranchAsync(
@@ -788,7 +792,7 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         List<string> missing = [];
-        foreach (string required in RequiredScopes.For(ProviderTypes.GitHub))
+        foreach (string required in ClassicPatOAuthScopes)
         {
             if (!grantedScopes.Contains(required))
             {
@@ -1017,8 +1021,6 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
-
-internal sealed record AvailableRepository(string Slug, bool IsPrivate, bool CanPush);
 
 internal static class GitHubErrors
 {

@@ -2,7 +2,7 @@ import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/cor
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
-import { AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
+import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
 
 @Injectable({ providedIn: 'root' })
 export class RepositoryService {
@@ -34,6 +34,9 @@ export class RepositoryService {
 
   private readonly _availableRepositoriesSignal: WritableSignal<AvailableRepository[]> = signal([]);
   readonly availableRepositories: Signal<AvailableRepository[]> = this._availableRepositoriesSignal.asReadonly();
+
+  private readonly _availableHasClaimsSignal: WritableSignal<boolean> = signal(false);
+  readonly availableHasClaims: Signal<boolean> = this._availableHasClaimsSignal.asReadonly();
 
   private readonly _loadingAvailableSignal: WritableSignal<boolean> = signal(false);
   readonly loadingAvailable: Signal<boolean> = this._loadingAvailableSignal.asReadonly();
@@ -89,14 +92,17 @@ export class RepositoryService {
   loadAvailableRepositories(accountId: string): void {
     this._loadAvailableErrorSignal.set(null);
     this._loadingAvailableSignal.set(true);
+    this._availableHasClaimsSignal.set(false);
 
-    this._http.get<AvailableRepository[]>(`${this._repositoriesUrl(accountId)}/available-repositories`).subscribe({
-      next: (repositories) => {
-        this._availableRepositoriesSignal.set(repositories);
+    this._http.get<AvailableRepositoriesResponse>(`${this._repositoriesUrl(accountId)}/available-repositories`).subscribe({
+      next: (response) => {
+        this._availableRepositoriesSignal.set(response.repositories);
+        this._availableHasClaimsSignal.set(response.hasClaims);
         this._loadingAvailableSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
+        this._availableHasClaimsSignal.set(false);
         this._loadAvailableErrorSignal.set(this._extractErrorMessage(err));
         this._loadingAvailableSignal.set(false);
       },

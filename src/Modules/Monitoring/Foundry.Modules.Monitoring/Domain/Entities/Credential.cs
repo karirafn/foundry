@@ -54,7 +54,9 @@ public abstract class Credential : AggregateRoot<CredentialId>
         }
     }
 
-    public Namespace? ResolveCoveringNamespace(RepositorySlug slug)
+    internal bool Covers(RepositorySlug slug) => ResolveCoveringNamespace(slug) is not null;
+
+    internal Namespace? ResolveCoveringNamespace(RepositorySlug slug)
     {
         HashSet<string> ownedValues = _namespaces
             .Select(n => n.Value)
