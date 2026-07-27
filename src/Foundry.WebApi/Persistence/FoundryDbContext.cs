@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 using CredentialsInfrastructure = Foundry.Modules.Credentials.Infrastructure;
-using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure;
+using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 namespace Foundry.WebApi.Persistence;
 

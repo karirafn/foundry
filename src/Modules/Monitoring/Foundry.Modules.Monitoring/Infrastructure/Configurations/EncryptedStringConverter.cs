@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Foundry.Modules.Monitoring.Infrastructure;
+namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 internal sealed class EncryptedStringConverter : ValueConverter<string?, string?>
 {
