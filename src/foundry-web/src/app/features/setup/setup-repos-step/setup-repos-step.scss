@@ -150,15 +150,14 @@
   }
 
   &__empty-status {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.875rem;
-    list-style: none;
     padding: var(--fd-spacing-md);
     text-align: center;
   }
 
   &__empty-status-hint {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     display: block;
     font-size: 0.8125rem;
     margin-top: var(--fd-spacing-xs);

@@ -402,7 +402,7 @@ describe('SetupReposStepComponent', () => {
     expect(errorText).toContain('1 of 2');
   });
 
-  // Cycle 15: non-writable repos render disabled with reason
+  // Cycle 14: non-writable repos render disabled with reason
   it('should render a disabled checkbox for non-writable repositories', () => {
     // Arrange
     const { fixture, httpMock } = setup();
@@ -574,7 +574,30 @@ describe('SetupReposStepComponent', () => {
     expect(emptyEl).toBeNull();
   });
 
-  // Cycle 17: monitored row — check replaces checkbox, sr-only "already monitored", non-toggleable
+  // Cycle 17: monitored row — non-label wrapper (div), check replaces checkbox, sr-only "already monitored", non-toggleable
+  it('should render a div (not a label) as the row wrapper for a monitored repository', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    httpMock
+      .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_WITH_MONITORED });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
+    const monitoredItem = items[0];
+    const selectableItem = items[1];
+
+    // Assert — monitored row uses div, not label (WCAG 1.3.1: label must wrap a form control)
+    const monitoredWrapper = monitoredItem.querySelector('.setup-repos-step__repo-label');
+    expect(monitoredWrapper?.tagName.toLowerCase()).toBe('div');
+    // Selectable row still uses label (it wraps a checkbox)
+    const selectableWrapper = selectableItem.querySelector('.setup-repos-step__repo-label');
+    expect(selectableWrapper?.tagName.toLowerCase()).toBe('label');
+  });
+
   it('should render a green check (not a checkbox) for a monitored repository', () => {
     // Arrange
     const { fixture, httpMock } = setup();
@@ -599,7 +622,7 @@ describe('SetupReposStepComponent', () => {
     expect(check).toBeTruthy();
   });
 
-  it('should render sr-only "already monitored" text for a monitored repository', () => {
+  it('should render sr-only "already monitored" text for a monitored repository without a leading comma', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -613,9 +636,9 @@ describe('SetupReposStepComponent', () => {
     const items = el.querySelectorAll('.setup-repos-step__repo-item') as NodeListOf<HTMLElement>;
     const monitoredItem = items[0];
 
-    // Assert
+    // Assert — no leading comma (AT would speak "comma" before the label)
     const srOnlySpan = monitoredItem.querySelector('.sr-only');
-    expect(srOnlySpan?.textContent).toContain('already monitored');
+    expect(srOnlySpan?.textContent?.trim()).toBe('already monitored');
   });
 
   it('should not toggle a monitored repository when its onToggle is invoked programmatically', () => {
@@ -711,7 +734,7 @@ describe('SetupReposStepComponent', () => {
     });
   });
 
-  // Cycle 21: no-claims empty state
+  // Cycle 21: no-claims empty state — persistent role="status" sibling of list
   it('should show "no claimed namespaces" empty state when hasClaims is false and list is empty', () => {
     // Arrange
     const { fixture, httpMock } = setup();
@@ -723,15 +746,18 @@ describe('SetupReposStepComponent', () => {
       .flush({ hasClaims: false, repositories: [] });
     fixture.detectChanges();
 
-    // Assert
+    // Assert — persistent role="status" element (not inside the ul)
     const el = fixture.nativeElement as HTMLElement;
     const emptyStatus = el.querySelector('.setup-repos-step__empty-status');
     expect(emptyStatus).toBeTruthy();
     expect(emptyStatus?.getAttribute('role')).toBe('status');
     expect(emptyStatus?.textContent).toContain('no claimed namespaces');
+    // Verify it is NOT inside the repo list
+    const repoList = el.querySelector('.setup-repos-step__repo-list');
+    expect(repoList?.contains(emptyStatus)).toBe(false);
   });
 
-  // Cycle 22: claims-but-empty state
+  // Cycle 22: claims-but-empty state — persistent role="status" sibling
   it('should show "no repositories under claimed namespaces" when hasClaims is true but list is empty', () => {
     // Arrange
     const { fixture, httpMock } = setup();
@@ -743,13 +769,16 @@ describe('SetupReposStepComponent', () => {
       .flush({ hasClaims: true, repositories: [] });
     fixture.detectChanges();
 
-    // Assert
+    // Assert — persistent role="status" element (not inside the ul)
     const el = fixture.nativeElement as HTMLElement;
     const emptyStatus = el.querySelector('.setup-repos-step__empty-status');
     expect(emptyStatus).toBeTruthy();
     expect(emptyStatus?.getAttribute('role')).toBe('status');
     expect(emptyStatus?.textContent).toContain('claimed namespaces');
     expect(emptyStatus?.textContent).not.toContain('no claimed namespaces');
+    // Verify it is NOT inside the repo list
+    const repoList = el.querySelector('.setup-repos-step__repo-list');
+    expect(repoList?.contains(emptyStatus)).toBe(false);
   });
 
   // Cycle 16: error strings are truncated to 200 characters
