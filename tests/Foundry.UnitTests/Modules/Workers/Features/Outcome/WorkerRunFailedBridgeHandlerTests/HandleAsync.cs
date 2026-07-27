@@ -5,6 +5,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
 
 using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
@@ -14,7 +15,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.WorkerRunFailedBridgeHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.WorkerRunFailedBridgeHandlerTests;
 
 public sealed class HandleAsync
 {

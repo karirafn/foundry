@@ -6,13 +6,14 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.WorkerOutcomeResolverTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.WorkerOutcomeResolverTests;
 
 public sealed class ResolveAsync
 {

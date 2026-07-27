@@ -9,7 +9,7 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Outcome;
 
 /// <summary>
 /// Maps a completed worker run's post-exit facts to a <see cref="WorkerOutcome"/>.

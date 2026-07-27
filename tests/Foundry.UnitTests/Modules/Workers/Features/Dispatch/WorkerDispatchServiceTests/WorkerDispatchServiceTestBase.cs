@@ -12,6 +12,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Shared;

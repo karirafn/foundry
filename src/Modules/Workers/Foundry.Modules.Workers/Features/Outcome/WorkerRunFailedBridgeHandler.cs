@@ -3,7 +3,7 @@ using Foundry.Shared;
 
 using WorkerRunFailedIntegration = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
 
-namespace Foundry.Modules.Workers.Features;
+namespace Foundry.Modules.Workers.Features.Outcome;
 
 internal sealed class WorkerRunFailedBridgeHandler(IIntegrationEventDispatcher integrationEventDispatcher)
     : IDomainEventHandler<WorkerRunFailed>

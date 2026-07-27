@@ -1,10 +1,11 @@
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Outcome;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.ContainerOutputParserTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.ContainerOutputParserTests;
 
 public sealed class Parse
 {
