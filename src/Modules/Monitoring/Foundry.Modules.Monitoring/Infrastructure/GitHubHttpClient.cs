@@ -20,6 +20,9 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
+    private const int MaxBranchErrorBodyLength = 500;
+    private const int MaxPermissionsLength = 200;
+    private const string Ellipsis = "...";
 
     // Classic PATs remain accepted by design (issue #333 keeps them valid, just no longer advertised in the UI).
     // This constant is intentionally decoupled from RequiredScopes.For(github), which now carries fine-grained
@@ -611,7 +614,8 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
 
         if (!createRefResponse.IsSuccessStatusCode)
         {
-            return Result<bool>.Fail(ErrorFromNonSuccess(createRefResponse));
+            Error branchError = await ErrorFromBranchCreationFailureAsync(createRefResponse, slug, cancellationToken);
+            return Result<bool>.Fail(branchError);
         }
 
         return Result<bool>.Ok(true);
@@ -802,6 +806,20 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
     [GeneratedRegex(@"/pull/(\d+)(?:[/?#]|$)")]
     private static partial Regex PrNumberRegex();
 
+    [GeneratedRegex(
+        @"(?:glpat-|ghp_|github_pat_|gho_|sk-ant-)\S+",
+        RegexOptions.None,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex KnownTokenPattern();
+
+    // Mirrors SecretRedactor.HttpsUserinfoPattern — scoped here to GitHub response bodies
+    // (no env-var pass needed in this context).
+    [GeneratedRegex(
+        @"https://[^@/\s]+@",
+        RegexOptions.None,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex HttpsUserinfoPattern();
+
     private static bool TryParsePrNumber(string pullRequestUrl, out int prNumber)
     {
         Match match = PrNumberRegex().Match(pullRequestUrl);
@@ -858,15 +876,57 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         return path;
     }
 
+    private static bool IsRateLimited(HttpResponseMessage response)
+    {
+        return response.Headers.TryGetValues("X-RateLimit-Remaining", out IEnumerable<string>? remaining) &&
+            remaining.FirstOrDefault() == "0";
+    }
+
+    private static async Task<Error> ErrorFromBranchCreationFailureAsync(
+        HttpResponseMessage response,
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        if (response.StatusCode == HttpStatusCode.Forbidden && IsRateLimited(response))
+        {
+            return GitHubErrors.RateLimitExhausted;
+        }
+
+        if (response.StatusCode != HttpStatusCode.Forbidden)
+        {
+            return ErrorFromNonSuccess(response);
+        }
+
+        if (response.Headers.TryGetValues("X-Accepted-GitHub-Permissions", out IEnumerable<string>? permValues))
+        {
+            string permissions = TruncateWithEllipsis(string.Join(", ", permValues), MaxPermissionsLength);
+            string message = $"Branch pre-creation on {slug} returned 403 — token lacks {permissions}. " +
+                $"Pending organization approval may also prevent access (fine-grained PATs require org approval).";
+            return GitHubErrors.ProviderError(message);
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubErrorBodyDto? errorDto = DeserializeErrorBody(body);
+        string rawBodyMessage = errorDto?.Message ?? body;
+        string bodyMessage = TruncateWithEllipsis(RedactSecrets(rawBodyMessage), MaxBranchErrorBodyLength);
+        return GitHubErrors.ProviderError($"Branch pre-creation on {slug} returned 403 — {bodyMessage}");
+    }
+
+    // Scoped to GitHub response bodies — no env-var pass (irrelevant here).
+    private static string RedactSecrets(string input)
+    {
+        string result = HttpsUserinfoPattern().Replace(input, "https://***@");
+        return KnownTokenPattern().Replace(result, "***");
+    }
+
+    private static string TruncateWithEllipsis(string value, int maxLength) =>
+        value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength), Ellipsis);
+
     private static Error ErrorFromNonSuccess(HttpResponseMessage response)
     {
-        if (response.StatusCode == HttpStatusCode.Forbidden)
+        if (response.StatusCode == HttpStatusCode.Forbidden && IsRateLimited(response))
         {
-            if (response.Headers.TryGetValues("X-RateLimit-Remaining", out IEnumerable<string>? remaining) &&
-                remaining.FirstOrDefault() == "0")
-            {
-                return GitHubErrors.RateLimitExhausted;
-            }
+            return GitHubErrors.RateLimitExhausted;
         }
 
         int statusCode = (int)response.StatusCode;
@@ -878,6 +938,18 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         }
 
         return error;
+    }
+
+    private static GitHubErrorBodyDto? DeserializeErrorBody(string body)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<GitHubErrorBodyDto>(body, JsonOptions);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
     }
 
     private sealed record GitHubRepositoryInfoDto(string DefaultBranch);
@@ -944,6 +1016,8 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient)
         string State,
         string? MergedAt,
         DateTimeOffset UpdatedAt);
+
+    private sealed record GitHubErrorBodyDto(string? Message);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
@@ -968,4 +1042,7 @@ internal static class GitHubErrors
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitHub.UnexpectedStatusCode", $"GitHub API returned unexpected status code {statusCode}.");
+
+    public static Error ProviderError(string message) =>
+        new("GitHub.ProviderError", message);
 }

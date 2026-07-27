@@ -348,4 +348,32 @@ describe('StateBadgeComponent', () => {
     // Assert
     expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: usage limited');
   });
+
+  // Cycle 9: provider_error failure classification
+  it('should display "PROVIDER ERROR" when failureClassification is provider_error and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'provider_error');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('PROVIDER ERROR');
+  });
+
+  it('should apply badge--failure-provider-error CSS class when failureClassification is provider_error and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'provider_error');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.classList.contains('badge--failure-provider-error')).toBe(true);
+  });
+
+  it('should set aria-label "State: provider error" when failureClassification is provider_error and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'provider_error');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: provider error');
+  });
 });

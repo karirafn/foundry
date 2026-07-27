@@ -47,6 +47,23 @@ describe('failure-category', () => {
     expect(display?.label).toBe('BOOTSTRAP FAILED');
   });
 
+  it('should return display for provider_error', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('provider_error');
+
+    // Assert
+    expect(display).not.toBeNull();
+    expect(display?.label).toBe('PROVIDER ERROR');
+  });
+
+  it('should return badge--failure-provider-error cssClass for provider_error', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('provider_error');
+
+    // Assert
+    expect(display?.cssClass).toBe('badge--failure-provider-error');
+  });
+
   // Cycle 2: unknown category returns null
   it('should return null for an unknown category token', () => {
     // Arrange / Act

@@ -146,6 +146,51 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBranchPreCreationFails_ProviderErrorSummaryPassesThroughErrorMessage()
+    {
+        // Arrange
+        CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
+        IssueClaimedHandler sut = BuildHandler(
+            integrationEventDispatcher,
+            postExitProviderQueries: new BranchCreationFailsQueries());
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>()
+            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.ProviderError providerError = failedRun.Reason.ShouldBeOfType<FailureReason.ProviderError>();
+        providerError.Message.ShouldBe("403 Forbidden");
+        providerError.Summary.ShouldBe("403 Forbidden");
+    }
+
+    [Fact]
+    public async Task WhenContainerStartFails_PersistedReasonIsContainerError()
+    {
+        // Arrange — container-start failure must still map to ContainerError (not ProviderError)
+        CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
+        IssueClaimedHandler sut = BuildHandler(
+            integrationEventDispatcher,
+            orchestrator: new AlwaysFailingOrchestrator(),
+            postExitProviderQueries: new BranchCreationSucceedsQueries());
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>()
+            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+    }
+
+    [Fact]
     public async Task WhenContainerStartFails_PublishesWorkerRunFailedIntegrationEventExactlyOnceWithNullBranch()
     {
         // Arrange — container-start failure is pre-container (always terminal, null branch)

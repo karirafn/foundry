@@ -75,4 +75,18 @@ public sealed class Summary
         // Assert
         summary.ShouldBe("Worker bootstrap failed: rootless dockerd");
     }
+
+    [Fact]
+    public void WhenProviderError_SummaryReturnsMessageVerbatim()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.ProviderError(
+            Message: "Branch pre-creation on acme/repo returned 403 — token lacks contents=write");
+
+        // Act
+        string summary = reason.Summary;
+
+        // Assert
+        summary.ShouldBe("Branch pre-creation on acme/repo returned 403 — token lacks contents=write");
+    }
 }
