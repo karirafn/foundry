@@ -1,7 +1,7 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { DecimalPipe, NgClass } from '@angular/common';
 import { IssueSummary, RunStats, LIVE_STATES } from '../issue.model';
-import { STATE_ARIA_LABELS } from '../state-display';
+import { STATE_ARIA_LABELS } from '../../../shared/utils/state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';

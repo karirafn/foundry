@@ -1,4 +1,4 @@
-import { IssueState } from './issue.model';
+import { IssueState } from './issue-state';
 
 export const STATE_LABELS: Record<IssueState, string> = {
   detected: 'DETECTED',
