@@ -4,7 +4,7 @@ import { SystemBannerComponent } from './shared/components/system-banner/system-
 import { ForgeOverlayComponent } from './shared/components/forge-overlay/forge-overlay';
 import { ToastHostComponent } from './shared/components/toast-host/toast-host';
 import { AccountChipComponent } from './shared/components/account-chip/account-chip';
-import { SettingsService } from './features/settings/settings.service';
+import { SettingsService } from './core/services/settings.service';
 
 @Component({
   selector: 'fd-root',

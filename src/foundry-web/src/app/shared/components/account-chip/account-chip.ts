@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { SettingsService } from '../../../features/settings/settings.service';
-import { AuthSettings } from '../../../features/settings/settings.model';
+import { SettingsService } from '../../../core/services/settings.service';
+import { AuthSettings } from '../../../core/models/settings.model';
 
 interface OAuthPresentView {
   kind: 'oauth';

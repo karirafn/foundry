@@ -5,9 +5,9 @@ import { WritableSignal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { vi } from 'vitest';
 import { SettingsService } from './settings.service';
-import { LoginSessionUpdate } from './settings.model';
-import { DispatchService } from '../../core/services/dispatch.service';
-import { SystemSignalRService } from '../../core/services/system-signalr.service';
+import { LoginSessionUpdate } from '../models/settings.model';
+import { DispatchService } from './dispatch.service';
+import { SystemSignalRService } from './system-signalr.service';
 
 function createMockSignalRService() {
   return {

@@ -1,6 +1,6 @@
 import { Component, ElementRef, Signal, ViewChild, afterRenderEffect, computed, inject } from '@angular/core';
-import { SettingsService } from '../../../features/settings/settings.service';
-import { ImageBuildStatus } from '../../../features/settings/settings.model';
+import { SettingsService } from '../../../core/services/settings.service';
+import { ImageBuildStatus } from '../../../core/models/settings.model';
 
 const STATUS_TEXT_STARTING = 'Starting…';
 const STATUS_TEXT_BUILDING = 'Building worker image…';

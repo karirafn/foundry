@@ -5,7 +5,7 @@ import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { NEVER } from 'rxjs';
 import { SettingsLayoutComponent } from './settings-layout';
-import { SettingsService } from '../settings.service';
+import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { SETTINGS_ROUTES } from '../settings.routes';
 

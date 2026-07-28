@@ -2,8 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { vi } from 'vitest';
 import { ForgeOverlayComponent } from './forge-overlay';
-import { SettingsService } from '../../../features/settings/settings.service';
-import { ImageBuildStatus } from '../../../features/settings/settings.model';
+import { SettingsService } from '../../../core/services/settings.service';
+import { ImageBuildStatus } from '../../../core/models/settings.model';
 
 function createMockSettingsService(overrides: {
   isColdBuildBlocking?: boolean;

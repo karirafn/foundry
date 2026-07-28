@@ -5,7 +5,7 @@ import { vi } from 'vitest';
 import { ImageBuildBannerComponent } from './image-build-banner';
 import { SystemSignalRService } from '../../../../../core/services/system-signalr.service';
 import { SystemNotification } from '../../../../../core/models/system-notification.model';
-import { SettingsService } from '../../../../../features/settings/settings.service';
+import { SettingsService } from '../../../../../core/services/settings.service';
 
 function createMockSignalRService(notifications: SystemNotification[]) {
   const notificationsSignal = signal(notifications);

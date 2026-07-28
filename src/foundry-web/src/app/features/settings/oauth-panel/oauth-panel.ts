@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
-import { LoginError, LoginPhase, OAuthStatus } from '../settings.model';
+import { LoginError, LoginPhase, OAuthStatus } from '../../../core/models/settings.model';
 import { LoginFlowComponent } from './login-flow/login-flow';
 
 @Component({

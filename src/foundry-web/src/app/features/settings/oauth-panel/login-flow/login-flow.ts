@@ -13,7 +13,7 @@ import {
   runInInjectionContext,
   signal,
 } from '@angular/core';
-import { LoginError, LoginPhase } from '../../settings.model';
+import { LoginError, LoginPhase } from '../../../../core/models/settings.model';
 
 interface FailedCopy {
   heading: string;

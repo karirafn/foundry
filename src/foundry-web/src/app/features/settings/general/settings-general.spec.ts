@@ -5,7 +5,7 @@ import { By } from '@angular/platform-browser';
 import { NgModel } from '@angular/forms';
 import { NEVER } from 'rxjs';
 import { SettingsGeneralComponent } from './settings-general';
-import { SettingsService } from '../settings.service';
+import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 
 const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };

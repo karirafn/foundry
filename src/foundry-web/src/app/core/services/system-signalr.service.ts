@@ -3,7 +3,7 @@ import { Observable, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { DISPATCH_NOTIFICATION_CATEGORY, DOCKER_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
-import { LoginSessionUpdate } from '../../features/settings/settings.model';
+import { LoginSessionUpdate } from '../models/settings.model';
 
 export interface SystemHub {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

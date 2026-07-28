@@ -14,8 +14,8 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { SettingsService } from '../../settings/settings.service';
-import { AuthMode } from '../../settings/settings.model';
+import { SettingsService } from '../../../core/services/settings.service';
+import { AuthMode } from '../../../core/models/settings.model';
 import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
 
 @Component({

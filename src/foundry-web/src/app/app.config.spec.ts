@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { NEVER } from 'rxjs';
-import { SettingsService } from './features/settings/settings.service';
+import { SettingsService } from './core/services/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
 import { SystemSignalRService } from './core/services/system-signalr.service';
 

@@ -7,7 +7,7 @@ import { SystemBannerComponent } from './system-banner';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { SystemNotification } from '../../../core/models/system-notification.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
-import { SettingsService } from '../../../features/settings/settings.service';
+import { SettingsService } from '../../../core/services/settings.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { SystemStatusService } from '../../../core/services/system-status.service';
 
