@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, InputSignal } from '@angular/core';
-import { IssueState } from '../../../features/issues/issue.model';
+import { IssueState } from '../../utils/issue-state';
 import { STATE_LABELS, STATE_ARIA_LABELS, STATE_CSS_CLASSES } from '../../../features/issues/state-display';
 import { getFailureCategoryDisplay } from '../../../features/workers/failure-category';
 

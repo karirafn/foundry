@@ -1,18 +1,5 @@
-export type IssueState =
-  | 'detected'
-  | 'queued'
-  | 'blocked'
-  | 'in_progress'
-  | 'review'
-  | 'unchanged'
-  | 'failed'
-  | 'continuable_failed'
-  | 'continuation_queued'
-  | 'completed'
-  | 'revision_queued'
-  | 'revision_in_progress'
-  | 'revision_failed'
-  | 'ineligible';
+import type { IssueState } from '../../shared/utils/issue-state';
+export type { IssueState } from '../../shared/utils/issue-state';
 
 export interface RunStats {
   runCount: number;
