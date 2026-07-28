@@ -2,8 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { AccountChipComponent } from './account-chip';
-import { SettingsService } from '../../../features/settings/settings.service';
-import { AuthSettings } from '../../../features/settings/settings.model';
+import { SettingsService } from '../../../core/services/settings.service';
+import { AuthSettings } from '../../../core/models/settings.model';
 
 function createMockSettingsService(authSettings: AuthSettings | null = null) {
   return {

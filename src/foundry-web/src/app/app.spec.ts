@@ -7,7 +7,7 @@ import { Subject } from 'rxjs';
 import { App } from './app';
 import { routes } from './app.routes';
 import { SYSTEM_HUB_FACTORY, SystemHub, SystemSignalRService } from './core/services/system-signalr.service';
-import { SettingsService } from './features/settings/settings.service';
+import { SettingsService } from './core/services/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
 import { DispatchService } from './core/services/dispatch.service';
 

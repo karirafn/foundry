@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { StateBadgeComponent } from './state-badge';
-import { IssueState } from '../../../features/issues/issue.model';
+import { IssueState } from '../../utils/issue-state';
 
 function createComponent(state: IssueState, failureClassification?: string) {
   TestBed.configureTestingModule({

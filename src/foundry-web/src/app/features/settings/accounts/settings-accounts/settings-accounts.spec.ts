@@ -2,8 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { SettingsAccountsComponent } from './settings-accounts';
-import { AccountService } from './account.service';
-import { AccountSummary, AffectedRepository, CredentialUpdateResult } from './account.model';
+import { AccountService } from '../account.service';
+import { AccountSummary, AffectedRepository, CredentialUpdateResult } from '../account.model';
 
 function makeUpdateResult(account: AccountSummary, affected: AffectedRepository[] = []): CredentialUpdateResult {
   return { credential: account, affectedRepositories: affected };

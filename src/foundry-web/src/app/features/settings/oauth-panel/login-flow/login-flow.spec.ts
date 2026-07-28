@@ -1,6 +1,6 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { LoginFlowComponent } from './login-flow';
-import { LoginError, LoginPhase } from '../../settings.model';
+import { LoginError, LoginPhase } from '../../../../core/models/settings.model';
 
 function setup(inputs: {
   phase: LoginPhase;

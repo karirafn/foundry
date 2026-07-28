@@ -14,9 +14,9 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { SettingsService } from '../settings.service';
+import { SettingsService } from '../../../core/services/settings.service';
 import { DispatchService } from '../../../core/services/dispatch.service';
-import { AuthMode, OAuthStatus, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../settings.model';
+import { AuthMode, OAuthStatus, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../../../core/models/settings.model';
 import { OAuthPanelComponent } from '../oauth-panel/oauth-panel';
 
 const MAX_CONCURRENT_MIN = 1;

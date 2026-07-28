@@ -16,7 +16,7 @@ import {
   signal,
 } from '@angular/core';
 import { AccountSummary } from '../../accounts/account.model';
-import { accountOptionLabel } from '../../accounts/account-label.util';
+import { accountOptionLabel } from '../../account-label.util';
 import {
   AvailableRepository,
   CreateRepositoryRequest,

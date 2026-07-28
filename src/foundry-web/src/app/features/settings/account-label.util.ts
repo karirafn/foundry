@@ -1,4 +1,4 @@
-import { AccountSummary } from './account.model';
+import { AccountSummary } from './accounts/account.model';
 
 const MAX_VISIBLE_NAMESPACES = 4;
 

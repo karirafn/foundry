@@ -1,0 +1,15 @@
+export type IssueState =
+  | 'detected'
+  | 'queued'
+  | 'blocked'
+  | 'in_progress'
+  | 'review'
+  | 'unchanged'
+  | 'failed'
+  | 'continuable_failed'
+  | 'continuation_queued'
+  | 'completed'
+  | 'revision_queued'
+  | 'revision_in_progress'
+  | 'revision_failed'
+  | 'ineligible';

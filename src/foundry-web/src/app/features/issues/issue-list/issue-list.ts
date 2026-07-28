@@ -9,7 +9,7 @@ import { ConnectionIndicatorComponent } from '../../../shared/components/connect
 import { DispatchControlsComponent } from './dispatch-controls/dispatch-controls';
 import { IssueFilterRailComponent } from '../issue-filter-rail/issue-filter-rail';
 import { IssueFilterBarComponent } from '../issue-filter-bar/issue-filter-bar';
-import { SettingsService } from '../../../features/settings/settings.service';
+import { SettingsService } from '../../../core/services/settings.service';
 import { LIVE_STATES } from '../issue.model';
 import { RunStatsBarComponent } from '../run-stats-bar/run-stats-bar';
 import { WorkerRunTotalsService } from '../../workers/run-totals.service';

@@ -1,6 +1,6 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { GlobalSettingsResponse } from '../../features/settings/settings.model';
+import { GlobalSettingsResponse } from '../models/settings.model';
 
 const PAUSE_DISPATCH_ERROR = 'Failed to pause dispatch';
 const RESUME_DISPATCH_ERROR = 'Failed to resume dispatch';

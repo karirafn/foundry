@@ -1,9 +1,9 @@
 import { Component, ChangeDetectionStrategy, OnInit, Signal, WritableSignal, computed, effect, inject, signal, Injector, ViewChild, ElementRef, afterNextRender, runInInjectionContext } from '@angular/core';
-import { AccountService } from './account.service';
-import { AccountListComponent } from './account-list/account-list';
-import { AccountFormComponent } from './account-form/account-form';
-import { AffectedRepositoriesComponent } from './affected-repositories/affected-repositories';
-import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from './account.model';
+import { AccountService } from '../account.service';
+import { AccountListComponent } from '../account-list/account-list';
+import { AccountFormComponent } from '../account-form/account-form';
+import { AffectedRepositoriesComponent } from '../affected-repositories/affected-repositories';
+import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from '../account.model';
 
 type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account: AccountSummary };
 

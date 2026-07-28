@@ -1,6 +1,6 @@
 import { Component, ChangeDetectionStrategy, OnInit, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { SettingsService } from '../settings.service';
+import { SettingsService } from '../../../core/services/settings.service';
 
 @Component({
   selector: 'fd-settings-layout',

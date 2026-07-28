@@ -1,6 +1,6 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { OAuthPanelComponent } from './oauth-panel';
-import { LoginError, LoginPhase } from '../settings.model';
+import { LoginError, LoginPhase } from '../../../core/models/settings.model';
 
 function setup(inputs: {
   status: 'NotConfigured' | 'Present' | 'ReLoginNeeded';

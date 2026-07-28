@@ -15,12 +15,12 @@ export const SETTINGS_ROUTES: Routes = [
       {
         path: 'accounts',
         loadComponent: () =>
-          import('./accounts/settings-accounts').then((m) => m.SettingsAccountsComponent),
+          import('./accounts/settings-accounts/settings-accounts').then((m) => m.SettingsAccountsComponent),
       },
       {
         path: 'repositories',
         loadComponent: () =>
-          import('./repositories/settings-repositories').then((m) => m.SettingsRepositoriesComponent),
+          import('./repositories/settings-repositories/settings-repositories').then((m) => m.SettingsRepositoriesComponent),
       },
     ],
   },

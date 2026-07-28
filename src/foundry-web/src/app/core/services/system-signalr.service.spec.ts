@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { SystemSignalRService, SYSTEM_HUB_FACTORY, SystemHub } from './system-signalr.service';
 import { DISPATCH_NOTIFICATION_CATEGORY, DOCKER_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
-import { LoginSessionUpdate } from '../../features/settings/settings.model';
+import { LoginSessionUpdate } from '../models/settings.model';
 
 interface CapturedHubCallbacks {
   onSystemNotificationReceived: ((notification: SystemNotification) => void) | null;

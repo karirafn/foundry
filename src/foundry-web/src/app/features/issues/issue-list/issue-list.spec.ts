@@ -9,7 +9,7 @@ import { IssueSignalRService } from '../../../core/services/issue-signalr.servic
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
 import { IssueSummary } from '../issue.model';
-import { GlobalSettingsResponse } from '../../../features/settings/settings.model';
+import { GlobalSettingsResponse } from '../../../core/models/settings.model';
 
 const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
 

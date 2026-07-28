@@ -3,8 +3,8 @@ import { SlicePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { SystemSignalRService } from '../../../../../core/services/system-signalr.service';
 import { IMAGE_BUILD_NOTIFICATION_CATEGORY } from '../../../../../core/models/system-notification.model';
-import { SettingsService } from '../../../../../features/settings/settings.service';
-import { ImageBuildStatus } from '../../../../../features/settings/settings.model';
+import { SettingsService } from '../../../../../core/services/settings.service';
+import { ImageBuildStatus } from '../../../../../core/models/settings.model';
 
 const IMAGE_BUILD_MESSAGE_SEPARATOR = '|';
 

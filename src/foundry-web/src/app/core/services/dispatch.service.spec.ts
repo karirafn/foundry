@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DispatchService } from './dispatch.service';
-import { GlobalSettingsResponse } from '../../features/settings/settings.model';
+import { GlobalSettingsResponse } from '../models/settings.model';
 
 function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalSettingsResponse {
   return {

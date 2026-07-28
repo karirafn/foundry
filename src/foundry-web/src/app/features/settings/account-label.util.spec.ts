@@ -1,5 +1,5 @@
 import { accountOptionLabel } from './account-label.util';
-import { AccountSummary } from './account.model';
+import { AccountSummary } from './accounts/account.model';
 
 function makeAccount(overrides: Partial<AccountSummary> = {}): AccountSummary {
   return {

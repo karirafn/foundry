@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, HostBinding, inject, input } from '
 import { IssueService } from '../issue.service';
 import { STATE_GROUPS } from '../issue-lifecycle.model';
 import { IssueState } from '../issue.model';
-import { STATE_RAIL_LABELS, STATE_COLOR_VARS } from '../state-display';
+import { STATE_RAIL_LABELS, STATE_COLOR_VARS } from '../../../shared/utils/state-display';
 
 @Component({
   selector: 'fd-issue-filter-rail',

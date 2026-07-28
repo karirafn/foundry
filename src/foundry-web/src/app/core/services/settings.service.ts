@@ -16,10 +16,10 @@ import {
   UpdatePromptTemplatesRequest,
   WorkerImageFlags,
   WorkerLimits,
-} from './settings.model';
-import { DispatchService } from '../../core/services/dispatch.service';
-import { AccountService } from './accounts/account.service';
-import { SystemSignalRService } from '../../core/services/system-signalr.service';
+} from '../models/settings.model';
+import { DispatchService } from './dispatch.service';
+import { AccountService } from '../../features/settings/accounts/account.service';
+import { SystemSignalRService } from './system-signalr.service';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
