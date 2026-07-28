@@ -2,10 +2,10 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { SettingsRepositoriesComponent } from './settings-repositories';
-import { AccountService } from '../accounts/account.service';
-import { RepositoryService } from './repository.service';
-import { AccountSummary } from '../accounts/account.model';
-import { RepositorySummary } from './repository.model';
+import { AccountService } from '../../accounts/account.service';
+import { RepositoryService } from '../repository.service';
+import { AccountSummary } from '../../accounts/account.model';
+import { RepositorySummary } from '../repository.model';
 
 const ACCOUNT_1: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',

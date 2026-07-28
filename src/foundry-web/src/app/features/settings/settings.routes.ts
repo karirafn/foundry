@@ -20,7 +20,7 @@ export const SETTINGS_ROUTES: Routes = [
       {
         path: 'repositories',
         loadComponent: () =>
-          import('./repositories/settings-repositories').then((m) => m.SettingsRepositoriesComponent),
+          import('./repositories/settings-repositories/settings-repositories').then((m) => m.SettingsRepositoriesComponent),
       },
     ],
   },

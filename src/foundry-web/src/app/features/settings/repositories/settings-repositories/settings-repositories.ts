@@ -14,11 +14,11 @@ import {
   afterNextRender,
   runInInjectionContext,
 } from '@angular/core';
-import { AccountService } from '../accounts/account.service';
-import { RepositoryService } from './repository.service';
-import { RepositoryListComponent } from './repository-list/repository-list';
-import { RepositoryFormComponent } from './repository-form/repository-form';
-import { RepositorySummary, CreateRepositoryRequest, UpdateRepositoryRequest } from './repository.model';
+import { AccountService } from '../../accounts/account.service';
+import { RepositoryService } from '../repository.service';
+import { RepositoryListComponent } from '../repository-list/repository-list';
+import { RepositoryFormComponent } from '../repository-form/repository-form';
+import { RepositorySummary, CreateRepositoryRequest, UpdateRepositoryRequest } from '../repository.model';
 
 type RepositoryView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; repository: RepositorySummary };
 
