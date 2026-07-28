@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Credentials.Domain;
+using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;

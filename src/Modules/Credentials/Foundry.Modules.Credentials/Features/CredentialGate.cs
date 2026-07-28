@@ -1,5 +1,5 @@
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Credentials.Domain;
+using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.Login;
 

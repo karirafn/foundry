@@ -1,6 +1,6 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Features.Login;
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
 using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;

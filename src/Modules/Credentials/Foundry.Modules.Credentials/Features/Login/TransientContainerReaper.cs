@@ -1,4 +1,4 @@
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.Extensions.Logging;

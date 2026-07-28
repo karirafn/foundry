@@ -1,4 +1,4 @@
-using Foundry.Modules.Credentials.Domain;
+using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
 

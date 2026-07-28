@@ -1,6 +1,6 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Contracts.Queries;
-using Foundry.Modules.Credentials.Domain;
+using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;

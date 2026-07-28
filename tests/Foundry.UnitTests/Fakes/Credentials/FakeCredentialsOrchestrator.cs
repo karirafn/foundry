@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 
 using Foundry.Modules.Credentials.Features.Login;
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
 
 namespace Foundry.UnitTests.Fakes.Credentials;

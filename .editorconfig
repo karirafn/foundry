@@ -49,7 +49,7 @@ dotnet_style_require_accessibility_modifiers = for_non_interface_members:silent
 dotnet_style_coalesce_expression = true:suggestion
 dotnet_style_collection_initializer = true:suggestion
 dotnet_style_explicit_tuple_names = true:suggestion
-dotnet_style_namespace_match_folder = true:suggestion
+dotnet_style_namespace_match_folder = true:warning
 dotnet_style_null_propagation = true:suggestion
 dotnet_style_object_initializer = true:suggestion
 dotnet_style_operator_placement_when_wrapping = beginning_of_line
@@ -429,3 +429,14 @@ dotnet_diagnostic.CA1055.severity = none
 
 # CA1056: URI-like properties should not be strings — suppressed for value object properties on ProviderUrl
 dotnet_diagnostic.CA1056.severity = none
+
+# Integration-event and query contracts intentionally share one namespace per module
+# regardless of subfolder: event types are persisted by AssemblyQualifiedName in the outbox,
+# so the namespace is part of the serialized contract and must stay stable across folders.
+[src/Modules/**/*.Contracts/**/*.cs]
+dotnet_style_namespace_match_folder = false
+
+# .NET Aspire ServiceDefaults ships AddServiceDefaults in Microsoft.Extensions.Hosting by
+# convention so it is discoverable at call sites without an extra using.
+[src/Foundry.ServiceDefaults/*.cs]
+dotnet_style_namespace_match_folder = false

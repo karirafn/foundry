@@ -1,4 +1,4 @@
-using Foundry.Modules.Credentials.Infrastructure;
+using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 
 namespace Foundry.Modules.Credentials.Features.Login;
 
