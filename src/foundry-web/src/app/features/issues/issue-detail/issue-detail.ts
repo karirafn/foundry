@@ -20,7 +20,7 @@ import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
-import { providerTerminology } from '../../settings/accounts/provider.util';
+import { providerTerminology } from '../../../shared/utils/provider.util';
 import { getFailureCategoryDisplay } from '../../workers/failure-category';
 
 @Component({

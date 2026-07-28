@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, InputSignal } from '@angular/core';
-import { providerDisplayName } from '../../../features/settings/accounts/provider.util';
+import { providerDisplayName } from '../../utils/provider.util';
 
 const GITHUB_PATH =
   'M12 1C5.923 1 1 5.923 1 12c0 4.867 3.149 8.979 7.521 10.436.55.096.756-.233.756-.522' +
