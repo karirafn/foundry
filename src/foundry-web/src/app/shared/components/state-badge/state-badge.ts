@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, InputSignal } from '@angular/core';
 import { IssueState } from '../../utils/issue-state';
 import { STATE_LABELS, STATE_ARIA_LABELS, STATE_CSS_CLASSES } from '../../../features/issues/state-display';
-import { getFailureCategoryDisplay } from '../../../features/workers/failure-category';
+import { getFailureCategoryDisplay } from '../../utils/failure-category';
 
 const FAILED_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['failed', 'continuable_failed']);
 

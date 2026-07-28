@@ -21,7 +21,7 @@ import { WorkerSignalRService } from '../../../core/services/worker-signalr.serv
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { providerTerminology } from '../../../shared/utils/provider.util';
-import { getFailureCategoryDisplay } from '../../workers/failure-category';
+import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
 
 @Component({
   selector: 'fd-issue-detail',
