@@ -66,7 +66,9 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.InstallDotnet.ShouldBeTrue(),
@@ -101,7 +103,9 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
     }
