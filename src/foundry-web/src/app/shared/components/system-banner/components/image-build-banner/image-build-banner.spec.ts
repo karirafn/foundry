@@ -3,127 +3,82 @@ import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
 import { ImageBuildBannerComponent } from './image-build-banner';
-import { SystemSignalRService } from '../../../../../core/services/system-signalr.service';
-import { SystemNotification } from '../../../../../core/models/system-notification.model';
 import { SettingsService } from '../../../../../core/services/settings.service';
+import { ImageBuildStatus } from '../../../../../core/models/settings.model';
 
-function createMockSignalRService(notifications: SystemNotification[]) {
-  const notificationsSignal = signal(notifications);
+function createMockSettingsService(
+  status: ImageBuildStatus = 'Idle',
+  logTail: string | null = null
+) {
+  const statusSignal = signal<ImageBuildStatus>(status);
+  const logTailSignal = signal<string | null>(logTail);
   return {
-    notifications: notificationsSignal.asReadonly(),
-    _signal: notificationsSignal,
-  };
-}
-
-function createMockSettingsService() {
-  return {
-    loadSettings: vi.fn(),
-    setImageBuildStatus: vi.fn(),
+    imageBuildStatus: statusSignal.asReadonly(),
+    imageBuildLogTail: logTailSignal.asReadonly(),
     retryImageBuild: vi.fn(),
+    _statusSignal: statusSignal,
+    _logTailSignal: logTailSignal,
   };
 }
 
-function setup(notifications: SystemNotification[] = []) {
-  const mockSignalR = createMockSignalRService(notifications);
-  const mockSettings = createMockSettingsService();
+function setup(status: ImageBuildStatus = 'Idle', logTail: string | null = null) {
+  const mockSettings = createMockSettingsService(status, logTail);
 
   TestBed.configureTestingModule({
     imports: [ImageBuildBannerComponent],
     providers: [
       provideRouter([]),
-      { provide: SystemSignalRService, useValue: mockSignalR },
       { provide: SettingsService, useValue: mockSettings },
     ],
   });
 
   const fixture = TestBed.createComponent(ImageBuildBannerComponent);
   fixture.detectChanges();
-  return { fixture, mockSignalR, mockSettings };
+  return { fixture, mockSettings };
 }
 
 describe('ImageBuildBannerComponent', () => {
-  it('should call setImageBuildStatus when an image-build notification arrives', () => {
-    // Arrange
-    const { fixture, mockSignalR, mockSettings } = setup([]);
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Building|null' };
-
-    // Act
-    mockSignalR._signal.set([notification]);
-    fixture.detectChanges();
-
-    // Assert
-    expect(mockSettings.setImageBuildStatus).toHaveBeenCalled();
-  });
-
-  it('should render a Building bar when an image-build Building notification is active', () => {
-    // Arrange
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Building|null' };
-
-    // Act
-    const { fixture } = setup([notification]);
+  it('should render a Failed bar with message, log tail, "View details" link, and Retry button when status is Failed', () => {
+    // Arrange / Act
+    const { fixture } = setup('Failed', 'Step 2/5 FAILED');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
-    expect(imageBuildBar).toBeTruthy();
-    expect(imageBuildBar.textContent).toContain('Worker image is building');
-  });
-
-  it('should render a Failed bar with Retry button when an image-build Failed notification is active', () => {
-    // Arrange
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|Step 2/5 FAILED' };
-
-    // Act
-    const { fixture } = setup([notification]);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
+    const imageBuildBar = el.querySelector('.system-banner__bar--failed') as HTMLElement;
     expect(imageBuildBar).toBeTruthy();
     expect(imageBuildBar.textContent).toContain('Worker image build failed');
+
+    const logTail = imageBuildBar.querySelector('.system-banner__log-tail') as HTMLElement;
+    expect(logTail).toBeTruthy();
+    expect(logTail.textContent).toContain('Step 2/5 FAILED');
+
+    const link = imageBuildBar.querySelector('a.system-banner__details-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.textContent?.trim()).toBe('View details');
+    expect(link.getAttribute('href')).toBe('/settings/general');
 
     const retryBtn = imageBuildBar.querySelector('.system-banner__action-btn') as HTMLButtonElement;
     expect(retryBtn).toBeTruthy();
     expect(retryBtn.textContent?.trim()).toBe('Retry');
   });
 
-  it('should show "View details" routerLink to /settings/general when image build fails', () => {
-    // Arrange
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|error log' };
-
-    // Act
-    const { fixture } = setup([notification]);
+  it('should render a Building bar when status is Building', () => {
+    // Arrange / Act
+    const { fixture } = setup('Building');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
-    const link = imageBuildBar?.querySelector('a.system-banner__details-link') as HTMLAnchorElement;
-    expect(link).toBeTruthy();
-    expect(link.textContent?.trim()).toBe('View details');
-    expect(link.getAttribute('href')).toBe('/settings/general');
+    const buildingBar = el.querySelector('.system-banner__bar--building') as HTMLElement;
+    expect(buildingBar).toBeTruthy();
+    expect(buildingBar.textContent).toContain('Worker image is building');
+
+    const failedBar = el.querySelector('.system-banner__bar--failed');
+    expect(failedBar).toBeFalsy();
   });
 
-  it('should treat an empty log part after separator as null (no log tail shown)', () => {
-    // Arrange — message with separator but no log content
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|' };
-
-    // Act
-    const { fixture } = setup([notification]);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert — failed bar rendered but no log-tail span
-    const imageBuildBar = el.querySelector('.system-banner__bar--image-build') as HTMLElement;
-    expect(imageBuildBar).toBeTruthy();
-    const logTail = imageBuildBar.querySelector('.system-banner__log-tail');
-    expect(logTail).toBeFalsy();
-  });
-
-  it('should not render an image-build bar when there are no image-build notifications', () => {
-    // Arrange
-    const notification: SystemNotification = { category: 'auth', isActive: true, message: 'Auth invalid' };
-
-    // Act
-    const { fixture } = setup([notification]);
+  it('should render nothing when status is Idle', () => {
+    // Arrange / Act
+    const { fixture } = setup('Idle');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -131,25 +86,53 @@ describe('ImageBuildBannerComponent', () => {
     expect(imageBuildBar).toBeFalsy();
   });
 
-  it('should have role="region" with aria-label "Image build status" on the image-build wrapper', () => {
+  it('should re-render when the status signal changes', () => {
     // Arrange
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Building|null' };
+    const { fixture, mockSettings } = setup('Idle');
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.system-banner__bar--image-build')).toBeFalsy();
 
     // Act
-    const { fixture } = setup([notification]);
+    mockSettings._statusSignal.set('Building');
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.system-banner__bar--building')).toBeTruthy();
+
+    // Act again — transition to Failed
+    mockSettings._statusSignal.set('Failed');
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.system-banner__bar--failed')).toBeTruthy();
+  });
+
+  it('should not show log-tail span when log tail is null', () => {
+    // Arrange / Act
+    const { fixture } = setup('Failed', null);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const imageBuildBar = el.querySelector('.system-banner__bar--failed') as HTMLElement;
+    expect(imageBuildBar).toBeTruthy();
+    const logTail = imageBuildBar.querySelector('.system-banner__log-tail');
+    expect(logTail).toBeFalsy();
+  });
+
+  it('should have role="region" with aria-label "Image build status" on the wrapper when not Idle', () => {
+    // Arrange / Act
+    const { fixture } = setup('Building');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const wrapper = el.querySelector('[aria-label="Image build status"]') as HTMLElement;
-    expect(wrapper?.getAttribute('role')).toBe('region');
+    expect(wrapper).toBeTruthy();
+    expect(wrapper.getAttribute('role')).toBe('region');
   });
 
-  it('should have role="status" aria-live="polite" on the Building bar', () => {
-    // Arrange
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Building|null' };
-
-    // Act
-    const { fixture } = setup([notification]);
+  it('should have role="status" and aria-live="polite" on the Building bar', () => {
+    // Arrange / Act
+    const { fixture } = setup('Building');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -159,15 +142,26 @@ describe('ImageBuildBannerComponent', () => {
   });
 
   it('should have role="alert" on the Failed bar', () => {
-    // Arrange
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|error' };
-
-    // Act
-    const { fixture } = setup([notification]);
+    // Arrange / Act
+    const { fixture } = setup('Failed', 'error');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const failedBar = el.querySelector('.system-banner__bar--failed') as HTMLElement;
     expect(failedBar?.getAttribute('role')).toBe('alert');
+  });
+
+  it('should call settingsService.retryImageBuild when Retry is clicked', () => {
+    // Arrange
+    const { fixture, mockSettings } = setup('Failed', 'error log');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act
+    const retryBtn = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
+    retryBtn.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(mockSettings.retryImageBuild).toHaveBeenCalledOnce();
   });
 });
