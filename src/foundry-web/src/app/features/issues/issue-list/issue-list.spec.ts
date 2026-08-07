@@ -11,7 +11,7 @@ import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services
 import { IssueSummary } from '../issue.model';
 import { GlobalSettingsResponse } from '../../../core/models/settings.model';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 
 const mockIssueSignalRService = {
   on: () => {},

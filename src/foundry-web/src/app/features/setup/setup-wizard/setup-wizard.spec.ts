@@ -2,13 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { vi } from 'vitest';
 import { NEVER } from 'rxjs';
 import { SetupWizardComponent } from './setup-wizard';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 
 @Component({ template: '', standalone: true })
 class StubIssuesComponent {}
