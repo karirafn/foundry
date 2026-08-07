@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { SlicePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { SettingsService } from '../../../../../core/services/settings.service';
@@ -9,9 +9,10 @@ import { SettingsService } from '../../../../../core/services/settings.service';
   imports: [RouterLink, SlicePipe],
   templateUrl: './image-build-banner.html',
   styleUrl: './image-build-banner.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ImageBuildBannerComponent {
-  readonly settingsService = inject(SettingsService);
+  protected readonly settingsService = inject(SettingsService);
 
   retryImageBuild(): void {
     this.settingsService.retryImageBuild();

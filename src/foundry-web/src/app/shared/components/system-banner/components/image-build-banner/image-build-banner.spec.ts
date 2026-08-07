@@ -8,21 +8,25 @@ import { ImageBuildStatus } from '../../../../../core/models/settings.model';
 
 function createMockSettingsService(
   status: ImageBuildStatus = 'Idle',
-  logTail: string | null = null
+  logTail: string | null = null,
+  savingImageFlags: boolean = false
 ) {
   const statusSignal = signal<ImageBuildStatus>(status);
   const logTailSignal = signal<string | null>(logTail);
+  const savingImageFlagsSignal = signal<boolean>(savingImageFlags);
   return {
     imageBuildStatus: statusSignal.asReadonly(),
     imageBuildLogTail: logTailSignal.asReadonly(),
+    savingImageFlags: savingImageFlagsSignal.asReadonly(),
     retryImageBuild: vi.fn(),
     _statusSignal: statusSignal,
     _logTailSignal: logTailSignal,
+    _savingImageFlagsSignal: savingImageFlagsSignal,
   };
 }
 
-function setup(status: ImageBuildStatus = 'Idle', logTail: string | null = null) {
-  const mockSettings = createMockSettingsService(status, logTail);
+function setup(status: ImageBuildStatus = 'Idle', logTail: string | null = null, savingImageFlags: boolean = false) {
+  const mockSettings = createMockSettingsService(status, logTail, savingImageFlags);
 
   TestBed.configureTestingModule({
     imports: [ImageBuildBannerComponent],
@@ -86,7 +90,7 @@ describe('ImageBuildBannerComponent', () => {
     expect(imageBuildBar).toBeFalsy();
   });
 
-  it('should re-render when the status signal changes', () => {
+  it('should re-render from Idle to Building when the status signal changes', () => {
     // Arrange
     const { fixture, mockSettings } = setup('Idle');
     const el = fixture.nativeElement as HTMLElement;
@@ -98,13 +102,21 @@ describe('ImageBuildBannerComponent', () => {
 
     // Assert
     expect(el.querySelector('.system-banner__bar--building')).toBeTruthy();
+  });
 
-    // Act again — transition to Failed
+  it('should re-render from Building to Failed when the status signal changes', () => {
+    // Arrange
+    const { fixture, mockSettings } = setup('Building');
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.system-banner__bar--building')).toBeTruthy();
+
+    // Act
     mockSettings._statusSignal.set('Failed');
     fixture.detectChanges();
 
     // Assert
     expect(el.querySelector('.system-banner__bar--failed')).toBeTruthy();
+    expect(el.querySelector('.system-banner__bar--building')).toBeFalsy();
   });
 
   it('should not show log-tail span when log tail is null', () => {
@@ -141,14 +153,59 @@ describe('ImageBuildBannerComponent', () => {
     expect(buildingBar?.getAttribute('aria-live')).toBe('polite');
   });
 
-  it('should have role="alert" on the Failed bar', () => {
+  it('should have role="status" and aria-live="polite" on the Failed bar', () => {
     // Arrange / Act
     const { fixture } = setup('Failed', 'error');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const failedBar = el.querySelector('.system-banner__bar--failed') as HTMLElement;
-    expect(failedBar?.getAttribute('role')).toBe('alert');
+    expect(failedBar?.getAttribute('role')).toBe('status');
+    expect(failedBar?.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('should disable the Retry button and set aria-busy when savingImageFlags is true', () => {
+    // Arrange / Act
+    const { fixture } = setup('Failed', 'error log', true);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const retryBtn = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
+    expect(retryBtn.disabled).toBe(true);
+    expect(retryBtn.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('should enable the Retry button and unset aria-busy when savingImageFlags is false', () => {
+    // Arrange / Act
+    const { fixture } = setup('Failed', 'error log', false);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const retryBtn = el.querySelector('.system-banner__action-btn') as HTMLButtonElement;
+    expect(retryBtn.disabled).toBe(false);
+    expect(retryBtn.getAttribute('aria-busy')).toBeFalsy();
+  });
+
+  it('should have a screen-reader-only prefix before the log tail', () => {
+    // Arrange / Act
+    const { fixture } = setup('Failed', 'some error log');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const logTailSpan = el.querySelector('.system-banner__log-tail') as HTMLElement;
+    const hiddenPrefix = logTailSpan?.querySelector('.sr-only') as HTMLElement;
+    expect(hiddenPrefix).toBeTruthy();
+    expect(hiddenPrefix.textContent?.trim()).toBeTruthy();
+  });
+
+  it('should have aria-label "View image build details" on the View details link', () => {
+    // Arrange / Act
+    const { fixture } = setup('Failed', 'error');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('a.system-banner__details-link') as HTMLAnchorElement;
+    expect(link?.getAttribute('aria-label')).toBe('View image build details');
   });
 
   it('should call settingsService.retryImageBuild when Retry is clicked', () => {

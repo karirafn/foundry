@@ -52,8 +52,10 @@ export class SettingsService {
         (n) => n.category === IMAGE_BUILD_NOTIFICATION_CATEGORY
       );
       if (notification) {
-        const { status, logTail } = this._parseImageBuildMessage(notification.message);
-        this.setImageBuildStatus(status, logTail);
+        const parsed = this._parseImageBuildMessage(notification.message);
+        if (parsed) {
+          this.setImageBuildStatus(parsed.status, parsed.logTail);
+        }
       }
     });
 
@@ -424,14 +426,17 @@ export class SettingsService {
     this._imageBuildLogTailSignal.set(logTail);
   }
 
-  private _parseImageBuildMessage(message: string): { status: ImageBuildStatus; logTail: string | null } {
+  private _parseImageBuildMessage(message: string): { status: ImageBuildStatus; logTail: string | null } | null {
     const separatorIndex = message.indexOf(IMAGE_BUILD_MESSAGE_SEPARATOR);
     if (separatorIndex === -1) {
-      return { status: 'Idle', logTail: null };
+      return null;
     }
-    const status = message.slice(0, separatorIndex) as ImageBuildStatus;
+    const token = message.slice(0, separatorIndex);
+    if (token !== 'Idle' && token !== 'Building' && token !== 'Failed') {
+      return null;
+    }
     const logPart = message.slice(separatorIndex + 1);
-    return { status, logTail: logPart.length > 0 ? logPart : null };
+    return { status: token, logTail: logPart.length > 0 ? logPart : null };
   }
 
   private _mapToWorkerImageFlags(response: GlobalSettingsResponse): WorkerImageFlags {

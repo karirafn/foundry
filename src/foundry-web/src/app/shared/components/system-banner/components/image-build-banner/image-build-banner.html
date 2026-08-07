@@ -20,7 +20,7 @@
         <span class="system-banner__message">Worker image is building&hellip;</span>
       </div>
     } @else if (settingsService.imageBuildStatus() === 'Failed') {
-      <div class="system-banner__bar system-banner__bar--image-build system-banner__bar--failed" role="alert">
+      <div class="system-banner__bar system-banner__bar--image-build system-banner__bar--failed" role="status" aria-live="polite">
         <svg
           class="system-banner__icon"
           xmlns="http://www.w3.org/2000/svg"
@@ -40,12 +40,14 @@
         </svg>
         <span class="system-banner__message">Worker image build failed.</span>
         @if (settingsService.imageBuildLogTail()) {
-          <span class="system-banner__log-tail">{{ settingsService.imageBuildLogTail() | slice: -120 }}</span>
+          <span class="system-banner__log-tail"><span class="sr-only">Build log (partial): </span>{{ settingsService.imageBuildLogTail() | slice: -120 }}</span>
         }
-        <a routerLink="/settings/general" class="system-banner__details-link">View details</a>
+        <a routerLink="/settings/general" class="system-banner__details-link" aria-label="View image build details">View details</a>
         <button
           type="button"
           class="system-banner__action-btn"
+          [disabled]="settingsService.savingImageFlags()"
+          [attr.aria-busy]="settingsService.savingImageFlags() || null"
           (click)="retryImageBuild()"
         >
           Retry

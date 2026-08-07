@@ -1671,4 +1671,66 @@ describe('SettingsService — SignalR image-build funnel', () => {
     expect(service.imageBuildLogTail()).toBeNull();
     httpMock.verify();
   });
+
+  it('should leave imageBuildStatus and imageBuildLogTail unchanged when the notification has an unknown status token', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithNotifications();
+    service.setImageBuildStatus('Failed', 'previous error');
+    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Bogus|some log' };
+
+    // Act
+    mockSignalR._notificationsSignal.set([notification]);
+    TestBed.flushEffects();
+
+    // Assert — signals are NOT clobbered by the unknown token
+    expect(service.imageBuildStatus()).toBe('Failed');
+    expect(service.imageBuildLogTail()).toBe('previous error');
+    httpMock.verify();
+  });
+
+  it('should preserve a log tail containing pipe characters when parsing', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithNotifications();
+    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Building|Step 1|2 running' };
+
+    // Act
+    mockSignalR._notificationsSignal.set([notification]);
+    TestBed.flushEffects();
+
+    // Assert — status is from first segment; log tail is everything after the FIRST pipe
+    expect(service.imageBuildStatus()).toBe('Building');
+    expect(service.imageBuildLogTail()).toBe('Step 1|2 running');
+    httpMock.verify();
+  });
+
+  it('should NOT reset imageBuildStatus and imageBuildLogTail to Idle when notifications becomes empty', () => {
+    // Arrange — simulate hydrated Failed state
+    const { service, httpMock, mockSignalR } = setupWithNotifications();
+    service.setImageBuildStatus('Failed', 'boom');
+
+    // Act — notifications list becomes empty (no live SignalR notification present)
+    mockSignalR._notificationsSignal.set([]);
+    TestBed.flushEffects();
+
+    // Assert — hydrated state is preserved; effect must NOT reset to Idle
+    expect(service.imageBuildStatus()).toBe('Failed');
+    expect(service.imageBuildLogTail()).toBe('boom');
+    httpMock.verify();
+  });
+
+  it('should NOT reset imageBuildStatus and imageBuildLogTail when a non-image-build notification replaces the list', () => {
+    // Arrange — simulate hydrated Failed state
+    const { service, httpMock, mockSignalR } = setupWithNotifications();
+    service.setImageBuildStatus('Failed', 'boom');
+    const otherNotification: SystemNotification = { category: 'docker', isActive: true, message: 'docker down' };
+
+    // Act — only a non-image-build notification present
+    mockSignalR._notificationsSignal.set([otherNotification]);
+    TestBed.flushEffects();
+
+    // Assert — hydrated state is preserved
+    expect(service.imageBuildStatus()).toBe('Failed');
+    expect(service.imageBuildLogTail()).toBe('boom');
+    httpMock.verify();
+  });
 });
