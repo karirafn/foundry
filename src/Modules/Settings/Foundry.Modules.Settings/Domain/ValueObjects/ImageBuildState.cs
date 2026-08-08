@@ -8,5 +8,8 @@ public abstract record ImageBuildState
 
     public sealed record Building : ImageBuildState;
 
-    public sealed record Failed(string? ErrorTail) : ImageBuildState;
+    public sealed record Failed(
+        string? ErrorTail,
+        DateTimeOffset? NextRetryAt,
+        int Attempt) : ImageBuildState;
 }

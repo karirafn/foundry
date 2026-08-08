@@ -114,7 +114,7 @@ public sealed class ToSummary
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
         settings.BeginImageBuild();
-        settings.FailImageBuild("Something went wrong");
+        settings.FailImageBuild("Something went wrong", nextRetryAt: null, attempt: 0);
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
@@ -144,7 +144,7 @@ public sealed class ToSummary
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
         settings.BeginImageBuild();
-        settings.FailImageBuild("transient error");
+        settings.FailImageBuild("transient error", nextRetryAt: null, attempt: 0);
         settings.BeginImageBuild();
         settings.CompleteImageBuild();
 
@@ -193,7 +193,7 @@ public sealed class ToSummary
         settings.BeginImageBuild();
         settings.CompleteImageBuild();
         settings.BeginImageBuild();
-        settings.FailImageBuild("new error");
+        settings.FailImageBuild("new error", nextRetryAt: null, attempt: 0);
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);

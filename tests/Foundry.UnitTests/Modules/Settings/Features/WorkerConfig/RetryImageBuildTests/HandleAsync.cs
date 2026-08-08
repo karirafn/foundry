@@ -56,7 +56,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        settings.FailImageBuild("previous error");
+        settings.FailImageBuild("previous error", nextRetryAt: null, attempt: 0);
         await SeedSettingsAsync(settings);
 
         await using FoundryDbContext dbContext = CreateDbContext();
@@ -78,7 +78,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange — state transition to Building is owned by WorkerImageRebuildService, not this handler
         GlobalSettings settings = GlobalSettings.Create();
-        settings.FailImageBuild("previous error");
+        settings.FailImageBuild("previous error", nextRetryAt: null, attempt: 0);
         await SeedSettingsAsync(settings);
 
         await using FoundryDbContext dbContext = CreateDbContext();

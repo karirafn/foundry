@@ -37,7 +37,7 @@ public sealed class WhenStatusIsFailed : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.FailImageBuild("previous build error");
+        settings.FailImageBuild("previous build error", nextRetryAt: null, attempt: 0);
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }

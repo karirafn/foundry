@@ -254,7 +254,7 @@ internal sealed class WorkerImageRebuildService(
         }
         else
         {
-            settings.FailImageBuild(errorTail);
+            settings.FailImageBuild(errorTail, nextRetryAt: null, attempt: 0);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             logger.LogError(

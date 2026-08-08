@@ -28,7 +28,7 @@ public sealed class CompleteImageBuild
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        settings.FailImageBuild("some error");
+        settings.FailImageBuild("some error", nextRetryAt: null, attempt: 0);
 
         // Act
         settings.CompleteImageBuild();

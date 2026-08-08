@@ -62,7 +62,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         if (initiallyFailed)
         {
-            settings.FailImageBuild("previous error");
+            settings.FailImageBuild("previous error", nextRetryAt: null, attempt: 0);
         }
 
         db.Set<GlobalSettings>().Add(settings);

@@ -82,7 +82,7 @@ public sealed class GetImageBuildStatusAsync : IAsyncDisposable
         {
             GlobalSettings settings = GlobalSettings.Create();
             settings.BeginImageBuild();
-            settings.FailImageBuild("Build error output");
+            settings.FailImageBuild("Build error output", nextRetryAt: null, attempt: 0);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

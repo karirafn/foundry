@@ -130,7 +130,7 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.FailImageBuild("build error tail");
+        settings.FailImageBuild("build error tail", nextRetryAt: null, attempt: 0);
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
