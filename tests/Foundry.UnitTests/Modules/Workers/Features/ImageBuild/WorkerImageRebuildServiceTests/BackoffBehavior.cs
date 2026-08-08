@@ -54,17 +54,6 @@ public sealed class BackoffBehavior : IAsyncDisposable
         db.SaveChanges();
     }
 
-    private WorkerImageRebuildService BuildService(
-        IWorkerImageRebuildQueue queue,
-        ISystemNotificationBroadcaster? broadcaster = null,
-        TimeSpan? initialBackoff = null)
-        => BuildServiceCore(
-            queue,
-            broadcaster,
-            contentRootPath: string.Empty,
-            relativeContextPath: string.Empty,
-            initialBackoff: initialBackoff);
-
     private WorkerImageRebuildService BuildServiceWithFailingContextPath(
         IWorkerImageRebuildQueue queue,
         TimeSpan? initialBackoff = null)
@@ -122,32 +111,50 @@ public sealed class BackoffBehavior : IAsyncDisposable
     [Fact]
     public async Task WhenImmediateRebuildRequested_CancelsScheduledRetry()
     {
-        // Arrange — use a queue whose RequestImmediateRebuild raises the event synchronously
+        // Arrange — long backoff (500ms) so the delayed retry cannot fire before we supersede it.
+        // Use a non-existent context path so the build fails and a retry is scheduled.
         SeedGlobalSettings();
 
-        TrackingQueue queue = new();
-        WorkerImageRebuildService sut = BuildService(queue, initialBackoff: TimeSpan.FromMilliseconds(500));
+        // The broadcaster signals when the failure notification is sent, which means the
+        // service has finished processing and the pending retry CTS is in place.
+        using SignallingBroadcaster broadcaster = new();
+        using ControlledQueue queue = new();
+
+        WorkerImageRebuildService sut = BuildServiceCore(
+            queue,
+            broadcaster,
+            contentRootPath: "/tmp",
+            relativeContextPath: "nonexistent-path-for-test",
+            initialBackoff: TimeSpan.FromMilliseconds(500));
 
         using CancellationTokenSource cts = new();
         await sut.StartAsync(cts.Token);
 
-        // Queue first item — starts processing (GlobalSettings missing so it early-returns without error)
-        queue.RaiseTryEnqueue();
+        // Signal one rebuild — the build will fail and schedule a 500ms delayed retry.
+        queue.Enqueue();
 
-        // Wait briefly for the service to start processing
-        await Task.Delay(50, TestContext.Current.CancellationToken);
+        // Wait deterministically for the service to reach the failed state and set up the pending retry.
+        bool failureNotified = await broadcaster.WaitForFailureNotificationAsync(
+            TimeSpan.FromSeconds(5));
+        failureNotified.ShouldBeTrue("the service should have sent a failure notification");
 
-        // Immediately request rebuild — should cancel any pending retry
-        queue.RaiseImmediateRebuild();
+        // Capture the TryEnqueue count before the supersede. At this point, only the internal
+        // ScheduleDelayedRetryAsync is running; no TryEnqueue should have been called yet.
+        int countBeforeSupersede = queue.TryEnqueueCount;
 
-        // Wait and check that ImmediateRebuildRequested was raised
-        await Task.Delay(50, TestContext.Current.CancellationToken);
+        // Supersede the pending retry — this cancels the 500ms delayed re-enqueue
+        // and re-enqueues immediately (calling TryEnqueue once itself).
+        queue.RequestImmediateRebuild();
 
+        // Stop the service immediately so the second build cycle (triggered by RequestImmediateRebuild)
+        // does not start and cause its own delayed retry to fire.
         await cts.CancelAsync();
         await sut.StopAsync(CancellationToken.None);
 
-        // Assert — the event was raised
-        queue.ImmediateRebuildRaisedCount.ShouldBeGreaterThanOrEqualTo(1);
+        // Assert — TryEnqueue was called exactly once (by RequestImmediateRebuild itself),
+        // not by the cancelled delayed retry task.
+        queue.TryEnqueueCount.ShouldBe(countBeforeSupersede + 1,
+            "only the immediate re-enqueue from RequestImmediateRebuild should have fired");
     }
 
     [Fact]
@@ -156,7 +163,7 @@ public sealed class BackoffBehavior : IAsyncDisposable
         // Arrange — tiny backoff so the delay fires almost immediately
         SeedGlobalSettings();
 
-        ControlledQueue queue = new();
+        using ControlledQueue queue = new();
         // Use a non-existent context path so the build fails (TarFile throws DirectoryNotFoundException)
         WorkerImageRebuildService sut = BuildServiceWithFailingContextPath(
             queue,
@@ -168,68 +175,21 @@ public sealed class BackoffBehavior : IAsyncDisposable
         // Signal one rebuild
         queue.Enqueue();
 
-        // Wait long enough for the delayed retry to fire (5ms delay + processing time)
-        await Task.Delay(300, TestContext.Current.CancellationToken);
+        // Wait deterministically for the delayed retry to fire (5ms backoff).
+        bool retryFired = await queue.WaitForTryEnqueueAsync(TimeSpan.FromSeconds(5));
 
         await cts.CancelAsync();
         await sut.StopAsync(CancellationToken.None);
 
-        // Assert — TryEnqueue was called at least once (the delayed retry fired after the failure)
-        queue.TryEnqueueCount.ShouldBeGreaterThanOrEqualTo(1);
+        // Assert — TryEnqueue was called once (the delayed retry fired after the failure)
+        retryFired.ShouldBeTrue("the delayed retry should have re-enqueued a rebuild after the backoff elapsed");
     }
 
     // -------------------------------------------------------------------------
     // Test doubles
     // -------------------------------------------------------------------------
 
-    private sealed class TrackingQueue : IWorkerImageRebuildQueue
-    {
-        private readonly System.Threading.Channels.Channel<bool> _channel =
-            System.Threading.Channels.Channel.CreateBounded<bool>(
-                new System.Threading.Channels.BoundedChannelOptions(capacity: 5)
-                {
-                    FullMode = System.Threading.Channels.BoundedChannelFullMode.DropWrite,
-                });
-
-        public int ImmediateRebuildRaisedCount { get; private set; }
-
-        public event Action? ImmediateRebuildRequested;
-
-        public void RaiseImmediateRebuild()
-        {
-            ImmediateRebuildRaisedCount++;
-            ImmediateRebuildRequested?.Invoke();
-            _channel.Writer.TryWrite(true);
-        }
-
-        public void RaiseTryEnqueue()
-        {
-            _channel.Writer.TryWrite(true);
-        }
-
-        public void RequestImmediateRebuild()
-        {
-            ImmediateRebuildRaisedCount++;
-            ImmediateRebuildRequested?.Invoke();
-            TryEnqueue();
-        }
-
-        public bool TryEnqueue()
-        {
-            return _channel.Writer.TryWrite(true);
-        }
-
-        public async IAsyncEnumerable<bool> ReadAllAsync(
-            [EnumeratorCancellation] CancellationToken cancellationToken)
-        {
-            await foreach (bool signal in _channel.Reader.ReadAllAsync(cancellationToken))
-            {
-                yield return signal;
-            }
-        }
-    }
-
-    private sealed class ControlledQueue : IWorkerImageRebuildQueue
+    private sealed class ControlledQueue : IWorkerImageRebuildQueue, IDisposable
     {
         private readonly System.Threading.Channels.Channel<bool> _channel =
             System.Threading.Channels.Channel.CreateBounded<bool>(
@@ -238,9 +198,14 @@ public sealed class BackoffBehavior : IAsyncDisposable
                     FullMode = System.Threading.Channels.BoundedChannelFullMode.DropWrite,
                 });
 
+        // Released once inside TryEnqueue so waiters are unblocked deterministically.
+        private readonly SemaphoreSlim _tryEnqueueSignal = new(initialCount: 0, maxCount: int.MaxValue);
+
         public int TryEnqueueCount { get; private set; }
 
         public event Action? ImmediateRebuildRequested;
+
+        public void Dispose() => _tryEnqueueSignal.Dispose();
 
         public void Enqueue()
         {
@@ -256,8 +221,16 @@ public sealed class BackoffBehavior : IAsyncDisposable
         public bool TryEnqueue()
         {
             TryEnqueueCount++;
+            _tryEnqueueSignal.Release();
             return _channel.Writer.TryWrite(true);
         }
+
+        /// <summary>
+        /// Waits deterministically until <see cref="TryEnqueue"/> is called or the timeout elapses.
+        /// Returns <c>true</c> if <see cref="TryEnqueue"/> fired within the timeout; <c>false</c> otherwise.
+        /// </summary>
+        public Task<bool> WaitForTryEnqueueAsync(TimeSpan timeout)
+            => _tryEnqueueSignal.WaitAsync(timeout);
 
         public async IAsyncEnumerable<bool> ReadAllAsync(
             [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -309,6 +282,37 @@ public sealed class BackoffBehavior : IAsyncDisposable
     {
         public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// A broadcaster that signals a gate when a failure notification is sent, enabling tests to wait
+    /// deterministically until the service has recorded the failure and set up the pending retry CTS.
+    /// </summary>
+    private sealed class SignallingBroadcaster : ISystemNotificationBroadcaster, IDisposable
+    {
+        private const string FailedStatus = WorkerImageRebuildService.FailedStatus;
+
+        // Released when a notification carrying "Failed" status arrives.
+        private readonly SemaphoreSlim _failureSignal = new(initialCount: 0, maxCount: 1);
+
+        public void Dispose() => _failureSignal.Dispose();
+
+        public Task<bool> WaitForFailureNotificationAsync(TimeSpan timeout)
+            => _failureSignal.WaitAsync(timeout);
+
+        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+        {
+            if (notification.Message.Contains(FailedStatus, StringComparison.Ordinal))
+            {
+                // Release idempotently — the service sends only one failure notification per build attempt.
+                if (_failureSignal.CurrentCount == 0)
+                {
+                    _failureSignal.Release();
+                }
+            }
+
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StubHostEnvironment(string contentRootPath) : IHostEnvironment
