@@ -15,9 +15,11 @@ internal static class GlobalSettingsMapper
             _ => Contracts.ImageBuildStatus.Idle,
         };
 
-        string? lastError = settings.ImageBuildState is ImageBuildState.Failed failed
-            ? failed.ErrorTail
-            : null;
+        ImageBuildState.Failed? failedState = settings.ImageBuildState as ImageBuildState.Failed;
+
+        string? lastError = failedState?.ErrorTail;
+        DateTimeOffset? nextRetryAt = failedState?.NextRetryAt;
+        int attempt = failedState?.Attempt ?? 0;
 
         return new GlobalSettingsSummary(
             settings.MaxConcurrent,
@@ -36,6 +38,8 @@ internal static class GlobalSettingsMapper
             settings.WorkerImageConfiguration.InstallDocker,
             status,
             lastError,
-            settings.LastImageBuiltAt is not null);
+            settings.LastImageBuiltAt is not null,
+            nextRetryAt,
+            attempt);
     }
 }

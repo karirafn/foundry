@@ -17,4 +17,6 @@ public sealed record GlobalSettingsSummary(
     bool InstallDocker,
     ImageBuildStatus ImageBuildStatus,
     string? LastImageBuildError,
-    bool HasUsableImage);
+    bool HasUsableImage,
+    DateTimeOffset? NextRetryAt,
+    int Attempt);

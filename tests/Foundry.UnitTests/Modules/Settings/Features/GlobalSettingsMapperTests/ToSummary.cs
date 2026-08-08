@@ -201,4 +201,89 @@ public sealed class ToSummary
         // Assert
         result.HasUsableImage.ShouldBeTrue();
     }
+
+    [Fact]
+    public void WhenBuildFailedWithNextRetryAt_SummaryExposesNextRetryAt()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.BeginImageBuild();
+        DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow.AddSeconds(30);
+        settings.FailImageBuild("error", nextRetryAt, attempt: 1);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.NextRetryAt.ShouldBe(nextRetryAt);
+    }
+
+    [Fact]
+    public void WhenBuildFailedWithAttempt_SummaryExposesAttempt()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.BeginImageBuild();
+        settings.FailImageBuild("error", nextRetryAt: null, attempt: 3);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.Attempt.ShouldBe(3);
+    }
+
+    [Fact]
+    public void WhenStatusIsIdle_NextRetryAtIsNull()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.NextRetryAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenStatusIsIdle_AttemptIsZero()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.Attempt.ShouldBe(0);
+    }
+
+    [Fact]
+    public void WhenStatusIsBuilding_NextRetryAtIsNull()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.BeginImageBuild();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.NextRetryAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenStatusIsBuilding_AttemptIsZero()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.BeginImageBuild();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.Attempt.ShouldBe(0);
+    }
 }
