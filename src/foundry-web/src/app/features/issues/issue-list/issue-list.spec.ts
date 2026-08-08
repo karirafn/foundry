@@ -54,6 +54,8 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
   hasUsableImage: false,
+  nextRetryAt: null,
+  attempt: 0,
 };
 
 const mockCredentialsResponse = {

@@ -1627,10 +1627,14 @@ describe('SettingsService — SignalR image-build funnel', () => {
     };
   }
 
-  it('should update imageBuildStatus and imageBuildLogTail when an image-build notification arrives with a non-empty log part', () => {
+  it('should update imageBuildStatus and imageBuildLogTail when an image-build JSON notification arrives with a non-empty logTail', () => {
     // Arrange
     const { service, httpMock, mockSignalR } = setupWithNotifications();
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|Step 2/5 FAILED' };
+    const notification: SystemNotification = {
+      category: 'image-build',
+      isActive: true,
+      message: JSON.stringify({ status: 'Failed', logTail: 'Step 2/5 FAILED', nextRetryAt: null, attempt: 0 }),
+    };
 
     // Act
     mockSignalR._notificationsSignal.set([notification]);
@@ -1642,10 +1646,14 @@ describe('SettingsService — SignalR image-build funnel', () => {
     httpMock.verify();
   });
 
-  it('should set imageBuildLogTail to null when the log part after the separator is empty', () => {
+  it('should set imageBuildLogTail to null when the JSON notification logTail is null', () => {
     // Arrange
     const { service, httpMock, mockSignalR } = setupWithNotifications();
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Failed|' };
+    const notification: SystemNotification = {
+      category: 'image-build',
+      isActive: true,
+      message: JSON.stringify({ status: 'Failed', logTail: null, nextRetryAt: null, attempt: 0 }),
+    };
 
     // Act
     mockSignalR._notificationsSignal.set([notification]);
@@ -1672,11 +1680,15 @@ describe('SettingsService — SignalR image-build funnel', () => {
     httpMock.verify();
   });
 
-  it('should leave imageBuildStatus and imageBuildLogTail unchanged when the notification has an unknown status token', () => {
+  it('should leave image-build signals unchanged when the JSON notification has an unknown status token', () => {
     // Arrange
     const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'previous error');
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Bogus|some log' };
+    service.setImageBuildStatus('Failed', 'previous error', null, 0);
+    const notification: SystemNotification = {
+      category: 'image-build',
+      isActive: true,
+      message: JSON.stringify({ status: 'Bogus', logTail: 'some log', nextRetryAt: null, attempt: 0 }),
+    };
 
     // Act
     mockSignalR._notificationsSignal.set([notification]);
@@ -1688,25 +1700,10 @@ describe('SettingsService — SignalR image-build funnel', () => {
     httpMock.verify();
   });
 
-  it('should preserve a log tail containing pipe characters when parsing', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    const notification: SystemNotification = { category: 'image-build', isActive: true, message: 'Building|Step 1|2 running' };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert — status is from first segment; log tail is everything after the FIRST pipe
-    expect(service.imageBuildStatus()).toBe('Building');
-    expect(service.imageBuildLogTail()).toBe('Step 1|2 running');
-    httpMock.verify();
-  });
-
   it('should NOT reset imageBuildStatus and imageBuildLogTail to Idle when notifications becomes empty', () => {
     // Arrange — simulate hydrated Failed state
     const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'boom');
+    service.setImageBuildStatus('Failed', 'boom', null, 0);
 
     // Act — notifications list becomes empty (no live SignalR notification present)
     mockSignalR._notificationsSignal.set([]);
@@ -1721,7 +1718,7 @@ describe('SettingsService — SignalR image-build funnel', () => {
   it('should NOT reset imageBuildStatus and imageBuildLogTail when a non-image-build notification replaces the list', () => {
     // Arrange — simulate hydrated Failed state
     const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'boom');
+    service.setImageBuildStatus('Failed', 'boom', null, 0);
     const otherNotification: SystemNotification = { category: 'docker', isActive: true, message: 'docker down' };
 
     // Act — only a non-image-build notification present
@@ -1731,6 +1728,208 @@ describe('SettingsService — SignalR image-build funnel', () => {
     // Assert — hydrated state is preserved
     expect(service.imageBuildStatus()).toBe('Failed');
     expect(service.imageBuildLogTail()).toBe('boom');
+    httpMock.verify();
+  });
+
+  it('should leave image-build signals unchanged when the notification message is malformed JSON', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithNotifications();
+    service.setImageBuildStatus('Failed', 'previous error', null, 2);
+    const notification: SystemNotification = {
+      category: 'image-build',
+      isActive: true,
+      message: 'not-valid-json',
+    };
+
+    // Act
+    mockSignalR._notificationsSignal.set([notification]);
+    TestBed.flushEffects();
+
+    // Assert — signals are NOT clobbered by malformed payload
+    expect(service.imageBuildStatus()).toBe('Failed');
+    expect(service.imageBuildLogTail()).toBe('previous error');
+    httpMock.verify();
+  });
+
+  it('should populate imageBuildNextRetryAt and imageBuildAttempt from the JSON notification when status is Failed', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithNotifications();
+    const notification: SystemNotification = {
+      category: 'image-build',
+      isActive: true,
+      message: JSON.stringify({ status: 'Failed', logTail: 'err', nextRetryAt: '2026-08-08T12:30:00Z', attempt: 3 }),
+    };
+
+    // Act
+    mockSignalR._notificationsSignal.set([notification]);
+    TestBed.flushEffects();
+
+    // Assert
+    expect(service.imageBuildNextRetryAt()).toBe('2026-08-08T12:30:00Z');
+    expect(service.imageBuildAttempt()).toBe(3);
+    httpMock.verify();
+  });
+
+  it('should clear imageBuildNextRetryAt to null when status is Building', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithNotifications();
+    service.setImageBuildStatus('Failed', 'err', '2026-08-08T12:30:00Z', 2);
+
+    const notification: SystemNotification = {
+      category: 'image-build',
+      isActive: true,
+      message: JSON.stringify({ status: 'Building', logTail: null, nextRetryAt: null, attempt: 0 }),
+    };
+
+    // Act
+    mockSignalR._notificationsSignal.set([notification]);
+    TestBed.flushEffects();
+
+    // Assert — nextRetryAt forced to null for Building
+    expect(service.imageBuildNextRetryAt()).toBeNull();
+    httpMock.verify();
+  });
+
+  it('should clear imageBuildNextRetryAt to null when status is Idle', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithNotifications();
+    service.setImageBuildStatus('Failed', 'err', '2026-08-08T12:30:00Z', 2);
+
+    const notification: SystemNotification = {
+      category: 'image-build',
+      isActive: true,
+      message: JSON.stringify({ status: 'Idle', logTail: null, nextRetryAt: null, attempt: 0 }),
+    };
+
+    // Act
+    mockSignalR._notificationsSignal.set([notification]);
+    TestBed.flushEffects();
+
+    // Assert — nextRetryAt forced to null for Idle
+    expect(service.imageBuildNextRetryAt()).toBeNull();
+    httpMock.verify();
+  });
+});
+
+describe('SettingsService — retry fields', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  function setup() {
+    const mockSignalR = createMockSignalRService();
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsService,
+        DispatchService,
+        { provide: SystemSignalRService, useValue: mockSignalR },
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
+    });
+    return {
+      service: TestBed.inject(SettingsService),
+      httpMock: TestBed.inject(HttpTestingController),
+    };
+  }
+
+  function buildSettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      systemPromptTemplate: null,
+      workerPromptTemplate: null,
+      usageLimitResetsAt: null,
+      isDispatchPaused: false,
+      autoResumeOnUsageReset: true,
+      defaultCooldownMinutes: 60,
+      installDotnet: false,
+      installAngular: false,
+      installGlab: false,
+      installGh: false,
+      installChromium: false,
+      installDocker: false,
+      imageBuildStatus: 'Idle',
+      lastImageBuildError: null,
+      hasUsableImage: false,
+      nextRetryAt: null,
+      attempt: 0,
+      ...overrides,
+    };
+  }
+
+  function buildCredentials(): Record<string, unknown> {
+    return {
+      accountId: '00000000-0000-0000-0000-000000000001',
+      authMode: 'ApiKey',
+      oAuthStatus: 'NotConfigured',
+      subscriptionType: null,
+      oAuthAccountEmail: null,
+      oAuthAccountOrgName: null,
+    };
+  }
+
+  it('should start with null imageBuildNextRetryAt and 0 imageBuildAttempt', () => {
+    // Arrange / Act
+    const { service, httpMock } = setup();
+
+    // Assert
+    expect(service.imageBuildNextRetryAt()).toBeNull();
+    expect(service.imageBuildAttempt()).toBe(0);
+    httpMock.verify();
+  });
+
+  it('should populate imageBuildNextRetryAt and imageBuildAttempt from loadSettings response', () => {
+    // Arrange
+    const { service, httpMock } = setup();
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettings({ imageBuildStatus: 'Failed', nextRetryAt: '2026-08-08T12:00:00Z', attempt: 2 }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+
+    // Assert
+    expect(service.imageBuildNextRetryAt()).toBe('2026-08-08T12:00:00Z');
+    expect(service.imageBuildAttempt()).toBe(2);
+    httpMock.verify();
+  });
+
+  it('should populate imageBuildNextRetryAt and imageBuildAttempt from updateWorkerImageFlags response', () => {
+    // Arrange
+    const { service, httpMock } = setup();
+
+    // Act
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    httpMock.expectOne('/api/settings/worker-image').flush(buildSettings({ imageBuildStatus: 'Failed', nextRetryAt: '2026-08-08T14:00:00Z', attempt: 1 }));
+
+    // Assert
+    expect(service.imageBuildNextRetryAt()).toBe('2026-08-08T14:00:00Z');
+    expect(service.imageBuildAttempt()).toBe(1);
+    httpMock.verify();
+  });
+
+  it('should populate imageBuildNextRetryAt and imageBuildAttempt from retryImageBuild response', () => {
+    // Arrange
+    const { service, httpMock } = setup();
+
+    // Act
+    service.retryImageBuild();
+    httpMock.expectOne('/api/settings/worker-image/retry').flush(buildSettings({ imageBuildStatus: 'Building', nextRetryAt: null, attempt: 0 }));
+
+    // Assert — Building clears nextRetryAt
+    expect(service.imageBuildNextRetryAt()).toBeNull();
+    expect(service.imageBuildAttempt()).toBe(0);
+    httpMock.verify();
+  });
+
+  it('should clear imageBuildNextRetryAt when setImageBuildStatus is called with Building', () => {
+    // Arrange
+    const { service, httpMock } = setup();
+    service.setImageBuildStatus('Failed', 'err', '2026-08-08T12:00:00Z', 3);
+
+    // Act
+    service.setImageBuildStatus('Building', null, null, 0);
+
+    // Assert
+    expect(service.imageBuildNextRetryAt()).toBeNull();
     httpMock.verify();
   });
 });
