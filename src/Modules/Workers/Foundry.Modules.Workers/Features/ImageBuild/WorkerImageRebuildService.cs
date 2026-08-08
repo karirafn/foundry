@@ -63,7 +63,7 @@ internal sealed class WorkerImageRebuildService(
             return;
         }
 
-        rebuildQueue.TryEnqueue();
+        rebuildQueue.RequestImmediateRebuild();
     }
 
     public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;

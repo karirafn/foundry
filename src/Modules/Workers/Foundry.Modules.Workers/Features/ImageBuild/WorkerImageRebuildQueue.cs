@@ -13,6 +13,17 @@ internal sealed class WorkerImageRebuildQueue : IWorkerImageRebuildQueue
             SingleWriter = false,
         });
 
+    public event Action? ImmediateRebuildRequested;
+
+    public void RequestImmediateRebuild()
+    {
+        // Raise the event before enqueuing so subscribers can cancel pending delayed retries
+        // before the new signal enters the channel.
+        // The event is raised outside any lock — see csharp rules on events-inside-locks.
+        ImmediateRebuildRequested?.Invoke();
+        TryEnqueue();
+    }
+
     public bool TryEnqueue()
     {
         // DropWrite silently drops the item when full but still returns true from TryWrite.

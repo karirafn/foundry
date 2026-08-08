@@ -1281,6 +1281,14 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
     private sealed class NullWorkerImageRebuildQueue : IWorkerImageRebuildQueue
     {
+        public event Action? ImmediateRebuildRequested;
+
+        public void RequestImmediateRebuild()
+        {
+            ImmediateRebuildRequested?.Invoke();
+            TryEnqueue();
+        }
+
         public bool TryEnqueue() => false;
 
         public async IAsyncEnumerable<bool> ReadAllAsync(

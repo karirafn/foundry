@@ -166,6 +166,14 @@ public sealed class ExecuteAsync : IAsyncDisposable
     {
         public SemaphoreSlim Completed { get; } = new(0, 1);
 
+        public event Action? ImmediateRebuildRequested;
+
+        public void RequestImmediateRebuild()
+        {
+            ImmediateRebuildRequested?.Invoke();
+            TryEnqueue();
+        }
+
         public bool TryEnqueue() => false;
 
         public async IAsyncEnumerable<bool> ReadAllAsync(
@@ -183,6 +191,14 @@ public sealed class ExecuteAsync : IAsyncDisposable
     /// </summary>
     private sealed class BlockingQueue : IWorkerImageRebuildQueue
     {
+        public event Action? ImmediateRebuildRequested;
+
+        public void RequestImmediateRebuild()
+        {
+            ImmediateRebuildRequested?.Invoke();
+            TryEnqueue();
+        }
+
         public bool TryEnqueue() => false;
 
         public async IAsyncEnumerable<bool> ReadAllAsync(
