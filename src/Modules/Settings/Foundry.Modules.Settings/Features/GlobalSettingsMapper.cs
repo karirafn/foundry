@@ -8,14 +8,15 @@ internal static class GlobalSettingsMapper
 {
     internal static GlobalSettingsSummary ToSummary(GlobalSettings settings)
     {
+        // Capture the failed state once; derive both status and failure fields from a single pattern.
+        ImageBuildState.Failed? failedState = settings.ImageBuildState as ImageBuildState.Failed;
+
         Contracts.ImageBuildStatus status = settings.ImageBuildState switch
         {
             ImageBuildState.Building => Contracts.ImageBuildStatus.Building,
-            ImageBuildState.Failed => Contracts.ImageBuildStatus.Failed,
+            _ when failedState is not null => Contracts.ImageBuildStatus.Failed,
             _ => Contracts.ImageBuildStatus.Idle,
         };
-
-        ImageBuildState.Failed? failedState = settings.ImageBuildState as ImageBuildState.Failed;
 
         string? lastError = failedState?.ErrorTail;
         DateTimeOffset? nextRetryAt = failedState?.NextRetryAt;

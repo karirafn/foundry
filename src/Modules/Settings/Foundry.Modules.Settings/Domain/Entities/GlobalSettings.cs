@@ -51,7 +51,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
 
-    public ImageBuildState ImageBuildState { get; private set; } = null!;
+    internal ImageBuildState ImageBuildState { get; private set; } = null!;
 
     public DateTimeOffset? LastImageBuiltAt { get; private set; }
 

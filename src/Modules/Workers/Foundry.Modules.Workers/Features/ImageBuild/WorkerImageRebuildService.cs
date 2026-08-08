@@ -46,17 +46,9 @@ internal sealed class WorkerImageRebuildService(
     private int _attempt;
     private CancellationTokenSource? _pendingRetryCts;
 
-    private bool _eventSubscribed;
-
     private void SubscribeToImmediateRebuild()
     {
-        if (_eventSubscribed)
-        {
-            return;
-        }
-
         rebuildQueue.ImmediateRebuildRequested += OnImmediateRebuildRequested;
-        _eventSubscribed = true;
     }
 
     private void OnImmediateRebuildRequested()
@@ -131,8 +123,7 @@ internal sealed class WorkerImageRebuildService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        SubscribeToImmediateRebuild();
-
+        // StartingAsync already subscribed; no second call needed here.
         await foreach (bool _ in rebuildQueue.ReadAllAsync(stoppingToken))
         {
             try
@@ -221,6 +212,7 @@ internal sealed class WorkerImageRebuildService(
 
             if (baseProgress.HasError)
             {
+                // LastError is already redacted and capped by BuildProgress.Report().
                 errorTail = TruncateTail(baseProgress.LastError);
             }
             else
@@ -252,6 +244,7 @@ internal sealed class WorkerImageRebuildService(
 
                 if (workerProgress.HasError)
                 {
+                    // LastError is already redacted and capped by BuildProgress.Report().
                     errorTail = TruncateTail(workerProgress.LastError);
                 }
                 else
@@ -285,6 +278,7 @@ internal sealed class WorkerImageRebuildService(
 
                     if (loginProgress.HasError)
                     {
+                        // LastError is already redacted and capped by BuildProgress.Report().
                         errorTail = TruncateTail(loginProgress.LastError);
                     }
                 }
@@ -304,7 +298,14 @@ internal sealed class WorkerImageRebuildService(
 
         if (errorTail is null)
         {
-            CancellationTokenSource? oldCts = SwapPendingRetryCts(replacement: null, resetAttempt: true);
+            CancellationTokenSource? oldCts;
+            lock (_stateLock)
+            {
+                _attempt = 0;
+                oldCts = _pendingRetryCts;
+                _pendingRetryCts = null;
+            }
+
             await CancelAndDisposeAsync(oldCts);
 
             settings.CompleteImageBuild();
@@ -319,17 +320,25 @@ internal sealed class WorkerImageRebuildService(
         else
         {
             CancellationTokenSource retryCts = new();
-            CancellationTokenSource? oldCts = SwapPendingRetryCts(retryCts, resetAttempt: false);
-            await CancelAndDisposeAsync(oldCts);
 
+            // Atomically swap the pending retry CTS and increment the attempt counter
+            // so OnImmediateRebuildRequested cannot interleave between the two operations,
+            // which would otherwise orphan the just-swapped CTS or corrupt the attempt count.
+            CancellationTokenSource? oldCts;
             int attempt;
-            DateTimeOffset nextRetryAt;
+            TimeSpan backoff;
             lock (_stateLock)
             {
+                oldCts = _pendingRetryCts;
+                _pendingRetryCts = retryCts;
                 _attempt++;
                 attempt = _attempt;
-                nextRetryAt = DateTimeOffset.UtcNow + ComputeBackoff(attempt);
+                backoff = ComputeBackoff(attempt);
             }
+
+            await CancelAndDisposeAsync(oldCts);
+
+            DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow + backoff;
 
             settings.FailImageBuild(errorTail, nextRetryAt, attempt);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -350,23 +359,8 @@ internal sealed class WorkerImageRebuildService(
             // can cancel the wait. The linked CTS created inside ScheduleDelayedRetryAsync is
             // disposed within the task itself after the delay completes or is cancelled.
 #pragma warning disable CA2025 // The linked CancellationTokenSource is owned and disposed by ScheduleDelayedRetryAsync; the task disposes it internally before returning.
-            _ = ScheduleDelayedRetryAsync(nextRetryAt - DateTimeOffset.UtcNow, retryCts, cancellationToken);
+            _ = ScheduleDelayedRetryAsync(backoff, retryCts, cancellationToken);
 #pragma warning restore CA2025
-        }
-    }
-
-    private CancellationTokenSource? SwapPendingRetryCts(CancellationTokenSource? replacement, bool resetAttempt)
-    {
-        lock (_stateLock)
-        {
-            if (resetAttempt)
-            {
-                _attempt = 0;
-            }
-
-            CancellationTokenSource? old = _pendingRetryCts;
-            _pendingRetryCts = replacement;
-            return old;
         }
     }
 
@@ -448,8 +442,14 @@ internal sealed class WorkerImageRebuildService(
             if (message.Error is not null)
             {
                 HasError = true;
-                LastError = message.Error.Message;
-                logger.LogError("Docker build error: {Error}", message.Error.Message);
+                // Redact and cap at collection time so neither the log nor the caller
+                // can observe raw secret-shaped content from Docker build-arg/env errors.
+                string raw = message.Error.Message ?? string.Empty;
+                string redacted = SecretRedactor.Redact(raw);
+                LastError = redacted.Length > LogTailLines * 120
+                    ? redacted[^(LogTailLines * 120)..]
+                    : redacted;
+                logger.LogError("Docker build error: {Error}", LastError);
                 return;
             }
 

@@ -159,4 +159,33 @@ public sealed class RoundTrip
         // Assert
         result.ShouldBeOfType<ImageBuildState.Building>();
     }
+
+    [Fact]
+    public void WhenFailedStateWithOversizedAttempt_ClampsToMaxAttempt()
+    {
+        // Arrange — a tampered or corrupted persisted row with an unreasonably large attempt value
+        const string tamperedJson = """{"type":"failed","error_tail":"err","attempt":99999}""";
+
+        // Act
+        ImageBuildState result = JsonSerializer.Deserialize<ImageBuildState>(tamperedJson, Options)!;
+
+        // Assert — attempt is clamped to a sane maximum; the exact max is an implementation detail
+        // but must be much less than 99999 to prevent overflow in backoff computation
+        ImageBuildState.Failed failed = result.ShouldBeOfType<ImageBuildState.Failed>();
+        failed.Attempt.ShouldBeLessThan(1000);
+    }
+
+    [Fact]
+    public void WhenFailedStateWithNegativeAttempt_ClampsToZero()
+    {
+        // Arrange — negative attempt is not meaningful; clamp to 0
+        const string tamperedJson = """{"type":"failed","error_tail":"err","attempt":-5}""";
+
+        // Act
+        ImageBuildState result = JsonSerializer.Deserialize<ImageBuildState>(tamperedJson, Options)!;
+
+        // Assert
+        ImageBuildState.Failed failed = result.ShouldBeOfType<ImageBuildState.Failed>();
+        failed.Attempt.ShouldBe(0);
+    }
 }

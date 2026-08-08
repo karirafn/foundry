@@ -15,6 +15,10 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
     private const string BuildingType = "building";
     private const string FailedType = "failed";
 
+    // Clamp deserialized attempt values to prevent overflow in exponential backoff computation.
+    // Beyond this point the backoff is always at maximum, so higher values add no information.
+    private const int MaxAttempt = 100;
+
     public override ImageBuildState Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
@@ -84,9 +88,12 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
             ? retryEl.GetDateTimeOffset()
             : null;
 
-        int attempt = root.TryGetProperty(AttemptProperty, out JsonElement attemptEl)
+        int rawAttempt = root.TryGetProperty(AttemptProperty, out JsonElement attemptEl)
             ? attemptEl.GetInt32()
             : 0;
+
+        // Clamp defensively: a tampered or corrupted row must not cause overflow in backoff computation.
+        int attempt = Math.Clamp(rawAttempt, 0, MaxAttempt);
 
         return new ImageBuildState.Failed(errorTail, nextRetryAt, attempt);
     }
