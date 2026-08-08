@@ -9,9 +9,15 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
 {
     private const string TypeProperty = "type";
     private const string ErrorTailProperty = "error_tail";
+    private const string NextRetryAtProperty = "next_retry_at";
+    private const string AttemptProperty = "attempt";
     private const string IdleType = "idle";
     private const string BuildingType = "building";
     private const string FailedType = "failed";
+
+    // Clamp deserialized attempt values to prevent overflow in exponential backoff computation.
+    // Beyond this point the backoff is always at maximum, so higher values add no information.
+    private const int MaxAttempt = 100;
 
     public override ImageBuildState Read(
         ref Utf8JsonReader reader,
@@ -53,6 +59,15 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
             case ImageBuildState.Failed failed:
                 writer.WriteString(TypeProperty, FailedType);
                 writer.WriteString(ErrorTailProperty, failed.ErrorTail);
+                if (failed.NextRetryAt is DateTimeOffset nextRetryAt)
+                {
+                    writer.WriteString(NextRetryAtProperty, nextRetryAt);
+                }
+                else
+                {
+                    writer.WriteNull(NextRetryAtProperty);
+                }
+                writer.WriteNumber(AttemptProperty, failed.Attempt);
                 break;
 
             default:
@@ -64,9 +79,22 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
 
     private static ImageBuildState.Failed ReadFailed(JsonElement root)
     {
-        string? errorTail = root.TryGetProperty(ErrorTailProperty, out JsonElement el)
-            ? el.GetString()
+        string? errorTail = root.TryGetProperty(ErrorTailProperty, out JsonElement errorEl)
+            ? errorEl.GetString()
             : null;
-        return new ImageBuildState.Failed(errorTail);
+
+        DateTimeOffset? nextRetryAt = root.TryGetProperty(NextRetryAtProperty, out JsonElement retryEl)
+            && retryEl.ValueKind != JsonValueKind.Null
+            ? retryEl.GetDateTimeOffset()
+            : null;
+
+        int rawAttempt = root.TryGetProperty(AttemptProperty, out JsonElement attemptEl)
+            ? attemptEl.GetInt32()
+            : 0;
+
+        // Clamp defensively: a tampered or corrupted row must not cause overflow in backoff computation.
+        int attempt = Math.Clamp(rawAttempt, 0, MaxAttempt);
+
+        return new ImageBuildState.Failed(errorTail, nextRetryAt, attempt);
     }
 }

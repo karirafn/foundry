@@ -17,7 +17,7 @@ public sealed class FailImageBuild
         settings.BeginImageBuild();
 
         // Act
-        settings.FailImageBuild("error log tail");
+        settings.FailImageBuild("error log tail", nextRetryAt: null, attempt: 0);
 
         // Assert
         settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
@@ -32,7 +32,7 @@ public sealed class FailImageBuild
         const string errorTail = "Step 5/10 : RUN apt-get install dotnet\nERROR: package not found";
 
         // Act
-        settings.FailImageBuild(errorTail);
+        settings.FailImageBuild(errorTail, nextRetryAt: null, attempt: 0);
 
         // Assert
         ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
@@ -47,7 +47,7 @@ public sealed class FailImageBuild
         settings.BeginImageBuild();
 
         // Act
-        settings.FailImageBuild(null);
+        settings.FailImageBuild(null, nextRetryAt: null, attempt: 0);
 
         // Assert
         ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
@@ -63,7 +63,7 @@ public sealed class FailImageBuild
         DateTimeOffset before = settings.UpdatedAt;
 
         // Act
-        settings.FailImageBuild("error");
+        settings.FailImageBuild("error", nextRetryAt: null, attempt: 0);
 
         // Assert
         settings.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
@@ -80,9 +80,40 @@ public sealed class FailImageBuild
 
         // Act
         settings.BeginImageBuild();
-        settings.FailImageBuild("error after prior success");
+        settings.FailImageBuild("error after prior success", nextRetryAt: null, attempt: 0);
 
         // Assert
         settings.LastImageBuiltAt.ShouldBe(lastBuiltAt);
+    }
+
+    [Fact]
+    public void WhenCalledWithNextRetryAt_StoresNextRetryAtOnFailedState()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow.AddSeconds(30);
+
+        // Act
+        settings.FailImageBuild("error", nextRetryAt, attempt: 1);
+
+        // Assert
+        ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        failed.NextRetryAt.ShouldBe(nextRetryAt);
+    }
+
+    [Fact]
+    public void WhenCalledWithAttempt_StoresAttemptOnFailedState()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+
+        // Act
+        settings.FailImageBuild("error", nextRetryAt: null, attempt: 2);
+
+        // Assert
+        ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+        failed.Attempt.ShouldBe(2);
     }
 }

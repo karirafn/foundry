@@ -75,6 +75,15 @@ export interface GlobalSettingsResponse {
   imageBuildStatus: ImageBuildStatus;
   lastImageBuildError: string | null;
   hasUsableImage: boolean;
+  nextRetryAt: string | null;
+  attempt: number;
+}
+
+export interface ImageBuildNotification {
+  status: ImageBuildStatus;
+  logTail: string | null;
+  nextRetryAt: string | null;
+  attempt: number;
 }
 
 export interface UpdatePromptTemplatesRequest {

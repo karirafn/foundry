@@ -10,7 +10,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageConfi
 public sealed class HandleAsync
 {
     [Fact]
-    public async Task WhenEventReceived_EnqueuesRebuildRequest()
+    public async Task WhenEventReceived_RequestsImmediateRebuild()
     {
         // Arrange
         SpyWorkerImageRebuildQueue queue = new();
@@ -20,18 +20,39 @@ public sealed class HandleAsync
         await sut.HandleAsync(new WorkerImageConfigurationChanged(), TestContext.Current.CancellationToken);
 
         // Assert
-        queue.EnqueueCalled.ShouldBeTrue();
+        queue.RequestImmediateRebuildCalled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenEventReceived_RaisesImmediateRebuildRequestedEvent()
+    {
+        // Arrange
+        SpyWorkerImageRebuildQueue queue = new();
+        WorkerImageConfigurationChangedHandler sut = new(queue);
+        bool eventRaised = false;
+        queue.ImmediateRebuildRequested += () => eventRaised = true;
+
+        // Act
+        await sut.HandleAsync(new WorkerImageConfigurationChanged(), TestContext.Current.CancellationToken);
+
+        // Assert
+        eventRaised.ShouldBeTrue();
     }
 
     private sealed class SpyWorkerImageRebuildQueue : IWorkerImageRebuildQueue
     {
-        public bool EnqueueCalled { get; private set; }
+        public bool RequestImmediateRebuildCalled { get; private set; }
 
-        public bool TryEnqueue()
+        public event Action? ImmediateRebuildRequested;
+
+        public void RequestImmediateRebuild()
         {
-            EnqueueCalled = true;
-            return true;
+            RequestImmediateRebuildCalled = true;
+            ImmediateRebuildRequested?.Invoke();
+            TryEnqueue();
         }
+
+        public bool TryEnqueue() => true;
 
         public async IAsyncEnumerable<bool> ReadAllAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)

@@ -75,7 +75,7 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
         // Arrange
         GlobalSettings seed = GlobalSettings.Create();
         seed.BeginImageBuild();
-        seed.FailImageBuild("build error output");
+        seed.FailImageBuild("build error output", nextRetryAt: null, attempt: 0);
         GlobalSettingsId id = await SeedSettingsAsync(seed);
 
         // Act

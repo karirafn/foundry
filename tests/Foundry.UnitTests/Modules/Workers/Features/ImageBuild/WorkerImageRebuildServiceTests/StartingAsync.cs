@@ -51,7 +51,7 @@ public sealed class StartingAsync : IAsyncDisposable
 
         if (initiallyFailed)
         {
-            settings.FailImageBuild("previous error");
+            settings.FailImageBuild("previous error", nextRetryAt: null, attempt: 0);
         }
 
         db.Set<GlobalSettings>().Add(settings);
@@ -97,7 +97,7 @@ public sealed class StartingAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task OnStartup_EnqueuesRebuildRequest()
+    public async Task OnStartup_RequestsImmediateRebuild()
     {
         // Arrange
         SeedGlobalSettings();
@@ -108,7 +108,7 @@ public sealed class StartingAsync : IAsyncDisposable
         await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        queue.EnqueueCalled.ShouldBeTrue();
+        queue.RequestImmediateRebuildCalled.ShouldBeTrue();
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public sealed class StartingAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenImageBuildDisabled_DoesNotEnqueueRebuild()
+    public async Task WhenImageBuildDisabled_DoesNotRequestImmediateRebuild()
     {
         // Arrange
         SeedGlobalSettings();
@@ -154,7 +154,7 @@ public sealed class StartingAsync : IAsyncDisposable
         await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        queue.EnqueueCalled.ShouldBeFalse();
+        queue.RequestImmediateRebuildCalled.ShouldBeFalse();
     }
 
     [Fact]
@@ -177,13 +177,18 @@ public sealed class StartingAsync : IAsyncDisposable
 
     private sealed class SpyWorkerImageRebuildQueue : IWorkerImageRebuildQueue
     {
-        public bool EnqueueCalled { get; private set; }
+        public bool RequestImmediateRebuildCalled { get; private set; }
 
-        public bool TryEnqueue()
+        public event Action? ImmediateRebuildRequested;
+
+        public void RequestImmediateRebuild()
         {
-            EnqueueCalled = true;
-            return true;
+            RequestImmediateRebuildCalled = true;
+            ImmediateRebuildRequested?.Invoke();
+            TryEnqueue();
         }
+
+        public bool TryEnqueue() => true;
 
         public async IAsyncEnumerable<bool> ReadAllAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)

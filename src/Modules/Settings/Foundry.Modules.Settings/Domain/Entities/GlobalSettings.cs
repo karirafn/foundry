@@ -51,7 +51,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
 
-    public ImageBuildState ImageBuildState { get; private set; } = null!;
+    internal ImageBuildState ImageBuildState { get; private set; } = null!;
 
     public DateTimeOffset? LastImageBuiltAt { get; private set; }
 
@@ -161,9 +161,9 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    public void FailImageBuild(string? errorTail)
+    public void FailImageBuild(string? errorTail, DateTimeOffset? nextRetryAt, int attempt)
     {
-        ImageBuildState = new ImageBuildState.Failed(errorTail);
+        ImageBuildState = new ImageBuildState.Failed(errorTail, nextRetryAt, attempt);
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

@@ -9,7 +9,7 @@ internal sealed class WorkerImageConfigurationChangedHandler(
 {
     public Task HandleAsync(WorkerImageConfigurationChanged @event, CancellationToken cancellationToken)
     {
-        rebuildQueue.TryEnqueue();
+        rebuildQueue.RequestImmediateRebuild();
         return Task.CompletedTask;
     }
 }

@@ -1,12 +1,15 @@
 namespace Foundry.Modules.Settings.Domain.ValueObjects;
 
-public abstract record ImageBuildState
+internal abstract record ImageBuildState
 {
     private ImageBuildState() { }
 
-    public sealed record Idle : ImageBuildState;
+    internal sealed record Idle : ImageBuildState;
 
-    public sealed record Building : ImageBuildState;
+    internal sealed record Building : ImageBuildState;
 
-    public sealed record Failed(string? ErrorTail) : ImageBuildState;
+    internal sealed record Failed(
+        string? ErrorTail,
+        DateTimeOffset? NextRetryAt,
+        int Attempt) : ImageBuildState;
 }

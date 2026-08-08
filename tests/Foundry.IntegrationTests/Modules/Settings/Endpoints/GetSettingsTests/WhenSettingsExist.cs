@@ -130,7 +130,7 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.FailImageBuild("build error tail");
+        settings.FailImageBuild("build error tail", nextRetryAt: null, attempt: 0);
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -146,5 +146,64 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         JsonElement imageBuildStatusElement = document.RootElement.GetProperty("imageBuildStatus");
         imageBuildStatusElement.ValueKind.ShouldBe(JsonValueKind.String);
         imageBuildStatusElement.GetString().ShouldBe("Failed");
+    }
+
+    [Fact]
+    public async Task ExposesNextRetryAtInRawJsonWhenImageBuildFailed()
+    {
+        // Arrange
+        // DbContext seeding is used because no HTTP endpoint produces the Failed state directly.
+        // A typed round-trip cannot distinguish a missing field from a null one, so the raw JSON
+        // is asserted directly to prove the camelCase property name and value are present (D2).
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        DateTimeOffset expectedNextRetryAt = new(2025, 6, 15, 10, 30, 0, TimeSpan.Zero);
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.FailImageBuild("error tail", nextRetryAt: expectedNextRetryAt, attempt: 2);
+        dbContext.Set<GlobalSettings>().Add(settings);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/settings", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        string rawJson = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using JsonDocument document = JsonDocument.Parse(rawJson);
+        JsonElement nextRetryAtElement = document.RootElement.GetProperty("nextRetryAt");
+        nextRetryAtElement.ValueKind.ShouldBe(JsonValueKind.String);
+        nextRetryAtElement.GetDateTimeOffset().ShouldBe(expectedNextRetryAt);
+    }
+
+    [Fact]
+    public async Task ExposesAttemptInRawJsonWhenImageBuildFailed()
+    {
+        // Arrange
+        // DbContext seeding is used because no HTTP endpoint produces the Failed state directly.
+        // A typed round-trip cannot distinguish absence from 0, so the raw JSON is asserted
+        // directly to prove the camelCase property name and value are present (D2).
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.FailImageBuild("error tail", nextRetryAt: DateTimeOffset.UtcNow.AddMinutes(5), attempt: 3);
+        dbContext.Set<GlobalSettings>().Add(settings);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/settings", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        string rawJson = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using JsonDocument document = JsonDocument.Parse(rawJson);
+        JsonElement attemptElement = document.RootElement.GetProperty("attempt");
+        attemptElement.ValueKind.ShouldBe(JsonValueKind.Number);
+        attemptElement.GetInt32().ShouldBe(3);
     }
 }

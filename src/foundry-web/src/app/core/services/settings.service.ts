@@ -8,6 +8,7 @@ import {
   AuthSettings,
   ClaudeAccountSummary,
   GlobalSettingsResponse,
+  ImageBuildNotification,
   ImageBuildStatus,
   LoginError,
   LoginPhase,
@@ -23,7 +24,6 @@ import { SystemSignalRService } from './system-signalr.service';
 import { IMAGE_BUILD_NOTIFICATION_CATEGORY } from '../models/system-notification.model';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
-const IMAGE_BUILD_MESSAGE_SEPARATOR = '|';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
@@ -52,9 +52,9 @@ export class SettingsService {
         (n) => n.category === IMAGE_BUILD_NOTIFICATION_CATEGORY
       );
       if (notification) {
-        const parsed = this._parseImageBuildMessage(notification.message);
+        const parsed = this._parseImageBuildNotification(notification.message);
         if (parsed) {
-          this.setImageBuildStatus(parsed.status, parsed.logTail);
+          this.setImageBuildStatus(parsed.status, parsed.logTail, parsed.nextRetryAt, parsed.attempt);
         }
       }
     });
@@ -143,6 +143,12 @@ export class SettingsService {
   private readonly _imageBuildLogTailSignal: WritableSignal<string | null> = signal(null);
   readonly imageBuildLogTail: Signal<string | null> = this._imageBuildLogTailSignal.asReadonly();
 
+  private readonly _imageBuildNextRetryAtSignal: WritableSignal<string | null> = signal(null);
+  readonly imageBuildNextRetryAt: Signal<string | null> = this._imageBuildNextRetryAtSignal.asReadonly();
+
+  private readonly _imageBuildAttemptSignal: WritableSignal<number> = signal(0);
+  readonly imageBuildAttempt: Signal<number> = this._imageBuildAttemptSignal.asReadonly();
+
   private readonly _hasUsableImageSignal: WritableSignal<boolean> = signal(false);
   readonly hasUsableImage: Signal<boolean> = this._hasUsableImageSignal.asReadonly();
 
@@ -214,9 +220,7 @@ export class SettingsService {
           this._workerPromptTemplateSignal.set(settings.workerPromptTemplate);
           this._dispatchService.updateFromSettings(settings);
           this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
-          this._imageBuildStatusSignal.set(settings.imageBuildStatus);
-          this._imageBuildLogTailSignal.set(settings.lastImageBuildError);
-          this._hasUsableImageSignal.set(settings.hasUsableImage);
+          this._applyImageBuildResponse(settings);
           this.loading.set(false);
           observer.next();
           observer.complete();
@@ -386,9 +390,7 @@ export class SettingsService {
     this._http.put<GlobalSettingsResponse>('/api/settings/worker-image', flags).subscribe({
       next: (response) => {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
-        this._imageBuildStatusSignal.set(response.imageBuildStatus);
-        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
-        this._hasUsableImageSignal.set(response.hasUsableImage);
+        this._applyImageBuildResponse(response);
         this._savingImageFlagsSignal.set(false);
         this._saveImageFlagsSuccessSignal.set(true);
       },
@@ -408,9 +410,7 @@ export class SettingsService {
     this._http.post<GlobalSettingsResponse>('/api/settings/worker-image/retry', null).subscribe({
       next: (response) => {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
-        this._imageBuildStatusSignal.set(response.imageBuildStatus);
-        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
-        this._hasUsableImageSignal.set(response.hasUsableImage);
+        this._applyImageBuildResponse(response);
         this._savingImageFlagsSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -421,22 +421,51 @@ export class SettingsService {
     });
   }
 
-  setImageBuildStatus(status: ImageBuildStatus, logTail: string | null): void {
+  setImageBuildStatus(status: ImageBuildStatus, logTail: string | null, nextRetryAt: string | null = null, attempt: number = 0): void {
     this._imageBuildStatusSignal.set(status);
     this._imageBuildLogTailSignal.set(logTail);
+    this._imageBuildNextRetryAtSignal.set(
+      status === 'Building' || status === 'Idle' ? null : nextRetryAt
+    );
+    this._imageBuildAttemptSignal.set(attempt);
   }
 
-  private _parseImageBuildMessage(message: string): { status: ImageBuildStatus; logTail: string | null } | null {
-    const separatorIndex = message.indexOf(IMAGE_BUILD_MESSAGE_SEPARATOR);
-    if (separatorIndex === -1) {
+  private _applyImageBuildResponse(response: GlobalSettingsResponse): void {
+    this._imageBuildStatusSignal.set(response.imageBuildStatus);
+    this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+    this._imageBuildNextRetryAtSignal.set(
+      response.imageBuildStatus === 'Building' || response.imageBuildStatus === 'Idle'
+        ? null
+        : (response.nextRetryAt ?? null)
+    );
+    this._imageBuildAttemptSignal.set(response.attempt ?? 0);
+    this._hasUsableImageSignal.set(response.hasUsableImage);
+  }
+
+  private _parseImageBuildNotification(message: string): ImageBuildNotification | null {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(message);
+    } catch {
       return null;
     }
-    const token = message.slice(0, separatorIndex);
-    if (token !== 'Idle' && token !== 'Building' && token !== 'Failed') {
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !('status' in parsed) ||
+      typeof (parsed as Record<string, unknown>)['status'] !== 'string'
+    ) {
       return null;
     }
-    const logPart = message.slice(separatorIndex + 1);
-    return { status: token, logTail: logPart.length > 0 ? logPart : null };
+    const raw = parsed as Record<string, unknown>;
+    const status = raw['status'] as string;
+    if (status !== 'Idle' && status !== 'Building' && status !== 'Failed') {
+      return null;
+    }
+    const logTail = typeof raw['logTail'] === 'string' ? raw['logTail'] : null;
+    const nextRetryAt = typeof raw['nextRetryAt'] === 'string' ? raw['nextRetryAt'] : null;
+    const attempt = typeof raw['attempt'] === 'number' ? raw['attempt'] : 0;
+    return { status, logTail, nextRetryAt, attempt };
   }
 
   private _mapToWorkerImageFlags(response: GlobalSettingsResponse): WorkerImageFlags {

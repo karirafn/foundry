@@ -67,7 +67,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         {
             FoundryDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
             GlobalSettings settings = GlobalSettings.Create();
-            settings.FailImageBuild("previous error");
+            settings.FailImageBuild("previous error", nextRetryAt: null, attempt: 0);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

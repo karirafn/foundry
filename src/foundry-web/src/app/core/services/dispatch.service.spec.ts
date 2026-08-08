@@ -23,6 +23,8 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     imageBuildStatus: 'Idle',
     lastImageBuildError: null,
     hasUsableImage: false,
+    nextRetryAt: null,
+    attempt: 0,
     ...overrides,
   };
 }
