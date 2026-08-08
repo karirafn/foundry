@@ -1,4 +1,5 @@
 using System.Formats.Tar;
+using System.Text.Json;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -26,7 +27,8 @@ internal sealed class WorkerImageRebuildService(
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
 {
     internal const string ImageBuildCategory = "image-build";
-    internal const string BuildingMessage = "Building|";
+    internal const string BuildingStatus = "Building";
+    internal const string FailedStatus = "Failed";
     internal const string BaseDockerfile = "Dockerfile.base";
     internal const string LoginDockerfile = "Dockerfile.login";
 
@@ -114,7 +116,7 @@ internal sealed class WorkerImageRebuildService(
         }
 
         await broadcaster.SendAsync(
-            new SystemNotification(ImageBuildCategory, true, BuildingMessage),
+            new SystemNotification(ImageBuildCategory, true, SerializeBuildingNotification()),
             cancellationToken);
 
         settings.BeginImageBuild();
@@ -263,10 +265,16 @@ internal sealed class WorkerImageRebuildService(
                 errorTail);
 
             await broadcaster.SendAsync(
-                new SystemNotification(ImageBuildCategory, true, $"Failed|{errorTail}"),
+                new SystemNotification(ImageBuildCategory, true, SerializeFailedNotification(errorTail, nextRetryAt: null, attempt: 0)),
                 cancellationToken);
         }
     }
+
+    private static string SerializeBuildingNotification()
+        => JsonSerializer.Serialize(new ImageBuildStatusNotification(BuildingStatus, null, null, 0));
+
+    private static string SerializeFailedNotification(string? logTail, DateTimeOffset? nextRetryAt, int attempt)
+        => JsonSerializer.Serialize(new ImageBuildStatusNotification(FailedStatus, logTail, nextRetryAt, attempt));
 
     private string ResolveContextPath(string configuredContextPath)
     {

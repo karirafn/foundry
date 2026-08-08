@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
@@ -138,11 +140,10 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         // Act
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-        // Assert
+        // Assert — no active image-build notification should be broadcast at all
         broadcaster.Sent.ShouldNotContain(n =>
             n.Category == WorkerImageRebuildService.ImageBuildCategory
-            && n.IsActive
-            && n.Message == WorkerImageRebuildService.BuildingMessage);
+            && n.IsActive);
     }
 
     [Fact]
@@ -657,11 +658,19 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — message format: "Failed|<errorTail>"
-            broadcaster.Sent.ShouldContain(n =>
-                n.Category == WorkerImageRebuildService.ImageBuildCategory
-                && n.IsActive
-                && n.Message == $"Failed|{dockerError}");
+            // Assert — message is JSON with status "Failed" and the error in logTail
+            // (failure notification is last; building notification comes first)
+            SystemNotification? failureNotification = broadcaster.Sent
+                .LastOrDefault(n =>
+                    n.Category == WorkerImageRebuildService.ImageBuildCategory
+                    && n.IsActive);
+            failureNotification.ShouldNotBeNull();
+
+            JsonDocument doc = JsonDocument.Parse(failureNotification.Message);
+            doc.RootElement.GetProperty("status").GetString().ShouldBe(WorkerImageRebuildService.FailedStatus);
+            string? logTail = doc.RootElement.GetProperty("logTail").GetString();
+            logTail.ShouldNotBeNull();
+            logTail.ShouldBe(dockerError);
         }
         finally
         {
@@ -781,12 +790,14 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — building notification must be first
+            // Assert — building notification must be first with JSON payload
             broadcaster.Sent.ShouldNotBeEmpty();
             SystemNotification first = broadcaster.Sent[0];
             first.Category.ShouldBe(WorkerImageRebuildService.ImageBuildCategory);
             first.IsActive.ShouldBeTrue();
-            first.Message.ShouldBe(WorkerImageRebuildService.BuildingMessage);
+
+            JsonDocument doc = JsonDocument.Parse(first.Message);
+            doc.RootElement.GetProperty("status").GetString().ShouldBe(WorkerImageRebuildService.BuildingStatus);
         }
         finally
         {
@@ -794,20 +805,41 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         }
     }
 
-    // Finding 1: notification protocol format tests
+    // Notification protocol format tests
 
     [Fact]
-    public async Task BuildingMessage_HasPipeSeparatedFormat()
+    public async Task WhenBuildStarts_BroadcastMessageIsValidJson()
     {
-        // Act
-        string message = WorkerImageRebuildService.BuildingMessage;
+        // Arrange
+        string contextDir = CreateTempContextDir();
 
-        // Assert — Angular parser expects "Status|logTail"
-        message.ShouldStartWith("Building|");
+        try
+        {
+            SeedGlobalSettings();
+
+            CapturingNotificationBroadcaster broadcaster = new();
+            WorkerImageRebuildService sut = BuildService(
+                new SpyImageOperations(),
+                broadcaster,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — message must be valid JSON (not a pipe-delimited string)
+            broadcaster.Sent.ShouldNotBeEmpty();
+            SystemNotification first = broadcaster.Sent[0];
+            JsonDocument doc = JsonDocument.Parse(first.Message);
+            doc.RootElement.ValueKind.ShouldBe(JsonValueKind.Object);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
     }
 
     [Fact]
-    public async Task WhenDockerReportsError_BroadcastsFailedMessageWithPipeSeparator()
+    public async Task WhenDockerReportsError_BroadcastMessageIsJsonWithStatusAndLogTail()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
@@ -827,15 +859,19 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — Angular parser expects "Failed|<errorTail>"
+            // Assert — JSON payload has camelCase fields matching settings DTO shape
+            // (failure notification is the last active notification; building comes first)
             SystemNotification? failureNotification = broadcaster.Sent
-                .FirstOrDefault(n =>
+                .LastOrDefault(n =>
                     n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive
-                    && n.Message != WorkerImageRebuildService.BuildingMessage);
+                    && n.IsActive);
             failureNotification.ShouldNotBeNull();
-            failureNotification.Message.ShouldStartWith("Failed|");
-            failureNotification.Message.ShouldContain(dockerError);
+
+            JsonDocument doc = JsonDocument.Parse(failureNotification.Message);
+            doc.RootElement.GetProperty("status").GetString().ShouldBe(WorkerImageRebuildService.FailedStatus);
+            string? logTail = doc.RootElement.GetProperty("logTail").GetString();
+            logTail.ShouldNotBeNull();
+            logTail.ShouldContain(dockerError);
         }
         finally
         {
