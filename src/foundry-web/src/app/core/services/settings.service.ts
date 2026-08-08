@@ -220,15 +220,7 @@ export class SettingsService {
           this._workerPromptTemplateSignal.set(settings.workerPromptTemplate);
           this._dispatchService.updateFromSettings(settings);
           this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
-          this._imageBuildStatusSignal.set(settings.imageBuildStatus);
-          this._imageBuildLogTailSignal.set(settings.lastImageBuildError);
-          this._imageBuildNextRetryAtSignal.set(
-            settings.imageBuildStatus === 'Building' || settings.imageBuildStatus === 'Idle'
-              ? null
-              : (settings.nextRetryAt ?? null)
-          );
-          this._imageBuildAttemptSignal.set(settings.attempt ?? 0);
-          this._hasUsableImageSignal.set(settings.hasUsableImage);
+          this._applyImageBuildResponse(settings);
           this.loading.set(false);
           observer.next();
           observer.complete();
@@ -398,15 +390,7 @@ export class SettingsService {
     this._http.put<GlobalSettingsResponse>('/api/settings/worker-image', flags).subscribe({
       next: (response) => {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
-        this._imageBuildStatusSignal.set(response.imageBuildStatus);
-        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
-        this._imageBuildNextRetryAtSignal.set(
-          response.imageBuildStatus === 'Building' || response.imageBuildStatus === 'Idle'
-            ? null
-            : (response.nextRetryAt ?? null)
-        );
-        this._imageBuildAttemptSignal.set(response.attempt ?? 0);
-        this._hasUsableImageSignal.set(response.hasUsableImage);
+        this._applyImageBuildResponse(response);
         this._savingImageFlagsSignal.set(false);
         this._saveImageFlagsSuccessSignal.set(true);
       },
@@ -426,15 +410,7 @@ export class SettingsService {
     this._http.post<GlobalSettingsResponse>('/api/settings/worker-image/retry', null).subscribe({
       next: (response) => {
         this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(response));
-        this._imageBuildStatusSignal.set(response.imageBuildStatus);
-        this._imageBuildLogTailSignal.set(response.lastImageBuildError);
-        this._imageBuildNextRetryAtSignal.set(
-          response.imageBuildStatus === 'Building' || response.imageBuildStatus === 'Idle'
-            ? null
-            : (response.nextRetryAt ?? null)
-        );
-        this._imageBuildAttemptSignal.set(response.attempt ?? 0);
-        this._hasUsableImageSignal.set(response.hasUsableImage);
+        this._applyImageBuildResponse(response);
         this._savingImageFlagsSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -452,6 +428,18 @@ export class SettingsService {
       status === 'Building' || status === 'Idle' ? null : nextRetryAt
     );
     this._imageBuildAttemptSignal.set(attempt);
+  }
+
+  private _applyImageBuildResponse(response: GlobalSettingsResponse): void {
+    this._imageBuildStatusSignal.set(response.imageBuildStatus);
+    this._imageBuildLogTailSignal.set(response.lastImageBuildError);
+    this._imageBuildNextRetryAtSignal.set(
+      response.imageBuildStatus === 'Building' || response.imageBuildStatus === 'Idle'
+        ? null
+        : (response.nextRetryAt ?? null)
+    );
+    this._imageBuildAttemptSignal.set(response.attempt ?? 0);
+    this._hasUsableImageSignal.set(response.hasUsableImage);
   }
 
   private _parseImageBuildNotification(message: string): ImageBuildNotification | null {

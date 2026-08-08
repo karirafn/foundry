@@ -17,7 +17,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../../core/services/settings.service';
 import { DispatchService } from '../../../core/services/dispatch.service';
-import { AuthMode, OAuthStatus, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../../../core/models/settings.model';
+import { AuthMode, ImageBuildStatus, OAuthStatus, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../../../core/models/settings.model';
 import { OAuthPanelComponent } from '../oauth-panel/oauth-panel';
 
 const MAX_CONCURRENT_MIN = 1;
@@ -323,6 +323,7 @@ const COOLDOWN_MINUTES_MAX = 1440;
             </div>
           </fieldset>
 
+          <span class="sr-only general-settings__image-failure-alert" role="alert" aria-live="assertive">{{ imageFailureAlertText() }}</span>
           <div class="general-settings__image-status" role="status" aria-live="polite">
             @if (settingsService.imageBuildStatus() === 'Building') {
               <span class="general-settings__image-spinner" aria-hidden="true"></span>
@@ -561,6 +562,10 @@ export class SettingsGeneralComponent {
     return 'Worker image build failed.';
   });
 
+  private _imagePreviousStatus: ImageBuildStatus = 'Idle';
+  private readonly _imageFailureAlertTextSignal: WritableSignal<string> = signal('');
+  protected readonly imageFailureAlertText: Signal<string> = this._imageFailureAlertTextSignal.asReadonly();
+
   constructor() {
     effect(() => {
       const settings = this.settingsService.authSettings();
@@ -641,6 +646,21 @@ export class SettingsGeneralComponent {
       if (error !== null && this._switchAccountDraining()) {
         this._switchAccountDraining.set(false);
         this._showResumeAfterSwitch.set(false);
+      }
+    });
+
+    // Fire a one-shot assertive alert when the image build status first transitions to Failed.
+    effect(() => {
+      const status = this.settingsService.imageBuildStatus();
+      const prevStatus = this._imagePreviousStatus;
+      this._imagePreviousStatus = status;
+
+      if (status === 'Failed' && prevStatus !== 'Failed') {
+        this._imageFailureAlertTextSignal.set('Worker image build failed.');
+        // Clear after the AT has announced it; countdown ticks must not re-trigger the alert.
+        setTimeout(() => this._imageFailureAlertTextSignal.set(''), 0);
+      } else if (status !== 'Failed') {
+        this._imageFailureAlertTextSignal.set('');
       }
     });
   }

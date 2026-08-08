@@ -60,6 +60,8 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     imageBuildStatus: 'Idle',
     lastImageBuildError: null,
     hasUsableImage: false,
+    nextRetryAt: null,
+    attempt: 0,
     ...overrides,
   };
 }
@@ -1276,6 +1278,8 @@ describe('SettingsService — SignalR login session', () => {
       imageBuildStatus: 'Idle',
       lastImageBuildError: null,
       hasUsableImage: false,
+      nextRetryAt: null,
+      attempt: 0,
       ...overrides,
     };
   }
@@ -1494,6 +1498,8 @@ describe('SettingsService — SignalR re-sync', () => {
       imageBuildStatus: 'Idle',
       lastImageBuildError: null,
       hasUsableImage: false,
+      nextRetryAt: null,
+      attempt: 0,
       ...overrides,
     };
   }

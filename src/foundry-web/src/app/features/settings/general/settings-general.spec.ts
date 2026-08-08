@@ -5,6 +5,7 @@ import { By } from '@angular/platform-browser';
 import { NgModel } from '@angular/forms';
 import { signal } from '@angular/core';
 import { NEVER } from 'rxjs';
+import { vi } from 'vitest';
 import { SettingsGeneralComponent } from './settings-general';
 import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
@@ -1797,6 +1798,76 @@ describe('SettingsGeneralComponent', () => {
         // Assert
         expect(failedRegion?.textContent).toContain('Worker image build failed — retrying at');
         expect(failedRegion?.textContent).toContain('(attempt 3)');
+      });
+    });
+
+    describe('initial-failure assertive alert', () => {
+      it('should have a visually-hidden role="alert" region that emits text on the initial Idle→Failed transition', () => {
+        // Arrange — start Idle
+        const { httpMock } = setup();
+        const fixture = TestBed.createComponent(SettingsGeneralComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock);
+        fixture.detectChanges();
+
+        const service = TestBed.inject(SettingsService);
+        const el = fixture.nativeElement as HTMLElement;
+
+        // Act — transition to Failed via service signal
+        service.setImageBuildStatus('Failed', 'err');
+        fixture.detectChanges();
+
+        // Assert — assertive alert fires with failure text
+        const alertEl = el.querySelector('[role="alert"].general-settings__image-failure-alert') as HTMLElement;
+        expect(alertEl).toBeTruthy();
+        expect(alertEl.textContent?.trim()).toContain('Worker image build failed');
+      });
+
+      it('should NOT fire the assertive alert when status stays Failed (countdown tick)', () => {
+        // Arrange — use fake timers to control the alert clear timeout
+        vi.useFakeTimers();
+        const { httpMock } = setup();
+        const fixture = TestBed.createComponent(SettingsGeneralComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err', nextRetryAt: null, attempt: 0 });
+        fixture.detectChanges();
+
+        const service = TestBed.inject(SettingsService);
+        const el = fixture.nativeElement as HTMLElement;
+
+        // Advance past the clear timeout
+        vi.advanceTimersByTime(0);
+        fixture.detectChanges();
+
+        // Act — countdown tick (nextRetryAt changes but status stays Failed)
+        service.setImageBuildStatus('Failed', 'err', '2026-08-08T12:30:00Z', 1);
+        fixture.detectChanges();
+
+        // Assert — alert is empty (no re-announcement)
+        const alertEl = el.querySelector('[role="alert"].general-settings__image-failure-alert') as HTMLElement;
+        expect(alertEl?.textContent?.trim()).toBe('');
+
+        vi.useRealTimers();
+      });
+
+      it('should clear the assertive alert when status returns to Idle', () => {
+        // Arrange — start Failed
+        const { httpMock } = setup();
+        const fixture = TestBed.createComponent(SettingsGeneralComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err' });
+        fixture.detectChanges();
+
+        const service = TestBed.inject(SettingsService);
+        const el = fixture.nativeElement as HTMLElement;
+
+        // Act — return to Idle
+        service.setImageBuildStatus('Idle', null);
+        fixture.detectChanges();
+
+        // Assert — alert is empty
+        const alertEl = el.querySelector('[role="alert"].general-settings__image-failure-alert') as HTMLElement | null;
+        expect(!alertEl || alertEl.textContent?.trim() === '').toBe(true);
       });
     });
   });

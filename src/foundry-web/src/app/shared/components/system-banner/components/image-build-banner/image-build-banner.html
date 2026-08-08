@@ -1,5 +1,6 @@
 @if (settingsService.imageBuildStatus() !== 'Idle') {
   <div class="system-banner" role="region" aria-label="Image build status">
+    <span class="sr-only system-banner__failure-alert" role="alert" aria-live="assertive">{{ failureAlertText() }}</span>
     @if (settingsService.imageBuildStatus() === 'Building') {
       <div class="system-banner__bar system-banner__bar--image-build system-banner__bar--building" role="status" aria-live="polite">
         <svg
@@ -20,7 +21,7 @@
         <span class="system-banner__message">Worker image is building&hellip;</span>
       </div>
     } @else if (settingsService.imageBuildStatus() === 'Failed') {
-      <div class="system-banner__bar system-banner__bar--image-build system-banner__bar--failed" role="status" aria-live="polite">
+      <div class="system-banner__bar system-banner__bar--image-build system-banner__bar--failed">
         <svg
           class="system-banner__icon"
           xmlns="http://www.w3.org/2000/svg"
@@ -38,7 +39,7 @@
           <line x1="12" y1="8" x2="12" y2="12"></line>
           <line x1="12" y1="16" x2="12.01" y2="16"></line>
         </svg>
-        <span class="system-banner__message">{{ failedMessage() }}</span>
+        <span class="system-banner__message" role="status" aria-live="polite">{{ failedMessage() }}</span>
         @if (settingsService.imageBuildLogTail()) {
           <span class="system-banner__log-tail"><span class="sr-only">Build log (partial): </span>{{ settingsService.imageBuildLogTail() | slice: -120 }}</span>
         }
