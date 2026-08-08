@@ -13,6 +13,7 @@ import {
   runInInjectionContext,
   signal,
 } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../../core/services/settings.service';
 import { DispatchService } from '../../../core/services/dispatch.service';
@@ -30,6 +31,7 @@ const COOLDOWN_MINUTES_MAX = 1440;
   selector: 'fd-settings-general',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormsModule, OAuthPanelComponent],
+  providers: [DatePipe],
   template: `
     <div class="general-settings">
       <section class="general-settings__section">
@@ -327,7 +329,7 @@ const COOLDOWN_MINUTES_MAX = 1440;
             }
             {{ _imageBuildingText() }}
           </div>
-          <div class="general-settings__image-status" role="alert">{{ _imageFailedText() }}</div>
+          <div class="general-settings__image-status" role="status" aria-live="polite">{{ _imageFailedText() }}</div>
 
           @if (settingsService.imageBuildStatus() === 'Failed' && settingsService.imageBuildLogTail()) {
             <pre
@@ -353,6 +355,8 @@ const COOLDOWN_MINUTES_MAX = 1440;
               <button
                 class="general-settings__retry-btn"
                 type="button"
+                aria-label="Retry image build now"
+                [disabled]="settingsService.savingImageFlags()"
                 (click)="retryImageBuild()"
               >Retry</button>
             }
@@ -459,6 +463,7 @@ const COOLDOWN_MINUTES_MAX = 1440;
 export class SettingsGeneralComponent {
   protected readonly settingsService = inject(SettingsService);
   protected readonly dispatchService = inject(DispatchService);
+  private readonly _datePipe = inject(DatePipe);
   private readonly _injector = inject(Injector);
   private readonly _elementRef = inject(ElementRef);
 
@@ -534,9 +539,27 @@ export class SettingsGeneralComponent {
     this.settingsService.imageBuildStatus() === 'Building' ? 'Building worker image…' : ''
   );
 
-  protected readonly _imageFailedText: Signal<string> = computed(() =>
-    this.settingsService.imageBuildStatus() === 'Failed' ? 'Worker image build failed.' : ''
-  );
+  protected readonly _imageFailedText: Signal<string> = computed(() => {
+    if (this.settingsService.imageBuildStatus() !== 'Failed') {
+      return '';
+    }
+    const retryAt = this.settingsService.imageBuildNextRetryAt();
+    const attempt = this.settingsService.imageBuildAttempt();
+    const formattedTime = retryAt ? this._datePipe.transform(retryAt, 'HH:mm') : null;
+    const hasRetryAt = formattedTime !== null;
+    const hasAttempt = attempt >= 1;
+
+    if (hasRetryAt && hasAttempt) {
+      return `Worker image build failed — retrying at ${formattedTime} (attempt ${attempt})`;
+    }
+    if (hasRetryAt) {
+      return `Worker image build failed — retrying at ${formattedTime}`;
+    }
+    if (hasAttempt) {
+      return `Worker image build failed (attempt ${attempt})`;
+    }
+    return 'Worker image build failed.';
+  });
 
   constructor() {
     effect(() => {

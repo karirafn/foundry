@@ -6,7 +6,7 @@ import { SettingsService } from '../../../../../core/services/settings.service';
 @Component({
   selector: 'fd-image-build-banner',
   standalone: true,
-  imports: [RouterLink, SlicePipe, DatePipe],
+  imports: [RouterLink, SlicePipe],
   templateUrl: './image-build-banner.html',
   styleUrl: './image-build-banner.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

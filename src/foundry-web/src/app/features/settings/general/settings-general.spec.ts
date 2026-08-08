@@ -21,6 +21,8 @@ const IMAGE_FLAGS_DEFAULTS = {
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
   hasUsableImage: false,
+  nextRetryAt: null,
+  attempt: 0,
 };
 
 const BASE_RESPONSE = {
@@ -1439,14 +1441,13 @@ describe('SettingsGeneralComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
       const statusRegions = Array.from(el.querySelectorAll('.general-settings__image-status[role="status"]')) as HTMLElement[];
 
-      // Assert — persistent polite region present and contains building text
-      expect(statusRegions.length).toBe(1);
-      const politeRegion = statusRegions[0];
-      expect(politeRegion.getAttribute('aria-live')).toBe('polite');
-      expect(politeRegion.textContent).toContain('Building worker image');
+      // Assert — at least one polite region contains the building text
+      const buildingRegion = statusRegions.find(r => r.textContent?.includes('Building worker image'));
+      expect(buildingRegion).toBeTruthy();
+      expect(buildingRegion?.getAttribute('aria-live')).toBe('polite');
     });
 
-    it('should have a persistent role="alert" image-status region always in the DOM', () => {
+    it('should have a persistent role="status" image-failed region always in the DOM (polite, not assertive)', () => {
       // Arrange
       const { httpMock } = setup();
       const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -1456,30 +1457,29 @@ describe('SettingsGeneralComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const alertRegion = el.querySelector('.general-settings__image-status[role="alert"]') as HTMLElement;
+      // The failed-text container must be role="status" (polite) — countdown must not be assertive
+      const statusRegion = el.querySelector('.general-settings__image-status[role="status"][aria-live="polite"]') as HTMLElement;
 
-      // Assert — always present, empty when not failed
-      expect(alertRegion).toBeTruthy();
-      expect(alertRegion.textContent?.trim()).toBe('');
+      // Assert — the polite failed-text region exists (may be empty when Idle)
+      expect(statusRegion).toBeTruthy();
     });
 
-    it('should show failed text in role="alert" region and build log pre element when Failed', () => {
+    it('should show failed text in role="status" (polite) region and build log pre element when Failed', () => {
       // Arrange
       const { httpMock } = setup();
       const fixture = TestBed.createComponent(SettingsGeneralComponent);
       fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'Step 2/5 FAILED' });
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'Step 2/5 FAILED', nextRetryAt: null, attempt: 0 });
       fixture.detectChanges();
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const alertRegion = el.querySelector('.general-settings__image-status[role="alert"]') as HTMLElement;
-      const politeRegion = el.querySelector('.general-settings__image-status[role="status"]') as HTMLElement;
+      const statusRegions = Array.from(el.querySelectorAll('.general-settings__image-status[role="status"]')) as HTMLElement[];
       const logPre = el.querySelector('.general-settings__image-log') as HTMLElement;
 
-      // Assert
-      expect(alertRegion.textContent).toContain('Worker image build failed');
-      expect(politeRegion.textContent?.trim()).toBe('');
+      // Assert — one of the status regions contains the failed text
+      const failedRegion = statusRegions.find(r => r.textContent?.includes('Worker image build failed'));
+      expect(failedRegion).toBeTruthy();
       expect(logPre).toBeTruthy();
       expect(logPre.tagName).toBe('PRE');
       expect(logPre.getAttribute('tabindex')).toBe('0');
@@ -1689,6 +1689,115 @@ describe('SettingsGeneralComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
       const errorEl = el.querySelector('#image-flags-error');
       expect(errorEl?.textContent).toContain('Failed to save worker image settings');
+    });
+
+    it('should have aria-label="Retry image build now" on the settings-page Retry button', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const retryBtn = el.querySelector('.general-settings__retry-btn') as HTMLButtonElement;
+
+      // Assert
+      expect(retryBtn?.getAttribute('aria-label')).toBe('Retry image build now');
+    });
+
+    it('should disable the settings-page Retry button while savingImageFlags is true', () => {
+      // Arrange
+      const { httpMock, service } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err' });
+      fixture.detectChanges();
+
+      // Act — trigger a save so savingImageFlags becomes true
+      service.retryImageBuild();
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const retryBtn = el.querySelector('.general-settings__retry-btn') as HTMLButtonElement;
+      expect(retryBtn.disabled).toBe(true);
+
+      httpMock.expectOne('/api/settings/worker-image/retry').flush({ ...API_KEY_RESPONSE, imageBuildStatus: 'Building', nextRetryAt: null, attempt: 0 });
+    });
+
+    describe('_imageFailedText copy matrix', () => {
+      it('should show plain "Worker image build failed." when nextRetryAt is null and attempt is 0', () => {
+        // Arrange
+        const { httpMock } = setup();
+        const fixture = TestBed.createComponent(SettingsGeneralComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err', nextRetryAt: null, attempt: 0 });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const statusRegions = Array.from(el.querySelectorAll('.general-settings__image-status[role="status"]')) as HTMLElement[];
+        const failedRegion = statusRegions.find(r => r.textContent?.includes('Worker image build failed'));
+
+        // Assert
+        expect(failedRegion?.textContent?.trim()).toBe('Worker image build failed.');
+      });
+
+      it('should show "(attempt N)" when nextRetryAt is null and attempt >= 1', () => {
+        // Arrange
+        const { httpMock } = setup();
+        const fixture = TestBed.createComponent(SettingsGeneralComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', nextRetryAt: null, attempt: 2 });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const statusRegions = Array.from(el.querySelectorAll('.general-settings__image-status[role="status"]')) as HTMLElement[];
+        const failedRegion = statusRegions.find(r => r.textContent?.includes('Worker image build failed'));
+
+        // Assert
+        expect(failedRegion?.textContent).toContain('Worker image build failed (attempt 2)');
+        expect(failedRegion?.textContent).not.toContain('retrying');
+      });
+
+      it('should show "retrying at HH:MM" when nextRetryAt is set and attempt < 1', () => {
+        // Arrange
+        const { httpMock } = setup();
+        const fixture = TestBed.createComponent(SettingsGeneralComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', nextRetryAt: '2026-08-08T12:30:00Z', attempt: 0 });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const statusRegions = Array.from(el.querySelectorAll('.general-settings__image-status[role="status"]')) as HTMLElement[];
+        const failedRegion = statusRegions.find(r => r.textContent?.includes('Worker image build failed'));
+
+        // Assert
+        expect(failedRegion?.textContent).toContain('Worker image build failed — retrying at');
+        expect(failedRegion?.textContent).not.toContain('attempt');
+      });
+
+      it('should show "retrying at HH:MM (attempt N)" when both nextRetryAt is set and attempt >= 1', () => {
+        // Arrange
+        const { httpMock } = setup();
+        const fixture = TestBed.createComponent(SettingsGeneralComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', nextRetryAt: '2026-08-08T12:30:00Z', attempt: 3 });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const statusRegions = Array.from(el.querySelectorAll('.general-settings__image-status[role="status"]')) as HTMLElement[];
+        const failedRegion = statusRegions.find(r => r.textContent?.includes('Worker image build failed'));
+
+        // Assert
+        expect(failedRegion?.textContent).toContain('Worker image build failed — retrying at');
+        expect(failedRegion?.textContent).toContain('(attempt 3)');
+      });
     });
   });
 });
