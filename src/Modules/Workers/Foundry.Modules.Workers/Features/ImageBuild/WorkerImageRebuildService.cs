@@ -41,8 +41,65 @@ internal sealed class WorkerImageRebuildService(
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
+    // Backoff state — all mutations guarded by _stateLock.
+    private readonly Lock _stateLock = new();
+    private int _attempt;
+    private CancellationTokenSource? _pendingRetryCts;
+
+    private bool _eventSubscribed;
+
+    private void SubscribeToImmediateRebuild()
+    {
+        if (_eventSubscribed)
+        {
+            return;
+        }
+
+        rebuildQueue.ImmediateRebuildRequested += OnImmediateRebuildRequested;
+        _eventSubscribed = true;
+    }
+
+    private void OnImmediateRebuildRequested()
+    {
+        CancellationTokenSource? ctsToCancel;
+        lock (_stateLock)
+        {
+            _attempt = 0;
+            ctsToCancel = _pendingRetryCts;
+            _pendingRetryCts = null;
+        }
+
+        // Cancel and dispose outside the lock — cancellation callbacks must not re-acquire the lock.
+        if (ctsToCancel is not null)
+        {
+#pragma warning disable CA1849 // CancelAsync is not available in sync event handler context.
+            ctsToCancel.Cancel();
+#pragma warning restore CA1849
+            ctsToCancel.Dispose();
+        }
+    }
+
+    public override void Dispose()
+    {
+        // Unsubscribe before disposal to avoid callbacks on a disposed instance.
+        rebuildQueue.ImmediateRebuildRequested -= OnImmediateRebuildRequested;
+
+        CancellationTokenSource? ctsToDispose;
+        lock (_stateLock)
+        {
+            ctsToDispose = _pendingRetryCts;
+            _pendingRetryCts = null;
+        }
+
+        ctsToDispose?.Dispose();
+
+        base.Dispose();
+    }
+
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
+        SubscribeToImmediateRebuild();
+
         if (!_options.ImageBuild.Enabled)
         {
             logger.LogInformation("Startup image rebuild skipped: ImageBuild.Enabled is false.");
@@ -74,6 +131,8 @@ internal sealed class WorkerImageRebuildService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        SubscribeToImmediateRebuild();
+
         await foreach (bool _ in rebuildQueue.ReadAllAsync(stoppingToken))
         {
             try
@@ -86,7 +145,7 @@ internal sealed class WorkerImageRebuildService(
                 return;
             }
 #pragma warning disable CA1031 // An item failure must not crash the background service or the host; the error log surfaces the issue without interrupting the consumer loop.
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
             {
                 logger.LogError(ex, "Unhandled exception in {ServiceName} while processing image rebuild.", nameof(WorkerImageRebuildService));
@@ -236,7 +295,7 @@ internal sealed class WorkerImageRebuildService(
             throw;
         }
 #pragma warning disable CA1031 // Docker build failures must be surfaced as status notifications, not exceptions, to avoid crashing the BackgroundService consumer loop.
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogError(ex, "Worker image build failed with an unhandled exception.");
@@ -245,6 +304,9 @@ internal sealed class WorkerImageRebuildService(
 
         if (errorTail is null)
         {
+            CancellationTokenSource? oldCts = SwapPendingRetryCts(replacement: null, resetAttempt: true);
+            await CancelAndDisposeAsync(oldCts);
+
             settings.CompleteImageBuild();
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -256,18 +318,97 @@ internal sealed class WorkerImageRebuildService(
         }
         else
         {
-            settings.FailImageBuild(errorTail, nextRetryAt: null, attempt: 0);
+            CancellationTokenSource retryCts = new();
+            CancellationTokenSource? oldCts = SwapPendingRetryCts(retryCts, resetAttempt: false);
+            await CancelAndDisposeAsync(oldCts);
+
+            int attempt;
+            DateTimeOffset nextRetryAt;
+            lock (_stateLock)
+            {
+                _attempt++;
+                attempt = _attempt;
+                nextRetryAt = DateTimeOffset.UtcNow + ComputeBackoff(attempt);
+            }
+
+            settings.FailImageBuild(errorTail, nextRetryAt, attempt);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             logger.LogError(
-                "Worker image '{Image}' build failed: {Error}",
+                "Worker image '{Image}' build failed (attempt {Attempt}, next retry at {NextRetryAt}): {Error}",
                 _options.Image,
+                attempt,
+                nextRetryAt,
                 errorTail);
 
             await broadcaster.SendAsync(
-                new SystemNotification(ImageBuildCategory, true, SerializeFailedNotification(errorTail, nextRetryAt: null, attempt: 0)),
+                new SystemNotification(ImageBuildCategory, true, SerializeFailedNotification(errorTail, nextRetryAt, attempt)),
                 cancellationToken);
+
+            // Fire-and-forget delayed re-enqueue. Link both the service stopping token and the
+            // per-retry CTS so that either a shutdown or a superseding RequestImmediateRebuild
+            // can cancel the wait. The linked CTS created inside ScheduleDelayedRetryAsync is
+            // disposed within the task itself after the delay completes or is cancelled.
+#pragma warning disable CA2025 // The linked CancellationTokenSource is owned and disposed by ScheduleDelayedRetryAsync; the task disposes it internally before returning.
+            _ = ScheduleDelayedRetryAsync(nextRetryAt - DateTimeOffset.UtcNow, retryCts, cancellationToken);
+#pragma warning restore CA2025
         }
+    }
+
+    private CancellationTokenSource? SwapPendingRetryCts(CancellationTokenSource? replacement, bool resetAttempt)
+    {
+        lock (_stateLock)
+        {
+            if (resetAttempt)
+            {
+                _attempt = 0;
+            }
+
+            CancellationTokenSource? old = _pendingRetryCts;
+            _pendingRetryCts = replacement;
+            return old;
+        }
+    }
+
+    private static async Task CancelAndDisposeAsync(CancellationTokenSource? cts)
+    {
+        if (cts is null)
+        {
+            return;
+        }
+
+        await cts.CancelAsync();
+        cts.Dispose();
+    }
+
+    private async Task ScheduleDelayedRetryAsync(
+        TimeSpan delay,
+        CancellationTokenSource retryCts,
+        CancellationToken stoppingToken)
+    {
+        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
+            retryCts.Token,
+            stoppingToken);
+
+        try
+        {
+            await Task.Delay(delay, linked.Token);
+            rebuildQueue.TryEnqueue();
+        }
+        catch (OperationCanceledException)
+        {
+            // Either superseded by RequestImmediateRebuild or the service is stopping — both are intentional.
+        }
+    }
+
+    private TimeSpan ComputeBackoff(int attempt)
+    {
+        // Exponential backoff: initialBackoff * 2^(attempt-1), capped at maxBackoff.
+        // Use double arithmetic to avoid overflow on large attempt counts.
+        double multiplier = Math.Pow(2, attempt - 1);
+        double seconds = _options.ImageBuild.InitialBackoff.TotalSeconds * multiplier;
+        TimeSpan uncapped = TimeSpan.FromSeconds(seconds);
+        return uncapped < _options.ImageBuild.MaxBackoff ? uncapped : _options.ImageBuild.MaxBackoff;
     }
 
     private static string SerializeBuildingNotification()

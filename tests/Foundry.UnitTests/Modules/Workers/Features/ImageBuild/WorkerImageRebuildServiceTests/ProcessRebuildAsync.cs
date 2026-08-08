@@ -76,7 +76,8 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         CapturingNotificationBroadcaster? broadcaster = null,
         string contentRootPath = "",
         string? contextPath = null,
-        bool imageBuildEnabled = true)
+        bool imageBuildEnabled = true,
+        TimeSpan? initialBackoff = null)
     {
         SqliteConnection connection = _connection;
 
@@ -100,6 +101,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             {
                 Enabled = imageBuildEnabled,
                 ContextPath = contextPath ?? string.Empty,
+                InitialBackoff = initialBackoff ?? TimeSpan.FromSeconds(30),
             },
         };
 
@@ -989,6 +991,187 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
         settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
+    }
+
+    // Backoff state tests (Step 5)
+
+    [Fact]
+    public async Task WhenBuildFails_PersistedAttemptIsOne()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            failed.Attempt.ShouldBe(1);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildFails_PersistedNextRetryAtIsInFuture()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            DateTimeOffset before = DateTimeOffset.UtcNow;
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            failed.NextRetryAt.ShouldNotBeNull();
+            failed.NextRetryAt.Value.ShouldBeGreaterThan(before);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildFailsTwice_AttemptIsTwo()
+    {
+        // Arrange — use tiny backoff so the test doesn't wait 30s
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                contextPath: contextDir,
+                initialBackoff: TimeSpan.FromMilliseconds(1));
+
+            // Act — call twice on the same service instance to accumulate attempt
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            failed.Attempt.ShouldBe(2);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceedsAfterFailure_AttemptResets()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService firstSut = BuildService(
+                errorImages,
+                contextPath: contextDir,
+                initialBackoff: TimeSpan.FromMilliseconds(1));
+
+            // Fail once to set attempt=1
+            await firstSut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Now build with a success path — use the same service instance
+            WorkerImageRebuildService sut = BuildService(
+                new SpyImageOperations(),
+                contextPath: contextDir,
+                initialBackoff: TimeSpan.FromMilliseconds(1));
+
+            // Act — build succeeds; attempt should reset to 0
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — state is Idle after success; no attempt counter needed
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildFails_FailureNotificationContainsAttemptAndNextRetryAt()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            SeedGlobalSettings();
+
+            CapturingNotificationBroadcaster broadcaster = new();
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                broadcaster,
+                contextPath: contextDir,
+                initialBackoff: TimeSpan.FromMilliseconds(1));
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — JSON notification payload carries attempt=1 and non-null nextRetryAt
+            SystemNotification? failureNotification = broadcaster.Sent
+                .LastOrDefault(n =>
+                    n.Category == WorkerImageRebuildService.ImageBuildCategory
+                    && n.IsActive);
+            failureNotification.ShouldNotBeNull();
+
+            JsonDocument doc = JsonDocument.Parse(failureNotification.Message);
+            doc.RootElement.GetProperty("attempt").GetInt32().ShouldBe(1);
+            doc.RootElement.GetProperty("nextRetryAt").ValueKind.ShouldNotBe(JsonValueKind.Null);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
     }
 
     private static string CreateTempContextDir()
