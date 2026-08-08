@@ -38,7 +38,7 @@
           <line x1="12" y1="8" x2="12" y2="12"></line>
           <line x1="12" y1="16" x2="12.01" y2="16"></line>
         </svg>
-        <span class="system-banner__message">Worker image build failed.</span>
+        <span class="system-banner__message">{{ failedMessage() }}</span>
         @if (settingsService.imageBuildLogTail()) {
           <span class="system-banner__log-tail"><span class="sr-only">Build log (partial): </span>{{ settingsService.imageBuildLogTail() | slice: -120 }}</span>
         }
@@ -46,6 +46,7 @@
         <button
           type="button"
           class="system-banner__action-btn"
+          aria-label="Retry image build now"
           [disabled]="settingsService.savingImageFlags()"
           [attr.aria-busy]="settingsService.savingImageFlags() || null"
           (click)="retryImageBuild()"
