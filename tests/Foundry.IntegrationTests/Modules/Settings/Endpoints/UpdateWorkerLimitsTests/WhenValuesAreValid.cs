@@ -58,7 +58,9 @@ public sealed class WhenValuesAreValid : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.MaxConcurrent.ShouldBe(5),
@@ -85,7 +87,9 @@ public sealed class WhenValuesAreValid : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.MaxConcurrent.ShouldBe(10),

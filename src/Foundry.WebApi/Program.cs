@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Foundry.Modules.Credentials;
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues;
@@ -21,6 +23,8 @@ const string AngularDevServerPolicy = "AngularDevServer";
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo("data/dp-keys"));
 builder.Services.AddScoped<IntegrationEventCollector>();

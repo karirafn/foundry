@@ -63,7 +63,9 @@ public sealed class WhenTemplatesAreCleared : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.SystemPromptTemplate.ShouldBeNull(),
@@ -90,7 +92,9 @@ public sealed class WhenTemplatesAreCleared : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.SystemPromptTemplate.ShouldBeNull(),
@@ -117,7 +121,9 @@ public sealed class WhenTemplatesAreCleared : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.SystemPromptTemplate.ShouldBe("Retained system prompt."),
