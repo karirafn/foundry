@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
@@ -56,7 +57,9 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.MaxConcurrent.ShouldBe(1),
@@ -83,7 +86,9 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.SystemPromptTemplate.ShouldBe("system-prompt"),
@@ -104,10 +109,42 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.SystemPromptTemplate.ShouldBeNull(),
             () => summary.WorkerPromptTemplate.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task SerializesImageBuildStatusAsString()
+    {
+        // Arrange
+        // ReadFromJsonAsync<GlobalSettingsSummary> deserializes both "2" and "Failed" identically,
+        // so a typed round-trip cannot catch the regression — read the raw JSON and assert the
+        // token kind and value directly (design decision D3).
+        // DbContext seeding is used because no HTTP endpoint produces the Failed state directly.
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.FailImageBuild("build error tail");
+        dbContext.Set<GlobalSettings>().Add(settings);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/settings", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        string rawJson = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using JsonDocument document = JsonDocument.Parse(rawJson);
+        JsonElement imageBuildStatusElement = document.RootElement.GetProperty("imageBuildStatus");
+        imageBuildStatusElement.ValueKind.ShouldBe(JsonValueKind.String);
+        imageBuildStatusElement.GetString().ShouldBe("Failed");
     }
 }

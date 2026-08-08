@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
 
@@ -14,6 +17,15 @@ namespace Foundry.IntegrationTests;
 
 public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyncDisposable
 {
+    // Matches the server-side JSON options registered in Program.cs (camelCase property names,
+    // string enum serialization). Tests that deserialize response bodies with enum properties must
+    // pass these options to ReadFromJsonAsync so string enum tokens round-trip correctly.
+    public static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
     private readonly SqliteConnection _connection;
     private readonly Action<IServiceCollection>? _serviceOverrides;
 

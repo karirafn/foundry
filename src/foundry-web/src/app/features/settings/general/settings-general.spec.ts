@@ -3,12 +3,13 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { By } from '@angular/platform-browser';
 import { NgModel } from '@angular/forms';
+import { signal } from '@angular/core';
 import { NEVER } from 'rxjs';
 import { SettingsGeneralComponent } from './settings-general';
 import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 
 const IMAGE_FLAGS_DEFAULTS = {
   installDotnet: false,

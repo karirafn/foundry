@@ -1,12 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { NEVER } from 'rxjs';
 import { SettingsService } from './core/services/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
 import { SystemSignalRService } from './core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 
 function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {

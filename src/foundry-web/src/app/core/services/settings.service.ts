@@ -1,4 +1,4 @@
-import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { Injectable, Signal, WritableSignal, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin, merge } from 'rxjs';
@@ -20,8 +20,10 @@ import {
 import { DispatchService } from './dispatch.service';
 import { AccountService } from '../../features/settings/accounts/account.service';
 import { SystemSignalRService } from './system-signalr.service';
+import { IMAGE_BUILD_NOTIFICATION_CATEGORY } from '../models/system-notification.model';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
+const IMAGE_BUILD_MESSAGE_SEPARATOR = '|';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
@@ -44,6 +46,18 @@ export class SettingsService {
         takeUntilDestroyed()
       )
       .subscribe();
+
+    effect(() => {
+      const notification = this._signalR.notifications().find(
+        (n) => n.category === IMAGE_BUILD_NOTIFICATION_CATEGORY
+      );
+      if (notification) {
+        const parsed = this._parseImageBuildMessage(notification.message);
+        if (parsed) {
+          this.setImageBuildStatus(parsed.status, parsed.logTail);
+        }
+      }
+    });
 
     this._signalR.loginSessionUpdate
       .pipe(takeUntilDestroyed())
@@ -410,6 +424,19 @@ export class SettingsService {
   setImageBuildStatus(status: ImageBuildStatus, logTail: string | null): void {
     this._imageBuildStatusSignal.set(status);
     this._imageBuildLogTailSignal.set(logTail);
+  }
+
+  private _parseImageBuildMessage(message: string): { status: ImageBuildStatus; logTail: string | null } | null {
+    const separatorIndex = message.indexOf(IMAGE_BUILD_MESSAGE_SEPARATOR);
+    if (separatorIndex === -1) {
+      return null;
+    }
+    const token = message.slice(0, separatorIndex);
+    if (token !== 'Idle' && token !== 'Building' && token !== 'Failed') {
+      return null;
+    }
+    const logPart = message.slice(separatorIndex + 1);
+    return { status: token, logTail: logPart.length > 0 ? logPart : null };
   }
 
   private _mapToWorkerImageFlags(response: GlobalSettingsResponse): WorkerImageFlags {
