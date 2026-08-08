@@ -3,13 +3,14 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { signal } from '@angular/core';
 import { NEVER } from 'rxjs';
 import { SettingsLayoutComponent } from './settings-layout';
 import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { SETTINGS_ROUTES } from '../settings.routes';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: [] };
+const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 
 const SETTINGS_RESPONSE = {
   maxConcurrent: 3,

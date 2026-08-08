@@ -40,10 +40,15 @@ function createMockDispatchService() {
 }
 
 function createMockSettingsService() {
+  const imageBuildStatusSignal = signal<'Idle' | 'Building' | 'Failed'>('Idle');
+  const imageBuildLogTailSignal = signal<string | null>(null);
+
   return {
     loadSettings: vi.fn(),
     setImageBuildStatus: vi.fn(),
     retryImageBuild: vi.fn(),
+    imageBuildStatus: imageBuildStatusSignal.asReadonly(),
+    imageBuildLogTail: imageBuildLogTailSignal.asReadonly(),
   };
 }
 

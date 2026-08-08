@@ -62,7 +62,9 @@ public sealed class WhenTemplatesAreSet : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.SystemPromptTemplate.ShouldBe("You are a helpful assistant."),
@@ -93,7 +95,9 @@ public sealed class WhenTemplatesAreSet : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(TestContext.Current.CancellationToken);
+            .ReadFromJsonAsync<GlobalSettingsSummary>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.SystemPromptTemplate.ShouldBe("System prompt here."),
