@@ -59,6 +59,25 @@ Settings and the setup wizard derive OAuth status from persisted state — a com
 The OAuth credential sits in plaintext in the volume, consistent with how the genuine CLI stores it, and bounded by the Docker-socket trust boundary Foundry already operates within.
 Distinct from provider authentication (Account / PAT), which authenticates git operations against GitHub or GitLab.
 
+## Worker Image Build
+
+The staged Docker build (base → worker → login images) that produces the images workers run on, executed by `WorkerImageRebuildService` (a Workers-module background service).
+A failure at any stage — including the login image — fails the whole rebuild.
+Rebuilds are requested when the Worker Image Configuration changes (`WorkerImageConfigurationChanged` → immediate rebuild request) and by operator retry; an immediate rebuild request supersedes a pending backoff wait.
+While no usable image exists and at least one account is configured, the dashboard blocks with a full-screen forge overlay (**cold build**) until the first build succeeds.
+
+## Image Build State
+
+A closed-hierarchy value object on Global Settings tracking the worker image build lifecycle: `Idle`, `Building`, `Failed(ErrorTail, NextRetryAt, Attempt)`.
+Transitions are methods on the aggregate (`BeginImageBuild`, `CompleteImageBuild`, `FailImageBuild`); persisted as a JSON blob.
+Failed builds auto-retry with exponential backoff (`initial * 2^(attempt-1)`, capped at a configured maximum); operator retry is only permitted from `Failed`.
+A non-`Idle` state drives the dashboard image-build banner and disables the worker-image settings form, and dispatch gates on the status — no new workers are dispatched while the image is building or failed.
+
+## Worker Image Configuration
+
+The set of preinstall flags (provider CLIs and other tooling, e.g. `INSTALL_GH`, `INSTALL_GLAB`) stored on Global Settings, driving Docker build args for the worker image.
+Changing it publishes `WorkerImageConfigurationChanged`, which requests an immediate rebuild.
+
 ## Provider
 
 A git hosting platform (GitHub, GitLab).
@@ -95,7 +114,7 @@ A Monitored Repository carries no account reference; on each eligibility evaluat
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, prompt templates), authentication mode (API key or OAuth), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `DefaultCooldownMinutes`, `UsageLimitResetsAt`) and the auth-invalid pause (`IsAuthInvalidPaused`) — both pause dispatch until explicitly resumed, but only the usage-limit pause supports auto-resume. `IsDispatchPaused` is the separate manual operator pause.
+Includes worker settings (max concurrent, timeout, prompt templates), authentication mode (API key or OAuth), the Worker Image Configuration and Image Build State, and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `DefaultCooldownMinutes`, `UsageLimitResetsAt`) and the auth-invalid pause (`IsAuthInvalidPaused`) — both pause dispatch until explicitly resumed, but only the usage-limit pause supports auto-resume. `IsDispatchPaused` is the separate manual operator pause.
 DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.
 Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`.
 
@@ -420,6 +439,14 @@ Auto-resume clears `UsageLimitResetsAt` and retries all `FailureReason.UsageLimi
 Manual "Resume All" clears both flags and retries usage-limited issues.
 Already-running workers are unaffected — only queued issues are held.
 Both pause and resume broadcast a `dispatch` system notification (`isActive: true` on pause, `isActive: false` on resume); the client treats this as a pure reload trigger and re-syncs banner state from `/api/settings` (the authoritative source) rather than reading any timestamp off the SignalR payload.
+
+## System Notification
+
+A lightweight SignalR broadcast (`Category`, `IsActive`, `Message`) delivered to all dashboard clients via the system hub, used for global operational banners.
+Categories in use: `dispatch`, `docker`, `image-build`, `auth`, `license`.
+Client semantics: an `isActive: true` notification is stored, replacing any prior entry for its category; `isActive: false` removes the category's entry.
+For the `dispatch` category the notification is a pure reload trigger — the client re-syncs authoritative state from `/api/settings` rather than reading it off the payload (see Dispatch Pause); the `image-build` category currently carries a JSON state payload instead.
+Ephemeral — broadcast directly, never through the transactional outbox, since there is no durable consumer.
 
 ## Container Output Parser
 
