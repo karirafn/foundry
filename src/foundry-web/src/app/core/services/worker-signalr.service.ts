@@ -1,7 +1,7 @@
 import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { Observable, Observer, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
-import { WorkerActivity } from '../../features/workers/worker-run.model';
+import { WorkerActivity } from '../models/worker-activity.model';
 
 export interface WorkerHub {
   on(methodName: string, callback: (activity: WorkerActivity) => void): void;

@@ -25,8 +25,3 @@ export interface WorkerRunDetail {
   readonly hasStoredLog: boolean;
 }
 
-export interface WorkerActivity {
-  readonly workerRunId: string;
-  readonly issueId: string;
-  readonly lastActivityAt: string;
-}
