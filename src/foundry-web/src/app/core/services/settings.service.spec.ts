@@ -1948,7 +1948,6 @@ describe('SettingsService — isColdBuildBlocking', () => {
     const hasAccountsSignal: WritableSignal<boolean> = signal(false);
     return {
       hasAccounts: hasAccountsSignal.asReadonly() as Signal<boolean>,
-      _hasAccountsSignal: hasAccountsSignal,
       setHasAccounts: (value: boolean) => hasAccountsSignal.set(value),
     };
   }
