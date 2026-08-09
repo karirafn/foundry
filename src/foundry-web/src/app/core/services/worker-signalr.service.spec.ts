@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, take, toArray } from 'rxjs';
 import { WorkerSignalRService, WORKER_HUB_FACTORY, WorkerHub } from './worker-signalr.service';
-import { WorkerActivity } from '../../features/workers/worker-run.model';
+import { WorkerActivity } from '../models/worker-activity.model';
 
 interface CapturedHubCallbacks {
   onWorkerActivity: ((activity: WorkerActivity) => void) | null;
