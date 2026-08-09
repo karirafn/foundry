@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AccountService } from './account.service';
 import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, TokenRequirements, UpdateAccountRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { AccountPresenceService } from '../../../core/services/account-presence.service';
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -31,6 +32,7 @@ function setupService() {
   TestBed.configureTestingModule({
     providers: [
       AccountService,
+      AccountPresenceService,
       provideHttpClient(),
       provideHttpClientTesting(),
     ],
@@ -38,17 +40,20 @@ function setupService() {
   return {
     service: TestBed.inject(AccountService),
     httpMock: TestBed.inject(HttpTestingController),
+    accountPresence: TestBed.inject(AccountPresenceService),
   };
 }
 
 describe('AccountService', () => {
   let service: AccountService;
   let httpMock: HttpTestingController;
+  let accountPresence: AccountPresenceService;
 
   beforeEach(() => {
     const setup = setupService();
     service = setup.service;
     httpMock = setup.httpMock;
+    accountPresence = setup.accountPresence;
   });
 
   afterEach(() => httpMock.verify());
@@ -831,6 +836,70 @@ describe('AccountService', () => {
     expect(secondResult).toEqual(mockRequirements);
     // Assert — same object reference proves the cache returned the stored instance
     expect(secondResult).toBe(firstResult);
+  });
+
+  // Presence effect — Cycle 1: loadAccounts with ≥1 account sets hasAccounts to true
+  it('should set hasAccounts to true in AccountPresenceService after loadAccounts returns accounts', () => {
+    // Arrange / Act
+    service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    TestBed.flushEffects();
+
+    // Assert
+    expect(accountPresence.hasAccounts()).toBe(true);
+  });
+
+  // Presence effect — Cycle 2: loadAccounts with empty list sets hasAccounts to false
+  it('should set hasAccounts to false in AccountPresenceService after loadAccounts returns empty list', () => {
+    // Arrange — first load with an account to get to true
+    service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    TestBed.flushEffects();
+
+    // Act — reload with empty list
+    service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush([]);
+    TestBed.flushEffects();
+
+    // Assert
+    expect(accountPresence.hasAccounts()).toBe(false);
+  });
+
+  // Presence effect — Cycle 3: createAccount adding an account flips hasAccounts to true
+  it('should set hasAccounts to true in AccountPresenceService after createAccount adds an account', () => {
+    // Arrange — start with empty state (hasAccounts false)
+    service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush([]);
+    TestBed.flushEffects();
+    expect(accountPresence.hasAccounts()).toBe(false);
+
+    // Act
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+    httpMock.expectOne('/api/accounts').flush(
+      { credential: MOCK_ACCOUNT, affectedRepositories: [] },
+      { status: 201, statusText: 'Created' }
+    );
+    TestBed.flushEffects();
+
+    // Assert
+    expect(accountPresence.hasAccounts()).toBe(true);
+  });
+
+  // Presence effect — Cycle 4: deleting the last account flips hasAccounts to false
+  it('should set hasAccounts to false in AccountPresenceService after the last account is deleted', () => {
+    // Arrange — load one account so hasAccounts is true
+    service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    TestBed.flushEffects();
+    expect(accountPresence.hasAccounts()).toBe(true);
+
+    // Act — delete the only account
+    service.deleteAccount(MOCK_ACCOUNT.id);
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(null, { status: 204, statusText: 'No Content' });
+    TestBed.flushEffects();
+
+    // Assert
+    expect(accountPresence.hasAccounts()).toBe(false);
   });
 
   // Cycle 12: different providers each fetch once independently

@@ -1,8 +1,9 @@
-import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
+import { Injectable, Signal, WritableSignal, effect, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, NamespaceConflictResponse, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { AccountPresenceService } from '../../../core/services/account-presence.service';
 
 const API_BASE = '/api/accounts';
 const PROVIDERS_API_BASE = '/api/providers';
@@ -17,6 +18,7 @@ interface ValidateTokenRequest {
 export class AccountService {
   private readonly _http = inject(HttpClient);
   private readonly _toastService = inject(ToastService);
+  private readonly _accountPresence = inject(AccountPresenceService);
 
   private readonly _accountsSignal: WritableSignal<AccountSummary[]> = signal([]);
   readonly accounts: Signal<AccountSummary[]> = this._accountsSignal.asReadonly();
@@ -61,6 +63,10 @@ export class AccountService {
   readonly conflicts: Signal<NamespaceConflict[]> = this._conflictsSignal.asReadonly();
 
   private readonly _tokenRequirementsCache = new Map<ProviderType, Promise<TokenRequirements>>();
+
+  constructor() {
+    effect(() => this._accountPresence.setHasAccounts(this.accounts().length > 0));
+  }
 
   loadAccounts(): Promise<void> {
     this._loadErrorSignal.set(null);
