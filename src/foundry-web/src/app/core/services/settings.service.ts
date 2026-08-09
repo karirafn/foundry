@@ -19,7 +19,7 @@ import {
   WorkerLimits,
 } from '../models/settings.model';
 import { DispatchService } from './dispatch.service';
-import { AccountService } from '../../features/settings/accounts/account.service';
+import { AccountPresenceService } from './account-presence.service';
 import { SystemSignalRService } from './system-signalr.service';
 import { IMAGE_BUILD_NOTIFICATION_CATEGORY } from '../models/system-notification.model';
 
@@ -35,7 +35,7 @@ const START_LOGIN_ERROR = 'Failed to start login';
 export class SettingsService {
   private readonly _http = inject(HttpClient);
   private readonly _dispatchService = inject(DispatchService);
-  private readonly _accountService = inject(AccountService);
+  private readonly _accountPresence = inject(AccountPresenceService);
   private readonly _signalR = inject(SystemSignalRService);
 
   constructor() {
@@ -153,7 +153,7 @@ export class SettingsService {
   readonly hasUsableImage: Signal<boolean> = this._hasUsableImageSignal.asReadonly();
 
   readonly isColdBuildBlocking: Signal<boolean> = computed(
-    () => this._accountService.accounts().length > 0 && !this._hasUsableImageSignal()
+    () => this._accountPresence.hasAccounts() && !this._hasUsableImageSignal()
   );
 
   private readonly _savingImageFlagsSignal: WritableSignal<boolean> = signal(false);

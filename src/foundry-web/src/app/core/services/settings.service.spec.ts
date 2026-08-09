@@ -9,6 +9,7 @@ import { LoginSessionUpdate } from '../models/settings.model';
 import { DispatchService } from './dispatch.service';
 import { SystemSignalRService } from './system-signalr.service';
 import { SystemNotification } from '../models/system-notification.model';
+import { AccountPresenceService } from './account-presence.service';
 
 function createMockSignalRService() {
   const notificationsSignal: WritableSignal<SystemNotification[]> = signal([]);
@@ -1936,6 +1937,144 @@ describe('SettingsService — retry fields', () => {
 
     // Assert
     expect(service.imageBuildNextRetryAt()).toBeNull();
+    httpMock.verify();
+  });
+});
+
+describe('SettingsService — isColdBuildBlocking', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  function createMockAccountPresenceService() {
+    const hasAccountsSignal: WritableSignal<boolean> = signal(false);
+    return {
+      hasAccounts: hasAccountsSignal.asReadonly() as Signal<boolean>,
+      _hasAccountsSignal: hasAccountsSignal,
+      setHasAccounts: (value: boolean) => hasAccountsSignal.set(value),
+    };
+  }
+
+  function setupWithPresence() {
+    const mockSignalR = createMockSignalRService();
+    const mockPresence = createMockAccountPresenceService();
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsService,
+        DispatchService,
+        { provide: SystemSignalRService, useValue: mockSignalR },
+        { provide: AccountPresenceService, useValue: mockPresence },
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
+    });
+    return {
+      service: TestBed.inject(SettingsService),
+      httpMock: TestBed.inject(HttpTestingController),
+      mockPresence,
+    };
+  }
+
+  function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      maxConcurrent: 3,
+      timeoutMinutes: 60,
+      systemPromptTemplate: null,
+      workerPromptTemplate: null,
+      usageLimitResetsAt: null,
+      isDispatchPaused: false,
+      autoResumeOnUsageReset: true,
+      defaultCooldownMinutes: 60,
+      installDotnet: false,
+      installAngular: false,
+      installGlab: false,
+      installGh: false,
+      installChromium: false,
+      installDocker: false,
+      imageBuildStatus: 'Idle',
+      lastImageBuildError: null,
+      hasUsableImage: false,
+      nextRetryAt: null,
+      attempt: 0,
+      ...overrides,
+    };
+  }
+
+  function buildCredentials(): Record<string, unknown> {
+    return {
+      accountId: '00000000-0000-0000-0000-000000000001',
+      authMode: 'ApiKey',
+      oAuthStatus: 'NotConfigured',
+      subscriptionType: null,
+      oAuthAccountEmail: null,
+      oAuthAccountOrgName: null,
+    };
+  }
+
+  // Cycle 1: hasAccounts=true + hasUsableImage=false → isColdBuildBlocking is true
+  it('should be true when hasAccounts is true and there is no usable image', () => {
+    // Arrange
+    const { service, httpMock, mockPresence } = setupWithPresence();
+    mockPresence.setHasAccounts(true);
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: false }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+
+    // Act
+    // (computed signal — no explicit call)
+
+    // Assert
+    expect(service.isColdBuildBlocking()).toBe(true);
+    httpMock.verify();
+  });
+
+  // Cycle 2: hasAccounts=false → isColdBuildBlocking is false regardless of usable image
+  it('should be false when hasAccounts is false regardless of usable image', () => {
+    // Arrange
+    const { service, httpMock, mockPresence } = setupWithPresence();
+    mockPresence.setHasAccounts(false);
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: false }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+
+    // Act
+    // (computed signal — no explicit call)
+
+    // Assert
+    expect(service.isColdBuildBlocking()).toBe(false);
+    httpMock.verify();
+  });
+
+  // Cycle 3: hasAccounts=true + hasUsableImage=true → isColdBuildBlocking is false
+  it('should be false when hasAccounts is true but there is a usable image', () => {
+    // Arrange
+    const { service, httpMock, mockPresence } = setupWithPresence();
+    mockPresence.setHasAccounts(true);
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: true }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+
+    // Act
+    // (computed signal — no explicit call)
+
+    // Assert
+    expect(service.isColdBuildBlocking()).toBe(false);
+    httpMock.verify();
+  });
+
+  // Cycle 4: reactive — flipping hasAccounts live updates isColdBuildBlocking
+  it('should react to hasAccounts changing from false to true while hasUsableImage remains false', () => {
+    // Arrange
+    const { service, httpMock, mockPresence } = setupWithPresence();
+    mockPresence.setHasAccounts(false);
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ hasUsableImage: false }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+    expect(service.isColdBuildBlocking()).toBe(false);
+
+    // Act
+    mockPresence.setHasAccounts(true);
+
+    // Assert
+    expect(service.isColdBuildBlocking()).toBe(true);
     httpMock.verify();
   });
 });
