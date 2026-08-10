@@ -1,11 +1,9 @@
-using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
-using Foundry.WebApi.Persistence;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -18,61 +16,16 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebuildServiceTests;
 
-public sealed class StartingAsync : IAsyncDisposable
+public sealed class StartingAsync
 {
-    private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
-
-    public StartingAsync()
-    {
-        _connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await _connection.DisposeAsync();
-        GC.SuppressFinalize(this);
-    }
-
-    private FoundryDbContext CreateDbContext()
-    {
-        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new FoundryDbContext(options);
-    }
-
-    private void SeedGlobalSettings(bool initiallyFailed = false)
-    {
-        using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
-
-        if (initiallyFailed)
-        {
-            settings.FailImageBuild("previous error", nextRetryAt: null, attempt: 0);
-        }
-
-        db.Set<GlobalSettings>().Add(settings);
-        db.SaveChanges();
-    }
-
-    private WorkerImageRebuildService BuildService(
+    private static WorkerImageRebuildService BuildService(
         SpyWorkerImageRebuildQueue? queue = null,
-        bool imageBuildEnabled = true)
+        bool imageBuildEnabled = true,
+        bool settingsExists = true)
     {
-        Microsoft.Data.Sqlite.SqliteConnection connection = _connection;
-
         ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
+        services.AddScoped<IGlobalSettingsQueries>(_ => new StubGlobalSettingsQueries(settingsExists));
+        services.AddScoped<IIntegrationEventDispatcher>(_ => new NullIntegrationEventDispatcher());
 
         ServiceProvider sp = services.BuildServiceProvider();
 
@@ -92,7 +45,6 @@ public sealed class StartingAsync : IAsyncDisposable
             new NullImageOperations(),
             new StubHostEnvironment(string.Empty),
             Options.Create(workerOptions),
-            new NullNotificationBroadcaster(),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 
@@ -100,9 +52,8 @@ public sealed class StartingAsync : IAsyncDisposable
     public async Task OnStartup_RequestsImmediateRebuild()
     {
         // Arrange
-        SeedGlobalSettings();
         SpyWorkerImageRebuildQueue queue = new();
-        WorkerImageRebuildService sut = BuildService(queue);
+        WorkerImageRebuildService sut = BuildService(queue, settingsExists: true);
 
         // Act
         await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
@@ -112,28 +63,24 @@ public sealed class StartingAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task OnStartup_DoesNotTransitionStatusToBuilding()
+    public async Task WhenGlobalSettingsMissing_DoesNotRequestImmediateRebuild()
     {
-        // Arrange — Building transition is owned by ProcessRebuildAsync, not StartingAsync
-        SeedGlobalSettings();
-        WorkerImageRebuildService sut = BuildService();
+        // Arrange — settings query returns null; early-return path fires
+        SpyWorkerImageRebuildQueue queue = new();
+        WorkerImageRebuildService sut = BuildService(queue, settingsExists: false);
 
         // Act
         await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        await using FoundryDbContext db = CreateDbContext();
-        GlobalSettings? settings = await db.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-        settings.ShouldNotBeNull();
-        settings.ImageBuildState.ShouldNotBeOfType<ImageBuildState.Building>();
+        queue.RequestImmediateRebuildCalled.ShouldBeFalse();
     }
 
     [Fact]
     public async Task WhenGlobalSettingsMissing_DoesNotThrow()
     {
-        // Arrange — no GlobalSettings seeded
-        WorkerImageRebuildService sut = BuildService();
+        // Arrange — no settings row
+        WorkerImageRebuildService sut = BuildService(settingsExists: false);
 
         // Act
         Task act = ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
@@ -146,7 +93,6 @@ public sealed class StartingAsync : IAsyncDisposable
     public async Task WhenImageBuildDisabled_DoesNotRequestImmediateRebuild()
     {
         // Arrange
-        SeedGlobalSettings();
         SpyWorkerImageRebuildQueue queue = new();
         WorkerImageRebuildService sut = BuildService(queue, imageBuildEnabled: false);
 
@@ -155,24 +101,6 @@ public sealed class StartingAsync : IAsyncDisposable
 
         // Assert
         queue.RequestImmediateRebuildCalled.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task WhenImageBuildDisabled_DoesNotSetStatusToBuilding()
-    {
-        // Arrange
-        SeedGlobalSettings();
-        WorkerImageRebuildService sut = BuildService(imageBuildEnabled: false);
-
-        // Act
-        await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        await using FoundryDbContext db = CreateDbContext();
-        GlobalSettings? settings = await db.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-        settings.ShouldNotBeNull();
-        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
     }
 
     private sealed class SpyWorkerImageRebuildQueue : IWorkerImageRebuildQueue
@@ -234,10 +162,63 @@ public sealed class StartingAsync : IAsyncDisposable
         public Task<IList<Docker.DotNet.Models.ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<Docker.DotNet.Models.ImageHistoryResponse>>([]);
     }
 
-    private sealed class NullNotificationBroadcaster : ISystemNotificationBroadcaster
+    private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    private sealed class StubGlobalSettingsQueries(bool settingsExists) : IGlobalSettingsQueries
+    {
+        private static readonly GlobalSettingsSummary DefaultSummary = new(
+            MaxConcurrent: 1,
+            TimeoutMinutes: 60,
+            SystemPromptTemplate: null,
+            WorkerPromptTemplate: null,
+            UsageLimitResetsAt: null,
+            IsDispatchPaused: false,
+            AutoResumeOnUsageReset: true,
+            DefaultCooldownMinutes: 0,
+            InstallDotnet: false,
+            InstallAngular: false,
+            InstallGlab: false,
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false,
+            ImageBuildStatus: ImageBuildStatus.Idle,
+            LastImageBuildError: null,
+            HasUsableImage: false,
+            NextRetryAt: null,
+            Attempt: 0);
+
+        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(settingsExists ? DefaultSummary : (GlobalSettingsSummary?)null);
+
+        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
+            => Task.FromResult(1);
+
+        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(60);
+
+        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<(string?, string?)>((null, null));
+
+        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new DispatchPauseState(null, false, true));
+
+        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(0);
+
+        public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
+            => Task.FromResult(ImageBuildStatus.Idle);
+
+        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
+        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult((IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
     }
 
     private sealed class StubHostEnvironment(string contentRootPath) : IHostEnvironment

@@ -1,15 +1,13 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
-using Foundry.WebApi.Persistence;
 
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -22,76 +20,25 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebuildServiceTests;
 
-public sealed class ProcessRebuildAsync : IAsyncDisposable
+public sealed class ProcessRebuildAsync
 {
-    private readonly SqliteConnection _connection;
-
-    public ProcessRebuildAsync()
-    {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await _connection.DisposeAsync();
-        GC.SuppressFinalize(this);
-    }
-
-    private FoundryDbContext CreateDbContext()
-    {
-        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new FoundryDbContext(options);
-    }
-
-    private void SeedGlobalSettings(
-        WorkerImageConfiguration? config = null,
-        bool initiallyFailed = false)
-    {
-        using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
-
-        if (config is not null)
-        {
-            settings.UpdateWorkerImageConfiguration(config);
-        }
-
-        if (initiallyFailed)
-        {
-            settings.FailImageBuild("previous error", nextRetryAt: null, attempt: 0);
-        }
-
-        db.Set<GlobalSettings>().Add(settings);
-        db.SaveChanges();
-    }
-
-    private WorkerImageRebuildService BuildService(
+    private static WorkerImageRebuildService BuildService(
         IImageOperations imageOperations,
-        CapturingNotificationBroadcaster? broadcaster = null,
+        IGlobalSettingsQueries? settingsQueries = null,
+        CapturingIntegrationEventDispatcher? dispatcher = null,
         string contentRootPath = "",
         string? contextPath = null,
         bool imageBuildEnabled = true,
         TimeSpan? initialBackoff = null,
         IWorkerImageRebuildQueue? queue = null)
     {
-        SqliteConnection connection = _connection;
+        ServiceCollection services = new();
+        services.AddScoped<IGlobalSettingsQueries>(_ =>
+            settingsQueries ?? new StubGlobalSettingsQueries(settingsExists: true));
+        services.AddScoped<IIntegrationEventDispatcher>(_ =>
+            dispatcher ?? new CapturingIntegrationEventDispatcher());
 
-        Microsoft.Extensions.DependencyInjection.ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<DbContext>(sp =>
-            sp.GetRequiredService<FoundryDbContext>());
-
-        Microsoft.Extensions.DependencyInjection.ServiceProvider sp = services.BuildServiceProvider();
+        ServiceProvider sp = services.BuildServiceProvider();
 
         WorkerOptions workerOptions = new()
         {
@@ -108,20 +55,21 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         return new WorkerImageRebuildService(
             queue ?? new NullWorkerImageRebuildQueue(),
-            sp.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(),
+            sp.GetRequiredService<IServiceScopeFactory>(),
             imageOperations,
             hostEnv,
             Options.Create(workerOptions),
-            broadcaster ?? new CapturingNotificationBroadcaster(),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 
     [Fact]
     public async Task WhenGlobalSettingsMissing_DoesNotBuildImage()
     {
-        // Arrange — no GlobalSettings row seeded
+        // Arrange — settings query returns null (no row)
         SpyImageOperations spyImages = new();
-        WorkerImageRebuildService sut = BuildService(spyImages);
+        WorkerImageRebuildService sut = BuildService(
+            spyImages,
+            settingsQueries: new StubGlobalSettingsQueries(settingsExists: false));
 
         // Act
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -131,45 +79,43 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGlobalSettingsMissing_DoesNotBroadcastBuildingNotification()
+    public async Task WhenGlobalSettingsMissing_PublishesNoEvents()
     {
-        // Arrange — no GlobalSettings row seeded; Broadcasting "Building" with no settings
-        // would leave a stuck banner since no success/failure broadcast follows the early return.
-        CapturingNotificationBroadcaster broadcaster = new();
-        WorkerImageRebuildService sut = BuildService(new SpyImageOperations(), broadcaster);
+        // Arrange — settings query returns null; no event should be published since
+        // the early return fires before any dispatch call.
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerImageRebuildService sut = BuildService(
+            new SpyImageOperations(),
+            settingsQueries: new StubGlobalSettingsQueries(settingsExists: false),
+            dispatcher: dispatcher);
 
         // Act
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-        // Assert — no active image-build notification should be broadcast at all
-        broadcaster.Sent.ShouldNotContain(n =>
-            n.Category == WorkerImageRebuildService.ImageBuildCategory
-            && n.IsActive);
+        // Assert — no ImageBuildRequested (or any other report event) must be published
+        dispatcher.Published.ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task WhenBuildSucceeds_SetsStatusToIdle()
+    public async Task WhenBuildSucceeds_PublishesImageBuildRequestedFirst()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
 
         try
         {
-            SeedGlobalSettings();
-
+            CapturingIntegrationEventDispatcher dispatcher = new();
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
+                dispatcher: dispatcher,
                 contextPath: contextDir);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
+            // Assert — ImageBuildRequested must be published before ImageBuildSucceeded
+            dispatcher.Published.Count.ShouldBeGreaterThanOrEqualTo(1);
+            dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
         }
         finally
         {
@@ -178,28 +124,26 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBuildSucceeds_ClearsFailedState()
+    public async Task WhenBuildSucceeds_PublishesImageBuildSucceeded()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
 
         try
         {
-            SeedGlobalSettings(initiallyFailed: true);
-
+            CapturingIntegrationEventDispatcher dispatcher = new();
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
+                dispatcher: dispatcher,
                 contextPath: contextDir);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
+            // Assert — ImageBuildSucceeded published after ImageBuildRequested
+            dispatcher.Published.Count.ShouldBe(2);
+            dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+            dispatcher.Published[1].ShouldBeOfType<ImageBuildSucceeded>();
         }
         finally
         {
@@ -208,99 +152,279 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBuildSucceeds_BroadcastsInactiveNotification()
+    public async Task WhenDockerReportsError_PublishesImageBuildOutcomeFailed()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
 
         try
         {
-            SeedGlobalSettings();
-
-            CapturingNotificationBroadcaster broadcaster = new();
-            WorkerImageRebuildService sut = BuildService(
-                new SpyImageOperations(),
-                broadcaster,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — the final inactive broadcast must carry an empty message (pure reload trigger)
-            SystemNotification? inactiveNotification = broadcaster.Sent
-                .FirstOrDefault(n =>
-                    n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && !n.IsActive);
-            inactiveNotification.ShouldNotBeNull();
-            inactiveNotification.Message.ShouldBe(string.Empty);
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenBuildSucceeds_PassesBuildArgsFromConfig()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            WorkerImageConfiguration config = new(
-                InstallDotnet: true,
-                InstallAngular: false,
-                InstallGlab: false,
-                InstallGh: false,
-                InstallChromium: false,
-                InstallDocker: false);
-            SeedGlobalSettings(config);
-
-            SequencedImageOperations sequenced = new();
-            WorkerImageRebuildService sut = BuildService(
-                sequenced,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — worker build (index 1) receives INSTALL_DOTNET from config
-            sequenced.AllParameters.Count.ShouldBe(3);
-            ImageBuildParameters workerParams = sequenced.AllParameters[1];
-            workerParams.BuildArgs.ShouldContainKey("INSTALL_DOTNET");
-            workerParams.BuildArgs["INSTALL_DOTNET"].ShouldBe("true");
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenDockerReportsError_SetsStatusToFailed()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            ErrorReportingImageOperations errorImages = new("Build failed: layer error");
+            const string dockerError = "Build failed: layer error";
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ErrorReportingImageOperations errorImages = new(dockerError);
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
+                dispatcher: dispatcher,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — ImageBuildOutcomeFailed published after ImageBuildRequested
+            dispatcher.Published.Count.ShouldBe(2);
+            dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+            ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+            failed.ErrorTail.ShouldBe(dockerError);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenDockerReportsError_PublishedFailedEventHasAttemptOne()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                dispatcher: dispatcher,
                 contextPath: contextDir);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+            failed.Attempt.ShouldBe(1);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenDockerReportsError_PublishedFailedEventHasNextRetryAtInFuture()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            DateTimeOffset before = DateTimeOffset.UtcNow;
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                dispatcher: dispatcher,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+            failed.NextRetryAt.ShouldNotBeNull();
+            failed.NextRetryAt.Value.ShouldBeGreaterThan(before);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildFailsTwice_SecondFailedEventHasAttemptTwo()
+    {
+        // Arrange — tiny backoff so test runs quickly
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                dispatcher: dispatcher,
+                contextPath: contextDir,
+                initialBackoff: TimeSpan.FromMilliseconds(1));
+
+            // Act — call twice on the same service instance to accumulate attempt
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — last published event is OutcomeFailed with attempt=2
+            IIntegrationEvent last = dispatcher.Published[^1];
+            ImageBuildOutcomeFailed failed = last.ShouldBeOfType<ImageBuildOutcomeFailed>();
+            failed.Attempt.ShouldBe(2);
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceedsAfterFailure_PublishesSucceeded()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            CapturingIntegrationEventDispatcher failDispatcher = new();
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService firstSut = BuildService(
+                errorImages,
+                dispatcher: failDispatcher,
+                contextPath: contextDir,
+                initialBackoff: TimeSpan.FromMilliseconds(1));
+
+            // Fail once
+            await firstSut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Now succeed — new service instance, new dispatcher
+            CapturingIntegrationEventDispatcher successDispatcher = new();
+            WorkerImageRebuildService sut = BuildService(
+                new SpyImageOperations(),
+                dispatcher: successDispatcher,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — success path publishes Requested then Succeeded
+            successDispatcher.Published.Count.ShouldBe(2);
+            successDispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+            successDispatcher.Published[1].ShouldBeOfType<ImageBuildSucceeded>();
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenDockerThrowsException_PublishesOutcomeFailed()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ThrowingImageOperations throwingImages = new("connection refused");
+            WorkerImageRebuildService sut = BuildService(
+                throwingImages,
+                dispatcher: dispatcher,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            dispatcher.Published.Count.ShouldBe(2);
+            dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenDockerThrowsExceptionWithSecret_RedactsSecretFromPublishedErrorTail()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            const string secretMessage = "pull access denied: https://user:sk-ant-api03-secret@registry.example.com/image";
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ThrowingImageOperations throwingImages = new(secretMessage);
+            WorkerImageRebuildService sut = BuildService(
+                throwingImages,
+                dispatcher: dispatcher,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — the published error tail must not contain the raw secret token
+            ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+            string errorTail = failed.ErrorTail.ShouldNotBeNull();
+            errorTail.ShouldNotContain("sk-ant-api03-secret");
+            errorTail.ShouldContain("***");
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenDockerReportsErrorWithSecret_RedactsSecretFromPublishedErrorTail()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            const string secretError = "https://glpat-abc123secret@gitlab.example.com/image build failed";
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ErrorReportingImageOperations errorImages = new(secretError);
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                dispatcher: dispatcher,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — the published error tail must not contain the raw token
+            ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+            string errorTail = failed.ErrorTail.ShouldNotBeNull();
+            errorTail.ShouldNotContain("glpat-abc123secret");
+            errorTail.ShouldContain("***");
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenDockerReportsErrorWithBuildArgSecret_RedactsSecretFromPublishedErrorTail()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            const string secretError = "ANTHROPIC_API_KEY=sk-ant-key123 in build arg caused failure";
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ErrorReportingImageOperations errorImages = new(secretError);
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                dispatcher: dispatcher,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — the published error tail must not contain the raw secret value
+            ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+            string errorTail = failed.ErrorTail.ShouldNotBeNull();
+            errorTail.ShouldNotContain("sk-ant-key123");
+            errorTail.ShouldContain("***");
         }
         finally
         {
@@ -318,8 +442,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
@@ -348,8 +470,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             SequencedImageOperations sequenced = new(failOnFirstCall: true);
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
@@ -369,29 +489,60 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBaseBuildFails_SetsStatusToFailed()
+    public async Task WhenBaseBuildFails_PublishesOutcomeFailed()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
 
         try
         {
-            SeedGlobalSettings();
-
+            CapturingIntegrationEventDispatcher dispatcher = new();
             SequencedImageOperations sequenced = new(failOnFirstCall: true);
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
+                dispatcher: dispatcher,
                 contextPath: contextDir);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceeds_PassesBuildArgsFromConfig()
+    {
+        // Arrange
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            Dictionary<string, string> configBuildArgs = new()
+            {
+                ["INSTALL_DOTNET"] = "true",
+                ["INSTALL_ANGULAR"] = "false",
+            };
+            StubGlobalSettingsQueries settingsQueries = new(settingsExists: true, buildArgs: configBuildArgs);
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                settingsQueries: settingsQueries,
+                contextPath: contextDir);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — worker build (index 1) receives INSTALL_DOTNET from config
+            sequenced.AllParameters.Count.ShouldBe(3);
+            ImageBuildParameters workerParams = sequenced.AllParameters[1];
+            workerParams.BuildArgs.ShouldContainKey("INSTALL_DOTNET");
+            workerParams.BuildArgs["INSTALL_DOTNET"].ShouldBe("true");
         }
         finally
         {
@@ -407,8 +558,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
@@ -439,8 +588,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
@@ -467,8 +614,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
@@ -496,8 +641,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
@@ -526,8 +669,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             // failOnSecondCall: base succeeds, worker fails, login must be skipped
             SequencedImageOperations sequenced = new(failOnSecondCall: true);
             WorkerImageRebuildService sut = BuildService(
@@ -547,29 +688,25 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenWorkerBuildFails_SetsStatusToFailed()
+    public async Task WhenWorkerBuildFails_PublishesOutcomeFailed()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
 
         try
         {
-            SeedGlobalSettings();
-
+            CapturingIntegrationEventDispatcher dispatcher = new();
             SequencedImageOperations sequenced = new(failOnSecondCall: true);
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
+                dispatcher: dispatcher,
                 contextPath: contextDir);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
         }
         finally
         {
@@ -578,7 +715,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenLoginBuildFails_SetsStatusToFailed()
+    public async Task WhenLoginBuildFails_PublishesOutcomeFailed()
     {
         // Arrange — a broken login image leaves the guided command non-functional,
         // so we fail the entire rebuild rather than succeeding silently.
@@ -586,22 +723,18 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
+            CapturingIntegrationEventDispatcher dispatcher = new();
             SequencedImageOperations sequenced = new(failOnThirdCall: true);
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
+                dispatcher: dispatcher,
                 contextPath: contextDir);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
         }
         finally
         {
@@ -609,347 +742,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         }
     }
 
-    [Fact]
-    public async Task WhenDockerReportsError_StoresErrorTailInFailedState()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            const string dockerError = "Build failed: layer error";
-            ErrorReportingImageOperations errorImages = new(dockerError);
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
-            failed.ErrorTail.ShouldBe(dockerError);
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenDockerReportsError_BroadcastsActiveNotificationWithEmptyMessage()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            const string dockerError = "Build failed: layer error";
-            CapturingNotificationBroadcaster broadcaster = new();
-            ErrorReportingImageOperations errorImages = new(dockerError);
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                broadcaster,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — two active image-build broadcasts: building first, then failed.
-            // Both carry empty messages (pure reload trigger; clients re-fetch /api/settings).
-            IReadOnlyList<SystemNotification> activeNotifications = broadcaster.Sent
-                .Where(n =>
-                    n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive)
-                .ToList();
-            activeNotifications.Count.ShouldBe(2, "building then failed");
-
-            SystemNotification buildingNotification = activeNotifications[0];
-            buildingNotification.Message.ShouldBe(string.Empty);
-
-            SystemNotification failedNotification = activeNotifications[1];
-            failedNotification.Message.ShouldBe(string.Empty);
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenDockerThrowsException_SetsStatusToFailed()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            ThrowingImageOperations throwingImages = new("connection refused");
-            WorkerImageRebuildService sut = BuildService(
-                throwingImages,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenDockerThrowsExceptionWithSecret_RedactsSecretFromPersistedErrorTail()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            const string secretMessage = "pull access denied: https://user:sk-ant-api03-secret@registry.example.com/image";
-            ThrowingImageOperations throwingImages = new(secretMessage);
-            WorkerImageRebuildService sut = BuildService(
-                throwingImages,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — the persisted error tail must not contain the raw secret token
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
-            string errorTail = failed.ErrorTail.ShouldNotBeNull();
-            errorTail.ShouldNotContain("sk-ant-api03-secret");
-            errorTail.ShouldContain("***");
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenDockerReportsErrorWithSecret_RedactsSecretFromPersistedErrorTail()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            const string secretError = "https://glpat-abc123secret@gitlab.example.com/image build failed";
-            ErrorReportingImageOperations errorImages = new(secretError);
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — the persisted error tail must not contain the raw token
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
-            string errorTail = failed.ErrorTail.ShouldNotBeNull();
-            errorTail.ShouldNotContain("glpat-abc123secret");
-            errorTail.ShouldContain("***");
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenDockerReportsErrorWithBuildArgSecret_RedactsSecretFromPersistedErrorTail()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            const string secretError = "ANTHROPIC_API_KEY=sk-ant-key123 in build arg caused failure";
-            ErrorReportingImageOperations errorImages = new(secretError);
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — the persisted error tail must not contain the raw secret value
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
-            string errorTail = failed.ErrorTail.ShouldNotBeNull();
-            errorTail.ShouldNotContain("sk-ant-key123");
-            errorTail.ShouldContain("***");
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenBuildStarts_SetsStatusToBuilding()
-    {
-        // Arrange — use a blocking spy to capture status mid-build
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            StatusCapturingImageOperations capturingImages = new(CreateDbContext);
-            WorkerImageRebuildService sut = BuildService(
-                capturingImages,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert
-            capturingImages.CapturedStateDuringBuild.ShouldBeOfType<ImageBuildState.Building>();
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenBuildStarts_BroadcastsBuildingNotificationFirst()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            CapturingNotificationBroadcaster broadcaster = new();
-            WorkerImageRebuildService sut = BuildService(
-                new SpyImageOperations(),
-                broadcaster,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — building notification must be first, active, with empty message (pure reload trigger)
-            broadcaster.Sent.ShouldNotBeEmpty();
-            SystemNotification first = broadcaster.Sent[0];
-            first.Category.ShouldBe(WorkerImageRebuildService.ImageBuildCategory);
-            first.IsActive.ShouldBeTrue();
-            first.Message.ShouldBe(string.Empty);
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    // Notification protocol format tests
-
-    [Fact]
-    public async Task WhenBuildStarts_BroadcastMessageIsEmpty()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            CapturingNotificationBroadcaster broadcaster = new();
-            WorkerImageRebuildService sut = BuildService(
-                new SpyImageOperations(),
-                broadcaster,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — message is empty (pure reload trigger; clients re-fetch /api/settings)
-            broadcaster.Sent.ShouldNotBeEmpty();
-            SystemNotification first = broadcaster.Sent[0];
-            first.Message.ShouldBe(string.Empty);
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenDockerReportsError_BuildingBroadcastPrecedesFailedBroadcast()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            const string dockerError = "Build failed: layer error";
-            CapturingNotificationBroadcaster broadcaster = new();
-            ErrorReportingImageOperations errorImages = new(dockerError);
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                broadcaster,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — building active broadcast comes before failed active broadcast.
-            // Both carry empty messages (pure reload trigger; clients re-fetch /api/settings for details).
-            IReadOnlyList<SystemNotification> activeNotifications = broadcaster.Sent
-                .Where(n =>
-                    n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive)
-                .ToList();
-            activeNotifications.Count.ShouldBe(2, "exactly building then failed active broadcasts");
-            activeNotifications[0].Message.ShouldBe(string.Empty, "building broadcast carries no payload");
-            activeNotifications[1].Message.ShouldBe(string.Empty, "failed broadcast carries no payload");
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    // Finding 2: OperationCanceledException propagation test
+    // OperationCanceledException propagation test
 
     [Fact]
     public async Task WhenCancellationRequested_PropagatesOperationCanceledException()
@@ -959,8 +752,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             using CancellationTokenSource cts = new();
             CancellingImageOperations cancellingImages = new(cts);
             WorkerImageRebuildService sut = BuildService(
@@ -985,24 +776,24 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenCancellationRequested_DoesNotPersistFailedStatus()
+    public async Task WhenCancellationRequested_DoesNotPublishOutcomeFailed()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
 
         try
         {
-            SeedGlobalSettings();
-
             using CancellationTokenSource cts = new();
+            CapturingIntegrationEventDispatcher dispatcher = new();
             CancellingImageOperations cancellingImages = new(cts);
             WorkerImageRebuildService sut = BuildService(
                 cancellingImages,
+                dispatcher: dispatcher,
                 contextPath: contextDir);
 
             await cts.CancelAsync();
 
-            // Act — OCE is expected and suppressed here; we verify the DB state
+            // Act — OCE is expected and suppressed here; we verify no OutcomeFailed was published
             try
             {
                 await sut.ProcessRebuildAsync(cts.Token);
@@ -1012,13 +803,8 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
                 // Expected — cancellation propagated correctly
             }
 
-            // Assert — status should not be Failed (it was set to Building before cancel)
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(CancellationToken.None);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldNotBeOfType<ImageBuildState.Failed>();
+            // Assert — OutcomeFailed must not be published on cancellation
+            dispatcher.Published.ShouldNotContain(e => e is ImageBuildOutcomeFailed);
         }
         finally
         {
@@ -1026,13 +812,12 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         }
     }
 
-    // Finding 3: Enabled flag tests
+    // Enabled flag tests
 
     [Fact]
     public async Task WhenImageBuildDisabled_DoesNotBuildImage()
     {
         // Arrange
-        SeedGlobalSettings();
         SpyImageOperations spyImages = new();
         WorkerImageRebuildService sut = BuildService(spyImages, imageBuildEnabled: false);
 
@@ -1044,203 +829,23 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenImageBuildDisabled_DoesNotSetStatusToBuilding()
+    public async Task WhenImageBuildDisabled_PublishesNoEvents()
     {
         // Arrange
-        SeedGlobalSettings();
-        WorkerImageRebuildService sut = BuildService(new SpyImageOperations(), imageBuildEnabled: false);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerImageRebuildService sut = BuildService(
+            new SpyImageOperations(),
+            dispatcher: dispatcher,
+            imageBuildEnabled: false);
 
         // Act
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        await using FoundryDbContext db = CreateDbContext();
-        GlobalSettings? settings = await db.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-        settings.ShouldNotBeNull();
-        settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
+        dispatcher.Published.ShouldBeEmpty();
     }
 
-    // Backoff state tests (Step 5)
-
-    [Fact]
-    public async Task WhenBuildFails_PersistedAttemptIsOne()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            ErrorReportingImageOperations errorImages = new("build error");
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
-            failed.Attempt.ShouldBe(1);
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenBuildFails_PersistedNextRetryAtIsInFuture()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            DateTimeOffset before = DateTimeOffset.UtcNow;
-            ErrorReportingImageOperations errorImages = new("build error");
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                contextPath: contextDir);
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
-            failed.NextRetryAt.ShouldNotBeNull();
-            failed.NextRetryAt.Value.ShouldBeGreaterThan(before);
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenBuildFailsTwice_AttemptIsTwo()
-    {
-        // Arrange — use tiny backoff so the test doesn't wait 30s
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            ErrorReportingImageOperations errorImages = new("build error");
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                contextPath: contextDir,
-                initialBackoff: TimeSpan.FromMilliseconds(1));
-
-            // Act — call twice on the same service instance to accumulate attempt
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
-            failed.Attempt.ShouldBe(2);
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenBuildSucceedsAfterFailure_AttemptResets()
-    {
-        // Arrange
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            ErrorReportingImageOperations errorImages = new("build error");
-            WorkerImageRebuildService firstSut = BuildService(
-                errorImages,
-                contextPath: contextDir,
-                initialBackoff: TimeSpan.FromMilliseconds(1));
-
-            // Fail once to set attempt=1
-            await firstSut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Now build with a success path — use the same service instance
-            WorkerImageRebuildService sut = BuildService(
-                new SpyImageOperations(),
-                contextPath: contextDir,
-                initialBackoff: TimeSpan.FromMilliseconds(1));
-
-            // Act — build succeeds; attempt should reset to 0
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — state is Idle after success; no attempt counter needed
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Idle>();
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenBuildFails_FailedBroadcastHasEmptyMessage()
-    {
-        // Arrange — verifies that the failure broadcast sends no wire payload.
-        // Attempt and nextRetryAt are authoritative in persisted state (asserted by WhenBuildFails_PersistedAttemptIsOne
-        // and WhenBuildFails_PersistedNextRetryAtIsInFuture); clients re-fetch /api/settings after the broadcast.
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SeedGlobalSettings();
-
-            CapturingNotificationBroadcaster broadcaster = new();
-            ErrorReportingImageOperations errorImages = new("build error");
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                broadcaster,
-                contextPath: contextDir,
-                initialBackoff: TimeSpan.FromMilliseconds(1));
-
-            // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — the failed active broadcast carries an empty message
-            IReadOnlyList<SystemNotification> activeNotifications = broadcaster.Sent
-                .Where(n =>
-                    n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive)
-                .ToList();
-            activeNotifications.Count.ShouldBe(2, "building then failed active broadcasts");
-            activeNotifications[1].Message.ShouldBe(string.Empty, "failed broadcast is a pure reload trigger");
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
-    }
+    // Backoff state tests
 
     [Fact]
     public async Task WhenFailureThenSupersede_AttemptResetsAndNextFailureStartsAtOne()
@@ -1252,18 +857,17 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
 
         try
         {
-            SeedGlobalSettings();
-
             SupersedingQueue queue = new();
+            CapturingIntegrationEventDispatcher dispatcher = new();
             ErrorReportingImageOperations errorImages = new("build error");
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
+                dispatcher: dispatcher,
                 contextPath: contextDir,
                 queue: queue,
                 initialBackoff: TimeSpan.FromMilliseconds(1));
 
-            // StartingAsync subscribes the event handler; the RequestImmediateRebuild call within
-            // it is a no-op on SupersedingQueue (TryEnqueue returns false).
+            // StartingAsync subscribes the event handler
             await sut.StartingAsync(TestContext.Current.CancellationToken);
 
             // Act — first failure accumulates attempt=1
@@ -1275,12 +879,9 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Second failure must start fresh: attempt increments from 0 → 1
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — attempt must be 1, proving the supersede reset took effect
-            await using FoundryDbContext db = CreateDbContext();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-            settings.ShouldNotBeNull();
-            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            // Assert — last published OutcomeFailed must have attempt=1
+            IIntegrationEvent last = dispatcher.Published[^1];
+            ImageBuildOutcomeFailed failed = last.ShouldBeOfType<ImageBuildOutcomeFailed>();
             failed.Attempt.ShouldBe(1);
 
             // Disposal must not throw — no orphaned CTS
@@ -1398,55 +999,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             IProgress<JSONMessage> progress,
             CancellationToken cancellationToken)
             => throw new InvalidOperationException(message);
-
-#pragma warning disable CS0618 // Required for interface compliance
-        public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
-            => Task.FromResult<Stream>(new MemoryStream("{}"u8.ToArray()));
-#pragma warning restore CS0618
-
-        public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
-        public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult(new ImageInspectResponse());
-        public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
-        public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
-        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task LoadImageAsync(ImageLoadParameters parameters, Stream imageStream, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task<Stream> SaveImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
-        public Task<Stream> SaveImagesAsync(string[] names, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
-        public Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task PushImageAsync(string name, ImagePushParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task<ImagesPruneResponse> PruneImagesAsync(ImagesPruneParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new ImagesPruneResponse());
-        public Task<CommitContainerChangesResponse> CommitContainerChangesAsync(CommitContainerChangesParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new CommitContainerChangesResponse());
-        public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
-    }
-
-    /// <summary>
-    /// Captures the GlobalSettings.ImageBuildState mid-build to verify BeginImageBuild() was called.
-    /// </summary>
-    private sealed class StatusCapturingImageOperations(Func<FoundryDbContext> dbContextFactory) : IImageOperations
-    {
-        public ImageBuildState? CapturedStateDuringBuild { get; private set; }
-
-        public async Task BuildImageFromDockerfileAsync(
-            ImageBuildParameters parameters,
-            Stream contents,
-            IEnumerable<AuthConfig> authConfigs,
-            IDictionary<string, string> headers,
-            IProgress<JSONMessage> progress,
-            CancellationToken cancellationToken)
-        {
-            await using FoundryDbContext db = dbContextFactory();
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (settings is not null)
-            {
-                CapturedStateDuringBuild = settings.ImageBuildState;
-            }
-        }
 
 #pragma warning disable CS0618 // Required for interface compliance
         public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
@@ -1600,19 +1152,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         }
     }
 
-    private sealed class CapturingNotificationBroadcaster : ISystemNotificationBroadcaster
-    {
-        private readonly List<SystemNotification> _sent = [];
-
-        public IReadOnlyList<SystemNotification> Sent => _sent;
-
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
-        {
-            _sent.Add(notification);
-            return Task.CompletedTask;
-        }
-    }
-
     private sealed class NullWorkerImageRebuildQueue : IWorkerImageRebuildQueue
     {
         public event Action? ImmediateRebuildRequested;
@@ -1639,5 +1178,78 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
         public string ContentRootPath { get; set; } = contentRootPath;
         public string EnvironmentName { get; set; } = "Development";
+    }
+
+    private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        private readonly List<IIntegrationEvent> _published = [];
+
+        public IReadOnlyList<IIntegrationEvent> Published => _published;
+
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+        {
+            _published.AddRange(events);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Stubs <see cref="IGlobalSettingsQueries"/> so tests do not need a database.
+    /// When <paramref name="settingsExists"/> is false, <see cref="GetSettingsAsync"/> returns null,
+    /// triggering the early-return path. When true, returns a minimal populated summary.
+    /// </summary>
+    private sealed class StubGlobalSettingsQueries(
+        bool settingsExists,
+        IReadOnlyDictionary<string, string>? buildArgs = null) : IGlobalSettingsQueries
+    {
+        private static readonly GlobalSettingsSummary DefaultSummary = new(
+            MaxConcurrent: 1,
+            TimeoutMinutes: 60,
+            SystemPromptTemplate: null,
+            WorkerPromptTemplate: null,
+            UsageLimitResetsAt: null,
+            IsDispatchPaused: false,
+            AutoResumeOnUsageReset: true,
+            DefaultCooldownMinutes: 0,
+            InstallDotnet: false,
+            InstallAngular: false,
+            InstallGlab: false,
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false,
+            ImageBuildStatus: ImageBuildStatus.Idle,
+            LastImageBuildError: null,
+            HasUsableImage: false,
+            NextRetryAt: null,
+            Attempt: 0);
+
+        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(settingsExists ? DefaultSummary : (GlobalSettingsSummary?)null);
+
+        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
+            => Task.FromResult(1);
+
+        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(60);
+
+        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<(string?, string?)>((null, null));
+
+        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new DispatchPauseState(null, false, true));
+
+        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(0);
+
+        public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
+            => Task.FromResult(ImageBuildStatus.Idle);
+
+        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
+        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult(buildArgs ?? (IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
     }
 }

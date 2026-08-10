@@ -1,13 +1,12 @@
 using System.Runtime.CompilerServices;
 
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
-using Foundry.WebApi.Persistence;
 
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -20,69 +19,31 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebuildServiceTests;
 
-public sealed class BackoffBehavior : IAsyncDisposable
+public sealed class BackoffBehavior
 {
-    private readonly SqliteConnection _connection;
-
-    public BackoffBehavior()
-    {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await _connection.DisposeAsync();
-        GC.SuppressFinalize(this);
-    }
-
-    private FoundryDbContext CreateDbContext()
-    {
-        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new FoundryDbContext(options);
-    }
-
-    private void SeedGlobalSettings()
-    {
-        using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
-        db.Set<GlobalSettings>().Add(settings);
-        db.SaveChanges();
-    }
-
-    private WorkerImageRebuildService BuildServiceWithFailingContextPath(
+    private static WorkerImageRebuildService BuildServiceWithFailingContextPath(
         IWorkerImageRebuildQueue queue,
+        IIntegrationEventDispatcher? dispatcher = null,
         TimeSpan? initialBackoff = null)
         => BuildServiceCore(
             queue,
-            broadcaster: null,
+            dispatcher,
             // ContentRootPath=/tmp → solutionRoot=/ → resolved contextPath=/nonexistent-path-for-test
             contentRootPath: "/tmp",
             relativeContextPath: "nonexistent-path-for-test",
             initialBackoff: initialBackoff);
 
-    private WorkerImageRebuildService BuildServiceCore(
+    private static WorkerImageRebuildService BuildServiceCore(
         IWorkerImageRebuildQueue queue,
-        ISystemNotificationBroadcaster? broadcaster,
+        IIntegrationEventDispatcher? dispatcher,
         string contentRootPath,
         string relativeContextPath,
         TimeSpan? initialBackoff)
     {
-        SqliteConnection connection = _connection;
-
         ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
+        services.AddScoped<IGlobalSettingsQueries>(_ => new StubGlobalSettingsQueries());
+        services.AddScoped<IIntegrationEventDispatcher>(_ =>
+            dispatcher ?? new NullIntegrationEventDispatcher());
 
         ServiceProvider sp = services.BuildServiceProvider();
 
@@ -104,7 +65,6 @@ public sealed class BackoffBehavior : IAsyncDisposable
             new NullImageOperations(),
             new StubHostEnvironment(contentRootPath),
             Options.Create(workerOptions),
-            broadcaster ?? new NullNotificationBroadcaster(),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 
@@ -113,16 +73,15 @@ public sealed class BackoffBehavior : IAsyncDisposable
     {
         // Arrange — long backoff (500ms) so the delayed retry cannot fire before we supersede it.
         // Use a non-existent context path so the build fails and a retry is scheduled.
-        SeedGlobalSettings();
 
-        // The broadcaster signals when the failure notification is sent, which means the
+        // The dispatcher signals when the OutcomeFailed event is dispatched, which means the
         // service has finished processing and the pending retry CTS is in place.
-        using SignallingBroadcaster broadcaster = new();
+        using SignallingDispatcher signallingDispatcher = new();
         using ControlledQueue queue = new();
 
         WorkerImageRebuildService sut = BuildServiceCore(
             queue,
-            broadcaster,
+            signallingDispatcher,
             contentRootPath: "/tmp",
             relativeContextPath: "nonexistent-path-for-test",
             initialBackoff: TimeSpan.FromMilliseconds(500));
@@ -134,9 +93,9 @@ public sealed class BackoffBehavior : IAsyncDisposable
         queue.Enqueue();
 
         // Wait deterministically for the service to reach the failed state and set up the pending retry.
-        bool failureNotified = await broadcaster.WaitForFailureNotificationAsync(
+        bool failureNotified = await signallingDispatcher.WaitForFailureEventAsync(
             TimeSpan.FromSeconds(5));
-        failureNotified.ShouldBeTrue("the service should have sent a failure notification");
+        failureNotified.ShouldBeTrue("the service should have dispatched an ImageBuildOutcomeFailed event");
 
         // Capture the TryEnqueue count before the supersede. At this point, only the internal
         // ScheduleDelayedRetryAsync is running; no TryEnqueue should have been called yet.
@@ -161,8 +120,6 @@ public sealed class BackoffBehavior : IAsyncDisposable
     public async Task WhenBuildFailsAndDelayElapses_ReEnqueuesRebuild()
     {
         // Arrange — tiny backoff so the delay fires almost immediately
-        SeedGlobalSettings();
-
         using ControlledQueue queue = new();
         // Use a non-existent context path so the build fails (TarFile throws DirectoryNotFoundException)
         WorkerImageRebuildService sut = BuildServiceWithFailingContextPath(
@@ -278,48 +235,31 @@ public sealed class BackoffBehavior : IAsyncDisposable
         public Task<IList<Docker.DotNet.Models.ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<Docker.DotNet.Models.ImageHistoryResponse>>([]);
     }
 
-    private sealed class NullNotificationBroadcaster : ISystemNotificationBroadcaster
+    private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 
     /// <summary>
-    /// A broadcaster that signals a gate when the failure notification is sent, enabling tests to wait
-    /// deterministically until the service has recorded the failure and set up the pending retry CTS.
-    ///
-    /// A failed build emits exactly two active image-build broadcasts: building first, then failed.
-    /// The gate releases on the second active image-build broadcast, which is the failure notification.
-    /// Gating on message content is avoided because messages are now empty (pure reload trigger).
+    /// A dispatcher that signals a gate when an <see cref="ImageBuildOutcomeFailed"/> event is dispatched,
+    /// enabling tests to wait deterministically until the service has recorded the failure and set up the
+    /// pending retry CTS.
     /// </summary>
-    private sealed class SignallingBroadcaster : ISystemNotificationBroadcaster, IDisposable
+    private sealed class SignallingDispatcher : IIntegrationEventDispatcher, IDisposable
     {
-        // Released when the second active image-build broadcast arrives (the failed notification).
         private readonly SemaphoreSlim _failureSignal = new(initialCount: 0, maxCount: 1);
-        private int _activeImageBuildCount;
 
         public void Dispose() => _failureSignal.Dispose();
 
-        public Task<bool> WaitForFailureNotificationAsync(TimeSpan timeout)
+        public Task<bool> WaitForFailureEventAsync(TimeSpan timeout)
             => _failureSignal.WaitAsync(timeout);
 
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
         {
-            if (notification.Category == WorkerImageRebuildService.ImageBuildCategory
-                && notification.IsActive)
+            foreach (IIntegrationEvent @event in events)
             {
-                int count = Interlocked.Increment(ref _activeImageBuildCount);
-
-                if (count > 2)
-                {
-                    throw new InvalidOperationException(
-                        $"Expected at most 2 active image-build broadcasts (building then failed), " +
-                        $"but received a {count}th. The gate invariant has been violated.");
-                }
-
-                // The second active broadcast is the failure notification.
-                // Release idempotently — only one failure notification is sent per build attempt.
-                if (count == 2 && _failureSignal.CurrentCount == 0)
+                if (@event is ImageBuildOutcomeFailed && _failureSignal.CurrentCount == 0)
                 {
                     _failureSignal.Release();
                 }
@@ -327,6 +267,59 @@ public sealed class BackoffBehavior : IAsyncDisposable
 
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class StubGlobalSettingsQueries : IGlobalSettingsQueries
+    {
+        private static readonly GlobalSettingsSummary DefaultSummary = new(
+            MaxConcurrent: 1,
+            TimeoutMinutes: 60,
+            SystemPromptTemplate: null,
+            WorkerPromptTemplate: null,
+            UsageLimitResetsAt: null,
+            IsDispatchPaused: false,
+            AutoResumeOnUsageReset: true,
+            DefaultCooldownMinutes: 0,
+            InstallDotnet: false,
+            InstallAngular: false,
+            InstallGlab: false,
+            InstallGh: false,
+            InstallChromium: false,
+            InstallDocker: false,
+            ImageBuildStatus: ImageBuildStatus.Idle,
+            LastImageBuildError: null,
+            HasUsableImage: false,
+            NextRetryAt: null,
+            Attempt: 0);
+
+        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
+            => Task.FromResult((GlobalSettingsSummary?)DefaultSummary);
+
+        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
+            => Task.FromResult(1);
+
+        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(60);
+
+        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<(string?, string?)>((null, null));
+
+        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new DispatchPauseState(null, false, true));
+
+        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(0);
+
+        public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
+            => Task.FromResult(ImageBuildStatus.Idle);
+
+        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
+        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult((IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
     }
 
     private sealed class StubHostEnvironment(string contentRootPath) : IHostEnvironment
