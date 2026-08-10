@@ -1,9 +1,19 @@
 import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
-import { DISPATCH_NOTIFICATION_CATEGORY, DOCKER_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
+import {
+  DISPATCH_NOTIFICATION_CATEGORY,
+  DOCKER_NOTIFICATION_CATEGORY,
+  IMAGE_BUILD_NOTIFICATION_CATEGORY,
+  SystemNotification,
+} from '../models/system-notification.model';
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
 import { LoginSessionUpdate } from '../models/settings.model';
+
+const RELOAD_TRIGGER_CATEGORIES: ReadonlySet<string> = new Set([
+  DISPATCH_NOTIFICATION_CATEGORY,
+  IMAGE_BUILD_NOTIFICATION_CATEGORY,
+]);
 
 export interface SystemHub {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,8 +51,8 @@ export class SystemSignalRService {
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
 
-  private readonly _dispatchStateChanged = new Subject<void>();
-  readonly dispatchStateChanged: Observable<void> = this._dispatchStateChanged.asObservable();
+  private readonly _reloadTrigger = new Subject<void>();
+  readonly reloadTrigger: Observable<void> = this._reloadTrigger.asObservable();
 
   private readonly _loginSessionUpdate = new Subject<LoginSessionUpdate>();
   readonly loginSessionUpdate: Observable<LoginSessionUpdate> = this._loginSessionUpdate.asObservable();
@@ -51,8 +61,8 @@ export class SystemSignalRService {
     const hub = this._hubFactory();
 
     hub.on('SystemNotificationReceived', (notification: SystemNotification) => {
-      if (notification.category === DISPATCH_NOTIFICATION_CATEGORY) {
-        this._dispatchStateChanged.next();
+      if (RELOAD_TRIGGER_CATEGORIES.has(notification.category)) {
+        this._reloadTrigger.next();
       }
 
       this._applyNotification(notification);

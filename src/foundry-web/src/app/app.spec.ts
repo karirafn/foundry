@@ -50,7 +50,6 @@ function createMockSettingsService(isColdBuildBlocking = false) {
     saveImageFlagsError: signal(null).asReadonly(),
     loadSettings: () => {},
     retryImageBuild: () => {},
-    setImageBuildStatus: () => {},
     updateAuthMode: () => {},
     updateWorkerLimits: () => {},
     updatePromptTemplates: () => {},

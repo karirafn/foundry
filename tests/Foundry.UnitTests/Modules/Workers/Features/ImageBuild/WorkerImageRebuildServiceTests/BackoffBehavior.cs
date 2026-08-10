@@ -285,15 +285,18 @@ public sealed class BackoffBehavior : IAsyncDisposable
     }
 
     /// <summary>
-    /// A broadcaster that signals a gate when a failure notification is sent, enabling tests to wait
+    /// A broadcaster that signals a gate when the failure notification is sent, enabling tests to wait
     /// deterministically until the service has recorded the failure and set up the pending retry CTS.
+    ///
+    /// A failed build emits exactly two active image-build broadcasts: building first, then failed.
+    /// The gate releases on the second active image-build broadcast, which is the failure notification.
+    /// Gating on message content is avoided because messages are now empty (pure reload trigger).
     /// </summary>
     private sealed class SignallingBroadcaster : ISystemNotificationBroadcaster, IDisposable
     {
-        private const string FailedStatus = WorkerImageRebuildService.FailedStatus;
-
-        // Released when a notification carrying "Failed" status arrives.
+        // Released when the second active image-build broadcast arrives (the failed notification).
         private readonly SemaphoreSlim _failureSignal = new(initialCount: 0, maxCount: 1);
+        private int _activeImageBuildCount;
 
         public void Dispose() => _failureSignal.Dispose();
 
@@ -302,10 +305,21 @@ public sealed class BackoffBehavior : IAsyncDisposable
 
         public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
         {
-            if (notification.Message.Contains(FailedStatus, StringComparison.Ordinal))
+            if (notification.Category == WorkerImageRebuildService.ImageBuildCategory
+                && notification.IsActive)
             {
-                // Release idempotently — the service sends only one failure notification per build attempt.
-                if (_failureSignal.CurrentCount == 0)
+                int count = Interlocked.Increment(ref _activeImageBuildCount);
+
+                if (count > 2)
+                {
+                    throw new InvalidOperationException(
+                        $"Expected at most 2 active image-build broadcasts (building then failed), " +
+                        $"but received a {count}th. The gate invariant has been violated.");
+                }
+
+                // The second active broadcast is the failure notification.
+                // Release idempotently — only one failure notification is sent per build attempt.
+                if (count == 2 && _failureSignal.CurrentCount == 0)
                 {
                     _failureSignal.Release();
                 }

@@ -45,7 +45,6 @@ function createMockSettingsService() {
 
   return {
     loadSettings: vi.fn(),
-    setImageBuildStatus: vi.fn(),
     retryImageBuild: vi.fn(),
     imageBuildStatus: imageBuildStatusSignal.asReadonly(),
     imageBuildLogTail: imageBuildLogTailSignal.asReadonly(),
