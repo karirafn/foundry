@@ -208,6 +208,7 @@ public sealed class AddWorkersModule
         // Arrange
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
+        services.AddLogging();
 
         // Act
         services.AddWorkersModule(configuration);

@@ -6,9 +6,11 @@ using System.Text.RegularExpressions;
 
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
+using Microsoft.Extensions.Logging;
+
 namespace Foundry.Modules.Workers.Features.Outcome;
 
-internal sealed partial class ContainerOutputParser : IContainerOutputParser
+internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParser> logger) : IContainerOutputParser
 {
     private const int MaxLogLength = 65_536;    // 64 KB
     private const int MaxJsonLineLength = 4_096; // 4 KB
@@ -17,6 +19,12 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
     {
         "blocking_limit",
         "rapid_refill_breaker",
+    }.ToFrozenSet(StringComparer.Ordinal);
+
+    private static readonly FrozenSet<string> TransientApiErrorPhrases = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "API Error: Connection closed mid-response",
+        "API Error: 529 Overloaded",
     }.ToFrozenSet(StringComparer.Ordinal);
 
     public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
@@ -61,10 +69,12 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
 
         string? terminalReason = ReadString(node["terminal_reason"]);
         int? apiErrorStatus = ReadApiErrorStatus(node);
+        bool isError = ReadBool(node["is_error"]);
+        string? resultText = ReadString(node["result"]);
 
         if (IsUsageLimit(apiErrorStatus, terminalReason))
         {
-            DateTimeOffset resetsAt = ParseResetTime(ReadString(node["result"]), defaultCooldownMinutes);
+            DateTimeOffset resetsAt = ParseResetTime(resultText, defaultCooldownMinutes);
 
             return new ContainerOutputParseResult.UsageLimited(resetsAt);
         }
@@ -72,6 +82,18 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
         if (IsAuthInvalid(apiErrorStatus, node))
         {
             return new ContainerOutputParseResult.AuthInvalid();
+        }
+
+        if (IsTransientApiError(apiErrorStatus, isError, resultText))
+        {
+            return new ContainerOutputParseResult.TransientApiError();
+        }
+
+        if (isError)
+        {
+            logger.LogWarning(
+                "Unclassified worker error — result text: {ResultText}",
+                resultText);
         }
 
         return new ContainerOutputParseResult.NormalExit();
@@ -209,6 +231,27 @@ internal sealed partial class ContainerOutputParser : IContainerOutputParser
 
         return errorType is not null
             && string.Equals(errorType, "authentication_error", StringComparison.Ordinal);
+    }
+
+    private static bool IsTransientApiError(int? apiErrorStatus, bool isError, string? resultText)
+    {
+        if (apiErrorStatus is >= 500 and <= 599)
+        {
+            return true;
+        }
+
+        if (isError && resultText is not null)
+        {
+            foreach (string phrase in TransientApiErrorPhrases)
+            {
+                if (resultText.Contains(phrase, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static string? ReadString(JsonNode? node)

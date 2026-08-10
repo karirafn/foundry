@@ -11,6 +11,7 @@ using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -40,7 +41,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
     {
-        IContainerOutputParser outputParser = new ContainerOutputParser();
+        IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, containerLogs);
 
         return base.BuildService(

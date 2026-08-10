@@ -11,6 +11,7 @@ using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -56,7 +57,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus,
         IIntegrationEventProcessor? integrationEventProcessor = null)
     {
-        IContainerOutputParser outputParser = new ContainerOutputParser();
+        IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, containerLogs);
 
         return BuildService(

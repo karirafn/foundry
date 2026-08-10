@@ -17,4 +17,6 @@ internal abstract record ContainerOutputParseResult
     internal sealed record NoResultLine : ContainerOutputParseResult;
 
     internal sealed record AuthInvalid : ContainerOutputParseResult;
+
+    internal sealed record TransientApiError : ContainerOutputParseResult;
 }
