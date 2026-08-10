@@ -28,6 +28,13 @@ export interface EligibilityViolation {
   description: string;
 }
 
+export interface TransientRetryDetails {
+  attemptNumber: number;
+  maxAttempts: number;
+  isExhausted: boolean;
+  nextAttemptDueAt: string | null;
+}
+
 export interface IssueStateDetails {
   workerRunId: string | null;
   branchName: string | null;
@@ -38,6 +45,7 @@ export interface IssueStateDetails {
   completedAt: string | null;
   blockedBy: number[] | null;
   violations: EligibilityViolation[] | null;
+  transientRetry: TransientRetryDetails | null;
 }
 
 export interface IssueDetail extends IssueSummary {

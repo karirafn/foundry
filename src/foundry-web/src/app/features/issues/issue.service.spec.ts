@@ -236,6 +236,7 @@ describe('IssueService', () => {
         completedAt: null,
         blockedBy: null,
         violations: null,
+        transientRetry: null,
       },
     };
 
@@ -362,6 +363,7 @@ describe('IssueService', () => {
         completedAt: null,
         blockedBy: null,
         violations: null,
+        transientRetry: null,
       },
     };
 
