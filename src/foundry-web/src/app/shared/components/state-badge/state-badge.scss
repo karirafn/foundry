@@ -98,4 +98,16 @@
     border: 1px solid var(--fd-state-failed);
     color: var(--fd-text-error);
   }
+
+  &--retrying {
+    background: transparent;
+    border: 1px solid var(--fd-text-warning);
+    color: var(--fd-text-warning);
+  }
+
+  &--retry-exhausted {
+    background: transparent;
+    border: 1px solid var(--fd-state-failed);
+    color: var(--fd-text-error);
+  }
 }

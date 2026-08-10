@@ -103,6 +103,27 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
               </div>
             }
 
+            @if (s.transientRetry; as retry) {
+              <div class="issue-detail__field issue-detail__field--full-width issue-detail__retry-state"
+                   [class.issue-detail__retry-state--exhausted]="retry.isExhausted"
+                   role="status">
+                <span class="issue-detail__field-key">Automatic Retry</span>
+                <div class="issue-detail__retry-callout">
+                  @if (retry.isExhausted) {
+                    <span class="badge issue-detail__retry-chip badge--retry-exhausted">Retry exhausted</span>
+                    <span class="issue-detail__retry-message issue-detail__field-value">
+                      Automatic retries exhausted after {{ retry.maxAttempts }} attempts. Use Retry Issue to try again manually.
+                    </span>
+                  } @else {
+                    <span class="badge issue-detail__retry-chip badge--retrying">Attempt {{ retry.attemptNumber }} of {{ retry.maxAttempts }}</span>
+                    <span class="issue-detail__retry-message issue-detail__field-value">
+                      Automatic retry pending — next attempt at {{ retry.nextAttemptDueAt | date: 'medium' }}.
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+
             @if (s.blockedBy?.length) {
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Blocked By</span>

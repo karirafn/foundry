@@ -1051,4 +1051,86 @@ describe('IssueDetailComponent', () => {
     const summary = el.querySelector('.issue-detail__failure-summary');
     expect(summary?.textContent?.trim()).toBe('Worker bootstrap failed: container died');
   });
+
+  // Transient retry block — AC1: active retry shows attempt chip and next-attempt time
+  it('should render the "Attempt N of M" chip and next-attempt time when transientRetry is present and not exhausted', () => {
+    // Arrange
+    const retryingDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: {
+        ...mockStateDetails,
+        transientRetry: {
+          attemptNumber: 2,
+          maxAttempts: 5,
+          isExhausted: false,
+          nextAttemptDueAt: '2026-08-10T14:30:00Z',
+        },
+      },
+    };
+
+    // Act
+    const fixture = createComponent(retryingDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__retry-chip') as HTMLElement;
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent?.trim()).toContain('Attempt 2 of 5');
+    const message = el.querySelector('.issue-detail__retry-message') as HTMLElement;
+    expect(message).toBeTruthy();
+    expect(message?.textContent?.trim()).toContain('Automatic retry pending');
+  });
+
+  // Transient retry block — AC2: exhausted shows "Retry exhausted" chip and manual retry copy
+  it('should render the "Retry exhausted" chip and manual retry copy when transientRetry is exhausted', () => {
+    // Arrange
+    const exhaustedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: {
+        ...mockStateDetails,
+        transientRetry: {
+          attemptNumber: 5,
+          maxAttempts: 5,
+          isExhausted: true,
+          nextAttemptDueAt: null,
+        },
+      },
+    };
+
+    // Act
+    const fixture = createComponent(exhaustedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__retry-chip') as HTMLElement;
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent?.trim()).toContain('Retry exhausted');
+    const message = el.querySelector('.issue-detail__retry-message') as HTMLElement;
+    expect(message).toBeTruthy();
+    expect(message?.textContent?.trim()).toContain('Automatic retries exhausted after 5 attempts');
+    expect(message?.textContent?.trim()).toContain('Use Retry Issue to try again manually');
+  });
+
+  // Transient retry block — AC3: null transientRetry renders no retry block
+  it('should not render a retry block when transientRetry is null', () => {
+    // Arrange
+    const noRetryDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: {
+        ...mockStateDetails,
+        transientRetry: null,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(noRetryDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const retryState = el.querySelector('.issue-detail__retry-state');
+    expect(retryState).toBeFalsy();
+  });
 });

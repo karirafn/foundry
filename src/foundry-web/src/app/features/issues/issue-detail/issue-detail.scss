@@ -285,4 +285,36 @@
     word-break: break-word;
   }
 
+  &__retry-state {
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    border: 1px solid var(--fd-border-warning);
+    border-radius: var(--fd-radius-sm);
+    background: var(--fd-bg-warning-subtle);
+
+    &--exhausted {
+      border-color: var(--fd-state-failed);
+      background: var(--fd-bg-error-subtle);
+    }
+  }
+
+  &__retry-callout {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+    margin-top: var(--fd-spacing-xs);
+  }
+
+  &__retry-chip {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  &__retry-message {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
 }
