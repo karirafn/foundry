@@ -1,5 +1,7 @@
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -84,5 +86,22 @@ public sealed class CompleteImageBuild
         // Assert
         settings.LastImageBuiltAt.ShouldNotBeNull();
         settings.LastImageBuiltAt.Value.ShouldBeGreaterThanOrEqualTo(firstBuildTime);
+    }
+
+    [Fact]
+    public void WhenCalled_RaisesExactlyOneImageBuildCompletedEvent()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        settings.ClearIntegrationEvents();
+
+        // Act
+        settings.CompleteImageBuild();
+
+        // Assert
+        IReadOnlyList<IIntegrationEvent> events = settings.IntegrationEvents;
+        events.Count.ShouldBe(1);
+        events[0].ShouldBeOfType<ImageBuildCompleted>();
     }
 }

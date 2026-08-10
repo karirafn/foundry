@@ -1,3 +1,4 @@
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -152,6 +153,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         ImageBuildState = new ImageBuildState.Building();
         UpdatedAt = DateTimeOffset.UtcNow;
+        AddIntegrationEvent(new ImageBuildStarted());
     }
 
     public void CompleteImageBuild()
@@ -159,12 +161,14 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         ImageBuildState = new ImageBuildState.Idle();
         LastImageBuiltAt = DateTimeOffset.UtcNow;
         UpdatedAt = DateTimeOffset.UtcNow;
+        AddIntegrationEvent(new ImageBuildCompleted());
     }
 
     public void FailImageBuild(string? errorTail, DateTimeOffset? nextRetryAt, int attempt)
     {
         ImageBuildState = new ImageBuildState.Failed(errorTail, nextRetryAt, attempt);
         UpdatedAt = DateTimeOffset.UtcNow;
+        AddIntegrationEvent(new ImageBuildFailed(errorTail, nextRetryAt, attempt));
     }
 
     public Result UpdateLimits(int maxConcurrent, int timeoutMinutes)

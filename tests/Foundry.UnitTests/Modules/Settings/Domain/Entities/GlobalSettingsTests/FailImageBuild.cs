@@ -1,5 +1,7 @@
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -115,5 +117,29 @@ public sealed class FailImageBuild
         // Assert
         ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
         failed.Attempt.ShouldBe(2);
+    }
+
+    [Fact]
+    public void WhenCalled_RaisesExactlyOneImageBuildFailedEventWithCorrectPayload()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        settings.ClearIntegrationEvents();
+        const string errorTail = "Build failed: package not found";
+        DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow.AddSeconds(30);
+        const int attempt = 1;
+
+        // Act
+        settings.FailImageBuild(errorTail, nextRetryAt, attempt);
+
+        // Assert
+        IReadOnlyList<IIntegrationEvent> events = settings.IntegrationEvents;
+        events.Count.ShouldBe(1);
+        ImageBuildFailed evt = events[0].ShouldBeOfType<ImageBuildFailed>();
+        evt.ShouldSatisfyAllConditions(
+            () => evt.ErrorTail.ShouldBe(errorTail),
+            () => evt.NextRetryAt.ShouldBe(nextRetryAt),
+            () => evt.Attempt.ShouldBe(attempt));
     }
 }

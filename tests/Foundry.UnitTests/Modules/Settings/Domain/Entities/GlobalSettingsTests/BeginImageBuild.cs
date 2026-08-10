@@ -1,5 +1,7 @@
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -64,5 +66,20 @@ public sealed class BeginImageBuild
 
         // Assert
         settings.LastImageBuiltAt.ShouldBe(lastBuiltAt);
+    }
+
+    [Fact]
+    public void WhenCalled_RaisesExactlyOneImageBuildStartedEvent()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Act
+        settings.BeginImageBuild();
+
+        // Assert
+        IReadOnlyList<IIntegrationEvent> events = settings.IntegrationEvents;
+        events.Count.ShouldBe(1);
+        events[0].ShouldBeOfType<ImageBuildStarted>();
     }
 }
