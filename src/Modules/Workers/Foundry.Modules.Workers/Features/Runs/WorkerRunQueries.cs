@@ -203,8 +203,9 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         // Take() must be applied in memory. To bound the materialized payload, two typed-set
         // queries are used rather than one base-type query:
         //   - Set<FailedRun>: projects (created_at, reason.CategoryToken) — reason is on
-        //     FailedRun only; EF applies the ValueConverter and materializes the full entity,
-        //     but the Select projection avoids the OwnsOne ResultSummary hydration.
+        //     FailedRun only; EF fetches just created_at and reason, applies the ValueConverter
+        //     to deserialize reason client-side, and the Select projection skips the OwnsOne
+        //     ResultSummary columns (no full-entity hydration).
         //   - Set<WorkerRun> excluding FailedRun: projects (created_at, null) — only the
         //     timestamp is needed for ordering; no payload fields are fetched.
         //

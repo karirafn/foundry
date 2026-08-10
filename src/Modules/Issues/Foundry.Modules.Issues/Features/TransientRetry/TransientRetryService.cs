@@ -110,11 +110,9 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
         {
             Guid issueId = candidate.Id.Value;
 
-            if (candidate is not FailedIssue and not ContinuableFailedIssue)
-            {
-                return;
-            }
-
+            // Candidates are sourced exclusively from FindDueTransientFailuresAsync, which returns
+            // only FailedIssue / ContinuableFailedIssue — the failed-state guard that matters for
+            // the manual-retry race is on the reloaded `live` instance below.
             DateTimeOffset failedAt = candidate is FailedIssue fi
                 ? fi.FailedAt
                 : ((ContinuableFailedIssue)candidate).FailedAt;
