@@ -1,4 +1,4 @@
-import { Injectable, Signal, WritableSignal, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin, merge } from 'rxjs';
@@ -8,7 +8,6 @@ import {
   AuthSettings,
   ClaudeAccountSummary,
   GlobalSettingsResponse,
-  ImageBuildNotification,
   ImageBuildStatus,
   LoginError,
   LoginPhase,
@@ -21,7 +20,6 @@ import {
 import { DispatchService } from './dispatch.service';
 import { AccountPresenceService } from './account-presence.service';
 import { SystemSignalRService } from './system-signalr.service';
-import { IMAGE_BUILD_NOTIFICATION_CATEGORY } from '../models/system-notification.model';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
@@ -46,18 +44,6 @@ export class SettingsService {
         takeUntilDestroyed()
       )
       .subscribe();
-
-    effect(() => {
-      const notification = this._signalR.notifications().find(
-        (n) => n.category === IMAGE_BUILD_NOTIFICATION_CATEGORY
-      );
-      if (notification) {
-        const parsed = this._parseImageBuildNotification(notification.message);
-        if (parsed) {
-          this.setImageBuildStatus(parsed.status, parsed.logTail, parsed.nextRetryAt, parsed.attempt);
-        }
-      }
-    });
 
     this._signalR.loginSessionUpdate
       .pipe(takeUntilDestroyed())
@@ -440,32 +426,6 @@ export class SettingsService {
     );
     this._imageBuildAttemptSignal.set(response.attempt ?? 0);
     this._hasUsableImageSignal.set(response.hasUsableImage);
-  }
-
-  private _parseImageBuildNotification(message: string): ImageBuildNotification | null {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(message);
-    } catch {
-      return null;
-    }
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      !('status' in parsed) ||
-      typeof (parsed as Record<string, unknown>)['status'] !== 'string'
-    ) {
-      return null;
-    }
-    const raw = parsed as Record<string, unknown>;
-    const status = raw['status'] as string;
-    if (status !== 'Idle' && status !== 'Building' && status !== 'Failed') {
-      return null;
-    }
-    const logTail = typeof raw['logTail'] === 'string' ? raw['logTail'] : null;
-    const nextRetryAt = typeof raw['nextRetryAt'] === 'string' ? raw['nextRetryAt'] : null;
-    const attempt = typeof raw['attempt'] === 'number' ? raw['attempt'] : 0;
-    return { status, logTail, nextRetryAt, attempt };
   }
 
   private _mapToWorkerImageFlags(response: GlobalSettingsResponse): WorkerImageFlags {

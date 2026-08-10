@@ -79,13 +79,6 @@ export interface GlobalSettingsResponse {
   attempt: number;
 }
 
-export interface ImageBuildNotification {
-  status: ImageBuildStatus;
-  logTail: string | null;
-  nextRetryAt: string | null;
-  attempt: number;
-}
-
 export interface UpdatePromptTemplatesRequest {
   systemPromptTemplate: string | null;
   workerPromptTemplate: string | null;
