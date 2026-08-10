@@ -1550,6 +1550,29 @@ describe('SettingsService — SignalR re-sync', () => {
     flushSettings(httpMock);
   });
 
+  // Cycle: image-build reload trigger fires exactly one /api/settings GET
+  it('should fire exactly one GET /api/settings when reloadTrigger emits for image-build wiring', () => {
+    // Arrange
+    const mockSignalR = createMockSignalRService();
+    const { service, httpMock } = setupService(mockSignalR);
+
+    // Seed Building via an initial /api/settings fetch
+    service.loadSettings();
+    flushSettings(httpMock, { imageBuildStatus: 'Building' });
+    expect(service.imageBuildStatus()).toBe('Building');
+
+    // Act — image-build SignalR fires reloadTrigger
+    mockSignalR.reloadTrigger.next();
+    vi.advanceTimersByTime(300);
+
+    // Assert — exactly one reload cycle triggered
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Idle' }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentialsResponse());
+
+    expect(service.imageBuildStatus()).toBe('Idle');
+    httpMock.verify();
+  });
+
   // Cycle: separate emissions (outside debounce window) each trigger a reload
   it('should reload settings each time reconnected emits outside the debounce window', () => {
     // Arrange
@@ -1613,210 +1636,6 @@ describe('SettingsService — SignalR re-sync', () => {
   });
 });
 
-describe('SettingsService — SignalR image-build funnel', () => {
-  afterEach(() => TestBed.resetTestingModule());
-
-  function setupWithNotifications() {
-    const mockSignalR = createMockSignalRService();
-    TestBed.configureTestingModule({
-      providers: [
-        SettingsService,
-        DispatchService,
-        { provide: SystemSignalRService, useValue: mockSignalR },
-        provideHttpClient(),
-        provideHttpClientTesting(),
-      ],
-    });
-    return {
-      service: TestBed.inject(SettingsService),
-      httpMock: TestBed.inject(HttpTestingController),
-      mockSignalR,
-    };
-  }
-
-  it('should update imageBuildStatus and imageBuildLogTail when an image-build JSON notification arrives with a non-empty logTail', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    const notification: SystemNotification = {
-      category: 'image-build',
-      isActive: true,
-      message: JSON.stringify({ status: 'Failed', logTail: 'Step 2/5 FAILED', nextRetryAt: null, attempt: 0 }),
-    };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert
-    expect(service.imageBuildStatus()).toBe('Failed');
-    expect(service.imageBuildLogTail()).toBe('Step 2/5 FAILED');
-    httpMock.verify();
-  });
-
-  it('should set imageBuildLogTail to null when the JSON notification logTail is null', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    const notification: SystemNotification = {
-      category: 'image-build',
-      isActive: true,
-      message: JSON.stringify({ status: 'Failed', logTail: null, nextRetryAt: null, attempt: 0 }),
-    };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert
-    expect(service.imageBuildStatus()).toBe('Failed');
-    expect(service.imageBuildLogTail()).toBeNull();
-    httpMock.verify();
-  });
-
-  it('should not update image-build signals when a non-image-build category notification arrives', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    const notification: SystemNotification = { category: 'docker', isActive: true, message: 'some docker message' };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert — signals unchanged from defaults
-    expect(service.imageBuildStatus()).toBe('Idle');
-    expect(service.imageBuildLogTail()).toBeNull();
-    httpMock.verify();
-  });
-
-  it('should leave image-build signals unchanged when the JSON notification has an unknown status token', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'previous error', null, 0);
-    const notification: SystemNotification = {
-      category: 'image-build',
-      isActive: true,
-      message: JSON.stringify({ status: 'Bogus', logTail: 'some log', nextRetryAt: null, attempt: 0 }),
-    };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert — signals are NOT clobbered by the unknown token
-    expect(service.imageBuildStatus()).toBe('Failed');
-    expect(service.imageBuildLogTail()).toBe('previous error');
-    httpMock.verify();
-  });
-
-  it('should NOT reset imageBuildStatus and imageBuildLogTail to Idle when notifications becomes empty', () => {
-    // Arrange — simulate hydrated Failed state
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'boom', null, 0);
-
-    // Act — notifications list becomes empty (no live SignalR notification present)
-    mockSignalR._notificationsSignal.set([]);
-    TestBed.flushEffects();
-
-    // Assert — hydrated state is preserved; effect must NOT reset to Idle
-    expect(service.imageBuildStatus()).toBe('Failed');
-    expect(service.imageBuildLogTail()).toBe('boom');
-    httpMock.verify();
-  });
-
-  it('should NOT reset imageBuildStatus and imageBuildLogTail when a non-image-build notification replaces the list', () => {
-    // Arrange — simulate hydrated Failed state
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'boom', null, 0);
-    const otherNotification: SystemNotification = { category: 'docker', isActive: true, message: 'docker down' };
-
-    // Act — only a non-image-build notification present
-    mockSignalR._notificationsSignal.set([otherNotification]);
-    TestBed.flushEffects();
-
-    // Assert — hydrated state is preserved
-    expect(service.imageBuildStatus()).toBe('Failed');
-    expect(service.imageBuildLogTail()).toBe('boom');
-    httpMock.verify();
-  });
-
-  it('should leave image-build signals unchanged when the notification message is malformed JSON', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'previous error', null, 2);
-    const notification: SystemNotification = {
-      category: 'image-build',
-      isActive: true,
-      message: 'not-valid-json',
-    };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert — signals are NOT clobbered by malformed payload
-    expect(service.imageBuildStatus()).toBe('Failed');
-    expect(service.imageBuildLogTail()).toBe('previous error');
-    httpMock.verify();
-  });
-
-  it('should populate imageBuildNextRetryAt and imageBuildAttempt from the JSON notification when status is Failed', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    const notification: SystemNotification = {
-      category: 'image-build',
-      isActive: true,
-      message: JSON.stringify({ status: 'Failed', logTail: 'err', nextRetryAt: '2026-08-08T12:30:00Z', attempt: 3 }),
-    };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert
-    expect(service.imageBuildNextRetryAt()).toBe('2026-08-08T12:30:00Z');
-    expect(service.imageBuildAttempt()).toBe(3);
-    httpMock.verify();
-  });
-
-  it('should clear imageBuildNextRetryAt to null when status is Building', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'err', '2026-08-08T12:30:00Z', 2);
-
-    const notification: SystemNotification = {
-      category: 'image-build',
-      isActive: true,
-      message: JSON.stringify({ status: 'Building', logTail: null, nextRetryAt: null, attempt: 0 }),
-    };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert — nextRetryAt forced to null for Building
-    expect(service.imageBuildNextRetryAt()).toBeNull();
-    httpMock.verify();
-  });
-
-  it('should clear imageBuildNextRetryAt to null when status is Idle', () => {
-    // Arrange
-    const { service, httpMock, mockSignalR } = setupWithNotifications();
-    service.setImageBuildStatus('Failed', 'err', '2026-08-08T12:30:00Z', 2);
-
-    const notification: SystemNotification = {
-      category: 'image-build',
-      isActive: true,
-      message: JSON.stringify({ status: 'Idle', logTail: null, nextRetryAt: null, attempt: 0 }),
-    };
-
-    // Act
-    mockSignalR._notificationsSignal.set([notification]);
-    TestBed.flushEffects();
-
-    // Assert — nextRetryAt forced to null for Idle
-    expect(service.imageBuildNextRetryAt()).toBeNull();
-    httpMock.verify();
-  });
-});
 
 describe('SettingsService — retry fields', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -1969,6 +1788,7 @@ describe('SettingsService — isColdBuildBlocking', () => {
       service: TestBed.inject(SettingsService),
       httpMock: TestBed.inject(HttpTestingController),
       mockPresence,
+      mockSignalR,
     };
   }
 
@@ -2075,5 +1895,35 @@ describe('SettingsService — isColdBuildBlocking', () => {
     // Assert
     expect(service.isColdBuildBlocking()).toBe(true);
     httpMock.verify();
+  });
+
+  // Cycle 5: Building → Idle over SignalR clears isColdBuildBlocking
+  it('should transition imageBuildStatus from Building to Idle and clear isColdBuildBlocking when reloadTrigger fires', () => {
+    // Arrange
+    vi.useFakeTimers();
+    const { service, httpMock, mockPresence, mockSignalR } = setupWithPresence();
+    mockPresence.setHasAccounts(true);
+
+    // Seed Building via an initial /api/settings fetch
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Building', hasUsableImage: false }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+    expect(service.imageBuildStatus()).toBe('Building');
+    expect(service.isColdBuildBlocking()).toBe(true);
+
+    // Act — image-build SignalR fires reloadTrigger, advance past the 300ms debounce
+    mockSignalR.reloadTrigger.next();
+    vi.advanceTimersByTime(300);
+
+    // Flush /api/settings returning Idle + hasUsableImage: true
+    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Idle', hasUsableImage: true }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+
+    // Assert — status cleared and cold-build gate lifted
+    expect(service.imageBuildStatus()).toBe('Idle');
+    expect(service.isColdBuildBlocking()).toBe(false);
+    httpMock.verify();
+
+    vi.useRealTimers();
   });
 });
