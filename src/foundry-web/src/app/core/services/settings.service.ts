@@ -39,7 +39,7 @@ export class SettingsService {
   private readonly _signalR = inject(SystemSignalRService);
 
   constructor() {
-    merge(this._signalR.reconnected, this._signalR.dispatchStateChanged)
+    merge(this._signalR.reconnected, this._signalR.reloadTrigger)
       .pipe(
         debounceTime(300),
         switchMap(() => this._fetchSettings()),

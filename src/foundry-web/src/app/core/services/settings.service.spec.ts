@@ -15,7 +15,7 @@ function createMockSignalRService() {
   const notificationsSignal: WritableSignal<SystemNotification[]> = signal([]);
   return {
     reconnected: new Subject<void>(),
-    dispatchStateChanged: new Subject<void>(),
+    reloadTrigger: new Subject<void>(),
     loginSessionUpdate: new Subject<LoginSessionUpdate>(),
     notifications: notificationsSignal.asReadonly() as Signal<SystemNotification[]>,
     _notificationsSignal: notificationsSignal,
@@ -1536,14 +1536,14 @@ describe('SettingsService — SignalR re-sync', () => {
     flushSettings(httpMock);
   });
 
-  // Cycle: dispatchStateChanged triggers a GET /api/settings after debounce window
-  it('should reload settings when SystemSignalRService.dispatchStateChanged emits (after debounce)', () => {
+  // Cycle: reloadTrigger triggers a GET /api/settings after debounce window
+  it('should reload settings when SystemSignalRService.reloadTrigger emits (after debounce)', () => {
     // Arrange
     const mockSignalR = createMockSignalRService();
     const { httpMock } = setupService(mockSignalR);
 
     // Act
-    mockSignalR.dispatchStateChanged.next();
+    mockSignalR.reloadTrigger.next();
     vi.advanceTimersByTime(300);
 
     // Assert — both endpoints fired
@@ -1570,15 +1570,15 @@ describe('SettingsService — SignalR re-sync', () => {
   });
 
   // Cycle: rapid burst of emissions collapses to a single reload (debounce coalescing)
-  it('should coalesce a rapid burst of dispatchStateChanged emissions into a single reload', () => {
+  it('should coalesce a rapid burst of reloadTrigger emissions into a single reload', () => {
     // Arrange
     const mockSignalR = createMockSignalRService();
     const { httpMock } = setupService(mockSignalR);
 
     // Act — fire three emissions rapidly (within the debounce window)
-    mockSignalR.dispatchStateChanged.next();
-    mockSignalR.dispatchStateChanged.next();
-    mockSignalR.dispatchStateChanged.next();
+    mockSignalR.reloadTrigger.next();
+    mockSignalR.reloadTrigger.next();
+    mockSignalR.reloadTrigger.next();
 
     // No reload should have fired yet (debounce window not elapsed)
     httpMock.expectNone('/api/settings');

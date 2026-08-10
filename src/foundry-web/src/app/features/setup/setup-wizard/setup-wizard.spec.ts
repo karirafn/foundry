@@ -8,7 +8,7 @@ import { NEVER } from 'rxjs';
 import { SetupWizardComponent } from './setup-wizard';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
+const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 
 @Component({ template: '', standalone: true })
 class StubIssuesComponent {}

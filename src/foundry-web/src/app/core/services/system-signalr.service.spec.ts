@@ -1,6 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { SystemSignalRService, SYSTEM_HUB_FACTORY, SystemHub } from './system-signalr.service';
-import { DISPATCH_NOTIFICATION_CATEGORY, DOCKER_NOTIFICATION_CATEGORY, SystemNotification } from '../models/system-notification.model';
+import {
+  DISPATCH_NOTIFICATION_CATEGORY,
+  DOCKER_NOTIFICATION_CATEGORY,
+  IMAGE_BUILD_NOTIFICATION_CATEGORY,
+  SystemNotification,
+} from '../models/system-notification.model';
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
 import { LoginSessionUpdate } from '../models/settings.model';
 
@@ -152,12 +157,12 @@ describe('SystemSignalRService', () => {
     expect((svc.reconnected as unknown as { next?: unknown }).next).toBeUndefined();
   });
 
-  // Cycle 8: dispatchStateChanged emits when a dispatch notification arrives with isActive: true
-  it('should emit on dispatchStateChanged when a dispatch notification with isActive: true arrives', () => {
+  // Cycle 8: reloadTrigger emits when a dispatch notification arrives with isActive: true
+  it('should emit on reloadTrigger when a dispatch notification with isActive: true arrives', () => {
     // Arrange
     const { svc, captured } = setup();
     let emitCount = 0;
-    svc.dispatchStateChanged.subscribe(() => emitCount++);
+    svc.reloadTrigger.subscribe(() => emitCount++);
     const notification: SystemNotification = {
       category: DISPATCH_NOTIFICATION_CATEGORY,
       isActive: true,
@@ -171,12 +176,12 @@ describe('SystemSignalRService', () => {
     expect(emitCount).toBe(1);
   });
 
-  // Cycle 9: dispatchStateChanged emits when a dispatch notification arrives with isActive: false
-  it('should emit on dispatchStateChanged when a dispatch notification with isActive: false arrives', () => {
+  // Cycle 9: reloadTrigger emits when a dispatch notification arrives with isActive: false
+  it('should emit on reloadTrigger when a dispatch notification with isActive: false arrives', () => {
     // Arrange
     const { svc, captured } = setup();
     let emitCount = 0;
-    svc.dispatchStateChanged.subscribe(() => emitCount++);
+    svc.reloadTrigger.subscribe(() => emitCount++);
     const notification: SystemNotification = {
       category: DISPATCH_NOTIFICATION_CATEGORY,
       isActive: false,
@@ -190,16 +195,35 @@ describe('SystemSignalRService', () => {
     expect(emitCount).toBe(1);
   });
 
-  // Cycle 10: dispatchStateChanged does NOT emit for a non-dispatch category
-  it('should not emit on dispatchStateChanged for a non-dispatch category notification', () => {
+  // Cycle 10: reloadTrigger emits when an image-build notification arrives
+  it('should emit on reloadTrigger when an image-build notification arrives', () => {
     // Arrange
     const { svc, captured } = setup();
     let emitCount = 0;
-    svc.dispatchStateChanged.subscribe(() => emitCount++);
+    svc.reloadTrigger.subscribe(() => emitCount++);
     const notification: SystemNotification = {
-      category: 'image-build',
+      category: IMAGE_BUILD_NOTIFICATION_CATEGORY,
+      isActive: false,
+      message: '',
+    };
+
+    // Act
+    captured.onSystemNotificationReceived!(notification);
+
+    // Assert
+    expect(emitCount).toBe(1);
+  });
+
+  // Cycle 11: reloadTrigger does NOT emit for an undeclared category (docker)
+  it('should not emit on reloadTrigger for an undeclared category (docker)', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    let emitCount = 0;
+    svc.reloadTrigger.subscribe(() => emitCount++);
+    const notification: SystemNotification = {
+      category: DOCKER_NOTIFICATION_CATEGORY,
       isActive: true,
-      message: 'Build in progress',
+      message: 'Docker unavailable',
     };
 
     // Act
@@ -209,16 +233,16 @@ describe('SystemSignalRService', () => {
     expect(emitCount).toBe(0);
   });
 
-  // Cycle 11: dispatchStateChanged is an Observable, not a writable Subject
-  it('should expose dispatchStateChanged as an Observable (no next() method)', () => {
+  // Cycle 12: reloadTrigger is an Observable, not a writable Subject
+  it('should expose reloadTrigger as an Observable (no next() method)', () => {
     // Arrange / Act
     const { svc } = setup();
 
     // Assert — Observable does not expose next(), so callers cannot emit spurious events
-    expect((svc.dispatchStateChanged as unknown as { next?: unknown }).next).toBeUndefined();
+    expect((svc.reloadTrigger as unknown as { next?: unknown }).next).toBeUndefined();
   });
 
-  // Cycle 12: LoginSessionUpdated handler is registered on the hub
+  // Cycle 13: LoginSessionUpdated handler is registered on the hub
   it('should register a LoginSessionUpdated handler on the hub', () => {
     // Arrange / Act
     const { captured } = setup();
@@ -227,7 +251,7 @@ describe('SystemSignalRService', () => {
     expect(captured.onLoginSessionUpdated).not.toBeNull();
   });
 
-  // Cycle 13: receiving a LoginSessionUpdated message emits on loginSessionUpdate
+  // Cycle 14: receiving a LoginSessionUpdated message emits on loginSessionUpdate
   it('should emit on loginSessionUpdate when a LoginSessionUpdated message arrives', () => {
     // Arrange
     const { svc, captured } = setup();
@@ -248,7 +272,7 @@ describe('SystemSignalRService', () => {
     expect(received).toEqual(update);
   });
 
-  // Cycle 14: loginSessionUpdate is an Observable, not a writable Subject
+  // Cycle 15: loginSessionUpdate is an Observable, not a writable Subject
   it('should expose loginSessionUpdate as an Observable (no next() method)', () => {
     // Arrange / Act
     const { svc } = setup();
@@ -257,7 +281,7 @@ describe('SystemSignalRService', () => {
     expect((svc.loginSessionUpdate as unknown as { next?: unknown }).next).toBeUndefined();
   });
 
-  // Cycle 15: separate LoginSessionUpdated messages each emit independently
+  // Cycle 16: separate LoginSessionUpdated messages each emit independently
   it('should emit each LoginSessionUpdated message independently', () => {
     // Arrange
     const { svc, captured } = setup();
@@ -276,7 +300,7 @@ describe('SystemSignalRService', () => {
     expect(updates[1].phase).toBe('WaitingForAuthorization');
   });
 
-  // Cycle 16: applyDockerAvailability(false) — Docker down — adds a docker notification
+  // Cycle 17: applyDockerAvailability(false) — Docker down — adds a docker notification
   it('should add a docker notification slot when applyDockerAvailability is called with false', () => {
     // Arrange
     const { svc } = setup();
@@ -292,7 +316,7 @@ describe('SystemSignalRService', () => {
     expect(notifications[0].message).toBe(DOCKER_UNAVAILABLE_MESSAGE);
   });
 
-  // Cycle 17: applyDockerAvailability(true) — Docker recovered — clears the docker notification slot
+  // Cycle 18: applyDockerAvailability(true) — Docker recovered — clears the docker notification slot
   it('should clear the docker notification slot when applyDockerAvailability is called with true', () => {
     // Arrange
     const { svc } = setup();
@@ -306,7 +330,7 @@ describe('SystemSignalRService', () => {
     expect(svc.notifications().length).toBe(0);
   });
 
-  // Cycle 18: applyDockerAvailability does not affect other notification categories
+  // Cycle 19: applyDockerAvailability does not affect other notification categories
   it('should not remove other category notifications when applying docker availability', () => {
     // Arrange
     const { svc, captured } = setup();

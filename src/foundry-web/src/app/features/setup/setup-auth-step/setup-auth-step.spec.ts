@@ -6,7 +6,7 @@ import { NEVER } from 'rxjs';
 import { SetupAuthStepComponent } from './setup-auth-step';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 
-const mockSystemSignalR = { reconnected: NEVER, dispatchStateChanged: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
+const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 
 const CREDENTIALS_API_KEY_RESPONSE = {
   accountId: '00000000-0000-0000-0000-000000000001',
