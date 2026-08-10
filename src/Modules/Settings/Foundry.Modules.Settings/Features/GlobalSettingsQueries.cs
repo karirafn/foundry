@@ -1,7 +1,6 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -83,12 +82,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             return ImageBuildStatus.Idle;
         }
 
-        return settings.ImageBuildState switch
-        {
-            ImageBuildState.Building => ImageBuildStatus.Building,
-            ImageBuildState.Failed => ImageBuildStatus.Failed,
-            _ => ImageBuildStatus.Idle,
-        };
+        return settings.ImageBuildState.ToStatus();
     }
 
     public async Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
