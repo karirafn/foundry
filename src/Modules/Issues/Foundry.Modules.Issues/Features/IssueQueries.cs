@@ -303,7 +303,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: blocked.BlockedBy),
+                BlockedBy: blocked.BlockedBy,
+                TransientRetry: null),
 
             InProgressIssue inProgress => new IssueStateDetails(
                 WorkerRunId: inProgress.WorkerRunId,
@@ -313,7 +314,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             ReviewIssue review => new IssueStateDetails(
                 WorkerRunId: review.WorkerRunId,
@@ -323,7 +325,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId,
@@ -333,7 +336,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             FailedIssue failed => new IssueStateDetails(
                 WorkerRunId: failed.WorkerRunId,
@@ -343,7 +347,8 @@ internal sealed class IssueQueries(
                 FailureReason: failed.FailureReason,
                 FailedAt: failed.FailedAt,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             CompletedIssue completed => new IssueStateDetails(
                 WorkerRunId: null,
@@ -353,7 +358,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: completed.CompletedAt,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             RevisionQueuedIssue revisionQueued => new IssueStateDetails(
                 WorkerRunId: null,
@@ -363,7 +369,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
                 WorkerRunId: revisionInProgress.WorkerRunId,
@@ -373,7 +380,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             RevisionFailedIssue revisionFailed => new IssueStateDetails(
                 WorkerRunId: revisionFailed.WorkerRunId,
@@ -383,7 +391,8 @@ internal sealed class IssueQueries(
                 FailureReason: revisionFailed.FailureReason,
                 FailedAt: revisionFailed.FailedAt,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             ContinuableFailedIssue continuableFailed => new IssueStateDetails(
                 WorkerRunId: continuableFailed.WorkerRunId,
@@ -393,7 +402,8 @@ internal sealed class IssueQueries(
                 FailureReason: continuableFailed.FailureReason,
                 FailedAt: continuableFailed.FailedAt,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             ContinuationQueuedIssue continuationQueued => new IssueStateDetails(
                 WorkerRunId: null,
@@ -403,7 +413,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             _ => null
         };
