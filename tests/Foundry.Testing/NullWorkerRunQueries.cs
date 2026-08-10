@@ -26,4 +26,10 @@ public sealed class NullWorkerRunQueries : IWorkerRunQueries
         DateTimeOffset to,
         CancellationToken cancellationToken)
         => Task.FromResult(new RunTotals(0, 0L, 0, 0m, 0L, 0L));
+
+    public Task<int> CountConsecutiveTransientRunsAsync(
+        Guid issueId,
+        int maxAttempts,
+        CancellationToken cancellationToken)
+        => Task.FromResult(0);
 }

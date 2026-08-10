@@ -191,6 +191,41 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             CommitMarkers: [],
             HasStoredLog: false);
 
+    public async Task<int> CountConsecutiveTransientRunsAsync(
+        Guid issueId,
+        int maxAttempts,
+        CancellationToken cancellationToken)
+    {
+        IssueId id = IssueId.From(issueId);
+
+        // worker_runs.reason is JSON behind a ValueConverter and is NOT SQL-filterable.
+        // FailureReason.CategoryToken is a derived C# property EF cannot translate — so
+        // the ordering and Take are done server-side, then the streak is counted in memory.
+        List<WorkerRun> rows = await db.Set<WorkerRun>()
+            .AsNoTracking()
+            .Where(r => r.IssueId == id)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(maxAttempts + 1)
+            .ToListAsync(cancellationToken);
+
+        int count = 0;
+
+        foreach (WorkerRun run in rows)
+        {
+            if (run is FailedRun failed
+                && failed.Reason.CategoryToken == FailureReason.TransientApiErrorToken)
+            {
+                count++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return count;
+    }
+
     public async Task<RunTotals> GetRunTotalsAsync(
         DateTimeOffset from,
         DateTimeOffset to,
