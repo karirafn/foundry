@@ -3,15 +3,12 @@ using System.Threading;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 using Foundry.Testing;
-using Foundry.WebApi.Persistence;
 
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -24,56 +21,16 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebuildServiceTests;
 
-public sealed class ExecuteAsync : IAsyncDisposable
+public sealed class ExecuteAsync
 {
-    private readonly SqliteConnection _connection;
-
-    public ExecuteAsync()
-    {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        using FoundryDbContext setup = CreateDbContext();
-        setup.Database.EnsureCreated();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await _connection.DisposeAsync();
-        GC.SuppressFinalize(this);
-    }
-
-    private FoundryDbContext CreateDbContext()
-    {
-        DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        return new FoundryDbContext(options);
-    }
-
-    private void SeedGlobalSettings()
-    {
-        using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
-        db.Set<GlobalSettings>().Add(settings);
-        db.SaveChanges();
-    }
-
-    private WorkerImageRebuildService BuildService(
+    private static WorkerImageRebuildService BuildService(
         IWorkerImageRebuildQueue queue,
-        ISystemNotificationBroadcaster broadcaster,
+        IIntegrationEventDispatcher dispatcher,
         CapturingLogger logger)
     {
-        SqliteConnection connection = _connection;
-
         ServiceCollection services = new();
-        services.AddScoped<FoundryDbContext>(_ =>
-        {
-            DbContextOptions<FoundryDbContext> options = new DbContextOptionsBuilder<FoundryDbContext>()
-                .UseSqlite(connection)
-                .Options;
-            return new FoundryDbContext(options);
-        });
-        services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
+        services.AddScoped<IGlobalSettingsQueries>(_ => new StubGlobalSettingsQueries());
+        services.AddScoped<IIntegrationEventDispatcher>(_ => dispatcher);
 
         ServiceProvider sp = services.BuildServiceProvider();
 
@@ -93,7 +50,6 @@ public sealed class ExecuteAsync : IAsyncDisposable
             new NullImageOperations(),
             new StubHostEnvironment(string.Empty),
             Options.Create(workerOptions),
-            broadcaster,
             new CapturingLoggerAdapter<WorkerImageRebuildService>(logger));
     }
 
@@ -101,15 +57,13 @@ public sealed class ExecuteAsync : IAsyncDisposable
     public async Task WhenFirstItemBodyThrows_ErrorIsLoggedAndSecondItemIsStillProcessed()
     {
         // Arrange
-        SeedGlobalSettings();
-
         CapturingLogger logger = new();
-        InvalidOperationException firstItemException = new("broadcaster failure on item 1");
-        int broadcastCallCount = 0;
-        FaultOnFirstCallBroadcaster broadcaster = new(firstItemException, onSendAsync: () => broadcastCallCount++);
+        InvalidOperationException firstItemException = new("dispatcher failure on item 1");
+        int dispatchCallCount = 0;
+        FaultOnFirstCallDispatcher dispatcher = new(firstItemException, onDispatchAsync: () => dispatchCallCount++);
         TwoItemQueue queue = new();
 
-        WorkerImageRebuildService sut = BuildService(queue, broadcaster, logger);
+        WorkerImageRebuildService sut = BuildService(queue, dispatcher, logger);
 
         using CancellationTokenSource cts = new();
 
@@ -124,9 +78,9 @@ public sealed class ExecuteAsync : IAsyncDisposable
             e => e.Level == LogLevel.Error && e.Exception == firstItemException,
             "consumer loop must log an Error when the item body throws");
 
-        // Assert — second item reached the broadcaster (broadcastCallCount >= 2: first item throws on 1st call,
+        // Assert — second item reached the dispatcher (dispatchCallCount >= 2: first item throws on 1st call,
         // second item makes at least one successful call)
-        broadcastCallCount.ShouldBeGreaterThanOrEqualTo(2,
+        dispatchCallCount.ShouldBeGreaterThanOrEqualTo(2,
             "the second queued item must be processed after the first item throws");
     }
 
@@ -134,13 +88,11 @@ public sealed class ExecuteAsync : IAsyncDisposable
     public async Task WhenStoppingTokenCancelled_LoopExitsWithNoErrorLogged()
     {
         // Arrange
-        SeedGlobalSettings();
-
         CapturingLogger logger = new();
-        NeverCalledBroadcaster broadcaster = new();
+        NullIntegrationEventDispatcher dispatcher = new();
         BlockingQueue queue = new();
 
-        WorkerImageRebuildService sut = BuildService(queue, broadcaster, logger);
+        WorkerImageRebuildService sut = BuildService(queue, dispatcher, logger);
 
         using CancellationTokenSource cts = new();
 
@@ -214,19 +166,19 @@ public sealed class ExecuteAsync : IAsyncDisposable
     }
 
     /// <summary>
-    /// Throws on the first SendAsync call to simulate a broadcaster failure that escapes the inner
+    /// Throws on the first DispatchAsync call to simulate a dispatcher failure that escapes the inner
     /// Docker build try/catch in ProcessRebuildAsync. Subsequent calls succeed and increment a counter.
     /// </summary>
-    private sealed class FaultOnFirstCallBroadcaster(
+    private sealed class FaultOnFirstCallDispatcher(
         Exception firstCallException,
-        Action onSendAsync) : ISystemNotificationBroadcaster
+        Action onDispatchAsync) : IIntegrationEventDispatcher
     {
         private int _callCount;
 
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
         {
             int call = Interlocked.Increment(ref _callCount);
-            onSendAsync();
+            onDispatchAsync();
 
             if (call == 1)
             {
@@ -237,9 +189,9 @@ public sealed class ExecuteAsync : IAsyncDisposable
         }
     }
 
-    private sealed class NeverCalledBroadcaster : ISystemNotificationBroadcaster
+    private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 

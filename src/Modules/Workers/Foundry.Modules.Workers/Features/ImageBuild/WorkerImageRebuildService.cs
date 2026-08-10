@@ -3,12 +3,12 @@ using System.Formats.Tar;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,7 +22,6 @@ internal sealed class WorkerImageRebuildService(
     IImageOperations imageOperations,
     IHostEnvironment hostEnvironment,
     IOptions<WorkerOptions> optionsAccessor,
-    ISystemNotificationBroadcaster broadcaster,
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
 {
     internal const string ImageBuildCategory = "image-build";
@@ -96,11 +95,9 @@ internal sealed class WorkerImageRebuildService(
         }
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
 
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettingsSummary? settings = await settingsQueries.GetSettingsAsync(cancellationToken);
 
         if (settings is null)
         {
@@ -150,10 +147,11 @@ internal sealed class WorkerImageRebuildService(
         }
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
+        IIntegrationEventDispatcher integrationEventDispatcher =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettingsSummary? settings = await settingsQueries.GetSettingsAsync(cancellationToken);
 
         if (settings is null)
         {
@@ -162,15 +160,12 @@ internal sealed class WorkerImageRebuildService(
             return;
         }
 
-        await broadcaster.SendAsync(
-            new SystemNotification(ImageBuildCategory, true, string.Empty),
-            cancellationToken);
+        IReadOnlyDictionary<string, string> buildArgs =
+            await settingsQueries.GetWorkerImageBuildArgsAsync(cancellationToken);
 
-        settings.BeginImageBuild();
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await integrationEventDispatcher.DispatchAsync([new ImageBuildRequested()], cancellationToken);
 
         string contextPath = ResolveContextPath(_options.ImageBuild.ContextPath);
-        IReadOnlyDictionary<string, string> buildArgs = settings.WorkerImageConfiguration.ToBuildArgs();
 
         logger.LogInformation(
             "Building worker image '{Image}' from context '{ContextPath}'.",
@@ -305,14 +300,9 @@ internal sealed class WorkerImageRebuildService(
 
             await CancelAndDisposeAsync(oldCts);
 
-            settings.CompleteImageBuild();
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await integrationEventDispatcher.DispatchAsync([new ImageBuildSucceeded()], cancellationToken);
 
             logger.LogInformation("Worker image '{Image}' built successfully.", _options.Image);
-
-            await broadcaster.SendAsync(
-                new SystemNotification(ImageBuildCategory, false, string.Empty),
-                cancellationToken);
         }
         else
         {
@@ -337,8 +327,9 @@ internal sealed class WorkerImageRebuildService(
 
             DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow + backoff;
 
-            settings.FailImageBuild(errorTail, nextRetryAt, attempt);
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await integrationEventDispatcher.DispatchAsync(
+                [new ImageBuildOutcomeFailed(errorTail, nextRetryAt, attempt)],
+                cancellationToken);
 
             logger.LogError(
                 "Worker image '{Image}' build failed (attempt {Attempt}, next retry at {NextRetryAt}): {Error}",
@@ -346,10 +337,6 @@ internal sealed class WorkerImageRebuildService(
                 attempt,
                 nextRetryAt,
                 errorTail);
-
-            await broadcaster.SendAsync(
-                new SystemNotification(ImageBuildCategory, true, string.Empty),
-                cancellationToken);
 
             // Fire-and-forget delayed re-enqueue. Link both the service stopping token and the
             // per-retry CTS so that either a shutdown or a superseding RequestImmediateRebuild

@@ -2,6 +2,7 @@ using Docker.DotNet;
 
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features;
@@ -251,6 +252,60 @@ public sealed class AddWorkersModule
         IEnumerable<IIntegrationEventHandler<DispatchResumed>> handlers =
             provider.GetServices<IIntegrationEventHandler<DispatchResumed>>();
         handlers.ShouldContain(h => h is DispatchResumedBroadcastHandler);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersImageBuildStartedBroadcastHandler()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IIntegrationEventHandler<ImageBuildStarted>> handlers =
+            provider.GetServices<IIntegrationEventHandler<ImageBuildStarted>>();
+        handlers.ShouldContain(h => h is ImageBuildStartedBroadcastHandler);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersImageBuildCompletedBroadcastHandler()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IIntegrationEventHandler<ImageBuildCompleted>> handlers =
+            provider.GetServices<IIntegrationEventHandler<ImageBuildCompleted>>();
+        handlers.ShouldContain(h => h is ImageBuildCompletedBroadcastHandler);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersImageBuildFailedBroadcastHandler()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IIntegrationEventHandler<ImageBuildFailed>> handlers =
+            provider.GetServices<IIntegrationEventHandler<ImageBuildFailed>>();
+        handlers.ShouldContain(h => h is ImageBuildFailedBroadcastHandler);
     }
 
     [Fact]

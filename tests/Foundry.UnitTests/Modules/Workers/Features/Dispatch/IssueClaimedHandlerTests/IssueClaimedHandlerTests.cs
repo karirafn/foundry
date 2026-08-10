@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -1132,5 +1133,8 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(installsDocker);
+
+        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());
     }
 }
