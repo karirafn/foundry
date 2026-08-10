@@ -286,6 +286,11 @@
   }
 
   &__retry-live-region {
+    // The live region is a sibling of the fields grid, not a grid child, so it
+    // never creates a phantom track or row-gap. When populated it sits below the
+    // grid with a top margin that visually groups it with the failure fields.
+    margin-top: var(--fd-spacing-md);
+
     &--empty {
       // Collapse the empty live region visually without removing it from the
       // accessibility tree — display:none or [hidden] would prevent screen readers

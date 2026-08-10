@@ -1110,6 +1110,7 @@ describe('IssueDetailComponent', () => {
     const message = el.querySelector('.issue-detail__retry-message') as HTMLElement;
     expect(message).toBeTruthy();
     expect(message?.textContent?.trim()).toContain('Automatic retries exhausted after 2 attempts');
+    expect(message?.textContent?.trim()).toContain('Use Retry Issue to try again manually');
   });
 
   // Transient retry block — AC3: null transientRetry renders no retry block

@@ -103,40 +103,6 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
               </div>
             }
 
-            <div
-              class="issue-detail__field issue-detail__field--full-width issue-detail__retry-live-region"
-              [class.issue-detail__retry-state]="s.transientRetry !== null"
-              [class.issue-detail__retry-state--exhausted]="s.transientRetry?.isExhausted ?? false"
-              [class.issue-detail__retry-live-region--empty]="s.transientRetry === null"
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              @if (s.transientRetry; as retry) {
-                <span class="issue-detail__field-key">Automatic Retry</span>
-                <div class="issue-detail__retry-callout">
-                  @if (retry.isExhausted) {
-                    <span class="badge issue-detail__retry-chip badge--retry-exhausted">Retry exhausted</span>
-                    <span class="issue-detail__retry-message issue-detail__field-value">
-                      Automatic retries exhausted after {{ retry.maxAttempts }} attempts.
-                      @if (d.state === 'failed' || d.state === 'continuable_failed' || d.state === 'revision_failed') {
-                        Use Retry Issue to try again manually.
-                      }
-                    </span>
-                  } @else {
-                    <span class="badge issue-detail__retry-chip badge--retrying">Attempt {{ retry.attemptNumber }} of {{ retry.maxAttempts }}</span>
-                    <span class="issue-detail__retry-message issue-detail__field-value">
-                      @if (retry.nextAttemptDueAt) {
-                        Automatic retry pending — next attempt at {{ retry.nextAttemptDueAt | date: 'medium' }}.
-                      } @else {
-                        Automatic retry pending — next attempt shortly.
-                      }
-                    </span>
-                  }
-                </div>
-              }
-            </div>
-
             @if (s.blockedBy?.length) {
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Blocked By</span>
@@ -177,6 +143,43 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Feedback Cutoff</span>
                 <span class="issue-detail__field-value">{{ s.feedbackCutoffAt | date: 'medium' }}</span>
+              </div>
+            }
+          </div>
+
+          <!-- Live region sits outside the grid so it does not create a phantom grid track
+               when empty. It remains permanently mounted so screen readers detect content
+               changes when retry data populates. -->
+          <div
+            class="issue-detail__retry-live-region"
+            [class.issue-detail__retry-state]="s.transientRetry !== null"
+            [class.issue-detail__retry-state--exhausted]="s.transientRetry?.isExhausted ?? false"
+            [class.issue-detail__retry-live-region--empty]="s.transientRetry === null"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            @if (s.transientRetry; as retry) {
+              <span class="issue-detail__field-key">Automatic Retry</span>
+              <div class="issue-detail__retry-callout">
+                @if (retry.isExhausted) {
+                  <span class="badge issue-detail__retry-chip badge--retry-exhausted">Retry exhausted</span>
+                  <span class="issue-detail__retry-message issue-detail__field-value">
+                    Automatic retries exhausted after {{ retry.maxAttempts }} attempts.
+                    @if (d.state === 'failed' || d.state === 'continuable_failed' || d.state === 'revision_failed') {
+                      Use Retry Issue to try again manually.
+                    }
+                  </span>
+                } @else {
+                  <span class="badge issue-detail__retry-chip badge--retrying">Attempt {{ retry.attemptNumber }} of {{ retry.maxAttempts }}</span>
+                  <span class="issue-detail__retry-message issue-detail__field-value">
+                    @if (retry.nextAttemptDueAt) {
+                      Automatic retry pending — next attempt at {{ retry.nextAttemptDueAt | date: 'medium' }}.
+                    } @else {
+                      Automatic retry pending — next attempt shortly.
+                    }
+                  </span>
+                }
               </div>
             }
           </div>
