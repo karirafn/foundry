@@ -241,9 +241,10 @@ public sealed class ProcessRebuildAsync
     }
 
     [Fact]
-    public async Task WhenBuildFailsTwice_SecondFailedEventHasAttemptTwo()
+    public async Task WhenPersistedAttemptIsOne_FailureReportsAttemptTwo()
     {
-        // Arrange — tiny backoff so test runs quickly
+        // Arrange — settings returns Attempt=1 (persisted from a prior failed build),
+        // so the next failure must report Attempt=2 (derived from persisted state, not in-memory counter).
         string contextDir = CreateTempContextDir();
 
         try
@@ -252,15 +253,14 @@ public sealed class ProcessRebuildAsync
             ErrorReportingImageOperations errorImages = new("build error");
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
+                settingsQueries: new StubGlobalSettingsQueries(attempt: 1),
                 dispatcher: dispatcher,
-                contextPath: contextDir,
-                initialBackoff: TimeSpan.FromMilliseconds(1));
+                contextPath: contextDir);
 
-            // Act — call twice on the same service instance to accumulate attempt
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — last published event is OutcomeFailed with attempt=2
+            // Assert — OutcomeFailed must have attempt=2 (persisted 1 + 1)
             IIntegrationEvent last = dispatcher.Published[^1];
             ImageBuildOutcomeFailed failed = last.ShouldBeOfType<ImageBuildOutcomeFailed>();
             failed.Attempt.ShouldBe(2);
@@ -843,54 +843,6 @@ public sealed class ProcessRebuildAsync
 
         // Assert
         dispatcher.Published.ShouldBeEmpty();
-    }
-
-    // Backoff state tests
-
-    [Fact]
-    public async Task WhenFailureThenSupersede_AttemptResetsAndNextFailureStartsAtOne()
-    {
-        // Arrange — verifies the CODE-H1 invariant: after a supersede cancels the pending retry,
-        // the next failure path atomically reads attempt=1 (reset + increment are one lock scope).
-        // The service must be subscribed (via StartingAsync) before ImmediateRebuildRequested fires.
-        string contextDir = CreateTempContextDir();
-
-        try
-        {
-            SupersedingQueue queue = new();
-            CapturingIntegrationEventDispatcher dispatcher = new();
-            ErrorReportingImageOperations errorImages = new("build error");
-            WorkerImageRebuildService sut = BuildService(
-                errorImages,
-                dispatcher: dispatcher,
-                contextPath: contextDir,
-                queue: queue,
-                initialBackoff: TimeSpan.FromMilliseconds(1));
-
-            // StartingAsync subscribes the event handler
-            await sut.StartingAsync(TestContext.Current.CancellationToken);
-
-            // Act — first failure accumulates attempt=1
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Supersede resets _attempt=0 atomically via the registered handler
-            queue.RaiseImmediateRebuild();
-
-            // Second failure must start fresh: attempt increments from 0 → 1
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
-
-            // Assert — last published OutcomeFailed must have attempt=1
-            IIntegrationEvent last = dispatcher.Published[^1];
-            ImageBuildOutcomeFailed failed = last.ShouldBeOfType<ImageBuildOutcomeFailed>();
-            failed.Attempt.ShouldBe(1);
-
-            // Disposal must not throw — no orphaned CTS
-            sut.Dispose();
-        }
-        finally
-        {
-            Directory.Delete(contextDir, true);
-        }
     }
 
     private static string CreateTempContextDir()

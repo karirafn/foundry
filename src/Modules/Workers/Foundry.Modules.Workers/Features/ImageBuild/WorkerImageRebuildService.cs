@@ -40,9 +40,8 @@ internal sealed class WorkerImageRebuildService(
         optionsAccessor.Value.ImageBuild.InitialBackoff,
         optionsAccessor.Value.ImageBuild.MaxBackoff);
 
-    // Backoff state — all mutations guarded by _stateLock.
+    // Pending retry CTS — mutations guarded by _stateLock.
     private readonly Lock _stateLock = new();
-    private int _attempt;
     private CancellationTokenSource? _pendingRetryCts;
 
     private void SubscribeToImmediateRebuild()
@@ -55,7 +54,6 @@ internal sealed class WorkerImageRebuildService(
         CancellationTokenSource? ctsToCancel;
         lock (_stateLock)
         {
-            _attempt = 0;
             ctsToCancel = _pendingRetryCts;
             _pendingRetryCts = null;
         }
@@ -296,7 +294,6 @@ internal sealed class WorkerImageRebuildService(
             CancellationTokenSource? oldCts;
             lock (_stateLock)
             {
-                _attempt = 0;
                 oldCts = _pendingRetryCts;
                 _pendingRetryCts = null;
             }
@@ -309,21 +306,19 @@ internal sealed class WorkerImageRebuildService(
         }
         else
         {
+            // Derive attempt count from persisted state so the backoff survives host restarts.
+            int nextAttempt = settings.Attempt + 1;
+            TimeSpan backoff = _retryPolicy.ComputeBackoff(nextAttempt);
+
             CancellationTokenSource retryCts = new();
 
-            // Atomically swap the pending retry CTS and increment the attempt counter
-            // so OnImmediateRebuildRequested cannot interleave between the two operations,
-            // which would otherwise orphan the just-swapped CTS or corrupt the attempt count.
+            // Atomically swap the pending retry CTS so OnImmediateRebuildRequested cannot
+            // interleave and orphan the just-swapped CTS.
             CancellationTokenSource? oldCts;
-            int attempt;
-            TimeSpan backoff;
             lock (_stateLock)
             {
                 oldCts = _pendingRetryCts;
                 _pendingRetryCts = retryCts;
-                _attempt++;
-                attempt = _attempt;
-                backoff = _retryPolicy.ComputeBackoff(attempt);
             }
 
             await CancelAndDisposeAsync(oldCts);
@@ -331,13 +326,13 @@ internal sealed class WorkerImageRebuildService(
             DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow + backoff;
 
             await integrationEventDispatcher.DispatchAsync(
-                [new ImageBuildOutcomeFailed(errorTail, nextRetryAt, attempt)],
+                [new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt)],
                 cancellationToken);
 
             logger.LogError(
                 "Worker image '{Image}' build failed (attempt {Attempt}, next retry at {NextRetryAt}): {Error}",
                 _options.Image,
-                attempt,
+                nextAttempt,
                 nextRetryAt,
                 errorTail);
 
