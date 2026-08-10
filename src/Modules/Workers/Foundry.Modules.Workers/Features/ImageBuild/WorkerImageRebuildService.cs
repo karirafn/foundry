@@ -36,6 +36,9 @@ internal sealed class WorkerImageRebuildService(
     private const int LogTailLines = 200;
 
     private readonly WorkerOptions _options = optionsAccessor.Value;
+    private readonly ImageBuildRetryPolicy _retryPolicy = new(
+        optionsAccessor.Value.ImageBuild.InitialBackoff,
+        optionsAccessor.Value.ImageBuild.MaxBackoff);
 
     // Backoff state — all mutations guarded by _stateLock.
     private readonly Lock _stateLock = new();
@@ -320,7 +323,7 @@ internal sealed class WorkerImageRebuildService(
                 _pendingRetryCts = retryCts;
                 _attempt++;
                 attempt = _attempt;
-                backoff = ComputeBackoff(attempt);
+                backoff = _retryPolicy.ComputeBackoff(attempt);
             }
 
             await CancelAndDisposeAsync(oldCts);
@@ -377,16 +380,6 @@ internal sealed class WorkerImageRebuildService(
         {
             // Either superseded by RequestImmediateRebuild or the service is stopping — both are intentional.
         }
-    }
-
-    private TimeSpan ComputeBackoff(int attempt)
-    {
-        // Exponential backoff: initialBackoff * 2^(attempt-1), capped at maxBackoff.
-        // Use double arithmetic to avoid overflow on large attempt counts.
-        double multiplier = Math.Pow(2, attempt - 1);
-        double seconds = _options.ImageBuild.InitialBackoff.TotalSeconds * multiplier;
-        TimeSpan uncapped = TimeSpan.FromSeconds(seconds);
-        return uncapped < _options.ImageBuild.MaxBackoff ? uncapped : _options.ImageBuild.MaxBackoff;
     }
 
     private string ResolveContextPath(string configuredContextPath)
