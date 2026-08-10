@@ -445,7 +445,7 @@ Both pause and resume broadcast a `dispatch` system notification (`isActive: tru
 A lightweight SignalR broadcast (`Category`, `IsActive`, `Message`) delivered to all dashboard clients via the system hub, used for global operational banners.
 Categories in use: `dispatch`, `docker`, `image-build`, `auth`, `license`.
 Client semantics: an `isActive: true` notification is stored, replacing any prior entry for its category; `isActive: false` removes the category's entry.
-For the `dispatch` category the notification is a pure reload trigger — the client re-syncs authoritative state from `/api/settings` rather than reading it off the payload (see Dispatch Pause); the `image-build` category currently carries a JSON state payload instead.
+Both `dispatch` and `image-build` are pure reload triggers — each broadcast carries an empty message and signals the client to re-sync authoritative state from `/api/settings` rather than reading any payload (see Dispatch Pause and Worker Image Build State).
 Ephemeral — broadcast directly, never through the transactional outbox, since there is no durable consumer.
 
 ## Container Output Parser
