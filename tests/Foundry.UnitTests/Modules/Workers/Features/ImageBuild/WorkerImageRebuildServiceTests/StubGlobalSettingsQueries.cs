@@ -11,7 +11,8 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebui
 /// </summary>
 internal sealed class StubGlobalSettingsQueries(
     bool settingsExists = true,
-    IReadOnlyDictionary<string, string>? buildArgs = null) : IGlobalSettingsQueries
+    IReadOnlyDictionary<string, string>? buildArgs = null,
+    int attempt = 0) : IGlobalSettingsQueries
 {
     private static readonly GlobalSettingsSummary DefaultSummary = new(
         MaxConcurrent: 1,
@@ -34,8 +35,10 @@ internal sealed class StubGlobalSettingsQueries(
         NextRetryAt: null,
         Attempt: 0);
 
+    private readonly GlobalSettingsSummary _summary = DefaultSummary with { Attempt = attempt };
+
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
-        => Task.FromResult(settingsExists ? DefaultSummary : (GlobalSettingsSummary?)null);
+        => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);
 
     public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
         => Task.FromResult(1);

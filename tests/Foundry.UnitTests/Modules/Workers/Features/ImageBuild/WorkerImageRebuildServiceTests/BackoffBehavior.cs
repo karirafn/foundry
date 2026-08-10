@@ -116,6 +116,41 @@ public sealed class BackoffBehavior
     }
 
     [Fact]
+    public async Task WhenImmediateRebuildSupersedes_DisposeDoesNotThrow()
+    {
+        // Arrange — verifies that after a supersede cancels the pending retry CTS, Dispose
+        // releases that CTS without throwing, confirming no orphaned resources.
+        using SignallingDispatcher signal = new();
+        using ControlledQueue queue = new();
+
+        WorkerImageRebuildService sut = BuildServiceCore(
+            queue,
+            signal,
+            contentRootPath: "/tmp",
+            relativeContextPath: "nonexistent-path-for-test",
+            initialBackoff: TimeSpan.FromMilliseconds(500));
+
+        using CancellationTokenSource cts = new();
+        await sut.StartAsync(cts.Token);
+
+        // Signal one rebuild — the build will fail and schedule a 500ms pending retry.
+        queue.Enqueue();
+
+        // Wait deterministically for the failure event so the pending retry CTS is in place.
+        bool notified = await signal.WaitForFailureEventAsync(TimeSpan.FromSeconds(5));
+        notified.ShouldBeTrue("the service should have dispatched an ImageBuildOutcomeFailed event");
+
+        // Supersede cancels the pending retry CTS and re-enqueues immediately.
+        queue.RequestImmediateRebuild();
+
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert — Dispose must not throw after a supersede.
+        Record.Exception(() => sut.Dispose()).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenBuildFailsAndDelayElapses_ReEnqueuesRebuild()
     {
         // Arrange — tiny backoff so the delay fires almost immediately
