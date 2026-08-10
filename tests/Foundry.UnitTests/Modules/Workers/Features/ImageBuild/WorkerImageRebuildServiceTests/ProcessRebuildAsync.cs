@@ -845,6 +845,51 @@ public sealed class ProcessRebuildAsync
         dispatcher.Published.ShouldBeEmpty();
     }
 
+    // Restart-continuity regression test (AC#1)
+
+    [Fact]
+    public async Task WhenPersistedStateIsFailedWithAttempt_FailureContinuesProgression()
+    {
+        // Arrange — a fresh service (simulating host restart) whose settings query returns Attempt=3.
+        // The service must continue the progression: backoff for attempt 4, not attempt 1.
+        // Use distinctive initial backoff (10s) so attempt-4 backoff (10s * 2^3 = 80s)
+        // is clearly distinguishable from attempt-1 backoff (10s).
+        string contextDir = CreateTempContextDir();
+
+        try
+        {
+            TimeSpan initialBackoff = TimeSpan.FromSeconds(10);
+
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            ErrorReportingImageOperations errorImages = new("build error");
+            WorkerImageRebuildService sut = BuildService(
+                errorImages,
+                settingsQueries: new StubGlobalSettingsQueries(attempt: 3),
+                dispatcher: dispatcher,
+                contextPath: contextDir,
+                initialBackoff: initialBackoff);
+
+            DateTimeOffset before = DateTimeOffset.UtcNow;
+
+            // Act — a fresh service instance with persisted Attempt=3 fails
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — Attempt must be 4 (not 1, which would indicate the counter reset on restart)
+            IIntegrationEvent last = dispatcher.Published[^1];
+            ImageBuildOutcomeFailed failed = last.ShouldBeOfType<ImageBuildOutcomeFailed>();
+            failed.Attempt.ShouldBe(4);
+
+            // NextRetryAt must reflect backoff for attempt 4: 10s * 2^3 = 80s
+            TimeSpan expectedBackoff = initialBackoff * 8;
+            failed.NextRetryAt.ShouldNotBeNull();
+            failed.NextRetryAt.Value.ShouldBeGreaterThan(before + expectedBackoff - TimeSpan.FromSeconds(1));
+        }
+        finally
+        {
+            Directory.Delete(contextDir, true);
+        }
+    }
+
     private static string CreateTempContextDir()
     {
         string contextDir = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}");
