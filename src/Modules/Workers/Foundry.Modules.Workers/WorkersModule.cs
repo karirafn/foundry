@@ -58,6 +58,9 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
+        services.AddIntegrationEventHandler<ImageBuildStarted, ImageBuildStartedBroadcastHandler>();
+        services.AddIntegrationEventHandler<ImageBuildCompleted, ImageBuildCompletedBroadcastHandler>();
+        services.AddIntegrationEventHandler<ImageBuildFailed, ImageBuildFailedBroadcastHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
         services.AddDomainEventHandler<Domain.Events.WorkerRunFailed, WorkerRunFailedBridgeHandler>();
 
