@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
@@ -263,6 +264,9 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
+
+        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());
     }
 
     private sealed class AlwaysCanDispatchCredentialGate : ICredentialGate

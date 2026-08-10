@@ -1,6 +1,7 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -94,5 +95,17 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .FirstOrDefaultAsync(cancellationToken);
 
         return settings?.WorkerImageConfiguration.InstallDocker ?? false;
+    }
+
+    public async Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
+        CancellationToken cancellationToken)
+    {
+        // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
+        // into a SQL column — the full entity must be loaded and the value read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return (settings?.WorkerImageConfiguration ?? WorkerImageConfiguration.Default).ToBuildArgs();
     }
 }
