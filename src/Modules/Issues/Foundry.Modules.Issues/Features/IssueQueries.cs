@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.StateChanges;
+using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
@@ -257,7 +258,8 @@ internal sealed class IssueQueries(
 
         string state = GetStateDiscriminator(issue);
 
-        IssueStateDetails? stateDetails = BuildStateDetails(issue);
+        TransientRetryDetails? transientRetry = await BuildTransientRetryDetailsAsync(issue, cancellationToken);
+        IssueStateDetails? stateDetails = BuildStateDetails(issue, transientRetry);
 
         return new IssueDetail(
             Id: issue.Id.Value,
@@ -292,7 +294,50 @@ internal sealed class IssueQueries(
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
-    private static IssueStateDetails? BuildStateDetails(Issue issue) =>
+    private async Task<TransientRetryDetails?> BuildTransientRetryDetailsAsync(
+        Issue issue,
+        CancellationToken cancellationToken)
+    {
+        string? failureCategory = issue switch
+        {
+            FailedIssue failed => failed.FailureCategory,
+            ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory,
+            _ => null
+        };
+
+        if (failureCategory != TransientRetrySchedule.TransientApiErrorCategory)
+        {
+            return null;
+        }
+
+        // Retrieve the 0-based count of consecutive transient runs from the worker run store.
+        int consecutiveRuns = await workerRunQueries.CountConsecutiveTransientRunsAsync(
+            issue.Id.Value,
+            TransientRetrySchedule.MaxTransientRetries,
+            cancellationToken);
+
+        // AttemptNumber is the human-readable count of the attempt that just failed.
+        // consecutiveRuns is the count of completed transient runs (1 = first attempt failed),
+        // which already maps directly to the 1-based human count — no offset needed.
+        int attemptNumber = consecutiveRuns;
+        int maxAttempts = TransientRetrySchedule.MaxTransientRetries;
+        bool isExhausted = consecutiveRuns >= maxAttempts;
+
+        DateTimeOffset failedAt = issue switch
+        {
+            FailedIssue failed => failed.FailedAt,
+            ContinuableFailedIssue continuableFailed => continuableFailed.FailedAt,
+            _ => throw new InvalidOperationException($"Unexpected transient issue type: {issue.GetType().Name}")
+        };
+
+        return new TransientRetryDetails(
+            AttemptNumber: attemptNumber,
+            MaxAttempts: maxAttempts,
+            IsExhausted: isExhausted,
+            NextAttemptDueAt: isExhausted ? null : failedAt + TransientRetrySchedule.ComputeBackoff(consecutiveRuns));
+    }
+
+    private static IssueStateDetails? BuildStateDetails(Issue issue, TransientRetryDetails? transientRetry) =>
         issue switch
         {
             BlockedIssue blocked => new IssueStateDetails(
@@ -348,7 +393,7 @@ internal sealed class IssueQueries(
                 FailedAt: failed.FailedAt,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: transientRetry),
 
             CompletedIssue completed => new IssueStateDetails(
                 WorkerRunId: null,
@@ -403,7 +448,7 @@ internal sealed class IssueQueries(
                 FailedAt: continuableFailed.FailedAt,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: transientRetry),
 
             ContinuationQueuedIssue continuationQueued => new IssueStateDetails(
                 WorkerRunId: null,
