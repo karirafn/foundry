@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
@@ -228,9 +226,13 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert
-            broadcaster.Sent.ShouldContain(n =>
-                n.Category == WorkerImageRebuildService.ImageBuildCategory && !n.IsActive);
+            // Assert — the final inactive broadcast must carry an empty message (pure reload trigger)
+            SystemNotification? inactiveNotification = broadcaster.Sent
+                .FirstOrDefault(n =>
+                    n.Category == WorkerImageRebuildService.ImageBuildCategory
+                    && !n.IsActive);
+            inactiveNotification.ShouldNotBeNull();
+            inactiveNotification.Message.ShouldBe(string.Empty);
         }
         finally
         {
@@ -641,7 +643,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerReportsError_BroadcastsActiveNotificationWithError()
+    public async Task WhenDockerReportsError_BroadcastsActiveNotificationWithEmptyMessage()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
@@ -661,19 +663,20 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — message is JSON with status "Failed" and the error in logTail
-            // (failure notification is last; building notification comes first)
-            SystemNotification? failureNotification = broadcaster.Sent
-                .LastOrDefault(n =>
+            // Assert — two active image-build broadcasts: building first, then failed.
+            // Both carry empty messages (pure reload trigger; clients re-fetch /api/settings).
+            IReadOnlyList<SystemNotification> activeNotifications = broadcaster.Sent
+                .Where(n =>
                     n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive);
-            failureNotification.ShouldNotBeNull();
+                    && n.IsActive)
+                .ToList();
+            activeNotifications.Count.ShouldBe(2, "building then failed");
 
-            JsonDocument doc = JsonDocument.Parse(failureNotification.Message);
-            doc.RootElement.GetProperty("status").GetString().ShouldBe(WorkerImageRebuildService.FailedStatus);
-            string? logTail = doc.RootElement.GetProperty("logTail").GetString();
-            logTail.ShouldNotBeNull();
-            logTail.ShouldBe(dockerError);
+            SystemNotification buildingNotification = activeNotifications[0];
+            buildingNotification.Message.ShouldBe(string.Empty);
+
+            SystemNotification failedNotification = activeNotifications[1];
+            failedNotification.Message.ShouldBe(string.Empty);
         }
         finally
         {
@@ -783,7 +786,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerReportsErrorWithSecret_RedactsSecretFromBroadcastNotification()
+    public async Task WhenDockerReportsErrorWithSecret_RedactsSecretFromPersistedErrorTailAndSendsBroadcastWithEmptyMessage()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
@@ -803,17 +806,24 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — the broadcast notification must not contain the raw secret value
-            SystemNotification? failureNotification = broadcaster.Sent
-                .LastOrDefault(n =>
+            // Assert — the persisted error tail must not contain the raw secret value
+            await using FoundryDbContext db = CreateDbContext();
+            GlobalSettings? settings = await db.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+            settings.ShouldNotBeNull();
+            ImageBuildState.Failed failed = settings.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
+            string errorTail = failed.ErrorTail.ShouldNotBeNull();
+            errorTail.ShouldNotContain("sk-ant-key123");
+            errorTail.ShouldContain("***");
+
+            // Assert — the broadcast notification carries no payload (pure reload trigger)
+            IReadOnlyList<SystemNotification> activeNotifications = broadcaster.Sent
+                .Where(n =>
                     n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive);
-            failureNotification.ShouldNotBeNull();
-            JsonDocument doc = JsonDocument.Parse(failureNotification.Message);
-            string? logTail = doc.RootElement.GetProperty("logTail").GetString();
-            logTail.ShouldNotBeNull();
-            logTail.ShouldNotContain("sk-ant-key123");
-            logTail.ShouldContain("***");
+                    && n.IsActive)
+                .ToList();
+            activeNotifications.Count.ShouldBe(2, "building then failed active broadcasts");
+            activeNotifications[1].Message.ShouldBe(string.Empty, "failed broadcast is a pure reload trigger");
         }
         finally
         {
@@ -867,14 +877,12 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — building notification must be first with JSON payload
+            // Assert — building notification must be first, active, with empty message (pure reload trigger)
             broadcaster.Sent.ShouldNotBeEmpty();
             SystemNotification first = broadcaster.Sent[0];
             first.Category.ShouldBe(WorkerImageRebuildService.ImageBuildCategory);
             first.IsActive.ShouldBeTrue();
-
-            JsonDocument doc = JsonDocument.Parse(first.Message);
-            doc.RootElement.GetProperty("status").GetString().ShouldBe(WorkerImageRebuildService.BuildingStatus);
+            first.Message.ShouldBe(string.Empty);
         }
         finally
         {
@@ -885,7 +893,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     // Notification protocol format tests
 
     [Fact]
-    public async Task WhenBuildStarts_BroadcastMessageIsValidJson()
+    public async Task WhenBuildStarts_BroadcastMessageIsEmpty()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
@@ -903,11 +911,10 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — message must be valid JSON (not a pipe-delimited string)
+            // Assert — message is empty (pure reload trigger; clients re-fetch /api/settings)
             broadcaster.Sent.ShouldNotBeEmpty();
             SystemNotification first = broadcaster.Sent[0];
-            JsonDocument doc = JsonDocument.Parse(first.Message);
-            doc.RootElement.ValueKind.ShouldBe(JsonValueKind.Object);
+            first.Message.ShouldBe(string.Empty);
         }
         finally
         {
@@ -916,7 +923,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerReportsError_BroadcastMessageIsJsonWithStatusAndLogTail()
+    public async Task WhenDockerReportsError_BuildingBroadcastPrecedesFailedBroadcast()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
@@ -936,19 +943,16 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — JSON payload has camelCase fields matching settings DTO shape
-            // (failure notification is the last active notification; building comes first)
-            SystemNotification? failureNotification = broadcaster.Sent
-                .LastOrDefault(n =>
+            // Assert — building active broadcast comes before failed active broadcast.
+            // Both carry empty messages (pure reload trigger; clients re-fetch /api/settings for details).
+            IReadOnlyList<SystemNotification> activeNotifications = broadcaster.Sent
+                .Where(n =>
                     n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive);
-            failureNotification.ShouldNotBeNull();
-
-            JsonDocument doc = JsonDocument.Parse(failureNotification.Message);
-            doc.RootElement.GetProperty("status").GetString().ShouldBe(WorkerImageRebuildService.FailedStatus);
-            string? logTail = doc.RootElement.GetProperty("logTail").GetString();
-            logTail.ShouldNotBeNull();
-            logTail.ShouldContain(dockerError);
+                    && n.IsActive)
+                .ToList();
+            activeNotifications.Count.ShouldBe(2, "exactly building then failed active broadcasts");
+            activeNotifications[0].Message.ShouldBe(string.Empty, "building broadcast carries no payload");
+            activeNotifications[1].Message.ShouldBe(string.Empty, "failed broadcast carries no payload");
         }
         finally
         {
@@ -1212,9 +1216,11 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBuildFails_FailureNotificationContainsAttemptAndNextRetryAt()
+    public async Task WhenBuildFails_FailedBroadcastHasEmptyMessage()
     {
-        // Arrange
+        // Arrange — verifies that the failure broadcast sends no wire payload.
+        // Attempt and nextRetryAt are authoritative in persisted state (asserted by WhenBuildFails_PersistedAttemptIsOne
+        // and WhenBuildFails_PersistedNextRetryAtIsInFuture); clients re-fetch /api/settings after the broadcast.
         string contextDir = CreateTempContextDir();
 
         try
@@ -1232,16 +1238,14 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — JSON notification payload carries attempt=1 and non-null nextRetryAt
-            SystemNotification? failureNotification = broadcaster.Sent
-                .LastOrDefault(n =>
+            // Assert — the failed active broadcast carries an empty message
+            IReadOnlyList<SystemNotification> activeNotifications = broadcaster.Sent
+                .Where(n =>
                     n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive);
-            failureNotification.ShouldNotBeNull();
-
-            JsonDocument doc = JsonDocument.Parse(failureNotification.Message);
-            doc.RootElement.GetProperty("attempt").GetInt32().ShouldBe(1);
-            doc.RootElement.GetProperty("nextRetryAt").ValueKind.ShouldNotBe(JsonValueKind.Null);
+                    && n.IsActive)
+                .ToList();
+            activeNotifications.Count.ShouldBe(2, "building then failed active broadcasts");
+            activeNotifications[1].Message.ShouldBe(string.Empty, "failed broadcast is a pure reload trigger");
         }
         finally
         {

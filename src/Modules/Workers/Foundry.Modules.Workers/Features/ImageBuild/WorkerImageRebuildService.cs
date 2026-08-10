@@ -1,5 +1,4 @@
 using System.Formats.Tar;
-using System.Text.Json;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -27,8 +26,6 @@ internal sealed class WorkerImageRebuildService(
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
 {
     internal const string ImageBuildCategory = "image-build";
-    internal const string BuildingStatus = "Building";
-    internal const string FailedStatus = "Failed";
     internal const string BaseDockerfile = "Dockerfile.base";
     internal const string LoginDockerfile = "Dockerfile.login";
 
@@ -166,7 +163,7 @@ internal sealed class WorkerImageRebuildService(
         }
 
         await broadcaster.SendAsync(
-            new SystemNotification(ImageBuildCategory, true, SerializeBuildingNotification()),
+            new SystemNotification(ImageBuildCategory, true, string.Empty),
             cancellationToken);
 
         settings.BeginImageBuild();
@@ -351,7 +348,7 @@ internal sealed class WorkerImageRebuildService(
                 errorTail);
 
             await broadcaster.SendAsync(
-                new SystemNotification(ImageBuildCategory, true, SerializeFailedNotification(errorTail, nextRetryAt, attempt)),
+                new SystemNotification(ImageBuildCategory, true, string.Empty),
                 cancellationToken);
 
             // Fire-and-forget delayed re-enqueue. Link both the service stopping token and the
@@ -404,12 +401,6 @@ internal sealed class WorkerImageRebuildService(
         TimeSpan uncapped = TimeSpan.FromSeconds(seconds);
         return uncapped < _options.ImageBuild.MaxBackoff ? uncapped : _options.ImageBuild.MaxBackoff;
     }
-
-    private static string SerializeBuildingNotification()
-        => JsonSerializer.Serialize(new ImageBuildStatusNotification(BuildingStatus, null, null, 0));
-
-    private static string SerializeFailedNotification(string? logTail, DateTimeOffset? nextRetryAt, int attempt)
-        => JsonSerializer.Serialize(new ImageBuildStatusNotification(FailedStatus, logTail, nextRetryAt, attempt));
 
     private string ResolveContextPath(string configuredContextPath)
     {
