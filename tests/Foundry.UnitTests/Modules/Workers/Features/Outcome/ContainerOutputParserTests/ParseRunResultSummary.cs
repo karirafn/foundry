@@ -206,7 +206,7 @@ public sealed class ParseRunResultSummary
     }
 
     [Fact]
-    public void WhenIsErrorTrueWithSuccessSubtype_SubtypeIsNormalisedToNull()
+    public void WhenIsErrorTrueWithSuccessSubtype_SubtypeIsNormalizedToNull()
     {
         // Arrange — the Claude CLI emits subtype:"success" even when is_error:true; this
         // fixture reproduces that exact payload.

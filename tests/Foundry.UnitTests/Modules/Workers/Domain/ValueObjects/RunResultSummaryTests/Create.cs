@@ -11,7 +11,7 @@ public sealed class Create
     [Fact]
     public void WhenIsErrorTrueAndSubtypeIsSuccess_SubtypeIsNull()
     {
-        // Arrange
+        // Arrange (no preconditions — inputs passed directly to Act)
 
         // Act
         RunResultSummary summary = RunResultSummary.Create(
@@ -29,9 +29,49 @@ public sealed class Create
     }
 
     [Fact]
+    public void WhenIsErrorTrueAndSubtypeIsSuccessMixedCase_SubtypeIsNull()
+    {
+        // Arrange (no preconditions — inputs passed directly to Act)
+
+        // Act
+        RunResultSummary summary = RunResultSummary.Create(
+            resultText: "Claude encountered an error.",
+            subtype: "Success",
+            isError: true,
+            durationMs: 1000,
+            numTurns: 3,
+            totalCostUsd: null,
+            inputTokens: null,
+            outputTokens: null);
+
+        // Assert
+        summary.Subtype.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenIsErrorTrueAndSubtypeIsNull_SubtypeRemainsNull()
+    {
+        // Arrange (no preconditions — inputs passed directly to Act)
+
+        // Act
+        RunResultSummary summary = RunResultSummary.Create(
+            resultText: "Claude encountered an error.",
+            subtype: null,
+            isError: true,
+            durationMs: 1000,
+            numTurns: 3,
+            totalCostUsd: null,
+            inputTokens: null,
+            outputTokens: null);
+
+        // Assert
+        summary.Subtype.ShouldBeNull();
+    }
+
+    [Fact]
     public void WhenIsErrorFalseAndSubtypeIsSuccess_SubtypeIsPreserved()
     {
-        // Arrange
+        // Arrange (no preconditions — inputs passed directly to Act)
 
         // Act
         RunResultSummary summary = RunResultSummary.Create(
@@ -51,7 +91,7 @@ public sealed class Create
     [Fact]
     public void WhenIsErrorTrueAndSubtypeIsGenuineErrorSubtype_SubtypeIsPreserved()
     {
-        // Arrange
+        // Arrange (no preconditions — inputs passed directly to Act)
 
         // Act
         RunResultSummary summary = RunResultSummary.Create(
