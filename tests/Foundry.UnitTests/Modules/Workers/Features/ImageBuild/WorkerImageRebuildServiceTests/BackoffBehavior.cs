@@ -120,20 +120,10 @@ public sealed class BackoffBehavior
     {
         // Arrange — verifies that after a supersede cancels the pending retry CTS, Dispose
         // releases that CTS without throwing, confirming no orphaned resources.
+        using SignallingDispatcher signal = new();
         using ControlledQueue queue = new();
 
-        WorkerImageRebuildService sut = BuildServiceWithFailingContextPath(
-            queue,
-            initialBackoff: TimeSpan.FromMilliseconds(500));
-
-        await sut.StartAsync(CancellationToken.None);
-
-        // Signal one rebuild — the build will fail and schedule a pending retry
-        queue.Enqueue();
-
-        // Wait for the delayed retry to be set up
-        using SignallingDispatcher signal = new();
-        WorkerImageRebuildService sut2 = BuildServiceCore(
+        WorkerImageRebuildService sut = BuildServiceCore(
             queue,
             signal,
             contentRootPath: "/tmp",
@@ -141,23 +131,23 @@ public sealed class BackoffBehavior
             initialBackoff: TimeSpan.FromMilliseconds(500));
 
         using CancellationTokenSource cts = new();
-        await sut2.StartAsync(cts.Token);
+        await sut.StartAsync(cts.Token);
+
+        // Signal one rebuild — the build will fail and schedule a 500ms pending retry.
         queue.Enqueue();
 
+        // Wait deterministically for the failure event so the pending retry CTS is in place.
         bool notified = await signal.WaitForFailureEventAsync(TimeSpan.FromSeconds(5));
         notified.ShouldBeTrue("the service should have dispatched an ImageBuildOutcomeFailed event");
 
-        // Supersede cancels the pending retry CTS
+        // Supersede cancels the pending retry CTS and re-enqueues immediately.
         queue.RequestImmediateRebuild();
 
         await cts.CancelAsync();
-        await sut2.StopAsync(CancellationToken.None);
-
-        // Assert — Dispose must not throw after supersede
-        Exception? thrown = Record.Exception(() => sut2.Dispose());
-        thrown.ShouldBeNull();
-
         await sut.StopAsync(CancellationToken.None);
+
+        // Assert — Dispose must not throw after a supersede.
+        Record.Exception(() => sut.Dispose()).ShouldBeNull();
     }
 
     [Fact]

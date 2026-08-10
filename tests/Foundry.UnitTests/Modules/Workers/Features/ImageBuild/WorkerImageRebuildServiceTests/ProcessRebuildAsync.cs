@@ -1116,39 +1116,6 @@ public sealed class ProcessRebuildAsync
         public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
     }
 
-    /// <summary>
-    /// A queue that allows tests to directly raise ImmediateRebuildRequested to simulate supersede events.
-    /// </summary>
-    private sealed class SupersedingQueue : IWorkerImageRebuildQueue
-    {
-        private event Action? _immediateRebuildRequested;
-
-        public event Action? ImmediateRebuildRequested
-        {
-            add => _immediateRebuildRequested += value;
-            remove => _immediateRebuildRequested -= value;
-        }
-
-        public void RaiseImmediateRebuild()
-        {
-            _immediateRebuildRequested?.Invoke();
-        }
-
-        public void RequestImmediateRebuild()
-        {
-            _immediateRebuildRequested?.Invoke();
-        }
-
-        public bool TryEnqueue() => false;
-
-        public async IAsyncEnumerable<bool> ReadAllAsync(
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
-        {
-            await Task.CompletedTask;
-            yield break;
-        }
-    }
-
     private sealed class NullWorkerImageRebuildQueue : IWorkerImageRebuildQueue
     {
         public event Action? ImmediateRebuildRequested;

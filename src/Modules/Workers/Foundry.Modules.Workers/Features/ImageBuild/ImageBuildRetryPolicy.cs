@@ -18,12 +18,11 @@ internal sealed record ImageBuildRetryPolicy(TimeSpan InitialBackoff, TimeSpan M
         // Guard against +Infinity or values that would overflow TimeSpan before converting.
         double multiplier = Math.Pow(2, clampedAttempt - 1);
         double seconds = InitialBackoff.TotalSeconds * multiplier;
-        if (double.IsInfinity(seconds) || seconds >= MaxBackoff.TotalSeconds)
+        if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds >= MaxBackoff.TotalSeconds)
         {
             return MaxBackoff;
         }
 
-        TimeSpan uncapped = TimeSpan.FromSeconds(seconds);
-        return uncapped < MaxBackoff ? uncapped : MaxBackoff;
+        return TimeSpan.FromSeconds(seconds);
     }
 }

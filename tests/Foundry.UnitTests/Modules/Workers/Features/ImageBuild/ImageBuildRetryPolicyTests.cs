@@ -122,4 +122,20 @@ public sealed class ImageBuildRetryPolicyTests
         // Assert — negative is clamped to 1, so initial backoff is returned
         result.ShouldBe(InitialBackoff);
     }
+
+    [Fact]
+    public void WhenInitialBackoffIsZeroAndAttemptOverflows_ReturnsMaxWithoutThrowing()
+    {
+        // Arrange — InitialBackoff=0, multiplier=2^1999 → +Infinity, 0.0 * Infinity = NaN;
+        // the guard must handle NaN so TimeSpan.FromSeconds does not throw OverflowException.
+        ImageBuildRetryPolicy policy = CreatePolicy(
+            initialBackoff: TimeSpan.Zero,
+            maxBackoff: MaxBackoff);
+
+        // Act
+        TimeSpan result = policy.ComputeBackoff(2000);
+
+        // Assert
+        result.ShouldBe(MaxBackoff);
+    }
 }
