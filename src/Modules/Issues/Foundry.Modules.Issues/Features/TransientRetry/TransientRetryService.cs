@@ -14,12 +14,12 @@ namespace Foundry.Modules.Issues.Features.TransientRetry;
 
 /// <summary>
 /// Periodic background service that re-queues transient failed issues once their backoff has elapsed,
-/// up to a maximum of <see cref="MaxTransientRetries"/> consecutive transient attempts.
+/// up to a maximum of <see cref="TransientRetrySchedule.MaxTransientRetries"/> consecutive transient attempts.
 /// </summary>
 internal sealed class TransientRetryService : PeriodicBackgroundService
 {
-    internal const int MaxTransientRetries = 2;
-    internal static readonly TimeSpan InitialBackoff = TimeSpan.FromMinutes(1);
+    internal const int MaxTransientRetries = TransientRetrySchedule.MaxTransientRetries;
+    internal static readonly TimeSpan InitialBackoff = TransientRetrySchedule.InitialBackoff;
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<TransientRetryService> _log;
@@ -81,12 +81,12 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
         // Load transient FailedIssue and ContinuableFailedIssue candidates separately by typed set.
         List<FailedIssue> failedCandidates = await db.Set<FailedIssue>()
             .AsNoTracking()
-            .Where(i => i.FailureCategory == "transient_api_error")
+            .Where(i => i.FailureCategory == TransientRetrySchedule.TransientApiErrorCategory)
             .ToListAsync(cancellationToken);
 
         List<ContinuableFailedIssue> continuableCandidates = await db.Set<ContinuableFailedIssue>()
             .AsNoTracking()
-            .Where(i => i.FailureCategory == "transient_api_error")
+            .Where(i => i.FailureCategory == TransientRetrySchedule.TransientApiErrorCategory)
             .ToListAsync(cancellationToken);
 
         // Apply coarse cutoff in memory (SQLite DateTimeOffset translation limitation).
@@ -172,15 +172,8 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
 
     /// <summary>
     /// Computes the exponential backoff for a given attempt count.
-    /// <paramref name="attempt"/> is the number of prior consecutive transient runs (0-based):
-    /// 0 prior runs = first retry, 1 prior run = second retry. Both use 1-minute backoff;
-    /// at 2+ runs (capped by <see cref="MaxTransientRetries"/>) no retry is issued.
+    /// Delegates to <see cref="TransientRetrySchedule.ComputeBackoff"/>.
     /// </summary>
-    internal static TimeSpan ComputeBackoff(int attempt)
-    {
-        // exponent = max(0, attempt-1): attempt 0 or 1 → exponent 0 → 1min * 2^0 = 1 minute.
-        // Doubling applies if MaxTransientRetries > 2 (e.g., attempt 2 → 2min).
-        int exponent = Math.Max(0, attempt - 1);
-        return TimeSpan.FromTicks(InitialBackoff.Ticks * (1L << exponent));
-    }
+    internal static TimeSpan ComputeBackoff(int attempt) =>
+        TransientRetrySchedule.ComputeBackoff(attempt);
 }
