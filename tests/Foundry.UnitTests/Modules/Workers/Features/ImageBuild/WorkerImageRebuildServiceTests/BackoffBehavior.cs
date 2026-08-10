@@ -310,6 +310,13 @@ public sealed class BackoffBehavior : IAsyncDisposable
             {
                 int count = Interlocked.Increment(ref _activeImageBuildCount);
 
+                if (count > 2)
+                {
+                    throw new InvalidOperationException(
+                        $"Expected at most 2 active image-build broadcasts (building then failed), " +
+                        $"but received a {count}th. The gate invariant has been violated.");
+                }
+
                 // The second active broadcast is the failure notification.
                 // Release idempotently — only one failure notification is sent per build attempt.
                 if (count == 2 && _failureSignal.CurrentCount == 0)

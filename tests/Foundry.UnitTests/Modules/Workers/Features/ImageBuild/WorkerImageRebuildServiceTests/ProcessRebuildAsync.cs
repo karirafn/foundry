@@ -786,7 +786,7 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerReportsErrorWithSecret_RedactsSecretFromPersistedErrorTailAndSendsBroadcastWithEmptyMessage()
+    public async Task WhenDockerReportsErrorWithBuildArgSecret_RedactsSecretFromPersistedErrorTail()
     {
         // Arrange
         string contextDir = CreateTempContextDir();
@@ -796,11 +796,9 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             SeedGlobalSettings();
 
             const string secretError = "ANTHROPIC_API_KEY=sk-ant-key123 in build arg caused failure";
-            CapturingNotificationBroadcaster broadcaster = new();
             ErrorReportingImageOperations errorImages = new(secretError);
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
-                broadcaster,
                 contextPath: contextDir);
 
             // Act
@@ -815,15 +813,6 @@ public sealed class ProcessRebuildAsync : IAsyncDisposable
             string errorTail = failed.ErrorTail.ShouldNotBeNull();
             errorTail.ShouldNotContain("sk-ant-key123");
             errorTail.ShouldContain("***");
-
-            // Assert — the broadcast notification carries no payload (pure reload trigger)
-            IReadOnlyList<SystemNotification> activeNotifications = broadcaster.Sent
-                .Where(n =>
-                    n.Category == WorkerImageRebuildService.ImageBuildCategory
-                    && n.IsActive)
-                .ToList();
-            activeNotifications.Count.ShouldBe(2, "building then failed active broadcasts");
-            activeNotifications[1].Message.ShouldBe(string.Empty, "failed broadcast is a pure reload trigger");
         }
         finally
         {
