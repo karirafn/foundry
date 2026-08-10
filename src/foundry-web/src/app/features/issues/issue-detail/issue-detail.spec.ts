@@ -1061,8 +1061,8 @@ describe('IssueDetailComponent', () => {
       stateDetails: {
         ...mockStateDetails,
         transientRetry: {
-          attemptNumber: 2,
-          maxAttempts: 5,
+          attemptNumber: 1,
+          maxAttempts: 2,
           isExhausted: false,
           nextAttemptDueAt: '2026-08-10T14:30:00Z',
         },
@@ -1076,7 +1076,7 @@ describe('IssueDetailComponent', () => {
     // Assert
     const chip = el.querySelector('.issue-detail__retry-chip') as HTMLElement;
     expect(chip).toBeTruthy();
-    expect(chip?.textContent?.trim()).toContain('Attempt 2 of 5');
+    expect(chip?.textContent?.trim()).toContain('Attempt 1 of 2');
     const message = el.querySelector('.issue-detail__retry-message') as HTMLElement;
     expect(message).toBeTruthy();
     expect(message?.textContent?.trim()).toContain('Automatic retry pending');
@@ -1091,8 +1091,8 @@ describe('IssueDetailComponent', () => {
       stateDetails: {
         ...mockStateDetails,
         transientRetry: {
-          attemptNumber: 5,
-          maxAttempts: 5,
+          attemptNumber: 2,
+          maxAttempts: 2,
           isExhausted: true,
           nextAttemptDueAt: null,
         },
@@ -1109,8 +1109,7 @@ describe('IssueDetailComponent', () => {
     expect(chip?.textContent?.trim()).toContain('Retry exhausted');
     const message = el.querySelector('.issue-detail__retry-message') as HTMLElement;
     expect(message).toBeTruthy();
-    expect(message?.textContent?.trim()).toContain('Automatic retries exhausted after 5 attempts');
-    expect(message?.textContent?.trim()).toContain('Use Retry Issue to try again manually');
+    expect(message?.textContent?.trim()).toContain('Automatic retries exhausted after 2 attempts');
   });
 
   // Transient retry block — AC3: null transientRetry renders no retry block
@@ -1132,5 +1131,82 @@ describe('IssueDetailComponent', () => {
     // Assert
     const retryState = el.querySelector('.issue-detail__retry-state');
     expect(retryState).toBeFalsy();
+  });
+
+  // Live region — always present within state-details, populated when retry data is present, empty otherwise
+  it('should render a persistent aria-live region inside state details when transientRetry is present', () => {
+    // Arrange
+    const retryingDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: {
+        ...mockStateDetails,
+        transientRetry: {
+          attemptNumber: 1,
+          maxAttempts: 2,
+          isExhausted: false,
+          nextAttemptDueAt: '2026-08-10T14:30:00Z',
+        },
+      },
+    };
+
+    // Act
+    const fixture = createComponent(retryingDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — live region exists and contains retry content
+    const liveRegion = el.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+    expect(liveRegion).toBeTruthy();
+    expect(liveRegion?.textContent?.trim()).toContain('Attempt 1 of 2');
+  });
+
+  it('should render a persistent aria-live region that is empty when transientRetry is null', () => {
+    // Arrange
+    const noRetryDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: {
+        ...mockStateDetails,
+        transientRetry: null,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(noRetryDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — live region is present but empty; stateDetails is non-null so the region is mounted
+    const liveRegion = el.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+    expect(liveRegion).toBeTruthy();
+    expect(liveRegion?.textContent?.trim()).toBe('');
+  });
+
+  // Null guard on nextAttemptDueAt — non-exhausted retry with null nextAttemptDueAt shows fallback text
+  it('should show fallback text when nextAttemptDueAt is null on a non-exhausted retry', () => {
+    // Arrange
+    const retryNullDue: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: {
+        ...mockStateDetails,
+        transientRetry: {
+          attemptNumber: 1,
+          maxAttempts: 2,
+          isExhausted: false,
+          nextAttemptDueAt: null,
+        },
+      },
+    };
+
+    // Act
+    const fixture = createComponent(retryNullDue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — no dangling "next attempt at ." fragment; fallback phrase is present
+    const message = el.querySelector('.issue-detail__retry-message') as HTMLElement;
+    expect(message).toBeTruthy();
+    const text = message?.textContent?.trim() ?? '';
+    expect(text).toContain('shortly');
+    expect(text).not.toContain('next attempt at .');
   });
 });

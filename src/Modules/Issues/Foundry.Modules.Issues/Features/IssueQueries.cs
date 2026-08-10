@@ -310,19 +310,23 @@ internal sealed class IssueQueries(
             return null;
         }
 
-        // Retrieve the 0-based count of consecutive transient runs from the worker run store.
+        // Retrieve the count of consecutive transient runs from the worker run store.
+        // Returns 0 when the worker-run row is not yet visible (e.g. write not yet committed).
         int consecutiveRuns = await workerRunQueries.CountConsecutiveTransientRunsAsync(
             issue.Id.Value,
             TransientRetrySchedule.MaxTransientRetries,
             cancellationToken);
 
-        // AttemptNumber is the human-readable count of the attempt that just failed.
-        // consecutiveRuns is the count of completed transient runs (1 = first attempt failed),
-        // which already maps directly to the 1-based human count — no offset needed.
-        int attemptNumber = consecutiveRuns;
+        // Guard: worker-run row not yet visible — surface no retry block rather than "Attempt 0 of N".
+        if (consecutiveRuns <= 0)
+        {
+            return null;
+        }
+
         int maxAttempts = TransientRetrySchedule.MaxTransientRetries;
         bool isExhausted = consecutiveRuns >= maxAttempts;
 
+        // EF SQLite provider normalizes FailedAt to UTC — the derived NextAttemptDueAt relies on this.
         DateTimeOffset failedAt = issue switch
         {
             FailedIssue failed => failed.FailedAt,
@@ -331,7 +335,7 @@ internal sealed class IssueQueries(
         };
 
         return new TransientRetryDetails(
-            AttemptNumber: attemptNumber,
+            AttemptNumber: consecutiveRuns,
             MaxAttempts: maxAttempts,
             IsExhausted: isExhausted,
             NextAttemptDueAt: isExhausted ? null : failedAt + TransientRetrySchedule.ComputeBackoff(consecutiveRuns));

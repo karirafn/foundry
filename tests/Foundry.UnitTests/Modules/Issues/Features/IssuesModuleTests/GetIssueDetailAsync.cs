@@ -6,8 +6,6 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
@@ -402,7 +400,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // 1 consecutive transient run = attempt number 1 out of max 2, attempts remaining
-        StubWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
+        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
         IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
 
         // Act
@@ -443,7 +441,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // consecutiveRuns at cap — exhausted
-        StubWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: TransientRetrySchedule.MaxTransientRetries);
+        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: TransientRetrySchedule.MaxTransientRetries);
         IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
 
         // Act
@@ -482,7 +480,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
-        StubWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
+        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
         IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
 
         // Act
@@ -519,7 +517,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // 1 consecutive transient run = attempt number 1, attempts remaining
-        StubWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
+        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
         IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
 
         // Act
@@ -540,34 +538,80 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
                 .ShouldBe(failedAt + TransientRetrySchedule.ComputeBackoff(1), tolerance: TimeSpan.FromSeconds(1)));
     }
 
-    private sealed class StubWorkerRunQueries(int consecutiveTransientRuns) : IWorkerRunQueries
+    [Fact]
+    public async Task WhenTransientFailedIssueHasZeroConsecutiveRuns_TransientRetryIsNull()
     {
-        public Task<Result<WorkerRunDetail>> GetWorkerRunDetailAsync(
-            Guid workerRunId,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<WorkerRunDetail>.Fail(new Error("Test.NotFound", "Not found")));
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        public Task<WorkerRunLogResult> GetWorkerRunLogAsync(
-            Guid workerRunId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<WorkerRunLogResult>(new WorkerRunLogResult.RunNotFound());
+        Guid workerRunId = Guid.NewGuid();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        public Task<IReadOnlyDictionary<Guid, RunAggregate>> GetRunAggregatesForIssuesAsync(
-            IReadOnlyCollection<Guid> issueIds,
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<Guid, RunAggregate>>(new Dictionary<Guid, RunAggregate>());
+        FailedIssue failed = inProgress.MarkFailed(
+            workerRunId,
+            "Transient API error",
+            DateTimeOffset.UtcNow,
+            TransientRetrySchedule.TransientApiErrorCategory);
+        await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
 
-        public Task<RunTotals> GetRunTotalsAsync(
-            DateTimeOffset from,
-            DateTimeOffset to,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new RunTotals(0, 0L, 0, 0m, 0L, 0L));
+        // Worker-run row not yet visible — consecutive run count is 0
+        IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), new NullWorkerRunQueries(consecutiveTransientRuns: 0));
 
-        public Task<int> CountConsecutiveTransientRunsAsync(
-            Guid issueId,
-            int maxAttempts,
-            CancellationToken cancellationToken)
-            => Task.FromResult(consecutiveTransientRuns);
+        // Act
+        Result<IssueDetail> result = await sut.GetIssueDetailAsync(
+            failed.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        stateDetails.TransientRetry.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTransientContinuableFailedIssueExhaustsRetries_ReturnsExhaustedBlock()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        QueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        Guid workerRunId = Guid.NewGuid();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
+            workerRunId,
+            branchName: "feat/issue-1",
+            failureReason: "Transient API error",
+            failureCategory: TransientRetrySchedule.TransientApiErrorCategory,
+            failedAt: DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // consecutiveRuns at cap — exhausted
+        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: TransientRetrySchedule.MaxTransientRetries);
+        IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
+
+        // Act
+        Result<IssueDetail> result = await sut.GetIssueDetailAsync(
+            continuableFailed.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.State.ShouldBe("continuable_failed");
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        TransientRetryDetails retryDetails = stateDetails.TransientRetry.ShouldNotBeNull();
+        retryDetails.ShouldSatisfyAllConditions(
+            () => retryDetails.IsExhausted.ShouldBeTrue(),
+            () => retryDetails.AttemptNumber.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
+            () => retryDetails.MaxAttempts.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
+            () => retryDetails.NextAttemptDueAt.ShouldBeNull());
     }
 
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries

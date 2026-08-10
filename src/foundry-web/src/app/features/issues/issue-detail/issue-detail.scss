@@ -285,6 +285,19 @@
     word-break: break-word;
   }
 
+  &__retry-live-region {
+    &--empty {
+      // Collapse the empty live region visually without removing it from the
+      // accessibility tree — display:none or [hidden] would prevent screen readers
+      // from detecting content changes when retry data populates.
+      padding: 0;
+      margin: 0;
+      border: none;
+      height: 0;
+      overflow: hidden;
+    }
+  }
+
   &__retry-state {
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
     border: 1px solid var(--fd-border-warning);
@@ -305,12 +318,8 @@
     margin-top: var(--fd-spacing-xs);
   }
 
-  &__retry-chip {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-  }
+  // Typography for __retry-chip is inherited from the base .badge class
+  // (font-size, font-weight, letter-spacing, text-transform are all defined there).
 
   &__retry-message {
     color: var(--fd-text-secondary);
