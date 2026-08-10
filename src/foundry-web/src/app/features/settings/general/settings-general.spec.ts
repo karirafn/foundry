@@ -1813,8 +1813,9 @@ describe('SettingsGeneralComponent', () => {
         const service = TestBed.inject(SettingsService);
         const el = fixture.nativeElement as HTMLElement;
 
-        // Act — transition to Failed via service signal
-        service.setImageBuildStatus('Failed', 'err');
+        // Act — transition to Failed via loadSettings
+        service.loadSettings();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err' });
         fixture.detectChanges();
 
         // Assert — assertive alert fires with failure text
@@ -1840,7 +1841,8 @@ describe('SettingsGeneralComponent', () => {
         fixture.detectChanges();
 
         // Act — countdown tick (nextRetryAt changes but status stays Failed)
-        service.setImageBuildStatus('Failed', 'err', '2026-08-08T12:30:00Z', 1);
+        service.loadSettings();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err', nextRetryAt: '2026-08-08T12:30:00Z', attempt: 1 });
         fixture.detectChanges();
 
         // Assert — alert is empty (no re-announcement)
@@ -1862,7 +1864,8 @@ describe('SettingsGeneralComponent', () => {
         const el = fixture.nativeElement as HTMLElement;
 
         // Act — return to Idle
-        service.setImageBuildStatus('Idle', null);
+        service.loadSettings();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Idle', lastImageBuildError: null });
         fixture.detectChanges();
 
         // Assert — alert is empty

@@ -1033,25 +1033,15 @@ describe('SettingsService', () => {
     expect(service.savingImageFlags()).toBe(false);
   });
 
-  // setImageBuildStatus updates status and logTail signals
-  it('should update imageBuildStatus and imageBuildLogTail when setImageBuildStatus is called', () => {
-    // Arrange
-    // (service initialized by test setup)
+  it('should clear imageBuildLogTail when loadSettings returns Idle after a Failed state', () => {
+    // Arrange — seed Failed state via loadSettings
+    service.loadSettings();
+    flushLoadSettings(httpMock, { imageBuildStatus: 'Failed', lastImageBuildError: 'some error' });
+    expect(service.imageBuildLogTail()).toBe('some error');
 
-    // Act
-    service.setImageBuildStatus('Failed', 'Build failed at step 2');
-
-    // Assert
-    expect(service.imageBuildStatus()).toBe('Failed');
-    expect(service.imageBuildLogTail()).toBe('Build failed at step 2');
-  });
-
-  it('should clear imageBuildLogTail when setImageBuildStatus is called with Idle', () => {
-    // Arrange
-    service.setImageBuildStatus('Failed', 'some error');
-
-    // Act
-    service.setImageBuildStatus('Idle', null);
+    // Act — reload with Idle
+    service.loadSettings();
+    flushLoadSettings(httpMock, { imageBuildStatus: 'Idle', lastImageBuildError: null });
 
     // Assert
     expect(service.imageBuildStatus()).toBe('Idle');
@@ -1131,8 +1121,7 @@ describe('SettingsService', () => {
 
   // loadSettings resets image signals
   it('should reset image signals in loadSettings', () => {
-    // Arrange — put signals into dirty state
-    service.setImageBuildStatus('Failed', 'error text');
+    // Arrange — (service initialized by test setup)
 
     // Act
     service.loadSettings();
@@ -1746,13 +1735,18 @@ describe('SettingsService — retry fields', () => {
     httpMock.verify();
   });
 
-  it('should clear imageBuildNextRetryAt when setImageBuildStatus is called with Building', () => {
-    // Arrange
+  it('should clear imageBuildNextRetryAt when loadSettings returns Building after a Failed state with nextRetryAt', () => {
+    // Arrange — seed Failed state with a nextRetryAt via loadSettings
     const { service, httpMock } = setup();
-    service.setImageBuildStatus('Failed', 'err', '2026-08-08T12:00:00Z', 3);
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettings({ imageBuildStatus: 'Failed', nextRetryAt: '2026-08-08T12:00:00Z', attempt: 3 }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+    expect(service.imageBuildNextRetryAt()).toBe('2026-08-08T12:00:00Z');
 
-    // Act
-    service.setImageBuildStatus('Building', null, null, 0);
+    // Act — reload with Building (server ignores nextRetryAt when Building)
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettings({ imageBuildStatus: 'Building', nextRetryAt: null, attempt: 0 }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
 
     // Assert
     expect(service.imageBuildNextRetryAt()).toBeNull();
@@ -1897,33 +1891,35 @@ describe('SettingsService — isColdBuildBlocking', () => {
     httpMock.verify();
   });
 
-  // Cycle 5: Building → Idle over SignalR clears isColdBuildBlocking
-  it('should transition imageBuildStatus from Building to Idle and clear isColdBuildBlocking when reloadTrigger fires', () => {
-    // Arrange
-    vi.useFakeTimers();
-    const { service, httpMock, mockPresence, mockSignalR } = setupWithPresence();
-    mockPresence.setHasAccounts(true);
+  describe('SignalR-triggered reload', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
 
-    // Seed Building via an initial /api/settings fetch
-    service.loadSettings();
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Building', hasUsableImage: false }));
-    httpMock.expectOne('/api/credentials').flush(buildCredentials());
-    expect(service.imageBuildStatus()).toBe('Building');
-    expect(service.isColdBuildBlocking()).toBe(true);
+    // Cycle 5: Building → Idle over SignalR clears isColdBuildBlocking
+    it('should transition imageBuildStatus from Building to Idle and clear isColdBuildBlocking when reloadTrigger fires', () => {
+      // Arrange
+      const { service, httpMock, mockPresence, mockSignalR } = setupWithPresence();
+      mockPresence.setHasAccounts(true);
 
-    // Act — image-build SignalR fires reloadTrigger, advance past the 300ms debounce
-    mockSignalR.reloadTrigger.next();
-    vi.advanceTimersByTime(300);
+      // Seed Building via an initial /api/settings fetch
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Building', hasUsableImage: false }));
+      httpMock.expectOne('/api/credentials').flush(buildCredentials());
+      expect(service.imageBuildStatus()).toBe('Building');
+      expect(service.isColdBuildBlocking()).toBe(true);
 
-    // Flush /api/settings returning Idle + hasUsableImage: true
-    httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Idle', hasUsableImage: true }));
-    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+      // Act — image-build SignalR fires reloadTrigger, advance past the 300ms debounce
+      mockSignalR.reloadTrigger.next();
+      vi.advanceTimersByTime(300);
 
-    // Assert — status cleared and cold-build gate lifted
-    expect(service.imageBuildStatus()).toBe('Idle');
-    expect(service.isColdBuildBlocking()).toBe(false);
-    httpMock.verify();
+      // Flush /api/settings returning Idle + hasUsableImage: true
+      httpMock.expectOne('/api/settings').flush(buildSettingsResponse({ imageBuildStatus: 'Idle', hasUsableImage: true }));
+      httpMock.expectOne('/api/credentials').flush(buildCredentials());
 
-    vi.useRealTimers();
+      // Assert — status cleared and cold-build gate lifted
+      expect(service.imageBuildStatus()).toBe('Idle');
+      expect(service.isColdBuildBlocking()).toBe(false);
+      httpMock.verify();
+    });
   });
 });

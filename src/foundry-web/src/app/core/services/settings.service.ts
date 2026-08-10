@@ -407,15 +407,6 @@ export class SettingsService {
     });
   }
 
-  setImageBuildStatus(status: ImageBuildStatus, logTail: string | null, nextRetryAt: string | null = null, attempt: number = 0): void {
-    this._imageBuildStatusSignal.set(status);
-    this._imageBuildLogTailSignal.set(logTail);
-    this._imageBuildNextRetryAtSignal.set(
-      status === 'Building' || status === 'Idle' ? null : nextRetryAt
-    );
-    this._imageBuildAttemptSignal.set(attempt);
-  }
-
   private _applyImageBuildResponse(response: GlobalSettingsResponse): void {
     this._imageBuildStatusSignal.set(response.imageBuildStatus);
     this._imageBuildLogTailSignal.set(response.lastImageBuildError);
