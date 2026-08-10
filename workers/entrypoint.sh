@@ -263,8 +263,81 @@ else
     echo "FOUNDRY_DOCKER_UNAVAILABLE detail=rootless dockerd failed to start" >&2
 fi
 
-claude -p "$WORKER_PROMPT" \
+# ---------------------------------------------------------------------------
+# is_transient_api_error <json_output>
+#
+# Returns 0 (true) when the captured claude JSON output classifies as a
+# transient API error, 1 (false) otherwise.
+#
+# Mirrors ContainerOutputParser.IsTransientApiError in C# — the detection
+# criteria MUST stay in sync between here and that class.
+#
+# Transient when EITHER:
+#   - api_error_status is in the 500–599 range (numeric or string), OR
+#   - is_error is true AND result contains one of these exact phrases:
+#       "API Error: Connection closed mid-response"
+#       "API Error: 529 Overloaded"
+# ---------------------------------------------------------------------------
+is_transient_api_error() {
+    local output="$1"
+
+    # Extract api_error_status value (numeric or quoted numeric)
+    local status_raw
+    status_raw="$(printf '%s' "$output" | grep -o '"api_error_status":[[:space:]]*[0-9"]*' | grep -o '[0-9]\{3,\}' | head -1)"
+
+    if [[ -n "$status_raw" ]] && [ "$status_raw" -ge 500 ] 2>/dev/null && [ "$status_raw" -le 599 ] 2>/dev/null; then
+        return 0
+    fi
+
+    # Check is_error flag (true) combined with known transient phrases
+    if printf '%s' "$output" | grep -q '"is_error":[[:space:]]*true'; then
+        if printf '%s' "$output" | grep -qF 'API Error: Connection closed mid-response'; then
+            return 0
+        fi
+        if printf '%s' "$output" | grep -qF 'API Error: 529 Overloaded'; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# ---------------------------------------------------------------------------
+# Invoke claude in headless/JSON mode.  Capture stdout (the single JSON
+# result line) while letting stderr stream through live so logs are visible.
+# set -e is toggled off around the capture so we can inspect the exit status.
+#
+# If the first run classifies as a transient API error (mirrors
+# ContainerOutputParser.IsTransientApiError), resume the interrupted session
+# ONCE via "claude -c" before giving up.  The resume's JSON result line
+# becomes the last line of output — if it also fails transiently, Foundry's
+# outer retry bound (#368) still applies.
+# ---------------------------------------------------------------------------
+set +e
+first_output="$(claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \
     --dangerously-skip-permissions \
     --output-format json \
-    --max-turns 200
+    --max-turns 200)"
+first_status=$?
+set -e
+
+printf '%s\n' "$first_output"
+
+if is_transient_api_error "$first_output"; then
+    echo "Transient API error detected — resuming session once via claude -c" >&2
+    # Resume the most recent conversation in cwd.  --append-system-prompt is
+    # intentionally omitted: -c restores the original session (system prompt
+    # included) and re-appending would duplicate it.
+    set +e
+    resume_output="$(claude -c -p "$WORKER_PROMPT" \
+        --dangerously-skip-permissions \
+        --output-format json \
+        --max-turns 200)"
+    resume_status=$?
+    set -e
+    printf '%s\n' "$resume_output"
+    exit "$resume_status"
+fi
+
+exit "$first_status"
