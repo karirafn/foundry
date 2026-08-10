@@ -1,6 +1,7 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -10,22 +11,6 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.ImageBuildComple
 
 public sealed class HandleAsync
 {
-    private sealed class CapturingSystemNotificationBroadcaster : ISystemNotificationBroadcaster
-    {
-        private readonly List<SystemNotification> _notifications = [];
-        private CancellationToken _lastToken;
-
-        public IReadOnlyList<SystemNotification> SentNotifications => _notifications;
-        public CancellationToken LastToken => _lastToken;
-
-        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
-        {
-            _notifications.Add(notification);
-            _lastToken = cancellationToken;
-            return Task.CompletedTask;
-        }
-    }
-
     [Fact]
     public async Task WhenImageBuildCompleted_SendsImageBuildCategoryNotification()
     {

@@ -197,7 +197,8 @@ public sealed class HandleAsync : IAsyncLifetime
         ImageBuildState.Failed failed = stored.ImageBuildState.ShouldBeOfType<ImageBuildState.Failed>();
         failed.ShouldSatisfyAllConditions(
             () => failed.ErrorTail.ShouldBe("error tail"),
-            () => failed.Attempt.ShouldBe(1));
+            () => failed.Attempt.ShouldBe(1),
+            () => failed.NextRetryAt.ShouldBe(nextRetryAt));
     }
 
     [Fact]

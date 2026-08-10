@@ -3,15 +3,12 @@ using System.Threading;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 using Foundry.Testing;
 
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -262,56 +259,4 @@ public sealed class ExecuteAsync
         public string EnvironmentName { get; set; } = "Development";
     }
 
-    private sealed class StubGlobalSettingsQueries : IGlobalSettingsQueries
-    {
-        private static readonly GlobalSettingsSummary DefaultSummary = new(
-            MaxConcurrent: 1,
-            TimeoutMinutes: 60,
-            SystemPromptTemplate: null,
-            WorkerPromptTemplate: null,
-            UsageLimitResetsAt: null,
-            IsDispatchPaused: false,
-            AutoResumeOnUsageReset: true,
-            DefaultCooldownMinutes: 0,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
-            InstallChromium: false,
-            InstallDocker: false,
-            ImageBuildStatus: ImageBuildStatus.Idle,
-            LastImageBuildError: null,
-            HasUsableImage: false,
-            NextRetryAt: null,
-            Attempt: 0);
-
-        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
-            => Task.FromResult((GlobalSettingsSummary?)DefaultSummary);
-
-        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
-            => Task.FromResult(1);
-
-        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(60);
-
-        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult<(string?, string?)>((null, null));
-
-        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true));
-
-        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(0);
-
-        public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
-            => Task.FromResult(ImageBuildStatus.Idle);
-
-        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-            => Task.FromResult(false);
-
-        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult((IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
-    }
 }
