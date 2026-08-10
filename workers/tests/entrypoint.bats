@@ -752,7 +752,7 @@ EOF
     [ -f "$resume_args_file" ]
     local args
     args="$(cat "$resume_args_file")"
-    [[ "$args" == *"-c"* ]]
+    [[ "$args" =~ (^| )-c( |$) ]]
 }
 
 @test "transient retry: last output line is the success JSON from the resume call" {
@@ -862,6 +862,96 @@ EOF
     local count
     count="$(cat "$call_count_file")"
     [ "$count" -eq 1 ]
+}
+
+# Write a fake claude that emits the "Connection closed mid-response" phrase
+# on first call; success on second (-c resume).
+make_fake_claude_connection_closed_then_success() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: connection-closed phrase transient on first call, success on second
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+if [ "\$count" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"result":"API Error: Connection closed mid-response"}'
+    exit 1
+else
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    exit 0
+fi
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "transient retry: phrase 'API Error: Connection closed mid-response' triggers resume (2 calls)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_connection_closed_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 2 ]
+}
+
+@test "transient retry: phrase 'API Error: Connection closed mid-response' resume succeeds — last JSON is success" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_connection_closed_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local last_line
+    last_line="$(printf '%s\n' "$output" | grep '^{' | tail -1)"
+    [[ "$last_line" == *'"is_error":false'* ]]
+    [[ "$last_line" == *'"subtype":"success"'* ]]
+}
+
+# Write a fake claude that emits is_error:false with a 5xx api_error_status
+# on first call (5xx classification is independent of is_error — mirrors C#).
+make_fake_claude_5xx_no_is_error_then_success() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: 5xx status with is_error:false on first call, success on second
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+if [ "\$count" -eq 1 ]; then
+    printf '%s\n' '{"is_error":false,"api_error_status":503}'
+    exit 1
+else
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    exit 0
+fi
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "transient retry: 5xx api_error_status triggers resume regardless of is_error flag (2 calls)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_5xx_no_is_error_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 2 ]
 }
 
 # ---------------------------------------------------------------------------

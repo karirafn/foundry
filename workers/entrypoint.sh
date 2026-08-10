@@ -272,29 +272,49 @@ fi
 # Mirrors ContainerOutputParser.IsTransientApiError in C# — the detection
 # criteria MUST stay in sync between here and that class.
 #
+# Classification inspects only the LAST JSON line (the line whose first
+# non-space character is '{', walking backward through the output), matching
+# ExtractLastJsonLine in C#.  Earlier lines that happen to contain 5xx
+# statuses or error phrases do NOT trigger a resume.
+#
 # Transient when EITHER:
 #   - api_error_status is in the 500–599 range (numeric or string), OR
-#   - is_error is true AND result contains one of these exact phrases:
+#   - is_error is true AND the last JSON line contains one of these phrases:
 #       "API Error: Connection closed mid-response"
 #       "API Error: 529 Overloaded"
+#
+# Note: the phrase check runs against the whole last JSON line rather than
+# just the "result" field value (a minor widening vs C# which extracts only
+# the result string).  This is benign: both phrases are API Error messages
+# that only appear inside the result field in practice.
 # ---------------------------------------------------------------------------
 is_transient_api_error() {
     local output="$1"
 
-    # Extract api_error_status value (numeric or quoted numeric)
+    # Extract the last line whose first non-space character is '{' — mirrors
+    # ExtractLastJsonLine in ContainerOutputParser.cs.
+    local last_json_line
+    last_json_line="$(printf '%s\n' "$output" | grep -E '^[[:space:]]*\{' | tail -n 1)"
+
+    # No JSON object line found — cannot be a transient API error.
+    if [[ -z "$last_json_line" ]]; then
+        return 1
+    fi
+
+    # Extract api_error_status value from the last JSON line (numeric or quoted numeric)
     local status_raw
-    status_raw="$(printf '%s' "$output" | grep -o '"api_error_status":[[:space:]]*[0-9"]*' | grep -o '[0-9]\{3,\}' | head -1)"
+    status_raw="$(printf '%s' "$last_json_line" | grep -o '"api_error_status":[[:space:]]*[0-9"]*' | grep -o '[0-9]\{3,\}' | head -1)"
 
     if [[ -n "$status_raw" ]] && [ "$status_raw" -ge 500 ] 2>/dev/null && [ "$status_raw" -le 599 ] 2>/dev/null; then
         return 0
     fi
 
     # Check is_error flag (true) combined with known transient phrases
-    if printf '%s' "$output" | grep -q '"is_error":[[:space:]]*true'; then
-        if printf '%s' "$output" | grep -qF 'API Error: Connection closed mid-response'; then
+    if printf '%s' "$last_json_line" | grep -q '"is_error":[[:space:]]*true'; then
+        if printf '%s' "$last_json_line" | grep -qF 'API Error: Connection closed mid-response'; then
             return 0
         fi
-        if printf '%s' "$output" | grep -qF 'API Error: 529 Overloaded'; then
+        if printf '%s' "$last_json_line" | grep -qF 'API Error: 529 Overloaded'; then
             return 0
         fi
     fi
@@ -322,7 +342,7 @@ first_output="$(claude -p "$WORKER_PROMPT" \
 first_status=$?
 set -e
 
-printf '%s\n' "$first_output"
+[[ -n "$first_output" ]] && printf '%s\n' "$first_output"
 
 if is_transient_api_error "$first_output"; then
     echo "Transient API error detected — resuming session once via claude -c" >&2
@@ -336,7 +356,7 @@ if is_transient_api_error "$first_output"; then
         --max-turns 200)"
     resume_status=$?
     set -e
-    printf '%s\n' "$resume_output"
+    [[ -n "$resume_output" ]] && printf '%s\n' "$resume_output"
     exit "$resume_status"
 fi
 
