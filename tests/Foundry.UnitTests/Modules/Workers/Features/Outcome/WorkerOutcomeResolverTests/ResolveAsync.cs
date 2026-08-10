@@ -655,6 +655,133 @@ public sealed class ResolveAsync
     }
 
     // -------------------------------------------------------------------------
+    // TransientApiError parse result wiring
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task WhenNoMrAndNonZeroExitWithNoCommitsAndTransientApiError_ReturnsFailureWithTransientApiError()
+    {
+        // Arrange — non-zero exit + TransientApiError parse result + no commits → Failure(TransientApiError)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        IContainerOutputParser parser = new TransientApiErrorParser();
+        WorkerOutcomeResolver sut = BuildResolver(queries, parser);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 1,
+            containerOutput: "transient output",
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.TransientApiError>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndNonZeroExitWithCommitsAndTransientApiError_ReturnsContinuableFailureWithTransientApiError()
+    {
+        // Arrange — non-zero exit + TransientApiError parse result + commits exist → ContinuableFailure(TransientApiError)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        IContainerOutputParser parser = new TransientApiErrorParser();
+        WorkerOutcomeResolver sut = BuildResolver(queries, parser);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 1,
+            containerOutput: "transient output",
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.ContinuableFailure failure = outcome.ShouldBeOfType<WorkerOutcome.ContinuableFailure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.TransientApiError>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndTransientApiError_ReturnsFailureWithTransientApiError()
+    {
+        // Arrange — exit 0 + no commits + TransientApiError parse result → Failure(TransientApiError)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        IContainerOutputParser parser = new TransientApiErrorParser();
+        WorkerOutcomeResolver sut = BuildResolver(queries, parser);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: "transient output",
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.TransientApiError>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndNonTransientParse_ReturnsUnchanged()
+    {
+        // Arrange — exit 0 + no commits + NormalExit (non-transient) → Unchanged (regression guard)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: null,
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Unchanged>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndNonZeroExitWithNoCommitsAndNonTransientNonUsageLimitedParse_ReturnsFailureWithNonZeroExit()
+    {
+        // Arrange — non-zero exit + NormalExit parse result (non-transient, non-usage-limited) → Failure(NonZeroExit)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 2,
+            containerOutput: null,
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        FailureReason.NonZeroExit nonZeroExit = failure.FailureReason.ShouldBeOfType<FailureReason.NonZeroExit>();
+        nonZeroExit.ExitCode.ShouldBe(2);
+    }
+
+    // -------------------------------------------------------------------------
     // Test doubles
     // -------------------------------------------------------------------------
 
@@ -740,6 +867,14 @@ public sealed class ResolveAsync
     {
         public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
             => new ContainerOutputParseResult.NoResultLine();
+
+        public RunResultSummary? ParseRunResultSummary(string? log) => null;
+    }
+
+    private sealed class TransientApiErrorParser : IContainerOutputParser
+    {
+        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+            => new ContainerOutputParseResult.TransientApiError();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
     }

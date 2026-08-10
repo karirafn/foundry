@@ -258,6 +258,11 @@ internal sealed class WorkerOutcomeResolver(
             return new WorkerOutcome.Failure(new FailureReason.UsageLimited(usageLimited.ResetsAt), containerOutput, summary);
         }
 
+        if (parseResult is ContainerOutputParseResult.TransientApiError)
+        {
+            return new WorkerOutcome.Failure(new FailureReason.TransientApiError(), containerOutput, summary);
+        }
+
         // Exit 0 with no commits — the issue is unchanged (nothing to submit)
         return new WorkerOutcome.Unchanged(run.BranchName, summary);
     }
@@ -279,6 +284,11 @@ internal sealed class WorkerOutcomeResolver(
         if (parseResult is ContainerOutputParseResult.AuthInvalid)
         {
             return new FailureReason.AuthInvalid();
+        }
+
+        if (parseResult is ContainerOutputParseResult.TransientApiError)
+        {
+            return new FailureReason.TransientApiError();
         }
 
         // NoResultLine with non-zero exit = bootstrap failure (no result line produced)
