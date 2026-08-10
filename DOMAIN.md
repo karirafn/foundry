@@ -419,7 +419,7 @@ The wizard reuses the same form components as the settings page.
 ## FailureReason
 
 A value object on FailedRun that classifies how the run failed.
-Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.), `UsageLimited(resetsAt)` (worker hit an Anthropic API usage limit — session, weekly, or Opus quota), `WorkerBootstrapFailed(detail)` (pre-task failure — the worker container died during entrypoint bootstrap, before `claude` ran; carries a short, secret-redacted diagnostic `Detail` with the failed stage and error tail).
+Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.), `UsageLimited(resetsAt)` (worker hit an Anthropic API usage limit — session, weekly, or Opus quota), `WorkerBootstrapFailed(detail)` (pre-task failure — the worker container died during entrypoint bootstrap, before `claude` ran; carries a short, secret-redacted diagnostic `Detail` with the failed stage and error tail), `AuthInvalid` (the worker's Claude credentials were rejected — `api_error_status == 401` or `error.type == "authentication_error"`; triggers the auth-invalid pause), `ProviderError(message)` (a provider API call needed to start the run failed, e.g. branch pre-creation rejected with 403; raised before the worker task begins).
 
 ## Usage Limit
 
@@ -451,7 +451,8 @@ Ephemeral — broadcast directly, never through the transactional outbox, since 
 ## Container Output Parser
 
 An infrastructure service (`IContainerOutputParser`) that classifies a worker container's JSON output.
-Takes raw JSON from `--output-format json` and returns a discriminated result: `NormalExit`, `UsageLimited(DateTimeOffset ResetsAt)`, `ParseFailure(string RawOutput)`, or `WorkerBootstrapFailed(string Detail)`.
+Takes raw JSON from `--output-format json` and returns a discriminated result: `NormalExit`, `UsageLimited(DateTimeOffset ResetsAt)`, `AuthInvalid`, `ParseFailure(string RawOutput)`, `NoResultLine`, or `WorkerBootstrapFailed(string Detail)`.
 Inspects `ResultMessage.api_error_status` (429) as the primary limit signal, with the `terminal_reason` allowlist as a secondary signal, and extracts the reset time from the result text via best-effort regex (wall-clock or ISO-8601).
+Auth failures are detected from `api_error_status == 401`, with `error.type == "authentication_error"` as a secondary guard.
 Bootstrap failures are detected via a sentinel line (`FOUNDRY_BOOTSTRAP_FAILED stage=… detail=…`) emitted by `entrypoint.sh` when the container dies before `claude` runs (clone, auth, or branch stage); the parser scans for the sentinel only when no Claude JSON result line is present, so a genuine result always wins; a non-zero exit with no result line and no sentinel falls back to `WorkerBootstrapFailed` heuristically.
 Domain types remain JSON-unaware — all parsing is in infrastructure.
