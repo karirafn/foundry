@@ -1,6 +1,8 @@
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using Shouldly;
 
 using Xunit;
@@ -15,7 +17,8 @@ public sealed class ParseRunResultSummary
     private const string ErrorJsonLine =
         """{"type":"result","subtype":"error","is_error":true,"duration_ms":300,"num_turns":1,"result":"Usage limit hit.","session_id":"xyz","terminal_reason":"blocking_limit"}""";
 
-    private readonly IContainerOutputParser _sut = new ContainerOutputParser();
+    private readonly IContainerOutputParser _sut = new ContainerOutputParser(
+        NullLogger<ContainerOutputParser>.Instance);
 
     [Theory]
     [InlineData(null)]

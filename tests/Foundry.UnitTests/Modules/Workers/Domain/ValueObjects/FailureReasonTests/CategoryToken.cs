@@ -86,4 +86,17 @@ public sealed class CategoryToken
         // Assert
         token.ShouldBe("provider_error");
     }
+
+    [Fact]
+    public void WhenTransientApiError_CategoryTokenIsTransientApiError()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.TransientApiError();
+
+        // Act
+        string token = reason.CategoryToken;
+
+        // Assert
+        token.ShouldBe("transient_api_error");
+    }
 }

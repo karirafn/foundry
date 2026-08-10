@@ -11,6 +11,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(WorkerBootstrapFailed), typeDiscriminator: FailureReason.WorkerBootstrapFailedToken)]
 [JsonDerivedType(typeof(AuthInvalid), typeDiscriminator: FailureReason.AuthInvalidToken)]
 [JsonDerivedType(typeof(ProviderError), typeDiscriminator: FailureReason.ProviderErrorToken)]
+[JsonDerivedType(typeof(TransientApiError), typeDiscriminator: FailureReason.TransientApiErrorToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = "non_zero_exit";
@@ -20,6 +21,7 @@ public abstract record FailureReason
     public const string WorkerBootstrapFailedToken = "worker_bootstrap_failed";
     public const string AuthInvalidToken = "auth_invalid";
     public const string ProviderErrorToken = "provider_error";
+    public const string TransientApiErrorToken = "transient_api_error";
 
     private FailureReason()
     {
@@ -34,6 +36,7 @@ public abstract record FailureReason
         WorkerBootstrapFailed => WorkerBootstrapFailedToken,
         AuthInvalid => AuthInvalidToken,
         ProviderError => ProviderErrorToken,
+        TransientApiError => TransientApiErrorToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -46,6 +49,7 @@ public abstract record FailureReason
         WorkerBootstrapFailed bootstrapFailed => $"Worker bootstrap failed: {bootstrapFailed.Detail}",
         AuthInvalid => "Worker authentication failed",
         ProviderError providerError => providerError.Message,
+        TransientApiError => "Transient Anthropic API fault",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -62,4 +66,6 @@ public abstract record FailureReason
     public sealed record AuthInvalid : FailureReason;
 
     public sealed record ProviderError(string Message) : FailureReason;
+
+    public sealed record TransientApiError : FailureReason;
 }

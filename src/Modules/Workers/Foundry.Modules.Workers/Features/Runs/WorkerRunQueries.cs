@@ -191,6 +191,60 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             CommitMarkers: [],
             HasStoredLog: false);
 
+    public async Task<int> CountConsecutiveTransientRunsAsync(
+        Guid issueId,
+        int maxAttempts,
+        CancellationToken cancellationToken)
+    {
+        IssueId id = IssueId.From(issueId);
+
+        // The SQLite provider stores DateTimeOffset as ISO 8601 TEXT and throws
+        // NotSupportedException for DateTimeOffset in ORDER BY clauses, so ordering and
+        // Take() must be applied in memory. To bound the materialized payload, two typed-set
+        // queries are used rather than one base-type query:
+        //   - Set<FailedRun>: projects (created_at, reason.CategoryToken) — reason is on
+        //     FailedRun only; EF fetches just created_at and reason, applies the ValueConverter
+        //     to deserialize reason client-side, and the Select projection skips the OwnsOne
+        //     ResultSummary columns (no full-entity hydration).
+        //   - Set<WorkerRun> excluding FailedRun: projects (created_at, null) — only the
+        //     timestamp is needed for ordering; no payload fields are fetched.
+        //
+        // A streak breaks on the first row that is not a transient failed run — including
+        // CompletedRun, StartingRun, or ActiveRun — so all row types must be included.
+        List<WorkerRunStreakRow> failedRows = await db.Set<FailedRun>()
+            .AsNoTracking()
+            .Where(r => r.IssueId == id)
+            .Select(r => new WorkerRunStreakRow(r.CreatedAt, r.Reason.CategoryToken))
+            .ToListAsync(cancellationToken);
+
+        List<WorkerRunStreakRow> otherRows = await db.Set<WorkerRun>()
+            .AsNoTracking()
+            .Where(r => r.IssueId == id)
+            .Where(r => !(r is FailedRun))
+            .Select(r => new WorkerRunStreakRow(r.CreatedAt, null))
+            .ToListAsync(cancellationToken);
+
+        List<WorkerRunStreakRow> recent = [..Enumerable.Concat(failedRows, otherRows)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(maxAttempts + 1)];
+
+        int count = 0;
+
+        foreach (WorkerRunStreakRow row in recent)
+        {
+            if (row.CategoryToken == FailureReason.TransientApiErrorToken)
+            {
+                count++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return count;
+    }
+
     public async Task<RunTotals> GetRunTotalsAsync(
         DateTimeOffset from,
         DateTimeOffset to,
@@ -336,4 +390,11 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         decimal? TotalCostUsd,
         int? InputTokens,
         int? OutputTokens);
+
+    // Minimal projection for CountConsecutiveTransientRunsAsync.
+    // CategoryToken is null for non-FailedRun rows (starting, active, completed);
+    // non-null for FailedRun rows.
+    private sealed record WorkerRunStreakRow(
+        DateTimeOffset CreatedAt,
+        string? CategoryToken);
 }

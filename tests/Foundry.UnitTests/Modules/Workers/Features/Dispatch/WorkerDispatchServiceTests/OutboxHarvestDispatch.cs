@@ -231,7 +231,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddScoped<IGlobalSettingsQueries>(sp =>
             new StubGlobalSettingsQueries(usePastResetsAt ? DateTimeOffset.UtcNow.AddHours(-1) : null));
         services.AddScoped<IPostExitProviderQueries, NullPostExitProviderQueries>();
-        services.AddSingleton<IContainerOutputParser>(new ContainerOutputParser());
+        services.AddSingleton<IContainerOutputParser>(new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
         services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
             sp.GetRequiredService<IPostExitProviderQueries>(),
             sp.GetRequiredService<IContainerOutputParser>(),

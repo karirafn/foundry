@@ -20,6 +20,11 @@ public interface IWorkerRunQueries
         DateTimeOffset from,
         DateTimeOffset to,
         CancellationToken cancellationToken);
+
+    Task<int> CountConsecutiveTransientRunsAsync(
+        Guid issueId,
+        int maxAttempts,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

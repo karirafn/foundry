@@ -6,6 +6,7 @@ using Foundry.Modules.Issues.Features.CredentialReactions;
 using Foundry.Modules.Issues.Features.DispatchReactions;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Issues.Features.StateChanges;
+using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -22,6 +23,7 @@ public static class IssuesModule
     public static IServiceCollection AddIssuesModule(this IServiceCollection services)
     {
         services.AddScoped<IIssueQueries, IssueQueries>();
+        services.AddHostedService<TransientRetryService>();
 
         services.AddCommandHandler<RetryIssue.Command, IssueDetail, RetryIssue.Handler>();
 

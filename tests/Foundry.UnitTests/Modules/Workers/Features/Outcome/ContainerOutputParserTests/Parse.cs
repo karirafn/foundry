@@ -1,4 +1,8 @@
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Testing;
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -10,7 +14,30 @@ public sealed class Parse
 {
     private const int DefaultCooldownMinutes = 60;
 
-    private readonly IContainerOutputParser _sut = new ContainerOutputParser();
+    private readonly IContainerOutputParser _sut = new ContainerOutputParser(
+        NullLogger<ContainerOutputParser>.Instance);
+
+    private static ContainerOutputParser BuildParserWithCapture(CapturingLogger logger)
+    {
+        return new ContainerOutputParser(new CapturingLoggerAdapter(logger));
+    }
+
+    private sealed class CapturingLoggerAdapter(CapturingLogger inner) : ILogger<ContainerOutputParser>
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            inner.Log(logLevel, eventId, state, exception, formatter);
+        }
+    }
 
     [Fact]
     public void WhenNormalExitJson_ReturnsNormalExit()
@@ -153,7 +180,7 @@ public sealed class Parse
     [Theory]
     [InlineData(500)]
     [InlineData(529)]
-    public void WhenNon429ApiErrorStatusAndNonAllowlistTerminalReason_ReturnsNormalExit(int apiErrorStatus)
+    public void WhenApiErrorStatusIn5xx_ReturnsTransientApiError(int apiErrorStatus)
     {
         // Arrange
         string log = $$"""
@@ -164,7 +191,7 @@ public sealed class Parse
         ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
 
         // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+        result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
     }
 
     [Fact]
@@ -488,5 +515,141 @@ public sealed class Parse
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+    }
+
+    // --- Transient API error detection ---
+
+    [Fact]
+    public void WhenApiErrorStatus500_ReturnsTransientApiError()
+    {
+        // Arrange — any 5xx api_error_status triggers transient classification
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":1,"result":"Server error.","session_id":"abc","terminal_reason":"completed","api_error_status":500}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
+    }
+
+    [Fact]
+    public void WhenApiErrorStatus599_ReturnsTransientApiError()
+    {
+        // Arrange — upper boundary of 5xx range
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":1,"result":"Server error.","session_id":"abc","terminal_reason":"completed","api_error_status":599}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
+    }
+
+    [Fact]
+    public void WhenIsErrorAndConnectionClosedPhrase_ReturnsTransientApiError()
+    {
+        // Arrange — run 6BDD98F4-5BCB-4E72-A05A-951BF3741770 fixture:
+        //   api_error_status: null, is_error: true, subtype: "success", terminal_reason: "completed"
+        string log = """
+            {"type":"result","subtype":"success","is_error":true,"duration_ms":100,"num_turns":1,"result":"API Error: Connection closed mid-response. The response above may be incomplete.","session_id":"abc","terminal_reason":"completed"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
+    }
+
+    [Fact]
+    public void WhenIsErrorAndOverloadedPhrase_ReturnsTransientApiError()
+    {
+        // Arrange — is_error:true with "API Error: 529 Overloaded" phrase (no api_error_status field)
+        string log = """
+            {"type":"result","subtype":"success","is_error":true,"duration_ms":100,"num_turns":1,"result":"API Error: 529 Overloaded. This is a server-side issue, usually temporary...","session_id":"abc","terminal_reason":"completed"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
+    }
+
+    [Fact]
+    public void WhenIsErrorTrueAndNoKnownCategory_LogsWarningAndReturnsNormalExit()
+    {
+        // Arrange — bare is_error:true with unrecognised result text
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":1,"result":"Something completely unknown happened.","session_id":"abc","terminal_reason":"completed"}
+            """;
+        CapturingLogger logger = new();
+        ContainerOutputParser sut = BuildParserWithCapture(logger);
+
+        // Act
+        ContainerOutputParseResult result = sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public void WhenIsErrorFalseAndUnrecognisedResult_DoesNotLogWarning()
+    {
+        // Arrange — regression: warning guard must be gated on is_error:true only
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":1,"result":"Something completely unknown happened.","session_id":"abc","terminal_reason":"completed"}
+            """;
+        CapturingLogger logger = new();
+        ContainerOutputParser sut = BuildParserWithCapture(logger);
+
+        // Act
+        ContainerOutputParseResult result = sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+        logger.Entries.ShouldNotContain(e => e.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public void WhenIsErrorTrueAndBareNoApiErrorStatus_NotTransient_ReturnsNormalExit()
+    {
+        // Arrange — bare is_error:true with no api_error_status and no transient phrase:
+        //   must NOT be classified as transient
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":1,"result":"Some non-transient error text.","session_id":"abc","terminal_reason":"completed"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — falls through to NormalExit, not TransientApiError
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenIsErrorTrueAndResultContainsNewline_LoggedWarningHasNoEmbeddedNewline()
+    {
+        // Arrange — result text contains a newline (log-injection attempt from untrusted worker output)
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":1,"result":"unclassified error\nINJECTED SECOND LOG LINE","session_id":"abc","terminal_reason":"completed"}
+            """;
+        CapturingLogger logger = new();
+        ContainerOutputParser sut = BuildParserWithCapture(logger);
+
+        // Act
+        sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — the logged warning message must not contain a literal newline
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Warning);
+        (LogLevel Level, string Message, Exception? Exception) warning =
+            logger.Entries.Single(e => e.Level == LogLevel.Warning);
+        warning.Message.ShouldNotContain('\n');
+        warning.Message.ShouldNotContain('\r');
     }
 }

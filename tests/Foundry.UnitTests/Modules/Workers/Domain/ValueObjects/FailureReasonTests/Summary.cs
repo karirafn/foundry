@@ -89,4 +89,17 @@ public sealed class Summary
         // Assert
         summary.ShouldBe("Branch pre-creation on acme/repo returned 403 — token lacks contents=write");
     }
+
+    [Fact]
+    public void WhenTransientApiError_SummaryDescribesTransientFault()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.TransientApiError();
+
+        // Act
+        string summary = reason.Summary;
+
+        // Assert
+        summary.ShouldBe("Transient Anthropic API fault");
+    }
 }
