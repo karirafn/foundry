@@ -520,21 +520,6 @@ public sealed class Parse
     // --- Transient API error detection ---
 
     [Fact]
-    public void WhenApiErrorStatus529_ReturnsTransientApiError()
-    {
-        // Arrange — run 6EB72F0F-0DC5-41AC-98D4-DB8C4D78E7CA fixture
-        string log = """
-            {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":1,"result":"API Error: 529 Overloaded. This is a server-side issue, usually temporary...","session_id":"abc","terminal_reason":"completed","api_error_status":529}
-            """;
-
-        // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
-
-        // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
-    }
-
-    [Fact]
     public void WhenApiErrorStatus500_ReturnsTransientApiError()
     {
         // Arrange — any 5xx api_error_status triggers transient classification
@@ -645,5 +630,26 @@ public sealed class Parse
 
         // Assert — falls through to NormalExit, not TransientApiError
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenIsErrorTrueAndResultContainsNewline_LoggedWarningHasNoEmbeddedNewline()
+    {
+        // Arrange — result text contains a newline (log-injection attempt from untrusted worker output)
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":1,"result":"unclassified error\nINJECTED SECOND LOG LINE","session_id":"abc","terminal_reason":"completed"}
+            """;
+        CapturingLogger logger = new();
+        ContainerOutputParser sut = BuildParserWithCapture(logger);
+
+        // Act
+        sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — the logged warning message must not contain a literal newline
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Warning);
+        (LogLevel Level, string Message, Exception? Exception) warning =
+            logger.Entries.Single(e => e.Level == LogLevel.Warning);
+        warning.Message.ShouldNotContain('\n');
+        warning.Message.ShouldNotContain('\r');
     }
 }

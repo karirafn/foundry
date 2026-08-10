@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Workers.Contracts.Queries;
@@ -69,7 +71,9 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // Coarse SQL prefilter: candidates whose FailedAt is at least InitialBackoff in the past.
+        // FailureCategory is SQL-filterable (stored as a plain TEXT column).
+        // FailedAt is applied as a coarse in-memory cutoff — the SQLite EF provider cannot
+        // translate DateTimeOffset comparisons server-side (stored as ISO 8601 TEXT).
         // Exact per-candidate backoff computation happens in memory via CountConsecutiveTransientRunsAsync.
         DateTimeOffset coarseCutoff = now - InitialBackoff;
 
@@ -138,20 +142,20 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
             Issue? live = await db.Set<Issue>()
                 .FirstOrDefaultAsync(i => i.Id == candidate.Id, cancellationToken);
 
-            Issue? next = live switch
-            {
-                FailedIssue failed => failed.Retry(),
-                ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
-                _ => null,
-            };
-
-            if (next is null)
+            if (live is not (FailedIssue or ContinuableFailedIssue))
             {
                 // Issue was concurrently transitioned by a manual retry — skip without error.
                 return;
             }
 
-            await db.TransitionAsync(live!, next, domainEventDispatcher, cancellationToken);
+            Issue next = live switch
+            {
+                FailedIssue failed => failed.Retry(),
+                ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
+                _ => throw new UnreachableException($"Unexpected issue state after guard: {live.GetType().Name}"),
+            };
+
+            await db.TransitionAsync(live, next, domainEventDispatcher, cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {

@@ -93,7 +93,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         {
             logger.LogWarning(
                 "Unclassified worker error — result text: {ResultText}",
-                resultText);
+                SanitizeForLog(resultText));
         }
 
         return new ContainerOutputParseResult.NormalExit();
@@ -152,6 +152,29 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             totalCostUsd,
             inputTokens,
             outputTokens);
+    }
+
+    private const int MaxLoggedResultTextLength = 200;
+
+    // Sanitize untrusted worker output before logging to prevent log injection.
+    // Strips CR and LF characters (which could forge a second log line) and caps length.
+    private static string? SanitizeForLog(string? text)
+    {
+        if (text is null)
+        {
+            return null;
+        }
+
+        string sanitized = text
+            .Replace('\n', ' ')
+            .Replace('\r', ' ');
+
+        if (sanitized.Length > MaxLoggedResultTextLength)
+        {
+            sanitized = sanitized[..MaxLoggedResultTextLength];
+        }
+
+        return sanitized;
     }
 
     private static bool ReadBool(JsonNode? node)
