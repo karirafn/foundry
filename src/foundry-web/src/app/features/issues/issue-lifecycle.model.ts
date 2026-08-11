@@ -31,7 +31,6 @@ export function isResolvedState(state: IssueState): boolean {
 const KNOWN_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   ...ACTIVE_STATES,
   ...RESOLVED_STATES,
-  'ineligible',
 ]);
 
 export function isKnownState(state: string): state is IssueState {
@@ -57,8 +56,6 @@ export const STATE_GROUPS: readonly StateGroup[] = [
   },
 ] as const;
 
-export const UNGROUPED_RANK = STATE_GROUPS.length;
-
 const groupRankMap = new Map<IssueState, number>(
   STATE_GROUPS.flatMap((group, index) =>
     group.states.map((state): [IssueState, number] => [state, index])
@@ -66,7 +63,9 @@ const groupRankMap = new Map<IssueState, number>(
 );
 
 export function groupRankFor(state: IssueState): number {
-  return groupRankMap.get(state) ?? UNGROUPED_RANK;
+  // Non-null assertion is safe: every IssueState is assigned to exactly one group in STATE_GROUPS.
+  // The partition-guard test in issue-lifecycle.model.spec.ts enforces totality.
+  return groupRankMap.get(state)!;
 }
 
 // Declarative within-group tier ordering. Each nested array is a peer tier;

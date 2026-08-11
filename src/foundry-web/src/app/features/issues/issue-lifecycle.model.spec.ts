@@ -1,7 +1,7 @@
-import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, UNGROUPED_RANK, WITHIN_GROUP_ORDER, groupRankFor, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
+import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, WITHIN_GROUP_ORDER, groupRankFor, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
 import { IssueState } from './issue.model';
 
-// All lifecycle states — ineligible is an overlay, not a lifecycle state.
+// All lifecycle states — must match IssueState union exactly.
 const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'detected',
   'queued',
@@ -59,16 +59,6 @@ describe('issue-lifecycle model', () => {
     }
   });
 
-  it('should not include ineligible in ACTIVE_STATES', () => {
-    // Arrange / Act / Assert
-    expect(ACTIVE_STATES.has('ineligible' as IssueState)).toBe(false);
-  });
-
-  it('should not include ineligible in RESOLVED_STATES', () => {
-    // Arrange / Act / Assert
-    expect(RESOLVED_STATES.has('ineligible' as IssueState)).toBe(false);
-  });
-
   // Cycle 2: isResolvedState predicate
   it('should return true for resolved states', () => {
     // Arrange / Act / Assert
@@ -100,7 +90,7 @@ describe('issue-lifecycle model', () => {
     expect(labels).toContain('Resolved');
   });
 
-  it('should cover every lifecycle state (except ineligible) in exactly one group', () => {
+  it('should cover every lifecycle state in exactly one group', () => {
     // Arrange
     const seenStates = new Map<IssueState, string>();
 
@@ -170,11 +160,6 @@ describe('issue-lifecycle model', () => {
     expect(groupRankFor('review')).toBeLessThan(groupRankFor('queued'));
   });
 
-  it('should return UNGROUPED_RANK for ineligible', () => {
-    // Arrange / Act / Assert
-    expect(groupRankFor('ineligible')).toBe(UNGROUPED_RANK);
-  });
-
   it('should return the Resolved group index (3) for a Resolved-group state', () => {
     // Arrange
     const resolvedIndex = STATE_GROUPS.findIndex(g => g.label === 'Resolved');
@@ -185,13 +170,6 @@ describe('issue-lifecycle model', () => {
     // Assert
     expect(rank).toBe(resolvedIndex);
     expect(rank).toBe(3);
-  });
-
-  it('should return UNGROUPED_RANK that sorts after all defined groups', () => {
-    // Arrange / Act / Assert
-    for (let i = 0; i < STATE_GROUPS.length; i++) {
-      expect(UNGROUPED_RANK).toBeGreaterThan(i);
-    }
   });
 
   // Cycle 4: group → state membership spot checks
@@ -305,12 +283,6 @@ describe('withinGroupRankFor', () => {
     for (const rank of needsAttentionRanks) {
       expect(rank).toBe(firstRank);
     }
-  });
-
-  // Cycle 4: Unlisted / ineligible returns default 0
-  it('should return 0 for ineligible (unlisted state)', () => {
-    // Arrange / Act / Assert
-    expect(withinGroupRankFor('ineligible')).toBe(0);
   });
 
   // Cycle 5: Partition guard — every STATE_GROUPS state appears in exactly one within-group tier
