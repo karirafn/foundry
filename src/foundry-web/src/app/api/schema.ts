@@ -788,11 +788,10 @@ export interface components {
             providerType: string;
         };
         ValidateTokenResponse: {
-            isValid: boolean;
-            isAuthFailure: boolean;
-            scopesVerified: boolean;
-            missingScopes: string[];
+            kind: string;
             accountName: null | string;
+            missingScopes: string[];
+            detectedProvider: null | string;
         };
         WorkerRunCommitMarker: {
             /** Format: date-time */

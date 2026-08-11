@@ -8,6 +8,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -46,7 +47,7 @@ public sealed class ListRepositoriesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
@@ -79,7 +80,7 @@ public sealed class ListRepositoriesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
@@ -109,7 +110,7 @@ public sealed class ListRepositoriesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
@@ -139,7 +140,7 @@ public sealed class ListRepositoriesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
@@ -169,7 +170,7 @@ public sealed class ListRepositoriesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
@@ -196,7 +197,7 @@ public sealed class ListRepositoriesAsync
             (HttpStatusCode.OK, page2Json),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
@@ -223,7 +224,7 @@ public sealed class ListRepositoriesAsync
             (HttpStatusCode.OK, BuildPageJson(100, startIndex: 400)),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
@@ -243,7 +244,7 @@ public sealed class ListRepositoriesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.ListRepositoriesAsync(ValidBaseUrl, "glpat_token", CancellationToken.None);
@@ -265,7 +266,7 @@ public sealed class ListRepositoriesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.ListRepositoriesAsync(ValidBaseUrl, "glpat_mytoken", CancellationToken.None);
@@ -283,7 +284,7 @@ public sealed class ListRepositoriesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -304,7 +305,7 @@ public sealed class ListRepositoriesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(

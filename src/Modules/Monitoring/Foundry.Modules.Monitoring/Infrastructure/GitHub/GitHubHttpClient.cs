@@ -7,14 +7,19 @@ using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
+using Microsoft.Extensions.Logging;
+
 namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
-internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubWriteProber
+internal sealed partial class GitHubHttpClient(
+    HttpClient httpClient,
+    ILogger<GitHubHttpClient> logger) : IGitHubWriteProber
 {
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
@@ -432,14 +437,14 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubW
         return Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Ok(dtos ?? []);
     }
 
-    public async Task<Result<TokenValidationResult>> ValidateTokenAsync(
+    public async Task<Result<TokenValidationOutcome>> ValidateTokenAsync(
         Uri apiBaseUrl,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<TokenValidationResult>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<TokenValidationOutcome>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), "user");
@@ -454,25 +459,42 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubW
 
         if (response.StatusCode is HttpStatusCode.Unauthorized)
         {
-            return Result<TokenValidationResult>.Ok(TokenValidationResult.AuthFailure());
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.AuthenticationFailed());
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<TokenValidationResult>.Fail(ErrorFromNonSuccess(response));
+            return Result<TokenValidationOutcome>.Fail(ErrorFromNonSuccess(response));
         }
 
         string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        string? accountName = DeserializeLogin(responseBody);
+        GitHubUserDto? userDto = DeserializeUserDto(responseBody, apiBaseUrl, (int)response.StatusCode);
+
+        if (userDto is null)
+        {
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.IdentityUnresolved());
+        }
+
+        string? login = string.IsNullOrEmpty(userDto.Login) ? null : userDto.Login;
+
+        if (login is null && !string.IsNullOrEmpty(userDto.Username))
+        {
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ProviderMismatch(ProviderTypes.GitLab));
+        }
+
+        if (login is null)
+        {
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.IdentityUnresolved());
+        }
 
         if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
         {
-            return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated([], accountName));
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login));
         }
 
         IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
 
-        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missingScopes, accountName));
+        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, missingScopes));
     }
 
     public async Task<Result<WritePermissionProbeResult>> ProbeContentsWriteAsync(
@@ -978,16 +1000,19 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubW
         return string.Concat(body.AsSpan(0, MaxCommentBodyLength), TruncatedSuffix);
     }
 
-    private static string? DeserializeLogin(string responseBody)
+    private GitHubUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)
     {
         try
         {
-            GitHubUserDto? dto = JsonSerializer.Deserialize<GitHubUserDto>(responseBody, JsonOptions);
-            string? login = dto?.Login;
-            return string.IsNullOrEmpty(login) ? null : login;
+            return JsonSerializer.Deserialize<GitHubUserDto>(responseBody, JsonOptions);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            logger.LogWarning(
+                ex,
+                "GitHub token validation: failed to parse response body. Provider: github, Host: {Host}, Status: {StatusCode}",
+                apiBaseUrl.Host,
+                statusCode);
             return null;
         }
     }
@@ -1100,7 +1125,9 @@ internal sealed partial class GitHubHttpClient(HttpClient httpClient) : IGitHubW
         string HtmlUrl,
         IReadOnlyList<GitHubLabelDto> Labels);
 
-    private sealed record GitHubUserDto([property: JsonPropertyName("login")] string Login);
+    private sealed record GitHubUserDto(
+        [property: JsonPropertyName("login")] string Login,
+        [property: JsonPropertyName("username")] string? Username);
 
     private sealed record GitHubLabelDto(string Name);
 

@@ -12,6 +12,7 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubIssueProviderTests;
 
@@ -26,7 +27,7 @@ public sealed class GetBranchProtectionAsync
     private static GitHubIssueProvider BuildSut(SequentialFakeHandler handler)
     {
         HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         return new GitHubIssueProvider(gitHubHttpClient, ValidToken, ValidBaseUrl);
     }
 

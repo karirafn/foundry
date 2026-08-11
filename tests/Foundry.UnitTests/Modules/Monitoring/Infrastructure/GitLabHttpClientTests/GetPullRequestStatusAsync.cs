@@ -12,6 +12,7 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -30,7 +31,7 @@ public sealed class GetPullRequestStatusAsync
         string json = """{ "iid": 1, "state": "merged" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -55,7 +56,7 @@ public sealed class GetPullRequestStatusAsync
         string json = """{ "iid": 1, "state": "closed" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -80,7 +81,7 @@ public sealed class GetPullRequestStatusAsync
         string json = """{ "iid": 1, "state": "opened" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -104,7 +105,7 @@ public sealed class GetPullRequestStatusAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -127,7 +128,7 @@ public sealed class GetPullRequestStatusAsync
         string json = """{ "iid": 1, "state": "opened" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.GetPullRequestStatusAsync(
@@ -149,7 +150,7 @@ public sealed class GetPullRequestStatusAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -172,7 +173,7 @@ public sealed class GetPullRequestStatusAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(

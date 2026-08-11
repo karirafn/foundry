@@ -49,7 +49,8 @@ public sealed class HandleAsync : IAsyncDisposable
     private CreateAccount.Handler BuildHandler(
         INamespaceDeriver namespaceDeriver,
         IRepositoryEligibilityEvaluator? evaluator = null,
-        IGitHubWriteProber? writeProber = null)
+        IGitHubWriteProber? writeProber = null,
+        IQueryHandler<ValidateToken.Query, ValidateToken.Response>? validateToken = null)
     {
         RepositoryEligibilityDiffer differ = new(
             _dbContext,
@@ -57,7 +58,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         return new CreateAccount.Handler(
             _dbContext,
-            new StubValidateTokenHandler(),
+            validateToken ?? new StubValidateTokenHandler(),
             namespaceDeriver,
             differ,
             writeProber ?? new GrantedWriteProber());
@@ -446,6 +447,146 @@ public sealed class HandleAsync : IAsyncDisposable
         neverCalledProber.WasCalled.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task WhenAuthenticatedWithMissingScopes_RejectsWithInvalidToken()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.Authenticated,
+                AccountName: "octocat",
+                MissingScopes: ["repo", "write:packages"]));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
+    }
+
+    [Fact]
+    public async Task WhenScopesUnverifiable_ProceedsToCreateCredential()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.ScopesUnverifiable,
+                AccountName: "octocat",
+                MissingScopes: []));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+    }
+
+    [Fact]
+    public async Task WhenProviderMismatch_RejectsWithProviderMismatchError()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.ProviderMismatch,
+                AccountName: null,
+                MissingScopes: [],
+                DetectedProvider: "gitlab"));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.ProviderMismatchCode);
+        failure.Error.Message.ShouldContain("gitlab");
+    }
+
+    [Fact]
+    public async Task WhenAuthenticationFailed_RejectsWithInvalidToken()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.AuthenticationFailed,
+                AccountName: null,
+                MissingScopes: []));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
+    }
+
+    [Fact]
+    public async Task WhenScopesUnverifiableWithNullAccountName_RejectsWithUnresolvedIdentity()
+    {
+        // Arrange — ScopesUnverifiable with a null AccountName must map to UnresolvedIdentity,
+        // not silently fall through to InvalidToken via the default arm.
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.ScopesUnverifiable,
+                AccountName: null,
+                MissingScopes: []));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
+    }
+
+    [Fact]
+    public async Task WhenIdentityUnresolved_RejectsWithUnresolvedIdentity()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.IdentityUnresolved,
+                AccountName: null,
+                MissingScopes: []));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
+    }
+
     private sealed class StubValidateTokenHandler
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {
@@ -454,11 +595,30 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             ValidateToken.Response response = new(
-                IsValid: true,
-                IsAuthFailure: false,
-                ScopesVerified: true,
+                Kind: ValidateToken.Kinds.Authenticated,
+                AccountName: "octocat",
                 MissingScopes: [],
-                AccountName: "octocat");
+                DetectedProvider: null);
+            return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
+        }
+    }
+
+    private sealed class KindValidateTokenHandler(
+        string kind,
+        string? AccountName,
+        IReadOnlyList<string> MissingScopes,
+        string? DetectedProvider = null)
+        : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
+    {
+        public Task<Result<ValidateToken.Response>> HandleAsync(
+            ValidateToken.Query query,
+            CancellationToken cancellationToken)
+        {
+            ValidateToken.Response response = new(
+                Kind: kind,
+                AccountName: AccountName,
+                MissingScopes: MissingScopes,
+                DetectedProvider: DetectedProvider);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

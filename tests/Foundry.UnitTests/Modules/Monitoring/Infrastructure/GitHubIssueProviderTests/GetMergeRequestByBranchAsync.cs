@@ -12,6 +12,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubIssueProviderTests;
 
@@ -40,7 +41,7 @@ public sealed class GetMergeRequestByBranchAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, prJson);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
@@ -61,7 +62,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
@@ -82,7 +83,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act

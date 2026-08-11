@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -28,7 +29,7 @@ public sealed class WhenProviderListingFails : IAsyncDisposable
         {
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(new FailingListingHandler())));
+                new GitHubHttpClient(new HttpClient(new FailingListingHandler()), NullLogger<GitHubHttpClient>.Instance));
         });
 
         _client = _factory.CreateClient();
