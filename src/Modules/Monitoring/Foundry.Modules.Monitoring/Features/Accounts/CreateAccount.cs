@@ -442,7 +442,7 @@ internal static partial class CreateAccount
                         Outcome.Conflict conflict =>
                             (IResult)TypedResults.Conflict(conflict.Conflicts),
                         Outcome.InvalidTakeover invalid =>
-                            TypedResults.BadRequest(invalid.Invalid),
+                            TypedResults.UnprocessableEntity(invalid.Invalid),
                         Outcome.Failure failure => TypedResults.BadRequest(failure.Error.Message),
                         _ => throw new UnreachableException($"Unhandled CreateAccount.Outcome: {outcome.GetType().Name}"),
                     };
@@ -451,7 +451,7 @@ internal static partial class CreateAccount
                 .WithSummary("Creates a new account")
                 .Produces<CredentialCreationResult>(StatusCodes.Status201Created)
                 .Produces<NamespaceConflictResponse>(StatusCodes.Status409Conflict)
-                .Produces<TakeoverValidationResponse>(StatusCodes.Status400BadRequest)
+                .Produces<TakeoverValidationResponse>(StatusCodes.Status422UnprocessableEntity)
                 .Produces<string>(StatusCodes.Status400BadRequest);
         }
     }

@@ -531,6 +531,17 @@ export interface components {
             oAuthAccountEmail: null | string;
             oAuthAccountOrgName: null | string;
         };
+        CreateAccountRequestBody: {
+            providerType: string;
+            baseUrl: string;
+            token: string;
+            takeoverNamespaces?: null | string[];
+        };
+        CreateRepositoryRequestBody: {
+            slug: string;
+            /** Format: int32 */
+            pollIntervalSeconds: null | number | string;
+        };
         CredentialCreationResult: {
             credential: components["schemas"]["CredentialSummary"];
             affectedRepositories: components["schemas"]["AffectedRepository"][];
@@ -632,6 +643,10 @@ export interface components {
             repositoryEligibilityStatus: null | string;
             runStats: null | components["schemas"]["RunStats"];
         };
+        MoveRepositoryRequestBody: {
+            /** Format: int32 */
+            position: number | string;
+        };
         NamespaceConflict: {
             namespace: string;
             /** Format: uuid */
@@ -674,17 +689,6 @@ export interface components {
             /** Format: int32 */
             position: number | string;
         };
-        Request: {
-            code: string;
-        };
-        RequestBody: {
-            mode: string;
-            apiKey: null | string;
-        };
-        Response: {
-            /** Format: uuid */
-            sessionId: string;
-        };
         RunStats: {
             /** Format: int32 */
             runCount: number | string;
@@ -713,8 +717,18 @@ export interface components {
             /** Format: int64 */
             outputTokens: number | string;
         };
+        StartLoginResponse: {
+            /** Format: uuid */
+            sessionId: string;
+        };
+        SubmitLoginCodeRequest: {
+            code: string;
+        };
         SystemStatus: {
             dockerAvailable: boolean;
+        };
+        TakeoverValidationResponse: {
+            invalidNamespaces: string[];
         };
         TokenRequirements: {
             providerType: string;
@@ -731,6 +745,54 @@ export interface components {
             isExhausted: boolean;
             /** Format: date-time */
             nextAttemptDueAt: null | string;
+        };
+        UpdateAccountRequestBody: {
+            baseUrl: string;
+            token: null | string;
+        };
+        UpdateAuthModeRequestBody: {
+            mode: string;
+            apiKey: null | string;
+        };
+        UpdateDispatchSettingsRequestBody: {
+            autoResumeOnUsageReset: boolean;
+            /** Format: int32 */
+            defaultCooldownMinutes: number | string;
+        };
+        UpdatePromptTemplatesRequestBody: {
+            systemPromptTemplate: null | string;
+            workerPromptTemplate: null | string;
+        };
+        UpdateRepositoryRequestBody: {
+            /** Format: int32 */
+            pollIntervalSeconds: null | number | string;
+            isActive: boolean;
+        };
+        UpdateWorkerImageConfigurationRequestBody: {
+            installDotnet: boolean;
+            installAngular: boolean;
+            installGlab: boolean;
+            installGh: boolean;
+            installChromium: boolean;
+            installDocker: boolean;
+        };
+        UpdateWorkerLimitsRequestBody: {
+            /** Format: int32 */
+            maxConcurrent: number | string;
+            /** Format: int32 */
+            timeoutMinutes: number | string;
+        };
+        ValidateTokenRequestBody: {
+            token: string;
+            baseUrl: string;
+            providerType: string;
+        };
+        ValidateTokenResponse: {
+            isValid: boolean;
+            isAuthFailure: boolean;
+            scopesVerified: boolean;
+            missingScopes: string[];
+            accountName: null | string;
         };
         WorkerRunCommitMarker: {
             /** Format: date-time */
@@ -811,7 +873,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["UpdateAuthModeRequestBody"];
             };
         };
         responses: {
@@ -859,7 +921,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Response"];
+                    "application/json": components["schemas"]["StartLoginResponse"];
                 };
             };
             /** @description Internal Server Error */
@@ -882,7 +944,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Request"];
+                "application/json": components["schemas"]["SubmitLoginCodeRequest"];
             };
         };
         responses: {
@@ -1105,7 +1167,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["CreateAccountRequestBody"];
             };
         };
         responses: {
@@ -1136,6 +1198,15 @@ export interface operations {
                     "application/json": components["schemas"]["NamespaceConflictResponse"];
                 };
             };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TakeoverValidationResponse"];
+                };
+            };
         };
     };
     UpdateAccount: {
@@ -1149,7 +1220,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["UpdateAccountRequestBody"];
             };
         };
         responses: {
@@ -1229,7 +1300,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["ValidateTokenRequestBody"];
             };
         };
         responses: {
@@ -1239,7 +1310,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Response"];
+                    "application/json": components["schemas"]["ValidateTokenResponse"];
                 };
             };
             /** @description Bad Request */
@@ -1326,7 +1397,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["CreateRepositoryRequestBody"];
             };
         };
         responses: {
@@ -1420,7 +1491,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["UpdateRepositoryRequestBody"];
             };
         };
         responses: {
@@ -1544,7 +1615,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["MoveRepositoryRequestBody"];
             };
         };
         responses: {
@@ -1743,7 +1814,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["UpdateWorkerLimitsRequestBody"];
             };
         };
         responses: {
@@ -1785,7 +1856,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["UpdatePromptTemplatesRequestBody"];
             };
         };
         responses: {
@@ -1827,7 +1898,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["UpdateDispatchSettingsRequestBody"];
             };
         };
         responses: {
@@ -1927,7 +1998,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestBody"];
+                "application/json": components["schemas"]["UpdateWorkerImageConfigurationRequestBody"];
             };
         };
         responses: {

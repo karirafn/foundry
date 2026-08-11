@@ -47,7 +47,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/UpdateAuthModeRequestBody"
               }
             }
           },
@@ -100,7 +100,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/StartLoginResponse"
                 }
               }
             }
@@ -129,7 +129,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Request"
+                "$ref": "#/components/schemas/SubmitLoginCodeRequest"
               }
             }
           },
@@ -430,7 +430,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/CreateAccountRequestBody"
               }
             }
           },
@@ -453,6 +453,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NamespaceConflictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakeoverValidationResponse"
                 }
               }
             }
@@ -492,7 +502,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/UpdateAccountRequestBody"
               }
             }
           },
@@ -586,7 +596,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/ValidateTokenRequestBody"
               }
             }
           },
@@ -598,7 +608,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/ValidateTokenResponse"
                 }
               }
             }
@@ -722,7 +732,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/CreateRepositoryRequestBody"
               }
             }
           },
@@ -855,7 +865,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/UpdateRepositoryRequestBody"
               }
             }
           },
@@ -1030,7 +1040,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/MoveRepositoryRequestBody"
               }
             }
           },
@@ -1272,7 +1282,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/UpdateWorkerLimitsRequestBody"
               }
             }
           },
@@ -1323,7 +1333,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/UpdatePromptTemplatesRequestBody"
               }
             }
           },
@@ -1374,7 +1384,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/UpdateDispatchSettingsRequestBody"
               }
             }
           },
@@ -1487,7 +1497,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestBody"
+                "$ref": "#/components/schemas/UpdateWorkerImageConfigurationRequestBody"
               }
             }
           },
@@ -1674,6 +1684,55 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "CreateAccountRequestBody": {
+        "required": [
+          "providerType",
+          "baseUrl",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "providerType": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "takeoverNamespaces": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreateRepositoryRequestBody": {
+        "required": [
+          "slug",
+          "pollIntervalSeconds"
+        ],
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "pollIntervalSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -2130,6 +2189,22 @@
           }
         }
       },
+      "MoveRepositoryRequestBody": {
+        "required": [
+          "position"
+        ],
+        "type": "object",
+        "properties": {
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "NamespaceConflict": {
         "required": [
           "namespace",
@@ -2312,47 +2387,6 @@
           }
         }
       },
-      "Request": {
-        "required": [
-          "code"
-        ],
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string"
-          }
-        }
-      },
-      "RequestBody": {
-        "required": [
-          "mode",
-          "apiKey"
-        ],
-        "type": "object",
-        "properties": {
-          "mode": {
-            "type": "string"
-          },
-          "apiKey": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
-      "Response": {
-        "required": [
-          "sessionId"
-        ],
-        "type": "object",
-        "properties": {
-          "sessionId": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
       "RunStats": {
         "required": [
           "runCount",
@@ -2480,6 +2514,29 @@
           }
         }
       },
+      "StartLoginResponse": {
+        "required": [
+          "sessionId"
+        ],
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "SubmitLoginCodeRequest": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
       "SystemStatus": {
         "required": [
           "dockerAvailable"
@@ -2488,6 +2545,20 @@
         "properties": {
           "dockerAvailable": {
             "type": "boolean"
+          }
+        }
+      },
+      "TakeoverValidationResponse": {
+        "required": [
+          "invalidNamespaces"
+        ],
+        "type": "object",
+        "properties": {
+          "invalidNamespaces": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -2558,6 +2629,212 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "UpdateAccountRequestBody": {
+        "required": [
+          "baseUrl",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "baseUrl": {
+            "type": "string"
+          },
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "UpdateAuthModeRequestBody": {
+        "required": [
+          "mode",
+          "apiKey"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "UpdateDispatchSettingsRequestBody": {
+        "required": [
+          "autoResumeOnUsageReset",
+          "defaultCooldownMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "autoResumeOnUsageReset": {
+            "type": "boolean"
+          },
+          "defaultCooldownMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "UpdatePromptTemplatesRequestBody": {
+        "required": [
+          "systemPromptTemplate",
+          "workerPromptTemplate"
+        ],
+        "type": "object",
+        "properties": {
+          "systemPromptTemplate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "workerPromptTemplate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "UpdateRepositoryRequestBody": {
+        "required": [
+          "pollIntervalSeconds",
+          "isActive"
+        ],
+        "type": "object",
+        "properties": {
+          "pollIntervalSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateWorkerImageConfigurationRequestBody": {
+        "required": [
+          "installDotnet",
+          "installAngular",
+          "installGlab",
+          "installGh",
+          "installChromium",
+          "installDocker"
+        ],
+        "type": "object",
+        "properties": {
+          "installDotnet": {
+            "type": "boolean"
+          },
+          "installAngular": {
+            "type": "boolean"
+          },
+          "installGlab": {
+            "type": "boolean"
+          },
+          "installGh": {
+            "type": "boolean"
+          },
+          "installChromium": {
+            "type": "boolean"
+          },
+          "installDocker": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateWorkerLimitsRequestBody": {
+        "required": [
+          "maxConcurrent",
+          "timeoutMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "maxConcurrent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "timeoutMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ValidateTokenRequestBody": {
+        "required": [
+          "token",
+          "baseUrl",
+          "providerType"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "providerType": {
+            "type": "string"
+          }
+        }
+      },
+      "ValidateTokenResponse": {
+        "required": [
+          "isValid",
+          "isAuthFailure",
+          "scopesVerified",
+          "missingScopes",
+          "accountName"
+        ],
+        "type": "object",
+        "properties": {
+          "isValid": {
+            "type": "boolean"
+          },
+          "isAuthFailure": {
+            "type": "boolean"
+          },
+          "scopesVerified": {
+            "type": "boolean"
+          },
+          "missingScopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "accountName": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

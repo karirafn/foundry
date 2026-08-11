@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 using Foundry.Modules.Credentials;
 using Foundry.Modules.Credentials.Contracts;
@@ -17,6 +18,7 @@ using Foundry.WebApi.Hubs;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.EntityFrameworkCore;
 
 const string AngularDevServerPolicy = "AngularDevServer";
@@ -61,7 +63,27 @@ builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule(builder.Configuration);
 builder.Services.AddWorkersModule(builder.Configuration);
 builder.Services.AddSettingsModule();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.CreateSchemaReferenceId = (JsonTypeInfo jsonTypeInfo) =>
+    {
+        string? defaultId = OpenApiOptions.CreateDefaultSchemaReferenceId(jsonTypeInfo);
+        if (defaultId is null)
+        {
+            return null;
+        }
+
+        Type outermost = jsonTypeInfo.Type;
+        while (outermost.DeclaringType is Type declaring)
+        {
+            outermost = declaring;
+        }
+
+        return ReferenceEquals(outermost, jsonTypeInfo.Type)
+            ? defaultId
+            : outermost.Name + defaultId;
+    };
+});
 
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
