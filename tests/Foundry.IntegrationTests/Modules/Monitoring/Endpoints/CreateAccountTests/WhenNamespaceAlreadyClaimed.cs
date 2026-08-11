@@ -11,6 +11,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -51,7 +52,7 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
 
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(new ListingFakeHandler(HttpStatusCode.OK, GitHubListingJson))));
+                new GitHubHttpClient(new HttpClient(new ListingFakeHandler(HttpStatusCode.OK, GitHubListingJson)), NullLogger<GitHubHttpClient>.Instance));
         });
         _client = _factory.CreateClient();
     }
@@ -120,11 +121,10 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
         {
             string accountName = tokenToName.TryGetValue(query.Token, out string? name) ? name : "unknown";
             ValidateToken.Response response = new(
-                IsValid: true,
-                IsAuthFailure: false,
-                ScopesVerified: true,
+                Kind: ValidateToken.Kinds.Authenticated,
+                AccountName: accountName,
                 MissingScopes: [],
-                AccountName: accountName);
+                DetectedProvider: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

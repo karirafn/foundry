@@ -25,11 +25,10 @@ internal sealed class TokenKeyedValidateTokenStub(Dictionary<string, string> tok
     {
         string accountName = tokenToName.TryGetValue(query.Token, out string? name) ? name : "unknown-user";
         ValidateToken.Response response = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: accountName,
             MissingScopes: [],
-            AccountName: accountName);
+            DetectedProvider: null);
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
     }
 }

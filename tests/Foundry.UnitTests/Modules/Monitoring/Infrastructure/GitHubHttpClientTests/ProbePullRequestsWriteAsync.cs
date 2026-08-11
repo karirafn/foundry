@@ -11,6 +11,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -27,7 +28,7 @@ public sealed class ProbePullRequestsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.ProbePullRequestsWriteAsync(
@@ -47,7 +48,7 @@ public sealed class ProbePullRequestsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.ProbePullRequestsWriteAsync(
@@ -69,7 +70,7 @@ public sealed class ProbePullRequestsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbePullRequestsWriteAsync(
@@ -91,7 +92,7 @@ public sealed class ProbePullRequestsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.NotFound, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbePullRequestsWriteAsync(
@@ -113,7 +114,7 @@ public sealed class ProbePullRequestsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbePullRequestsWriteAsync(
@@ -137,7 +138,7 @@ public sealed class ProbePullRequestsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbePullRequestsWriteAsync(
@@ -159,7 +160,7 @@ public sealed class ProbePullRequestsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         Uri nonHttpsUrl = new("http://api.github.com");
 
         // Act

@@ -105,6 +105,24 @@ Multiple accounts can exist per provider and per host — including multiple PAT
 The provider username the token authenticates as — resolved from the provider's `/user` endpoint at token validation and stored as the account's name (`Credential.Name`).
 Not user-chosen: the account's display name *is* the PAT owner. Because multiple accounts may share one PAT owner, the name alone does not identify an account; UI surfaces disambiguate with the account's Namespace Claims and host.
 
+### Token Validation Outcome
+
+A closed variant set (`TokenValidationOutcome`) returned by both provider adapters after validating a PAT.
+Five variants:
+
+- `Authenticated(AccountName, MissingScopes)` — the token authenticated and the PAT owner resolved; `MissingScopes` lists any required scopes absent from the token.
+- `AuthenticationFailed` — the token was rejected (401/unauthorized).
+- `ScopesUnverifiable(AccountName)` — the token authenticated and the owner resolved, but the token's scopes could not be read (e.g. GitLab group/project access tokens where `personal_access_tokens/self` returns non-2xx, or GitHub classic PATs served without `X-OAuth-Scopes`).
+- `IdentityUnresolved` — the response could not be parsed to an identity (neither provider's identity field present).
+- `ProviderMismatch(DetectedProvider)` — the response carried the *other* provider's identity shape (e.g. GitLab answered while GitHub was selected); names the detected provider.
+
+Two behavioral rules apply:
+
+1. A successful authentication requires a PAT owner — a "valid but nameless" state cannot be represented; if the owner cannot be resolved the outcome is `IdentityUnresolved` or `ProviderMismatch`, not `Authenticated`.
+2. `ScopesUnverifiable` warns but permits saving — the provider owns authorization and claim-time scope enforcement is the real gate, so an unreadable scope list is advisory, not blocking.
+
+The endpoint (`POST /api/accounts/validate-token`) maps these variants to the response `Kind` field: `"authenticated"`, `"authenticationFailed"`, `"scopesUnverifiable"`, `"identityUnresolved"`, `"providerMismatch"`.
+
 ## Namespace Claim
 
 The exclusive association between an Account and an owner namespace on a host — stored in `credential_namespaces` with a unique `(host, namespace)` constraint, so each namespace is served by exactly one account.

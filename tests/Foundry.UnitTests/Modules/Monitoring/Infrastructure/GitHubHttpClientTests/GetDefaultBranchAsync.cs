@@ -11,6 +11,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -28,7 +29,7 @@ public sealed class GetDefaultBranchAsync
         string json = """{ "default_branch": "main" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<string> result = await sut.GetDefaultBranchAsync(
@@ -50,7 +51,7 @@ public sealed class GetDefaultBranchAsync
         string json = """{ "default_branch": "main" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.GetDefaultBranchAsync(ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
@@ -67,7 +68,7 @@ public sealed class GetDefaultBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<string> result = await sut.GetDefaultBranchAsync(
@@ -88,7 +89,7 @@ public sealed class GetDefaultBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act

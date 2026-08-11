@@ -12,6 +12,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -34,11 +35,10 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
     public WhenRequestIsValid()
     {
         ValidateToken.Response validResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: InitialAccountName,
             MissingScopes: [],
-            AccountName: InitialAccountName);
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -49,7 +49,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson))));
+                    new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson)),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
         _client = _factory.CreateClient();
     }
@@ -130,7 +131,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing))));
+                    new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
         using HttpClient client = factory.CreateClient();
 
@@ -227,11 +229,10 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
                 ? name
                 : "default-user";
             ValidateToken.Response response = new(
-                IsValid: true,
-                IsAuthFailure: false,
-                ScopesVerified: true,
+                Kind: ValidateToken.Kinds.Authenticated,
+                AccountName: accountName,
                 MissingScopes: [],
-                AccountName: accountName);
+                DetectedProvider: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

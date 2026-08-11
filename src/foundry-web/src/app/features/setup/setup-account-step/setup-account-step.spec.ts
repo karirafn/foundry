@@ -31,35 +31,45 @@ const CREATED_ACCOUNT_RESULT: CredentialCreationResult = {
 };
 
 const VALID_RESULT: TokenValidationResult = {
-  isValid: true,
-  isAuthFailure: false,
-  scopesVerified: true,
+  kind: 'authenticated',
   missingScopes: [],
   accountName: 'octocat',
+  detectedProvider: null,
 };
 
 const AUTH_FAIL_RESULT: TokenValidationResult = {
-  isValid: false,
-  isAuthFailure: true,
-  scopesVerified: false,
+  kind: 'authenticationFailed',
   missingScopes: [],
   accountName: null,
+  detectedProvider: null,
 };
 
 const MISSING_SCOPES_RESULT: TokenValidationResult = {
-  isValid: false,
-  isAuthFailure: false,
-  scopesVerified: false,
+  kind: 'authenticated',
   missingScopes: ['repo', 'workflow'],
-  accountName: null,
+  accountName: 'octocat',
+  detectedProvider: null,
 };
 
-const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
-  isValid: true,
-  isAuthFailure: false,
-  scopesVerified: true,
+const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
+  kind: 'identityUnresolved',
   missingScopes: [],
   accountName: null,
+  detectedProvider: null,
+};
+
+const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
+  kind: 'scopesUnverifiable',
+  missingScopes: [],
+  accountName: 'octocat',
+  detectedProvider: null,
+};
+
+const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
+  kind: 'providerMismatch',
+  missingScopes: [],
+  accountName: null,
+  detectedProvider: 'gitlab',
 };
 
 describe('SetupAccountStepComponent', () => {
@@ -501,8 +511,8 @@ describe('SetupAccountStepComponent', () => {
     expect(statusRegion?.textContent).toContain('Missing required scopes: repo, workflow');
   });
 
-  // Valid but no identity message
-  it('should render "Token is valid, but identity could not be resolved" when accountName is null', () => {
+  // identityUnresolved message
+  it('should render identity-unresolved message when kind is identityUnresolved', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -515,12 +525,12 @@ describe('SetupAccountStepComponent', () => {
     // Act
     tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
-    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_NULL_IDENTITY_RESULT);
+    httpMock.expectOne('/api/accounts/validate-token').flush(IDENTITY_UNRESOLVED_RESULT);
     fixture.detectChanges();
 
     // Assert
     const statusRegion = el.querySelector('[role="status"]');
-    expect(statusRegion?.textContent).toContain('Token is valid, but the account identity could not be resolved from the provider');
+    expect(statusRegion?.textContent).toContain('Token accepted, but the account identity could not be resolved from the provider');
   });
 
   // Resolving identity message shown while validating
@@ -666,5 +676,346 @@ describe('SetupAccountStepComponent', () => {
 
     // Cleanup
     httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+  });
+
+  // Cycle K1: scopesUnverifiable — shows warning + enabled Create
+  it('should show warning message and enable Create when kind is scopesUnverifiable', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(SCOPES_UNVERIFIABLE_RESULT);
+    fixture.detectChanges();
+
+    // Assert — warning message shown
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent).toContain("Authenticated as octocat — couldn't verify token scopes");
+
+    // Assert — Create button enabled
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+  });
+
+  // Cycle K2: authenticated with non-empty missingScopes — Create DISABLED
+  it('should disable Create when kind is authenticated but missingScopes non-empty', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'limited_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(MISSING_SCOPES_RESULT);
+    fixture.detectChanges();
+
+    // Assert
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent).toContain('Missing required scopes: repo, workflow');
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle K3: providerMismatch — shows error message naming detected provider, inline switch button, Create DISABLED
+  it('should show providerMismatch error with switch button naming the detected provider', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(PROVIDER_MISMATCH_RESULT);
+    fixture.detectChanges();
+
+    // Assert — error message names both providers
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent).toContain('GitLab');
+    expect(statusRegion?.textContent).toContain('GitHub');
+
+    // Assert — inline switch button present
+    const switchBtn = el.querySelector('.setup-account-step__switch-provider-btn') as HTMLButtonElement;
+    expect(switchBtn).toBeTruthy();
+    expect(switchBtn.textContent).toContain('Switch to GitLab');
+
+    // Assert — Create disabled
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle K4: clicking the switch button for providerMismatch changes the provider
+  it('should switch provider to detected provider when switch button is clicked', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(PROVIDER_MISMATCH_RESULT);
+    fixture.detectChanges();
+
+    // Act — click the switch button
+    const switchBtn = el.querySelector('.setup-account-step__switch-provider-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Assert — GitLab radio is now selected
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find(r => r.value === 'GitLab');
+    expect(gitlabRadio?.checked).toBe(true);
+
+    // Cleanup — absorb re-triggered validate request
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+  });
+
+  // Cycle K5: identityUnresolved — Create DISABLED
+  it('should disable Create when kind is identityUnresolved', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_no_identity';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(IDENTITY_UNRESOLVED_RESULT);
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Finding 1: provider change clears stale resolution + updates base URL
+  it('should clear stale validation result when provider is changed via radio', () => {
+    // Arrange — resolve token with GitHub
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+    fixture.detectChanges();
+
+    // Assert result initially visible
+    expect(el.querySelector('[role="status"]')?.textContent).toContain('Authenticated as');
+
+    // Act — switch provider
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find(r => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+
+    // Assert — stale result is hidden
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent).not.toContain('Authenticated as');
+  });
+
+  it('should update base URL to GitLab default when switching provider via switch button', () => {
+    // Arrange — produce a providerMismatch result (github selected, gitlab detected)
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(PROVIDER_MISMATCH_RESULT);
+    fixture.detectChanges();
+
+    // Act — click switch button
+    const switchBtn = el.querySelector('.setup-account-step__switch-provider-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+
+    // Assert — base URL updated to GitLab default
+    const baseUrlInput = el.querySelector('input[id="setup-base-url"]') as HTMLInputElement;
+    expect(baseUrlInput.value).toBe('https://gitlab.com');
+
+    // Cleanup — absorb re-triggered validate request
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+  });
+
+  // Finding 2: switch button has min 44px target (class defined)
+  it('should render switch provider button with the __switch-provider-btn class and no __cancel-link class', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(PROVIDER_MISMATCH_RESULT);
+    fixture.detectChanges();
+
+    // Assert
+    const switchBtn = el.querySelector('.setup-account-step__switch-provider-btn') as HTMLButtonElement;
+    expect(switchBtn).toBeTruthy();
+    expect(switchBtn.classList.contains('setup-account-step__cancel-link')).toBe(false);
+  });
+
+  // Finding 3: switching provider emits notice into the live region
+  it('should render a non-empty status after switching provider via switch button', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(PROVIDER_MISMATCH_RESULT);
+    fixture.detectChanges();
+
+    // Act
+    const switchBtn = el.querySelector('.setup-account-step__switch-provider-btn') as HTMLButtonElement;
+    switchBtn.click();
+    // Absorb the re-triggered validate request
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+    fixture.detectChanges();
+
+    // Assert — status region is not silent (re-triggered result is shown)
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent?.trim()).toBeTruthy();
+  });
+
+  it('should clear the switch notice when the token input is edited after switching', () => {
+    // Arrange — switch provider, which may show a notice
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(PROVIDER_MISMATCH_RESULT);
+    fixture.detectChanges();
+
+    const switchBtn = el.querySelector('.setup-account-step__switch-provider-btn') as HTMLButtonElement;
+    switchBtn.click();
+    fixture.detectChanges();
+    // Absorb re-triggered validation
+    const pending = httpMock.match('/api/accounts/validate-token');
+    pending.forEach(r => r.flush(VALID_RESULT));
+    fixture.detectChanges();
+
+    // Act — edit token; notice should be cleared
+    tokenInput.value = 'new_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert — no switch notice text (stale resolution cleared, region empty or just idle)
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent).not.toContain('Provider switched');
+  });
+
+  // Finding 4: unknown kind — fallback @default renders error message, Create disabled
+  it('should render a fallback error message and keep Create disabled when kind is unknown', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'some_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    const unknownResult: TokenValidationResult = {
+      kind: 'unknownKindFromFuture' as TokenValidationResult['kind'],
+      missingScopes: [],
+      accountName: null,
+      detectedProvider: null,
+    };
+    httpMock.expectOne('/api/accounts/validate-token').flush(unknownResult);
+    fixture.detectChanges();
+
+    // Assert — a message is shown (not silent)
+    const statusRegion = el.querySelector('[role="status"]');
+    expect(statusRegion?.textContent?.trim()).toBeTruthy();
+
+    // Assert — Create button disabled
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Finding 5: warning variants have sr-only "Warning:" prefix
+  it('should include a visually-hidden "Warning:" prefix in scopesUnverifiable warning message', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(SCOPES_UNVERIFIABLE_RESULT);
+    fixture.detectChanges();
+
+    // Assert — sr-only prefix present
+    const statusRegion = el.querySelector('[role="status"]');
+    const srOnly = statusRegion?.querySelector('.sr-only');
+    expect(srOnly?.textContent?.trim()).toBe('Warning:');
+  });
+
+  it('should include a visually-hidden "Error:" prefix in authenticationFailed error message', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'bad_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(AUTH_FAIL_RESULT);
+    fixture.detectChanges();
+
+    // Assert — sr-only prefix present
+    const statusRegion = el.querySelector('[role="status"]');
+    const srOnly = statusRegion?.querySelector('.sr-only');
+    expect(srOnly?.textContent?.trim()).toBe('Error:');
   });
 });

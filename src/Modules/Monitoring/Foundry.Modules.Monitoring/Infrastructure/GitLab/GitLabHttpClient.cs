@@ -15,9 +15,13 @@ using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
+using Microsoft.Extensions.Logging;
+
 namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
-internal sealed partial class GitLabHttpClient(HttpClient httpClient)
+internal sealed partial class GitLabHttpClient(
+    HttpClient httpClient,
+    ILogger<GitLabHttpClient> logger)
 {
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
@@ -32,14 +36,14 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    public async Task<Result<TokenValidationResult>> ValidateTokenAsync(
+    public async Task<Result<TokenValidationOutcome>> ValidateTokenAsync(
         Uri apiBaseUrl,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<TokenValidationResult>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<TokenValidationOutcome>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), "user");
@@ -53,24 +57,41 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         if (response.StatusCode is HttpStatusCode.Unauthorized)
         {
-            return Result<TokenValidationResult>.Ok(TokenValidationResult.AuthFailure());
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.AuthenticationFailed());
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<TokenValidationResult>.Fail(GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
+            return Result<TokenValidationOutcome>.Fail(GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
         }
 
         string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        string? accountName = DeserializeUsername(responseBody);
+        GitLabUserDto? userDto = DeserializeUserDto(responseBody, apiBaseUrl, (int)response.StatusCode);
 
-        return await ValidateScopesAsync(apiBaseUrl, token, accountName, cancellationToken);
+        if (userDto is null)
+        {
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.IdentityUnresolved());
+        }
+
+        string? username = string.IsNullOrEmpty(userDto.Username) ? null : userDto.Username;
+
+        if (username is null && !string.IsNullOrEmpty(userDto.Login))
+        {
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ProviderMismatch(ProviderTypes.GitHub));
+        }
+
+        if (username is null)
+        {
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.IdentityUnresolved());
+        }
+
+        return await ValidateScopesAsync(apiBaseUrl, token, username, cancellationToken);
     }
 
-    private async Task<Result<TokenValidationResult>> ValidateScopesAsync(
+    private async Task<Result<TokenValidationOutcome>> ValidateScopesAsync(
         Uri apiBaseUrl,
         string token,
-        string? accountName,
+        string accountName,
         CancellationToken cancellationToken)
     {
         Uri selfUri = new(EnsureTrailingSlash(apiBaseUrl), "personal_access_tokens/self");
@@ -82,18 +103,31 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
 
         if (!selfResponse.IsSuccessStatusCode)
         {
-            return Result<TokenValidationResult>.Ok(TokenValidationResult.ScopesUnverifiable(accountName));
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(accountName));
         }
 
         string selfBody = await selfResponse.Content.ReadAsStringAsync(cancellationToken);
-        GitLabTokenSelfDto? dto = JsonSerializer.Deserialize<GitLabTokenSelfDto>(selfBody, JsonOptions);
+        GitLabTokenSelfDto? dto;
+        try
+        {
+            dto = JsonSerializer.Deserialize<GitLabTokenSelfDto>(selfBody, JsonOptions);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                ex,
+                "GitLab token validation: failed to parse response body. Provider: gitlab, Host: {Host}, Status: {StatusCode}",
+                apiBaseUrl.Host,
+                (int)selfResponse.StatusCode);
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(accountName));
+        }
 
         HashSet<string> granted = new(dto?.Scopes ?? [], StringComparer.OrdinalIgnoreCase);
         List<string> missing = RequiredScopes.For(ProviderTypes.GitLab)
             .Where(s => !granted.Contains(s))
             .ToList();
 
-        return Result<TokenValidationResult>.Ok(TokenValidationResult.Validated(missing, accountName));
+        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(accountName, missing));
     }
 
     public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
@@ -728,16 +762,19 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
     }
 
-    private static string? DeserializeUsername(string responseBody)
+    private GitLabUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)
     {
         try
         {
-            GitLabUserDto? dto = JsonSerializer.Deserialize<GitLabUserDto>(responseBody, JsonOptions);
-            string? username = dto?.Username;
-            return string.IsNullOrEmpty(username) ? null : username;
+            return JsonSerializer.Deserialize<GitLabUserDto>(responseBody, JsonOptions);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            logger.LogWarning(
+                ex,
+                "GitLab token validation: failed to parse response body. Provider: gitlab, Host: {Host}, Status: {StatusCode}",
+                apiBaseUrl.Host,
+                statusCode);
             return null;
         }
     }
@@ -832,7 +869,9 @@ internal sealed partial class GitLabHttpClient(HttpClient httpClient)
         return error;
     }
 
-    private sealed record GitLabUserDto([property: JsonPropertyName("username")] string Username);
+    private sealed record GitLabUserDto(
+        [property: JsonPropertyName("username")] string Username,
+        [property: JsonPropertyName("login")] string Login);
 
     private sealed record GitLabTokenSelfDto([property: JsonPropertyName("scopes")] IReadOnlyList<string> Scopes);
 

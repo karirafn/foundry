@@ -29,10 +29,23 @@ describe('LoginFlowComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const spinner = el.querySelector('.login-flow__spinner');
+      const spinner = el.querySelector('fd-spinner');
 
       // Assert
       expect(spinner).toBeTruthy();
+    });
+
+    it('should render fd-spinner at the 14px default diameter in Starting phase', () => {
+      // Arrange
+      const fixture = setup({ phase: 'Starting' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const innerSpan = el.querySelector('fd-spinner span.spinner') as HTMLElement;
+
+      // Assert
+      expect(innerSpan.style.width).toBe('14px');
+      expect(innerSpan.style.height).toBe('14px');
     });
 
     it('should show "Starting sign-in…" text in Starting phase', () => {
@@ -298,10 +311,23 @@ describe('LoginFlowComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const spinner = el.querySelector('.login-flow__spinner');
+      const spinner = el.querySelector('fd-spinner');
 
       // Assert
       expect(spinner).toBeTruthy();
+    });
+
+    it('should render fd-spinner at the 14px default diameter in SigningIn phase', () => {
+      // Arrange
+      const fixture = setup({ phase: 'SigningIn' });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const innerSpan = el.querySelector('fd-spinner span.spinner') as HTMLElement;
+
+      // Assert
+      expect(innerSpan.style.width).toBe('14px');
+      expect(innerSpan.style.height).toBe('14px');
     });
 
     it('should show "Signing you in…" text in SigningIn phase', () => {

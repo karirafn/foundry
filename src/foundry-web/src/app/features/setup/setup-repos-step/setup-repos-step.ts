@@ -16,12 +16,14 @@ import { from } from 'rxjs';
 import { concatMap } from 'rxjs/operators';
 import { RepositoryService } from '../../settings/repositories/repository.service';
 import { AvailableRepository, NO_WRITE_ACCESS_REASON } from '../../settings/repositories/repository.model';
+import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
 
 const ERROR_TRUNCATE_LENGTH = 200;
 
 @Component({
   selector: 'fd-setup-repos-step',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SpinnerComponent],
   template: `
     <div class="setup-repos-step">
       <h2 class="setup-repos-step__title">Select Repositories</h2>
@@ -31,7 +33,7 @@ const ERROR_TRUNCATE_LENGTH = 200;
 
       @if (_repositoryService.loadingAvailable()) {
         <div class="setup-repos-step__loading" role="status">
-          <span class="setup-repos-step__loading-spinner" aria-hidden="true"></span>
+          <fd-spinner [size]="16" />
           Loading repositories...
         </div>
       } @else if (_repositoryService.loadAvailableError()) {

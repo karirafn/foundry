@@ -12,6 +12,7 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -28,7 +29,7 @@ public sealed class RateLimitHandling
         // Arrange
         FakeHandler handler = new(HttpStatusCode.TooManyRequests, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
@@ -51,7 +52,7 @@ public sealed class RateLimitHandling
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders.Add("RateLimit-Remaining", "0");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
@@ -74,7 +75,7 @@ public sealed class RateLimitHandling
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders.Add("RateLimit-Remaining", "10");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
@@ -97,7 +98,7 @@ public sealed class RateLimitHandling
         // Arrange
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(

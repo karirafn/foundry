@@ -9,6 +9,7 @@ internal static class CredentialErrors
     internal const string DuplicateNamespaceCode = "Credential.DuplicateNamespace";
     internal const string InvalidTokenCode = "Credential.InvalidToken";
     internal const string UnresolvedIdentityCode = "Credential.UnresolvedIdentity";
+    internal const string ProviderMismatchCode = "Credential.ProviderMismatch";
     internal const string MissingWritePermissionCode = "Credential.MissingWritePermission";
     internal const string NoNamespaceRepositoriesCode = "Credential.NoNamespaceRepositories";
     internal const string WriteAccessVerificationFailedCode = "Credential.WriteAccessVerificationFailed";
@@ -21,6 +22,10 @@ internal static class CredentialErrors
 
     internal static Error MissingWritePermission(string permissionName) =>
         new(MissingWritePermissionCode, $"The token is missing the '{permissionName}' write permission required by Foundry.");
+
+    internal static Error ProviderMismatch(string detectedProvider) =>
+        new(ProviderMismatchCode,
+            $"The token belongs to '{detectedProvider}'. Switch the provider selection to match the token.");
 
     internal static readonly Error InvalidToken =
         new(InvalidTokenCode, "The token is not valid or is missing required scopes.");

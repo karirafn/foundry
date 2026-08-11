@@ -2807,22 +2807,21 @@
       },
       "ValidateTokenResponse": {
         "required": [
-          "isValid",
-          "isAuthFailure",
-          "scopesVerified",
+          "kind",
+          "accountName",
           "missingScopes",
-          "accountName"
+          "detectedProvider"
         ],
         "type": "object",
         "properties": {
-          "isValid": {
-            "type": "boolean"
+          "kind": {
+            "type": "string"
           },
-          "isAuthFailure": {
-            "type": "boolean"
-          },
-          "scopesVerified": {
-            "type": "boolean"
+          "accountName": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "missingScopes": {
             "type": "array",
@@ -2830,7 +2829,7 @@
               "type": "string"
             }
           },
-          "accountName": {
+          "detectedProvider": {
             "type": [
               "null",
               "string"
