@@ -13,7 +13,7 @@ import { SpinnerComponent } from '../spinner/spinner';
         [attr.aria-label]="editLabel()"
         [attr.title]="editLabel()"
         [attr.aria-disabled]="deleteBusy() ? 'true' : null"
-        (click)="edit.emit()"
+        (click)="onEditClick()"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -73,6 +73,13 @@ export class RowActionsComponent {
 
   readonly edit: OutputEmitterRef<void> = output<void>();
   readonly delete: OutputEmitterRef<void> = output<void>();
+
+  protected onEditClick(): void {
+    if (this.deleteBusy()) {
+      return;
+    }
+    this.edit.emit();
+  }
 
   protected onDeleteClick(): void {
     if (this.deleteBusy()) {

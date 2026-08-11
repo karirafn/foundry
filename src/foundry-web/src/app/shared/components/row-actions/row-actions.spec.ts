@@ -178,6 +178,36 @@ describe('RowActionsComponent', () => {
     expect(deleteBtn.getAttribute('aria-disabled')).toBeNull();
   });
 
+  // Cycle 14a: deleteBusy=true → clicking edit emits nothing (no-op guard)
+  it('should not emit edit when deleteBusy is true and the edit button is clicked', () => {
+    // Arrange
+    const { el, component } = setup({ deleteBusy: true });
+    let emitCount = 0;
+    component.edit.subscribe(() => { emitCount++; });
+
+    // Act
+    const editBtn = el.querySelector('.row-actions__edit-btn') as HTMLButtonElement;
+    editBtn.click();
+
+    // Assert
+    expect(emitCount).toBe(0);
+  });
+
+  // Cycle 14b: deleteBusy=false (default) → clicking edit emits once
+  it('should emit edit exactly once when deleteBusy is false and the edit button is clicked', () => {
+    // Arrange
+    const { el, component } = setup({ deleteBusy: false });
+    let emitCount = 0;
+    component.edit.subscribe(() => { emitCount++; });
+
+    // Act
+    const editBtn = el.querySelector('.row-actions__edit-btn') as HTMLButtonElement;
+    editBtn.click();
+
+    // Assert
+    expect(emitCount).toBe(1);
+  });
+
   // Cycle 14: aria-disabled="true" styling — attribute present and CSS selector targets it
   it('should apply not-allowed cursor styling via aria-disabled="true" on buttons when deleteBusy is true', () => {
     // Arrange / Act

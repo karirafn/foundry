@@ -9,6 +9,9 @@ import { AccountPresenceService } from '../../../core/services/account-presence.
 const API_BASE = '/api/accounts';
 const PROVIDERS_API_BASE = '/api/providers';
 const TOAST_ALL_RETAINED = 'Token updated. All repositories retained their access.';
+// Backend create/update handlers commit before returning, so a 60s client timeout surfaces
+// an error even though the server may have applied the change. A subsequent retry reaches the
+// 409-conflict path, which is the recovery mechanism for this failure mode.
 const MUTATION_TIMEOUT_MS = 60_000;
 
 @Injectable({ providedIn: 'root' })
@@ -224,15 +227,14 @@ export class AccountService {
     return request;
   }
 
-  private _extractErrorMessage(err: HttpErrorResponse | TimeoutError | unknown): string {
+  private _extractErrorMessage(err: HttpErrorResponse | TimeoutError): string {
     if (err instanceof TimeoutError) {
       return 'The request timed out. Please try again.';
     }
-    const httpErr = err as HttpErrorResponse;
-    if (typeof httpErr.error === 'string' && httpErr.error) {
-      return httpErr.error;
+    if (typeof err.error === 'string' && err.error) {
+      return err.error;
     }
-    return httpErr.message;
+    return err.message;
   }
 
   private _isNamespaceConflictResponse(body: unknown): boolean {

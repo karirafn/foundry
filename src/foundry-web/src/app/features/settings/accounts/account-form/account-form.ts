@@ -43,7 +43,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
   imports: [ProviderSelectorComponent, SpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="account-form" [attr.aria-busy]="saving() ? 'true' : null">
+    <div class="account-form" role="region" aria-label="Account form" [attr.aria-busy]="saving() ? 'true' : null">
       <button
         class="account-form__cancel-link"
         type="button"

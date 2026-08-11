@@ -1105,6 +1105,62 @@ describe('SetupAccountStepComponent', () => {
     expect(srOnly?.textContent?.trim()).toBe('Warning:');
   });
 
+  // FIX 4: root container exposes role="region" and aria-label so AT can track aria-busy
+  it('should expose role="region" and aria-label="Add account" on the root container', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const container = el.querySelector('.setup-account-step') as HTMLElement;
+    expect(container.getAttribute('role')).toBe('region');
+    expect(container.getAttribute('aria-label')).toBe('Add account');
+  });
+
+  it('should set aria-busy="true" on the root container while saving', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush({
+      kind: 'authenticated', missingScopes: [], accountName: 'octocat', detectedProvider: null,
+    });
+    fixture.detectChanges();
+
+    // Act — click Create; do NOT flush the POST so saving state stays active
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert
+    const container = el.querySelector('.setup-account-step') as HTMLElement;
+    expect(container.getAttribute('aria-busy')).toBe('true');
+
+    // Cleanup
+    httpMock.expectOne('/api/accounts').flush({
+      credential: CREATED_ACCOUNT,
+      affectedRepositories: [],
+    });
+  });
+
+  it('should not set aria-busy on the root container when not saving', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const container = el.querySelector('.setup-account-step') as HTMLElement;
+    expect(container.getAttribute('aria-busy')).toBeNull();
+  });
+
   it('should include a visually-hidden "Error:" prefix in authenticationFailed error message', () => {
     // Arrange
     const { fixture, httpMock } = setup();

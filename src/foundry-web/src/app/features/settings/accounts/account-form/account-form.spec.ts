@@ -1931,6 +1931,35 @@ describe('AccountFormComponent', () => {
     expect(region?.textContent).toContain('Switch the provider');
   });
 
+  // Accessibility — FIX 4: form container exposes role="region" and aria-label for AT
+  it('should expose role="region" on the form container so AT can track aria-busy', () => {
+    // Arrange / Act
+    const { el } = setup();
+
+    // Assert
+    const formContainer = el.querySelector('.account-form') as HTMLElement;
+    expect(formContainer.getAttribute('role')).toBe('region');
+    expect(formContainer.getAttribute('aria-label')).toBe('Account form');
+  });
+
+  it('should set aria-busy="true" on the form container (role=region) while saving', () => {
+    // Arrange
+    const { el } = setup({ saving: true });
+
+    // Assert
+    const formContainer = el.querySelector('.account-form') as HTMLElement;
+    expect(formContainer.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('should not set aria-busy on the form container when not saving', () => {
+    // Arrange
+    const { el } = setup({ saving: false });
+
+    // Assert
+    const formContainer = el.querySelector('.account-form') as HTMLElement;
+    expect(formContainer.getAttribute('aria-busy')).toBeNull();
+  });
+
   // --- Step 5: saving busy state ---
 
   // S-1: valid form + saving true → label is "Saving...", fd-spinner present, form container has aria-busy="true",

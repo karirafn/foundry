@@ -24,7 +24,7 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
   imports: [ProviderSelectorComponent, SpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="setup-account-step">
+    <div class="setup-account-step" role="region" aria-label="Add account" [attr.aria-busy]="saving() ? 'true' : null">
       <h2 class="setup-account-step__title">Add a Provider Account</h2>
       <p class="setup-account-step__description">
         Connect an account to get started.

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -60,6 +60,7 @@ function createMockSettingsService(isColdBuildBlocking = false) {
 }
 
 function createMockAccountService() {
+  const srAnnouncementSignal: WritableSignal<string> = signal('');
   return {
     accounts: signal([{ id: '1' }]).asReadonly(),
     loading: signal(false).asReadonly(),
@@ -72,7 +73,8 @@ function createMockAccountService() {
     deleteError: signal(null).asReadonly(),
     loadError: signal(null).asReadonly(),
     validationError: signal(null).asReadonly(),
-    srAnnouncement: signal('').asReadonly(),
+    srAnnouncement: srAnnouncementSignal.asReadonly(),
+    _srAnnouncementSignal: srAnnouncementSignal,
     loadAccounts: () => {},
     createAccount: () => {},
     updateAccount: () => {},
@@ -99,6 +101,7 @@ function createMockSignalRService() {
 }
 
 function setupApp(isColdBuildBlocking = false) {
+  const mockAccountService = createMockAccountService();
   TestBed.configureTestingModule({
     imports: [App],
     providers: [
@@ -107,34 +110,34 @@ function setupApp(isColdBuildBlocking = false) {
       provideHttpClientTesting(),
       { provide: SYSTEM_HUB_FACTORY, useValue: mockSystemHubFactory },
       { provide: SettingsService, useValue: createMockSettingsService(isColdBuildBlocking) },
-      { provide: AccountService, useValue: createMockAccountService() },
+      { provide: AccountService, useValue: mockAccountService },
       { provide: DispatchService, useValue: createMockDispatchService() },
       { provide: SystemSignalRService, useValue: createMockSignalRService() },
     ],
   });
   const fixture = TestBed.createComponent(App);
   fixture.detectChanges();
-  return fixture;
+  return { fixture, mockAccountService };
 }
 
 describe('App', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('should create the app', () => {
-    const fixture = setupApp();
+    const { fixture } = setupApp();
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
   });
 
   it('should render header with Foundry logo', async () => {
-    const fixture = setupApp();
+    const { fixture } = setupApp();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.app-header__logo')?.textContent).toContain('Foundry');
   });
 
   it('should include the forge overlay component', () => {
-    const fixture = setupApp();
+    const { fixture } = setupApp();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('fd-forge-overlay')).not.toBeNull();
   });
@@ -142,7 +145,7 @@ describe('App', () => {
   // F1: header, system banner, and main are not inert when overlay is not blocking
   it('should not set inert on header, system-banner, or main when overlay is not blocking', () => {
     // Arrange
-    const fixture = setupApp(false);
+    const { fixture } = setupApp(false);
 
     // Act
     const compiled = fixture.nativeElement as HTMLElement;
@@ -159,7 +162,7 @@ describe('App', () => {
   // Step 3: toast host is mounted exactly once at app root, outside inert regions
   it('should render exactly one fd-toast host', () => {
     // Arrange
-    const fixture = setupApp();
+    const { fixture } = setupApp();
 
     // Act
     const compiled = fixture.nativeElement as HTMLElement;
@@ -171,7 +174,7 @@ describe('App', () => {
 
   it('should render fd-toast outside inert-gated regions', () => {
     // Arrange
-    const fixture = setupApp(true);
+    const { fixture } = setupApp(true);
 
     // Act
     const compiled = fixture.nativeElement as HTMLElement;
@@ -190,7 +193,7 @@ describe('App', () => {
   // F1: header, system banner, and main are inert when overlay is blocking
   it('should set inert on header, system-banner, and main when overlay is blocking', () => {
     // Arrange
-    const fixture = setupApp(true);
+    const { fixture } = setupApp(true);
 
     // Act
     const compiled = fixture.nativeElement as HTMLElement;
@@ -207,7 +210,7 @@ describe('App', () => {
   // Step 7: exactly one polite live region exists in the app shell
   it('should render exactly one aria-live="polite" region in the shell', () => {
     // Arrange
-    const fixture = setupApp();
+    const { fixture } = setupApp();
 
     // Act
     const compiled = fixture.nativeElement as HTMLElement;
@@ -219,7 +222,7 @@ describe('App', () => {
 
   it('should render the sr-announcer region outside any inert subtree (sibling of main)', () => {
     // Arrange
-    const fixture = setupApp(true);
+    const { fixture } = setupApp(true);
 
     // Act
     const compiled = fixture.nativeElement as HTMLElement;
@@ -237,17 +240,24 @@ describe('App', () => {
 
   it('should update the sr-announcer text when srAnnouncement signal changes', () => {
     // Arrange
-    const fixture = setupApp();
+    const { fixture, mockAccountService } = setupApp();
     const compiled = fixture.nativeElement as HTMLElement;
-    const announcer = compiled.querySelector('.app__sr-announcer');
 
-    // Assert — initial state is empty
+    // Assert initial state
+    const announcer = compiled.querySelector('.app__sr-announcer');
     expect(announcer?.textContent?.trim()).toBe('');
+
+    // Act — push a non-empty value through the writable signal
+    mockAccountService._srAnnouncementSignal.set('Account added.');
+    fixture.detectChanges();
+
+    // Assert — binding reflects the updated signal value
+    expect(announcer?.textContent?.trim()).toBe('Account added.');
   });
 
   it('should render sr-announcer with aria-atomic="true"', () => {
     // Arrange
-    const fixture = setupApp();
+    const { fixture } = setupApp();
 
     // Act
     const compiled = fixture.nativeElement as HTMLElement;
@@ -260,7 +270,7 @@ describe('App', () => {
   // Step 3: fd-account-chip renders before the settings gear link
   it('should render fd-account-chip before .app-header__settings-link in .app-header__nav', () => {
     // Arrange / Act
-    const fixture = setupApp();
+    const { fixture } = setupApp();
     const compiled = fixture.nativeElement as HTMLElement;
     const nav = compiled.querySelector('.app-header__nav');
 

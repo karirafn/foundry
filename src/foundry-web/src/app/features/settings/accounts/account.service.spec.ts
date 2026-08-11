@@ -1142,6 +1142,34 @@ describe('AccountService', () => {
       httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
     });
 
+    it('should set timeout terminal error announcement when updateAccount times out', () => {
+      // Arrange
+      service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+
+      // Act
+      vi.advanceTimersByTime(60_000);
+
+      // Assert
+      expect(service.srAnnouncement()).toBe('Could not update account: The request timed out. Please try again.');
+
+      // Drain the cancelled request
+      httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
+    });
+
+    it('should set timeout terminal error announcement when deleteAccount times out', () => {
+      // Arrange
+      service.deleteAccount(MOCK_ACCOUNT.id);
+
+      // Act
+      vi.advanceTimersByTime(60_000);
+
+      // Assert
+      expect(service.srAnnouncement()).toBe('Could not delete account: The request timed out. Please try again.');
+
+      // Drain the cancelled request
+      httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
+    });
+
     it('should clear saving and set saveError when updateAccount request times out after 60s', () => {
       // Arrange
       service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
