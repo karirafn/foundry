@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using Foundry.Modules.Settings.Domain.Entities;
 
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +12,12 @@ internal sealed class SettingsSeeder(IServiceScopeFactory scopeFactory) : IHoste
 {
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
+        // Skip DB seeding when the build-time OpenAPI doc generation tool runs the app entry point.
+        if (Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider")
+        {
+            return;
+        }
+
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 

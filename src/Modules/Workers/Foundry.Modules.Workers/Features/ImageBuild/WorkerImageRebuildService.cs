@@ -1,4 +1,5 @@
 using System.Formats.Tar;
+using System.Reflection;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -88,6 +89,12 @@ internal sealed class WorkerImageRebuildService(
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
         SubscribeToImmediateRebuild();
+
+        // Skip DB access and image operations when the build-time OpenAPI doc generation tool runs the app.
+        if (Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider")
+        {
+            return;
+        }
 
         if (!_options.ImageBuild.Enabled)
         {

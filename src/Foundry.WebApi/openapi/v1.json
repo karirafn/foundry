@@ -1,0 +1,2740 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Foundry.WebApi | v1",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/credentials": {
+      "get": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Gets the current Claude account credentials summary",
+        "operationId": "GetCredentials",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeAccountSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/credentials/auth": {
+      "put": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Updates the authentication mode for Claude account credentials",
+        "operationId": "UpdateCredentialsAuthMode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeAccountSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/credentials/login/start": {
+      "post": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Starts an OAuth login session (non-blocking; result delivered via SignalR)",
+        "operationId": "StartOAuthLogin",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/credentials/login/code": {
+      "post": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Submits the authorization code to the active login session",
+        "operationId": "SubmitOAuthLoginCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Gets issue summaries, optionally filtered by repository and state",
+        "operationId": "GetIssues",
+        "parameters": [
+          {
+            "name": "repositoryId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "states",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedIssues"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues/counts": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Gets issue counts grouped by state, optionally filtered by repository",
+        "operationId": "GetIssueCounts",
+        "parameters": [
+          {
+            "name": "repositoryId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueStateCounts"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues/{id}": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Gets issue detail by ID",
+        "operationId": "GetIssueById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues/{id}/retry": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Retries a failed issue",
+        "operationId": "RetryIssue",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts": {
+      "get": {
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Gets all configured accounts",
+        "operationId": "GetAccounts",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CredentialSummary"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Creates a new account",
+        "operationId": "CreateAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialCreationResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespaceConflictResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/{id}": {
+      "put": {
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Updates an existing account",
+        "operationId": "UpdateAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialUpdateResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Deletes an account",
+        "operationId": "DeleteAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/validate-token": {
+      "post": {
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Validates a personal access token for the given provider",
+        "operationId": "ValidateToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/providers/{provider}/token-requirements": {
+      "get": {
+        "tags": [
+          "Providers"
+        ],
+        "summary": "Gets the PAT requirements for a provider",
+        "operationId": "GetTokenRequirements",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenRequirements"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/{accountId}/repositories": {
+      "get": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Gets all monitored repositories for an account",
+        "operationId": "GetRepositories",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RepositorySummary"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Creates a new monitored repository for an account",
+        "operationId": "CreateRepository",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositorySummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/{accountId}/repositories/available-repositories": {
+      "get": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Gets all repositories available for a given account",
+        "operationId": "GetAvailableRepositories",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailableRepositoriesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/{accountId}/repositories/{id}": {
+      "put": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Updates an existing monitored repository",
+        "operationId": "UpdateRepository",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositorySummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Deletes a monitored repository",
+        "operationId": "DeleteRepository",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/{accountId}/repositories/{id}/recheck": {
+      "post": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Re-evaluates branch protection eligibility for a monitored repository",
+        "operationId": "RecheckRepositoryEligibility",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositorySummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/repositories/{id}/position": {
+      "patch": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Moves a monitored repository to the specified position in the dispatch order",
+        "operationId": "MoveRepository",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workers/runs/{workerRunId}": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Gets worker run detail by ID",
+        "operationId": "GetWorkerRunDetail",
+        "parameters": [
+          {
+            "name": "workerRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerRunDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workers/runs/{workerRunId}/log": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Gets persisted container log for a failed worker run",
+        "operationId": "GetWorkerRunLog",
+        "parameters": [
+          {
+            "name": "workerRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workers/run-totals": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Gets aggregated worker-run totals across all issues for a time window",
+        "operationId": "GetRunTotals",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunTotals"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/status": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Returns system availability state, including whether the Docker daemon is reachable",
+        "operationId": "GetSystemStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Gets the current global settings",
+        "operationId": "GetSettings",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/limits": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates the worker concurrency and timeout limits",
+        "operationId": "UpdateWorkerLimits",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/prompts": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates the system and worker prompt templates",
+        "operationId": "UpdatePromptTemplates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/dispatch": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates the dispatch pause and cooldown settings",
+        "operationId": "UpdateDispatchSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/dispatch/pause": {
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Pauses worker dispatch",
+        "operationId": "PauseDispatch",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/dispatch/resume": {
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Resumes worker dispatch",
+        "operationId": "ResumeDispatch",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/worker-image": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates the worker image build flags",
+        "operationId": "UpdateWorkerImageConfiguration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/worker-image/retry": {
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Retries the worker image build after a failure",
+        "operationId": "RetryImageBuild",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AffectedRepository": {
+        "required": [
+          "id",
+          "slug",
+          "previousStatus",
+          "newStatus"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "previousStatus": {
+            "type": "string"
+          },
+          "newStatus": {
+            "type": "string"
+          }
+        }
+      },
+      "AvailableRepositoriesResponse": {
+        "required": [
+          "hasClaims",
+          "repositories"
+        ],
+        "type": "object",
+        "properties": {
+          "hasClaims": {
+            "type": "boolean"
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailableRepository"
+            }
+          }
+        }
+      },
+      "AvailableRepository": {
+        "required": [
+          "slug",
+          "isPrivate",
+          "canPush",
+          "isMonitored"
+        ],
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "isPrivate": {
+            "type": "boolean"
+          },
+          "canPush": {
+            "type": "boolean"
+          },
+          "isMonitored": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ClaudeAccountSummary": {
+        "required": [
+          "accountId",
+          "authMode",
+          "oAuthStatus",
+          "subscriptionType",
+          "oAuthAccountEmail",
+          "oAuthAccountOrgName"
+        ],
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authMode": {
+            "type": "string"
+          },
+          "oAuthStatus": {
+            "type": "string"
+          },
+          "subscriptionType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "oAuthAccountEmail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "oAuthAccountOrgName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CredentialCreationResult": {
+        "required": [
+          "credential",
+          "affectedRepositories"
+        ],
+        "type": "object",
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/CredentialSummary"
+          },
+          "affectedRepositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AffectedRepository"
+            }
+          }
+        }
+      },
+      "CredentialSummary": {
+        "required": [
+          "id",
+          "name",
+          "providerType",
+          "baseUrl",
+          "hasToken",
+          "namespaces"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "providerType": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "hasToken": {
+            "type": "boolean"
+          },
+          "namespaces": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CredentialUpdateResult": {
+        "required": [
+          "credential",
+          "affectedRepositories"
+        ],
+        "type": "object",
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/CredentialSummary"
+          },
+          "affectedRepositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AffectedRepository"
+            }
+          }
+        }
+      },
+      "EligibilityViolationInfo": {
+        "required": [
+          "rule",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "rule": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "GlobalSettingsSummary": {
+        "required": [
+          "maxConcurrent",
+          "timeoutMinutes",
+          "systemPromptTemplate",
+          "workerPromptTemplate",
+          "usageLimitResetsAt",
+          "isDispatchPaused",
+          "autoResumeOnUsageReset",
+          "defaultCooldownMinutes",
+          "installDotnet",
+          "installAngular",
+          "installGlab",
+          "installGh",
+          "installChromium",
+          "installDocker",
+          "imageBuildStatus",
+          "lastImageBuildError",
+          "hasUsableImage",
+          "nextRetryAt",
+          "attempt"
+        ],
+        "type": "object",
+        "properties": {
+          "maxConcurrent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "timeoutMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "systemPromptTemplate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "workerPromptTemplate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "usageLimitResetsAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "isDispatchPaused": {
+            "type": "boolean"
+          },
+          "autoResumeOnUsageReset": {
+            "type": "boolean"
+          },
+          "defaultCooldownMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "installDotnet": {
+            "type": "boolean"
+          },
+          "installAngular": {
+            "type": "boolean"
+          },
+          "installGlab": {
+            "type": "boolean"
+          },
+          "installGh": {
+            "type": "boolean"
+          },
+          "installChromium": {
+            "type": "boolean"
+          },
+          "installDocker": {
+            "type": "boolean"
+          },
+          "imageBuildStatus": {
+            "$ref": "#/components/schemas/ImageBuildStatus"
+          },
+          "lastImageBuildError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasUsableImage": {
+            "type": "boolean"
+          },
+          "nextRetryAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "attempt": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ImageBuildStatus": {
+        "enum": [
+          "Idle",
+          "Building",
+          "Failed"
+        ]
+      },
+      "IssueDetail": {
+        "required": [
+          "id",
+          "issueNumber",
+          "title",
+          "state",
+          "repositorySlug",
+          "providerType",
+          "detectedAt",
+          "url",
+          "author",
+          "labels",
+          "stateDetails"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issueNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "repositorySlug": {
+            "type": "string"
+          },
+          "providerType": {
+            "type": "string"
+          },
+          "detectedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "url": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stateDetails": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IssueStateDetails"
+              }
+            ]
+          }
+        }
+      },
+      "IssueStateCounts": {
+        "required": [
+          "counts"
+        ],
+        "type": "object",
+        "properties": {
+          "counts": {
+            "type": "object",
+            "additionalProperties": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "IssueStateDetails": {
+        "required": [
+          "workerRunId",
+          "branchName",
+          "pullRequestUrl",
+          "feedbackCutoffAt",
+          "failureReason",
+          "failedAt",
+          "completedAt",
+          "blockedBy",
+          "transientRetry"
+        ],
+        "type": "object",
+        "properties": {
+          "workerRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "branchName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pullRequestUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "feedbackCutoffAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "failureReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "failedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "blockedBy": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          "transientRetry": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TransientRetryDetails"
+              }
+            ]
+          }
+        }
+      },
+      "IssueSummary": {
+        "required": [
+          "id",
+          "issueNumber",
+          "title",
+          "state",
+          "repositorySlug",
+          "detectedAt",
+          "url",
+          "failureClassification",
+          "repositoryEligibilityStatus",
+          "runStats"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issueNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "repositorySlug": {
+            "type": "string"
+          },
+          "detectedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "url": {
+            "type": "string"
+          },
+          "failureClassification": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "repositoryEligibilityStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "runStats": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunStats"
+              }
+            ]
+          }
+        }
+      },
+      "NamespaceConflict": {
+        "required": [
+          "namespace",
+          "holderCredentialId",
+          "holderName"
+        ],
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "holderCredentialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "holderName": {
+            "type": "string"
+          }
+        }
+      },
+      "NamespaceConflictResponse": {
+        "required": [
+          "conflicts"
+        ],
+        "type": "object",
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamespaceConflict"
+            }
+          }
+        }
+      },
+      "PagedIssues": {
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueSummary"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RepositoryEligibilityInfo": {
+        "required": [
+          "status",
+          "violations"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "violations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EligibilityViolationInfo"
+            }
+          }
+        }
+      },
+      "RepositorySummary": {
+        "required": [
+          "id",
+          "slug",
+          "accountId",
+          "accountName",
+          "providerType",
+          "pollIntervalSeconds",
+          "isActive",
+          "lastPolledAt",
+          "eligibility",
+          "position"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "providerType": {
+            "type": "string"
+          },
+          "pollIntervalSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "lastPolledAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "eligibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepositoryEligibilityInfo"
+              }
+            ]
+          },
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "Request": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "RequestBody": {
+        "required": [
+          "mode",
+          "apiKey"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "Response": {
+        "required": [
+          "sessionId"
+        ],
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "RunStats": {
+        "required": [
+          "runCount",
+          "durationMs",
+          "numTurns",
+          "totalCostUsd",
+          "inputTokens",
+          "outputTokens"
+        ],
+        "type": "object",
+        "properties": {
+          "runCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "numTurns": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalCostUsd": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "inputTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "outputTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "RunTotals": {
+        "required": [
+          "runCount",
+          "durationMs",
+          "numTurns",
+          "totalCostUsd",
+          "inputTokens",
+          "outputTokens"
+        ],
+        "type": "object",
+        "properties": {
+          "runCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "numTurns": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalCostUsd": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "inputTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "outputTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SystemStatus": {
+        "required": [
+          "dockerAvailable"
+        ],
+        "type": "object",
+        "properties": {
+          "dockerAvailable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TokenRequirements": {
+        "required": [
+          "providerType",
+          "tokenTypeLabel",
+          "scopes",
+          "creationUrlTemplate",
+          "resourceOwnerHint"
+        ],
+        "type": "object",
+        "properties": {
+          "providerType": {
+            "type": "string"
+          },
+          "tokenTypeLabel": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "creationUrlTemplate": {
+            "type": "string"
+          },
+          "resourceOwnerHint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "TransientRetryDetails": {
+        "required": [
+          "attemptNumber",
+          "maxAttempts",
+          "isExhausted",
+          "nextAttemptDueAt"
+        ],
+        "type": "object",
+        "properties": {
+          "attemptNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxAttempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "isExhausted": {
+            "type": "boolean"
+          },
+          "nextAttemptDueAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "WorkerRunCommitMarker": {
+        "required": [
+          "observedAt",
+          "sha",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sha": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkerRunDetail": {
+        "required": [
+          "workerRunId",
+          "issueId",
+          "state",
+          "failureCategory",
+          "failureSummary",
+          "resultText",
+          "subtype",
+          "isError",
+          "durationMs",
+          "numTurns",
+          "totalCostUsd",
+          "inputTokens",
+          "outputTokens",
+          "lastActivityAt",
+          "commitMarkers",
+          "hasStoredLog"
+        ],
+        "type": "object",
+        "properties": {
+          "workerRunId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "failureCategory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "failureSummary": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "resultText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "subtype": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isError": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "durationMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "numTurns": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalCostUsd": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "inputTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "outputTokens": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "lastActivityAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "commitMarkers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerRunCommitMarker"
+            }
+          },
+          "hasStoredLog": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Credentials"
+    },
+    {
+      "name": "OAuth"
+    },
+    {
+      "name": "Issues"
+    },
+    {
+      "name": "Accounts"
+    },
+    {
+      "name": "Providers"
+    },
+    {
+      "name": "Repositories"
+    },
+    {
+      "name": "Workers"
+    },
+    {
+      "name": "System"
+    },
+    {
+      "name": "Settings"
+    }
+  ]
+}
