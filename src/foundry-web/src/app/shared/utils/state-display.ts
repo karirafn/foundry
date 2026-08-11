@@ -14,7 +14,6 @@ export const STATE_LABELS: Record<IssueState, string> = {
   revision_queued: 'REV QUEUED',
   revision_in_progress: 'REV IN PROGRESS',
   revision_failed: 'REV FAILED',
-  ineligible: 'INELIGIBLE',
 };
 
 export const STATE_ARIA_LABELS: Record<IssueState, string> = {
@@ -31,7 +30,6 @@ export const STATE_ARIA_LABELS: Record<IssueState, string> = {
   revision_queued: 'revision queued',
   revision_in_progress: 'revision in progress',
   revision_failed: 'revision failed',
-  ineligible: 'not eligible for dispatch',
 };
 
 export const STATE_CSS_CLASSES: Record<IssueState, string> = {
@@ -48,7 +46,6 @@ export const STATE_CSS_CLASSES: Record<IssueState, string> = {
   revision_queued: 'badge--revision-queued',
   revision_in_progress: 'badge--revision-in-progress',
   revision_failed: 'badge--revision-failed',
-  ineligible: 'badge--ineligible',
 };
 
 /**
@@ -69,7 +66,6 @@ export const STATE_RAIL_LABELS: Record<IssueState, string> = {
   revision_queued: 'Revision Queued',
   revision_in_progress: 'Revision In Progress',
   revision_failed: 'Revision Failed',
-  ineligible: 'Ineligible',
 };
 
 /**
@@ -90,5 +86,4 @@ export const STATE_COLOR_VARS: Record<IssueState, string> = {
   revision_queued: 'var(--fd-state-queued)',
   revision_in_progress: 'var(--fd-state-in-progress)',
   revision_failed: 'var(--fd-state-failed)',
-  ineligible: 'var(--fd-state-ineligible)',
 };
