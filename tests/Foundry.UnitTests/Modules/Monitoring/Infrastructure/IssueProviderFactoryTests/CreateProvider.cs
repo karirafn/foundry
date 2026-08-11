@@ -23,7 +23,7 @@ public sealed class CreateProvider
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         HttpClient httpClient = new(handler);
         GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
-        GitLabHttpClient gitLabHttpClient = new(httpClient);
+        GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         return new IssueProviderFactory(gitHubHttpClient, gitLabHttpClient);
     }
 

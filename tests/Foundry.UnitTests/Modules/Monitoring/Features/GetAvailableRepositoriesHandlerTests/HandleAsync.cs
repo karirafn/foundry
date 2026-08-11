@@ -102,7 +102,7 @@ public sealed class HandleAsync : IAsyncDisposable
         return new GetAvailableRepositories.Handler(
             _dbContext,
             new GitHubHttpClient(gitHubHttpClient, NullLogger<GitHubHttpClient>.Instance),
-            new GitLabHttpClient(gitLabHttpClient));
+            new GitLabHttpClient(gitLabHttpClient, NullLogger<GitLabHttpClient>.Instance));
     }
 
     [Fact]

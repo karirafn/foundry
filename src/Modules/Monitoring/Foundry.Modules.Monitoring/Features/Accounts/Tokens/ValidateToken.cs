@@ -35,15 +35,10 @@ internal static class ValidateToken
         {
             if (string.Equals(query.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase))
             {
-                Result<TokenValidationResult> gitLabResult = await gitLabHttpClient.ValidateTokenAsync(
+                Result<TokenValidationOutcome> gitLabResult = await gitLabHttpClient.ValidateTokenAsync(
                     query.ApiBaseUrl, query.Token, cancellationToken);
                 return gitLabResult.Match(
-                    validation => Result<Response>.Ok(new Response(
-                        IsValid: validation.IsValid,
-                        IsAuthFailure: validation.IsAuthFailure,
-                        ScopesVerified: validation.ScopesVerified,
-                        MissingScopes: validation.MissingScopes,
-                        AccountName: validation.AccountName)),
+                    outcome => Result<Response>.Ok(MapOutcomeToResponse(outcome)),
                     error => Result<Response>.Fail(error));
             }
 
