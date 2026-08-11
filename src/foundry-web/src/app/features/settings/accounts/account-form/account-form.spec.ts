@@ -793,8 +793,9 @@ describe('AccountFormComponent', () => {
     expect(emitted.length).toBe(1);
     expect(emitted[0].providerType).toBe('GitHub');
 
-    // Act — switch to GitLab (same token, same baseUrl changes via default, but let's use paste to re-trigger)
-    // Change provider: _onProviderChange calls _clearResolution, so we need to re-blur
+    // Act — switch to GitLab. _onProviderChange calls _clearResolution (nulling the
+    // dedup pair), so re-entering the same token and re-blurring replays resolution
+    // under the new provider; the providerType now differs even if token/baseUrl match.
     const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
     const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
     gitlabRadio.click();
