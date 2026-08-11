@@ -25,6 +25,7 @@ jobs:
             api:
               - 'src/**/*.cs'
               - 'src/**/*.csproj'
+              - 'src/Foundry.WebApi/openapi/**'
               - 'tests/**'
               - 'Directory.Build.props'
               - 'Directory.Packages.props'
@@ -43,6 +44,10 @@ jobs:
       - name: Build
         if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
         run: dotnet build --no-restore
+
+      - name: Verify OpenAPI document is up to date
+        if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
+        run: git diff --exit-code -- src/Foundry.WebApi/openapi/v1.json
 
       - name: Test
         if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
@@ -73,6 +78,13 @@ jobs:
       - name: Install dependencies
         if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
         run: npm ci
+        working-directory: src/foundry-web
+
+      - name: Verify generated API types are up to date
+        if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
+        run: |
+          npm run generate:api
+          git diff --exit-code -- src/app/api/schema.ts
         working-directory: src/foundry-web
 
       - name: Build
