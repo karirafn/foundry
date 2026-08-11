@@ -1,6 +1,7 @@
 import { Injectable, Signal, WritableSignal, effect, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { TimeoutError, firstValueFrom } from 'rxjs';
+import { timeout } from 'rxjs/operators';
 import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, NamespaceConflictResponse, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
@@ -8,6 +9,7 @@ import { AccountPresenceService } from '../../../core/services/account-presence.
 const API_BASE = '/api/accounts';
 const PROVIDERS_API_BASE = '/api/providers';
 const TOAST_ALL_RETAINED = 'Token updated. All repositories retained their access.';
+const MUTATION_TIMEOUT_MS = 60_000;
 
 @Injectable({ providedIn: 'root' })
 export class AccountService {
@@ -91,42 +93,53 @@ export class AccountService {
     this._affectedRepositoriesSignal.set(null);
     this._conflictsSignal.set([]);
     this._savingSignal.set(true);
+    this._srAnnouncementSignal.set('Adding account. Contacting the provider — this may take a few seconds.');
 
-    this._http.post<CredentialCreationResult>(API_BASE, request).subscribe({
-      next: (result) => {
-        this._accountsSignal.update(accounts => [...accounts, result.credential]);
-        this._affectedRepositoriesSignal.set(result.affectedRepositories);
-        if (result.affectedRepositories.length > 0) {
-          this._srAnnouncementSignal.set(
-            `Account added. ${result.affectedRepositories.length} repositories affected — review below.`
-          );
-        }
-        this._savingSignal.set(false);
-        this._saveSuccessSignal.set(true);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        if (err.status === 409 && this._isNamespaceConflictResponse(err.error)) {
-          const conflictBody = err.error as NamespaceConflictResponse;
-          this._conflictsSignal.set(conflictBody.conflicts);
-          this._srAnnouncementSignal.set(
-            `${conflictBody.conflicts.length} namespace conflict${conflictBody.conflicts.length === 1 ? '' : 's'} — select namespaces to transfer and retry.`
-          );
+    this._http.post<CredentialCreationResult>(API_BASE, request)
+      .pipe(timeout({ each: MUTATION_TIMEOUT_MS }))
+      .subscribe({
+        next: (result) => {
+          this._accountsSignal.update(accounts => [...accounts, result.credential]);
+          this._affectedRepositoriesSignal.set(result.affectedRepositories);
+          if (result.affectedRepositories.length > 0) {
+            this._srAnnouncementSignal.set(
+              `Account added. ${result.affectedRepositories.length} repositories affected — review below.`
+            );
+          } else {
+            this._srAnnouncementSignal.set('Account added.');
+          }
           this._savingSignal.set(false);
-          return;
-        }
-        if (err.status === 422 && this._isTakeoverValidationResponse(err.error)) {
-          const body = err.error as TakeoverValidationResponse;
-          this._saveErrorSignal.set(`Invalid namespaces for takeover: ${body.invalidNamespaces.join(', ')}.`);
+          this._saveSuccessSignal.set(true);
+        },
+        error: (err: HttpErrorResponse | TimeoutError) => {
+          console.error(err);
+          if (!(err instanceof TimeoutError)) {
+            if (err.status === 409 && this._isNamespaceConflictResponse(err.error)) {
+              const conflictBody = err.error as NamespaceConflictResponse;
+              this._conflictsSignal.set(conflictBody.conflicts);
+              this._srAnnouncementSignal.set(
+                `${conflictBody.conflicts.length} namespace conflict${conflictBody.conflicts.length === 1 ? '' : 's'} — select namespaces to transfer and retry.`
+              );
+              this._savingSignal.set(false);
+              return;
+            }
+            if (err.status === 422 && this._isTakeoverValidationResponse(err.error)) {
+              const body = err.error as TakeoverValidationResponse;
+              const message = `Invalid namespaces for takeover: ${body.invalidNamespaces.join(', ')}.`;
+              this._saveErrorSignal.set(message);
+              this._srAnnouncementSignal.set(`Could not add account: ${message}`);
+              this._savingSignal.set(false);
+              this._saveSuccessSignal.set(false);
+              return;
+            }
+          }
+          const message = this._extractErrorMessage(err);
+          this._saveErrorSignal.set(message);
+          this._srAnnouncementSignal.set(`Could not add account: ${message}`);
           this._savingSignal.set(false);
           this._saveSuccessSignal.set(false);
-          return;
-        }
-        this._saveErrorSignal.set(this._extractErrorMessage(err));
-        this._savingSignal.set(false);
-        this._saveSuccessSignal.set(false);
-      },
-    });
+        },
+      });
   }
 
   updateAccount(id: string, request: UpdateAccountRequest): void {
@@ -134,30 +147,36 @@ export class AccountService {
     this._saveSuccessSignal.set(false);
     this._affectedRepositoriesSignal.set(null);
     this._savingSignal.set(true);
+    this._srAnnouncementSignal.set('Updating account. Contacting the provider — this may take a few seconds.');
 
-    this._http.put<CredentialUpdateResult>(`${API_BASE}/${id}`, request).subscribe({
-      next: (result) => {
-        this._accountsSignal.update(accounts =>
-          accounts.map(a => a.id === result.credential.id ? result.credential : a)
-        );
-        this._affectedRepositoriesSignal.set(result.affectedRepositories);
-        if (result.affectedRepositories.length === 0) {
-          this._toastService.show(TOAST_ALL_RETAINED);
-        } else {
-          this._srAnnouncementSignal.set(
-            `Token updated. ${result.affectedRepositories.length} repositories affected — review below.`
+    this._http.put<CredentialUpdateResult>(`${API_BASE}/${id}`, request)
+      .pipe(timeout({ each: MUTATION_TIMEOUT_MS }))
+      .subscribe({
+        next: (result) => {
+          this._accountsSignal.update(accounts =>
+            accounts.map(a => a.id === result.credential.id ? result.credential : a)
           );
-        }
-        this._savingSignal.set(false);
-        this._saveSuccessSignal.set(true);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._saveErrorSignal.set(this._extractErrorMessage(err));
-        this._savingSignal.set(false);
-        this._saveSuccessSignal.set(false);
-      },
-    });
+          this._affectedRepositoriesSignal.set(result.affectedRepositories);
+          if (result.affectedRepositories.length === 0) {
+            this._toastService.show(TOAST_ALL_RETAINED);
+            this._srAnnouncementSignal.set('Account updated.');
+          } else {
+            this._srAnnouncementSignal.set(
+              `Token updated. ${result.affectedRepositories.length} repositories affected — review below.`
+            );
+          }
+          this._savingSignal.set(false);
+          this._saveSuccessSignal.set(true);
+        },
+        error: (err: HttpErrorResponse | TimeoutError) => {
+          console.error(err);
+          const message = this._extractErrorMessage(err);
+          this._saveErrorSignal.set(message);
+          this._srAnnouncementSignal.set(`Could not update account: ${message}`);
+          this._savingSignal.set(false);
+          this._saveSuccessSignal.set(false);
+        },
+      });
   }
 
   clearAffectedRepositories(): void {
@@ -168,18 +187,24 @@ export class AccountService {
   deleteAccount(id: string): void {
     this._deleteErrorSignal.set(null);
     this._deletingSignal.set(true);
+    this._srAnnouncementSignal.set('Deleting account. Contacting the provider — this may take a few seconds.');
 
-    this._http.delete(`${API_BASE}/${id}`).subscribe({
-      next: () => {
-        this._accountsSignal.update(accounts => accounts.filter(a => a.id !== id));
-        this._deletingSignal.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._deleteErrorSignal.set(this._extractErrorMessage(err));
-        this._deletingSignal.set(false);
-      },
-    });
+    this._http.delete(`${API_BASE}/${id}`)
+      .pipe(timeout({ each: MUTATION_TIMEOUT_MS }))
+      .subscribe({
+        next: () => {
+          this._accountsSignal.update(accounts => accounts.filter(a => a.id !== id));
+          this._srAnnouncementSignal.set('Account deleted.');
+          this._deletingSignal.set(false);
+        },
+        error: (err: HttpErrorResponse | TimeoutError) => {
+          console.error(err);
+          const message = this._extractErrorMessage(err);
+          this._deleteErrorSignal.set(message);
+          this._srAnnouncementSignal.set(`Could not delete account: ${message}`);
+          this._deletingSignal.set(false);
+        },
+      });
   }
 
   getTokenRequirements(provider: ProviderType): Promise<TokenRequirements> {
@@ -199,11 +224,15 @@ export class AccountService {
     return request;
   }
 
-  private _extractErrorMessage(err: HttpErrorResponse): string {
-    if (typeof err.error === 'string' && err.error) {
-      return err.error;
+  private _extractErrorMessage(err: HttpErrorResponse | TimeoutError | unknown): string {
+    if (err instanceof TimeoutError) {
+      return 'The request timed out. Please try again.';
     }
-    return err.message;
+    const httpErr = err as HttpErrorResponse;
+    if (typeof httpErr.error === 'string' && httpErr.error) {
+      return httpErr.error;
+    }
+    return httpErr.message;
   }
 
   private _isNamespaceConflictResponse(body: unknown): boolean {
