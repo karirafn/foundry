@@ -183,36 +183,36 @@
     gap: var(--fd-spacing-md);
   }
 
-  &__retry-failed-btn {
+  &__retry-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 44px;
     background: transparent;
-    border: 1px solid var(--fd-state-failed);
+    border: 1px solid var(--fd-border-default);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-error);
+    color: var(--fd-text-primary);
     cursor: pointer;
     font-size: 0.875rem;
     padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
 
     &:hover {
-      background: var(--fd-bg-error-subtle);
+      background: var(--fd-bg-card-hover);
     }
 
     &:disabled {
       cursor: not-allowed;
-      color: var(--fd-text-error-muted);
-      border-color: var(--fd-text-error-muted);
+      color: var(--fd-text-tertiary);
+      border-color: var(--fd-text-tertiary);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-state-failed);
+      outline: 2px solid var(--fd-text-link);
       outline-offset: 2px;
     }
   }
 
-  &__retry-failed-error {
+  &__retry-error {
     align-self: center;
     color: var(--fd-text-error);
     font-size: 0.875rem;

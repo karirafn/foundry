@@ -22,6 +22,7 @@ import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { providerTerminology } from '../../../shared/utils/provider.util';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
+import { RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
 @Component({
   selector: 'fd-issue-detail',
@@ -216,24 +217,24 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
           </div>
         }
 
-        @if (d.state === 'failed' || d.state === 'continuable_failed' || d.state === 'revision_failed') {
+        @if (_isRetryable(d.state)) {
           <div class="issue-detail__actions">
             <button
-              class="issue-detail__retry-failed-btn"
+              class="issue-detail__retry-btn"
               type="button"
-              [disabled]="_issueService.retryingFailed()"
-              [attr.aria-label]="'Retry failed issue #' + d.issueNumber"
-              (click)="retryFailed(d.id)"
-            >{{ _issueService.retryingFailed() ? 'Retrying Issue...' : 'Retry Issue' }}</button>
+              [disabled]="_issueService.retrying()"
+              [attr.aria-label]="'Retry issue #' + d.issueNumber"
+              (click)="retryIssue(d.id)"
+            >{{ _issueService.retrying() ? 'Retrying Issue...' : 'Retry Issue' }}</button>
             <span
-              class="issue-detail__retry-failed-error"
+              class="issue-detail__retry-error"
               role="alert"
-            >{{ _issueService.retryFailedError() ?? '' }}</span>
+            >{{ _issueService.retryError() ?? '' }}</span>
             <span
               class="issue-detail__retry-success-announcement sr-only"
               aria-live="polite"
               aria-atomic="true"
-            >{{ _issueService.retryFailedSuccess() ?? '' }}</span>
+            >{{ _issueService.retrySuccess() ?? '' }}</span>
           </div>
         }
       </div>
@@ -290,8 +291,12 @@ export class IssueDetailComponent {
     });
   }
 
-  retryFailed(id: string): void {
-    this._issueService.retryFailed(id);
+  retryIssue(id: string): void {
+    this._issueService.retryIssue(id);
+  }
+
+  protected _isRetryable(state: string): boolean {
+    return RETRYABLE_STATES.has(state as Parameters<typeof RETRYABLE_STATES.has>[0]);
   }
 
   protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {
