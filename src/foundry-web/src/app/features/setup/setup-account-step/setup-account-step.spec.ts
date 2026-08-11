@@ -948,6 +948,112 @@ describe('SetupAccountStepComponent', () => {
     expect(statusRegion?.textContent).not.toContain('Provider switched');
   });
 
+  // Step 6: Saving → label is Creating..., fd-spinner present, aria-disabled="true", NOT natively disabled
+  it('should show Creating... label, an fd-spinner, aria-disabled="true", and no native disabled while saving', () => {
+    // Arrange — get the component into saving state by clicking Create after resolving
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+    fixture.detectChanges();
+
+    // Act — click Create; do NOT flush the POST yet (saving state is active)
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert — label
+    expect(btn.textContent).toContain('Creating...');
+
+    // Assert — spinner present inside the button
+    expect(btn.querySelector('fd-spinner')).toBeTruthy();
+
+    // Assert — aria-disabled="true" (focusable while saving)
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+
+    // Assert — NOT natively disabled
+    expect(btn.disabled).toBe(false);
+
+    // Cleanup
+    httpMock.expectOne('/api/accounts').flush(CREATED_ACCOUNT_RESULT);
+  });
+
+  // Step 6: Form not yet valid (and not saving) → native disabled, no aria-disabled
+  it('should have native disabled and no aria-disabled when form is not yet valid and not saving', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — native disabled when form is invalid and not saving
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  // Step 6: double-request guard — clicking twice while saving fires createAccount exactly once
+  it('should fire the create request exactly once when the Create button is clicked twice while saving', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+    fixture.detectChanges();
+
+    // Act — click Create twice (second click should be a no-op guard)
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert — exactly one POST to /api/accounts
+    const reqs = httpMock.match('/api/accounts');
+    expect(reqs.length).toBe(1);
+
+    // Cleanup
+    reqs[0].flush(CREATED_ACCOUNT_RESULT);
+  });
+
+  // Step 6: aria-disabled="true" styling parity — attribute present when saving
+  it('should have aria-disabled="true" on create button while saving (dimmed/not-allowed treatment)', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
+    fixture.detectChanges();
+
+    // Act — click Create
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert — aria-disabled attribute present (CSS rule targets [aria-disabled="true"])
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+
+    // Cleanup
+    httpMock.expectOne('/api/accounts').flush(CREATED_ACCOUNT_RESULT);
+  });
+
   // Finding 4: unknown kind — fallback @default renders error message, Create disabled
   it('should render a fallback error message and keep Create disabled when kind is unknown', () => {
     // Arrange
@@ -997,6 +1103,62 @@ describe('SetupAccountStepComponent', () => {
     const statusRegion = el.querySelector('[role="status"]');
     const srOnly = statusRegion?.querySelector('.sr-only');
     expect(srOnly?.textContent?.trim()).toBe('Warning:');
+  });
+
+  // FIX 4: root container exposes role="region" and aria-label so AT can track aria-busy
+  it('should expose role="region" and aria-label="Add account" on the root container', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const container = el.querySelector('.setup-account-step') as HTMLElement;
+    expect(container.getAttribute('role')).toBe('region');
+    expect(container.getAttribute('aria-label')).toBe('Add account');
+  });
+
+  it('should set aria-busy="true" on the root container while saving', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    httpMock.expectOne('/api/accounts/validate-token').flush({
+      kind: 'authenticated', missingScopes: [], accountName: 'octocat', detectedProvider: null,
+    });
+    fixture.detectChanges();
+
+    // Act — click Create; do NOT flush the POST so saving state stays active
+    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+
+    // Assert
+    const container = el.querySelector('.setup-account-step') as HTMLElement;
+    expect(container.getAttribute('aria-busy')).toBe('true');
+
+    // Cleanup
+    httpMock.expectOne('/api/accounts').flush({
+      credential: CREATED_ACCOUNT,
+      affectedRepositories: [],
+    });
+  });
+
+  it('should not set aria-busy on the root container when not saving', () => {
+    // Arrange / Act
+    const { fixture } = setup();
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const container = el.querySelector('.setup-account-step') as HTMLElement;
+    expect(container.getAttribute('aria-busy')).toBeNull();
   });
 
   it('should include a visually-hidden "Error:" prefix in authenticationFailed error message', () => {

@@ -19,13 +19,6 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
           Manage provider accounts for repository monitoring.
         </p>
 
-        <!-- Persistent live region: always mounted so announcements are heard by screen readers. -->
-        <div
-          class="accounts-settings__sr-announcer sr-only"
-          aria-live="polite"
-          aria-atomic="true"
-        >{{ accountService.srAnnouncement() }}</div>
-
         @switch (_accountView().kind) {
           @case ('list') {
             @if (accountService.affectedRepositories(); as affected) {
@@ -40,6 +33,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
               [accounts]="accountService.accounts()"
               [loading]="accountService.loading()"
               [error]="_accountError()"
+              [deletingAccountId]="accountService.deletingAccountId()"
               (add)="onAddAccount()"
               (edit)="onEditAccount($event)"
               (delete)="onDeleteAccount($event)"
