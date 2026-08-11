@@ -10,10 +10,12 @@ namespace Foundry.Modules.Settings.Features;
 
 internal sealed class SettingsSeeder(IServiceScopeFactory scopeFactory) : IHostedLifecycleService
 {
+    private const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
+
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
         // Skip DB seeding when the build-time OpenAPI doc generation tool runs the app entry point.
-        if (Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider")
+        if (Assembly.GetEntryAssembly()?.GetName().Name == DocGenerationEntryAssemblyName)
         {
             return;
         }

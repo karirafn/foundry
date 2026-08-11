@@ -18,10 +18,13 @@ export type TokenRequirements = Schemas['TokenRequirements'];
 
 // Client-side refinements layered over the generated string wire type.
 // The API returns these fields as open strings so they are intentionally not generated.
+// ProviderType refines CredentialSummary.provider.
+// AffectedRepositoryStatus refines AffectedRepository.previousStatus and AffectedRepository.newStatus.
+// Update these unions when the corresponding C# contract values change.
 export type ProviderType = 'GitHub' | 'GitLab';
 export type AffectedRepositoryStatus = 'eligible' | 'ineligible' | 'unreachable';
 
-export function affectedStatusLabel(status: AffectedRepositoryStatus): string {
+export function affectedStatusLabel(status: AffectedRepositoryStatus | string): string {
   switch (status) {
     case 'eligible':
       return 'Eligible';
@@ -29,5 +32,7 @@ export function affectedStatusLabel(status: AffectedRepositoryStatus): string {
       return 'Ineligible';
     case 'unreachable':
       return 'Unable to verify branch protection';
+    default:
+      return status;
   }
 }

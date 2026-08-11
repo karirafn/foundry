@@ -66,6 +66,7 @@ jobs:
           filters: |
             web:
               - 'src/foundry-web/**'
+              - 'src/Foundry.WebApi/openapi/**'  # schema.ts is generated from v1.json
 
       - name: Setup Node
         if: github.event_name == 'push' || steps.changes.outputs.web == 'true'

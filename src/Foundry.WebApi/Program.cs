@@ -22,10 +22,11 @@ using Microsoft.AspNetCore.OpenApi;
 using Microsoft.EntityFrameworkCore;
 
 const string AngularDevServerPolicy = "AngularDevServer";
+const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
 
 // GetDocument.Insider is the build-time OpenAPI doc generation tool entry point.
 // When running under it, skip non-essential startup logic that requires a live database or filesystem.
-bool isDocGeneration = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
+bool isDocGeneration = Assembly.GetEntryAssembly()?.GetName().Name == DocGenerationEntryAssemblyName;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +66,10 @@ builder.Services.AddWorkersModule(builder.Configuration);
 builder.Services.AddSettingsModule();
 builder.Services.AddOpenApi(options =>
 {
+    // Qualifies nested schema types by their outermost declaring type (e.g. "OuterSimpleName").
+    // Collision-free as long as no two distinct nested endpoint DTO types share the same
+    // outermost.Name + simpleName combination. A future collision would surface immediately
+    // in the regenerated v1.json diff caught by CI.
     options.CreateSchemaReferenceId = (JsonTypeInfo jsonTypeInfo) =>
     {
         string? defaultId = OpenApiOptions.CreateDefaultSchemaReferenceId(jsonTypeInfo);
