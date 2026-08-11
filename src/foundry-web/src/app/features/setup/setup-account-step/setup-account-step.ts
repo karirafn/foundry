@@ -167,8 +167,6 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
                 </span>
               }
             }
-          } @else if (_switchNotice()) {
-            <span class="setup-account-step__validation-message">{{ _switchNotice() }}</span>
           }
         </div>
 
@@ -216,9 +214,6 @@ export class SetupAccountStepComponent {
   private readonly _pendingResolution: WritableSignal<boolean> = signal(false);
 
   private readonly _hasSaved: WritableSignal<boolean> = signal(false);
-
-  /** Transient notice shown in the live region after a provider switch (cleared on next token input). */
-  protected readonly _switchNotice: WritableSignal<string> = signal('');
 
   /** True only when the last resolved triple still matches current inputs — hides stale results after edits. */
   protected readonly _resultVisible: Signal<boolean> = computed(() => {
@@ -323,7 +318,6 @@ export class SetupAccountStepComponent {
 
   onTokenInput(value: string): void {
     this._token.set(value);
-    this._switchNotice.set('');
     this._clearResolution();
   }
 
