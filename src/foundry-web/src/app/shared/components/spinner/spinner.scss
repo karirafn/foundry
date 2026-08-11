@@ -1,0 +1,16 @@
+.spinner {
+  animation: fd-spinner-spin 1s linear infinite;
+  border: 2px solid var(--fd-border-default);
+  border-radius: 50%;
+  border-top-color: var(--fd-text-link);
+  display: inline-block;
+  flex-shrink: 0;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes fd-spinner-spin {
+  to { transform: rotate(360deg); }
+}
