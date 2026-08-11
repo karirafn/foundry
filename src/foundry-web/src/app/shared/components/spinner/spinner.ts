@@ -3,7 +3,6 @@ import { ChangeDetectionStrategy, Component, input, InputSignal } from '@angular
 @Component({
   selector: 'fd-spinner',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  standalone: true,
   template: `
     <span class="spinner" aria-hidden="true" [style.width.px]="size()" [style.height.px]="size()"></span>
   `,
