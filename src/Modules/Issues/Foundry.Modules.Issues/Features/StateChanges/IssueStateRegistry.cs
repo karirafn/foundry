@@ -18,6 +18,7 @@ internal static class IssueStateRegistry
         ["blocked"] = typeof(BlockedIssue),
         ["in_progress"] = typeof(InProgressIssue),
         ["review"] = typeof(ReviewIssue),
+        ["unchanged"] = typeof(UnchangedIssue),
         ["failed"] = typeof(FailedIssue),
         ["continuable_failed"] = typeof(ContinuableFailedIssue),
         ["continuation_queued"] = typeof(ContinuationQueuedIssue),
@@ -29,7 +30,6 @@ internal static class IssueStateRegistry
     private static readonly FrozenDictionary<string, Type> ResolvedMap = new Dictionary<string, Type>
     {
         ["completed"] = typeof(CompletedIssue),
-        ["unchanged"] = typeof(UnchangedIssue),
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private static readonly FrozenDictionary<string, Type> AllMap = ActiveMap

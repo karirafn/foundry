@@ -11,5 +11,4 @@ export type IssueState =
   | 'completed'
   | 'revision_queued'
   | 'revision_in_progress'
-  | 'revision_failed'
-  | 'ineligible';
+  | 'revision_failed';

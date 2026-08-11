@@ -110,21 +110,6 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
               </div>
             }
 
-            @if (d.state === 'ineligible') {
-              <div class="issue-detail__field">
-                <span class="issue-detail__field-key" id="eligibility-violations-label">Eligibility Violations</span>
-                @if (s.violations?.length) {
-                  <ul class="issue-detail__violations" aria-labelledby="eligibility-violations-label">
-                    @for (violation of s.violations!; track violation.rule) {
-                      <li class="issue-detail__violation">{{ violation.description }}</li>
-                    }
-                  </ul>
-                } @else {
-                  <span class="issue-detail__field-value">Eligibility details are unavailable</span>
-                }
-              </div>
-            }
-
             @if (s.completedAt) {
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Completed</span>
@@ -231,18 +216,6 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
           </div>
         }
 
-        @if (d.state === 'ineligible') {
-          <div class="issue-detail__actions">
-            <button
-              class="issue-detail__retry-eligibility-btn"
-              type="button"
-              [disabled]="_issueService.retryingEligibility()"
-              [attr.aria-label]="'Retry eligibility check for issue #' + d.issueNumber"
-              (click)="retryEligibility(d.id)"
-            >{{ _issueService.retryingEligibility() ? 'Retrying...' : 'Retry Eligibility Check' }}</button>
-          </div>
-        }
-
         @if (d.state === 'failed' || d.state === 'continuable_failed' || d.state === 'revision_failed') {
           <div class="issue-detail__actions">
             <button
@@ -315,10 +288,6 @@ export class IssueDetailComponent {
         }
       });
     });
-  }
-
-  retryEligibility(id: string): void {
-    this._issueService.retryEligibility(id);
   }
 
   retryFailed(id: string): void {
