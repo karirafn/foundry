@@ -231,7 +231,7 @@ public sealed class GetActiveIssueSummariesAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenResolvedStatesExist_ExcludesThemFromNullStatesResult()
+    public async Task WhenCompletedIssueExists_ExcludesItFromNullStatesResult()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -245,8 +245,10 @@ public sealed class GetActiveIssueSummariesAsync : IAsyncDisposable
             states: null,
             TestContext.Current.CancellationToken);
 
-        // Assert
-        result.ShouldHaveSingleItem();
-        result[0].State.ShouldBe("detected");
+        // Assert — completed is resolved and excluded; unchanged is active and included
+        result.Count.ShouldBe(2);
+        result.ShouldContain(s => s.State == "detected");
+        result.ShouldContain(s => s.State == "unchanged");
+        result.ShouldNotContain(s => s.State == "completed");
     }
 }

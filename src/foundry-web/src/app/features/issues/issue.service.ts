@@ -34,7 +34,6 @@ export class IssueService {
   readonly issueDetail: WritableSignal<IssueDetail | null> = signal(null);
   readonly detailLoading: WritableSignal<boolean> = signal(false);
   readonly initialLoading: WritableSignal<boolean> = signal(true);
-  readonly retryingEligibility: WritableSignal<boolean> = signal(false);
   readonly retryingFailed: WritableSignal<boolean> = signal(false);
 
   private readonly _loadErrorSignal: WritableSignal<string | null> = signal(null);
@@ -79,8 +78,8 @@ export class IssueService {
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
     const all = this.issues();
-    // Resolved states never enter issues() — filtered in loadIssues/_upsertIssue —
-    // so this sort never encounters completed or unchanged.
+    // Resolved states (currently only `completed`) never enter issues() — filtered in
+    // loadIssues/_upsertIssue — so this sort never encounters them.
 
     // Build server-index map once so the comparator is O(1) per lookup (not O(n²) indexOf).
     const serverIndex = new Map<string, number>(all.map((issue, i) => [issue.id, i]));
@@ -117,9 +116,10 @@ export class IssueService {
   );
 
   // Read issues() (raw server order = DispatchOrderKey) — NOT sortedIssues().
-  // Step 2's bucket sort splits the queued chain across visual groups (continuation_queued
-  // lands in "In progress", queued/revision_queued land in "Waiting"), so sortedIssues()
-  // no longer reflects true server dispatch priority. Dispatch order must follow issues().
+  // The whole queued chain (queued, revision_queued, continuation_queued) sits in the Waiting
+  // bucket, but serverIndex preserves their dispatch priority within that bucket. Using
+  // sortedIssues() would still expose correct relative queue order within Waiting, but
+  // issues() is canonical because it is unaffected by any future group reclassifications.
   readonly eligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
     this.issues().filter(i =>
       QUEUED_TIER_STATES.has(i.state) &&
@@ -142,9 +142,7 @@ export class IssueService {
   });
 
   readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
-    this.sortedIssues().filter(i =>
-      i.state === 'ineligible' || this.selectedActiveStates().has(i.state)
-    )
+    this.sortedIssues().filter(i => this.selectedActiveStates().has(i.state))
   );
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
@@ -294,21 +292,6 @@ export class IssueService {
     this.detailLoading.set(true);
     this.expandedIssueId.set(id);
     this.loadDetail(id);
-  }
-
-  retryEligibility(id: string): void {
-    this.retryingEligibility.set(true);
-    this._http.post<void>(`/api/issues/${encodeURIComponent(id)}/retry-eligibility`, {}).subscribe({
-      next: () => {
-        this.retryingEligibility.set(false);
-        this.loadDetail(id);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this.retryingEligibility.set(false);
-        this._detailErrorSignal.set(LOAD_DETAIL_ERROR);
-      },
-    });
   }
 
   retryFailed(id: string): void {

@@ -183,34 +183,6 @@
     gap: var(--fd-spacing-md);
   }
 
-  &__retry-eligibility-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    background: transparent;
-    border: 1px solid var(--fd-state-ineligible);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-ineligible);
-    cursor: pointer;
-    font-size: 0.875rem;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
-
-    &:hover {
-      background: rgba(179, 89, 0, 0.1);
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-state-ineligible);
-      outline-offset: 2px;
-    }
-  }
-
   &__retry-failed-btn {
     display: inline-flex;
     align-items: center;

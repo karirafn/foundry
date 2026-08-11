@@ -1,9 +1,23 @@
+@keyframes fd-card-pulse-working {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes fd-card-pulse-ready {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 .issue-card {
-  background: var(--fd-bg-card);
+  --fd-card-base: var(--fd-bg-card);
+  --fd-card-accent: transparent;
+
+  background: color-mix(in srgb, var(--fd-card-accent) 8%, var(--fd-card-base));
   border: 1px solid var(--fd-border-default);
   border-radius: var(--fd-radius-md);
   padding: var(--fd-spacing-lg);
   cursor: pointer;
+  position: relative;
   transition: background 150ms ease, border-color 150ms ease;
   outline: none;
   font: inherit;
@@ -11,10 +25,39 @@
   text-align: left;
   width: 100%;
 
+  &::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 3px;
+    background: var(--fd-card-accent);
+    border-start-start-radius: calc(var(--fd-radius-md) - 1px);
+    border-end-start-radius: calc(var(--fd-radius-md) - 1px);
+    pointer-events: none;
+  }
+
   &:hover,
   &:focus-visible {
-    background: var(--fd-bg-card-hover);
+    --fd-card-base: var(--fd-bg-card-hover);
+
     border-color: #484f58;
+  }
+
+  &--working {
+    --fd-card-accent: var(--fd-accent-working);
+
+    &::before {
+      animation: fd-card-pulse-working 1.5s ease-in-out infinite;
+    }
+  }
+
+  &--ready {
+    --fd-card-accent: var(--fd-accent-ready);
+
+    &::before {
+      animation: fd-card-pulse-ready 3s ease-in-out infinite;
+    }
   }
 
   &:focus-visible {
@@ -125,7 +168,7 @@
   }
 
   &__activity {
-    color: var(--fd-state-live);
+    color: var(--fd-text-activity);
     font-size: 0.75rem;
   }
 
