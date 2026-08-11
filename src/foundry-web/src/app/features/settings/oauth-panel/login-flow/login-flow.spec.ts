@@ -29,7 +29,7 @@ describe('LoginFlowComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const spinner = el.querySelector('.login-flow__spinner');
+      const spinner = el.querySelector('fd-spinner');
 
       // Assert
       expect(spinner).toBeTruthy();
@@ -298,7 +298,7 @@ describe('LoginFlowComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const spinner = el.querySelector('.login-flow__spinner');
+      const spinner = el.querySelector('fd-spinner');
 
       // Assert
       expect(spinner).toBeTruthy();
