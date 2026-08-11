@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -47,7 +49,7 @@ internal static class ValidateToken
         }
     }
 
-    internal sealed record RequestBody(string Token, string BaseUrl, string? ProviderType);
+    internal sealed record RequestBody(string Token, string BaseUrl, [property: JsonRequired] string ProviderType);
 
     internal static class Endpoint
     {
@@ -78,7 +80,7 @@ internal static class ValidateToken
                         : GitHubCredential.DeriveApiBaseUrl(parsedBaseUrl);
 
                     Result<Response> result = await handler.HandleAsync(
-                        new Query(body.Token, apiBaseUrl, body.ProviderType!),
+                        new Query(body.Token, apiBaseUrl, body.ProviderType),
                         cancellationToken);
 
                     return result.Match<Results<Ok<Response>, BadRequest<string>>>(

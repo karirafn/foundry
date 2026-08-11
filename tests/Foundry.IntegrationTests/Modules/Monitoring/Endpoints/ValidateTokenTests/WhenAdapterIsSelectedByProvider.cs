@@ -31,7 +31,7 @@ public sealed class WhenAdapterIsSelectedByProvider
         });
         using HttpClient client = factory.CreateClient();
 
-        object body = new { token = "ghp_test", baseUrl = "https://api.github.com", providerType = "github" };
+        object body = new { token = "ghp_test", baseUrl = "https://api.github.com", providerType = "GitHub" };
 
         // Act
         HttpResponseMessage response = await client.PostAsJsonAsync(
@@ -61,7 +61,7 @@ public sealed class WhenAdapterIsSelectedByProvider
         });
         using HttpClient client = factory.CreateClient();
 
-        object body = new { token = "glpat_test", baseUrl = "https://gitlab.com", providerType = "gitlab" };
+        object body = new { token = "glpat_test", baseUrl = "https://gitlab.com", providerType = "GitLab" };
 
         // Act
         HttpResponseMessage response = await client.PostAsJsonAsync(

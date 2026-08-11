@@ -775,6 +775,43 @@ describe('AccountFormComponent', () => {
     expect(emitted?.providerType).toBe('GitLab');
   });
 
+  // Cycle 37e: changing only provider (same token + baseUrl) triggers a fresh validateToken emit
+  it('should emit validateToken with new providerType when only the provider changes (same token and baseUrl)', () => {
+    // Arrange — start with GitHub selected, resolve once
+    const { el, component, fixture } = setup({ account: null });
+    const emitted: Array<{ token: string; baseUrl: string; providerType: string }> = [];
+    component.validateToken.subscribe((v: { token: string; baseUrl: string; providerType: string }) => { emitted.push(v); });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Confirm first emit used GitHub
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].providerType).toBe('GitHub');
+
+    // Act — switch to GitLab (same token, same baseUrl changes via default, but let's use paste to re-trigger)
+    // Change provider: _onProviderChange calls _clearResolution, so we need to re-blur
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+
+    // Set token back (cleared by provider change) and blur to trigger resolution with GitLab
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — a second emit with GitLab providerType was produced
+    expect(emitted.length).toBe(2);
+    expect(emitted[1].providerType).toBe('GitLab');
+  });
+
   // Cycle 38: edit mode — token-on-file panel shown when hasToken + name
   it('should show token-on-file panel in edit mode when account has token', () => {
     // Arrange
