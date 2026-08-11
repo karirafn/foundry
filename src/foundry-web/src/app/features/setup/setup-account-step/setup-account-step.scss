@@ -168,6 +168,26 @@ $text-warning: #d29922;
     font-weight: 600;
   }
 
+  &__switch-provider-btn {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    color: var(--fd-text-link);
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) 0;
+    text-decoration: underline;
+
+    &:hover {
+      opacity: 0.8;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
   &__save-error {
     color: var(--fd-text-error);
     font-size: 0.875rem;

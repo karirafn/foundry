@@ -27,6 +27,7 @@ import {
   TokenValidationResult,
   TokenValidationKind,
   UpdateAccountRequest,
+  narrowTokenValidationKind,
   providerDisplayName,
 } from '../account.model';
 import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
@@ -204,7 +205,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
                 <span class="account-form__validation-block">
                   <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
                   <span class="account-form__validation-message account-form__validation-message--warning">
-                    Missing required scopes: {{ result.missingScopes.join(', ') }}
+                    <span class="sr-only">Warning: </span>Missing required scopes: {{ result.missingScopes.join(', ') }}
                   </span>
                 </span>
               }
@@ -213,7 +214,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
               <span class="account-form__validation-block">
                 <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
                 <span class="account-form__validation-message account-form__validation-message--warning">
-                  Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
+                  <span class="sr-only">Warning: </span>Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
                 </span>
               </span>
             }
@@ -221,7 +222,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
               <span class="account-form__validation-block">
                 <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
                 <span class="account-form__validation-message account-form__validation-message--error">
-                  Authentication failed — check that the token is correct
+                  <span class="sr-only">Error: </span>Authentication failed — check that the token is correct
                 </span>
               </span>
             }
@@ -229,7 +230,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
               <span class="account-form__validation-block">
                 <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
                 <span class="account-form__validation-message account-form__validation-message--error">
-                  Token accepted, but the account identity could not be resolved from the provider
+                  <span class="sr-only">Error: </span>Token accepted, but the account identity could not be resolved from the provider
                 </span>
               </span>
             }
@@ -237,7 +238,20 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
               <span class="account-form__validation-block">
                 <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
                 <span class="account-form__validation-message account-form__validation-message--error">
-                  This looks like a {{ _providerDisplayName(result.detectedProvider) }} token, but {{ _provider() }} is selected. Switch the provider to {{ _providerDisplayName(result.detectedProvider) }}, or check the Base URL.
+                  <span class="sr-only">Error: </span>
+                  @if (_isEditMode()) {
+                    This looks like a {{ _providerDisplayName(result.detectedProvider) }} token. Verify you are using a {{ _provider() }} token, or check the Base URL.
+                  } @else {
+                    This looks like a {{ _providerDisplayName(result.detectedProvider) }} token, but {{ _provider() }} is selected. Switch the provider to {{ _providerDisplayName(result.detectedProvider) }}, or check the Base URL.
+                  }
+                </span>
+              </span>
+            }
+            @default {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  <span class="sr-only">Error: </span>Token validation returned an unexpected result — please try again.
                 </span>
               </span>
             }
@@ -481,7 +495,7 @@ export class AccountFormComponent implements OnInit {
   });
 
   private static _isSaveEligible(result: TokenValidationResult): boolean {
-    const kind = result.kind as TokenValidationKind;
+    const kind = narrowTokenValidationKind(result);
     if (kind === 'scopesUnverifiable') {
       return true;
     }
@@ -636,8 +650,8 @@ export class AccountFormComponent implements OnInit {
     this.validateToken.emit({ token, baseUrl, providerType });
   }
 
-  protected _kindOf(result: TokenValidationResult): TokenValidationKind {
-    return result.kind as TokenValidationKind;
+  protected _kindOf(result: TokenValidationResult): TokenValidationKind | 'unknown' {
+    return narrowTokenValidationKind(result);
   }
 
   protected _providerDisplayName(token: string | null): string {

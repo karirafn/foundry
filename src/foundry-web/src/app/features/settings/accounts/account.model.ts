@@ -44,16 +44,32 @@ export function affectedStatusLabel(status: AffectedRepositoryStatus | string): 
   }
 }
 
-export function providerDisplayName(token: string | null): string {
-  switch (token) {
+const KNOWN_TOKEN_VALIDATION_KINDS: ReadonlySet<TokenValidationKind> = new Set<TokenValidationKind>([
+  'authenticated',
+  'authenticationFailed',
+  'scopesUnverifiable',
+  'identityUnresolved',
+  'providerMismatch',
+]);
+
+export function narrowTokenValidationKind(result: TokenValidationResult): TokenValidationKind | 'unknown' {
+  const kind = result.kind as string;
+  if (KNOWN_TOKEN_VALIDATION_KINDS.has(kind as TokenValidationKind)) {
+    return kind as TokenValidationKind;
+  }
+  return 'unknown';
+}
+
+export function providerDisplayName(provider: string | null): string {
+  switch (provider) {
     case 'github':
       return 'GitHub';
     case 'gitlab':
       return 'GitLab';
     default:
-      if (!token) {
+      if (!provider) {
         return '';
       }
-      return token.charAt(0).toUpperCase() + token.slice(1);
+      return provider.charAt(0).toUpperCase() + provider.slice(1);
   }
 }

@@ -1836,4 +1836,97 @@ describe('AccountFormComponent', () => {
     expect(providerDisplayName('bitbucket')).toBe('Bitbucket');
     expect(providerDisplayName(null)).toBe('');
   });
+
+  // Finding 4: unknown kind — fallback @default renders error message, Save disabled
+  it('should render a fallback error message and keep Save disabled when kind is unknown', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: null,
+      validationResult: {
+        kind: 'unknownKindFromFuture' as TokenValidationResult['kind'],
+        missingScopes: [],
+        accountName: null,
+        detectedProvider: null,
+      },
+    });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'some_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — a message is shown (not silent)
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent?.trim()).toBeTruthy();
+
+    // Assert — Save disabled
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Finding 5: warning variants have sr-only "Warning:" prefix
+  it('should include a visually-hidden "Warning:" prefix in scopesUnverifiable warning message', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const region = el.querySelector('#account-token-validation');
+    const srOnly = region?.querySelector('.sr-only');
+    expect(srOnly?.textContent?.trim()).toBe('Warning:');
+  });
+
+  it('should include a visually-hidden "Error:" prefix in authenticationFailed error message', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: AUTH_FAIL_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'bad_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const region = el.querySelector('#account-token-validation');
+    const srOnly = region?.querySelector('.sr-only');
+    expect(srOnly?.textContent?.trim()).toBe('Error:');
+  });
+
+  // Finding 6: edit-mode providerMismatch message has no switch instruction
+  it('should show providerMismatch message WITHOUT switch instruction in edit mode', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: MOCK_ACCOUNT, validationResult: PROVIDER_MISMATCH_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — error mentions provider names but NOT the switch instruction
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('GitLab');
+    expect(region?.textContent).not.toContain('Switch the provider');
+  });
+
+  it('should show providerMismatch message WITH switch instruction in add mode', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: PROVIDER_MISMATCH_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — switch instruction present in add mode
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('Switch the provider');
+  });
 });
