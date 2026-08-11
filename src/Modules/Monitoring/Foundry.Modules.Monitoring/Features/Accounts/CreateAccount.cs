@@ -144,17 +144,36 @@ internal static partial class CreateAccount
             }
 
             ValidateToken.Response tokenResponse = tokenSuccess.Value;
-            if (tokenResponse.Kind != ValidateToken.Kinds.Authenticated)
+
+            string? resolvedAccountName = tokenResponse.Kind switch
             {
-                return new Outcome.Failure(CredentialErrors.InvalidToken);
+                ValidateToken.Kinds.Authenticated when tokenResponse.MissingScopes.Count == 0
+                    => tokenResponse.AccountName,
+                ValidateToken.Kinds.ScopesUnverifiable
+                    => tokenResponse.AccountName,
+                _ => null,
+            };
+
+            if (resolvedAccountName is null)
+            {
+                Error kindError = tokenResponse.Kind switch
+                {
+                    ValidateToken.Kinds.Authenticated => CredentialErrors.InvalidToken,
+                    ValidateToken.Kinds.AuthenticationFailed => CredentialErrors.InvalidToken,
+                    ValidateToken.Kinds.IdentityUnresolved => CredentialErrors.UnresolvedIdentity,
+                    ValidateToken.Kinds.ProviderMismatch =>
+                        CredentialErrors.ProviderMismatch(tokenResponse.DetectedProvider ?? string.Empty),
+                    _ => CredentialErrors.InvalidToken,
+                };
+                return new Outcome.Failure(kindError);
             }
 
-            if (string.IsNullOrWhiteSpace(tokenResponse.AccountName))
+            if (string.IsNullOrWhiteSpace(resolvedAccountName))
             {
                 return new Outcome.Failure(CredentialErrors.UnresolvedIdentity);
             }
 
-            string accountName = tokenResponse.AccountName;
+            string accountName = resolvedAccountName;
 
             if (accountName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || accountName.Any(char.IsControl))
             {
