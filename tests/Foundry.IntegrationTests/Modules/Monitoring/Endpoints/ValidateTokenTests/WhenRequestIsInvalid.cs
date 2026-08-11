@@ -71,4 +71,20 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task WhenProviderTypeIsOmitted_ReturnsBadRequest()
+    {
+        // Arrange
+        object body = new { token = "some_token", baseUrl = "https://github.com" };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts/validate-token", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
 }

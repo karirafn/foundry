@@ -15,7 +15,7 @@ namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 internal static class ValidateToken
 {
-    internal sealed record Query(string Token, Uri ApiBaseUrl, string ProviderType = "github") : IQuery<Response>;
+    internal sealed record Query(string Token, Uri ApiBaseUrl, string ProviderType) : IQuery<Response>;
 
     internal sealed record Response(
         bool IsValid,
@@ -47,7 +47,7 @@ internal static class ValidateToken
         }
     }
 
-    internal sealed record RequestBody(string Token, string BaseUrl, string ProviderType = "github");
+    internal sealed record RequestBody(string Token, string BaseUrl, string? ProviderType);
 
     internal static class Endpoint
     {
@@ -78,7 +78,7 @@ internal static class ValidateToken
                         : GitHubCredential.DeriveApiBaseUrl(parsedBaseUrl);
 
                     Result<Response> result = await handler.HandleAsync(
-                        new Query(body.Token, apiBaseUrl, body.ProviderType),
+                        new Query(body.Token, apiBaseUrl, body.ProviderType!),
                         cancellationToken);
 
                     return result.Match<Results<Ok<Response>, BadRequest<string>>>(

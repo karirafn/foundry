@@ -46,7 +46,7 @@ public sealed class WhenScopesCannotBeVerified : IAsyncDisposable
     public async Task ReturnsOkWithScopesVerifiedFalseAndIsValidFalse()
     {
         // Arrange
-        object body = new { token = "glpat_unverifiable", baseUrl = "https://gitlab.com" };
+        object body = new { token = "glpat_unverifiable", baseUrl = "https://gitlab.com", providerType = "gitlab" };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(
