@@ -12,6 +12,7 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -29,7 +30,7 @@ public sealed class GetPullRequestStatusAsync
         string json = """{ "number": 123, "state": "closed", "merged": true, "merged_at": "2026-05-01T00:00:00Z" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -54,7 +55,7 @@ public sealed class GetPullRequestStatusAsync
         string json = """{ "number": 123, "state": "closed", "merged": false, "merged_at": null }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -79,7 +80,7 @@ public sealed class GetPullRequestStatusAsync
         string json = """{ "number": 123, "state": "open", "merged": false, "merged_at": null }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -103,7 +104,7 @@ public sealed class GetPullRequestStatusAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -126,7 +127,7 @@ public sealed class GetPullRequestStatusAsync
         string json = """{ "number": 123, "state": "open", "merged": false, "merged_at": null }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.GetPullRequestStatusAsync(
@@ -149,7 +150,7 @@ public sealed class GetPullRequestStatusAsync
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["X-RateLimit-Remaining"] = "0";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
@@ -171,7 +172,7 @@ public sealed class GetPullRequestStatusAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act

@@ -12,6 +12,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -49,7 +50,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson))));
+                    new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson)),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
         _client = _factory.CreateClient();
     }
@@ -130,7 +132,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing))));
+                    new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
         using HttpClient client = factory.CreateClient();
 

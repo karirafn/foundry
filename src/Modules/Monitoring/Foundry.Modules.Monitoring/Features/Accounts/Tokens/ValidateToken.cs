@@ -33,20 +33,62 @@ internal static class ValidateToken
     {
         public async Task<Result<Response>> HandleAsync(Query query, CancellationToken cancellationToken)
         {
-            Result<TokenValidationResult> result = string.Equals(
-                    query.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase)
-                ? await gitLabHttpClient.ValidateTokenAsync(query.ApiBaseUrl, query.Token, cancellationToken)
-                : await gitHubHttpClient.ValidateTokenAsync(query.ApiBaseUrl, query.Token, cancellationToken);
+            if (string.Equals(query.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase))
+            {
+                Result<TokenValidationResult> gitLabResult = await gitLabHttpClient.ValidateTokenAsync(
+                    query.ApiBaseUrl, query.Token, cancellationToken);
+                return gitLabResult.Match(
+                    validation => Result<Response>.Ok(new Response(
+                        IsValid: validation.IsValid,
+                        IsAuthFailure: validation.IsAuthFailure,
+                        ScopesVerified: validation.ScopesVerified,
+                        MissingScopes: validation.MissingScopes,
+                        AccountName: validation.AccountName)),
+                    error => Result<Response>.Fail(error));
+            }
 
-            return result.Match(
-                validation => Result<Response>.Ok(new Response(
-                    IsValid: validation.IsValid,
-                    IsAuthFailure: validation.IsAuthFailure,
-                    ScopesVerified: validation.ScopesVerified,
-                    MissingScopes: validation.MissingScopes,
-                    AccountName: validation.AccountName)),
+            Result<TokenValidationOutcome> gitHubResult = await gitHubHttpClient.ValidateTokenAsync(
+                query.ApiBaseUrl, query.Token, cancellationToken);
+            return gitHubResult.Match(
+                outcome => Result<Response>.Ok(MapOutcomeToResponse(outcome)),
                 error => Result<Response>.Fail(error));
         }
+
+        private static Response MapOutcomeToResponse(TokenValidationOutcome outcome) =>
+            outcome switch
+            {
+                TokenValidationOutcome.AuthenticatedOutcome auth => new Response(
+                    IsValid: auth.MissingScopes.Count == 0,
+                    IsAuthFailure: false,
+                    ScopesVerified: true,
+                    MissingScopes: auth.MissingScopes,
+                    AccountName: auth.AccountName),
+                TokenValidationOutcome.AuthenticationFailedOutcome => new Response(
+                    IsValid: false,
+                    IsAuthFailure: true,
+                    ScopesVerified: false,
+                    MissingScopes: [],
+                    AccountName: null),
+                TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => new Response(
+                    IsValid: false,
+                    IsAuthFailure: false,
+                    ScopesVerified: false,
+                    MissingScopes: [],
+                    AccountName: unverifiable.AccountName),
+                TokenValidationOutcome.IdentityUnresolvedOutcome => new Response(
+                    IsValid: false,
+                    IsAuthFailure: false,
+                    ScopesVerified: false,
+                    MissingScopes: [],
+                    AccountName: null),
+                TokenValidationOutcome.ProviderMismatchOutcome => new Response(
+                    IsValid: false,
+                    IsAuthFailure: false,
+                    ScopesVerified: false,
+                    MissingScopes: [],
+                    AccountName: null),
+                _ => throw new System.Diagnostics.UnreachableException($"Unhandled outcome: {outcome.GetType().Name}"),
+            };
     }
 
     internal sealed record RequestBody(string Token, string BaseUrl, [property: JsonRequired] string ProviderType);

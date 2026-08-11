@@ -12,6 +12,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -65,7 +66,8 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new TokenKeyedListingFakeHandler(TokenToListing))));
+                    new HttpClient(new TokenKeyedListingFakeHandler(TokenToListing)),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
         _client = _factory.CreateClient();
     }
@@ -150,7 +152,8 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
                 new GitHubHttpClient(
                     new HttpClient(new StaticListingFakeHandler(
                         System.Net.HttpStatusCode.OK,
-                        """[{"full_name":"octocat/repo","private":false,"permissions":{"push":true}}]"""))));
+                        """[{"full_name":"octocat/repo","private":false,"permissions":{"push":true}}]""")),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
         using HttpClient client = factory.CreateClient();
 

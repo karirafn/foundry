@@ -35,7 +35,7 @@ public sealed class DeriveAsync
 
     private static NamespaceDeriver BuildSut(HttpClient gitHubClient, HttpClient? gitLabClient = null)
     {
-        GitHubHttpClient gh = new(gitHubClient);
+        GitHubHttpClient gh = new(gitHubClient, NullLogger<GitHubHttpClient>.Instance);
         GitLabHttpClient gl = new(gitLabClient ?? new HttpClient(new NotCalledHandler()));
         return new NamespaceDeriver(gh, gl, NullLogger<NamespaceDeriver>.Instance);
     }

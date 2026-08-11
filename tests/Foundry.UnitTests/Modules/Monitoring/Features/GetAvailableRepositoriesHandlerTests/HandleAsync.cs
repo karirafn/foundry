@@ -14,6 +14,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -100,7 +101,7 @@ public sealed class HandleAsync : IAsyncDisposable
         HttpClient gitLabHttpClient = new(gitLabFake);
         return new GetAvailableRepositories.Handler(
             _dbContext,
-            new GitHubHttpClient(gitHubHttpClient),
+            new GitHubHttpClient(gitHubHttpClient, NullLogger<GitHubHttpClient>.Instance),
             new GitLabHttpClient(gitLabHttpClient));
     }
 
