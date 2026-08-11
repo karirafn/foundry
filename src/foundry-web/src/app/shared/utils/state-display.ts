@@ -1,4 +1,4 @@
-import { IssueState } from './issue-state';
+import { IssueState, WORKING_STATES } from './issue-state';
 
 export const STATE_LABELS: Record<IssueState, string> = {
   detected: 'DETECTED',
@@ -67,6 +67,16 @@ export const STATE_RAIL_LABELS: Record<IssueState, string> = {
   revision_in_progress: 'Revision In Progress',
   revision_failed: 'Revision Failed',
 };
+
+export function cardAccentFor(state: IssueState): 'working' | 'ready' | null {
+  if (WORKING_STATES.has(state)) {
+    return 'working';
+  }
+  if (state === 'review') {
+    return 'ready';
+  }
+  return null;
+}
 
 /**
  * CSS custom property name for per-state color, used by the filter rail dot indicator.
