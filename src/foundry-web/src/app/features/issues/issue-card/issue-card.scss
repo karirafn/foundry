@@ -1,3 +1,13 @@
+@keyframes fd-card-pulse-working {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes fd-card-pulse-ready {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 .issue-card {
   --fd-card-base: var(--fd-bg-card);
   --fd-card-accent: transparent;
@@ -7,12 +17,25 @@
   border-radius: var(--fd-radius-md);
   padding: var(--fd-spacing-lg);
   cursor: pointer;
+  position: relative;
   transition: background 150ms ease, border-color 150ms ease;
   outline: none;
   font: inherit;
   color: inherit;
   text-align: left;
   width: 100%;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 3px;
+    background: var(--fd-card-accent);
+    border-start-start-radius: calc(var(--fd-radius-md) - 1px);
+    border-end-start-radius: calc(var(--fd-radius-md) - 1px);
+    pointer-events: none;
+  }
 
   &:hover,
   &:focus-visible {
@@ -23,10 +46,18 @@
 
   &--working {
     --fd-card-accent: var(--fd-accent-working);
+
+    &::before {
+      animation: fd-card-pulse-working 1.5s ease-in-out infinite;
+    }
   }
 
   &--ready {
     --fd-card-accent: var(--fd-accent-ready);
+
+    &::before {
+      animation: fd-card-pulse-ready 3s ease-in-out infinite;
+    }
   }
 
   &:focus-visible {
