@@ -541,20 +541,6 @@ describe('IssueService', () => {
     expect(service.detailError()).toBe('Failed to load issue details');
   });
 
-  it('should set detailError to a fixed user-facing string when retryEligibility fails', () => {
-    // Arrange — no additional setup
-
-    // Act
-    service.retryEligibility('abc123');
-    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
-
-    // Assert — must not contain server-influenced text such as err.message
-    expect(service.detailError()).toBe('Failed to load issue details');
-  });
-
   it('should clear loadError on successful loadIssues', () => {
     // Arrange — cause an error first
     service.loadIssues();
@@ -598,72 +584,6 @@ describe('IssueService', () => {
     });
 
     // Assert
-    expect(service.detailError()).not.toBeNull();
-  });
-
-  // Cycle 13: retryEligibility posts to retry-eligibility endpoint and reloads detail
-  it('should POST to retry-eligibility endpoint when retryEligibility is called', () => {
-    // Arrange — no additional setup
-
-    // Act
-    service.retryEligibility('abc123');
-
-    // Assert
-    const req = httpMock.expectOne('/api/issues/abc123/retry-eligibility');
-    expect(req.request.method).toBe('POST');
-    req.flush(null);
-    httpMock.expectOne('/api/issues/abc123').flush({});
-  });
-
-  it('should reload issue detail after retryEligibility succeeds', () => {
-    // Arrange
-    service.retryEligibility('abc123');
-    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush(null);
-
-    // Act — loadDetail is triggered after success
-    const req = httpMock.expectOne('/api/issues/abc123');
-    req.flush({ ...mockSummary });
-
-    // Assert
-    expect(req.request.method).toBe('GET');
-  });
-
-  it('should set retryingEligibility to true before the retry request resolves', () => {
-    // Arrange — no additional setup
-
-    // Act
-    service.retryEligibility('abc123');
-
-    // Assert — signal is true while the request is in flight
-    expect(service.retryingEligibility()).toBe(true);
-    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush(null);
-    httpMock.expectOne('/api/issues/abc123').flush({});
-  });
-
-  it('should set retryingEligibility to false after retryEligibility succeeds', () => {
-    // Arrange
-    service.retryEligibility('abc123');
-
-    // Act
-    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush(null);
-    httpMock.expectOne('/api/issues/abc123').flush({});
-
-    // Assert
-    expect(service.retryingEligibility()).toBe(false);
-  });
-
-  it('should set retryingEligibility to false and detailError when retryEligibility fails', () => {
-    // Arrange
-    service.retryEligibility('abc123');
-
-    // Act
-    httpMock.expectOne('/api/issues/abc123/retry-eligibility').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
-
-    // Assert
-    expect(service.retryingEligibility()).toBe(false);
     expect(service.detailError()).not.toBeNull();
   });
 

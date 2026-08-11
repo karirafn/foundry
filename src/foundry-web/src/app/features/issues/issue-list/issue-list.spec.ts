@@ -603,6 +603,35 @@ describe('IssueListComponent', () => {
     expect(separator).toBeFalsy();
   });
 
+  // Decision 3 regression: separator renders at index liveIssueCount() for a mix of live + waiting cards
+  it('should place the separator between the last live card and the first waiting card', () => {
+    // Arrange — two live (in_progress, revision_in_progress), one waiting (queued), one detected
+    const live1: IssueSummary = { ...mockSummary, id: 'live-1', state: 'in_progress', issueNumber: 1 };
+    const live2: IssueSummary = { ...mockSummary, id: 'live-2', state: 'revision_in_progress', issueNumber: 2 };
+    const waiting: IssueSummary = { ...mockSummary, id: 'waiting-1', state: 'queued', issueNumber: 3 };
+    const detected: IssueSummary = { ...mockSummary, id: 'detected-1', state: 'detected', issueNumber: 4 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [live1, live2, waiting, detected]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — separator is present
+    const el = fixture.nativeElement as HTMLElement;
+    const grid = el.querySelector('.issue-list__grid') as HTMLElement;
+    const separator = grid.querySelector('hr.issue-list__separator');
+    expect(separator).toBeTruthy();
+
+    // Assert — exactly 2 issue-list__item divs precede the separator in the grid (liveIssueCount = 2)
+    const gridChildren = Array.from(grid.children);
+    const separatorIndex = gridChildren.findIndex((c) => c.classList.contains('issue-list__separator'));
+    const itemsBefore = gridChildren
+      .slice(0, separatorIndex)
+      .filter((c) => c.classList.contains('issue-list__item'));
+    expect(itemsBefore.length).toBe(2);
+  });
+
   // Cycle 10: sr-only span announces section boundary for screen readers
   it('should render an sr-only span announcing the section boundary when there are both live and non-live issues', () => {
     // Arrange

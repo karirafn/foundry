@@ -34,7 +34,6 @@ export class IssueService {
   readonly issueDetail: WritableSignal<IssueDetail | null> = signal(null);
   readonly detailLoading: WritableSignal<boolean> = signal(false);
   readonly initialLoading: WritableSignal<boolean> = signal(true);
-  readonly retryingEligibility: WritableSignal<boolean> = signal(false);
   readonly retryingFailed: WritableSignal<boolean> = signal(false);
 
   private readonly _loadErrorSignal: WritableSignal<string | null> = signal(null);
@@ -293,21 +292,6 @@ export class IssueService {
     this.detailLoading.set(true);
     this.expandedIssueId.set(id);
     this.loadDetail(id);
-  }
-
-  retryEligibility(id: string): void {
-    this.retryingEligibility.set(true);
-    this._http.post<void>(`/api/issues/${encodeURIComponent(id)}/retry-eligibility`, {}).subscribe({
-      next: () => {
-        this.retryingEligibility.set(false);
-        this.loadDetail(id);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this.retryingEligibility.set(false);
-        this._detailErrorSignal.set(LOAD_DETAIL_ERROR);
-      },
-    });
   }
 
   retryFailed(id: string): void {
