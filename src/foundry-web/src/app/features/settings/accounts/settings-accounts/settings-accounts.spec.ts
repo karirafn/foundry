@@ -557,6 +557,35 @@ describe('SettingsAccountsComponent', () => {
     expect(announcer?.textContent).toContain('affected');
   });
 
+  it('should pass deletingAccountId from accountService to fd-account-list', () => {
+    // Arrange
+    const account: AccountSummary = {
+      id: '1',
+      name: 'My Org',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+      namespaces: [],
+    };
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+    const accountService = TestBed.inject(AccountService);
+    accountService.deleteAccount(account.id);
+    fixture.detectChanges();
+
+    // Act — inspect the spinner rendered inside the delete button for that row
+    const el = fixture.nativeElement as HTMLElement;
+    const busyBtn = el.querySelector('[aria-label="Deleting account My Org…"]');
+
+    // Assert — busy label is rendered, confirming deletingAccountId flows through
+    expect(busyBtn).toBeTruthy();
+
+    // Flush the pending delete so afterEach verify() doesn't fail
+    httpMock.expectOne('/api/accounts/1').flush(null);
+  });
+
   it('should not call deleteAccount when confirmation is declined', () => {
     // Arrange
     const account: AccountSummary = {

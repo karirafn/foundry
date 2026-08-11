@@ -40,6 +40,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
               [accounts]="accountService.accounts()"
               [loading]="accountService.loading()"
               [error]="_accountError()"
+              [deletingAccountId]="accountService.deletingAccountId()"
               (add)="onAddAccount()"
               (edit)="onEditAccount($event)"
               (delete)="onDeleteAccount($event)"
