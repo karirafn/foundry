@@ -25,7 +25,9 @@ import {
   ProviderType,
   TokenRequirements,
   TokenValidationResult,
+  TokenValidationKind,
   UpdateAccountRequest,
+  providerDisplayName,
 } from '../account.model';
 import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
 import { AccountService } from '../account.service';
@@ -189,34 +191,56 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
             <span class="account-form__validation-message">Resolving identity…</span>
           </span>
         } @else if (_resultVisible() && validationResult(); as result) {
-          @if (result.isValid && result.accountName) {
-            <span class="account-form__validation-block">
-              <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
-              <span class="account-form__validation-message account-form__validation-message--valid">
-                Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span>
+          @switch (_kindOf(result)) {
+            @case ('authenticated') {
+              @if (result.missingScopes.length === 0) {
+                <span class="account-form__validation-block">
+                  <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
+                  <span class="account-form__validation-message account-form__validation-message--valid">
+                    Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span>
+                  </span>
+                </span>
+              } @else {
+                <span class="account-form__validation-block">
+                  <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+                  <span class="account-form__validation-message account-form__validation-message--warning">
+                    Missing required scopes: {{ result.missingScopes.join(', ') }}
+                  </span>
+                </span>
+              }
+            }
+            @case ('scopesUnverifiable') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--warning">
+                  Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
+                </span>
               </span>
-            </span>
-          } @else if (result.isAuthFailure) {
-            <span class="account-form__validation-block">
-              <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
-              <span class="account-form__validation-message account-form__validation-message--error">
-                Authentication failed — check that the token is correct
+            }
+            @case ('authenticationFailed') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  Authentication failed — check that the token is correct
+                </span>
               </span>
-            </span>
-          } @else if (!result.isValid && result.missingScopes.length > 0) {
-            <span class="account-form__validation-block">
-              <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-              <span class="account-form__validation-message account-form__validation-message--warning">
-                Missing required scopes: {{ result.missingScopes.join(', ') }}
+            }
+            @case ('identityUnresolved') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  Token accepted, but the account identity could not be resolved from the provider
+                </span>
               </span>
-            </span>
-          } @else if (result.isValid && !result.accountName) {
-            <span class="account-form__validation-block">
-              <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
-              <span class="account-form__validation-message account-form__validation-message--error">
-                Token is valid, but the account identity could not be resolved from the provider
+            }
+            @case ('providerMismatch') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  This looks like a {{ _providerDisplayName(result.detectedProvider) }} token, but {{ _provider() }} is selected. Switch the provider to {{ _providerDisplayName(result.detectedProvider) }}, or check the Base URL.
+                </span>
               </span>
-            </span>
+            }
           }
         }
         @if (_isDuplicate()) {
@@ -444,17 +468,25 @@ export class AccountFormComponent implements OnInit {
         return false;
       }
       const result = this.validationResult();
-      return result !== null && result.isValid && !!result.accountName;
+      return result !== null && AccountFormComponent._isSaveEligible(result);
     }
     if (!this._resultVisible()) {
       return false;
     }
     const result = this.validationResult();
-    if (!result || !result.isValid || !result.accountName) {
+    if (!result || !AccountFormComponent._isSaveEligible(result)) {
       return false;
     }
     return !!this._token();
   });
+
+  private static _isSaveEligible(result: TokenValidationResult): boolean {
+    const kind = result.kind as TokenValidationKind;
+    if (kind === 'scopesUnverifiable') {
+      return true;
+    }
+    return kind === 'authenticated' && result.missingScopes.length === 0;
+  }
 
   protected readonly _saveLabel: Signal<string> = computed(() => {
     if (this._visibleConflicts().length === 0) {
@@ -602,6 +634,14 @@ export class AccountFormComponent implements OnInit {
     }
     this._lastResolvedPair.set({ token, baseUrl, providerType });
     this.validateToken.emit({ token, baseUrl, providerType });
+  }
+
+  protected _kindOf(result: TokenValidationResult): TokenValidationKind {
+    return result.kind as TokenValidationKind;
+  }
+
+  protected _providerDisplayName(token: string | null): string {
+    return providerDisplayName(token);
   }
 
   protected _onProviderChange(provider: ProviderType): void {

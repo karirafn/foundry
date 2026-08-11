@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { AccountFormComponent } from './account-form';
 import { AccountSummary, CreateAccountRequest, NamespaceConflict, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from '../account.model';
 import { AccountService } from '../account.service';
+import { providerDisplayName } from '../account.model';
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -22,35 +23,45 @@ const MOCK_ACCOUNT_2: AccountSummary = {
 };
 
 const VALID_RESULT: TokenValidationResult = {
-  isValid: true,
-  isAuthFailure: false,
-  scopesVerified: true,
+  kind: 'authenticated',
   missingScopes: [],
   accountName: 'octocat',
+  detectedProvider: null,
 };
 
 const AUTH_FAIL_RESULT: TokenValidationResult = {
-  isValid: false,
-  isAuthFailure: true,
-  scopesVerified: false,
+  kind: 'authenticationFailed',
   missingScopes: [],
   accountName: null,
+  detectedProvider: null,
 };
 
 const MISSING_SCOPES_RESULT: TokenValidationResult = {
-  isValid: false,
-  isAuthFailure: false,
-  scopesVerified: false,
+  kind: 'authenticated',
   missingScopes: ['repo', 'workflow'],
-  accountName: null,
+  accountName: 'octocat',
+  detectedProvider: null,
 };
 
-const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
-  isValid: true,
-  isAuthFailure: false,
-  scopesVerified: true,
+const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
+  kind: 'identityUnresolved',
   missingScopes: [],
   accountName: null,
+  detectedProvider: null,
+};
+
+const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
+  kind: 'scopesUnverifiable',
+  missingScopes: [],
+  accountName: 'octocat',
+  detectedProvider: null,
+};
+
+const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
+  kind: 'providerMismatch',
+  missingScopes: [],
+  accountName: null,
+  detectedProvider: 'gitlab',
 };
 
 const GITHUB_REQUIREMENTS: TokenRequirements = {
@@ -525,10 +536,10 @@ describe('AccountFormComponent', () => {
     expect(msg?.textContent).toContain('Missing required scopes: repo, workflow');
   });
 
-  // Cycle 27: valid-but-null identity state
-  it('should show error message when token valid but accountName is null', () => {
+  // Cycle 27: identityUnresolved state
+  it('should show error message when kind is identityUnresolved', () => {
     // Arrange
-    const { el, fixture } = setup({ validationResult: VALID_NULL_IDENTITY_RESULT });
+    const { el, fixture } = setup({ validationResult: IDENTITY_UNRESOLVED_RESULT });
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'anon_token';
     tokenInput.dispatchEvent(new Event('input'));
@@ -542,7 +553,7 @@ describe('AccountFormComponent', () => {
     const dot = el.querySelector('.account-form__validation-dot--error');
     expect(dot).toBeTruthy();
     const msg = el.querySelector('.account-form__validation-message--error');
-    expect(msg?.textContent).toContain('Token is valid, but the account identity could not be resolved from the provider');
+    expect(msg?.textContent).toContain('Token accepted, but the account identity could not be resolved from the provider');
   });
 
   // Cycle 28: idle status region empty when validationResult null and not validating
@@ -628,13 +639,13 @@ describe('AccountFormComponent', () => {
     expect(btn.disabled).toBe(true);
   });
 
-  // Cycle 34: save disabled in create mode when valid but null identity
-  it('should disable save button in add mode when identity could not be resolved', () => {
+  // Cycle 34: save disabled in create mode when identityUnresolved
+  it('should disable save button in add mode when kind is identityUnresolved', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup({ account: null, validationResult: VALID_NULL_IDENTITY_RESULT });
+    const { el } = setup({ account: null, validationResult: IDENTITY_UNRESOLVED_RESULT });
 
     // Assert
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
@@ -921,7 +932,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: null,
       accounts: [MOCK_ACCOUNT],
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -948,7 +959,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
       accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1016,7 +1027,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'new-identity' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1111,7 +1122,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: null,
       accounts: [MOCK_ACCOUNT],
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1131,7 +1142,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'new-identity' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1714,5 +1725,115 @@ describe('AccountFormComponent', () => {
     // Assert
     const panel = el.querySelector('.account-form__conflict-panel');
     expect(panel?.textContent).toContain('current holder');
+  });
+
+  // Cycle K1: scopesUnverifiable — shows warning dot + authenticated-as message, Save enabled
+  it('should show warning dot and "Authenticated as … could not verify" when kind is scopesUnverifiable', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — warning tone
+    const dot = el.querySelector('.account-form__validation-dot--warning');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--warning');
+    expect(msg?.textContent).toContain("Authenticated as octocat — couldn't verify token scopes");
+  });
+
+  // Cycle K2: scopesUnverifiable — Save button is ENABLED (the key behavioral fix)
+  it('should enable save when kind is scopesUnverifiable', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+  });
+
+  // Cycle K3: authenticated with non-empty missingScopes — shows warning, Save DISABLED
+  it('should show missing-scopes warning and disable save when kind is authenticated but missingScopes non-empty', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: MISSING_SCOPES_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'limited_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — warning tone, save disabled
+    const dot = el.querySelector('.account-form__validation-dot--warning');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--warning');
+    expect(msg?.textContent).toContain('Missing required scopes: repo, workflow');
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle K4: providerMismatch — shows error dot with named detected provider, Save disabled
+  it('should show providerMismatch error with detected provider name and disable save', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: PROVIDER_MISMATCH_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const dot = el.querySelector('.account-form__validation-dot--error');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--error');
+    expect(msg?.textContent).toContain('GitLab');
+    expect(msg?.textContent).toContain('GitHub');
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle K5: providerMismatch in edit mode — no switch button (provider is a fixed badge)
+  it('should NOT render a switch-provider button in edit mode for providerMismatch', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: MOCK_ACCOUNT, validationResult: PROVIDER_MISMATCH_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — no switch button in account-form (only in setup-account-step)
+    const switchBtn = el.querySelector('.account-form__switch-provider-btn');
+    expect(switchBtn).toBeNull();
+  });
+
+  // Cycle K6: providerDisplayName helper maps known tokens
+  it('providerDisplayName should map github → GitHub, gitlab → GitLab, fallback to capitalized', () => {
+    // Arrange / Act / Assert
+    expect(providerDisplayName('github')).toBe('GitHub');
+    expect(providerDisplayName('gitlab')).toBe('GitLab');
+    expect(providerDisplayName('bitbucket')).toBe('Bitbucket');
+    expect(providerDisplayName(null)).toBe('');
   });
 });
