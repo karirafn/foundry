@@ -139,7 +139,7 @@ export class SettingsAccountsComponent implements OnInit {
     this.accountService.updateAccount(view.account.id, request as UpdateAccountRequest);
   }
 
-  onValidateToken(event: { token: string; baseUrl: string }): void {
+  onValidateToken(event: { token: string; baseUrl: string; providerType: string }): void {
     this.accountService.validateToken(event);
   }
 

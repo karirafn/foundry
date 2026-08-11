@@ -287,6 +287,6 @@ export class SetupAccountStepComponent {
       return;
     }
     this._lastResolvedPair.set({ token, baseUrl });
-    this._accountService.validateToken({ token, baseUrl });
+    this._accountService.validateToken({ token, baseUrl, providerType: this._provider() });
   }
 }

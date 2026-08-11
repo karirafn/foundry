@@ -306,7 +306,7 @@ export class AccountFormComponent implements OnInit {
   readonly conflicts: InputSignal<NamespaceConflict[]> = input<NamespaceConflict[]>([]);
 
   readonly save: OutputEmitterRef<CreateAccountRequest | UpdateAccountRequest> = output<CreateAccountRequest | UpdateAccountRequest>();
-  readonly validateToken: OutputEmitterRef<{ token: string; baseUrl: string }> = output<{ token: string; baseUrl: string }>();
+  readonly validateToken: OutputEmitterRef<{ token: string; baseUrl: string; providerType: string }> = output<{ token: string; baseUrl: string; providerType: string }>();
   readonly cancel: OutputEmitterRef<void> = output<void>();
 
   @ViewChild('formHeading') readonly formHeading?: ElementRef<HTMLElement>;
@@ -502,6 +502,7 @@ export class AccountFormComponent implements OnInit {
       this._baseUrl.set(acc.baseUrl);
       const provider = this._normalizeProviderType(acc.providerType);
       if (provider !== null) {
+        this._provider.set(provider);
         this._fetchTokenRequirements(provider);
       }
     } else {
@@ -599,7 +600,7 @@ export class AccountFormComponent implements OnInit {
       return;
     }
     this._lastResolvedPair.set({ token, baseUrl });
-    this.validateToken.emit({ token, baseUrl });
+    this.validateToken.emit({ token, baseUrl, providerType: this._provider() });
   }
 
   protected _onProviderChange(provider: ProviderType): void {
