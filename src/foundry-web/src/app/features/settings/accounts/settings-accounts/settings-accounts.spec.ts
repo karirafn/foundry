@@ -504,7 +504,7 @@ describe('SettingsAccountsComponent', () => {
     req.flush(null);
   });
 
-  it('should render a persistent sr-only aria-live announcer outside the @if panel', () => {
+  it('should mount zero aria-live regions (announcer relocated to app shell)', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -513,48 +513,11 @@ describe('SettingsAccountsComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert — announcer must always be present, regardless of affected-repositories panel state
+    // Assert — the accounts page must not contain any live region; the shell owns it
     const el = fixture.nativeElement as HTMLElement;
-    const announcer = el.querySelector('.accounts-settings__sr-announcer');
-    expect(announcer).toBeTruthy();
-    expect(announcer?.getAttribute('aria-live')).toBe('polite');
-    expect(announcer?.getAttribute('aria-atomic')).toBe('true');
-    expect(announcer?.classList).toContain('sr-only');
-  });
-
-  it('should populate the sr-announcer when affected repositories appear', () => {
-    // Arrange
-    const account: AccountSummary = {
-      id: '1',
-      name: 'My Org',
-      providerType: 'GitHub',
-      baseUrl: 'https://github.com',
-      hasToken: true,
-      namespaces: [],
-    };
-    const { fixture, httpMock } = setup();
-    fixture.detectChanges();
-    flushAccounts(httpMock, [account]);
-    fixture.detectChanges();
-    fixture.componentInstance.onEditAccount(account);
-    fixture.detectChanges();
-    flushTokenRequirements(httpMock);
-    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com', token: null });
-    const affected: AffectedRepository[] = [
-      { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
-    ];
-
-    // Act
-    httpMock.expectOne(`/api/accounts/${account.id}`).flush(makeUpdateResult(account, affected));
-    fixture.detectChanges();
-    httpMock.expectOne('/api/accounts').flush([account]);
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const announcer = el.querySelector('.accounts-settings__sr-announcer');
-    expect(announcer?.textContent).toContain('1');
-    expect(announcer?.textContent).toContain('affected');
+    const liveRegions = el.querySelectorAll('[aria-live]');
+    expect(liveRegions.length).toBe(0);
+    expect(el.querySelector('.accounts-settings__sr-announcer')).toBeNull();
   });
 
   it('should pass deletingAccountId from accountService to fd-account-list', () => {

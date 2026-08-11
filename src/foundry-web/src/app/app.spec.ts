@@ -64,7 +64,7 @@ function createMockAccountService() {
     accounts: signal([{ id: '1' }]).asReadonly(),
     loading: signal(false).asReadonly(),
     saving: signal(false).asReadonly(),
-    deleting: signal(false).asReadonly(),
+    deletingAccountId: signal<string | null>(null).asReadonly(),
     validating: signal(false).asReadonly(),
     saveSuccess: signal(false).asReadonly(),
     validationResult: signal(null).asReadonly(),
@@ -72,6 +72,7 @@ function createMockAccountService() {
     deleteError: signal(null).asReadonly(),
     loadError: signal(null).asReadonly(),
     validationError: signal(null).asReadonly(),
+    srAnnouncement: signal('').asReadonly(),
     loadAccounts: () => {},
     createAccount: () => {},
     updateAccount: () => {},
@@ -201,6 +202,59 @@ describe('App', () => {
     expect(header?.hasAttribute('inert')).toBe(true);
     expect(banner?.hasAttribute('inert')).toBe(true);
     expect(main?.hasAttribute('inert')).toBe(true);
+  });
+
+  // Step 7: exactly one polite live region exists in the app shell
+  it('should render exactly one aria-live="polite" region in the shell', () => {
+    // Arrange
+    const fixture = setupApp();
+
+    // Act
+    const compiled = fixture.nativeElement as HTMLElement;
+    const liveRegions = compiled.querySelectorAll('[aria-live="polite"]');
+
+    // Assert
+    expect(liveRegions.length).toBe(1);
+  });
+
+  it('should render the sr-announcer region outside any inert subtree (sibling of main)', () => {
+    // Arrange
+    const fixture = setupApp(true);
+
+    // Act
+    const compiled = fixture.nativeElement as HTMLElement;
+    const announcer = compiled.querySelector('.app__sr-announcer');
+    const main = compiled.querySelector('main');
+    const header = compiled.querySelector('header');
+    const banner = compiled.querySelector('fd-system-banner');
+
+    // Assert — announcer must not be a descendant of any inert element
+    expect(announcer).not.toBeNull();
+    expect(main?.contains(announcer)).toBe(false);
+    expect(header?.contains(announcer)).toBe(false);
+    expect(banner?.contains(announcer)).toBe(false);
+  });
+
+  it('should update the sr-announcer text when srAnnouncement signal changes', () => {
+    // Arrange
+    const fixture = setupApp();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const announcer = compiled.querySelector('.app__sr-announcer');
+
+    // Assert — initial state is empty
+    expect(announcer?.textContent?.trim()).toBe('');
+  });
+
+  it('should render sr-announcer with aria-atomic="true"', () => {
+    // Arrange
+    const fixture = setupApp();
+
+    // Act
+    const compiled = fixture.nativeElement as HTMLElement;
+    const announcer = compiled.querySelector('.app__sr-announcer');
+
+    // Assert
+    expect(announcer?.getAttribute('aria-atomic')).toBe('true');
   });
 
   // Step 3: fd-account-chip renders before the settings gear link
