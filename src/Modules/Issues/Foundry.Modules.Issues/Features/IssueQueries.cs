@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.StateChanges;
+using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
@@ -257,7 +258,8 @@ internal sealed class IssueQueries(
 
         string state = GetStateDiscriminator(issue);
 
-        IssueStateDetails? stateDetails = BuildStateDetails(issue);
+        TransientRetryDetails? transientRetry = await BuildTransientRetryDetailsAsync(issue, cancellationToken);
+        IssueStateDetails? stateDetails = BuildStateDetails(issue, transientRetry);
 
         return new IssueDetail(
             Id: issue.Id.Value,
@@ -292,7 +294,54 @@ internal sealed class IssueQueries(
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
-    private static IssueStateDetails? BuildStateDetails(Issue issue) =>
+    private async Task<TransientRetryDetails?> BuildTransientRetryDetailsAsync(
+        Issue issue,
+        CancellationToken cancellationToken)
+    {
+        string? failureCategory = issue switch
+        {
+            FailedIssue failed => failed.FailureCategory,
+            ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory,
+            _ => null
+        };
+
+        if (failureCategory != TransientRetrySchedule.TransientApiErrorCategory)
+        {
+            return null;
+        }
+
+        // Retrieve the count of consecutive transient runs from the worker run store.
+        // Returns 0 when the worker-run row is not yet visible (e.g. write not yet committed).
+        int consecutiveRuns = await workerRunQueries.CountConsecutiveTransientRunsAsync(
+            issue.Id.Value,
+            TransientRetrySchedule.MaxTransientRetries,
+            cancellationToken);
+
+        // Guard: worker-run row not yet visible — surface no retry block rather than "Attempt 0 of N".
+        if (consecutiveRuns <= 0)
+        {
+            return null;
+        }
+
+        int maxAttempts = TransientRetrySchedule.MaxTransientRetries;
+        bool isExhausted = consecutiveRuns >= maxAttempts;
+
+        // EF SQLite provider normalizes FailedAt to UTC — the derived NextAttemptDueAt relies on this.
+        DateTimeOffset failedAt = issue switch
+        {
+            FailedIssue failed => failed.FailedAt,
+            ContinuableFailedIssue continuableFailed => continuableFailed.FailedAt,
+            _ => throw new InvalidOperationException($"Unexpected transient issue type: {issue.GetType().Name}")
+        };
+
+        return new TransientRetryDetails(
+            AttemptNumber: consecutiveRuns,
+            MaxAttempts: maxAttempts,
+            IsExhausted: isExhausted,
+            NextAttemptDueAt: isExhausted ? null : failedAt + TransientRetrySchedule.ComputeBackoff(consecutiveRuns));
+    }
+
+    private static IssueStateDetails? BuildStateDetails(Issue issue, TransientRetryDetails? transientRetry) =>
         issue switch
         {
             BlockedIssue blocked => new IssueStateDetails(
@@ -303,7 +352,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: blocked.BlockedBy),
+                BlockedBy: blocked.BlockedBy,
+                TransientRetry: null),
 
             InProgressIssue inProgress => new IssueStateDetails(
                 WorkerRunId: inProgress.WorkerRunId,
@@ -313,7 +363,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             ReviewIssue review => new IssueStateDetails(
                 WorkerRunId: review.WorkerRunId,
@@ -323,7 +374,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId,
@@ -333,7 +385,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             FailedIssue failed => new IssueStateDetails(
                 WorkerRunId: failed.WorkerRunId,
@@ -343,7 +396,8 @@ internal sealed class IssueQueries(
                 FailureReason: failed.FailureReason,
                 FailedAt: failed.FailedAt,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: transientRetry),
 
             CompletedIssue completed => new IssueStateDetails(
                 WorkerRunId: null,
@@ -353,7 +407,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: completed.CompletedAt,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             RevisionQueuedIssue revisionQueued => new IssueStateDetails(
                 WorkerRunId: null,
@@ -363,7 +418,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
                 WorkerRunId: revisionInProgress.WorkerRunId,
@@ -373,7 +429,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             RevisionFailedIssue revisionFailed => new IssueStateDetails(
                 WorkerRunId: revisionFailed.WorkerRunId,
@@ -383,7 +440,8 @@ internal sealed class IssueQueries(
                 FailureReason: revisionFailed.FailureReason,
                 FailedAt: revisionFailed.FailedAt,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             ContinuableFailedIssue continuableFailed => new IssueStateDetails(
                 WorkerRunId: continuableFailed.WorkerRunId,
@@ -393,7 +451,8 @@ internal sealed class IssueQueries(
                 FailureReason: continuableFailed.FailureReason,
                 FailedAt: continuableFailed.FailedAt,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: transientRetry),
 
             ContinuationQueuedIssue continuationQueued => new IssueStateDetails(
                 WorkerRunId: null,
@@ -403,7 +462,8 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: null),
+                BlockedBy: null,
+                TransientRetry: null),
 
             _ => null
         };

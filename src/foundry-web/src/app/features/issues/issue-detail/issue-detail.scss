@@ -285,4 +285,50 @@
     word-break: break-word;
   }
 
+  &__retry-live-region {
+    // The live region is a sibling of the fields grid, not a grid child, so it
+    // never creates a phantom track or row-gap. When populated it sits below the
+    // grid with a top margin that visually groups it with the failure fields.
+    margin-top: var(--fd-spacing-md);
+
+    &--empty {
+      // Collapse the empty live region visually without removing it from the
+      // accessibility tree — display:none or [hidden] would prevent screen readers
+      // from detecting content changes when retry data populates.
+      padding: 0;
+      margin: 0;
+      border: none;
+      height: 0;
+      overflow: hidden;
+    }
+  }
+
+  &__retry-state {
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    border: 1px solid var(--fd-border-warning);
+    border-radius: var(--fd-radius-sm);
+    background: var(--fd-bg-warning-subtle);
+
+    &--exhausted {
+      border-color: var(--fd-state-failed);
+      background: var(--fd-bg-error-subtle);
+    }
+  }
+
+  &__retry-callout {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+    margin-top: var(--fd-spacing-xs);
+  }
+
+  // Typography for __retry-chip is inherited from the base .badge class
+  // (font-size, font-weight, letter-spacing, text-transform are all defined there).
+
+  &__retry-message {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
 }

@@ -21,4 +21,11 @@ public sealed record IssueStateDetails(
     string? FailureReason,
     DateTimeOffset? FailedAt,
     DateTimeOffset? CompletedAt,
-    IReadOnlyList<int>? BlockedBy);
+    IReadOnlyList<int>? BlockedBy,
+    TransientRetryDetails? TransientRetry);
+
+public sealed record TransientRetryDetails(
+    int AttemptNumber,
+    int MaxAttempts,
+    bool IsExhausted,
+    DateTimeOffset? NextAttemptDueAt);

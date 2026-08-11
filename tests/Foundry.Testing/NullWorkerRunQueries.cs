@@ -4,7 +4,7 @@ using Foundry.Shared;
 
 namespace Foundry.Testing;
 
-public sealed class NullWorkerRunQueries : IWorkerRunQueries
+public sealed class NullWorkerRunQueries(int consecutiveTransientRuns = 0) : IWorkerRunQueries
 {
     public Task<Result<WorkerRunDetail>> GetWorkerRunDetailAsync(
         Guid workerRunId,
@@ -31,5 +31,5 @@ public sealed class NullWorkerRunQueries : IWorkerRunQueries
         Guid issueId,
         int maxAttempts,
         CancellationToken cancellationToken)
-        => Task.FromResult(0);
+        => Task.FromResult(consecutiveTransientRuns);
 }
