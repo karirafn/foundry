@@ -88,6 +88,28 @@ describe('SetupReposStepComponent', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
   });
 
+  // Cycle 2b: loading region uses fd-spinner at 16px (not hand-rolled span)
+  it('should render fd-spinner at 16px diameter inside the loading region', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act — detectChanges while HTTP is still in-flight (loading state)
+    fixture.detectChanges();
+
+    // Assert — fd-spinner is rendered inside the loading region
+    const el = fixture.nativeElement as HTMLElement;
+    const spinner = el.querySelector('.setup-repos-step__loading fd-spinner');
+    expect(spinner).toBeTruthy();
+    // The inner span carries the [size] binding — assert 16px
+    const innerSpan = (spinner as HTMLElement).querySelector('span.spinner') as HTMLElement;
+    expect(innerSpan).toBeTruthy();
+    expect(innerSpan.style.width).toBe('16px');
+    expect(innerSpan.style.height).toBe('16px');
+
+    // Cleanup
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
+  });
+
   // Cycle 3: Finish button is disabled when no repos are selected
   it('should disable the Finish button when no repositories are selected', () => {
     // Arrange
