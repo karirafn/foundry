@@ -352,11 +352,11 @@ describe('AccountFormComponent', () => {
   });
 
   // Cycle 17: token blur with non-empty token + baseUrl emits validateToken
-  it('should emit validateToken with token and baseUrl when token input loses focus', () => {
+  it('should emit validateToken with token, baseUrl, and providerType when token input loses focus', () => {
     // Arrange
     const { el, component, fixture } = setup();
-    let emitted: { token: string; baseUrl: string } | undefined;
-    component.validateToken.subscribe((v: { token: string; baseUrl: string }) => { emitted = v; });
+    let emitted: { token: string; baseUrl: string; providerType: string } | undefined;
+    component.validateToken.subscribe((v: { token: string; baseUrl: string; providerType: string }) => { emitted = v; });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_test_token';
@@ -367,7 +367,7 @@ describe('AccountFormComponent', () => {
     tokenInput.dispatchEvent(new Event('blur'));
 
     // Assert
-    expect(emitted).toEqual({ token: 'ghp_test_token', baseUrl: 'https://github.com' });
+    expect(emitted).toEqual({ token: 'ghp_test_token', baseUrl: 'https://github.com', providerType: 'GitHub' });
   });
 
   // Cycle 18: token blur with empty token does NOT emit
@@ -390,8 +390,8 @@ describe('AccountFormComponent', () => {
   it('should emit validateToken after paste on token field (next tick, baseUrl present)', async () => {
     // Arrange
     const { el, component, fixture } = setup();
-    let emitted: { token: string; baseUrl: string } | undefined;
-    component.validateToken.subscribe((v: { token: string; baseUrl: string }) => { emitted = v; });
+    let emitted: { token: string; baseUrl: string; providerType: string } | undefined;
+    component.validateToken.subscribe((v: { token: string; baseUrl: string; providerType: string }) => { emitted = v; });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'ghp_pasted_token';
@@ -404,7 +404,7 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    expect(emitted).toEqual({ token: 'ghp_pasted_token', baseUrl: 'https://github.com' });
+    expect(emitted).toEqual({ token: 'ghp_pasted_token', baseUrl: 'https://github.com', providerType: 'GitHub' });
   });
 
   // Cycle 20: resolving state — live region shows "Resolving identity…"
@@ -725,6 +725,92 @@ describe('AccountFormComponent', () => {
     expect((emitted as CreateAccountRequest).token).toBe('glpat_token');
     const r = emitted as unknown as Record<string, unknown>;
     expect(r['name']).toBeUndefined();
+  });
+
+  // Cycle 37c: GitLab selected — emitted validateToken includes providerType 'GitLab'
+  it('should emit validateToken with providerType GitLab when GitLab is selected', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ account: null });
+    let emitted: { token: string; baseUrl: string; providerType: string } | undefined;
+    component.validateToken.subscribe((v: { token: string; baseUrl: string; providerType: string }) => { emitted = v; });
+
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+
+    // Assert
+    expect(emitted?.providerType).toBe('GitLab');
+  });
+
+  // Cycle 37d: edit mode — emitted validateToken providerType comes from account.providerType
+  it('should emit validateToken with providerType from the account being edited in edit mode', () => {
+    // Arrange — account is GitLab
+    const gitlabAccount: AccountSummary = {
+      ...MOCK_ACCOUNT,
+      providerType: 'GitLab',
+      baseUrl: 'https://gitlab.com',
+    };
+    const { el, component, fixture } = setup({ account: gitlabAccount });
+    let emitted: { token: string; baseUrl: string; providerType: string } | undefined;
+    component.validateToken.subscribe((v: { token: string; baseUrl: string; providerType: string }) => { emitted = v; });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_replacement';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+
+    // Assert — providerType must be GitLab, not GitHub
+    expect(emitted?.providerType).toBe('GitLab');
+  });
+
+  // Cycle 37e: changing only provider (same token + baseUrl) triggers a fresh validateToken emit
+  it('should emit validateToken with new providerType when only the provider changes (same token and baseUrl)', () => {
+    // Arrange — start with GitHub selected, resolve once
+    const { el, component, fixture } = setup({ account: null });
+    const emitted: Array<{ token: string; baseUrl: string; providerType: string }> = [];
+    component.validateToken.subscribe((v: { token: string; baseUrl: string; providerType: string }) => { emitted.push(v); });
+
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Confirm first emit used GitHub
+    expect(emitted.length).toBe(1);
+    expect(emitted[0].providerType).toBe('GitHub');
+
+    // Act — switch to GitLab. _onProviderChange calls _clearResolution (nulling the
+    // dedup pair), so re-entering the same token and re-blurring replays resolution
+    // under the new provider; the providerType now differs even if token/baseUrl match.
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+
+    // Set token back (cleared by provider change) and blur to trigger resolution with GitLab
+    tokenInput.value = 'ghp_test_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — a second emit with GitLab providerType was produced
+    expect(emitted.length).toBe(2);
+    expect(emitted[1].providerType).toBe('GitLab');
   });
 
   // Cycle 38: edit mode — token-on-file panel shown when hasToken + name

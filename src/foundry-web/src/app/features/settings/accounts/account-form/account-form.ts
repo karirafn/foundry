@@ -306,7 +306,7 @@ export class AccountFormComponent implements OnInit {
   readonly conflicts: InputSignal<NamespaceConflict[]> = input<NamespaceConflict[]>([]);
 
   readonly save: OutputEmitterRef<CreateAccountRequest | UpdateAccountRequest> = output<CreateAccountRequest | UpdateAccountRequest>();
-  readonly validateToken: OutputEmitterRef<{ token: string; baseUrl: string }> = output<{ token: string; baseUrl: string }>();
+  readonly validateToken: OutputEmitterRef<{ token: string; baseUrl: string; providerType: string }> = output<{ token: string; baseUrl: string; providerType: string }>();
   readonly cancel: OutputEmitterRef<void> = output<void>();
 
   @ViewChild('formHeading') readonly formHeading?: ElementRef<HTMLElement>;
@@ -331,8 +331,8 @@ export class AccountFormComponent implements OnInit {
   /** Selected conflict namespaces (default: all). */
   protected readonly _selectedConflicts: WritableSignal<Set<string>> = signal(new Set<string>());
 
-  /** Tracks the last (token, baseUrl) pair that was sent to resolution to avoid duplicate calls. */
-  private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string } | null> = signal(null);
+  /** Tracks the last (token, baseUrl, providerType) triple that was sent to resolution to avoid duplicate calls. */
+  private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string; providerType: string } | null> = signal(null);
 
   /** Whether a held resolution is pending (token present but baseUrl was empty at blur time). */
   private readonly _pendingResolution: WritableSignal<boolean> = signal(false);
@@ -340,7 +340,7 @@ export class AccountFormComponent implements OnInit {
   /** Resolved name from the current (non-stale) validation result; null when the result is stale. */
   protected readonly _resolvedAccountName: Signal<string | null> = computed(() => {
     const last = this._lastResolvedPair();
-    if (!last || last.token !== this._token() || last.baseUrl !== this._baseUrl()) {
+    if (!last || last.token !== this._token() || last.baseUrl !== this._baseUrl() || last.providerType !== this._provider()) {
       return null;
     }
     return this.validationResult()?.accountName ?? null;
@@ -404,13 +404,13 @@ export class AccountFormComponent implements OnInit {
     });
   });
 
-  /** True only when the last resolved pair still matches current inputs — hides stale results after edits. */
+  /** True only when the last resolved triple still matches current inputs — hides stale results after edits. */
   protected readonly _resultVisible: Signal<boolean> = computed(() => {
     const last = this._lastResolvedPair();
     if (!last) {
       return false;
     }
-    return last.token === this._token() && last.baseUrl === this._baseUrl();
+    return last.token === this._token() && last.baseUrl === this._baseUrl() && last.providerType === this._provider();
   });
 
   protected readonly _showRenameNotice: Signal<boolean> = computed(() => {
@@ -502,6 +502,7 @@ export class AccountFormComponent implements OnInit {
       this._baseUrl.set(acc.baseUrl);
       const provider = this._normalizeProviderType(acc.providerType);
       if (provider !== null) {
+        this._provider.set(provider);
         this._fetchTokenRequirements(provider);
       }
     } else {
@@ -594,12 +595,13 @@ export class AccountFormComponent implements OnInit {
   private _triggerResolution(): void {
     const token = this._token();
     const baseUrl = this._baseUrl();
+    const providerType = this._provider();
     const last = this._lastResolvedPair();
-    if (last && last.token === token && last.baseUrl === baseUrl) {
+    if (last && last.token === token && last.baseUrl === baseUrl && last.providerType === providerType) {
       return;
     }
-    this._lastResolvedPair.set({ token, baseUrl });
-    this.validateToken.emit({ token, baseUrl });
+    this._lastResolvedPair.set({ token, baseUrl, providerType });
+    this.validateToken.emit({ token, baseUrl, providerType });
   }
 
   protected _onProviderChange(provider: ProviderType): void {

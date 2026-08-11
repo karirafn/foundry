@@ -144,7 +144,7 @@ describe('SetupAccountStepComponent', () => {
     // Assert
     const req = httpMock.expectOne('/api/accounts/validate-token');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ token: 'ghp_token', baseUrl: 'https://github.com' });
+    expect(req.request.body).toEqual({ token: 'ghp_token', baseUrl: 'https://github.com', providerType: 'GitHub' });
 
     // Cleanup
     req.flush(VALID_RESULT);
@@ -168,7 +168,7 @@ describe('SetupAccountStepComponent', () => {
 
     // Assert
     const req = httpMock.expectOne('/api/accounts/validate-token');
-    expect(req.request.body).toEqual({ token: 'ghp_pasted_token', baseUrl: 'https://github.com' });
+    expect(req.request.body).toEqual({ token: 'ghp_pasted_token', baseUrl: 'https://github.com', providerType: 'GitHub' });
 
     // Cleanup
     req.flush(VALID_RESULT);
@@ -290,6 +290,35 @@ describe('SetupAccountStepComponent', () => {
 
     // Cleanup
     req.flush({ credential: { ...CREATED_ACCOUNT, providerType: 'GitLab' }, affectedRepositories: [] });
+  });
+
+  // GitLab provider — validate-token request includes providerType 'GitLab'
+  it('should include providerType GitLab in the validate-token request when GitLab is selected', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+    const gitlabRadio = Array.from(radios).find((r) => r.value === 'GitLab')!;
+    gitlabRadio.click();
+    fixture.detectChanges();
+
+    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+    tokenInput.value = 'glpat_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const req = httpMock.expectOne('/api/accounts/validate-token');
+    expect(req.request.body).toEqual({ token: 'glpat_token', baseUrl: 'https://gitlab.com', providerType: 'GitLab' });
+
+    // Cleanup
+    req.flush(VALID_RESULT);
   });
 
   // Emits complete with account ID on successful create

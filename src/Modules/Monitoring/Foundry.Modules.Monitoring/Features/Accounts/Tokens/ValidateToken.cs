@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -15,7 +17,7 @@ namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 internal static class ValidateToken
 {
-    internal sealed record Query(string Token, Uri ApiBaseUrl, string ProviderType = "github") : IQuery<Response>;
+    internal sealed record Query(string Token, Uri ApiBaseUrl, string ProviderType) : IQuery<Response>;
 
     internal sealed record Response(
         bool IsValid,
@@ -47,7 +49,7 @@ internal static class ValidateToken
         }
     }
 
-    internal sealed record RequestBody(string Token, string BaseUrl, string ProviderType = "github");
+    internal sealed record RequestBody(string Token, string BaseUrl, [property: JsonRequired] string ProviderType);
 
     internal static class Endpoint
     {

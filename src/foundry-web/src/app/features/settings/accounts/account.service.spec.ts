@@ -671,7 +671,7 @@ describe('AccountService', () => {
   // Cycle 8: validateToken calls POST /api/accounts/validate-token
   it('should POST to /api/accounts/validate-token when validateToken is called', () => {
     // Arrange
-    const request = { token: 'ghp_test', baseUrl: 'https://api.github.com' };
+    const request = { token: 'ghp_test', baseUrl: 'https://api.github.com', providerType: 'GitHub' };
 
     // Act
     service.validateToken(request);
@@ -685,7 +685,7 @@ describe('AccountService', () => {
 
   it('should set validating to true while validateToken is in flight', () => {
     // Arrange
-    const request = { token: 'ghp_test', baseUrl: 'https://api.github.com' };
+    const request = { token: 'ghp_test', baseUrl: 'https://api.github.com', providerType: 'GitHub' };
 
     // Act
     service.validateToken(request);
@@ -701,7 +701,7 @@ describe('AccountService', () => {
 
   it('should set validationResult after validateToken succeeds', () => {
     // Arrange
-    const request = { token: 'ghp_test', baseUrl: 'https://api.github.com' };
+    const request = { token: 'ghp_test', baseUrl: 'https://api.github.com', providerType: 'GitHub' };
     service.validateToken(request);
     httpMock.expectOne('/api/accounts/validate-token').flush({
       isValid: true,
@@ -720,7 +720,7 @@ describe('AccountService', () => {
 
   it('should set validating to false when validateToken fails', () => {
     // Arrange
-    const request = { token: 'bad', baseUrl: 'https://api.github.com' };
+    const request = { token: 'bad', baseUrl: 'https://api.github.com', providerType: 'GitHub' };
     service.validateToken(request);
     httpMock.expectOne('/api/accounts/validate-token').flush('Bad Request', {
       status: 400,
@@ -733,7 +733,7 @@ describe('AccountService', () => {
 
   it('should set validationError when validateToken fails', () => {
     // Arrange
-    const request = { token: 'bad', baseUrl: 'https://api.github.com' };
+    const request = { token: 'bad', baseUrl: 'https://api.github.com', providerType: 'GitHub' };
     service.validateToken(request);
 
     // Act
@@ -748,14 +748,14 @@ describe('AccountService', () => {
 
   it('should clear validationError at start of validateToken', () => {
     // Arrange — first call that fails
-    service.validateToken({ token: 'bad', baseUrl: 'https://api.github.com' });
+    service.validateToken({ token: 'bad', baseUrl: 'https://api.github.com', providerType: 'GitHub' });
     httpMock.expectOne('/api/accounts/validate-token').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
     });
 
     // Act — second call clears error immediately
-    service.validateToken({ token: 'good', baseUrl: 'https://api.github.com' });
+    service.validateToken({ token: 'good', baseUrl: 'https://api.github.com', providerType: 'GitHub' });
 
     // Assert — error is cleared before response
     expect(service.validationError()).toBeNull();

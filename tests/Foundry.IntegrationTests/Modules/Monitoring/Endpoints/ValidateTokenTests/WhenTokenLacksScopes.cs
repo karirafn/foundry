@@ -41,7 +41,7 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
     public async Task ReturnsOkWithInvalidResultAndMissingScopes()
     {
         // Arrange
-        object body = new { token = "ghp_limited", baseUrl = "https://api.github.com" };
+        object body = new { token = "ghp_limited", baseUrl = "https://api.github.com", providerType = "github" };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(

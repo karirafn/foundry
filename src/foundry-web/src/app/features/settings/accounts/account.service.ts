@@ -12,6 +12,7 @@ const TOAST_ALL_RETAINED = 'Token updated. All repositories retained their acces
 interface ValidateTokenRequest {
   token: string;
   baseUrl: string;
+  providerType: string;
 }
 
 @Injectable({ providedIn: 'root' })
