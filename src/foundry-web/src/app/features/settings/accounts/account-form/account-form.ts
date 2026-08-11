@@ -32,6 +32,7 @@ import {
 } from '../account.model';
 import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
 import { AccountService } from '../account.service';
+import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 
 const GITHUB_BASE_URL = 'https://github.com';
 const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
@@ -39,13 +40,14 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
 @Component({
   selector: 'fd-account-form',
   standalone: true,
-  imports: [ProviderSelectorComponent],
+  imports: [ProviderSelectorComponent, SpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="account-form">
+    <div class="account-form" [attr.aria-busy]="saving() ? 'true' : null">
       <button
         class="account-form__cancel-link"
         type="button"
+        [disabled]="saving()"
         (click)="cancel.emit()"
       >
         <span aria-hidden="true">←</span> Cancel
@@ -324,9 +326,15 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
       <button
         class="account-form__save-btn"
         type="button"
-        [disabled]="!_canSave()"
+        [disabled]="!_formValid() && !saving()"
+        [attr.aria-disabled]="saving() ? 'true' : null"
         (click)="onSave()"
-      >{{ _saveLabel() }}</button>
+      >
+        @if (saving()) {
+          <fd-spinner />
+        }
+        {{ _saveLabel() }}
+      </button>
     </div>
   `,
   styleUrl: './account-form.scss',
@@ -463,10 +471,8 @@ export class AccountFormComponent implements OnInit {
     return resolved !== acc.name;
   });
 
-  protected readonly _canSave: Signal<boolean> = computed(() => {
-    if (this.saving()) {
-      return false;
-    }
+  /** Pure validity — everything except the saving guard. */
+  protected readonly _formValid: Signal<boolean> = computed(() => {
     if (this._isDuplicate()) {
       return false;
     }
@@ -503,6 +509,9 @@ export class AccountFormComponent implements OnInit {
   }
 
   protected readonly _saveLabel: Signal<string> = computed(() => {
+    if (this.saving()) {
+      return 'Saving...';
+    }
     if (this._visibleConflicts().length === 0) {
       return 'Save';
     }
@@ -666,6 +675,9 @@ export class AccountFormComponent implements OnInit {
   }
 
   onSave(): void {
+    if (this.saving()) {
+      return;
+    }
     const acc = this.account();
     if (acc !== null) {
       const token = this._token() || null;

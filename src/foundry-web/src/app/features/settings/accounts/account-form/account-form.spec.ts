@@ -670,8 +670,8 @@ describe('AccountFormComponent', () => {
     expect(btn.disabled).toBe(false);
   });
 
-  // Cycle 36: save disabled while saving
-  it('should disable save button when saving is true', () => {
+  // Cycle 36: save is aria-disabled (not natively disabled) while saving with valid form
+  it('should set aria-disabled="true" and not native disabled on save button when saving with valid form', () => {
     // Arrange
     const { el, fixture } = setup({ account: null, saving: true, validationResult: VALID_RESULT });
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -681,9 +681,10 @@ describe('AccountFormComponent', () => {
     tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
 
-    // Assert
+    // Assert — stays in tab order (no native disabled), but aria-disabled signals busy state
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    expect(btn.disabled).toBe(false);
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
   });
 
   // Cycle 37: save emits CreateAccountRequest without name in add mode
@@ -1928,5 +1929,122 @@ describe('AccountFormComponent', () => {
     // Assert — switch instruction present in add mode
     const region = el.querySelector('#account-token-validation');
     expect(region?.textContent).toContain('Switch the provider');
+  });
+
+  // --- Step 5: saving busy state ---
+
+  // S-1: valid form + saving true → label is "Saving...", fd-spinner present, form container has aria-busy="true",
+  //      Save button has aria-disabled="true" and does NOT have native disabled
+  it('should show Saving... label, fd-spinner, aria-busy on form, and aria-disabled on Save button when saving and form is valid', () => {
+    // Arrange — resolve a valid token so the form is valid, then set saving=true
+    const { el, fixture } = setup({ account: null, validationResult: VALID_RESULT, saving: true });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — label
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toContain('Saving...');
+
+    // Assert — fd-spinner present inside the button
+    const spinner = btn.querySelector('fd-spinner');
+    expect(spinner).toBeTruthy();
+
+    // Assert — form container has aria-busy="true"
+    const formContainer = el.querySelector('.account-form') as HTMLElement;
+    expect(formContainer.getAttribute('aria-busy')).toBe('true');
+
+    // Assert — Save button has aria-disabled="true" and is NOT natively disabled
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+    expect(btn.disabled).toBe(false);
+  });
+
+  // S-2: form not yet valid (not saving) → Save button has native disabled and NO aria-disabled
+  it('should set native disabled and no aria-disabled on Save button when form is invalid and not saving', () => {
+    // Arrange — no token, no resolution → form invalid
+    const { el } = setup({ account: null, validationResult: null, saving: false });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  // S-3: edit mode while saving → label is "Saving..." (busy wins over edit label)
+  it('should show Saving... label in edit mode while saving, not the edit-mode label', () => {
+    // Arrange — edit mode with no new token (form is valid) + saving
+    const { el } = setup({ account: MOCK_ACCOUNT, saving: true });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toContain('Saving...');
+  });
+
+  // S-4: conflict retry state while saving → label is "Saving..." (busy wins over conflict label)
+  it('should show Saving... label when conflicts visible and saving, not the conflict transfer label', () => {
+    // Arrange — conflicts present + saving
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+    const { el } = setup({ conflicts, saving: true });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toContain('Saving...');
+  });
+
+  // S-5: double-POST guard — calling onSave twice while saving emits exactly once
+  it('should emit save exactly once when onSave is called twice while saving', () => {
+    // Arrange — resolve a valid token so the form is valid
+    const { el, component, fixture } = setup({ account: null, validationResult: VALID_RESULT, saving: false });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    const emitted: Array<unknown> = [];
+    component.save.subscribe((v: unknown) => { emitted.push(v); });
+
+    // Act — first call (not saving, should emit)
+    component.onSave();
+
+    // Now simulate saving=true and call again
+    fixture.componentRef.setInput('saving', true);
+    fixture.detectChanges();
+    component.onSave();
+
+    // Assert — only one emission from the first call
+    expect(emitted.length).toBe(1);
+  });
+
+  // S-6: Cancel button has native disabled while saving
+  it('should disable the Cancel button while saving', () => {
+    // Arrange
+    const { el } = setup({ saving: true });
+
+    // Assert
+    const cancelBtn = el.querySelector('.account-form__cancel-link') as HTMLButtonElement;
+    expect(cancelBtn.disabled).toBe(true);
+  });
+
+  // S-7: aria-disabled="true" attribute is present on Save button while saving
+  it('should set aria-disabled="true" on Save button while saving when form is valid', () => {
+    // Arrange — valid form, saving
+    const { el, fixture } = setup({ account: null, validationResult: VALID_RESULT, saving: true });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — aria-disabled attribute is present
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
   });
 });
