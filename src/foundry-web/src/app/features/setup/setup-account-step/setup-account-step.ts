@@ -13,6 +13,7 @@ import {
 import { AccountService } from '../../settings/accounts/account.service';
 import { ProviderType, TokenValidationKind, TokenValidationResult, narrowTokenValidationKind, providerDisplayName } from '../../settings/accounts/account.model';
 import { ProviderSelectorComponent } from '../../settings/accounts/provider-selector/provider-selector';
+import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
 
 const GITHUB_BASE_URL = 'https://github.com';
 const GITLAB_BASE_URL = 'https://gitlab.com';
@@ -20,7 +21,7 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
 @Component({
   selector: 'fd-setup-account-step',
   standalone: true,
-  imports: [ProviderSelectorComponent],
+  imports: [ProviderSelectorComponent, SpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="setup-account-step">
@@ -186,9 +187,15 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
           <button
             class="setup-account-step__create-btn"
             type="button"
-            [disabled]="!_canCreate()"
+            [disabled]="!_formValid() && !saving()"
+            [attr.aria-disabled]="saving() ? 'true' : null"
             (click)="onCreate()"
-          >{{ _accountService.saving() ? 'Creating...' : 'Create Account' }}</button>
+          >
+            @if (saving()) {
+              <fd-spinner />
+            }
+            {{ saving() ? 'Creating...' : 'Create Account' }}
+          </button>
         </div>
       </div>
     </div>
@@ -224,10 +231,10 @@ export class SetupAccountStepComponent {
     return last.token === this._token() && last.baseUrl === this._baseUrl() && last.providerType === this._provider();
   });
 
-  protected readonly _canCreate: Signal<boolean> = computed(() => {
-    if (this._accountService.saving()) {
-      return false;
-    }
+  protected readonly saving: Signal<boolean> = computed(() => this._accountService.saving());
+
+  /** Pure form validity — everything except the saving guard. */
+  protected readonly _formValid: Signal<boolean> = computed(() => {
     if (!this._token()) {
       return false;
     }
@@ -346,6 +353,9 @@ export class SetupAccountStepComponent {
   }
 
   onCreate(): void {
+    if (this._accountService.saving()) {
+      return;
+    }
     this._hasSaved.set(true);
     this._accountService.createAccount({
       providerType: this._provider(),
