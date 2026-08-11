@@ -541,6 +541,30 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenScopesUnverifiableWithNullAccountName_RejectsWithUnresolvedIdentity()
+    {
+        // Arrange — ScopesUnverifiable with a null AccountName must map to UnresolvedIdentity,
+        // not silently fall through to InvalidToken via the default arm.
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.ScopesUnverifiable,
+                AccountName: null,
+                MissingScopes: []));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
+    }
+
+    [Fact]
     public async Task WhenIdentityUnresolved_RejectsWithUnresolvedIdentity()
     {
         // Arrange

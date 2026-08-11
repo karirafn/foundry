@@ -22,7 +22,7 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
     {
         ValidateToken.Response missingRepoResponse = new(
             Kind: ValidateToken.Kinds.Authenticated,
-            AccountName: null,
+            AccountName: "octocat",
             MissingScopes: ["repo"],
             DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
@@ -59,7 +59,8 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
             () => dto.Kind.ShouldBe(ValidateToken.Kinds.Authenticated),
-            () => dto.MissingScopes.ShouldContain("repo"));
+            () => dto.MissingScopes.ShouldContain("repo"),
+            () => dto.AccountName.ShouldBe("octocat"));
     }
 
     private sealed class StubHandler(Result<ValidateToken.Response> result)

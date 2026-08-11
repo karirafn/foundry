@@ -314,4 +314,26 @@ public sealed class ValidateTokenAsync
         Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
         success.Value.ShouldBeOfType<TokenValidationOutcome.IdentityUnresolvedOutcome>();
     }
+
+    [Fact]
+    public async Task WhenSelfEndpointReturns200WithInvalidJson_ReturnsScopesUnverifiable()
+    {
+        // Arrange — the user endpoint succeeds; the self endpoint returns 200 but with malformed body
+        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, "not-valid-json");
+        GitLabHttpClient sut = CreateSut(handler);
+
+        // Act
+        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
+        TokenValidationOutcome.ScopesUnverifiableOutcome outcome =
+            success.Value.ShouldBeOfType<TokenValidationOutcome.ScopesUnverifiableOutcome>();
+        outcome.AccountName.ShouldBe("alice");
+    }
 }

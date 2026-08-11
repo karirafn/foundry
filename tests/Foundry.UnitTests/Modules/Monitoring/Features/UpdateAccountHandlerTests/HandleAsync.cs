@@ -329,6 +329,29 @@ public sealed class HandleAsync : IAsyncDisposable
         failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
     }
 
+    [Fact]
+    public async Task WhenScopesUnverifiableWithNullAccountName_RejectsWithUnresolvedIdentity()
+    {
+        // Arrange — ScopesUnverifiable with a null AccountName must map to UnresolvedIdentity,
+        // not silently fall through to InvalidToken via the default arm.
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.ScopesUnverifiable,
+                AccountName: null,
+                MissingScopes: []));
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
+    }
+
     // Stubs and fakes
 
     private sealed class StubValidateTokenHandler(string accountName)

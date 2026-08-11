@@ -68,7 +68,7 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
         // Arrange — token is valid auth but missing required scopes, so IsValid == false
         ValidateToken.Response missingScopes = new(
             Kind: ValidateToken.Kinds.Authenticated,
-            AccountName: null,
+            AccountName: "octocat",
             MissingScopes: ["repo"],
             DetectedProvider: null);
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>

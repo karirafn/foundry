@@ -107,7 +107,20 @@ internal sealed partial class GitLabHttpClient(
         }
 
         string selfBody = await selfResponse.Content.ReadAsStringAsync(cancellationToken);
-        GitLabTokenSelfDto? dto = JsonSerializer.Deserialize<GitLabTokenSelfDto>(selfBody, JsonOptions);
+        GitLabTokenSelfDto? dto;
+        try
+        {
+            dto = JsonSerializer.Deserialize<GitLabTokenSelfDto>(selfBody, JsonOptions);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                ex,
+                "GitLab token validation: failed to parse response body. Provider: gitlab, Host: {Host}, Status: {StatusCode}",
+                apiBaseUrl.Host,
+                (int)selfResponse.StatusCode);
+            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(accountName));
+        }
 
         HashSet<string> granted = new(dto?.Scopes ?? [], StringComparer.OrdinalIgnoreCase);
         List<string> missing = RequiredScopes.For(ProviderTypes.GitLab)

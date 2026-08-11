@@ -161,6 +161,7 @@ internal static partial class CreateAccount
                     ValidateToken.Kinds.Authenticated => CredentialErrors.InvalidToken,
                     ValidateToken.Kinds.AuthenticationFailed => CredentialErrors.InvalidToken,
                     ValidateToken.Kinds.IdentityUnresolved => CredentialErrors.UnresolvedIdentity,
+                    ValidateToken.Kinds.ScopesUnverifiable => CredentialErrors.UnresolvedIdentity,
                     ValidateToken.Kinds.ProviderMismatch =>
                         CredentialErrors.ProviderMismatch(tokenResponse.DetectedProvider ?? string.Empty),
                     _ => CredentialErrors.InvalidToken,
