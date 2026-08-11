@@ -77,7 +77,7 @@ export class AffectedRepositoriesComponent {
     });
   });
 
-  protected _labelFor(status: AffectedRepositoryStatus): string {
-    return affectedStatusLabel(status);
+  protected _labelFor(status: string): string {
+    return affectedStatusLabel(status as AffectedRepositoryStatus);
   }
 }

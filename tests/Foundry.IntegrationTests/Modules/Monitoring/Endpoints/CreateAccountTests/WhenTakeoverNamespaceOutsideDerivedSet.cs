@@ -62,7 +62,7 @@ public sealed class WhenTakeoverNamespaceOutsideDerivedSet : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTakeoverNamespaceNotInDerivedSet_Returns400WithOffendingNamespaces()
+    public async Task WhenTakeoverNamespaceNotInDerivedSet_Returns422WithOffendingNamespaces()
     {
         // Arrange — derived set is "octocat"; request takeover of "other-org"
         object body = new
@@ -79,8 +79,8 @@ public sealed class WhenTakeoverNamespaceOutsideDerivedSet : IAsyncDisposable
             body,
             TestContext.Current.CancellationToken);
 
-        // Assert — structured 400 naming the offending namespace
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // Assert — structured 422 naming the offending namespace
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
         TakeoverValidationResponse? validationBody = await response.Content
             .ReadFromJsonAsync<TakeoverValidationResponse>(TestContext.Current.CancellationToken);

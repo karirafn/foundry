@@ -318,13 +318,13 @@ describe('AccountService', () => {
     httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
   });
 
-  it('should set saveError for 400 TakeoverValidationResponse listing invalid namespaces', () => {
+  it('should set saveError for 422 TakeoverValidationResponse listing invalid namespaces', () => {
     // Arrange
     const body = { invalidNamespaces: ['ns-a', 'ns-b'] };
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
 
     // Act
-    httpMock.expectOne('/api/accounts').flush(body, { status: 400, statusText: 'Bad Request' });
+    httpMock.expectOne('/api/accounts').flush(body, { status: 422, statusText: 'Unprocessable Entity' });
 
     // Assert
     expect(service.saveError()).toBe('Invalid namespaces for takeover: ns-a, ns-b.');
@@ -368,6 +368,7 @@ describe('AccountService', () => {
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
       baseUrl: 'https://api.github.com',
+      token: null,
     };
     service.updateAccount(id, request);
 
@@ -383,14 +384,14 @@ describe('AccountService', () => {
 
   it('should clear saveError at start of updateAccount', () => {
     // Arrange — updateAccount call that fails
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Conflict', {
       status: 409,
       statusText: 'Conflict',
     });
 
     // Act — second updateAccount call clears error immediately
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
@@ -421,6 +422,7 @@ describe('AccountService', () => {
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
       baseUrl: 'https://api.github.com',
+      token: null,
     };
 
     // Act
@@ -436,6 +438,7 @@ describe('AccountService', () => {
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
       baseUrl: 'https://api.github.com',
+      token: null,
     };
     service.loadAccounts();
     httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
@@ -457,6 +460,7 @@ describe('AccountService', () => {
     const updatedAccount: AccountSummary = { ...MOCK_ACCOUNT, name: 'Updated GitHub' };
     const request: UpdateAccountRequest = {
       baseUrl: 'https://api.github.com',
+      token: null,
     };
 
     // Act
@@ -576,7 +580,7 @@ describe('AccountService', () => {
     ];
 
     // Act
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
 
     // Assert
@@ -585,7 +589,7 @@ describe('AccountService', () => {
 
   it('should set affectedRepositories to empty array when no repos are affected', () => {
     // Arrange / Act
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, []));
 
     // Assert
@@ -598,7 +602,7 @@ describe('AccountService', () => {
     const showSpy = vi.spyOn(toastService, 'show');
 
     // Act
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, []));
 
     // Assert
@@ -614,7 +618,7 @@ describe('AccountService', () => {
     ];
 
     // Act
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
 
     // Assert
@@ -626,11 +630,11 @@ describe('AccountService', () => {
     const affected: AffectedRepository[] = [
       { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
     ];
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
 
     // Act — second call resets signal before response
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
 
     // Assert — signal reset immediately
     expect(service.affectedRepositories()).toBeNull();
@@ -642,7 +646,7 @@ describe('AccountService', () => {
     const affected: AffectedRepository[] = [
       { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
     ];
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
 
     // Act — createAccount resets signal before response
@@ -658,7 +662,7 @@ describe('AccountService', () => {
     const affected: AffectedRepository[] = [
       { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
     ];
-    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com' });
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
 
     // Act
@@ -680,7 +684,7 @@ describe('AccountService', () => {
     // Assert
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(request);
-    req.flush({ isValid: true, isAuthFailure: false, missingScopes: [] });
+    req.flush({ isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: null });
   });
 
   it('should set validating to true while validateToken is in flight', () => {
@@ -695,7 +699,9 @@ describe('AccountService', () => {
     httpMock.expectOne('/api/accounts/validate-token').flush({
       isValid: true,
       isAuthFailure: false,
+      scopesVerified: true,
       missingScopes: [],
+      accountName: null,
     });
   });
 
@@ -706,7 +712,9 @@ describe('AccountService', () => {
     httpMock.expectOne('/api/accounts/validate-token').flush({
       isValid: true,
       isAuthFailure: false,
+      scopesVerified: true,
       missingScopes: [],
+      accountName: null,
     });
 
     // Assert
@@ -714,7 +722,9 @@ describe('AccountService', () => {
     expect(service.validationResult()).toEqual({
       isValid: true,
       isAuthFailure: false,
+      scopesVerified: true,
       missingScopes: [],
+      accountName: null,
     });
   });
 
@@ -762,7 +772,9 @@ describe('AccountService', () => {
     httpMock.expectOne('/api/accounts/validate-token').flush({
       isValid: true,
       isAuthFailure: false,
+      scopesVerified: true,
       missingScopes: [],
+      accountName: null,
     });
   });
 

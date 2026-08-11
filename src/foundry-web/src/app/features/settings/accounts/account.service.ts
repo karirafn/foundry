@@ -1,19 +1,13 @@
 import { Injectable, Signal, WritableSignal, effect, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, NamespaceConflictResponse, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, NamespaceConflictResponse, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
 
 const API_BASE = '/api/accounts';
 const PROVIDERS_API_BASE = '/api/providers';
 const TOAST_ALL_RETAINED = 'Token updated. All repositories retained their access.';
-
-interface ValidateTokenRequest {
-  token: string;
-  baseUrl: string;
-  providerType: string;
-}
 
 @Injectable({ providedIn: 'root' })
 export class AccountService {
@@ -121,7 +115,7 @@ export class AccountService {
           this._savingSignal.set(false);
           return;
         }
-        if (err.status === 400 && this._isTakeoverValidationResponse(err.error)) {
+        if (err.status === 422 && this._isTakeoverValidationResponse(err.error)) {
           const body = err.error as TakeoverValidationResponse;
           this._saveErrorSignal.set(`Invalid namespaces for takeover: ${body.invalidNamespaces.join(', ')}.`);
           this._savingSignal.set(false);

@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using Foundry.Modules.Credentials.Domain.Entities;
 
 using Microsoft.EntityFrameworkCore;
@@ -8,8 +10,16 @@ namespace Foundry.Modules.Credentials.Features;
 
 internal sealed class ClaudeAccountSeeder(IServiceScopeFactory scopeFactory) : IHostedLifecycleService
 {
+    private const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
+
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
+        // Skip DB seeding when the build-time OpenAPI doc generation tool runs the app entry point.
+        if (Assembly.GetEntryAssembly()?.GetName().Name == DocGenerationEntryAssemblyName)
+        {
+            return;
+        }
+
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 

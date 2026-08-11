@@ -614,10 +614,10 @@ export class AccountFormComponent implements OnInit {
   onSave(): void {
     const acc = this.account();
     if (acc !== null) {
-      const token = this._token() || undefined;
+      const token = this._token() || null;
       const request: UpdateAccountRequest = {
         baseUrl: this._baseUrl(),
-        ...(token !== undefined ? { token } : {}),
+        token,
       };
       this.save.emit(request);
     } else {

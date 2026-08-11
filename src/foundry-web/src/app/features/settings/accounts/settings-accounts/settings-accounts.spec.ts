@@ -280,6 +280,7 @@ describe('SettingsAccountsComponent', () => {
     // Act
     fixture.componentInstance.onSaveExistingAccount({
       baseUrl: 'https://github.com',
+      token: null,
     });
 
     // Assert
@@ -287,6 +288,7 @@ describe('SettingsAccountsComponent', () => {
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({
       baseUrl: 'https://github.com',
+      token: null,
     });
     req.flush(makeUpdateResult({
       id: '1',
@@ -356,7 +358,7 @@ describe('SettingsAccountsComponent', () => {
     fixture.componentInstance.onEditAccount(account);
     fixture.detectChanges();
     flushTokenRequirements(httpMock);
-    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com', token: null });
     const affected: AffectedRepository[] = [
       { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
     ];
@@ -389,7 +391,7 @@ describe('SettingsAccountsComponent', () => {
     fixture.componentInstance.onEditAccount(account);
     fixture.detectChanges();
     flushTokenRequirements(httpMock);
-    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com', token: null });
     httpMock.expectOne(`/api/accounts/${account.id}`).flush(makeUpdateResult(account, []));
     fixture.detectChanges();
     // flush reload
@@ -419,7 +421,7 @@ describe('SettingsAccountsComponent', () => {
     fixture.componentInstance.onEditAccount(account);
     fixture.detectChanges();
     flushTokenRequirements(httpMock);
-    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com', token: null });
     const affected: AffectedRepository[] = [
       { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
     ];
@@ -456,7 +458,7 @@ describe('SettingsAccountsComponent', () => {
     fixture.componentInstance.onEditAccount(account);
     fixture.detectChanges();
     flushTokenRequirements(httpMock);
-    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com', token: null });
     const affected: AffectedRepository[] = [
       { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
     ];
@@ -537,7 +539,7 @@ describe('SettingsAccountsComponent', () => {
     fixture.componentInstance.onEditAccount(account);
     fixture.detectChanges();
     flushTokenRequirements(httpMock);
-    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com' });
+    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com', token: null });
     const affected: AffectedRepository[] = [
       { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
     ];

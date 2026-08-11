@@ -1,75 +1,30 @@
+import { Schemas } from '../../../api';
+
+// Generated type aliases — shape is owned by the OpenAPI contract in schema.ts.
+// Exported names are preserved so no importer's specifier changes.
+
+export type AccountSummary = Schemas['CredentialSummary'];
+export type CredentialCreationResult = Schemas['CredentialCreationResult'];
+export type CredentialUpdateResult = Schemas['CredentialUpdateResult'];
+export type CreateAccountRequest = Schemas['CreateAccountRequestBody'];
+export type UpdateAccountRequest = Schemas['UpdateAccountRequestBody'];
+export type TokenValidationResult = Schemas['ValidateTokenResponse'];
+export type ValidateTokenRequest = Schemas['ValidateTokenRequestBody'];
+export type AffectedRepository = Schemas['AffectedRepository'];
+export type NamespaceConflict = Schemas['NamespaceConflict'];
+export type NamespaceConflictResponse = Schemas['NamespaceConflictResponse'];
+export type TakeoverValidationResponse = Schemas['TakeoverValidationResponse'];
+export type TokenRequirements = Schemas['TokenRequirements'];
+
+// Client-side refinements layered over the generated string wire type.
+// The API returns these fields as open strings so they are intentionally not generated.
+// ProviderType refines CredentialSummary.provider.
+// AffectedRepositoryStatus refines AffectedRepository.previousStatus and AffectedRepository.newStatus.
+// Update these unions when the corresponding C# contract values change.
 export type ProviderType = 'GitHub' | 'GitLab';
-
-export interface AccountSummary {
-  id: string;
-  name: string;
-  providerType: string;
-  baseUrl: string;
-  hasToken: boolean;
-  namespaces: string[];
-}
-
-export interface NamespaceConflict {
-  namespace: string;
-  holderCredentialId: string;
-  holderName: string;
-}
-
-export interface NamespaceConflictResponse {
-  conflicts: NamespaceConflict[];
-}
-
-export interface TakeoverValidationResponse {
-  invalidNamespaces: string[];
-}
-
-export interface CredentialCreationResult {
-  credential: AccountSummary;
-  affectedRepositories: AffectedRepository[];
-}
-
-export interface CreateAccountRequest {
-  providerType: string;
-  baseUrl: string;
-  token: string;
-  takeoverNamespaces?: string[];
-}
-
-export interface UpdateAccountRequest {
-  baseUrl: string;
-  token?: string;
-}
-
-export interface TokenValidationResult {
-  isValid: boolean;
-  isAuthFailure: boolean;
-  missingScopes: string[];
-  accountName: string | null;
-}
-
 export type AffectedRepositoryStatus = 'eligible' | 'ineligible' | 'unreachable';
 
-export interface AffectedRepository {
-  id: string;
-  slug: string;
-  previousStatus: AffectedRepositoryStatus;
-  newStatus: AffectedRepositoryStatus;
-}
-
-export interface CredentialUpdateResult {
-  credential: AccountSummary;
-  affectedRepositories: AffectedRepository[];
-}
-
-export interface TokenRequirements {
-  readonly providerType: string;
-  readonly tokenTypeLabel: string;
-  readonly scopes: readonly string[];
-  readonly creationUrlTemplate: string;
-  readonly resourceOwnerHint: string | null;
-}
-
-export function affectedStatusLabel(status: AffectedRepositoryStatus): string {
+export function affectedStatusLabel(status: AffectedRepositoryStatus | string): string {
   switch (status) {
     case 'eligible':
       return 'Eligible';
@@ -77,5 +32,7 @@ export function affectedStatusLabel(status: AffectedRepositoryStatus): string {
       return 'Ineligible';
     case 'unreachable':
       return 'Unable to verify branch protection';
+    default:
+      return status;
   }
 }

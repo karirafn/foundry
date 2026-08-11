@@ -1,4 +1,6 @@
+using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 using Foundry.Modules.Credentials;
 using Foundry.Modules.Credentials.Contracts;
@@ -16,17 +18,28 @@ using Foundry.WebApi.Hubs;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.EntityFrameworkCore;
 
 const string AngularDevServerPolicy = "AngularDevServer";
+const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
+
+// GetDocument.Insider is the build-time OpenAPI doc generation tool entry point.
+// When running under it, skip non-essential startup logic that requires a live database or filesystem.
+bool isDocGeneration = Assembly.GetEntryAssembly()?.GetName().Name == DocGenerationEntryAssemblyName;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo("data/dp-keys"));
+
+if (!isDocGeneration)
+{
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo("data/dp-keys"));
+}
+
 builder.Services.AddScoped<IntegrationEventCollector>();
 builder.Services.AddScoped<OutboxSaveChangesInterceptor>();
 builder.Services.AddDbContext<FoundryDbContext>((sp, options) =>
@@ -40,13 +53,42 @@ builder.Services.AddScoped<IIntegrationEventDispatcher, OutboxIntegrationEventDi
 builder.Services.AddScoped<IIntegrationEventProcessor, IntegrationEventProcessor>();
 builder.Services.Configure<OutboxOptions>(builder.Configuration.GetSection("Outbox"));
 builder.Services.AddOutboxOptionsValidation();
-builder.Services.AddHostedService<OutboxRelayService>();
+
+if (!isDocGeneration)
+{
+    builder.Services.AddHostedService<OutboxRelayService>();
+}
+
 builder.Services.AddCredentialsModule();
 builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule(builder.Configuration);
 builder.Services.AddWorkersModule(builder.Configuration);
 builder.Services.AddSettingsModule();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    // Qualifies nested schema types by their outermost declaring type (e.g. "OuterSimpleName").
+    // Collision-free as long as no two distinct nested endpoint DTO types share the same
+    // outermost.Name + simpleName combination. A future collision would surface immediately
+    // in the regenerated v1.json diff caught by CI.
+    options.CreateSchemaReferenceId = (JsonTypeInfo jsonTypeInfo) =>
+    {
+        string? defaultId = OpenApiOptions.CreateDefaultSchemaReferenceId(jsonTypeInfo);
+        if (defaultId is null)
+        {
+            return null;
+        }
+
+        Type outermost = jsonTypeInfo.Type;
+        while (outermost.DeclaringType is Type declaring)
+        {
+            outermost = declaring;
+        }
+
+        return ReferenceEquals(outermost, jsonTypeInfo.Type)
+            ? defaultId
+            : outermost.Name + defaultId;
+    };
+});
 
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
@@ -72,9 +114,12 @@ GlobalExceptionLogging.Install(app.Services.GetRequiredService<ILoggerFactory>()
 
 if (app.Environment.IsDevelopment())
 {
-    using AsyncServiceScope scope = app.Services.CreateAsyncScope();
-    FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-    dbContext.Database.Migrate();
+    if (!isDocGeneration)
+    {
+        using AsyncServiceScope scope = app.Services.CreateAsyncScope();
+        FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+        dbContext.Database.Migrate();
+    }
 
     app.UseCors(AngularDevServerPolicy);
     app.MapOpenApi();

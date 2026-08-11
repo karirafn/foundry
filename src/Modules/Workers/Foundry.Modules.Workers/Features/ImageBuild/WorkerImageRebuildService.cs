@@ -1,4 +1,5 @@
 using System.Formats.Tar;
+using System.Reflection;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -27,6 +28,8 @@ internal sealed class WorkerImageRebuildService(
     internal const string ImageBuildCategory = "image-build";
     internal const string BaseDockerfile = "Dockerfile.base";
     internal const string LoginDockerfile = "Dockerfile.login";
+
+    private const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
 
     // These constants are promoted to WorkerImageNames in Contracts so the Settings module
     // can compose the login command without a cross-module circular dependency.
@@ -87,6 +90,12 @@ internal sealed class WorkerImageRebuildService(
 
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
+        // Skip DB access and image operations when the build-time OpenAPI doc generation tool runs the app.
+        if (Assembly.GetEntryAssembly()?.GetName().Name == DocGenerationEntryAssemblyName)
+        {
+            return;
+        }
+
         SubscribeToImmediateRebuild();
 
         if (!_options.ImageBuild.Enabled)
