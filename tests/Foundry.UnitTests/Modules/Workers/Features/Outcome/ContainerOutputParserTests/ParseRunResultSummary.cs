@@ -206,6 +206,24 @@ public sealed class ParseRunResultSummary
     }
 
     [Fact]
+    public void WhenIsErrorTrueWithSuccessSubtype_SubtypeIsNormalizedToNull()
+    {
+        // Arrange — the Claude CLI emits subtype:"success" even when is_error:true; this
+        // fixture reproduces that exact payload.
+        string log =
+            """{"type":"result","subtype":"success","is_error":true,"duration_ms":800,"num_turns":4,"result":"An error occurred."}""";
+
+        // Act
+        RunResultSummary? result = _sut.ParseRunResultSummary(log);
+
+        // Assert
+        RunResultSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.IsError.ShouldBeTrue(),
+            () => summary.Subtype.ShouldBeNull());
+    }
+
+    [Fact]
     public void WhenMixedTimestampedAndPlainLines_StillExtractsRunResultSummary()
     {
         // Arrange — lines without timestamps (e.g. persisted output before timestamps were enabled)

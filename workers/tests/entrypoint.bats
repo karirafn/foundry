@@ -614,6 +614,348 @@ set_required_env_no_auth() {
 # OAuth settings-write: atomic mv -f replaces a stale read-only settings.json
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Transient API error retry tests (is_transient_api_error + resume via claude -c)
+# Mirrors ContainerOutputParser.IsTransientApiError — both must stay in sync.
+# ---------------------------------------------------------------------------
+
+# Write a fake claude that:
+#   - On first call: emits a transient JSON line (5xx status) and exits non-zero
+#   - On second call (-c resume): emits a success JSON line and exits 0
+# Records a call-count marker under $BATS_TEST_TMPDIR.
+make_fake_claude_transient_then_success() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    local resume_args_file="$BATS_TEST_TMPDIR/claude_resume_args"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: transient on first call, success on second (-c resume)
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+if [ "\$count" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable"}'
+    exit 1
+else
+    # Record whether -c was passed on the resume call
+    printf '%s\n' "\$*" > "${resume_args_file}"
+    printf '%s\n' '{"is_error":false,"result":"Completed successfully","subtype":"success"}'
+    exit 0
+fi
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude that always emits a transient JSON line and exits non-zero.
+# Used to assert that only ONE resume is attempted.
+make_fake_claude_always_transient() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: always transient (5xx status)
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable"}'
+exit 1
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude that emits a transient JSON line via known phrase
+# (no numeric status) on first call; success on second.
+make_fake_claude_phrase_transient_then_success() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: phrase-based transient on first call, success on second (-c resume)
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+if [ "\$count" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"result":"API Error: 529 Overloaded"}'
+    exit 1
+else
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    exit 0
+fi
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude that emits a NON-transient failure on first call (no resume expected).
+make_fake_claude_nontransient_failure() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: non-transient failure (is_error true, no 5xx, no known phrase)
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+printf '%s\n' '{"is_error":true,"result":"some other error"}'
+exit 1
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude that exits 0 on first call (success, no resume expected).
+make_fake_claude_success_first() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: success on first call
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "transient retry: claude is invoked twice when first call returns 5xx transient error" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 2 ]
+}
+
+@test "transient retry: resume call uses -c flag" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local resume_args_file="$BATS_TEST_TMPDIR/claude_resume_args"
+    [ -f "$resume_args_file" ]
+    local args
+    args="$(cat "$resume_args_file")"
+    [[ "$args" =~ (^| )-c( |$) ]]
+}
+
+@test "transient retry: last output line is the success JSON from the resume call" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    # The last line of stdout must be the resume's success JSON
+    local last_line
+    last_line="$(printf '%s\n' "$output" | grep '^{' | tail -1)"
+    [[ "$last_line" == *'"is_error":false'* ]]
+    [[ "$last_line" == *'"subtype":"success"'* ]]
+}
+
+@test "transient retry: when resume also fails transiently, exactly two claude calls are made" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_always_transient
+
+    run bash "$ENTRYPOINT"
+
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 2 ]
+}
+
+@test "transient retry: when resume also fails transiently, last JSON line still carries transient signal" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_always_transient
+
+    run bash "$ENTRYPOINT"
+
+    local last_line
+    last_line="$(printf '%s\n' "$output" | grep '^{' | tail -1)"
+    # The last JSON must still classify as transient (5xx status)
+    [[ "$last_line" == *'"api_error_status":503'* ]]
+}
+
+@test "transient retry: phrase-based transient (API Error: 529 Overloaded) triggers resume" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_phrase_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 2 ]
+}
+
+@test "transient retry: phrase-based transient resume succeeds — last JSON is success" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_phrase_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local last_line
+    last_line="$(printf '%s\n' "$output" | grep '^{' | tail -1)"
+    [[ "$last_line" == *'"is_error":false'* ]]
+}
+
+@test "transient retry: non-transient failure does NOT trigger resume (claude called once)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_nontransient_failure
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 1 ]
+}
+
+@test "transient retry: non-transient failure — exit code is non-zero (behaviour unchanged)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_nontransient_failure
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+}
+
+@test "transient retry: success on first call does NOT trigger resume (claude called once)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_success_first
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 1 ]
+}
+
+# Write a fake claude that emits the "Connection closed mid-response" phrase
+# on first call; success on second (-c resume).
+make_fake_claude_connection_closed_then_success() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: connection-closed phrase transient on first call, success on second
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+if [ "\$count" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"result":"API Error: Connection closed mid-response"}'
+    exit 1
+else
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    exit 0
+fi
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "transient retry: phrase 'API Error: Connection closed mid-response' triggers resume (2 calls)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_connection_closed_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 2 ]
+}
+
+@test "transient retry: phrase 'API Error: Connection closed mid-response' resume succeeds — last JSON is success" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_connection_closed_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local last_line
+    last_line="$(printf '%s\n' "$output" | grep '^{' | tail -1)"
+    [[ "$last_line" == *'"is_error":false'* ]]
+    [[ "$last_line" == *'"subtype":"success"'* ]]
+}
+
+# Write a fake claude that emits is_error:false with a 5xx api_error_status
+# on first call (5xx classification is independent of is_error — mirrors C#).
+make_fake_claude_5xx_no_is_error_then_success() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: 5xx status with is_error:false on first call, success on second
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+if [ "\$count" -eq 1 ]; then
+    printf '%s\n' '{"is_error":false,"api_error_status":503}'
+    exit 1
+else
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    exit 0
+fi
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "transient retry: 5xx api_error_status triggers resume regardless of is_error flag (2 calls)" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_5xx_no_is_error_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    [ -f "$call_count_file" ]
+    local count
+    count="$(cat "$call_count_file")"
+    [ "$count" -eq 2 ]
+}
+
+# ---------------------------------------------------------------------------
+
 @test "oauth settings-write: CLAUDE_SETTINGS_JSON overwrites a pre-existing chmod 444 settings.json" {
     make_fake_claude
     make_fake_git
