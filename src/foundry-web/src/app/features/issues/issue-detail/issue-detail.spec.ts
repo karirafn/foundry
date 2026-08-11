@@ -9,6 +9,7 @@ import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
+import { RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -496,58 +497,29 @@ describe('IssueDetailComponent', () => {
   });
 
   // Retry button — shown for all retryable states
-  it('should render the retry button when state is failed', () => {
-    // Arrange
-    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
-
-    // Act
-    const fixture = createComponent(failedDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toBe('Retry Issue');
+  // Positive cases are driven by RETRYABLE_STATES so the spec stays bound to
+  // the single source of truth; adding a state to the set automatically tests it.
+  it('should cover the expected set of retryable states', () => {
+    // Arrange + Assert — pin membership so an unreviewed addition is caught
+    expect([...RETRYABLE_STATES].sort()).toEqual(
+      ['continuable_failed', 'failed', 'revision_failed', 'unchanged'],
+    );
   });
 
-  it('should render the retry button when state is continuable_failed', () => {
-    // Arrange
-    const continuableDetail: IssueDetail = { ...mockDetail, state: 'continuable_failed' };
+  for (const state of RETRYABLE_STATES) {
+    it(`should render the retry button when state is ${state}`, () => {
+      // Arrange
+      const retryableDetail: IssueDetail = { ...mockDetail, state };
 
-    // Act
-    const fixture = createComponent(continuableDetail);
-    const el = fixture.nativeElement as HTMLElement;
+      // Act
+      const fixture = createComponent(retryableDetail);
+      const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-  });
-
-  it('should render the retry button when state is revision_failed', () => {
-    // Arrange
-    const revisionFailedDetail: IssueDetail = { ...mockDetail, state: 'revision_failed' };
-
-    // Act
-    const fixture = createComponent(revisionFailedDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-  });
-
-  it('should render the retry button when state is unchanged', () => {
-    // Arrange
-    const unchangedDetail: IssueDetail = { ...mockDetail, state: 'unchanged' };
-
-    // Act
-    const fixture = createComponent(unchangedDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-  });
+      // Assert
+      const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
+      expect(btn).toBeTruthy();
+    });
+  }
 
   it('should not render the retry button for a non-retryable state (completed)', () => {
     // Arrange — completed is not in the retryable set

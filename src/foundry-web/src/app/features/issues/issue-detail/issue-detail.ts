@@ -22,7 +22,7 @@ import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { providerTerminology } from '../../../shared/utils/provider.util';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
-import { RETRYABLE_STATES } from '../../../shared/utils/issue-state';
+import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
 @Component({
   selector: 'fd-issue-detail',
@@ -228,7 +228,8 @@ import { RETRYABLE_STATES } from '../../../shared/utils/issue-state';
             >{{ _issueService.retrying() ? 'Retrying Issue...' : 'Retry Issue' }}</button>
             <span
               class="issue-detail__retry-error"
-              role="alert"
+              aria-live="assertive"
+              aria-atomic="true"
             >{{ _issueService.retryError() ?? '' }}</span>
             <span
               class="issue-detail__retry-success-announcement sr-only"
@@ -296,7 +297,7 @@ export class IssueDetailComponent {
   }
 
   protected _isRetryable(state: string): boolean {
-    return RETRYABLE_STATES.has(state as Parameters<typeof RETRYABLE_STATES.has>[0]);
+    return RETRYABLE_STATES.has(state as IssueState);
   }
 
   protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {
