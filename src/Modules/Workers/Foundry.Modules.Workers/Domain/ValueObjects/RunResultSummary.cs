@@ -47,9 +47,16 @@ public sealed record RunResultSummary
         int? inputTokens,
         int? outputTokens)
     {
+        // The Claude CLI emits subtype:"success" even when is_error:true — normalize the
+        // misleading value to null so a failed run never surfaces a "success" subtype.
+        // Genuine error subtypes (e.g. "error_max_turns") are preserved unchanged.
+        string? normalizedSubtype = isError && string.Equals(subtype, "success", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : subtype;
+
         return new RunResultSummary(
             resultText,
-            subtype,
+            normalizedSubtype,
             isError,
             durationMs,
             numTurns,
