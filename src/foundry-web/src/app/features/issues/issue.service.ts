@@ -78,8 +78,8 @@ export class IssueService {
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
     const all = this.issues();
-    // Resolved states never enter issues() — filtered in loadIssues/_upsertIssue —
-    // so this sort never encounters completed or unchanged.
+    // Resolved states (currently only `completed`) never enter issues() — filtered in
+    // loadIssues/_upsertIssue — so this sort never encounters them.
 
     // Build server-index map once so the comparator is O(1) per lookup (not O(n²) indexOf).
     const serverIndex = new Map<string, number>(all.map((issue, i) => [issue.id, i]));
