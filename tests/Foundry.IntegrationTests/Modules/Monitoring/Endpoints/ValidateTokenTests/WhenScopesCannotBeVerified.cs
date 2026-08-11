@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
@@ -22,11 +21,10 @@ public sealed class WhenScopesCannotBeVerified : IAsyncDisposable
     public WhenScopesCannotBeVerified()
     {
         ValidateToken.Response scopesUnverifiableResponse = new(
-            IsValid: false,
-            IsAuthFailure: false,
-            ScopesVerified: false,
+            Kind: ValidateToken.Kinds.ScopesUnverifiable,
+            AccountName: null,
             MissingScopes: [],
-            AccountName: null);
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -43,7 +41,7 @@ public sealed class WhenScopesCannotBeVerified : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithScopesVerifiedFalseAndIsValidFalse()
+    public async Task ReturnsOkWithScopesUnverifiableKind()
     {
         // Arrange
         object body = new { token = "glpat_unverifiable", baseUrl = "https://gitlab.com", providerType = "gitlab" };
@@ -60,8 +58,7 @@ public sealed class WhenScopesCannotBeVerified : IAsyncDisposable
             .ReadFromJsonAsync<ValidateToken.Response>(TestContext.Current.CancellationToken);
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
-            () => dto.IsValid.ShouldBeFalse(),
-            () => dto.ScopesVerified.ShouldBeFalse(),
+            () => dto.Kind.ShouldBe(ValidateToken.Kinds.ScopesUnverifiable),
             () => dto.MissingScopes.ShouldBeEmpty());
     }
 

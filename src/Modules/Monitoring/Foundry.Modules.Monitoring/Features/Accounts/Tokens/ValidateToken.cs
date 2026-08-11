@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -17,14 +18,22 @@ namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 internal static class ValidateToken
 {
+    internal static class Kinds
+    {
+        internal const string Authenticated = "authenticated";
+        internal const string AuthenticationFailed = "authenticationFailed";
+        internal const string ScopesUnverifiable = "scopesUnverifiable";
+        internal const string IdentityUnresolved = "identityUnresolved";
+        internal const string ProviderMismatch = "providerMismatch";
+    }
+
     internal sealed record Query(string Token, Uri ApiBaseUrl, string ProviderType) : IQuery<Response>;
 
     internal sealed record Response(
-        bool IsValid,
-        bool IsAuthFailure,
-        bool ScopesVerified,
+        string Kind,
+        string? AccountName,
         IReadOnlyList<string> MissingScopes,
-        string? AccountName);
+        string? DetectedProvider);
 
     internal sealed class Handler(
         GitHubHttpClient gitHubHttpClient,
@@ -53,36 +62,31 @@ internal static class ValidateToken
             outcome switch
             {
                 TokenValidationOutcome.AuthenticatedOutcome auth => new Response(
-                    IsValid: auth.MissingScopes.Count == 0,
-                    IsAuthFailure: false,
-                    ScopesVerified: true,
+                    Kind: Kinds.Authenticated,
+                    AccountName: auth.AccountName,
                     MissingScopes: auth.MissingScopes,
-                    AccountName: auth.AccountName),
+                    DetectedProvider: null),
                 TokenValidationOutcome.AuthenticationFailedOutcome => new Response(
-                    IsValid: false,
-                    IsAuthFailure: true,
-                    ScopesVerified: false,
+                    Kind: Kinds.AuthenticationFailed,
+                    AccountName: null,
                     MissingScopes: [],
-                    AccountName: null),
+                    DetectedProvider: null),
                 TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => new Response(
-                    IsValid: false,
-                    IsAuthFailure: false,
-                    ScopesVerified: false,
+                    Kind: Kinds.ScopesUnverifiable,
+                    AccountName: unverifiable.AccountName,
                     MissingScopes: [],
-                    AccountName: unverifiable.AccountName),
+                    DetectedProvider: null),
                 TokenValidationOutcome.IdentityUnresolvedOutcome => new Response(
-                    IsValid: false,
-                    IsAuthFailure: false,
-                    ScopesVerified: false,
+                    Kind: Kinds.IdentityUnresolved,
+                    AccountName: null,
                     MissingScopes: [],
-                    AccountName: null),
-                TokenValidationOutcome.ProviderMismatchOutcome => new Response(
-                    IsValid: false,
-                    IsAuthFailure: false,
-                    ScopesVerified: false,
+                    DetectedProvider: null),
+                TokenValidationOutcome.ProviderMismatchOutcome mismatch => new Response(
+                    Kind: Kinds.ProviderMismatch,
+                    AccountName: null,
                     MissingScopes: [],
-                    AccountName: null),
-                _ => throw new System.Diagnostics.UnreachableException($"Unhandled outcome: {outcome.GetType().Name}"),
+                    DetectedProvider: mismatch.DetectedProvider),
+                _ => throw new UnreachableException($"Unhandled outcome: {outcome.GetType().Name}"),
             };
     }
 

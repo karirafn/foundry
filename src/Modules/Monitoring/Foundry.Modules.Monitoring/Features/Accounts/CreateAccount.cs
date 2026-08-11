@@ -144,7 +144,7 @@ internal static partial class CreateAccount
             }
 
             ValidateToken.Response tokenResponse = tokenSuccess.Value;
-            if (!tokenResponse.IsValid)
+            if (tokenResponse.Kind != ValidateToken.Kinds.Authenticated)
             {
                 return new Outcome.Failure(CredentialErrors.InvalidToken);
             }

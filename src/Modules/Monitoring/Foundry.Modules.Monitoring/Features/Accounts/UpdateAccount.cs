@@ -112,7 +112,7 @@ internal static partial class UpdateAccount
                         $"Token validation returned an unexpected result type: {tokenResult.GetType().Name}");
                 }
 
-                if (!tokenResponse.IsValid)
+                if (tokenResponse.Kind != ValidateToken.Kinds.Authenticated)
                 {
                     return Result<CredentialUpdateResult>.Fail(CredentialErrors.InvalidToken);
                 }

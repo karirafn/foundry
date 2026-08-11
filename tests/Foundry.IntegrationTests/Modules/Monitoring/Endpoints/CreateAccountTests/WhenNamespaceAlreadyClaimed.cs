@@ -121,11 +121,10 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
         {
             string accountName = tokenToName.TryGetValue(query.Token, out string? name) ? name : "unknown";
             ValidateToken.Response response = new(
-                IsValid: true,
-                IsAuthFailure: false,
-                ScopesVerified: true,
+                Kind: ValidateToken.Kinds.Authenticated,
+                AccountName: accountName,
                 MissingScopes: [],
-                AccountName: accountName);
+                DetectedProvider: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

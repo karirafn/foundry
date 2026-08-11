@@ -32,7 +32,11 @@ public sealed class WhenAccountExists : IAsyncDisposable
 
     public WhenAccountExists()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, ScopesVerified: true, MissingScopes: [], AccountName: "octocat");
+        ValidateToken.Response validResponse = new(
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: "octocat",
+            MissingScopes: [],
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();

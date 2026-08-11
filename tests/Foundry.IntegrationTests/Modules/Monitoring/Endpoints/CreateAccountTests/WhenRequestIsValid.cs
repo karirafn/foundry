@@ -35,11 +35,10 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
     public WhenRequestIsValid()
     {
         ValidateToken.Response validResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: ResolvedAccountName,
             MissingScopes: [],
-            AccountName: ResolvedAccountName);
+            DetectedProvider: null);
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {

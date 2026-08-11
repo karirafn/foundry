@@ -35,11 +35,10 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
     public WhenRequestIsValid()
     {
         ValidateToken.Response validResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: InitialAccountName,
             MissingScopes: [],
-            AccountName: InitialAccountName);
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -230,11 +229,10 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
                 ? name
                 : "default-user";
             ValidateToken.Response response = new(
-                IsValid: true,
-                IsAuthFailure: false,
-                ScopesVerified: true,
+                Kind: ValidateToken.Kinds.Authenticated,
+                AccountName: accountName,
                 MissingScopes: [],
-                AccountName: accountName);
+                DetectedProvider: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

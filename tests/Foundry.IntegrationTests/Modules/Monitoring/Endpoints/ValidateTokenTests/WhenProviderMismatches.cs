@@ -13,24 +13,14 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.ValidateTokenTests;
 
-public sealed class WhenTokenLacksScopes : IAsyncDisposable
+public sealed class WhenProviderMismatches : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenTokenLacksScopes()
+    public WhenProviderMismatches()
     {
-        ValidateToken.Response missingRepoResponse = new(
-            Kind: ValidateToken.Kinds.Authenticated,
-            AccountName: null,
-            MissingScopes: ["repo"],
-            DetectedProvider: null);
-        _factory = FoundryWebAppFactory.WithOverrides(services =>
-        {
-            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
-            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
-                _ => new StubHandler(Result<ValidateToken.Response>.Ok(missingRepoResponse)));
-        });
+        _factory = new FoundryWebAppFactory();
         _client = _factory.CreateClient();
     }
 
@@ -41,13 +31,27 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithAuthenticatedKindAndMissingScopes()
+    public async Task WhenGitHubTokenSentToGitLab_ReturnsOkWithProviderMismatchKindNamingGitHub()
     {
-        // Arrange
-        object body = new { token = "ghp_limited", baseUrl = "https://api.github.com", providerType = "github" };
+        // Arrange — stub the handler to return a ProviderMismatch outcome naming GitHub as detected
+        ValidateToken.Response mismatchResponse = new(
+            Kind: ValidateToken.Kinds.ProviderMismatch,
+            AccountName: null,
+            MissingScopes: [],
+            DetectedProvider: "github");
+
+        await using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubHandler(Result<ValidateToken.Response>.Ok(mismatchResponse)));
+        });
+        using HttpClient client = factory.CreateClient();
+
+        object body = new { token = "ghp_github_token", baseUrl = "https://gitlab.com", providerType = "gitlab" };
 
         // Act
-        HttpResponseMessage response = await _client.PostAsJsonAsync(
+        HttpResponseMessage response = await client.PostAsJsonAsync(
             new Uri("/api/accounts/validate-token", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
@@ -58,8 +62,10 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
             .ReadFromJsonAsync<ValidateToken.Response>(TestContext.Current.CancellationToken);
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
-            () => dto.Kind.ShouldBe(ValidateToken.Kinds.Authenticated),
-            () => dto.MissingScopes.ShouldContain("repo"));
+            () => dto.Kind.ShouldBe(ValidateToken.Kinds.ProviderMismatch),
+            () => dto.DetectedProvider.ShouldBe("github"),
+            () => dto.AccountName.ShouldBeNull(),
+            () => dto.MissingScopes.ShouldBeEmpty());
     }
 
     private sealed class StubHandler(Result<ValidateToken.Response> result)
