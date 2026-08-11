@@ -66,7 +66,7 @@ describe('AccountService', () => {
     expect(service.accounts()).toEqual([]);
     expect(service.loading()).toBe(false);
     expect(service.saving()).toBe(false);
-    expect(service.deleting()).toBe(false);
+    expect(service.deletingAccountId()).toBeNull();
     expect(service.validating()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
     expect(service.validationResult()).toBeNull();
@@ -488,7 +488,7 @@ describe('AccountService', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
   });
 
-  it('should set deleting to true while deleteAccount is in flight', () => {
+  it('should set deletingAccountId to the account id while deleteAccount is in flight', () => {
     // Arrange
     const id = MOCK_ACCOUNT.id;
 
@@ -496,11 +496,11 @@ describe('AccountService', () => {
     service.deleteAccount(id);
 
     // Assert — before flush
-    expect(service.deleting()).toBe(true);
+    expect(service.deletingAccountId()).toBe(id);
     httpMock.expectOne(`/api/accounts/${id}`).flush(null, { status: 204, statusText: 'No Content' });
   });
 
-  it('should set deleting to false after deleteAccount succeeds', () => {
+  it('should set deletingAccountId to null after deleteAccount succeeds', () => {
     // Arrange
     service.deleteAccount(MOCK_ACCOUNT.id);
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(null, {
@@ -509,7 +509,7 @@ describe('AccountService', () => {
     });
 
     // Assert
-    expect(service.deleting()).toBe(false);
+    expect(service.deletingAccountId()).toBeNull();
   });
 
   it('should set deleteError when deleteAccount fails with a string body', () => {
@@ -1126,16 +1126,16 @@ describe('AccountService', () => {
       httpMock.match('/api/accounts');
     });
 
-    it('should clear deleting and set deleteError when deleteAccount request times out after 60s', () => {
+    it('should clear deletingAccountId and set deleteError when deleteAccount request times out after 60s', () => {
       // Arrange
       service.deleteAccount(MOCK_ACCOUNT.id);
-      expect(service.deleting()).toBe(true);
+      expect(service.deletingAccountId()).toBe(MOCK_ACCOUNT.id);
 
       // Act — advance past timeout
       vi.advanceTimersByTime(60_000);
 
       // Assert
-      expect(service.deleting()).toBe(false);
+      expect(service.deletingAccountId()).toBeNull();
       expect(service.deleteError()).toBe('The request timed out. Please try again.');
 
       // Drain the cancelled request

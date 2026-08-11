@@ -26,8 +26,8 @@ export class AccountService {
   private readonly _savingSignal: WritableSignal<boolean> = signal(false);
   readonly saving: Signal<boolean> = this._savingSignal.asReadonly();
 
-  private readonly _deletingSignal: WritableSignal<boolean> = signal(false);
-  readonly deleting: Signal<boolean> = this._deletingSignal.asReadonly();
+  private readonly _deletingAccountIdSignal: WritableSignal<string | null> = signal(null);
+  readonly deletingAccountId: Signal<string | null> = this._deletingAccountIdSignal.asReadonly();
 
   private readonly _validatingSignal: WritableSignal<boolean> = signal(false);
   readonly validating: Signal<boolean> = this._validatingSignal.asReadonly();
@@ -186,7 +186,7 @@ export class AccountService {
 
   deleteAccount(id: string): void {
     this._deleteErrorSignal.set(null);
-    this._deletingSignal.set(true);
+    this._deletingAccountIdSignal.set(id);
     this._srAnnouncementSignal.set('Deleting account. Contacting the provider — this may take a few seconds.');
 
     this._http.delete(`${API_BASE}/${id}`)
@@ -195,14 +195,14 @@ export class AccountService {
         next: () => {
           this._accountsSignal.update(accounts => accounts.filter(a => a.id !== id));
           this._srAnnouncementSignal.set('Account deleted.');
-          this._deletingSignal.set(false);
+          this._deletingAccountIdSignal.set(null);
         },
         error: (err: HttpErrorResponse | TimeoutError) => {
           console.error(err);
           const message = this._extractErrorMessage(err);
           this._deleteErrorSignal.set(message);
           this._srAnnouncementSignal.set(`Could not delete account: ${message}`);
-          this._deletingSignal.set(false);
+          this._deletingAccountIdSignal.set(null);
         },
       });
   }
