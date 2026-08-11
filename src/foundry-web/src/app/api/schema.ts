@@ -132,7 +132,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Retries a failed issue */
+        /** Retries an issue in a retry-supporting state */
         post: operations["RetryIssue"];
         delete?: never;
         options?: never;
