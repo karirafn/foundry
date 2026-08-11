@@ -582,7 +582,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenUnchangedIssueExists_DoesNotReturnItsNumber()
+    public async Task WhenUnchangedIssueExists_ReturnsItsNumber()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -594,7 +594,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeEmpty();
+        result.ShouldBe([22], ignoreOrder: true);
     }
 
     // Cross-reference test: the query's resting-state set and Issue.IsRestingState() must agree

@@ -592,7 +592,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenUnchangedIssue_PreservesRecord()
+    public async Task WhenUnchangedIssue_DeletesRecord()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -608,7 +608,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.Id == unchanged.Id,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<UnchangedIssue>();
+        issue.ShouldBeNull();
     }
 
     [Fact]
