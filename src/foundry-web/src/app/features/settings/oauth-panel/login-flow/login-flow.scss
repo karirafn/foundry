@@ -34,22 +34,10 @@
     flex-direction: row;
     font-size: 0.875rem;
     gap: var(--fd-spacing-xs);
-  }
 
-  &__spinner {
-    animation: lf-spin 1s linear infinite;
-    border: 2px solid var(--fd-border-default);
-    border-radius: 50%;
-    border-top-color: var(--fd-text-link);
-    display: inline-block;
-    flex-shrink: 0;
-    height: 14px;
-    margin-block-start: 0.125rem;
-    width: 14px;
-  }
-
-  @keyframes lf-spin {
-    to { transform: rotate(360deg); }
+    fd-spinner {
+      margin-block-start: 0.125rem;
+    }
   }
 
   &__step-label {

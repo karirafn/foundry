@@ -77,20 +77,6 @@
     padding: var(--fd-spacing-2xl);
   }
 
-  &__loading-spinner {
-    animation: spin 1s linear infinite;
-    border: 2px solid var(--fd-border-default);
-    border-radius: 50%;
-    border-top-color: var(--fd-text-link);
-    display: inline-block;
-    height: 24px;
-    width: 24px;
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  }
-
   &__header {
     display: flex;
     align-items: center;
@@ -395,12 +381,6 @@
     @media (prefers-reduced-motion: reduce) {
       transition: none;
     }
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 

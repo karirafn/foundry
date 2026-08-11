@@ -6,6 +6,7 @@ import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility
 import { RepositoryService } from '../repository.service';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
+import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 
 @Component({
   selector: 'fd-repository-list',
@@ -15,6 +16,7 @@ import { RowActionsComponent } from '../../../../shared/components/row-actions/r
     RepositoryEligibilityDetailsComponent,
     ProviderIconComponent,
     RowActionsComponent,
+    SpinnerComponent,
     CdkDropList,
     CdkDrag,
     CdkDragHandle,
@@ -39,7 +41,7 @@ import { RowActionsComponent } from '../../../../shared/components/row-actions/r
 
     @if (loading()) {
       <div class="repository-list__loading" role="status" aria-label="Loading repositories">
-        <span class="repository-list__loading-spinner" aria-hidden="true"></span>
+        <fd-spinner [size]="24" />
         <span class="sr-only">Loading repositories</span>
       </div>
     }
