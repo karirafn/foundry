@@ -33,6 +33,7 @@ const CREATED_ACCOUNT_RESULT: CredentialCreationResult = {
 const VALID_RESULT: TokenValidationResult = {
   isValid: true,
   isAuthFailure: false,
+  scopesVerified: true,
   missingScopes: [],
   accountName: 'octocat',
 };
@@ -40,6 +41,7 @@ const VALID_RESULT: TokenValidationResult = {
 const AUTH_FAIL_RESULT: TokenValidationResult = {
   isValid: false,
   isAuthFailure: true,
+  scopesVerified: false,
   missingScopes: [],
   accountName: null,
 };
@@ -47,6 +49,7 @@ const AUTH_FAIL_RESULT: TokenValidationResult = {
 const MISSING_SCOPES_RESULT: TokenValidationResult = {
   isValid: false,
   isAuthFailure: false,
+  scopesVerified: false,
   missingScopes: ['repo', 'workflow'],
   accountName: null,
 };
@@ -54,6 +57,7 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
 const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
   isValid: true,
   isAuthFailure: false,
+  scopesVerified: true,
   missingScopes: [],
   accountName: null,
 };

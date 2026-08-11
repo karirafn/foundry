@@ -24,6 +24,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
 const VALID_RESULT: TokenValidationResult = {
   isValid: true,
   isAuthFailure: false,
+  scopesVerified: true,
   missingScopes: [],
   accountName: 'octocat',
 };
@@ -31,6 +32,7 @@ const VALID_RESULT: TokenValidationResult = {
 const AUTH_FAIL_RESULT: TokenValidationResult = {
   isValid: false,
   isAuthFailure: true,
+  scopesVerified: false,
   missingScopes: [],
   accountName: null,
 };
@@ -38,6 +40,7 @@ const AUTH_FAIL_RESULT: TokenValidationResult = {
 const MISSING_SCOPES_RESULT: TokenValidationResult = {
   isValid: false,
   isAuthFailure: false,
+  scopesVerified: false,
   missingScopes: ['repo', 'workflow'],
   accountName: null,
 };
@@ -45,6 +48,7 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
 const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
   isValid: true,
   isAuthFailure: false,
+  scopesVerified: true,
   missingScopes: [],
   accountName: null,
 };
@@ -853,8 +857,8 @@ describe('AccountFormComponent', () => {
     expect(btn.disabled).toBe(false);
   });
 
-  // Cycle 41: save emits UpdateAccountRequest without name, without token (edit mode, no new token)
-  it('should emit UpdateAccountRequest without name and without token when no replacement token entered', () => {
+  // Cycle 41: save emits UpdateAccountRequest with null token (edit mode, no new token)
+  it('should emit UpdateAccountRequest with null token when no replacement token entered', () => {
     // Arrange
     const { el, component } = setup({ account: MOCK_ACCOUNT });
     let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
@@ -867,10 +871,10 @@ describe('AccountFormComponent', () => {
     // Assert
     expect(emitted).toEqual({
       baseUrl: 'https://github.com',
+      token: null,
     });
     const r = emitted as unknown as Record<string, unknown>;
     expect(r['name']).toBeUndefined();
-    expect(r['token']).toBeUndefined();
   });
 
   // Cycle 42: edit mode with new token includes token in UpdateAccountRequest
@@ -917,7 +921,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: null,
       accounts: [MOCK_ACCOUNT],
-      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'my-github' },
+      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -944,7 +948,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
       accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
-      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'my-github' },
+      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1012,7 +1016,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'new-identity' },
+      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'new-identity' },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1107,7 +1111,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: null,
       accounts: [MOCK_ACCOUNT],
-      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'my-github' },
+      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1127,7 +1131,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { isValid: true, isAuthFailure: false, missingScopes: [], accountName: 'new-identity' },
+      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'new-identity' },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
