@@ -129,6 +129,25 @@ A provider-side issue tagged for Foundry processing.
 Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
+### Issue Lifecycle Partition
+
+The lifecycle splits into two partitions defined by `IssueStateRegistry` (server) and mirrored in `ACTIVE_STATES` / `RESOLVED_STATES` (frontend):
+
+- **Active** — every state except `completed`.
+- **Resolved** — `completed` only.
+
+The dashboard renders Active states in four display groups, classified by one rule — the relationship between the issue and a worker:
+
+- **In progress** — a worker is actually running right now (`in_progress`, `revision_in_progress`). Exactly `LIVE_STATES`.
+- **Needs attention** — requires a user action to progress (`review`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`).
+- **Waiting** — waiting for a worker; advances with no user action (`detected`, `queued`, `blocked`, `revision_queued`, `continuation_queued`).
+- **Resolved** — done (`completed`).
+
+Two states deserve explicit note:
+
+- `unchanged` is Active/Needs-attention because the worker produced no changes and the user must decide whether to retry — it cannot resolve itself.
+- `blocked` is Waiting because a `BlockedIssue` auto-transitions to `QueuedIssue` when its blockers close on the provider; no user action is required.
+
 ## Issue Kind
 
 A value object on the base `Issue` type classifying the nature of the work — `Feature`, `Bug`, `Refactor`, `Documentation`, etc.
@@ -228,6 +247,7 @@ Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete
 
 A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
 Requires manual resolution: the user can retry (disagreeing with the worker's assessment).
+Classified as Active / Needs attention (see [Issue Lifecycle Partition](#issue-lifecycle-partition)) — it cannot resolve itself.
 Transitions: `UnchangedIssue.Retry()` → `QueuedIssue`.
 
 ## Revision Queued Issue
