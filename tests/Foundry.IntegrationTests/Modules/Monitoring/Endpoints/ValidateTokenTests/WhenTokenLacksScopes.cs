@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
@@ -21,7 +20,11 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
 
     public WhenTokenLacksScopes()
     {
-        ValidateToken.Response missingRepoResponse = new(IsValid: false, IsAuthFailure: false, ScopesVerified: true, MissingScopes: ["repo"], AccountName: null);
+        ValidateToken.Response missingRepoResponse = new(
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: "octocat",
+            MissingScopes: ["repo"],
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -38,7 +41,7 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithInvalidResultAndMissingScopes()
+    public async Task ReturnsOkWithAuthenticatedKindAndMissingScopes()
     {
         // Arrange
         object body = new { token = "ghp_limited", baseUrl = "https://api.github.com", providerType = "github" };
@@ -55,9 +58,9 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
             .ReadFromJsonAsync<ValidateToken.Response>(TestContext.Current.CancellationToken);
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
-            () => dto.IsValid.ShouldBeFalse(),
-            () => dto.IsAuthFailure.ShouldBeFalse(),
-            () => dto.MissingScopes.ShouldContain("repo"));
+            () => dto.Kind.ShouldBe(ValidateToken.Kinds.Authenticated),
+            () => dto.MissingScopes.ShouldContain("repo"),
+            () => dto.AccountName.ShouldBe("octocat"));
     }
 
     private sealed class StubHandler(Result<ValidateToken.Response> result)

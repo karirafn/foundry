@@ -1051,6 +1051,77 @@ describe('IssueCardComponent', () => {
     expect(row).toBeFalsy();
   });
 
+  // Cycle 21: BEM modifier for accent states
+  it('should apply issue-card--working class for in_progress state', () => {
+    // Arrange
+    const inProgressIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+
+    // Act
+    const fixture = createComponent(inProgressIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card.classList.contains('issue-card--working')).toBe(true);
+    expect(card.classList.contains('issue-card--ready')).toBe(false);
+  });
+
+  it('should apply issue-card--working class for revision_in_progress state', () => {
+    // Arrange
+    const revisionInProgressIssue: IssueSummary = { ...mockIssue, state: 'revision_in_progress' };
+
+    // Act
+    const fixture = createComponent(revisionInProgressIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card.classList.contains('issue-card--working')).toBe(true);
+    expect(card.classList.contains('issue-card--ready')).toBe(false);
+  });
+
+  it('should apply issue-card--ready class for review state', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card.classList.contains('issue-card--ready')).toBe(true);
+    expect(card.classList.contains('issue-card--working')).toBe(false);
+  });
+
+  it('should not apply any accent modifier class for failed state', () => {
+    // Arrange
+    const failedIssue: IssueSummary = { ...mockIssue, state: 'failed' };
+
+    // Act
+    const fixture = createComponent(failedIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card.classList.contains('issue-card--working')).toBe(false);
+    expect(card.classList.contains('issue-card--ready')).toBe(false);
+  });
+
+  it('should not apply any accent modifier class for completed state', () => {
+    // Arrange
+    const completedIssue: IssueSummary = { ...mockIssue, state: 'completed' };
+
+    // Act
+    const fixture = createComponent(completedIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card.classList.contains('issue-card--working')).toBe(false);
+    expect(card.classList.contains('issue-card--ready')).toBe(false);
+  });
+
   // Cycle 20: aria-label includes run-stat summary when stats are present
   it('should include run-stat summary in aria-label when runStats has visible pills', () => {
     // Arrange

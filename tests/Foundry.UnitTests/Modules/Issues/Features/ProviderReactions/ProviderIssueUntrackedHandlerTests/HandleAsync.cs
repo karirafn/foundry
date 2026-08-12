@@ -509,6 +509,26 @@ public sealed class HandleAsync : IAsyncDisposable
         issue.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task WhenUnchangedIssue_DeletesRecord()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        UnchangedIssue unchanged = SeedUnchangedIssue(repositoryId, issueNumber: 1);
+        ProviderIssueUntracked @event = new(repositoryId, 1);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.Id == unchanged.Id,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeNull();
+    }
+
     // Preserved/active states — should NOT be deleted
 
     [Fact]
@@ -589,26 +609,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.Id == completed.Id,
                 TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<CompletedIssue>();
-    }
-
-    [Fact]
-    public async Task WhenUnchangedIssue_PreservesRecord()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        UnchangedIssue unchanged = SeedUnchangedIssue(repositoryId, issueNumber: 1);
-        ProviderIssueUntracked @event = new(repositoryId, 1);
-
-        // Act
-        await _sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dbContext.ChangeTracker.Clear();
-        Issue? issue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.Id == unchanged.Id,
-                TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<UnchangedIssue>();
     }
 
     [Fact]

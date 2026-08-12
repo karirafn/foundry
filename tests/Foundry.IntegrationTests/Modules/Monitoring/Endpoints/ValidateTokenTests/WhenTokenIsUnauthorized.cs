@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
@@ -21,7 +20,11 @@ public sealed class WhenTokenIsUnauthorized : IAsyncDisposable
 
     public WhenTokenIsUnauthorized()
     {
-        ValidateToken.Response authFailureResponse = new(IsValid: false, IsAuthFailure: true, ScopesVerified: false, MissingScopes: [], AccountName: null);
+        ValidateToken.Response authFailureResponse = new(
+            Kind: ValidateToken.Kinds.AuthenticationFailed,
+            AccountName: null,
+            MissingScopes: [],
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -38,7 +41,7 @@ public sealed class WhenTokenIsUnauthorized : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithAuthFailureResult()
+    public async Task ReturnsOkWithAuthenticationFailedKind()
     {
         // Arrange
         object body = new { token = "ghp_bad_token", baseUrl = "https://api.github.com", providerType = "github" };
@@ -55,8 +58,7 @@ public sealed class WhenTokenIsUnauthorized : IAsyncDisposable
             .ReadFromJsonAsync<ValidateToken.Response>(TestContext.Current.CancellationToken);
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
-            () => dto.IsValid.ShouldBeFalse(),
-            () => dto.IsAuthFailure.ShouldBeTrue(),
+            () => dto.Kind.ShouldBe(ValidateToken.Kinds.AuthenticationFailed),
             () => dto.MissingScopes.ShouldBeEmpty());
     }
 

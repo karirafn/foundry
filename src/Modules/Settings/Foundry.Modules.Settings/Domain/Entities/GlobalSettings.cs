@@ -72,11 +72,28 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    public void ResumeDispatch()
+    /// <summary>
+    /// Clears every dispatch-pause reason — the operator's manual pause and the usage-limit
+    /// pause — for the manual "Resume All" action.
+    /// </summary>
+    public void ResumeAllDispatch()
     {
         IsDispatchPaused = false;
         UsageLimitResetsAt = null;
         UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Clears the usage-limit pause reason only. The operator's manual dispatch pause
+    /// (<see cref="IsDispatchPaused"/>) is left untouched, so a manual pause survives a
+    /// usage-limit auto-resume. Returns <c>true</c> when dispatch is now fully unpaused
+    /// (no manual pause remains), <c>false</c> when a manual pause still holds dispatch.
+    /// </summary>
+    public bool ClearUsageLimitPause()
+    {
+        UsageLimitResetsAt = null;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return !IsDispatchPaused;
     }
 
     public void SetUsageLimitResetsAt(DateTimeOffset resetsAt)

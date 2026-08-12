@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { AccountFormComponent } from './account-form';
 import { AccountSummary, CreateAccountRequest, NamespaceConflict, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from '../account.model';
 import { AccountService } from '../account.service';
+import { providerDisplayName } from '../account.model';
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -22,35 +23,45 @@ const MOCK_ACCOUNT_2: AccountSummary = {
 };
 
 const VALID_RESULT: TokenValidationResult = {
-  isValid: true,
-  isAuthFailure: false,
-  scopesVerified: true,
+  kind: 'authenticated',
   missingScopes: [],
   accountName: 'octocat',
+  detectedProvider: null,
 };
 
 const AUTH_FAIL_RESULT: TokenValidationResult = {
-  isValid: false,
-  isAuthFailure: true,
-  scopesVerified: false,
+  kind: 'authenticationFailed',
   missingScopes: [],
   accountName: null,
+  detectedProvider: null,
 };
 
 const MISSING_SCOPES_RESULT: TokenValidationResult = {
-  isValid: false,
-  isAuthFailure: false,
-  scopesVerified: false,
+  kind: 'authenticated',
   missingScopes: ['repo', 'workflow'],
-  accountName: null,
+  accountName: 'octocat',
+  detectedProvider: null,
 };
 
-const VALID_NULL_IDENTITY_RESULT: TokenValidationResult = {
-  isValid: true,
-  isAuthFailure: false,
-  scopesVerified: true,
+const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
+  kind: 'identityUnresolved',
   missingScopes: [],
   accountName: null,
+  detectedProvider: null,
+};
+
+const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
+  kind: 'scopesUnverifiable',
+  missingScopes: [],
+  accountName: 'octocat',
+  detectedProvider: null,
+};
+
+const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
+  kind: 'providerMismatch',
+  missingScopes: [],
+  accountName: null,
+  detectedProvider: 'gitlab',
 };
 
 const GITHUB_REQUIREMENTS: TokenRequirements = {
@@ -525,10 +536,10 @@ describe('AccountFormComponent', () => {
     expect(msg?.textContent).toContain('Missing required scopes: repo, workflow');
   });
 
-  // Cycle 27: valid-but-null identity state
-  it('should show error message when token valid but accountName is null', () => {
+  // Cycle 27: identityUnresolved state
+  it('should show error message when kind is identityUnresolved', () => {
     // Arrange
-    const { el, fixture } = setup({ validationResult: VALID_NULL_IDENTITY_RESULT });
+    const { el, fixture } = setup({ validationResult: IDENTITY_UNRESOLVED_RESULT });
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
     tokenInput.value = 'anon_token';
     tokenInput.dispatchEvent(new Event('input'));
@@ -542,7 +553,7 @@ describe('AccountFormComponent', () => {
     const dot = el.querySelector('.account-form__validation-dot--error');
     expect(dot).toBeTruthy();
     const msg = el.querySelector('.account-form__validation-message--error');
-    expect(msg?.textContent).toContain('Token is valid, but the account identity could not be resolved from the provider');
+    expect(msg?.textContent).toContain('Token accepted, but the account identity could not be resolved from the provider');
   });
 
   // Cycle 28: idle status region empty when validationResult null and not validating
@@ -628,13 +639,13 @@ describe('AccountFormComponent', () => {
     expect(btn.disabled).toBe(true);
   });
 
-  // Cycle 34: save disabled in create mode when valid but null identity
-  it('should disable save button in add mode when identity could not be resolved', () => {
+  // Cycle 34: save disabled in create mode when identityUnresolved
+  it('should disable save button in add mode when kind is identityUnresolved', () => {
     // Arrange
     // (TestBed configured in beforeEach)
 
     // Act
-    const { el } = setup({ account: null, validationResult: VALID_NULL_IDENTITY_RESULT });
+    const { el } = setup({ account: null, validationResult: IDENTITY_UNRESOLVED_RESULT });
 
     // Assert
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
@@ -659,8 +670,8 @@ describe('AccountFormComponent', () => {
     expect(btn.disabled).toBe(false);
   });
 
-  // Cycle 36: save disabled while saving
-  it('should disable save button when saving is true', () => {
+  // Cycle 36: save is aria-disabled (not natively disabled) while saving with valid form
+  it('should set aria-disabled="true" and not native disabled on save button when saving with valid form', () => {
     // Arrange
     const { el, fixture } = setup({ account: null, saving: true, validationResult: VALID_RESULT });
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -670,9 +681,10 @@ describe('AccountFormComponent', () => {
     tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
 
-    // Assert
+    // Assert — stays in tab order (no native disabled), but aria-disabled signals busy state
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    expect(btn.disabled).toBe(false);
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
   });
 
   // Cycle 37: save emits CreateAccountRequest without name in add mode
@@ -921,7 +933,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: null,
       accounts: [MOCK_ACCOUNT],
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -948,7 +960,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
       accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1016,7 +1028,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'new-identity' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1111,7 +1123,7 @@ describe('AccountFormComponent', () => {
     const { el, fixture } = setup({
       account: null,
       accounts: [MOCK_ACCOUNT],
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'my-github' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1131,7 +1143,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { isValid: true, isAuthFailure: false, scopesVerified: true, missingScopes: [], accountName: 'new-identity' },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1714,5 +1726,354 @@ describe('AccountFormComponent', () => {
     // Assert
     const panel = el.querySelector('.account-form__conflict-panel');
     expect(panel?.textContent).toContain('current holder');
+  });
+
+  // Cycle K1: scopesUnverifiable — shows warning dot + authenticated-as message, Save enabled
+  it('should show warning dot and "Authenticated as … could not verify" when kind is scopesUnverifiable', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — warning tone
+    const dot = el.querySelector('.account-form__validation-dot--warning');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--warning');
+    expect(msg?.textContent).toContain("Authenticated as octocat — couldn't verify token scopes");
+  });
+
+  // Cycle K2: scopesUnverifiable — Save button is ENABLED (the key behavioral fix)
+  it('should enable save when kind is scopesUnverifiable', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+  });
+
+  // Cycle K3: authenticated with non-empty missingScopes — shows warning, Save DISABLED
+  it('should show missing-scopes warning and disable save when kind is authenticated but missingScopes non-empty', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: MISSING_SCOPES_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'limited_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — warning tone, save disabled
+    const dot = el.querySelector('.account-form__validation-dot--warning');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--warning');
+    expect(msg?.textContent).toContain('Missing required scopes: repo, workflow');
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle K4: providerMismatch — shows error dot with named detected provider, Save disabled
+  it('should show providerMismatch error with detected provider name and disable save', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: PROVIDER_MISMATCH_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const dot = el.querySelector('.account-form__validation-dot--error');
+    expect(dot).toBeTruthy();
+    const msg = el.querySelector('.account-form__validation-message--error');
+    expect(msg?.textContent).toContain('GitLab');
+    expect(msg?.textContent).toContain('GitHub');
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Cycle K5: providerMismatch in edit mode — no switch button (provider is a fixed badge)
+  it('should NOT render a switch-provider button in edit mode for providerMismatch', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: MOCK_ACCOUNT, validationResult: PROVIDER_MISMATCH_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — no switch button in account-form (only in setup-account-step)
+    const switchBtn = el.querySelector('.account-form__switch-provider-btn');
+    expect(switchBtn).toBeNull();
+  });
+
+  // Cycle K6: providerDisplayName helper maps known tokens
+  it('providerDisplayName should map github → GitHub, gitlab → GitLab, fallback to capitalized', () => {
+    // Arrange / Act / Assert
+    expect(providerDisplayName('github')).toBe('GitHub');
+    expect(providerDisplayName('gitlab')).toBe('GitLab');
+    expect(providerDisplayName('bitbucket')).toBe('Bitbucket');
+    expect(providerDisplayName(null)).toBe('');
+  });
+
+  // Finding 4: unknown kind — fallback @default renders error message, Save disabled
+  it('should render a fallback error message and keep Save disabled when kind is unknown', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      account: null,
+      validationResult: {
+        kind: 'unknownKindFromFuture' as TokenValidationResult['kind'],
+        missingScopes: [],
+        accountName: null,
+        detectedProvider: null,
+      },
+    });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'some_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — a message is shown (not silent)
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent?.trim()).toBeTruthy();
+
+    // Assert — Save disabled
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  // Finding 5: warning variants have sr-only "Warning:" prefix
+  it('should include a visually-hidden "Warning:" prefix in scopesUnverifiable warning message', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const region = el.querySelector('#account-token-validation');
+    const srOnly = region?.querySelector('.sr-only');
+    expect(srOnly?.textContent?.trim()).toBe('Warning:');
+  });
+
+  it('should include a visually-hidden "Error:" prefix in authenticationFailed error message', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: AUTH_FAIL_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'bad_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const region = el.querySelector('#account-token-validation');
+    const srOnly = region?.querySelector('.sr-only');
+    expect(srOnly?.textContent?.trim()).toBe('Error:');
+  });
+
+  // Finding 6: edit-mode providerMismatch message has no switch instruction
+  it('should show providerMismatch message WITHOUT switch instruction in edit mode', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: MOCK_ACCOUNT, validationResult: PROVIDER_MISMATCH_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — error mentions provider names but NOT the switch instruction
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('GitLab');
+    expect(region?.textContent).not.toContain('Switch the provider');
+  });
+
+  it('should show providerMismatch message WITH switch instruction in add mode', () => {
+    // Arrange
+    const { el, fixture } = setup({ account: null, validationResult: PROVIDER_MISMATCH_RESULT });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'glpat_wrong';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — switch instruction present in add mode
+    const region = el.querySelector('#account-token-validation');
+    expect(region?.textContent).toContain('Switch the provider');
+  });
+
+  // Accessibility — FIX 4: form container exposes role="region" and aria-label for AT
+  it('should expose role="region" on the form container so AT can track aria-busy', () => {
+    // Arrange / Act
+    const { el } = setup();
+
+    // Assert
+    const formContainer = el.querySelector('.account-form') as HTMLElement;
+    expect(formContainer.getAttribute('role')).toBe('region');
+    expect(formContainer.getAttribute('aria-label')).toBe('Account form');
+  });
+
+  it('should set aria-busy="true" on the form container (role=region) while saving', () => {
+    // Arrange
+    const { el } = setup({ saving: true });
+
+    // Assert
+    const formContainer = el.querySelector('.account-form') as HTMLElement;
+    expect(formContainer.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('should not set aria-busy on the form container when not saving', () => {
+    // Arrange
+    const { el } = setup({ saving: false });
+
+    // Assert
+    const formContainer = el.querySelector('.account-form') as HTMLElement;
+    expect(formContainer.getAttribute('aria-busy')).toBeNull();
+  });
+
+  // --- Step 5: saving busy state ---
+
+  // S-1: valid form + saving true → label is "Saving...", fd-spinner present, form container has aria-busy="true",
+  //      Save button has aria-disabled="true" and does NOT have native disabled
+  it('should show Saving... label, fd-spinner, aria-busy on form, and aria-disabled on Save button when saving and form is valid', () => {
+    // Arrange — resolve a valid token so the form is valid, then set saving=true
+    const { el, fixture } = setup({ account: null, validationResult: VALID_RESULT, saving: true });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — label
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toContain('Saving...');
+
+    // Assert — fd-spinner present inside the button
+    const spinner = btn.querySelector('fd-spinner');
+    expect(spinner).toBeTruthy();
+
+    // Assert — form container has aria-busy="true"
+    const formContainer = el.querySelector('.account-form') as HTMLElement;
+    expect(formContainer.getAttribute('aria-busy')).toBe('true');
+
+    // Assert — Save button has aria-disabled="true" and is NOT natively disabled
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+    expect(btn.disabled).toBe(false);
+  });
+
+  // S-2: form not yet valid (not saving) → Save button has native disabled and NO aria-disabled
+  it('should set native disabled and no aria-disabled on Save button when form is invalid and not saving', () => {
+    // Arrange — no token, no resolution → form invalid
+    const { el } = setup({ account: null, validationResult: null, saving: false });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  // S-3: edit mode while saving → label is "Saving..." (busy wins over edit label)
+  it('should show Saving... label in edit mode while saving, not the edit-mode label', () => {
+    // Arrange — edit mode with no new token (form is valid) + saving
+    const { el } = setup({ account: MOCK_ACCOUNT, saving: true });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toContain('Saving...');
+  });
+
+  // S-4: conflict retry state while saving → label is "Saving..." (busy wins over conflict label)
+  it('should show Saving... label when conflicts visible and saving, not the conflict transfer label', () => {
+    // Arrange — conflicts present + saving
+    const conflicts: NamespaceConflict[] = [
+      { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
+    ];
+    const { el } = setup({ conflicts, saving: true });
+
+    // Assert
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toContain('Saving...');
+  });
+
+  // S-5: double-POST guard — calling onSave twice while saving emits exactly once
+  it('should emit save exactly once when onSave is called twice while saving', () => {
+    // Arrange — resolve a valid token so the form is valid
+    const { el, component, fixture } = setup({ account: null, validationResult: VALID_RESULT, saving: false });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    const emitted: Array<unknown> = [];
+    component.save.subscribe((v: unknown) => { emitted.push(v); });
+
+    // Act — first call (not saving, should emit)
+    component.onSave();
+
+    // Now simulate saving=true and call again
+    fixture.componentRef.setInput('saving', true);
+    fixture.detectChanges();
+    component.onSave();
+
+    // Assert — only one emission from the first call
+    expect(emitted.length).toBe(1);
+  });
+
+  // S-6: Cancel button has native disabled while saving
+  it('should disable the Cancel button while saving', () => {
+    // Arrange
+    const { el } = setup({ saving: true });
+
+    // Assert
+    const cancelBtn = el.querySelector('.account-form__cancel-link') as HTMLButtonElement;
+    expect(cancelBtn.disabled).toBe(true);
+  });
+
+  // S-7: aria-disabled="true" attribute is present on Save button while saving
+  it('should set aria-disabled="true" on Save button while saving when form is valid', () => {
+    // Arrange — valid form, saving
+    const { el, fixture } = setup({ account: null, validationResult: VALID_RESULT, saving: true });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'ghp_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert — aria-disabled attribute is present
+    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
   });
 });

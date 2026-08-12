@@ -11,6 +11,7 @@ export const ACTIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'blocked',
   'in_progress',
   'review',
+  'unchanged',
   'failed',
   'continuable_failed',
   'continuation_queued',
@@ -21,7 +22,6 @@ export const ACTIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
 
 export const RESOLVED_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'completed',
-  'unchanged',
 ]);
 
 export function isResolvedState(state: IssueState): boolean {
@@ -31,7 +31,6 @@ export function isResolvedState(state: IssueState): boolean {
 const KNOWN_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   ...ACTIVE_STATES,
   ...RESOLVED_STATES,
-  'ineligible',
 ]);
 
 export function isKnownState(state: string): state is IssueState {
@@ -41,23 +40,21 @@ export function isKnownState(state: string): state is IssueState {
 export const STATE_GROUPS: readonly StateGroup[] = [
   {
     label: 'In progress',
-    states: ['in_progress', 'revision_in_progress', 'continuation_queued'],
+    states: ['in_progress', 'revision_in_progress'],
   },
   {
     label: 'Needs attention',
-    states: ['review', 'failed', 'continuable_failed', 'revision_failed'],
+    states: ['review', 'unchanged', 'failed', 'continuable_failed', 'revision_failed'],
   },
   {
     label: 'Waiting',
-    states: ['detected', 'queued', 'blocked', 'revision_queued'],
+    states: ['detected', 'queued', 'blocked', 'revision_queued', 'continuation_queued'],
   },
   {
     label: 'Resolved',
-    states: ['completed', 'unchanged'],
+    states: ['completed'],
   },
 ] as const;
-
-export const UNGROUPED_RANK = STATE_GROUPS.length;
 
 const groupRankMap = new Map<IssueState, number>(
   STATE_GROUPS.flatMap((group, index) =>
@@ -66,7 +63,9 @@ const groupRankMap = new Map<IssueState, number>(
 );
 
 export function groupRankFor(state: IssueState): number {
-  return groupRankMap.get(state) ?? UNGROUPED_RANK;
+  // Non-null assertion is safe: every IssueState is assigned to exactly one group in STATE_GROUPS.
+  // The partition-guard test in issue-lifecycle.model.spec.ts enforces totality.
+  return groupRankMap.get(state)!;
 }
 
 // Declarative within-group tier ordering. Each nested array is a peer tier;
@@ -74,18 +73,17 @@ export function groupRankFor(state: IssueState): number {
 export const WITHIN_GROUP_ORDER: Readonly<Record<string, readonly (readonly IssueState[])[]>> = {
   'In progress': [
     ['in_progress', 'revision_in_progress'],
-    ['continuation_queued'],
   ],
   'Needs attention': [
-    ['review', 'failed', 'continuable_failed', 'revision_failed'],
+    ['review', 'unchanged', 'failed', 'continuable_failed', 'revision_failed'],
   ],
   'Waiting': [
-    ['queued', 'revision_queued'],
+    ['queued', 'revision_queued', 'continuation_queued'],
     ['detected'],
     ['blocked'],
   ],
   'Resolved': [
-    ['completed', 'unchanged'],
+    ['completed'],
   ],
 } as const;
 

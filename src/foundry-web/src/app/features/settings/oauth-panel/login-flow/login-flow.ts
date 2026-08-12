@@ -14,6 +14,7 @@ import {
   signal,
 } from '@angular/core';
 import { LoginError, LoginPhase } from '../../../../core/models/settings.model';
+import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 
 interface FailedCopy {
   heading: string;
@@ -65,6 +66,7 @@ function liveText(phase: LoginPhase, error: LoginError | null, accountEmail: str
 @Component({
   selector: 'fd-oauth-login-flow',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SpinnerComponent],
   template: `
     <!-- Persistent polite live region — always in DOM, content drives announcements -->
     <div role="status" aria-live="polite" aria-atomic="true" class="login-flow__sr-live">
@@ -73,7 +75,7 @@ function liveText(phase: LoginPhase, error: LoginError | null, accountEmail: str
 
     @if (phase() === 'Starting') {
       <div class="login-flow__phase login-flow__phase--starting">
-        <span class="login-flow__spinner" aria-hidden="true"></span>
+        <fd-spinner />
         <span>Starting sign-in…</span>
       </div>
     }
@@ -126,7 +128,7 @@ function liveText(phase: LoginPhase, error: LoginError | null, accountEmail: str
 
     @if (phase() === 'SigningIn') {
       <div class="login-flow__phase login-flow__phase--signing-in">
-        <span class="login-flow__spinner" aria-hidden="true"></span>
+        <fd-spinner />
         <span>Signing you in…</span>
       </div>
     }

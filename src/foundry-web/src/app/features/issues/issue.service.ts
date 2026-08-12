@@ -18,8 +18,8 @@ const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_RESOLVED_ERROR = 'Failed to load resolved issues';
 const LOAD_MORE_RESOLVED_ERROR = 'Failed to load more resolved issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
-const RETRY_FAILED_ERROR = 'Failed to retry issue.';
-const RETRY_FAILED_SUCCESS = 'Retry queued. Issue status is updating.';
+const RETRY_ERROR = 'Failed to retry issue.';
+const RETRY_SUCCESS = 'Retry queued. Issue status is updating.';
 const SAFE_ID_RE = /^[\w-]+$/;
 const COUNTS_DEBOUNCE_MS = 300;
 
@@ -34,8 +34,7 @@ export class IssueService {
   readonly issueDetail: WritableSignal<IssueDetail | null> = signal(null);
   readonly detailLoading: WritableSignal<boolean> = signal(false);
   readonly initialLoading: WritableSignal<boolean> = signal(true);
-  readonly retryingEligibility: WritableSignal<boolean> = signal(false);
-  readonly retryingFailed: WritableSignal<boolean> = signal(false);
+  readonly retrying: WritableSignal<boolean> = signal(false);
 
   private readonly _loadErrorSignal: WritableSignal<string | null> = signal(null);
   readonly loadError: Signal<string | null> = this._loadErrorSignal.asReadonly();
@@ -43,11 +42,11 @@ export class IssueService {
   private readonly _detailErrorSignal: WritableSignal<string | null> = signal(null);
   readonly detailError: Signal<string | null> = this._detailErrorSignal.asReadonly();
 
-  private readonly _retryFailedErrorSignal: WritableSignal<string | null> = signal(null);
-  readonly retryFailedError: Signal<string | null> = this._retryFailedErrorSignal.asReadonly();
+  private readonly _retryErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly retryError: Signal<string | null> = this._retryErrorSignal.asReadonly();
 
-  private readonly _retryFailedSuccessSignal: WritableSignal<string | null> = signal(null);
-  readonly retryFailedSuccess: Signal<string | null> = this._retryFailedSuccessSignal.asReadonly();
+  private readonly _retrySuccessSignal: WritableSignal<string | null> = signal(null);
+  readonly retrySuccess: Signal<string | null> = this._retrySuccessSignal.asReadonly();
 
   private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
   readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
@@ -79,8 +78,8 @@ export class IssueService {
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
     const all = this.issues();
-    // Resolved states never enter issues() — filtered in loadIssues/_upsertIssue —
-    // so this sort never encounters completed or unchanged.
+    // Resolved states (currently only `completed`) never enter issues() — filtered in
+    // loadIssues/_upsertIssue — so this sort never encounters them.
 
     // Build server-index map once so the comparator is O(1) per lookup (not O(n²) indexOf).
     const serverIndex = new Map<string, number>(all.map((issue, i) => [issue.id, i]));
@@ -117,9 +116,10 @@ export class IssueService {
   );
 
   // Read issues() (raw server order = DispatchOrderKey) — NOT sortedIssues().
-  // Step 2's bucket sort splits the queued chain across visual groups (continuation_queued
-  // lands in "In progress", queued/revision_queued land in "Waiting"), so sortedIssues()
-  // no longer reflects true server dispatch priority. Dispatch order must follow issues().
+  // The whole queued chain (queued, revision_queued, continuation_queued) sits in the Waiting
+  // bucket, but serverIndex preserves their dispatch priority within that bucket. Using
+  // sortedIssues() would still expose correct relative queue order within Waiting, but
+  // issues() is canonical because it is unaffected by any future group reclassifications.
   readonly eligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
     this.issues().filter(i =>
       QUEUED_TIER_STATES.has(i.state) &&
@@ -142,9 +142,7 @@ export class IssueService {
   });
 
   readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
-    this.sortedIssues().filter(i =>
-      i.state === 'ineligible' || this.selectedActiveStates().has(i.state)
-    )
+    this.sortedIssues().filter(i => this.selectedActiveStates().has(i.state))
   );
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
@@ -280,9 +278,9 @@ export class IssueService {
   }
 
   toggleExpand(id: string): void {
-    this._retryFailedErrorSignal.set(null);
-    this._retryFailedSuccessSignal.set(null);
-    this.retryingFailed.set(false);
+    this._retryErrorSignal.set(null);
+    this._retrySuccessSignal.set(null);
+    this.retrying.set(false);
 
     if (this.expandedIssueId() === id) {
       this.expandedIssueId.set(null);
@@ -296,35 +294,20 @@ export class IssueService {
     this.loadDetail(id);
   }
 
-  retryEligibility(id: string): void {
-    this.retryingEligibility.set(true);
-    this._http.post<void>(`/api/issues/${encodeURIComponent(id)}/retry-eligibility`, {}).subscribe({
-      next: () => {
-        this.retryingEligibility.set(false);
-        this.loadDetail(id);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this.retryingEligibility.set(false);
-        this._detailErrorSignal.set(LOAD_DETAIL_ERROR);
-      },
-    });
-  }
-
-  retryFailed(id: string): void {
-    this._retryFailedErrorSignal.set(null);
-    this._retryFailedSuccessSignal.set(null);
-    this.retryingFailed.set(true);
+  retryIssue(id: string): void {
+    this._retryErrorSignal.set(null);
+    this._retrySuccessSignal.set(null);
+    this.retrying.set(true);
     this._http.post<IssueDetail>(`/api/issues/${encodeURIComponent(id)}/retry`, {}).subscribe({
       next: () => {
-        this.retryingFailed.set(false);
-        this._retryFailedSuccessSignal.set(RETRY_FAILED_SUCCESS);
+        this.retrying.set(false);
+        this._retrySuccessSignal.set(RETRY_SUCCESS);
         this.loadDetail(id);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this.retryingFailed.set(false);
-        this._retryFailedErrorSignal.set(RETRY_FAILED_ERROR);
+        this.retrying.set(false);
+        this._retryErrorSignal.set(RETRY_ERROR);
       },
     });
   }

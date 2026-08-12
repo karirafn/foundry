@@ -21,13 +21,12 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
 
     public WhenIdentityUnresolvable()
     {
-        // Token is valid (IsValid = true) but the provider returned no identity (AccountName = null).
+        // Token is authenticated but the provider returned no identity (AccountName = null).
         ValidateToken.Response unresolvedResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: null,
             MissingScopes: [],
-            AccountName: null);
+            DetectedProvider: null);
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -70,11 +69,10 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
     {
         // Arrange — whitespace account name is treated as unresolved identity
         ValidateToken.Response whitespaceResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: "   ",
             MissingScopes: [],
-            AccountName: "   ");
+            DetectedProvider: null);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -107,11 +105,10 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
         // Arrange — provider returns a name longer than 200 characters (max allowed length)
         string oversizedName = new('a', 201);
         ValidateToken.Response oversizedResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: oversizedName,
             MissingScopes: [],
-            AccountName: oversizedName);
+            DetectedProvider: null);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -143,11 +140,10 @@ public sealed class WhenIdentityUnresolvable : IAsyncDisposable
     {
         // Arrange — provider returns a name containing a control character (newline)
         ValidateToken.Response controlCharResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: "valid-prefix\ninjected",
             MissingScopes: [],
-            AccountName: "valid-prefix\ninjected");
+            DetectedProvider: null);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {

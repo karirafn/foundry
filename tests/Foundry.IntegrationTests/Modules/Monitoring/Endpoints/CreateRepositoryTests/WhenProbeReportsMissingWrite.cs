@@ -14,6 +14,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -50,7 +51,8 @@ public sealed class WhenProbeReportsMissingWrite : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new ProbeBlockedFakeHandler())));
+                    new HttpClient(new ProbeBlockedFakeHandler()),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
 
         _client = _factory.CreateClient();
@@ -107,7 +109,8 @@ public sealed class WhenProbeReportsMissingWrite : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new ProbeGrantedFakeHandler())));
+                    new HttpClient(new ProbeGrantedFakeHandler()),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
 
         await using (factory.ConfigureAwait(false))

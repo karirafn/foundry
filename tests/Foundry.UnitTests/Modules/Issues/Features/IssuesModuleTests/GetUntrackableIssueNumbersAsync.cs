@@ -547,6 +547,22 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
         result.ShouldBe([8], ignoreOrder: true);
     }
 
+    [Fact]
+    public async Task WhenUnchangedIssueExists_ReturnsItsNumber()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedUnchangedIssue(repositoryId, issueNumber: 22);
+
+        // Act
+        IReadOnlySet<int> result = await _sut.GetUntrackableIssueNumbersAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBe([22], ignoreOrder: true);
+    }
+
     // Preserved state coverage — active and terminal states must NOT be returned.
 
     [Fact]
@@ -571,22 +587,6 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedRevisionInProgressIssue(repositoryId, issueNumber: 21);
-
-        // Act
-        IReadOnlySet<int> result = await _sut.GetUntrackableIssueNumbersAsync(
-            repositoryId,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenUnchangedIssueExists_DoesNotReturnItsNumber()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedUnchangedIssue(repositoryId, issueNumber: 22);
 
         // Act
         IReadOnlySet<int> result = await _sut.GetUntrackableIssueNumbersAsync(

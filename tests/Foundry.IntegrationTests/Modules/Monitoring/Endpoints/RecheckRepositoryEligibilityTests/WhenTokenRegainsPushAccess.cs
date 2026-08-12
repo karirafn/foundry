@@ -14,6 +14,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -48,7 +49,7 @@ public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
             // Use a configurable probe handler; state is toggled between initial seeding and recheck.
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(_probeHandler)));
+                new GitHubHttpClient(new HttpClient(_probeHandler), NullLogger<GitHubHttpClient>.Instance));
         });
 
         _client = _factory.CreateClient();

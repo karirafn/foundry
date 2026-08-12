@@ -29,23 +29,6 @@
     gap: var(--fd-spacing-sm);
   }
 
-  &__loading-spinner {
-    animation: spin 1s linear infinite;
-    border: 2px solid var(--fd-border-default);
-    border-radius: 50%;
-    border-top-color: var(--fd-text-link);
-    display: inline-block;
-    flex-shrink: 0;
-    height: 16px;
-    width: 16px;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
   &__load-error {
     align-items: center;
     color: var(--fd-text-error);
