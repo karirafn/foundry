@@ -652,4 +652,211 @@ public sealed class Parse
         warning.Message.ShouldNotContain('\n');
         warning.Message.ShouldNotContain('\r');
     }
+
+    // --- IANA timezone reset-time parsing ---
+
+    [Fact]
+    public void WhenResetAtWithIanaTimezone_ResolvesToCorrectUtcTime()
+    {
+        // Arrange — the actual message Claude Code emits: "reset at 3pm (America/New_York)"
+        // America/New_York is UTC-4 in EDT (summer) or UTC-5 in EST (winter).
+        // The test asserts that the hour is correct in UTC, not that it equals a fixed offset,
+        // because the test itself cannot know whether DST is currently active.
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Claude usage limit reached. Your limit will reset at 3pm (America/New_York).","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — parsed as UsageLimited with a UTC time corresponding to 3pm New York
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        TimeZoneInfo nyZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        DateTimeOffset nowInNy = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, nyZone);
+        // Expected UTC hour: 3pm New York converted to UTC
+        DateTime threePmNy = new(nowInNy.Date.Year, nowInNy.Date.Month, nowInNy.Date.Day, 15, 0, 0);
+        DateTimeOffset expectedUtc = TimeZoneInfo.ConvertTimeToUtc(threePmNy, nyZone);
+        if (expectedUtc <= DateTimeOffset.UtcNow)
+        {
+            expectedUtc = expectedUtc.AddDays(1);
+        }
+
+        limited.ResetsAt.ShouldBe(expectedUtc, tolerance: TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public void WhenResetAtWithBareHourAndIanaTimezone_MinutesDefaultToZero()
+    {
+        // Arrange — bare hour (no :MM) must default minutes to 00
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at 5am (America/Los_Angeles).","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        // 5am Los_Angeles is always 5 or 6 hours offset to UTC — verify the parsed minute is 0
+        TimeZoneInfo laZone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+        DateTimeOffset nowInLa = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, laZone);
+        DateTime fiveAmLa = new(nowInLa.Date.Year, nowInLa.Date.Month, nowInLa.Date.Day, 5, 0, 0);
+        DateTimeOffset expectedUtc = TimeZoneInfo.ConvertTimeToUtc(fiveAmLa, laZone);
+        if (expectedUtc <= DateTimeOffset.UtcNow)
+        {
+            expectedUtc = expectedUtc.AddDays(1);
+        }
+
+        limited.ResetsAt.ShouldBe(expectedUtc, tolerance: TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public void WhenResetAtWithBareHourAndUtcAnnotation_MinutesDefaultToZero()
+    {
+        // Arrange — bare hour (no :MM) with (UTC) annotation
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. resets 3pm (UTC)","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.Hour.ShouldBe(15);
+        limited.ResetsAt.Minute.ShouldBe(0);
+        limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void WhenResetAtWithUnknownTimezone_FallsBackToDefaultCooldown()
+    {
+        // Arrange — timezone name that does not exist in the timezone database
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at 3pm (NotA/RealTimezone).","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — must fall back gracefully, never throw
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
+        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
+        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
+    }
+
+    [Fact]
+    public void WhenMidnightAm_12amBoundary_ResolvesToMidnight()
+    {
+        // Arrange — 12am is midnight (00:00)
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. resets 12:00am (UTC)","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.Hour.ShouldBe(0);
+        limited.ResetsAt.Minute.ShouldBe(0);
+        limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void WhenNoonPm_12pmBoundary_ResolvesToNoon()
+    {
+        // Arrange — 12pm is noon (12:00)
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. resets 12:00pm (UTC)","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.Hour.ShouldBe(12);
+        limited.ResetsAt.Minute.ShouldBe(0);
+        limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void WhenMultipleCandidateTimesInText_FirstMatchWins()
+    {
+        // Arrange — two wall-clock times present; the first one (2am) should win
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. resets 2:00am (UTC) or maybe resets 11:00pm (UTC)","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — first match (2am) wins
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.Hour.ShouldBe(2);
+        limited.ResetsAt.Minute.ShouldBe(0);
+        limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void WhenUnrelatedTextContainsTime_DoesNotParseAsResetTime()
+    {
+        // Arrange — result text that resembles a usage-limit message but is actually a normal exit
+        // (terminal_reason is "completed" with no usage-limit signals)
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":1,"result":"The meeting resets at 3pm (UTC) tomorrow.","session_id":"abc","terminal_reason":"completed","api_error_status":200}
+            """;
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — normal exit, not usage-limited
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenResetAtPhraseWithIanaTimezoneAlreadyPast_ResolvesToNextDayUtc()
+    {
+        // Arrange — pick a timezone time that is guaranteed to be already past (1 hour ago in UTC)
+        // We use UTC itself to keep the test timezone-agnostic
+        DateTimeOffset oneHourAgo = DateTimeOffset.UtcNow.AddHours(-1);
+        string pastTime = oneHourAgo.ToString("h:mmtt", System.Globalization.CultureInfo.InvariantCulture)
+            .ToLowerInvariant();
+        string log = $$$"""
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at {{{pastTime}}} (UTC).","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+        DateTimeOffset utcNow = DateTimeOffset.UtcNow;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — rolled forward to tomorrow
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.ShouldBeGreaterThan(utcNow);
+        limited.ResetsAt.Hour.ShouldBe(oneHourAgo.Hour);
+        limited.ResetsAt.Minute.ShouldBe(oneHourAgo.Minute);
+        limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void WhenResetAtVerbWithUtcAnnotation_RegressionGuard()
+    {
+        // Arrange — "You've hit your limit · resets 12:10am (UTC)" — regression guard for original shape
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"You've hit your limit · resets 12:10am (UTC)","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.Hour.ShouldBe(0);
+        limited.ResetsAt.Minute.ShouldBe(10);
+        limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+    }
 }
