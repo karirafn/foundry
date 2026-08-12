@@ -32,7 +32,7 @@ internal static class ResumeDispatch
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            settings.ResumeDispatch();
+            settings.ResumeAllDispatch();
 
             await integrationEventDispatcher.DispatchAsync([new DispatchResumed()], cancellationToken);
 
