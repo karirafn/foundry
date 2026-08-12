@@ -65,7 +65,6 @@ export interface GlobalSettingsResponse {
   usageLimitResetsAt: string | null;
   isDispatchPaused: boolean;
   autoResumeOnUsageReset: boolean;
-  defaultCooldownMinutes: number;
   installDotnet: boolean;
   installAngular: boolean;
   installGlab: boolean;
@@ -86,5 +85,4 @@ export interface UpdatePromptTemplatesRequest {
 
 export interface DispatchSettings {
   autoResumeOnUsageReset: boolean;
-  defaultCooldownMinutes: number;
 }

@@ -18,7 +18,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     usageLimitResetsAt: null,
     isDispatchPaused: false,
     autoResumeOnUsageReset: true,
-    defaultCooldownMinutes: 60,
     installDotnet: false,
     installAngular: false,
     installGlab: false,

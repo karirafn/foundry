@@ -51,7 +51,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     usageLimitResetsAt: null,
     isDispatchPaused: false,
     autoResumeOnUsageReset: true,
-    defaultCooldownMinutes: 60,
     installDotnet: false,
     installAngular: false,
     installGlab: false,
@@ -702,13 +701,13 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateDispatchSettings(true, 90);
+    service.updateDispatchSettings(true);
     const req = httpMock.expectOne('/api/settings/dispatch');
 
     // Assert
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true, defaultCooldownMinutes: 90 });
-    req.flush(buildSettingsResponse({ autoResumeOnUsageReset: true, defaultCooldownMinutes: 90 }));
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true });
+    req.flush(buildSettingsResponse({ autoResumeOnUsageReset: true }));
   });
 
   it('should set savingDispatch to true while updateDispatchSettings is in flight', () => {
@@ -716,7 +715,7 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateDispatchSettings(false, 30);
+    service.updateDispatchSettings(false);
 
     // Assert — before flush
     expect(service.savingDispatch()).toBe(true);
@@ -725,10 +724,9 @@ describe('SettingsService', () => {
 
   it('should set saveDispatchSuccess to true and savingDispatch false after updateDispatchSettings succeeds', () => {
     // Arrange
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true);
     httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse({
       autoResumeOnUsageReset: true,
-      defaultCooldownMinutes: 60,
       isDispatchPaused: false,
     }));
 
@@ -740,7 +738,7 @@ describe('SettingsService', () => {
 
   it('should update dispatchService state after updateDispatchSettings succeeds', () => {
     // Arrange
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true);
     httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse({
       isDispatchPaused: true,
       usageLimitResetsAt: '2026-08-01T00:00:00Z',
@@ -753,7 +751,7 @@ describe('SettingsService', () => {
 
   it('should set saveDispatchError when updateDispatchSettings fails', () => {
     // Arrange
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
@@ -767,7 +765,7 @@ describe('SettingsService', () => {
 
   it('should set saveDispatchError to a fixed user-facing string when updateDispatchSettings fails', () => {
     // Arrange
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
@@ -779,7 +777,7 @@ describe('SettingsService', () => {
 
   it('should reset dispatch signals in loadSettings', () => {
     // Arrange — put signals into dirty state
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true);
     httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse());
     expect(service.saveDispatchSuccess()).toBe(true);
 
@@ -1258,7 +1256,6 @@ describe('SettingsService — SignalR login session', () => {
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
-      defaultCooldownMinutes: 60,
       installDotnet: false,
       installAngular: false,
       installGlab: false,
@@ -1478,7 +1475,6 @@ describe('SettingsService — SignalR re-sync', () => {
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
-      defaultCooldownMinutes: 60,
       installDotnet: false,
       installAngular: false,
       installGlab: false,
@@ -1655,7 +1651,6 @@ describe('SettingsService — retry fields', () => {
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
-      defaultCooldownMinutes: 60,
       installDotnet: false,
       installAngular: false,
       installGlab: false,
@@ -1795,7 +1790,6 @@ describe('SettingsService — isColdBuildBlocking', () => {
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
-      defaultCooldownMinutes: 60,
       installDotnet: false,
       installAngular: false,
       installGlab: false,
