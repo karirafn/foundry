@@ -278,9 +278,36 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        dispatcher.Captured.ShouldSatisfyAllConditions(
-            () => dispatcher.Captured.ShouldNotContain(e => e is WorkerCapacityAvailable),
-            () => dispatcher.Captured.ShouldNotContain(e => e is DispatchResumed));
+        dispatcher.Captured.ShouldNotContain(e => e is WorkerCapacityAvailable);
+    }
+
+    [Fact]
+    public async Task WhenManualPauseSetAndUsageLimitExpired_DoesNotDispatchDispatchResumed()
+    {
+        // Arrange
+        SeedGlobalSettings(isDispatchPaused: true, autoResumeOnUsageReset: true);
+
+        await using (FoundryDbContext db = CreateDbContext())
+        {
+            await SetUsageLimitResetsAtInPastAsync(db, TestContext.Current.CancellationToken);
+        }
+
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        DateTimeOffset pastReset = DateTimeOffset.UtcNow.AddHours(-1);
+        DispatchPauseState pauseState = new(
+            UsageLimitResetsAt: pastReset,
+            IsDispatchPaused: true,
+            AutoResumeOnUsageReset: true);
+        WorkerDispatchService sut = BuildService(
+            new NullWorkerOrchestrator(),
+            integrationEventDispatcher: dispatcher,
+            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.Captured.ShouldNotContain(e => e is DispatchResumed);
     }
 
     [Fact]

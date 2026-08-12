@@ -161,6 +161,31 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WhenBothPauseReasonsSet_PublishesDispatchResumed()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            settings.PauseDispatch();
+            settings.SetUsageLimitResetsAt(DateTimeOffset.UtcNow.AddHours(1));
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        ResumeDispatch.Handler sut = new(dbContext, dispatcher);
+        ResumeDispatch.Command command = new();
+
+        // Act
+        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.Captured.ShouldContain(e => e is DispatchResumed);
+    }
+
+    [Fact]
     public async Task WhenBothPauseReasonsSet_ClearsBoth()
     {
         // Arrange

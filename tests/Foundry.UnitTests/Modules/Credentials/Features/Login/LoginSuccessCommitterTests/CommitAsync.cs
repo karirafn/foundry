@@ -133,6 +133,8 @@ public sealed class CommitAsync : IAsyncLifetime
         dispatcher.Captured.ShouldBeEmpty();
     }
 
+    // Regression guard (AC5, #405): LoginSuccessCommitter clears only the auth-invalid pause on ClaudeAccount and must
+    // never clear the operator's manual dispatch pause on GlobalSettings. This asserts that architectural separation holds.
     [Fact]
     public async Task WhenManualDispatchPauseExists_DoesNotClearManualPause()
     {
