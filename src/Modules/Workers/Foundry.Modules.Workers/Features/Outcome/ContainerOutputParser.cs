@@ -460,7 +460,8 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         }
         catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException or ArgumentException)
         {
-            // Unknown or malformed timezone — fall through to the caller's default cooldown
+            // Unknown or malformed timezone string — defence-in-depth for FindSystemTimeZoneById.
+            // DST spring-forward gaps for ConvertTimeToUtc are handled separately by the IsInvalidTime guards below.
             return null;
         }
 

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Testing;
 
@@ -220,7 +222,7 @@ public sealed class Parse
         // Arrange
         // Use a time guaranteed to be in the past: 1 hour ago
         DateTimeOffset oneHourAgo = DateTimeOffset.UtcNow.AddHours(-1);
-        string pastTime = oneHourAgo.ToString("h:mmtt", System.Globalization.CultureInfo.InvariantCulture)
+        string pastTime = oneHourAgo.ToString("h:mmtt", CultureInfo.InvariantCulture)
             .ToLowerInvariant();
         string log = $$$"""
             {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. resets {{{pastTime}}} (UTC)","session_id":"xyz","terminal_reason":"blocking_limit"}
@@ -838,12 +840,11 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenResetAtPhraseWithIanaTimezoneAlreadyPast_ResolvesToNextDayUtc()
+    public void WhenResetAtPhraseAlreadyPastInUtc_ResolvesToNextDayUtc()
     {
-        // Arrange — pick a timezone time that is guaranteed to be already past (1 hour ago in UTC)
-        // We use UTC itself to keep the test timezone-agnostic
+        // Arrange — exercises the UTC fast-path: pick a time guaranteed to be already past (1 hour ago in UTC)
         DateTimeOffset oneHourAgo = DateTimeOffset.UtcNow.AddHours(-1);
-        string pastTime = oneHourAgo.ToString("h:mmtt", System.Globalization.CultureInfo.InvariantCulture)
+        string pastTime = oneHourAgo.ToString("h:mmtt", CultureInfo.InvariantCulture)
             .ToLowerInvariant();
         string log = $$$"""
             {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at {{{pastTime}}} (UTC).","session_id":"xyz","terminal_reason":"blocking_limit"}
@@ -925,7 +926,7 @@ public sealed class Parse
         TimeZoneInfo chicagoZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
         DateTimeOffset nowInChicago = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chicagoZone);
         DateTimeOffset oneHourAgoInChicago = nowInChicago.AddHours(-1);
-        string pastTime = oneHourAgoInChicago.ToString("h:mmtt", System.Globalization.CultureInfo.InvariantCulture)
+        string pastTime = oneHourAgoInChicago.ToString("h:mmtt", CultureInfo.InvariantCulture)
             .ToLowerInvariant();
         string log = $$$"""
             {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at {{{pastTime}}} (America/Chicago).","session_id":"xyz","terminal_reason":"blocking_limit"}
