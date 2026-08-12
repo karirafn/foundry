@@ -23,6 +23,7 @@ public static class CredentialsModule
         services.AddHostedService<ClaudeAccountSeeder>();
 
         services.AddIntegrationEventHandler<WorkerAuthenticationFailed, WorkerAuthenticationFailedHandler>();
+        services.AddIntegrationEventHandler<WorkerCreditsExhausted, WorkerCreditsExhaustedHandler>();
         services.AddIntegrationEventHandler<CredentialsInvalidated, CredentialsInvalidatedBroadcastHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedBroadcastHandler>();
 
