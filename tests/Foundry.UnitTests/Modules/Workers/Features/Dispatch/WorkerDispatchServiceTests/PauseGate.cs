@@ -44,7 +44,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
 
         if (!autoResumeOnUsageReset)
         {
-            settings.UpdateDispatchSettings(autoResume: false, defaultCooldownMinutes: 60);
+            settings.UpdateDispatchSettings(autoResume: false);
         }
 
         db.Set<GlobalSettings>().Add(settings);
@@ -356,9 +356,6 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(pauseState);
-
-        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(60);
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);
