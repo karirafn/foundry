@@ -12,6 +12,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -28,7 +29,7 @@ public sealed class GetBranchProtectionAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.NotFound, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<BranchRules> result = await sut.GetBranchProtectionAsync(
@@ -60,7 +61,7 @@ public sealed class GetBranchProtectionAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<BranchRules> result = await sut.GetBranchProtectionAsync(
@@ -89,7 +90,7 @@ public sealed class GetBranchProtectionAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<BranchRules> result = await sut.GetBranchProtectionAsync(
@@ -111,7 +112,7 @@ public sealed class GetBranchProtectionAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<BranchRules> result = await sut.GetBranchProtectionAsync(
@@ -133,7 +134,7 @@ public sealed class GetBranchProtectionAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -156,7 +157,7 @@ public sealed class GetBranchProtectionAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.NotFound, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.GetBranchProtectionAsync(ValidBaseUrl, ValidSlug, "main", "glpat_token", CancellationToken.None);

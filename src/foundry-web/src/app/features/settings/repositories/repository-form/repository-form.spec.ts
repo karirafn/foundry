@@ -259,6 +259,28 @@ describe('RepositoryFormComponent', () => {
     const loading = el.querySelector('.repository-form__picker-loading');
     expect(loading).toBeTruthy();
     expect(loading?.textContent).toContain('Loading repositories');
+    const spinner = el.querySelector('fd-spinner');
+    expect(spinner).toBeTruthy();
+  });
+
+  it('should not show fd-spinner when loadingAvailable is false', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE,
+      loadingAvailable: false,
+    });
+
+    // Act — select an account to show the picker
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Assert
+    const spinner = el.querySelector('fd-spinner');
+    expect(spinner).toBeNull();
   });
 
   // Cycle 8: repository picker shows error state

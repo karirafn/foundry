@@ -25,10 +25,14 @@ import {
   ProviderType,
   TokenRequirements,
   TokenValidationResult,
+  TokenValidationKind,
   UpdateAccountRequest,
+  narrowTokenValidationKind,
+  providerDisplayName,
 } from '../account.model';
 import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
 import { AccountService } from '../account.service';
+import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 
 const GITHUB_BASE_URL = 'https://github.com';
 const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
@@ -36,13 +40,14 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
 @Component({
   selector: 'fd-account-form',
   standalone: true,
-  imports: [ProviderSelectorComponent],
+  imports: [ProviderSelectorComponent, SpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="account-form">
+    <div class="account-form" role="region" aria-label="Account form" [attr.aria-busy]="saving() ? 'true' : null">
       <button
         class="account-form__cancel-link"
         type="button"
+        [disabled]="saving()"
         (click)="cancel.emit()"
       >
         <span aria-hidden="true">←</span> Cancel
@@ -189,34 +194,69 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
             <span class="account-form__validation-message">Resolving identity…</span>
           </span>
         } @else if (_resultVisible() && validationResult(); as result) {
-          @if (result.isValid && result.accountName) {
-            <span class="account-form__validation-block">
-              <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
-              <span class="account-form__validation-message account-form__validation-message--valid">
-                Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span>
+          @switch (_kindOf(result)) {
+            @case ('authenticated') {
+              @if (result.missingScopes.length === 0) {
+                <span class="account-form__validation-block">
+                  <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
+                  <span class="account-form__validation-message account-form__validation-message--valid">
+                    Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span>
+                  </span>
+                </span>
+              } @else {
+                <span class="account-form__validation-block">
+                  <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+                  <span class="account-form__validation-message account-form__validation-message--warning">
+                    <span class="sr-only">Warning: </span>Missing required scopes: {{ result.missingScopes.join(', ') }}
+                  </span>
+                </span>
+              }
+            }
+            @case ('scopesUnverifiable') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--warning">
+                  <span class="sr-only">Warning: </span>Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
+                </span>
               </span>
-            </span>
-          } @else if (result.isAuthFailure) {
-            <span class="account-form__validation-block">
-              <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
-              <span class="account-form__validation-message account-form__validation-message--error">
-                Authentication failed — check that the token is correct
+            }
+            @case ('authenticationFailed') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  <span class="sr-only">Error: </span>Authentication failed — check that the token is correct
+                </span>
               </span>
-            </span>
-          } @else if (!result.isValid && result.missingScopes.length > 0) {
-            <span class="account-form__validation-block">
-              <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-              <span class="account-form__validation-message account-form__validation-message--warning">
-                Missing required scopes: {{ result.missingScopes.join(', ') }}
+            }
+            @case ('identityUnresolved') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  <span class="sr-only">Error: </span>Token accepted, but the account identity could not be resolved from the provider
+                </span>
               </span>
-            </span>
-          } @else if (result.isValid && !result.accountName) {
-            <span class="account-form__validation-block">
-              <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
-              <span class="account-form__validation-message account-form__validation-message--error">
-                Token is valid, but the account identity could not be resolved from the provider
+            }
+            @case ('providerMismatch') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  <span class="sr-only">Error: </span>
+                  @if (_isEditMode()) {
+                    This looks like a {{ _providerDisplayName(result.detectedProvider) }} token. Verify you are using a {{ _provider() }} token, or check the Base URL.
+                  } @else {
+                    This looks like a {{ _providerDisplayName(result.detectedProvider) }} token, but {{ _provider() }} is selected. Switch the provider to {{ _providerDisplayName(result.detectedProvider) }}, or check the Base URL.
+                  }
+                </span>
               </span>
-            </span>
+            }
+            @default {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  <span class="sr-only">Error: </span>Token validation returned an unexpected result — please try again.
+                </span>
+              </span>
+            }
           }
         }
         @if (_isDuplicate()) {
@@ -286,9 +326,15 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
       <button
         class="account-form__save-btn"
         type="button"
-        [disabled]="!_canSave()"
+        [disabled]="!_formValid() && !saving()"
+        [attr.aria-disabled]="saving() ? 'true' : null"
         (click)="onSave()"
-      >{{ _saveLabel() }}</button>
+      >
+        @if (saving()) {
+          <fd-spinner />
+        }
+        {{ _saveLabel() }}
+      </button>
     </div>
   `,
   styleUrl: './account-form.scss',
@@ -425,10 +471,8 @@ export class AccountFormComponent implements OnInit {
     return resolved !== acc.name;
   });
 
-  protected readonly _canSave: Signal<boolean> = computed(() => {
-    if (this.saving()) {
-      return false;
-    }
+  /** Pure validity — everything except the saving guard. */
+  protected readonly _formValid: Signal<boolean> = computed(() => {
     if (this._isDuplicate()) {
       return false;
     }
@@ -444,19 +488,30 @@ export class AccountFormComponent implements OnInit {
         return false;
       }
       const result = this.validationResult();
-      return result !== null && result.isValid && !!result.accountName;
+      return result !== null && AccountFormComponent._isSaveEligible(result);
     }
     if (!this._resultVisible()) {
       return false;
     }
     const result = this.validationResult();
-    if (!result || !result.isValid || !result.accountName) {
+    if (!result || !AccountFormComponent._isSaveEligible(result)) {
       return false;
     }
     return !!this._token();
   });
 
+  private static _isSaveEligible(result: TokenValidationResult): boolean {
+    const kind = narrowTokenValidationKind(result);
+    if (kind === 'scopesUnverifiable') {
+      return true;
+    }
+    return kind === 'authenticated' && result.missingScopes.length === 0;
+  }
+
   protected readonly _saveLabel: Signal<string> = computed(() => {
+    if (this.saving()) {
+      return 'Saving...';
+    }
     if (this._visibleConflicts().length === 0) {
       return 'Save';
     }
@@ -604,6 +659,14 @@ export class AccountFormComponent implements OnInit {
     this.validateToken.emit({ token, baseUrl, providerType });
   }
 
+  protected _kindOf(result: TokenValidationResult): TokenValidationKind | 'unknown' {
+    return narrowTokenValidationKind(result);
+  }
+
+  protected _providerDisplayName(token: string | null): string {
+    return providerDisplayName(token);
+  }
+
   protected _onProviderChange(provider: ProviderType): void {
     this._provider.set(provider);
     this._tokenRequirements.set(null);
@@ -612,6 +675,9 @@ export class AccountFormComponent implements OnInit {
   }
 
   onSave(): void {
+    if (this.saving()) {
+      return;
+    }
     const acc = this.account();
     if (acc !== null) {
       const token = this._token() || null;

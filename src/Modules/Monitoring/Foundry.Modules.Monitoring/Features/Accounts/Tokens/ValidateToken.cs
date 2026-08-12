@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -17,14 +18,22 @@ namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 internal static class ValidateToken
 {
+    internal static class Kinds
+    {
+        internal const string Authenticated = "authenticated";
+        internal const string AuthenticationFailed = "authenticationFailed";
+        internal const string ScopesUnverifiable = "scopesUnverifiable";
+        internal const string IdentityUnresolved = "identityUnresolved";
+        internal const string ProviderMismatch = "providerMismatch";
+    }
+
     internal sealed record Query(string Token, Uri ApiBaseUrl, string ProviderType) : IQuery<Response>;
 
     internal sealed record Response(
-        bool IsValid,
-        bool IsAuthFailure,
-        bool ScopesVerified,
+        string Kind,
+        string? AccountName,
         IReadOnlyList<string> MissingScopes,
-        string? AccountName);
+        string? DetectedProvider);
 
     internal sealed class Handler(
         GitHubHttpClient gitHubHttpClient,
@@ -33,20 +42,52 @@ internal static class ValidateToken
     {
         public async Task<Result<Response>> HandleAsync(Query query, CancellationToken cancellationToken)
         {
-            Result<TokenValidationResult> result = string.Equals(
-                    query.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase)
-                ? await gitLabHttpClient.ValidateTokenAsync(query.ApiBaseUrl, query.Token, cancellationToken)
-                : await gitHubHttpClient.ValidateTokenAsync(query.ApiBaseUrl, query.Token, cancellationToken);
+            if (string.Equals(query.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase))
+            {
+                Result<TokenValidationOutcome> gitLabResult = await gitLabHttpClient.ValidateTokenAsync(
+                    query.ApiBaseUrl, query.Token, cancellationToken);
+                return gitLabResult.Match(
+                    outcome => Result<Response>.Ok(MapOutcomeToResponse(outcome)),
+                    error => Result<Response>.Fail(error));
+            }
 
-            return result.Match(
-                validation => Result<Response>.Ok(new Response(
-                    IsValid: validation.IsValid,
-                    IsAuthFailure: validation.IsAuthFailure,
-                    ScopesVerified: validation.ScopesVerified,
-                    MissingScopes: validation.MissingScopes,
-                    AccountName: validation.AccountName)),
+            Result<TokenValidationOutcome> gitHubResult = await gitHubHttpClient.ValidateTokenAsync(
+                query.ApiBaseUrl, query.Token, cancellationToken);
+            return gitHubResult.Match(
+                outcome => Result<Response>.Ok(MapOutcomeToResponse(outcome)),
                 error => Result<Response>.Fail(error));
         }
+
+        private static Response MapOutcomeToResponse(TokenValidationOutcome outcome) =>
+            outcome switch
+            {
+                TokenValidationOutcome.AuthenticatedOutcome auth => new Response(
+                    Kind: Kinds.Authenticated,
+                    AccountName: auth.AccountName,
+                    MissingScopes: auth.MissingScopes,
+                    DetectedProvider: null),
+                TokenValidationOutcome.AuthenticationFailedOutcome => new Response(
+                    Kind: Kinds.AuthenticationFailed,
+                    AccountName: null,
+                    MissingScopes: [],
+                    DetectedProvider: null),
+                TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => new Response(
+                    Kind: Kinds.ScopesUnverifiable,
+                    AccountName: unverifiable.AccountName,
+                    MissingScopes: [],
+                    DetectedProvider: null),
+                TokenValidationOutcome.IdentityUnresolvedOutcome => new Response(
+                    Kind: Kinds.IdentityUnresolved,
+                    AccountName: null,
+                    MissingScopes: [],
+                    DetectedProvider: null),
+                TokenValidationOutcome.ProviderMismatchOutcome mismatch => new Response(
+                    Kind: Kinds.ProviderMismatch,
+                    AccountName: null,
+                    MissingScopes: [],
+                    DetectedProvider: mismatch.DetectedProvider),
+                _ => throw new UnreachableException($"Unhandled outcome: {outcome.GetType().Name}"),
+            };
     }
 
     internal sealed record RequestBody(string Token, string BaseUrl, [property: JsonRequired] string ProviderType);

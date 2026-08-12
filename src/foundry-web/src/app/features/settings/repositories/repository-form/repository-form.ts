@@ -24,6 +24,7 @@ import {
   RepositorySummary,
   UpdateRepositoryRequest,
 } from '../repository.model';
+import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 
 const DEFAULT_POLL_INTERVAL_MINUTES = 5;
 const SECONDS_PER_MINUTE = 60;
@@ -33,6 +34,7 @@ const MAX_POLL_INTERVAL_MINUTES = 1440;
 @Component({
   selector: 'fd-repository-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SpinnerComponent],
   template: `
     <div class="repository-form">
       <button
@@ -78,7 +80,7 @@ const MAX_POLL_INTERVAL_MINUTES = 1440;
 
             @if (loadingAvailable()) {
               <div class="repository-form__picker-loading" role="status">
-                <span class="repository-form__picker-spinner" aria-hidden="true"></span>
+                <fd-spinner />
                 Loading repositories...
               </div>
             } @else if (loadAvailableError()) {

@@ -504,7 +504,7 @@ describe('SettingsAccountsComponent', () => {
     req.flush(null);
   });
 
-  it('should render a persistent sr-only aria-live announcer outside the @if panel', () => {
+  it('should mount zero aria-live regions (announcer relocated to app shell)', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -513,16 +513,14 @@ describe('SettingsAccountsComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert — announcer must always be present, regardless of affected-repositories panel state
+    // Assert — the accounts page must not contain any live region; the shell owns it
     const el = fixture.nativeElement as HTMLElement;
-    const announcer = el.querySelector('.accounts-settings__sr-announcer');
-    expect(announcer).toBeTruthy();
-    expect(announcer?.getAttribute('aria-live')).toBe('polite');
-    expect(announcer?.getAttribute('aria-atomic')).toBe('true');
-    expect(announcer?.classList).toContain('sr-only');
+    const liveRegions = el.querySelectorAll('[aria-live]');
+    expect(liveRegions.length).toBe(0);
+    expect(el.querySelector('.accounts-settings__sr-announcer')).toBeNull();
   });
 
-  it('should populate the sr-announcer when affected repositories appear', () => {
+  it('should pass deletingAccountId from accountService to fd-account-list', () => {
     // Arrange
     const account: AccountSummary = {
       id: '1',
@@ -536,25 +534,19 @@ describe('SettingsAccountsComponent', () => {
     fixture.detectChanges();
     flushAccounts(httpMock, [account]);
     fixture.detectChanges();
-    fixture.componentInstance.onEditAccount(account);
-    fixture.detectChanges();
-    flushTokenRequirements(httpMock);
-    fixture.componentInstance.onSaveExistingAccount({ baseUrl: 'https://github.com', token: null });
-    const affected: AffectedRepository[] = [
-      { id: 'repo-1', slug: 'org/api', previousStatus: 'eligible', newStatus: 'ineligible' },
-    ];
-
-    // Act
-    httpMock.expectOne(`/api/accounts/${account.id}`).flush(makeUpdateResult(account, affected));
-    fixture.detectChanges();
-    httpMock.expectOne('/api/accounts').flush([account]);
+    const accountService = TestBed.inject(AccountService);
+    accountService.deleteAccount(account.id);
     fixture.detectChanges();
 
-    // Assert
+    // Act — inspect the spinner rendered inside the delete button for that row
     const el = fixture.nativeElement as HTMLElement;
-    const announcer = el.querySelector('.accounts-settings__sr-announcer');
-    expect(announcer?.textContent).toContain('1');
-    expect(announcer?.textContent).toContain('affected');
+    const busyBtn = el.querySelector('[aria-label="Deleting account My Org…"]');
+
+    // Assert — busy label is rendered, confirming deletingAccountId flows through
+    expect(busyBtn).toBeTruthy();
+
+    // Flush the pending delete so afterEach verify() doesn't fail
+    httpMock.expectOne('/api/accounts/1').flush(null);
   });
 
   it('should not call deleteAccount when confirmation is declined', () => {

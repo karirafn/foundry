@@ -11,18 +11,20 @@ import {
   signal,
 } from '@angular/core';
 import { AccountService } from '../../settings/accounts/account.service';
-import { ProviderType } from '../../settings/accounts/account.model';
+import { ProviderType, TokenValidationKind, TokenValidationResult, narrowTokenValidationKind, providerDisplayName } from '../../settings/accounts/account.model';
 import { ProviderSelectorComponent } from '../../settings/accounts/provider-selector/provider-selector';
+import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
 
 const GITHUB_BASE_URL = 'https://github.com';
+const GITLAB_BASE_URL = 'https://gitlab.com';
 
 @Component({
   selector: 'fd-setup-account-step',
   standalone: true,
-  imports: [ProviderSelectorComponent],
+  imports: [ProviderSelectorComponent, SpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="setup-account-step">
+    <div class="setup-account-step" role="region" aria-label="Add account" [attr.aria-busy]="saving() ? 'true' : null">
       <h2 class="setup-account-step__title">Add a Provider Account</h2>
       <p class="setup-account-step__description">
         Connect an account to get started.
@@ -33,7 +35,7 @@ const GITHUB_BASE_URL = 'https://github.com';
           <span id="setup-provider-label" class="setup-account-step__field-label">Provider</span>
           <fd-provider-selector
             [provider]="_provider()"
-            (providerChange)="_provider.set($event)"
+            (providerChange)="_onProviderChange($event)"
             (defaultBaseUrlChange)="onDefaultBaseUrlChange($event)"
             [ariaLabelledBy]="'setup-provider-label'"
           />
@@ -102,34 +104,69 @@ const GITHUB_BASE_URL = 'https://github.com';
               <span class="setup-account-step__validation-message">Resolving identity…</span>
             </span>
           } @else if (_resultVisible() && _accountService.validationResult(); as result) {
-            @if (result.isValid && result.accountName) {
-              <span class="setup-account-step__validation-block">
-                <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
-                <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">
-                  Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span>
+            @switch (_kindOf(result)) {
+              @case ('authenticated') {
+                @if (result.missingScopes.length === 0) {
+                  <span class="setup-account-step__validation-block">
+                    <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
+                    <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">
+                      Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span>
+                    </span>
+                  </span>
+                } @else {
+                  <span class="setup-account-step__validation-block">
+                    <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+                    <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
+                      <span class="sr-only">Warning: </span>Missing required scopes: {{ result.missingScopes.join(', ') }}
+                    </span>
+                  </span>
+                }
+              }
+              @case ('scopesUnverifiable') {
+                <span class="setup-account-step__validation-block">
+                  <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+                  <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
+                    <span class="sr-only">Warning: </span>Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
+                  </span>
                 </span>
-              </span>
-            } @else if (result.isAuthFailure) {
-              <span class="setup-account-step__validation-block">
-                <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
-                <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
-                  Authentication failed — check that the token is correct
+              }
+              @case ('authenticationFailed') {
+                <span class="setup-account-step__validation-block">
+                  <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                  <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                    <span class="sr-only">Error: </span>Authentication failed — check that the token is correct
+                  </span>
                 </span>
-              </span>
-            } @else if (!result.isValid && result.missingScopes.length > 0) {
-              <span class="setup-account-step__validation-block">
-                <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
-                <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
-                  Missing required scopes: {{ result.missingScopes.join(', ') }}
+              }
+              @case ('identityUnresolved') {
+                <span class="setup-account-step__validation-block">
+                  <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                  <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                    <span class="sr-only">Error: </span>Token accepted, but the account identity could not be resolved from the provider
+                  </span>
                 </span>
-              </span>
-            } @else if (result.isValid && !result.accountName) {
-              <span class="setup-account-step__validation-block">
-                <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
-                <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
-                  Token is valid, but the account identity could not be resolved from the provider
+              }
+              @case ('providerMismatch') {
+                <span class="setup-account-step__validation-block">
+                  <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                  <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                    <span class="sr-only">Error: </span>This looks like a {{ _providerDisplayName(result.detectedProvider) }} token, but {{ _provider() }} is selected. Switch the provider to {{ _providerDisplayName(result.detectedProvider) }}, or check the Base URL.
+                  </span>
+                  <button
+                    class="setup-account-step__switch-provider-btn"
+                    type="button"
+                    (click)="_switchToDetectedProvider(result)"
+                  >Switch to {{ _providerDisplayName(result.detectedProvider) }}</button>
                 </span>
-              </span>
+              }
+              @default {
+                <span class="setup-account-step__validation-block">
+                  <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                  <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                    <span class="sr-only">Error: </span>Token validation returned an unexpected result — please try again.
+                  </span>
+                </span>
+              }
             }
           }
         </div>
@@ -150,9 +187,15 @@ const GITHUB_BASE_URL = 'https://github.com';
           <button
             class="setup-account-step__create-btn"
             type="button"
-            [disabled]="!_canCreate()"
+            [disabled]="!_formValid() && !saving()"
+            [attr.aria-disabled]="saving() ? 'true' : null"
             (click)="onCreate()"
-          >{{ _accountService.saving() ? 'Creating...' : 'Create Account' }}</button>
+          >
+            @if (saving()) {
+              <fd-spinner />
+            }
+            {{ saving() ? 'Creating...' : 'Create Account' }}
+          </button>
         </div>
       </div>
     </div>
@@ -171,27 +214,27 @@ export class SetupAccountStepComponent {
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
 
-  /** Tracks the last (token, baseUrl) pair sent to resolution to avoid duplicate calls. */
-  private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string } | null> = signal(null);
+  /** Tracks the last (token, baseUrl, providerType) triple sent to resolution to avoid duplicate calls. */
+  private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string; providerType: string } | null> = signal(null);
 
   /** Whether a held resolution is pending (token present but baseUrl was empty at blur time). */
   private readonly _pendingResolution: WritableSignal<boolean> = signal(false);
 
   private readonly _hasSaved: WritableSignal<boolean> = signal(false);
 
-  /** True only when the last resolved pair still matches current inputs — hides stale results after edits. */
+  /** True only when the last resolved triple still matches current inputs — hides stale results after edits. */
   protected readonly _resultVisible: Signal<boolean> = computed(() => {
     const last = this._lastResolvedPair();
     if (!last) {
       return false;
     }
-    return last.token === this._token() && last.baseUrl === this._baseUrl();
+    return last.token === this._token() && last.baseUrl === this._baseUrl() && last.providerType === this._provider();
   });
 
-  protected readonly _canCreate: Signal<boolean> = computed(() => {
-    if (this._accountService.saving()) {
-      return false;
-    }
+  protected readonly saving: Signal<boolean> = computed(() => this._accountService.saving());
+
+  /** Pure form validity — everything except the saving guard. */
+  protected readonly _formValid: Signal<boolean> = computed(() => {
     if (!this._token()) {
       return false;
     }
@@ -199,8 +242,16 @@ export class SetupAccountStepComponent {
       return false;
     }
     const result = this._accountService.validationResult();
-    return result !== null && result.isValid && !!result.accountName;
+    return result !== null && SetupAccountStepComponent._isSaveEligible(result);
   });
+
+  private static _isSaveEligible(result: TokenValidationResult): boolean {
+    const kind = narrowTokenValidationKind(result);
+    if (kind === 'scopesUnverifiable') {
+      return true;
+    }
+    return kind === 'authenticated' && result.missingScopes.length === 0;
+  }
 
   constructor() {
     effect(() => {
@@ -216,6 +267,41 @@ export class SetupAccountStepComponent {
         }
       }
     });
+  }
+
+  protected _kindOf(result: TokenValidationResult): TokenValidationKind | 'unknown' {
+    return narrowTokenValidationKind(result);
+  }
+
+  protected _providerDisplayName(token: string | null): string {
+    return providerDisplayName(token);
+  }
+
+  protected _onProviderChange(provider: ProviderType): void {
+    this._provider.set(provider);
+    this._clearResolution();
+  }
+
+  protected _switchToDetectedProvider(result: TokenValidationResult): void {
+    const detected = result.detectedProvider;
+    if (!detected) {
+      return;
+    }
+    const normalized = detected.toLowerCase();
+    let provider: ProviderType | null = null;
+    if (normalized === 'github') {
+      provider = 'GitHub';
+    } else if (normalized === 'gitlab') {
+      provider = 'GitLab';
+    }
+    if (!provider) {
+      return;
+    }
+    this._provider.set(provider);
+    this._baseUrl.set(provider === 'GitHub' ? GITHUB_BASE_URL : GITLAB_BASE_URL);
+    this._baseUrlManuallyEdited.set(false);
+    this._clearResolution();
+    this._triggerResolution();
   }
 
   onBaseUrlInput(value: string): void {
@@ -267,6 +353,9 @@ export class SetupAccountStepComponent {
   }
 
   onCreate(): void {
+    if (this._accountService.saving()) {
+      return;
+    }
     this._hasSaved.set(true);
     this._accountService.createAccount({
       providerType: this._provider(),
@@ -282,11 +371,12 @@ export class SetupAccountStepComponent {
   private _triggerResolution(): void {
     const token = this._token();
     const baseUrl = this._baseUrl();
+    const providerType = this._provider();
     const last = this._lastResolvedPair();
-    if (last && last.token === token && last.baseUrl === baseUrl) {
+    if (last && last.token === token && last.baseUrl === baseUrl && last.providerType === providerType) {
       return;
     }
-    this._lastResolvedPair.set({ token, baseUrl });
-    this._accountService.validateToken({ token, baseUrl, providerType: this._provider() });
+    this._lastResolvedPair.set({ token, baseUrl, providerType });
+    this._accountService.validateToken({ token, baseUrl, providerType });
   }
 }

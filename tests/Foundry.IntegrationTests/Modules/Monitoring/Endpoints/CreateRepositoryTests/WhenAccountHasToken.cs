@@ -14,6 +14,7 @@ using Foundry.IntegrationTests.Modules.Monitoring.Endpoints;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -45,7 +46,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new ProbeGrantedFakeHandler())));
+                    new HttpClient(new ProbeGrantedFakeHandler()),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
 
         _client = _factory.CreateClient();
@@ -107,7 +109,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new ProbeGrantedFakeHandler())));
+                    new HttpClient(new ProbeGrantedFakeHandler()),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
         await using (factory.ConfigureAwait(false))
         {

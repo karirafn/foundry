@@ -150,6 +150,42 @@ describe('RepositoryListComponent', () => {
     expect(srText?.textContent).toContain('Loading repositories');
   });
 
+  // Cycle 3b: fd-spinner rendered inside loading state at 24px
+  it('should render fd-spinner inside the loading region when loading is true', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ loading: true });
+
+    // Assert
+    const spinner = el.querySelector('fd-spinner');
+    expect(spinner).toBeTruthy();
+  });
+
+  it('should render fd-spinner with size 24 when loading is true', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ loading: true });
+
+    // Assert
+    const spinnerSpan = el.querySelector('fd-spinner .spinner') as HTMLElement;
+    expect(spinnerSpan).toBeTruthy();
+    expect(spinnerSpan.style.width).toBe('24px');
+    expect(spinnerSpan.style.height).toBe('24px');
+  });
+
+  it('should not render fd-spinner when loading is false', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ loading: false, repositories: [] });
+
+    // Assert
+    const spinner = el.querySelector('fd-spinner');
+    expect(spinner).toBeNull();
+  });
+
   // Cycle 4: error state
   it('should render error message in alert region', () => {
     // Arrange

@@ -23,3 +23,9 @@
 *.yaml text
 *.xml text
 *.sh text eol=lf
+
+###############################################################################
+# Generated files — keep the checked-out form byte-identical to the generator's
+# output so builds leave the worktree clean.
+###############################################################################
+src/Foundry.WebApi/openapi/*.json text eol=lf

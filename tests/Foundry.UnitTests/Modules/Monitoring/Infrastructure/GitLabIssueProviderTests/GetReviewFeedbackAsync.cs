@@ -13,6 +13,7 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabIssueProviderTests;
 
@@ -29,7 +30,7 @@ public sealed class GetReviewFeedbackAsync
     private static GitLabIssueProvider BuildSut(FakeHandler handler)
     {
         HttpClient httpClient = new(handler);
-        GitLabHttpClient gitLabHttpClient = new(httpClient);
+        GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         return new GitLabIssueProvider(gitLabHttpClient, ValidToken, ValidBaseUrl);
     }
 

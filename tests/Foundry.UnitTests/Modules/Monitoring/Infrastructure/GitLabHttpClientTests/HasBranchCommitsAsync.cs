@@ -11,6 +11,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -28,7 +29,7 @@ public sealed class HasBranchCommitsAsync
         string json = """{ "commits": [{ "id": "abc123" }] }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.HasBranchCommitsAsync(
@@ -52,7 +53,7 @@ public sealed class HasBranchCommitsAsync
         string json = """{ "commits": [] }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.HasBranchCommitsAsync(
@@ -75,7 +76,7 @@ public sealed class HasBranchCommitsAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.HasBranchCommitsAsync(
@@ -98,7 +99,7 @@ public sealed class HasBranchCommitsAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -123,7 +124,7 @@ public sealed class HasBranchCommitsAsync
         string json = """{ "commits": [] }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.HasBranchCommitsAsync(

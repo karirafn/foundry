@@ -12,6 +12,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.IssueProviderFactoryTests;
 
@@ -21,8 +22,8 @@ public sealed class CreateProvider
     {
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient);
-        GitLabHttpClient gitLabHttpClient = new(httpClient);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         return new IssueProviderFactory(gitHubHttpClient, gitLabHttpClient);
     }
 

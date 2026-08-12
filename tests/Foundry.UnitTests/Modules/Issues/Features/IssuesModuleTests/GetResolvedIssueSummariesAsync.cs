@@ -327,14 +327,14 @@ public sealed class GetResolvedIssueSummariesAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBothResolvedStates_FiltersBySpecifiedSubset()
+    public async Task WhenExplicitCompletedState_ExcludesUnchangedIssues()
     {
         // Arrange
         MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
         SeedCompletedIssue(repoId, issueNumber: 1, detectedAt: BaseTime);
         SeedUnchangedIssue(repoId, issueNumber: 2, detectedAt: BaseTime.AddHours(-1));
 
-        // Act — request only "completed" state
+        // Act — request only "completed" state; unchanged is active and excluded
         PagedIssues result = await _sut.GetResolvedIssueSummariesAsync(
             repositoryId: null,
             states: ["completed"],

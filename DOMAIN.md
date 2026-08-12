@@ -105,6 +105,24 @@ Multiple accounts can exist per provider and per host — including multiple PAT
 The provider username the token authenticates as — resolved from the provider's `/user` endpoint at token validation and stored as the account's name (`Credential.Name`).
 Not user-chosen: the account's display name *is* the PAT owner. Because multiple accounts may share one PAT owner, the name alone does not identify an account; UI surfaces disambiguate with the account's Namespace Claims and host.
 
+### Token Validation Outcome
+
+A closed variant set (`TokenValidationOutcome`) returned by both provider adapters after validating a PAT.
+Five variants:
+
+- `Authenticated(AccountName, MissingScopes)` — the token authenticated and the PAT owner resolved; `MissingScopes` lists any required scopes absent from the token.
+- `AuthenticationFailed` — the token was rejected (401/unauthorized).
+- `ScopesUnverifiable(AccountName)` — the token authenticated and the owner resolved, but the token's scopes could not be read (e.g. GitLab group/project access tokens where `personal_access_tokens/self` returns non-2xx, or GitHub classic PATs served without `X-OAuth-Scopes`).
+- `IdentityUnresolved` — the response could not be parsed to an identity (neither provider's identity field present).
+- `ProviderMismatch(DetectedProvider)` — the response carried the *other* provider's identity shape (e.g. GitLab answered while GitHub was selected); names the detected provider.
+
+Two behavioral rules apply:
+
+1. A successful authentication requires a PAT owner — a "valid but nameless" state cannot be represented; if the owner cannot be resolved the outcome is `IdentityUnresolved` or `ProviderMismatch`, not `Authenticated`.
+2. `ScopesUnverifiable` warns but permits saving — the provider owns authorization and claim-time scope enforcement is the real gate, so an unreadable scope list is advisory, not blocking.
+
+The endpoint (`POST /api/accounts/validate-token`) maps these variants to the response `Kind` field: `"authenticated"`, `"authenticationFailed"`, `"scopesUnverifiable"`, `"identityUnresolved"`, `"providerMismatch"`.
+
 ## Namespace Claim
 
 The exclusive association between an Account and an owner namespace on a host — stored in `credential_namespaces` with a unique `(host, namespace)` constraint, so each namespace is served by exactly one account.
@@ -128,6 +146,25 @@ Runs on a fixed tick interval (30s default) and checks whether each repo is due 
 A provider-side issue tagged for Foundry processing.
 Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
+
+### Issue Lifecycle Partition
+
+The lifecycle splits into two partitions defined by `IssueStateRegistry` (server) and mirrored in `ACTIVE_STATES` / `RESOLVED_STATES` (frontend):
+
+- **Active** — every state except `completed`.
+- **Resolved** — `completed` only.
+
+The dashboard renders Active states in four display groups, classified by one rule — the relationship between the issue and a worker:
+
+- **In progress** — a worker is actually running right now (`in_progress`, `revision_in_progress`). Exactly `LIVE_STATES`.
+- **Needs attention** — requires a user action to progress (`review`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`).
+- **Waiting** — waiting for a worker; advances with no user action (`detected`, `queued`, `blocked`, `revision_queued`, `continuation_queued`).
+- **Resolved** — done (`completed`).
+
+Two states deserve explicit note:
+
+- `unchanged` is Active/Needs-attention because the worker produced no changes and the user must decide whether to retry — it cannot resolve itself.
+- `blocked` is Waiting because a `BlockedIssue` auto-transitions to `QueuedIssue` when its blockers close on the provider; no user action is required.
 
 ## Issue Kind
 
@@ -222,13 +259,15 @@ A lifecycle state for an issue whose worker completed successfully and produced 
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable.
 Awaits human review of the PR. The monitoring service polls the provider for PR/issue status and review feedback.
 `FeedbackCutoffAt` filters stale feedback — only review comments submitted after this timestamp are considered actionable. Set to the worker run's completion time on first entry; updated on re-entry after a revision cycle.
-Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists); `Retry()` → `ContinuationQueuedIssue` (manual restart with branch context).
+Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists).
 
 ## Unchanged Issue
 
 A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
 Requires manual resolution: the user can retry (disagreeing with the worker's assessment).
+Classified as Active / Needs attention (see [Issue Lifecycle Partition](#issue-lifecycle-partition)) — it cannot resolve itself.
 Transitions: `UnchangedIssue.Retry()` → `QueuedIssue`.
+Hard-deleted when the provider-side issue is closed or loses its trigger label (untracked by the poller). If reopened upstream with the trigger label it is re-detected as a new issue.
 
 ## Revision Queued Issue
 
@@ -295,9 +334,9 @@ Transitions: `Retry()` → `RevisionQueuedIssue` (re-enters revision path with e
 
 ## Operator-Triggered Retry
 
-A manual action available on any failed issue via `POST /api/issues/{id}/retry`.
-Dispatches polymorphically on the loaded issue state: `FailedIssue.Retry()` → `QueuedIssue` (fresh run); `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `RevisionFailedIssue.Retry()` → `RevisionQueuedIssue` (re-enters revision path).
-Any non-retryable state returns a validation/conflict error with no state change.
+A manual action available on any retry-supporting issue via `POST /api/issues/{id}/retry`.
+Dispatches polymorphically on the loaded issue state: `FailedIssue.Retry()` → `QueuedIssue` (fresh run); `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `RevisionFailedIssue.Retry()` → `RevisionQueuedIssue` (re-enters revision path); `UnchangedIssue.Retry()` → `QueuedIssue` (fresh run, operator disagrees with worker assessment).
+Any non-retryable state returns a conflict error with no state change.
 
 ## Transient Retry
 
@@ -337,8 +376,8 @@ All lifecycle state is tracked internally in the database.
 The provider is the authoritative signal for issue closure.
 When an issue's trigger label is removed or the issue is closed on the provider, it disappears from the `?labels=foundry&state=open` fetch.
 On each poll cycle, the poller emits a `ProviderIssueUntracked` integration event for any tracked issue absent from that fetch.
-The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states: `detected`, `queued`, `blocked`, `failed`, `continuable_failed`, `revision_failed`, `revision_queued`, and `continuation_queued`.
-`completed` and `unchanged` are preserved — completion wins over provider closure.
+The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states: `detected`, `queued`, `blocked`, `failed`, `continuable_failed`, `revision_failed`, `revision_queued`, `continuation_queued`, and `unchanged`.
+`completed` is preserved — completion wins over provider closure.
 `in_progress`, `revision_in_progress`, and `review` are preserved — a live worker is running or the issue is under active review; worker cancellation is out of scope.
 An issue closed on the provider and later reopened with the trigger label is re-detected as a new issue.
 
@@ -415,7 +454,7 @@ Docker timestamps are enabled (`--timestamps` flag) so each output line carries 
 Failed-run output is served by `GET /api/workers/runs/{workerRunId}/log` (200 with text body when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
 
 Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines with backlog replay followed by live follow.
-The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and interleaves commit markers by timestamp to give a unified activity timeline.
+The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and renders the redacted lines in arrival order.
 
 ## First-Run Wizard
 
@@ -433,7 +472,7 @@ Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedO
 
 A state where the Anthropic API quota (session, weekly, or Opus limit) is exhausted.
 Detected by parsing the worker container's JSON output (`--output-format json`): the primary signal is `ResultMessage.api_error_status == 429`; the `terminal_reason` allowlist (`"blocking_limit"`, `"rapid_refill_breaker"`) is retained as a secondary signal for older output shapes. Note that a 429 can arrive with `subtype: "success"` and `terminal_reason: "completed"`, so neither field is reliable on its own.
-The reset time is extracted from the human-readable result text (e.g. `"You've hit your limit · resets 12:10am (UTC)"`): a 12-hour wall-clock time resolves to its next future UTC occurrence, ISO-8601 timestamps are also accepted, and when neither parses a configurable `DefaultCooldownMinutes` fallback is used. The fallback only ever extends an existing pause, never shortens it.
+The reset time is extracted from the human-readable result text. Two wall-clock wording shapes are handled: `resets <time> (UTC)` (e.g. `"You've hit your limit · resets 12:10am (UTC)"`) and `reset at <time> (<IANA zone>)` (e.g. `"Your limit will reset at 3pm (America/New_York)."`). In both forms the time is 12-hour; a bare hour without minutes (e.g. `3pm`) defaults minutes to `00`. UTC times resolve to the next future UTC occurrence directly; IANA zone names are converted to UTC via the system timezone database, then the same roll-forward applies. ISO-8601 timestamps in the result text take precedence over wall-clock parsing. When no recognised reset time is present, or an unrecognised timezone is encountered, a configurable `DefaultCooldownMinutes` fallback is used. The fallback only ever extends an existing pause, never shortens it.
 A detected usage limit always triggers a global dispatch pause via `GlobalSettings.UsageLimitResetsAt` — there is no immediate-requeue path.
 The triggering issue transitions to `FailedIssue` / `ContinuableFailedIssue` with `FailureReason.UsageLimited(resetsAt)`.
 On detection, `WorkerDispatchService` raises the `DispatchPaused` integration event, which is broadcast as a `dispatch` system notification (`isActive: true`) so the dashboard usage-limit banner updates live without a page refresh.

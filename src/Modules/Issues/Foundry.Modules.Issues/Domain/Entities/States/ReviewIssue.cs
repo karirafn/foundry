@@ -75,13 +75,6 @@ public sealed class ReviewIssue : Issue
         return revisionQueued;
     }
 
-    public ContinuationQueuedIssue Retry()
-    {
-        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromReview(this);
-        AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
-        return queued;
-    }
-
     public CompletedIssue Complete(DateTimeOffset completedAt)
     {
         CompletedIssue completed = CompletedIssue.FromReview(this, completedAt);

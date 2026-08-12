@@ -112,17 +112,34 @@ internal static partial class UpdateAccount
                         $"Token validation returned an unexpected result type: {tokenResult.GetType().Name}");
                 }
 
-                if (!tokenResponse.IsValid)
+                string? resolvedName = tokenResponse.Kind switch
                 {
-                    return Result<CredentialUpdateResult>.Fail(CredentialErrors.InvalidToken);
+                    ValidateToken.Kinds.Authenticated when tokenResponse.MissingScopes.Count == 0
+                        => tokenResponse.AccountName,
+                    ValidateToken.Kinds.ScopesUnverifiable
+                        => tokenResponse.AccountName,
+                    _ => null,
+                };
+
+                if (resolvedName is null)
+                {
+                    Error kindError = tokenResponse.Kind switch
+                    {
+                        ValidateToken.Kinds.Authenticated => CredentialErrors.InvalidToken,
+                        ValidateToken.Kinds.AuthenticationFailed => CredentialErrors.InvalidToken,
+                        ValidateToken.Kinds.IdentityUnresolved => CredentialErrors.UnresolvedIdentity,
+                        ValidateToken.Kinds.ScopesUnverifiable => CredentialErrors.UnresolvedIdentity,
+                        ValidateToken.Kinds.ProviderMismatch =>
+                            CredentialErrors.ProviderMismatch(tokenResponse.DetectedProvider ?? string.Empty),
+                        _ => CredentialErrors.InvalidToken,
+                    };
+                    return Result<CredentialUpdateResult>.Fail(kindError);
                 }
 
-                if (string.IsNullOrWhiteSpace(tokenResponse.AccountName))
+                if (string.IsNullOrWhiteSpace(resolvedName))
                 {
                     return Result<CredentialUpdateResult>.Fail(CredentialErrors.UnresolvedIdentity);
                 }
-
-                string resolvedName = tokenResponse.AccountName;
 
                 if (resolvedName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || resolvedName.Any(char.IsControl))
                 {

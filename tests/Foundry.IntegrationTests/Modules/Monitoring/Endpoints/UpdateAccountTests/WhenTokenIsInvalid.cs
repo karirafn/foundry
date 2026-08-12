@@ -24,7 +24,11 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     {
         // The stub returns invalid so both create and update see it as invalid,
         // but update is the operation under test.
-        ValidateToken.Response invalidResponse = new(IsValid: false, IsAuthFailure: true, ScopesVerified: false, MissingScopes: [], AccountName: null);
+        ValidateToken.Response invalidResponse = new(
+            Kind: ValidateToken.Kinds.AuthenticationFailed,
+            AccountName: null,
+            MissingScopes: [],
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -65,13 +69,12 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     [Fact]
     public async Task WhenTokenResolvesNullIdentity_ReturnsBadRequest()
     {
-        // Arrange — token is valid but provider returned no identity (AccountName = null)
+        // Arrange — token is authenticated but provider returned no identity (AccountName = null)
         ValidateToken.Response unresolvedResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: null,
             MissingScopes: [],
-            AccountName: null);
+            DetectedProvider: null);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -105,11 +108,10 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
         // Arrange — provider returns a name longer than 200 characters (max allowed length)
         string oversizedName = new('a', 201);
         ValidateToken.Response oversizedResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: oversizedName,
             MissingScopes: [],
-            AccountName: oversizedName);
+            DetectedProvider: null);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -142,11 +144,10 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     {
         // Arrange — provider returns a name containing a control character (newline)
         ValidateToken.Response controlCharResponse = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: "valid-prefix\ninjected",
             MissingScopes: [],
-            AccountName: "valid-prefix\ninjected");
+            DetectedProvider: null);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {

@@ -9,6 +9,7 @@ import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
+import { RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -319,244 +320,6 @@ describe('IssueDetailComponent', () => {
     expect(errorEl).toBeFalsy();
   });
 
-  // Cycle 16: ineligible state — violations list
-  it('should render eligibility violations when state is ineligible and violations are present', () => {
-    // Arrange
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: {
-        ...mockStateDetails,
-        violations: [
-          { rule: 'no-open-pr', description: 'Issue already has an open pull request' },
-          { rule: 'label-removed', description: 'Trigger label was removed' },
-        ],
-      },
-    };
-
-    // Act
-    const fixture = createComponent(ineligibleDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const items = el.querySelectorAll('.issue-detail__violation');
-    expect(items.length).toBe(2);
-    const texts = Array.from(items).map((i) => i.textContent?.trim());
-    expect(texts).toContain('Issue already has an open pull request');
-    expect(texts).toContain('Trigger label was removed');
-  });
-
-  it('should not render violations section when state is not ineligible', () => {
-    // Arrange
-    const fixture = createComponent(mockDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act — component renders on creation
-
-    // Assert
-    const violations = el.querySelector('.issue-detail__violations');
-    expect(violations).toBeFalsy();
-  });
-
-  it('should show fallback message when state is ineligible but violations list is empty', () => {
-    // Arrange
-    const ineligibleNoViolations: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: [] },
-    };
-
-    // Act
-    const fixture = createComponent(ineligibleNoViolations);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const violations = el.querySelector('.issue-detail__violations');
-    expect(violations).toBeFalsy();
-    const label = el.querySelector('#eligibility-violations-label') as HTMLElement;
-    const fallback = label?.parentElement?.querySelector('.issue-detail__field-value');
-    expect(fallback?.textContent?.trim()).toBe('Eligibility details are unavailable');
-  });
-
-  it('should show fallback message when state is ineligible and violations is null', () => {
-    // Arrange
-    const ineligibleNullViolations: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: null },
-    };
-
-    // Act
-    const fixture = createComponent(ineligibleNullViolations);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const violations = el.querySelector('.issue-detail__violations');
-    expect(violations).toBeFalsy();
-    const label = el.querySelector('#eligibility-violations-label') as HTMLElement;
-    const fallback = label?.parentElement?.querySelector('.issue-detail__field-value');
-    expect(fallback?.textContent?.trim()).toBe('Eligibility details are unavailable');
-  });
-
-  // Cycle 17: ineligible state — retry button
-  it('should render a retry button when state is ineligible', () => {
-    // Arrange
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: null },
-    };
-
-    // Act
-    const fixture = createComponent(ineligibleDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toBe('Retry Eligibility Check');
-  });
-
-  it('should not render retry eligibility button when state is not ineligible', () => {
-    // Arrange
-    const fixture = createComponent(mockDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Act — component renders on creation
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-eligibility-btn');
-    expect(btn).toBeFalsy();
-  });
-
-  it('should call retryEligibility on the service when retry button is clicked', () => {
-    // Arrange
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: null },
-    };
-    const fixture = createComponent(ineligibleDetail);
-    const el = fixture.nativeElement as HTMLElement;
-    const http = TestBed.inject(HttpTestingController);
-
-    // Act
-    const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
-    btn.click();
-    const req = http.expectOne(`/api/issues/${ineligibleDetail.id}/retry-eligibility`);
-
-    // Assert
-    expect(req.request.method).toBe('POST');
-    req.flush(null);
-    // Service calls loadDetail after success; flush that request too
-    http.expectOne(`/api/issues/${ineligibleDetail.id}`).flush(ineligibleDetail);
-    http.verify();
-  });
-
-  it('should set aria-label on retry button referencing the issue number', () => {
-    // Arrange
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: null },
-    };
-
-    // Act
-    const fixture = createComponent(ineligibleDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
-    expect(btn?.getAttribute('aria-label')).toBe('Retry eligibility check for issue #42');
-  });
-
-  it('should disable retry button while retryingEligibility is true', () => {
-    // Arrange
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: null },
-    };
-    const fixture = createComponent(ineligibleDetail);
-    const el = fixture.nativeElement as HTMLElement;
-    const issueService = TestBed.inject(IssueService);
-    const http = TestBed.inject(HttpTestingController);
-
-    // Act — click starts the request, signal becomes true
-    const btn = el.querySelector('.issue-detail__retry-eligibility-btn') as HTMLButtonElement;
-    btn.click();
-    fixture.detectChanges();
-
-    // Assert — button is disabled while request is in flight
-    expect(issueService.retryingEligibility()).toBe(true);
-    expect(btn.disabled).toBe(true);
-    expect(btn.textContent?.trim()).toBe('Retrying...');
-
-    // Cleanup
-    http.expectOne(`/api/issues/${ineligibleDetail.id}/retry-eligibility`).flush(null);
-    http.expectOne(`/api/issues/${ineligibleDetail.id}`).flush(ineligibleDetail);
-    http.verify();
-  });
-
-  it('should associate violations list with its label via aria-labelledby', () => {
-    // Arrange
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: {
-        ...mockStateDetails,
-        violations: [{ rule: 'no-open-pr', description: 'Issue already has an open pull request' }],
-      },
-    };
-
-    // Act
-    const fixture = createComponent(ineligibleDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const label = el.querySelector('#eligibility-violations-label');
-    expect(label).toBeTruthy();
-    const list = el.querySelector('.issue-detail__violations') as HTMLUListElement;
-    expect(list?.getAttribute('aria-labelledby')).toBe('eligibility-violations-label');
-  });
-
-  // Transition behavior: stale ineligible detail does not show content while loading
-  it('should not render content block when loading is true even if stale detail is present', () => {
-    // Arrange — simulate stale ineligible detail still in memory during transition
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: null },
-    };
-
-    // Act — loading=true with stale detail (transition state)
-    const fixture = createComponent(ineligibleDetail, true);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert — content is not rendered, only the skeleton is shown
-    const content = el.querySelector('.issue-detail__content');
-    expect(content).toBeFalsy();
-    const skeleton = el.querySelector('.issue-detail__skeleton');
-    expect(skeleton).toBeTruthy();
-  });
-
-  it('should not render retry eligibility button when loading is true even if stale ineligible detail is present', () => {
-    // Arrange — simulate stale ineligible detail during loading transition
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: null },
-    };
-
-    // Act
-    const fixture = createComponent(ineligibleDetail, true);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert — retry button is absent while skeleton is shown
-    const retryBtn = el.querySelector('.issue-detail__retry-eligibility-btn');
-    expect(retryBtn).toBeFalsy();
-  });
-
   // B10: persistent "View issue" link is always present in the detail panel
   it('should render a "View issue" link when detail is present', () => {
     // Arrange
@@ -733,73 +496,55 @@ describe('IssueDetailComponent', () => {
     expect(authorField?.querySelector('.issue-detail__field-value')?.textContent?.trim()).toBe('octocat');
   });
 
-  // Retry Failed button — shown for the three failed states
-  it('should render the retry failed button when state is failed', () => {
-    // Arrange
-    const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
-
-    // Act
-    const fixture = createComponent(failedDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toBe('Retry Issue');
+  // Retry button — shown for all retryable states
+  // Positive cases are driven by RETRYABLE_STATES so the spec stays bound to
+  // the single source of truth; adding a state to the set automatically tests it.
+  it('should cover the expected set of retryable states', () => {
+    // Arrange + Assert — pin membership so an unreviewed addition is caught
+    expect([...RETRYABLE_STATES].sort()).toEqual(
+      ['continuable_failed', 'failed', 'revision_failed', 'unchanged'],
+    );
   });
 
-  it('should render the retry failed button when state is continuable_failed', () => {
-    // Arrange
-    const continuableDetail: IssueDetail = { ...mockDetail, state: 'continuable_failed' };
+  for (const state of RETRYABLE_STATES) {
+    it(`should render the retry button when state is ${state}`, () => {
+      // Arrange
+      const retryableDetail: IssueDetail = { ...mockDetail, state };
 
-    // Act
-    const fixture = createComponent(continuableDetail);
-    const el = fixture.nativeElement as HTMLElement;
+      // Act
+      const fixture = createComponent(retryableDetail);
+      const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-  });
+      // Assert
+      const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
+      expect(btn).toBeTruthy();
+    });
+  }
 
-  it('should render the retry failed button when state is revision_failed', () => {
-    // Arrange
-    const revisionFailedDetail: IssueDetail = { ...mockDetail, state: 'revision_failed' };
-
-    // Act
-    const fixture = createComponent(revisionFailedDetail);
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-  });
-
-  it('should not render the retry failed button for a non-failed state', () => {
-    // Arrange — completed is not in the failed set
+  it('should not render the retry button for a non-retryable state (completed)', () => {
+    // Arrange — completed is not in the retryable set
     const fixture = createComponent(mockDetail); // mockDetail.state = 'completed'
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const btn = el.querySelector('.issue-detail__retry-failed-btn');
+    const btn = el.querySelector('.issue-detail__retry-btn');
     expect(btn).toBeFalsy();
   });
 
-  it('should not render the retry failed button for ineligible state', () => {
-    // Arrange
-    const ineligibleDetail: IssueDetail = {
-      ...mockDetail,
-      state: 'ineligible',
-      stateDetails: { ...mockStateDetails, violations: null },
-    };
-    const fixture = createComponent(ineligibleDetail);
+  it('should not render the retry button for review state', () => {
+    // Arrange — review has its own feedback flow, not a retry
+    const reviewDetail: IssueDetail = { ...mockDetail, state: 'review' };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const btn = el.querySelector('.issue-detail__retry-failed-btn');
+    const btn = el.querySelector('.issue-detail__retry-btn');
     expect(btn).toBeFalsy();
   });
 
-  it('should call retryFailed on the service when retry failed button is clicked', () => {
+  it('should call retryIssue on the service when retry button is clicked for a failed state', () => {
     // Arrange
     const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
     const fixture = createComponent(failedDetail);
@@ -807,7 +552,7 @@ describe('IssueDetailComponent', () => {
     const http = TestBed.inject(HttpTestingController);
 
     // Act
-    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
     btn.click();
     const req = http.expectOne(`/api/issues/${failedDetail.id}/retry`);
 
@@ -818,7 +563,26 @@ describe('IssueDetailComponent', () => {
     http.verify();
   });
 
-  it('should set aria-label on retry failed button referencing the issue number', () => {
+  it('should POST to /api/issues/{id}/retry when retry button is clicked for unchanged state', () => {
+    // Arrange
+    const unchangedDetail: IssueDetail = { ...mockDetail, state: 'unchanged' };
+    const fixture = createComponent(unchangedDetail);
+    const el = fixture.nativeElement as HTMLElement;
+    const http = TestBed.inject(HttpTestingController);
+
+    // Act
+    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
+    btn.click();
+    const req = http.expectOne(`/api/issues/${unchangedDetail.id}/retry`);
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+    http.expectOne(`/api/issues/${unchangedDetail.id}`).flush(unchangedDetail);
+    http.verify();
+  });
+
+  it('should set aria-label on retry button referencing the issue number', () => {
     // Arrange
     const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
 
@@ -827,11 +591,11 @@ describe('IssueDetailComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
-    expect(btn?.getAttribute('aria-label')).toBe('Retry failed issue #42');
+    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
+    expect(btn?.getAttribute('aria-label')).toBe('Retry issue #42');
   });
 
-  it('should disable the retry failed button while retryingFailed is true', () => {
+  it('should disable the retry button while retrying is true', () => {
     // Arrange
     const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
     const fixture = createComponent(failedDetail);
@@ -839,7 +603,7 @@ describe('IssueDetailComponent', () => {
     const http = TestBed.inject(HttpTestingController);
 
     // Act — click starts the request
-    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
     btn.click();
     fixture.detectChanges();
 
@@ -853,7 +617,7 @@ describe('IssueDetailComponent', () => {
     http.verify();
   });
 
-  it('should always render the retry failed error span in the DOM when state is failed', () => {
+  it('should always render the retry error span in the DOM when state is failed', () => {
     // Arrange
     const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
 
@@ -862,12 +626,12 @@ describe('IssueDetailComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert — span is present even with no error (empty content)
-    const errorEl = el.querySelector('.issue-detail__retry-failed-error');
+    const errorEl = el.querySelector('.issue-detail__retry-error');
     expect(errorEl).toBeTruthy();
     expect(errorEl?.textContent?.trim()).toBe('');
   });
 
-  it('should show retry failed error message when retryFailed fails', () => {
+  it('should show retry error message when retryIssue fails', () => {
     // Arrange
     const failedDetail: IssueDetail = { ...mockDetail, state: 'failed' };
     const fixture = createComponent(failedDetail);
@@ -876,7 +640,7 @@ describe('IssueDetailComponent', () => {
     const http = TestBed.inject(HttpTestingController);
 
     // Act — trigger a failure
-    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
     btn.click();
     http.expectOne(`/api/issues/${failedDetail.id}/retry`).flush('Error', {
       status: 500,
@@ -885,8 +649,8 @@ describe('IssueDetailComponent', () => {
     fixture.detectChanges();
 
     // Assert — error is surfaced next to the button (span always present, now contains text)
-    expect(issueService.retryFailedError()).toBe('Failed to retry issue.');
-    const errorEl = el.querySelector('.issue-detail__retry-failed-error');
+    expect(issueService.retryError()).toBe('Failed to retry issue.');
+    const errorEl = el.querySelector('.issue-detail__retry-error');
     expect(errorEl).toBeTruthy();
     expect(errorEl?.textContent?.trim()).toBe('Failed to retry issue.');
     http.verify();
@@ -915,7 +679,7 @@ describe('IssueDetailComponent', () => {
     const http = TestBed.inject(HttpTestingController);
 
     // Act — trigger a successful retry
-    const btn = el.querySelector('.issue-detail__retry-failed-btn') as HTMLButtonElement;
+    const btn = el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement;
     btn.click();
     http.expectOne(`/api/issues/${failedDetail.id}/retry`).flush({});
     http.expectOne(`/api/issues/${failedDetail.id}`).flush(failedDetail);
@@ -972,7 +736,7 @@ describe('IssueDetailComponent', () => {
     TestBed.configureTestingModule({
       imports: [IssueDetailComponent],
       providers: [
-        { provide: IssueService, useValue: { retryingEligibility: signal(false), retryingFailed: signal(false), retryFailedError: signal(null), retryFailedSuccess: signal(null) } },
+        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null) } },
         WorkerSignalRService,
         provideHttpClient(),
         provideHttpClientTesting(),

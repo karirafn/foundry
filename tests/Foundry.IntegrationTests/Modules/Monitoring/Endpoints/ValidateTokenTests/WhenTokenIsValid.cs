@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
@@ -21,7 +20,11 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
 
     public WhenTokenIsValid()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, ScopesVerified: true, MissingScopes: [], AccountName: null);
+        ValidateToken.Response validResponse = new(
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: null,
+            MissingScopes: [],
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -38,7 +41,7 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsOkWithValidResult()
+    public async Task ReturnsOkWithAuthenticatedKind()
     {
         // Arrange
         object body = new { token = "ghp_valid", baseUrl = "https://api.github.com", providerType = "github" };
@@ -55,8 +58,7 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
             .ReadFromJsonAsync<ValidateToken.Response>(TestContext.Current.CancellationToken);
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
-            () => dto.IsValid.ShouldBeTrue(),
-            () => dto.IsAuthFailure.ShouldBeFalse(),
+            () => dto.Kind.ShouldBe(ValidateToken.Kinds.Authenticated),
             () => dto.MissingScopes.ShouldBeEmpty());
     }
 
@@ -66,11 +68,10 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
         // Arrange
         const string ResolvedLogin = "octocat";
         ValidateToken.Response responseWithAccount = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: ResolvedLogin,
             MissingScopes: [],
-            AccountName: ResolvedLogin);
+            DetectedProvider: null);
         await using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();

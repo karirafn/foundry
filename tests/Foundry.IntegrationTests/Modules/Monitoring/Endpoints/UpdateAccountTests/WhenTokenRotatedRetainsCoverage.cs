@@ -12,6 +12,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -54,7 +55,7 @@ public sealed class WhenTokenRotatedRetainsCoverage : IAsyncDisposable
 
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing))));
+                new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)), NullLogger<GitHubHttpClient>.Instance));
 
             // Both repos stay eligible after rotation — no status change expected.
             services.RemoveAll<IRepositoryEligibilityEvaluator>();

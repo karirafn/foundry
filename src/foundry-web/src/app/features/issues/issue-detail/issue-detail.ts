@@ -22,6 +22,7 @@ import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { providerTerminology } from '../../../shared/utils/provider.util';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
+import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
 @Component({
   selector: 'fd-issue-detail',
@@ -107,21 +108,6 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Blocked By</span>
                 <span class="issue-detail__field-value">{{ s.blockedBy?.join(', ') }}</span>
-              </div>
-            }
-
-            @if (d.state === 'ineligible') {
-              <div class="issue-detail__field">
-                <span class="issue-detail__field-key" id="eligibility-violations-label">Eligibility Violations</span>
-                @if (s.violations?.length) {
-                  <ul class="issue-detail__violations" aria-labelledby="eligibility-violations-label">
-                    @for (violation of s.violations!; track violation.rule) {
-                      <li class="issue-detail__violation">{{ violation.description }}</li>
-                    }
-                  </ul>
-                } @else {
-                  <span class="issue-detail__field-value">Eligibility details are unavailable</span>
-                }
               </div>
             }
 
@@ -231,36 +217,25 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
           </div>
         }
 
-        @if (d.state === 'ineligible') {
+        @if (_isRetryable(d.state)) {
           <div class="issue-detail__actions">
             <button
-              class="issue-detail__retry-eligibility-btn"
+              class="issue-detail__retry-btn"
               type="button"
-              [disabled]="_issueService.retryingEligibility()"
-              [attr.aria-label]="'Retry eligibility check for issue #' + d.issueNumber"
-              (click)="retryEligibility(d.id)"
-            >{{ _issueService.retryingEligibility() ? 'Retrying...' : 'Retry Eligibility Check' }}</button>
-          </div>
-        }
-
-        @if (d.state === 'failed' || d.state === 'continuable_failed' || d.state === 'revision_failed') {
-          <div class="issue-detail__actions">
-            <button
-              class="issue-detail__retry-failed-btn"
-              type="button"
-              [disabled]="_issueService.retryingFailed()"
-              [attr.aria-label]="'Retry failed issue #' + d.issueNumber"
-              (click)="retryFailed(d.id)"
-            >{{ _issueService.retryingFailed() ? 'Retrying Issue...' : 'Retry Issue' }}</button>
+              [disabled]="_issueService.retrying()"
+              [attr.aria-label]="'Retry issue #' + d.issueNumber"
+              (click)="retryIssue(d.id)"
+            >{{ _issueService.retrying() ? 'Retrying Issue...' : 'Retry Issue' }}</button>
             <span
-              class="issue-detail__retry-failed-error"
-              role="alert"
-            >{{ _issueService.retryFailedError() ?? '' }}</span>
+              class="issue-detail__retry-error"
+              aria-live="assertive"
+              aria-atomic="true"
+            >{{ _issueService.retryError() ?? '' }}</span>
             <span
               class="issue-detail__retry-success-announcement sr-only"
               aria-live="polite"
               aria-atomic="true"
-            >{{ _issueService.retryFailedSuccess() ?? '' }}</span>
+            >{{ _issueService.retrySuccess() ?? '' }}</span>
           </div>
         }
       </div>
@@ -317,12 +292,12 @@ export class IssueDetailComponent {
     });
   }
 
-  retryEligibility(id: string): void {
-    this._issueService.retryEligibility(id);
+  retryIssue(id: string): void {
+    this._issueService.retryIssue(id);
   }
 
-  retryFailed(id: string): void {
-    this._issueService.retryFailed(id);
+  protected _isRetryable(state: string): boolean {
+    return RETRYABLE_STATES.has(state as IssueState);
   }
 
   protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {

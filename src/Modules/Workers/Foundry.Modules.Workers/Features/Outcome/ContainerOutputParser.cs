@@ -387,7 +387,17 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
 
             if (wallClockMatch.Success)
             {
-                DateTimeOffset? wallClockTime = ParseWallClockTime(wallClockMatch.Groups["time"].Value);
+                string timeText = wallClockMatch.Groups["time"].Value;
+                string minutesText = wallClockMatch.Groups["minutes"].Value;
+                string timezoneText = wallClockMatch.Groups["timezone"].Value;
+
+                // When minutes are absent (bare hour like "3pm"), insert ":00" before the am/pm suffix
+                // so TimeOnly.TryParse receives a valid "3:00pm" form.
+                string normalizedTime = string.IsNullOrEmpty(minutesText)
+                    ? NormalizedBareHourTime(timeText)
+                    : timeText;
+
+                DateTimeOffset? wallClockTime = ParseWallClockTime(normalizedTime, timezoneText);
 
                 if (wallClockTime is not null)
                 {
@@ -399,22 +409,90 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         return DateTimeOffset.UtcNow.AddMinutes(defaultCooldownMinutes);
     }
 
-    private static DateTimeOffset? ParseWallClockTime(string timeText)
+    // Converts a bare-hour am/pm form ("3pm", "3 pm", "12am") to a form TimeOnly.TryParse accepts ("3:00pm", "12:00am").
+    // Inserts ":00" immediately before the am/pm suffix, trimming any whitespace between the digit and the suffix.
+    private static string NormalizedBareHourTime(string timeText)
+    {
+        // Find where the am/pm starts (after the digit part, possibly with whitespace)
+        int suffixIndex = timeText.IndexOfAny(['a', 'p', 'A', 'P']);
+
+        if (suffixIndex < 0)
+        {
+            return timeText;
+        }
+
+        // Trim trailing whitespace off the digit portion so "3 pm" produces "3:00pm", not "3 :00pm"
+        return timeText[..suffixIndex].TrimEnd() + ":00" + timeText[suffixIndex..];
+    }
+
+    private static DateTimeOffset? ParseWallClockTime(string timeText, string timezoneText)
     {
         if (!TimeOnly.TryParse(timeText, CultureInfo.InvariantCulture, out TimeOnly timeOfDay))
         {
             return null;
         }
 
-        DateTimeOffset today = new(DateTimeOffset.UtcNow.Date, TimeSpan.Zero);
-        DateTimeOffset candidate = today.Add(timeOfDay.ToTimeSpan());
-
-        if (candidate <= DateTimeOffset.UtcNow)
+        if (string.Equals(timezoneText, "UTC", StringComparison.OrdinalIgnoreCase))
         {
-            candidate = candidate.AddDays(1);
+            DateTimeOffset today = new(DateTimeOffset.UtcNow.Date, TimeSpan.Zero);
+            DateTimeOffset candidate = today.Add(timeOfDay.ToTimeSpan());
+
+            if (candidate <= DateTimeOffset.UtcNow)
+            {
+                candidate = candidate.AddDays(1);
+            }
+
+            return candidate;
         }
 
-        return candidate;
+        // IANA timezone — look up via timezone database
+        // Cap length before BCL lookup: real IANA IDs are well under 64 chars; anything longer is garbage input
+        if (timezoneText.Length > 64)
+        {
+            return null;
+        }
+
+        TimeZoneInfo zone;
+
+        try
+        {
+            zone = TimeZoneInfo.FindSystemTimeZoneById(timezoneText);
+        }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException or ArgumentException)
+        {
+            // Unknown or malformed timezone string — defence-in-depth for FindSystemTimeZoneById.
+            // DST spring-forward gaps for ConvertTimeToUtc are handled separately by the IsInvalidTime guards below.
+            return null;
+        }
+
+        DateTimeOffset nowInZone = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone);
+        DateTime todayInZone = nowInZone.Date;
+        DateTime candidateInZone = todayInZone.Add(timeOfDay.ToTimeSpan());
+
+        // Guard against DST spring-forward gap: a time falling in the gap is invalid for ConvertTimeToUtc
+        // and would throw ArgumentException. Advance past the gap (by 1 hour) so the conversion always
+        // receives a valid local time — a real reset at 2:30am during the spring-forward resolves to 3:30am.
+        if (zone.IsInvalidTime(candidateInZone))
+        {
+            candidateInZone = candidateInZone.AddHours(1);
+        }
+
+        DateTimeOffset candidateUtc = TimeZoneInfo.ConvertTimeToUtc(candidateInZone, zone);
+
+        if (candidateUtc <= DateTimeOffset.UtcNow)
+        {
+            candidateInZone = candidateInZone.AddDays(1);
+
+            // Apply the same DST guard on the rolled-forward candidate
+            if (zone.IsInvalidTime(candidateInZone))
+            {
+                candidateInZone = candidateInZone.AddHours(1);
+            }
+
+            candidateUtc = TimeZoneInfo.ConvertTimeToUtc(candidateInZone, zone);
+        }
+
+        return candidateUtc;
     }
 
     private const int MaxBootstrapDetailLength = 500;
@@ -444,8 +522,12 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex Iso8601ResetTimePattern();
 
+    // Matches both "resets <time> (UTC|IANA)" and "reset at <time> (UTC|IANA)".
+    // Minutes are optional — a bare hour like "3pm" is captured without ":MM" in the <minutes> group,
+    // and the caller defaults minutes to 00 when the group is empty.
+    // The timezone group is REQUIRED — a bare "resets 11:59pm" with no zone falls through.
     [GeneratedRegex(
-        @"(?<!\w)resets\s+(?<time>\d{1,2}:\d{2}\s*[ap]m)\s*\(UTC\)",
+        @"(?<!\w)(?:resets|reset\s+at)\s+(?<time>\d{1,2}(?<minutes>:\d{2})?\s*[ap]m)\s*\((?<timezone>[^)]+)\)",
         RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex WallClockResetTimePattern();

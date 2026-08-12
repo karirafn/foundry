@@ -42,11 +42,13 @@ function setup(overrides: {
   accounts?: AccountSummary[];
   loading?: boolean;
   error?: string | null;
+  deletingAccountId?: string | null;
 } = {}) {
   const fixture = TestBed.createComponent(AccountListComponent);
   fixture.componentRef.setInput('accounts', overrides.accounts ?? []);
   fixture.componentRef.setInput('loading', overrides.loading ?? false);
   fixture.componentRef.setInput('error', overrides.error ?? null);
+  fixture.componentRef.setInput('deletingAccountId', overrides.deletingAccountId ?? null);
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
@@ -360,5 +362,43 @@ describe('AccountListComponent', () => {
     expect(chips.length).toBe(4);
     const overflow = el.querySelector('.account-list__namespace--overflow');
     expect(overflow).toBeNull();
+  });
+
+  // Cycle 20: deletingAccountId null — no row is busy
+  it('should set deleteBusy false on all rows when deletingAccountId is null', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2], deletingAccountId: null });
+
+    // Assert
+    const spinners = el.querySelectorAll('fd-spinner');
+    expect(spinners.length).toBe(0);
+    const deleteButtons = el.querySelectorAll('.row-actions__delete-btn');
+    expect(deleteButtons.length).toBe(2);
+    // Both delete buttons show idle label (trash icon, no spinner)
+    const btn1 = el.querySelector('[aria-label="Delete account my-github"]');
+    expect(btn1).toBeTruthy();
+    const btn2 = el.querySelector('[aria-label="Delete account work-gitlab"]');
+    expect(btn2).toBeTruthy();
+  });
+
+  // Cycle 21: deletingAccountId matches one row — only that row is busy
+  it('should set deleteBusy true only on the matching row and show busy deleteLabel', () => {
+    // Arrange / Act
+    const { el } = setup({
+      accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
+      deletingAccountId: MOCK_ACCOUNT.id,
+    });
+
+    // Assert — busy row renders a spinner and has the busy aria-label
+    const busyBtn = el.querySelector('[aria-label="Deleting account my-github…"]');
+    expect(busyBtn).toBeTruthy();
+    const spinnerInBusyRow = busyBtn?.querySelector('fd-spinner');
+    expect(spinnerInBusyRow).toBeTruthy();
+
+    // Assert — idle row keeps idle label with no spinner
+    const idleBtn = el.querySelector('[aria-label="Delete account work-gitlab"]');
+    expect(idleBtn).toBeTruthy();
+    const spinnerInIdleRow = idleBtn?.querySelector('fd-spinner');
+    expect(spinnerInIdleRow).toBeFalsy();
   });
 });

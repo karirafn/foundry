@@ -12,6 +12,7 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -41,7 +42,7 @@ public sealed class GetIssuesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
@@ -73,7 +74,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_mytoken", CancellationToken.None);
@@ -92,7 +93,7 @@ public sealed class GetIssuesAsync
         RepositorySlug nestedSlug = RepositorySlug.Create("group/subgroup/project").ValueOrThrow();
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.GetIssuesAsync(ValidBaseUrl, nestedSlug, "glpat_token", CancellationToken.None);
@@ -109,7 +110,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
@@ -129,7 +130,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -152,7 +153,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(

@@ -217,6 +217,141 @@ public sealed class HandleAsync : IAsyncDisposable
         failure.Error.Code.ShouldBe(CredentialErrors.NotFoundCode);
     }
 
+    [Fact]
+    public async Task WhenAuthenticatedWithMissingScopes_RejectsWithInvalidToken()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.Authenticated,
+                AccountName: "updated-user",
+                MissingScopes: ["repo", "write:packages"]));
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
+    }
+
+    [Fact]
+    public async Task WhenScopesUnverifiable_ProceedsToUpdateCredential()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.ScopesUnverifiable,
+                AccountName: "unverifiable-user",
+                MissingScopes: []));
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        CredentialUpdateResult updateResult = result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>().Value;
+        updateResult.Credential.Name.ShouldBe("unverifiable-user");
+    }
+
+    [Fact]
+    public async Task WhenProviderMismatch_RejectsWithProviderMismatchError()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.ProviderMismatch,
+                AccountName: null,
+                MissingScopes: [],
+                DetectedProvider: "gitlab"));
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.ProviderMismatchCode);
+        failure.Error.Message.ShouldContain("gitlab");
+    }
+
+    [Fact]
+    public async Task WhenAuthenticationFailed_RejectsWithInvalidToken()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.AuthenticationFailed,
+                AccountName: null,
+                MissingScopes: []));
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
+    }
+
+    [Fact]
+    public async Task WhenIdentityUnresolved_RejectsWithUnresolvedIdentity()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.IdentityUnresolved,
+                AccountName: null,
+                MissingScopes: []));
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
+    }
+
+    [Fact]
+    public async Task WhenScopesUnverifiableWithNullAccountName_RejectsWithUnresolvedIdentity()
+    {
+        // Arrange — ScopesUnverifiable with a null AccountName must map to UnresolvedIdentity,
+        // not silently fall through to InvalidToken via the default arm.
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.ScopesUnverifiable,
+                AccountName: null,
+                MissingScopes: []));
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
+    }
+
     // Stubs and fakes
 
     private sealed class StubValidateTokenHandler(string accountName)
@@ -227,11 +362,30 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             ValidateToken.Response response = new(
-                IsValid: true,
-                IsAuthFailure: false,
-                ScopesVerified: true,
+                Kind: ValidateToken.Kinds.Authenticated,
+                AccountName: accountName,
                 MissingScopes: [],
-                AccountName: accountName);
+                DetectedProvider: null);
+            return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
+        }
+    }
+
+    private sealed class KindValidateTokenHandler(
+        string kind,
+        string? AccountName,
+        IReadOnlyList<string> MissingScopes,
+        string? DetectedProvider = null)
+        : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
+    {
+        public Task<Result<ValidateToken.Response>> HandleAsync(
+            ValidateToken.Query query,
+            CancellationToken cancellationToken)
+        {
+            ValidateToken.Response response = new(
+                Kind: kind,
+                AccountName: AccountName,
+                MissingScopes: MissingScopes,
+                DetectedProvider: DetectedProvider);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

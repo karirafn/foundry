@@ -66,7 +66,7 @@ describe('AccountService', () => {
     expect(service.accounts()).toEqual([]);
     expect(service.loading()).toBe(false);
     expect(service.saving()).toBe(false);
-    expect(service.deleting()).toBe(false);
+    expect(service.deletingAccountId()).toBeNull();
     expect(service.validating()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
     expect(service.validationResult()).toBeNull();
@@ -488,7 +488,7 @@ describe('AccountService', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
   });
 
-  it('should set deleting to true while deleteAccount is in flight', () => {
+  it('should set deletingAccountId to the account id while deleteAccount is in flight', () => {
     // Arrange
     const id = MOCK_ACCOUNT.id;
 
@@ -496,11 +496,11 @@ describe('AccountService', () => {
     service.deleteAccount(id);
 
     // Assert — before flush
-    expect(service.deleting()).toBe(true);
+    expect(service.deletingAccountId()).toBe(id);
     httpMock.expectOne(`/api/accounts/${id}`).flush(null, { status: 204, statusText: 'No Content' });
   });
 
-  it('should set deleting to false after deleteAccount succeeds', () => {
+  it('should set deletingAccountId to null after deleteAccount succeeds', () => {
     // Arrange
     service.deleteAccount(MOCK_ACCOUNT.id);
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(null, {
@@ -509,7 +509,7 @@ describe('AccountService', () => {
     });
 
     // Assert
-    expect(service.deleting()).toBe(false);
+    expect(service.deletingAccountId()).toBeNull();
   });
 
   it('should set deleteError when deleteAccount fails with a string body', () => {
@@ -912,6 +912,279 @@ describe('AccountService', () => {
 
     // Assert
     expect(accountPresence.hasAccounts()).toBe(false);
+  });
+
+  // Announcements — createAccount start
+  it('should set start announcement when createAccount is called', () => {
+    // Arrange / Act
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Assert — announcement set before response
+    expect(service.srAnnouncement()).toBe('Adding account. Contacting the provider — this may take a few seconds.');
+    httpMock.expectOne('/api/accounts').flush(
+      { credential: MOCK_ACCOUNT, affectedRepositories: [] },
+      { status: 201, statusText: 'Created' }
+    );
+  });
+
+  // Announcements — updateAccount start
+  it('should set start announcement when updateAccount is called', () => {
+    // Arrange / Act
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+
+    // Assert — announcement set before response
+    expect(service.srAnnouncement()).toBe('Updating account. Contacting the provider — this may take a few seconds.');
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT));
+  });
+
+  // Announcements — deleteAccount start
+  it('should set start announcement when deleteAccount is called', () => {
+    // Arrange / Act
+    service.deleteAccount(MOCK_ACCOUNT.id);
+
+    // Assert — announcement set before response
+    expect(service.srAnnouncement()).toBe('Deleting account. Contacting the provider — this may take a few seconds.');
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  // Announcements — createAccount terminal success (no repos affected)
+  it('should set terminal success announcement when createAccount succeeds with no affected repos', () => {
+    // Arrange
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush(
+      { credential: MOCK_ACCOUNT, affectedRepositories: [] },
+      { status: 201, statusText: 'Created' }
+    );
+
+    // Assert
+    expect(service.srAnnouncement()).toBe('Account added.');
+  });
+
+  // Announcements — createAccount terminal success (repos affected — richer message preserved)
+  it('should set richer terminal announcement when createAccount succeeds with affected repos', () => {
+    // Arrange
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush(
+      { credential: MOCK_ACCOUNT, affectedRepositories: affected },
+      { status: 201, statusText: 'Created' }
+    );
+
+    // Assert — richer message preserved, not overridden by plain terminal
+    expect(service.srAnnouncement()).toBe('Account added. 1 repositories affected — review below.');
+  });
+
+  // Announcements — updateAccount terminal success (no repos affected — toast shown, plain terminal set)
+  it('should set terminal success announcement when updateAccount succeeds with no affected repos', () => {
+    // Arrange
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, []));
+
+    // Assert
+    expect(service.srAnnouncement()).toBe('Account updated.');
+  });
+
+  // Announcements — updateAccount terminal success (repos affected — richer message preserved)
+  it('should set richer terminal announcement when updateAccount succeeds with affected repos', () => {
+    // Arrange
+    const affected: AffectedRepository[] = [
+      { id: 'repo-1', slug: 'org/repo', previousStatus: 'eligible', newStatus: 'ineligible' },
+    ];
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT, affected));
+
+    // Assert — richer message preserved
+    expect(service.srAnnouncement()).toBe('Token updated. 1 repositories affected — review below.');
+  });
+
+  // Announcements — deleteAccount terminal success
+  it('should set terminal success announcement when deleteAccount succeeds', () => {
+    // Arrange
+    service.deleteAccount(MOCK_ACCOUNT.id);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(null, { status: 204, statusText: 'No Content' });
+
+    // Assert
+    expect(service.srAnnouncement()).toBe('Account deleted.');
+  });
+
+  // Announcements — createAccount terminal error
+  it('should set terminal error announcement when createAccount fails', () => {
+    // Arrange
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush('Unauthorized.', { status: 401, statusText: 'Unauthorized' });
+
+    // Assert
+    expect(service.srAnnouncement()).toBe('Could not add account: Unauthorized.');
+  });
+
+  // Announcements — updateAccount terminal error
+  it('should set terminal error announcement when updateAccount fails', () => {
+    // Arrange
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Token is invalid.', {
+      status: 422,
+      statusText: 'Unprocessable Entity',
+    });
+
+    // Assert
+    expect(service.srAnnouncement()).toBe('Could not update account: Token is invalid.');
+  });
+
+  // Announcements — deleteAccount terminal error
+  it('should set terminal error announcement when deleteAccount fails', () => {
+    // Arrange
+    service.deleteAccount(MOCK_ACCOUNT.id);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Account is in use.', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Assert
+    expect(service.srAnnouncement()).toBe('Could not delete account: Account is in use.');
+  });
+
+  // Announcements — alternation: two identical creates re-fire start announcement
+  it('should re-fire start announcement on second identical createAccount call after terminal', () => {
+    // Arrange — first create cycle
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+    const startAnnouncement = service.srAnnouncement();
+    httpMock.expectOne('/api/accounts').flush(
+      { credential: MOCK_ACCOUNT, affectedRepositories: [] },
+      { status: 201, statusText: 'Created' }
+    );
+    const terminalAnnouncement = service.srAnnouncement();
+
+    // Precondition — announcements differ
+    expect(startAnnouncement).not.toBe(terminalAnnouncement);
+
+    // Act — second identical create
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Assert — announcement changed back to start text
+    expect(service.srAnnouncement()).toBe(startAnnouncement);
+    httpMock.expectOne('/api/accounts').flush(
+      { credential: MOCK_ACCOUNT_2, affectedRepositories: [] },
+      { status: 201, statusText: 'Created' }
+    );
+  });
+
+  // Timeout — createAccount times out after 60 seconds
+  describe('mutation timeout', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should clear saving and set saveError when createAccount request times out after 60s', () => {
+      // Arrange
+      service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+      expect(service.saving()).toBe(true);
+
+      // Act — advance past timeout; the timeout operator cancels the underlying request
+      vi.advanceTimersByTime(60_000);
+
+      // Assert — state reflects timeout error, no response was flushed
+      expect(service.saving()).toBe(false);
+      expect(service.saveError()).toBe('The request timed out. Please try again.');
+
+      // Drain the cancelled request so httpMock.verify() passes
+      httpMock.match('/api/accounts');
+    });
+
+    it('should set timeout terminal error announcement when createAccount times out', () => {
+      // Arrange
+      service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+      // Act
+      vi.advanceTimersByTime(60_000);
+
+      // Assert
+      expect(service.srAnnouncement()).toBe('Could not add account: The request timed out. Please try again.');
+
+      // Drain the cancelled request
+      httpMock.match('/api/accounts');
+    });
+
+    it('should clear deletingAccountId and set deleteError when deleteAccount request times out after 60s', () => {
+      // Arrange
+      service.deleteAccount(MOCK_ACCOUNT.id);
+      expect(service.deletingAccountId()).toBe(MOCK_ACCOUNT.id);
+
+      // Act — advance past timeout
+      vi.advanceTimersByTime(60_000);
+
+      // Assert
+      expect(service.deletingAccountId()).toBeNull();
+      expect(service.deleteError()).toBe('The request timed out. Please try again.');
+
+      // Drain the cancelled request
+      httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
+    });
+
+    it('should set timeout terminal error announcement when updateAccount times out', () => {
+      // Arrange
+      service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+
+      // Act
+      vi.advanceTimersByTime(60_000);
+
+      // Assert
+      expect(service.srAnnouncement()).toBe('Could not update account: The request timed out. Please try again.');
+
+      // Drain the cancelled request
+      httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
+    });
+
+    it('should set timeout terminal error announcement when deleteAccount times out', () => {
+      // Arrange
+      service.deleteAccount(MOCK_ACCOUNT.id);
+
+      // Act
+      vi.advanceTimersByTime(60_000);
+
+      // Assert
+      expect(service.srAnnouncement()).toBe('Could not delete account: The request timed out. Please try again.');
+
+      // Drain the cancelled request
+      httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
+    });
+
+    it('should clear saving and set saveError when updateAccount request times out after 60s', () => {
+      // Arrange
+      service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+      expect(service.saving()).toBe(true);
+
+      // Act — advance past timeout
+      vi.advanceTimersByTime(60_000);
+
+      // Assert
+      expect(service.saving()).toBe(false);
+      expect(service.saveError()).toBe('The request timed out. Please try again.');
+
+      // Drain the cancelled request
+      httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
+    });
   });
 
   // Cycle 12: different providers each fetch once independently

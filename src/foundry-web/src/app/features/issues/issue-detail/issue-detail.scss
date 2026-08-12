@@ -183,64 +183,36 @@
     gap: var(--fd-spacing-md);
   }
 
-  &__retry-eligibility-btn {
+  &__retry-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 44px;
     background: transparent;
-    border: 1px solid var(--fd-state-ineligible);
+    border: 1px solid var(--fd-text-secondary);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-ineligible);
+    color: var(--fd-text-primary);
     cursor: pointer;
     font-size: 0.875rem;
     padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
 
     &:hover {
-      background: rgba(179, 89, 0, 0.1);
+      background: var(--fd-bg-card-hover);
     }
 
     &:disabled {
       cursor: not-allowed;
-      opacity: 0.6;
+      color: var(--fd-text-tertiary);
+      border-color: var(--fd-text-tertiary);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-state-ineligible);
+      outline: 2px solid var(--fd-text-link);
       outline-offset: 2px;
     }
   }
 
-  &__retry-failed-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    background: transparent;
-    border: 1px solid var(--fd-state-failed);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-error);
-    cursor: pointer;
-    font-size: 0.875rem;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
-
-    &:hover {
-      background: var(--fd-bg-error-subtle);
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-      color: var(--fd-text-error-muted);
-      border-color: var(--fd-text-error-muted);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-state-failed);
-      outline-offset: 2px;
-    }
-  }
-
-  &__retry-failed-error {
+  &__retry-error {
     align-self: center;
     color: var(--fd-text-error);
     font-size: 0.875rem;

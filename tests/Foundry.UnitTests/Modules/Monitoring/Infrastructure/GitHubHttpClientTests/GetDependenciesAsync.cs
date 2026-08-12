@@ -11,6 +11,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -28,7 +29,7 @@ public sealed class GetDependenciesAsync
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["X-RateLimit-Remaining"] = "0";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -51,7 +52,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
@@ -75,7 +76,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -98,7 +99,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.GetDependenciesAsync(ValidBaseUrl, ValidSlug, issueNumber: 42, token: "ghp_mytoken", CancellationToken.None);
@@ -120,7 +121,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.GetDependenciesAsync(ValidBaseUrl, ValidSlug, issueNumber: 42, token: "ghp_token", CancellationToken.None);
@@ -137,7 +138,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -175,7 +176,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -213,7 +214,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -247,7 +248,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -280,7 +281,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -314,7 +315,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -354,7 +355,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(

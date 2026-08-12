@@ -12,6 +12,7 @@ using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -31,7 +32,11 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
     public WhenRequestIsInvalid()
     {
-        ValidateToken.Response validResponse = new(IsValid: true, IsAuthFailure: false, ScopesVerified: true, MissingScopes: [], AccountName: "octocat");
+        ValidateToken.Response validResponse = new(
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: "octocat",
+            MissingScopes: [],
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -42,7 +47,8 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson))));
+                    new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson)),
+                    NullLogger<GitHubHttpClient>.Instance));
         });
         _client = _factory.CreateClient();
     }
