@@ -258,6 +258,11 @@ internal sealed class WorkerOutcomeResolver(
             return new WorkerOutcome.Failure(new FailureReason.UsageLimited(usageLimited.ResetsAt), containerOutput, summary);
         }
 
+        if (parseResult is ContainerOutputParseResult.CreditsExhausted)
+        {
+            return new WorkerOutcome.Failure(new FailureReason.CreditsExhausted(), containerOutput, summary);
+        }
+
         if (parseResult is ContainerOutputParseResult.TransientApiError)
         {
             return new WorkerOutcome.Failure(new FailureReason.TransientApiError(), containerOutput, summary);
@@ -279,6 +284,11 @@ internal sealed class WorkerOutcomeResolver(
         if (parseResult is ContainerOutputParseResult.UsageLimited usageLimited)
         {
             return new FailureReason.UsageLimited(usageLimited.ResetsAt);
+        }
+
+        if (parseResult is ContainerOutputParseResult.CreditsExhausted)
+        {
+            return new FailureReason.CreditsExhausted();
         }
 
         if (parseResult is ContainerOutputParseResult.AuthInvalid)

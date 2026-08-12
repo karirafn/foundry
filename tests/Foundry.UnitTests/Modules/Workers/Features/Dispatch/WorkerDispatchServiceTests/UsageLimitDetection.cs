@@ -123,10 +123,10 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithCreditsExhaustedOutput_TransitionsToFailedRunWithNonZeroExitReason()
+    public async Task WhenContainerExitsWithCreditsExhaustedOutput_TransitionsToFailedRunWithCreditsExhaustedReason()
     {
-        // Arrange — 429-only output (no parseable reset time) now yields CreditsExhausted from the parser.
-        // Until step 5 maps CreditsExhausted to its own failure reason, it falls through to NonZeroExit.
+        // Arrange — 429-only output (no parseable reset time) yields CreditsExhausted from the parser,
+        // which is now mapped to FailureReason.CreditsExhausted by the resolver.
         SeedGlobalSettings();
         SeedActiveRun("container-usage-limited-429-only");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
@@ -135,11 +135,11 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — CreditsExhausted is not yet mapped; falls through to NonZeroExit (step 5 will fix)
+        // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.CreditsExhausted>();
     }
 
     [Fact]

@@ -782,6 +782,60 @@ public sealed class ResolveAsync
     }
 
     // -------------------------------------------------------------------------
+    // CreditsExhausted parse result wiring
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndCreditsExhausted_ReturnsFailureWithCreditsExhausted()
+    {
+        // Arrange — exit 0 + no commits + CreditsExhausted parse result → Failure(CreditsExhausted)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        IContainerOutputParser parser = new CreditsExhaustedParser();
+        WorkerOutcomeResolver sut = BuildResolver(queries, parser);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: "credits output",
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.CreditsExhausted>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndNonZeroExitWithNoCommitsAndCreditsExhausted_ReturnsFailureWithCreditsExhausted()
+    {
+        // Arrange — non-zero exit + CreditsExhausted parse result + no commits → Failure(CreditsExhausted)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        IContainerOutputParser parser = new CreditsExhaustedParser();
+        WorkerOutcomeResolver sut = BuildResolver(queries, parser);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 1,
+            containerOutput: "credits output",
+            DefaultCooldownMinutes,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.CreditsExhausted>();
+    }
+
+    // -------------------------------------------------------------------------
     // Test doubles
     // -------------------------------------------------------------------------
 
@@ -875,6 +929,14 @@ public sealed class ResolveAsync
     {
         public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.TransientApiError();
+
+        public RunResultSummary? ParseRunResultSummary(string? log) => null;
+    }
+
+    private sealed class CreditsExhaustedParser : IContainerOutputParser
+    {
+        public ContainerOutputParseResult Parse(string? log)
+            => new ContainerOutputParseResult.CreditsExhausted();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
     }
