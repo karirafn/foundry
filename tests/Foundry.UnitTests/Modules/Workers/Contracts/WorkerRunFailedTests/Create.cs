@@ -1,4 +1,5 @@
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 
 using Shouldly;
@@ -87,5 +88,20 @@ public sealed class Create
 
         // Assert
         @event.Category.ShouldBeNull();
+    }
+
+    [Fact]
+    public void CreditsExhaustedReason_MatchesCreditsExhaustedFailureReasonSummary()
+    {
+        // Arrange
+        // Guard: the Issues re-queue handler matches CreditsExhaustedReason with == (exact match).
+        // This test ensures the constant stays in lock-step with FailureReason.CreditsExhausted.Summary.
+        FailureReason reason = new FailureReason.CreditsExhausted();
+
+        // Act
+        string summary = reason.Summary;
+
+        // Assert
+        WorkerRunFailed.CreditsExhaustedReason.ShouldBe(summary);
     }
 }

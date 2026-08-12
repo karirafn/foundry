@@ -12,4 +12,6 @@ public sealed record WorkerRunFailed(
     public const string UsageLimitedReason = "Usage limit reached";
 
     public const string AuthInvalidReason = "Worker authentication failed";
+
+    public const string CreditsExhaustedReason = "Credits exhausted";
 }
