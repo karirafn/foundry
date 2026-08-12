@@ -267,6 +267,7 @@ A lifecycle state for an issue whose worker completed successfully (exit code 0)
 Requires manual resolution: the user can retry (disagreeing with the worker's assessment).
 Classified as Active / Needs attention (see [Issue Lifecycle Partition](#issue-lifecycle-partition)) — it cannot resolve itself.
 Transitions: `UnchangedIssue.Retry()` → `QueuedIssue`.
+Hard-deleted when the provider-side issue is closed or loses its trigger label (untracked by the poller). If reopened upstream with the trigger label it is re-detected as a new issue.
 
 ## Revision Queued Issue
 
@@ -375,8 +376,8 @@ All lifecycle state is tracked internally in the database.
 The provider is the authoritative signal for issue closure.
 When an issue's trigger label is removed or the issue is closed on the provider, it disappears from the `?labels=foundry&state=open` fetch.
 On each poll cycle, the poller emits a `ProviderIssueUntracked` integration event for any tracked issue absent from that fetch.
-The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states: `detected`, `queued`, `blocked`, `failed`, `continuable_failed`, `revision_failed`, `revision_queued`, and `continuation_queued`.
-`completed` and `unchanged` are preserved — completion wins over provider closure.
+The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states: `detected`, `queued`, `blocked`, `failed`, `continuable_failed`, `revision_failed`, `revision_queued`, `continuation_queued`, and `unchanged`.
+`completed` is preserved — completion wins over provider closure.
 `in_progress`, `revision_in_progress`, and `review` are preserved — a live worker is running or the issue is under active review; worker cancellation is out of scope.
 An issue closed on the provider and later reopened with the trigger label is re-detected as a new issue.
 
