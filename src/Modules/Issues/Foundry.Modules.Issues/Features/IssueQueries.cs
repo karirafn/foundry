@@ -71,7 +71,8 @@ internal sealed class IssueQueries(
                 i is ContinuableFailedIssue ||
                 i is RevisionFailedIssue ||
                 i is RevisionQueuedIssue ||
-                i is ContinuationQueuedIssue)
+                i is ContinuationQueuedIssue ||
+                i is UnchangedIssue)
             .Select(i => i.IssueNumber)
             .ToListAsync(cancellationToken);
 
