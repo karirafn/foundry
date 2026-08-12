@@ -19,6 +19,7 @@ internal sealed class ClaudeAccountConfiguration(
 {
     private static readonly JsonSerializerOptions AuthModeSerializerOptions = BuildAuthModeSerializerOptions();
     private static readonly JsonSerializerOptions ValiditySerializerOptions = BuildValiditySerializerOptions();
+    private static readonly JsonSerializerOptions SpendStateSerializerOptions = BuildSpendStateSerializerOptions();
 
     public void Configure(EntityTypeBuilder<ClaudeAccount> builder)
     {
@@ -52,6 +53,15 @@ internal sealed class ClaudeAccountConfiguration(
             .HasColumnType("TEXT")
             .HasColumnName("validity");
 
+        ValueConverter<SpendState, string> spendStateConverter = new(
+            spendState => SerializeSpendState(spendState),
+            json => DeserializeSpendState(json));
+
+        builder.Property(a => a.SpendState)
+            .HasConversion(spendStateConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("spend_state");
+
         builder.Property(a => a.OAuthAccountEmail)
             .HasMaxLength(ClaudeAccount.MaxOAuthAccountEmailLength)
             .HasColumnName("oauth_account_email");
@@ -81,6 +91,13 @@ internal sealed class ClaudeAccountConfiguration(
         return options;
     }
 
+    private static JsonSerializerOptions BuildSpendStateSerializerOptions()
+    {
+        JsonSerializerOptions options = new();
+        options.Converters.Add(new SpendStateJsonConverter());
+        return options;
+    }
+
     private static string SerializeAuthMode(AuthMode mode)
         => JsonSerializer.Serialize(mode, AuthModeSerializerOptions);
 
@@ -94,4 +111,11 @@ internal sealed class ClaudeAccountConfiguration(
     private static CredentialValidity DeserializeValidity(string json)
         => JsonSerializer.Deserialize<CredentialValidity>(json, ValiditySerializerOptions)
             ?? throw new InvalidOperationException("Failed to deserialize CredentialValidity from the stored value.");
+
+    private static string SerializeSpendState(SpendState spendState)
+        => JsonSerializer.Serialize(spendState, SpendStateSerializerOptions);
+
+    private static SpendState DeserializeSpendState(string json)
+        => JsonSerializer.Deserialize<SpendState>(json, SpendStateSerializerOptions)
+            ?? throw new InvalidOperationException("Failed to deserialize SpendState from the stored value.");
 }

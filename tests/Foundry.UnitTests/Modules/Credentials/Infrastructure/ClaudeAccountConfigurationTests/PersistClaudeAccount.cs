@@ -179,4 +179,45 @@ public sealed class PersistClaudeAccount : IAsyncDisposable
         // Assert
         property.GetMaxLength().ShouldBe(ClaudeAccount.MaxOAuthAccountOrgNameLength);
     }
+
+    [Fact]
+    public async Task WhenBlockedSpendStatePersisted_CanBeReloadedAsBlocked()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+        account.BlockSpend();
+
+        _dbContext.Set<ClaudeAccount>().Add(account);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        ClaudeAccount? result = await _dbContext
+            .Set<ClaudeAccount>()
+            .FindAsync([account.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaudeAccount reloaded = result.ShouldNotBeNull();
+        reloaded.SpendState.ShouldBeOfType<SpendState.Blocked>();
+    }
+
+    [Fact]
+    public async Task WhenAvailableSpendStatePersisted_CanBeReloadedAsAvailable()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+
+        _dbContext.Set<ClaudeAccount>().Add(account);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        ClaudeAccount? result = await _dbContext
+            .Set<ClaudeAccount>()
+            .FindAsync([account.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaudeAccount reloaded = result.ShouldNotBeNull();
+        reloaded.SpendState.ShouldBeOfType<SpendState.Available>();
+    }
 }

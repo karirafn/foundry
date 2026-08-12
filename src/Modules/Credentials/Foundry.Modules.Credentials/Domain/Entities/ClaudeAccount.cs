@@ -16,6 +16,7 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     {
         AuthMode = new AuthMode.ApiKey(string.Empty);
         Validity = new CredentialValidity.Valid();
+        SpendState = new SpendState.Available();
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
@@ -23,6 +24,8 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     public AuthMode AuthMode { get; private set; } = null!;
 
     public CredentialValidity Validity { get; private set; } = null!;
+
+    public SpendState SpendState { get; private set; } = null!;
 
     public string? OAuthAccountEmail { get; private set; }
 
@@ -92,5 +95,43 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
         AuthMode = new AuthMode.OAuth(subscriptionType);
         Validity = new CredentialValidity.Valid();
         UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Marks spend as blocked, preventing further dispatch.
+    /// Idempotent: when already <see cref="SpendState.Blocked"/>, does nothing and returns
+    /// <c>false</c> so callers can avoid double-publishing an event.
+    /// Does not affect <see cref="Validity"/>.
+    /// </summary>
+    /// <returns><c>true</c> if the state changed; <c>false</c> if already blocked.</returns>
+    public bool BlockSpend()
+    {
+        if (SpendState is SpendState.Blocked)
+        {
+            return false;
+        }
+
+        SpendState = new SpendState.Blocked();
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    /// <summary>
+    /// Restores spend to available, allowing dispatch to resume.
+    /// Idempotent: when already <see cref="SpendState.Available"/>, does nothing and returns
+    /// <c>false</c>.
+    /// Does not affect <see cref="Validity"/>.
+    /// </summary>
+    /// <returns><c>true</c> if the state changed; <c>false</c> if already available.</returns>
+    public bool RestoreSpend()
+    {
+        if (SpendState is SpendState.Available)
+        {
+            return false;
+        }
+
+        SpendState = new SpendState.Available();
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
     }
 }
