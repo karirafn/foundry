@@ -42,7 +42,6 @@ internal sealed class WorkerOutcomeResolver(
         ActiveRun run,
         int? exitCode,
         string? containerOutput,
-        int defaultCooldownMinutes,
         CancellationToken cancellationToken)
     {
         // Step 5a — MR-state first
@@ -66,12 +65,7 @@ internal sealed class WorkerOutcomeResolver(
             MergeRequestPresence.Merged => ResolveMerged(run, mr, summary),
             MergeRequestPresence.Open => ResolveOpen(run, mr, summary),
             MergeRequestPresence.Closed => await ResolveClosedAsync(run, containerOutput, summary, cancellationToken),
-            MergeRequestPresence.None => await ResolveNoMrAsync(
-                run,
-                exitCode,
-                containerOutput,
-                defaultCooldownMinutes,
-                cancellationToken),
+            MergeRequestPresence.None => await ResolveNoMrAsync(run, exitCode, containerOutput, cancellationToken),
             _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
         };
     }
@@ -154,7 +148,6 @@ internal sealed class WorkerOutcomeResolver(
         ActiveRun run,
         int? exitCode,
         string? containerOutput,
-        int defaultCooldownMinutes,
         CancellationToken cancellationToken)
     {
         // Step 5b — no MR fallback
@@ -192,7 +185,7 @@ internal sealed class WorkerOutcomeResolver(
 
         if (exitCode == 0 && !hasCommits)
         {
-            return ResolveExitZeroNoCommits(run, containerOutput, defaultCooldownMinutes, summary);
+            return ResolveExitZeroNoCommits(run, containerOutput, summary);
         }
 
         // exit != 0 or null exit
@@ -248,7 +241,6 @@ internal sealed class WorkerOutcomeResolver(
     private WorkerOutcome ResolveExitZeroNoCommits(
         ActiveRun run,
         string? containerOutput,
-        int defaultCooldownMinutes,
         RunResultSummary? summary)
     {
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);

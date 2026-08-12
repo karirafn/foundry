@@ -200,10 +200,45 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         messages.ShouldContain(m => m.Type.Contains(nameof(WorkerAuthenticationFailed)));
     }
 
+    [Fact]
+    public async Task WhenContainerExitsWithCreditsExhaustedReason_WorkerCreditsExhaustedRowPersistedToOutbox()
+    {
+        // Arrange — seed an ActiveRun; orchestrator returns exited-with-credits-exhausted output
+        ActiveRun activeRun = SeedActiveRun("container-harvest-credits-exhausted");
+
+        using (IServiceScope scope = _serviceProvider.CreateScope())
+        {
+            FoundryDbContext db = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+            db.Set<WorkerRun>().Add(activeRun);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        IWorkerOrchestrator orchestrator = new ExitedOrchestrator(
+            exitCode: 1,
+            containerOutput: Credits429OnlyOutput);
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — WorkerCreditsExhausted enqueued then SaveChangesAsync harvested it
+        using IServiceScope assertScope = _serviceProvider.CreateScope();
+        FoundryDbContext assertDb = assertScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+        List<OutboxMessage> messages = await assertDb.Set<OutboxMessage>()
+            .ToListAsync(TestContext.Current.CancellationToken);
+        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerCreditsExhausted)));
+    }
+
     private const string AuthInvalidOutput =
         """
         Some output
         {"api_error_status":401}
+        """;
+
+    private const string Credits429OnlyOutput =
+        """
+        Some output
+        {"api_error_status":429}
         """;
 
     private WorkerDispatchService BuildService(

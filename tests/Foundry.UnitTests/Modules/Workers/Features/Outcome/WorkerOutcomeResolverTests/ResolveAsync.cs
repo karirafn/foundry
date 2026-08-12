@@ -17,7 +17,6 @@ public sealed class ResolveAsync
 {
     private const string DefaultBranchName = "feat/1-my-feature";
     private const string PrUrl = "https://github.com/owner/repo/pull/42";
-    private const int DefaultCooldownMinutes = 60;
 
     private static ActiveRun CreateActiveRun(string branchName = DefaultBranchName)
     {
@@ -60,7 +59,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -86,7 +84,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -109,7 +106,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -133,7 +129,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -157,7 +152,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -180,7 +174,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -204,7 +197,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -227,7 +219,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -259,7 +250,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -283,7 +273,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -314,7 +303,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -344,7 +332,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -379,7 +366,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -402,7 +388,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -427,7 +412,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: "some output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -453,7 +437,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: "usage limit output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -477,7 +460,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -501,7 +483,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -524,7 +505,6 @@ public sealed class ResolveAsync
             run,
             exitCode: null,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -548,7 +528,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -572,7 +551,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -596,7 +574,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -622,7 +599,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: "output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -647,7 +623,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -675,7 +650,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: "transient output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -700,7 +674,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: "transient output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -725,7 +698,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: "transient output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -749,7 +721,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -772,7 +743,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 2,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -802,7 +772,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: "credits output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -827,7 +796,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: "credits output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert

@@ -20,6 +20,7 @@ using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
 using DispatchResumedEvent = Foundry.Modules.Workers.Contracts.DispatchResumed;
 
 using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.WorkerAuthenticationFailed;
+using WorkerCreditsExhaustedEvent = Foundry.Modules.Workers.Contracts.WorkerCreditsExhausted;
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,7 +79,6 @@ internal sealed class WorkerDispatchService(
             .ToListAsync(cancellationToken);
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
-        int defaultCooldownMinutes = await settingsQueries.GetDefaultCooldownMinutesAsync(cancellationToken);
 
         if (!_reconciled)
         {
@@ -92,7 +92,6 @@ internal sealed class WorkerDispatchService(
                 postExitProviderQueries,
                 containerOutputParser,
                 timeoutMinutes,
-                defaultCooldownMinutes,
                 activeRuns,
                 cancellationToken);
         }
@@ -107,7 +106,6 @@ internal sealed class WorkerDispatchService(
             postExitProviderQueries,
             containerOutputParser,
             timeoutMinutes,
-            defaultCooldownMinutes,
             activeRuns,
             cancellationToken);
 
@@ -199,7 +197,6 @@ internal sealed class WorkerDispatchService(
             .ToListAsync(cancellationToken);
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
-        int defaultCooldownMinutes = await settingsQueries.GetDefaultCooldownMinutesAsync(cancellationToken);
 
         return await ReconcileOrphanedRunsAsync(
             dbContext,
@@ -211,7 +208,6 @@ internal sealed class WorkerDispatchService(
             postExitProviderQueries,
             containerOutputParser,
             timeoutMinutes,
-            defaultCooldownMinutes,
             activeRuns,
             cancellationToken);
     }
@@ -226,7 +222,6 @@ internal sealed class WorkerDispatchService(
         IPostExitProviderQueries postExitProviderQueries,
         IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
-        int defaultCooldownMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -250,7 +245,6 @@ internal sealed class WorkerDispatchService(
                         activeRun,
                         exitCode: null,
                         containerOutput: null,
-                        defaultCooldownMinutes,
                         cancellationToken);
 
                     if (outcome is WorkerOutcome.Indeterminate indeterminate)
@@ -294,7 +288,6 @@ internal sealed class WorkerDispatchService(
                         postExitProviderQueries,
                         containerOutputParser,
                         timeoutMinutes,
-                        defaultCooldownMinutes,
                         activeRun,
                         cancellationToken,
                         knownProbe: probe);
@@ -328,7 +321,6 @@ internal sealed class WorkerDispatchService(
         IPostExitProviderQueries postExitProviderQueries,
         IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
-        int defaultCooldownMinutes,
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
@@ -344,7 +336,6 @@ internal sealed class WorkerDispatchService(
                 postExitProviderQueries,
                 containerOutputParser,
                 timeoutMinutes,
-                defaultCooldownMinutes,
                 activeRun,
                 cancellationToken);
         }
@@ -360,7 +351,6 @@ internal sealed class WorkerDispatchService(
         IPostExitProviderQueries postExitProviderQueries,
         IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
-        int defaultCooldownMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
         WorkerStatusProbe? knownProbe = null)
@@ -380,7 +370,6 @@ internal sealed class WorkerDispatchService(
                     activeRun,
                     exitCode: null,
                     containerOutput: null,
-                    defaultCooldownMinutes,
                     cancellationToken);
 
                 if (outcome is WorkerOutcome.Indeterminate indeterminate)
@@ -483,7 +472,6 @@ internal sealed class WorkerDispatchService(
                     activeRun,
                     status.ExitCode,
                     exitContainerOutput,
-                    defaultCooldownMinutes,
                     cancellationToken);
 
                 if (exitOutcome is WorkerOutcome.Indeterminate exitIndeterminate)
@@ -663,6 +651,12 @@ internal sealed class WorkerDispatchService(
                     activeRun,
                     continuable.FailureReason,
                     cancellationToken);
+                await PublishCreditsExhaustedIfNeededAsync(
+                    dbContext,
+                    integrationEventDispatcher,
+                    activeRun,
+                    continuable.FailureReason,
+                    cancellationToken);
                 logger.LogWarning(
                     "Worker run {WorkerRunId} failed with commits (reason: {Reason}, branch: {BranchName}).",
                     activeRun.Id,
@@ -685,6 +679,12 @@ internal sealed class WorkerDispatchService(
                     failure.FailureReason,
                     cancellationToken);
                 await PublishAuthFailedIfNeededAsync(
+                    dbContext,
+                    integrationEventDispatcher,
+                    activeRun,
+                    failure.FailureReason,
+                    cancellationToken);
+                await PublishCreditsExhaustedIfNeededAsync(
                     dbContext,
                     integrationEventDispatcher,
                     activeRun,
@@ -874,6 +874,38 @@ internal sealed class WorkerDispatchService(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogWarning("Auth-invalid exit detected; WorkerAuthenticationFailed published.");
+    }
+
+    /// <summary>
+    /// When <paramref name="failureReason"/> is <see cref="FailureReason.CreditsExhausted"/>,
+    /// publishes <see cref="WorkerCreditsExhaustedEvent"/> so the Credentials module can
+    /// transition the account spend state and broadcast the dispatch-paused notification.
+    /// </summary>
+    private async Task PublishCreditsExhaustedIfNeededAsync(
+        DbContext dbContext,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        ActiveRun activeRun,
+        FailureReason failureReason,
+        CancellationToken cancellationToken)
+    {
+        if (failureReason is not FailureReason.CreditsExhausted)
+        {
+            return;
+        }
+
+        // Enqueue first, then save so the outbox interceptor harvests WorkerCreditsExhausted
+        // atomically. Without this save the event is enqueued into the scoped collector but never
+        // drained — the Credentials module's state mutation would be silently lost.
+        await TryDispatchAsync(
+            integrationEventDispatcher,
+            new WorkerCreditsExhaustedEvent(
+                activeRun.Id.Value,
+                activeRun.IssueId.Value),
+            cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        logger.LogWarning("Credits-exhausted exit detected; WorkerCreditsExhausted published.");
     }
 
     /// <summary>
