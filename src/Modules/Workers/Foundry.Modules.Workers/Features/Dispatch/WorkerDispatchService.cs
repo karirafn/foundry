@@ -878,8 +878,10 @@ internal sealed class WorkerDispatchService(
 
     /// <summary>
     /// When the usage-limit reset time has passed and auto-resume is enabled, calls
-    /// <see cref="GlobalSettings.ResumeDispatch"/>, persists, and publishes
-    /// <see cref="DispatchResumedEvent"/>. Returns <c>true</c> when a resume was performed.
+    /// <see cref="GlobalSettings.ClearUsageLimitPause"/>, persists, and publishes
+    /// <see cref="DispatchResumedEvent"/> only when no manual pause remains.
+    /// Returns <c>true</c> when dispatch is now fully unpaused (safe for the caller to
+    /// bypass the stale pause-state gate), <c>false</c> when a manual pause still holds.
     /// </summary>
     private async Task<bool> TryAutoResumeAsync(
         DbContext dbContext,
@@ -902,18 +904,27 @@ internal sealed class WorkerDispatchService(
             return false;
         }
 
-        settings.ResumeDispatch();
-        // Enqueue before save so the outbox interceptor harvests DispatchResumed atomically
-        // with the settings change. DispatchResumed has a durable consumer (DispatchResumedHandler
-        // in Issues re-queues failed issues), so it must go through the outbox.
-        await integrationEventDispatcher.DispatchAsync([new DispatchResumedEvent()], cancellationToken);
+        bool fullyUnpaused = settings.ClearUsageLimitPause();
+
+        if (fullyUnpaused)
+        {
+            // Enqueue before save so the outbox interceptor harvests DispatchResumed atomically
+            // with the settings change. DispatchResumed has a durable consumer (DispatchResumedHandler
+            // in Issues re-queues failed issues), so it must go through the outbox.
+            await integrationEventDispatcher.DispatchAsync([new DispatchResumedEvent()], cancellationToken);
+        }
+        // When a manual pause remains, suppress DispatchResumed — the operator has explicitly
+        // halted dispatch and the event would falsely signal that dispatch has resumed.
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Usage limit reset time has passed; dispatch auto-resumed (was paused until {ResetsAt}).",
-            pauseState.UsageLimitResetsAt.Value);
+            "Usage limit reset time has passed; usage-limit pause cleared (was paused until {ResetsAt}). "
+            + "Dispatch fully unpaused: {FullyUnpaused}.",
+            pauseState.UsageLimitResetsAt.Value,
+            fullyUnpaused);
 
-        return true;
+        return fullyUnpaused;
     }
 
     private async Task<bool> RemoveUnknownContainersAsync(
