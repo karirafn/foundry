@@ -19,4 +19,6 @@ internal abstract record ContainerOutputParseResult
     internal sealed record AuthInvalid : ContainerOutputParseResult;
 
     internal sealed record TransientApiError : ContainerOutputParseResult;
+
+    internal sealed record CreditsExhausted : ContainerOutputParseResult;
 }

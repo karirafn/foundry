@@ -27,7 +27,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         "API Error: 529 Overloaded",
     }.ToFrozenSet(StringComparer.Ordinal);
 
-    public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+    public ContainerOutputParseResult Parse(string? log)
     {
         if (string.IsNullOrWhiteSpace(log))
         {
@@ -74,9 +74,11 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
 
         if (IsUsageLimit(apiErrorStatus, terminalReason))
         {
-            DateTimeOffset resetsAt = ParseResetTime(resultText, defaultCooldownMinutes);
+            DateTimeOffset? resetsAt = TryParseResetTime(resultText);
 
-            return new ContainerOutputParseResult.UsageLimited(resetsAt);
+            return resetsAt is not null
+                ? new ContainerOutputParseResult.UsageLimited(resetsAt.Value)
+                : new ContainerOutputParseResult.CreditsExhausted();
         }
 
         if (IsAuthInvalid(apiErrorStatus, node))
@@ -368,45 +370,42 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         return null;
     }
 
-    private static DateTimeOffset ParseResetTime(string? resultText, int defaultCooldownMinutes)
+    private static DateTimeOffset? TryParseResetTime(string? resultText)
     {
-        if (resultText is not null)
+        if (resultText is null)
         {
-            Match isoMatch = Iso8601ResetTimePattern().Match(resultText);
-
-            if (isoMatch.Success && DateTimeOffset.TryParse(
-                isoMatch.Value,
-                null,
-                DateTimeStyles.RoundtripKind,
-                out DateTimeOffset parsed))
-            {
-                return parsed;
-            }
-
-            Match wallClockMatch = WallClockResetTimePattern().Match(resultText);
-
-            if (wallClockMatch.Success)
-            {
-                string timeText = wallClockMatch.Groups["time"].Value;
-                string minutesText = wallClockMatch.Groups["minutes"].Value;
-                string timezoneText = wallClockMatch.Groups["timezone"].Value;
-
-                // When minutes are absent (bare hour like "3pm"), insert ":00" before the am/pm suffix
-                // so TimeOnly.TryParse receives a valid "3:00pm" form.
-                string normalizedTime = string.IsNullOrEmpty(minutesText)
-                    ? NormalizedBareHourTime(timeText)
-                    : timeText;
-
-                DateTimeOffset? wallClockTime = ParseWallClockTime(normalizedTime, timezoneText);
-
-                if (wallClockTime is not null)
-                {
-                    return wallClockTime.Value;
-                }
-            }
+            return null;
         }
 
-        return DateTimeOffset.UtcNow.AddMinutes(defaultCooldownMinutes);
+        Match isoMatch = Iso8601ResetTimePattern().Match(resultText);
+
+        if (isoMatch.Success && DateTimeOffset.TryParse(
+            isoMatch.Value,
+            null,
+            DateTimeStyles.RoundtripKind,
+            out DateTimeOffset parsed))
+        {
+            return parsed;
+        }
+
+        Match wallClockMatch = WallClockResetTimePattern().Match(resultText);
+
+        if (wallClockMatch.Success)
+        {
+            string timeText = wallClockMatch.Groups["time"].Value;
+            string minutesText = wallClockMatch.Groups["minutes"].Value;
+            string timezoneText = wallClockMatch.Groups["timezone"].Value;
+
+            // When minutes are absent (bare hour like "3pm"), insert ":00" before the am/pm suffix
+            // so TimeOnly.TryParse receives a valid "3:00pm" form.
+            string normalizedTime = string.IsNullOrEmpty(minutesText)
+                ? NormalizedBareHourTime(timeText)
+                : timeText;
+
+            return ParseWallClockTime(normalizedTime, timezoneText);
+        }
+
+        return null;
     }
 
     // Converts a bare-hour am/pm form ("3pm", "3 pm", "12am") to a form TimeOnly.TryParse accepts ("3:00pm", "12:00am").

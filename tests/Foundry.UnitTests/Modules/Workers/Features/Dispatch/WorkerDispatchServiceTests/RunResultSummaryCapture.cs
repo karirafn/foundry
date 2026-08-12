@@ -195,7 +195,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
     private sealed class ScriptedContainerOutputParser(RunResultSummary? runResultSummary)
         : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => runResultSummary;

@@ -849,7 +849,7 @@ public sealed class ResolveAsync
 
     private sealed class NullContainerOutputParser : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
@@ -857,7 +857,7 @@ public sealed class ResolveAsync
 
     private sealed class UsageLimitedParser(DateTimeOffset resetsAt) : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.UsageLimited(resetsAt);
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
@@ -865,7 +865,7 @@ public sealed class ResolveAsync
 
     private sealed class NoResultLineParser : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.NoResultLine();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
@@ -873,7 +873,7 @@ public sealed class ResolveAsync
 
     private sealed class TransientApiErrorParser : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.TransientApiError();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;

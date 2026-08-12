@@ -231,7 +231,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
     internal sealed class NullContainerOutputParser : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;

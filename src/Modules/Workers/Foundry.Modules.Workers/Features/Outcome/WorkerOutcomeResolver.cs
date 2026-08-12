@@ -196,7 +196,7 @@ internal sealed class WorkerOutcomeResolver(
         }
 
         // exit != 0 or null exit
-        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput, defaultCooldownMinutes);
+        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
         FailureReason failureReason = ClassifyNonZeroFailureReason(parseResult, exitCode);
 
         return hasCommits
@@ -251,7 +251,7 @@ internal sealed class WorkerOutcomeResolver(
         int defaultCooldownMinutes,
         RunResultSummary? summary)
     {
-        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput, defaultCooldownMinutes);
+        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
 
         if (parseResult is ContainerOutputParseResult.UsageLimited usageLimited)
         {

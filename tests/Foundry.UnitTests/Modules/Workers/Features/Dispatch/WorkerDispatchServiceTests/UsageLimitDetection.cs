@@ -28,9 +28,9 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         {"terminal_reason":"blocking_limit","result":"resets at 2099-01-01T00:00:00Z"}
         """;
 
-    // Usage-limited output with a 429 status only — no terminal_reason, no reset time.
-    // The parser uses defaultCooldownMinutes to set a future reset time.
-    private const string UsageLimited429OnlyOutput =
+    // 429-only output — no terminal_reason, no parseable reset time.
+    // The parser returns CreditsExhausted (step 5 will map this to a CreditsExhausted failure reason).
+    private const string Credits429OnlyOutput =
         """
         Some prior output
         {"api_error_status":429}
@@ -123,42 +123,44 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithUsageLimitedOutputVia429Status_TransitionsToFailedRunWithUsageLimitedReason()
+    public async Task WhenContainerExitsWithCreditsExhaustedOutput_TransitionsToFailedRunWithNonZeroExitReason()
     {
-        // Arrange
+        // Arrange — 429-only output (no parseable reset time) now yields CreditsExhausted from the parser.
+        // Until step 5 maps CreditsExhausted to its own failure reason, it falls through to NonZeroExit.
         SeedGlobalSettings();
         SeedActiveRun("container-usage-limited-429-only");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(UsageLimited429OnlyOutput, exitedStatus);
+        WorkerDispatchService sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert
+        // Assert — CreditsExhausted is not yet mapped; falls through to NonZeroExit (step 5 will fix)
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.Reason.ShouldBeOfType<FailureReason.UsageLimited>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
     }
 
     [Fact]
-    public async Task WhenContainerExitsWithUsageLimitedOutput_AlwaysSetsUsageLimitResetsAt()
+    public async Task WhenContainerExitsWithCreditsExhaustedOutput_DoesNotSetUsageLimitResetsAt()
     {
-        // Arrange
+        // Arrange — 429-only output now yields CreditsExhausted; UsageLimitResetsAt must not be set
+        // (CreditsExhausted is a distinct pause — step 5 will introduce its own handler).
         SeedGlobalSettings();
         SeedActiveRun("container-usage-limited-429-sets-resets-at");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(UsageLimited429OnlyOutput, exitedStatus);
+        WorkerDispatchService sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert
+        // Assert — CreditsExhausted does not set UsageLimitResetsAt (that is a time-based pause field)
         await using FoundryDbContext assertDb = CreateDbContext();
         GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
-        settings.UsageLimitResetsAt.ShouldNotBeNull();
+        settings.UsageLimitResetsAt.ShouldBeNull();
     }
 
     [Fact]

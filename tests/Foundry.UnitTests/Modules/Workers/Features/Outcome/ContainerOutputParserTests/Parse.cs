@@ -14,8 +14,6 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.ContainerOutputPars
 
 public sealed class Parse
 {
-    private const int DefaultCooldownMinutes = 60;
-
     private readonly IContainerOutputParser _sut = new ContainerOutputParser(
         NullLogger<ContainerOutputParser>.Instance);
 
@@ -50,7 +48,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
@@ -65,7 +63,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -81,7 +79,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -89,22 +87,18 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenBlockingLimitWithUnparseableResetTime_ReturnsUsageLimitedWithFallback()
+    public void WhenBlockingLimitWithUnparseableResetTime_ReturnsCreditsExhausted()
     {
         // Arrange
-        DateTimeOffset before = DateTimeOffset.UtcNow;
         string log = """
             {"type":"result","subtype":"error","is_error":true,"duration_ms":200,"num_turns":1,"result":"Usage limit exceeded. No timestamp available.","session_id":"def","terminal_reason":"blocking_limit"}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
-        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
-        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
-        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
-        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 
     [Fact]
@@ -114,7 +108,7 @@ public sealed class Parse
         string log = "Plain text output from the container.";
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
@@ -129,7 +123,7 @@ public sealed class Parse
         // Arrange (input via theory parameter)
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
@@ -144,7 +138,7 @@ public sealed class Parse
         string log = padding + jsonLine;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
@@ -158,25 +152,25 @@ public sealed class Parse
         string jsonLine = $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"{{{oversizedValue}}}"}""";
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(jsonLine, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(jsonLine);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.ParseFailure>();
     }
 
     [Fact]
-    public void WhenApiErrorStatus429WithSuccessSubtypeAndCompletedReason_ReturnsUsageLimited()
+    public void WhenApiErrorStatus429WithSuccessSubtypeAndCompletedReason_ReturnsCreditsExhausted()
     {
-        // Arrange
+        // Arrange — result text "All done." has no parseable reset time → CreditsExhausted
         string log = """
             {"type":"result","subtype":"success","is_error":false,"duration_ms":1234,"num_turns":5,"result":"All done.","session_id":"abc","terminal_reason":"completed","api_error_status":429}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 
     [Theory]
@@ -190,7 +184,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
@@ -206,7 +200,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -230,7 +224,7 @@ public sealed class Parse
         DateTimeOffset utcNow = DateTimeOffset.UtcNow;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -241,37 +235,33 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenApiErrorStatusIsJsonString429_ReturnsUsageLimited()
+    public void WhenApiErrorStatusIsJsonString429_ReturnsCreditsExhausted()
     {
-        // Arrange
+        // Arrange — result text "Done." has no parseable reset time → CreditsExhausted
         string log = """
             {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":1,"result":"Done.","session_id":"abc","terminal_reason":"completed","api_error_status":"429"}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 
     [Fact]
-    public void WhenApiErrorStatus429AndResetTextHasNoTimestamp_FallsBackToDefaultCooldown()
+    public void WhenApiErrorStatus429AndResetTextHasNoTimestamp_ReturnsCreditsExhausted()
     {
-        // Arrange
-        DateTimeOffset before = DateTimeOffset.UtcNow;
+        // Arrange — no parseable reset time in result text → CreditsExhausted (no fallback cooldown)
         string log = """
             {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":1,"result":"Usage limit exceeded. No timestamp available.","session_id":"abc","terminal_reason":"completed","api_error_status":429}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
-        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
-        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
-        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
-        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 
     [Fact]
@@ -284,7 +274,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -302,30 +292,25 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
     }
 
     [Fact]
-    public void WhenWallClockResetTimeHasNoUtcAnnotation_FallsBackToDefaultCooldown()
+    public void WhenWallClockResetTimeHasNoUtcAnnotation_ReturnsCreditsExhausted()
     {
-        // Arrange
-        // "resets 11:59pm" without (UTC) must NOT be parsed as wall-clock UTC time
-        DateTimeOffset before = DateTimeOffset.UtcNow;
+        // Arrange — "resets 11:59pm" without (UTC) must NOT be parsed; wall-clock regex requires a timezone
         string log = """
             {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. resets 11:59pm","session_id":"xyz","terminal_reason":"blocking_limit"}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
-        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
-        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
-        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
-        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 
     [Fact]
@@ -338,7 +323,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
@@ -355,7 +340,7 @@ public sealed class Parse
         string log = $"FOUNDRY_BOOTSTRAP_FAILED stage={stage} some detail message";
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
@@ -372,7 +357,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -388,7 +373,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
@@ -401,7 +386,7 @@ public sealed class Parse
         string log = "FOUNDRY_BOOTSTRAP_FAILED stage=bogus unknown stage token";
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
@@ -415,7 +400,7 @@ public sealed class Parse
         string log = $"FOUNDRY_BOOTSTRAP_FAILED stage=clone {longDetail}";
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
@@ -433,7 +418,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -451,7 +436,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.AuthInvalid>();
@@ -467,7 +452,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.AuthInvalid>();
@@ -483,7 +468,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -498,25 +483,26 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
     }
 
     [Fact]
-    public void WhenApiErrorStatus429_StillReturnsUsageLimited_NotAuthInvalid()
+    public void WhenApiErrorStatus429_ReturnsCreditsExhausted_NotAuthInvalid()
     {
-        // Arrange — regression: usage-limited must not be reclassified as auth-invalid
+        // Arrange — regression: usage-limited signal must not be reclassified as auth-invalid;
+        // "Usage limit hit." has no parseable reset time → CreditsExhausted
         string log = """
             {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":1,"result":"Usage limit hit.","session_id":"abc","terminal_reason":"blocking_limit","api_error_status":429}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 
     // --- Transient API error detection ---
@@ -530,7 +516,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
@@ -545,7 +531,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
@@ -561,7 +547,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
@@ -576,7 +562,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
@@ -593,7 +579,7 @@ public sealed class Parse
         ContainerOutputParser sut = BuildParserWithCapture(logger);
 
         // Act
-        ContainerOutputParseResult result = sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
@@ -611,7 +597,7 @@ public sealed class Parse
         ContainerOutputParser sut = BuildParserWithCapture(logger);
 
         // Act
-        ContainerOutputParseResult result = sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = sut.Parse(log);
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
@@ -628,7 +614,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert — falls through to NormalExit, not TransientApiError
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
@@ -645,7 +631,7 @@ public sealed class Parse
         ContainerOutputParser sut = BuildParserWithCapture(logger);
 
         // Act
-        sut.Parse(log, DefaultCooldownMinutes);
+        sut.Parse(log);
 
         // Assert — the logged warning message must not contain a literal newline
         logger.Entries.ShouldContain(e => e.Level == LogLevel.Warning);
@@ -669,7 +655,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert — parsed as UsageLimited with a UTC time corresponding to 3pm New York
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -695,7 +681,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -721,7 +707,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -731,22 +717,18 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenResetAtWithUnknownTimezone_FallsBackToDefaultCooldown()
+    public void WhenResetAtWithUnknownTimezone_ReturnsCreditsExhausted()
     {
         // Arrange — timezone name that does not exist in the timezone database
-        DateTimeOffset before = DateTimeOffset.UtcNow;
         string log = """
             {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at 3pm (NotA/RealTimezone).","session_id":"xyz","terminal_reason":"blocking_limit"}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
-        // Assert — must fall back gracefully, never throw
-        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
-        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
-        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
-        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
+        // Assert — unknown timezone means no parseable reset time → CreditsExhausted, never throw
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 
     [Fact]
@@ -758,7 +740,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -776,7 +758,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -794,7 +776,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert — first match (2am) wins
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -813,30 +795,26 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert — normal exit, not usage-limited
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
     }
 
     [Fact]
-    public void WhenUsageLimitButResetPhraseHasNoTimezone_FallsBackToDefaultCooldown()
+    public void WhenUsageLimitButResetPhraseHasNoTimezone_ReturnsCreditsExhausted()
     {
         // Arrange — terminal_reason is blocking_limit (IS a usage limit) but the reset-time phrase has no
         // timezone in parentheses, so the wall-clock regex must NOT match — exercises the regex rejection path
-        DateTimeOffset before = DateTimeOffset.UtcNow;
         string log = """
             {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at 3pm today.","session_id":"xyz","terminal_reason":"blocking_limit"}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
-        // Assert — falls back to default cooldown because the regex requires "(timezone)"
-        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
-        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
-        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
-        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
+        // Assert — no parseable reset time (regex requires "(timezone)") → CreditsExhausted
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 
     [Fact]
@@ -852,7 +830,7 @@ public sealed class Parse
         DateTimeOffset utcNow = DateTimeOffset.UtcNow;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert — rolled forward to tomorrow
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -871,7 +849,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -890,7 +868,7 @@ public sealed class Parse
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -911,7 +889,7 @@ public sealed class Parse
             """;
 
         // Act — must not throw ArgumentException from ConvertTimeToUtc
-        ContainerOutputParseResult result = Should.NotThrow(() => _sut.Parse(log, DefaultCooldownMinutes));
+        ContainerOutputParseResult result = Should.NotThrow(() => _sut.Parse(log));
 
         // Assert — classified as UsageLimited (either resolved past the gap or default-cooldown fallback)
         result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
@@ -934,7 +912,7 @@ public sealed class Parse
         DateTimeOffset utcNow = DateTimeOffset.UtcNow;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert — rolled forward to tomorrow Chicago time; the resolved UTC instant must be in the future.
         // The assertion verifies consistency within a tolerance window (the zone lookup and parse use the
@@ -944,23 +922,52 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenTimezoneExceedsLengthCap_FallsBackToDefaultCooldown()
+    public void WhenTimezoneExceedsLengthCap_ReturnsCreditsExhausted()
     {
         // Arrange — a timezone string longer than 64 characters is not a real IANA id; the parser must
-        // fall back to the default cooldown without calling FindSystemTimeZoneById
-        DateTimeOffset before = DateTimeOffset.UtcNow;
+        // return CreditsExhausted without calling FindSystemTimeZoneById
         string longTimezone = new string('A', 65);
         string log = $$"""
             {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"reset at 3pm ({{longTimezone}}).","session_id":"xyz","terminal_reason":"blocking_limit"}
             """;
 
         // Act
-        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+        ContainerOutputParseResult result = _sut.Parse(log);
 
-        // Assert — falls back gracefully
+        // Assert — no parseable reset time (timezone too long) → CreditsExhausted, never throw
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
+    }
+
+    // --- New tests: CreditsExhausted for 429 and allowlisted terminal_reason with no parseable reset time ---
+
+    [Fact]
+    public void WhenApiErrorStatus429WithParseableResetTime_ReturnsUsageLimited()
+    {
+        // Arrange — 429 with a parseable ISO8601 reset time → UsageLimited
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":1,"result":"Rate limit. Resets at 2026-06-18T15:00:00Z.","session_id":"abc","terminal_reason":"completed","api_error_status":429}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
         ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
-        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
-        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
-        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
+        limited.ResetsAt.ShouldBe(new DateTimeOffset(2026, 6, 18, 15, 0, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void WhenRapidRefillBreakerWithNoParseableResetTime_ReturnsCreditsExhausted()
+    {
+        // Arrange — allowlisted terminal_reason with no parseable reset time → CreditsExhausted
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":300,"num_turns":1,"result":"Rapid refill breaker triggered.","session_id":"abc","terminal_reason":"rapid_refill_breaker"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
     }
 }
