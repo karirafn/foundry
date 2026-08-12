@@ -44,7 +44,7 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenSettingsExist_UpdatesDispatchSettingsAndReturnsSummary()
+    public async Task WhenSettingsExist_UpdatesAutoResumeAndReturnsSummary()
     {
         // Arrange
         await using (FoundryDbContext seedDb = CreateDbContext())
@@ -56,7 +56,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false, DefaultCooldownMinutes: 30);
+        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -66,9 +66,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Assert
         Result<GlobalSettingsSummary>.Success success =
             result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        success.Value.ShouldSatisfyAllConditions(
-            () => success.Value.AutoResumeOnUsageReset.ShouldBeFalse(),
-            () => success.Value.DefaultCooldownMinutes.ShouldBe(30));
+        success.Value.AutoResumeOnUsageReset.ShouldBeFalse();
     }
 
     [Fact]
@@ -85,7 +83,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             UpdateDispatchSettings.Handler sut = new(dbContext);
-            UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false, DefaultCooldownMinutes: 45);
+            UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false);
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
 
@@ -94,9 +92,7 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
-        stored.ShouldSatisfyAllConditions(
-            () => stored.AutoResumeOnUsageReset.ShouldBeFalse(),
-            () => stored.DefaultCooldownMinutes.ShouldBe(45));
+        stored.AutoResumeOnUsageReset.ShouldBeFalse();
     }
 
     [Fact]
@@ -105,7 +101,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true, DefaultCooldownMinutes: 60);
+        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -116,31 +112,5 @@ public sealed class HandleAsync : IAsyncLifetime
         Result<GlobalSettingsSummary>.Failure failure =
             result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
         failure.Error.Code.ShouldBe(SettingsErrors.NotFoundCode);
-    }
-
-    [Fact]
-    public async Task WhenUpdateDispatchSettingsReturnsDomainError_ReturnsDomainErrorWithoutSaving()
-    {
-        // Arrange
-        await using (FoundryDbContext seedDb = CreateDbContext())
-        {
-            GlobalSettings settings = GlobalSettings.Create();
-            seedDb.Set<GlobalSettings>().Add(settings);
-            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true, DefaultCooldownMinutes: 0);
-
-        // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
-            command,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        Result<GlobalSettingsSummary>.Failure failure =
-            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
-        failure.Error.Code.ShouldBe(SettingsErrors.InvalidDefaultCooldownCode);
     }
 }

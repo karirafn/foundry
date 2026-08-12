@@ -314,9 +314,6 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
                 IsDispatchPaused: false,
                 AutoResumeOnUsageReset: true));
 
-        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(60);
-
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);
 

@@ -62,16 +62,6 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             ?? new DispatchPauseState(null, false, true);
     }
 
-    public async Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
-    {
-        int? value = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .Select(s => (int?)s.DefaultCooldownMinutes)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return value is > 0 ? value.Value : GlobalSettings.DefaultCooldownMinutesValue;
-    }
-
     public async Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
     {
         GlobalSettings? settings = await dbContext.Set<GlobalSettings>()

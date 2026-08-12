@@ -22,7 +22,6 @@ internal sealed class StubGlobalSettingsQueries(
         UsageLimitResetsAt: null,
         IsDispatchPaused: false,
         AutoResumeOnUsageReset: true,
-        DefaultCooldownMinutes: 0,
         InstallDotnet: false,
         InstallAngular: false,
         InstallGlab: false,
@@ -52,9 +51,6 @@ internal sealed class StubGlobalSettingsQueries(
 
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
         => Task.FromResult(new DispatchPauseState(null, false, true));
-
-    public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
-        => Task.FromResult(0);
 
     public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
         => Task.FromResult(ImageBuildStatus.Idle);

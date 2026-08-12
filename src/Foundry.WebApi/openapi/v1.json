@@ -1378,7 +1378,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the dispatch pause and cooldown settings",
+        "summary": "Updates the dispatch auto-resume setting",
         "operationId": "UpdateDispatchSettings",
         "requestBody": {
           "content": {
@@ -1403,16 +1403,6 @@
           },
           "404": {
             "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1831,7 +1821,6 @@
           "usageLimitResetsAt",
           "isDispatchPaused",
           "autoResumeOnUsageReset",
-          "defaultCooldownMinutes",
           "installDotnet",
           "installAngular",
           "installGlab",
@@ -1886,14 +1875,6 @@
           },
           "autoResumeOnUsageReset": {
             "type": "boolean"
-          },
-          "defaultCooldownMinutes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
           },
           "installDotnet": {
             "type": "boolean"
@@ -2670,21 +2651,12 @@
       },
       "UpdateDispatchSettingsRequestBody": {
         "required": [
-          "autoResumeOnUsageReset",
-          "defaultCooldownMinutes"
+          "autoResumeOnUsageReset"
         ],
         "type": "object",
         "properties": {
           "autoResumeOnUsageReset": {
             "type": "boolean"
-          },
-          "defaultCooldownMinutes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
           }
         }
       },

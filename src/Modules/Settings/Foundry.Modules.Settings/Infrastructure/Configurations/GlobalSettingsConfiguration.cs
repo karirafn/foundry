@@ -47,9 +47,6 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
         builder.Property(s => s.AutoResumeOnUsageReset)
             .HasColumnName("auto_resume_on_usage_reset");
 
-        builder.Property(s => s.DefaultCooldownMinutes)
-            .HasColumnName("default_cooldown_minutes");
-
         ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
             config => SerializeWorkerImageConfiguration(config),
             json => DeserializeWorkerImageConfiguration(json));

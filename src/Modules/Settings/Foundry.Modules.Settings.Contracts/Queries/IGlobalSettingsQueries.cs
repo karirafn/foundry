@@ -18,8 +18,6 @@ public interface IGlobalSettingsQueries
 
     Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken);
 
-    Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken);
-
     Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken);
 
     Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken);
