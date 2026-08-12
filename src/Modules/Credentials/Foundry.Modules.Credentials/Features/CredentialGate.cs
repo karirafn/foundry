@@ -20,6 +20,21 @@ internal sealed class CredentialGate(DbContext dbContext, ILoginSessionState log
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
-        return account?.Validity is CredentialValidity.Valid;
+        if (account is null)
+        {
+            return false;
+        }
+
+        if (account.Validity is CredentialValidity.Invalid)
+        {
+            return false;
+        }
+
+        if (account.SpendState is SpendState.Blocked)
+        {
+            return false;
+        }
+
+        return true;
     }
 }
