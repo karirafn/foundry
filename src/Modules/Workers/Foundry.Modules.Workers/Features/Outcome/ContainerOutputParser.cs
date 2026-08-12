@@ -409,8 +409,8 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         return DateTimeOffset.UtcNow.AddMinutes(defaultCooldownMinutes);
     }
 
-    // Converts a bare-hour am/pm form ("3pm", "12am") to a form TimeOnly.TryParse accepts ("3:00pm", "12:00am").
-    // Inserts ":00" immediately before the am/pm suffix, preserving any whitespace.
+    // Converts a bare-hour am/pm form ("3pm", "3 pm", "12am") to a form TimeOnly.TryParse accepts ("3:00pm", "12:00am").
+    // Inserts ":00" immediately before the am/pm suffix, trimming any whitespace between the digit and the suffix.
     private static string NormalizedBareHourTime(string timeText)
     {
         // Find where the am/pm starts (after the digit part, possibly with whitespace)
@@ -421,7 +421,8 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             return timeText;
         }
 
-        return timeText[..suffixIndex] + ":00" + timeText[suffixIndex..];
+        // Trim trailing whitespace off the digit portion so "3 pm" produces "3:00pm", not "3 :00pm"
+        return timeText[..suffixIndex].TrimEnd() + ":00" + timeText[suffixIndex..];
     }
 
     private static DateTimeOffset? ParseWallClockTime(string timeText, string timezoneText)
@@ -445,13 +446,19 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         }
 
         // IANA timezone — look up via timezone database
+        // Cap length before BCL lookup: real IANA IDs are well under 64 chars; anything longer is garbage input
+        if (timezoneText.Length > 64)
+        {
+            return null;
+        }
+
         TimeZoneInfo zone;
 
         try
         {
             zone = TimeZoneInfo.FindSystemTimeZoneById(timezoneText);
         }
-        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException or ArgumentException)
         {
             // Unknown or malformed timezone — fall through to the caller's default cooldown
             return null;
@@ -460,11 +467,27 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         DateTimeOffset nowInZone = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone);
         DateTime todayInZone = nowInZone.Date;
         DateTime candidateInZone = todayInZone.Add(timeOfDay.ToTimeSpan());
+
+        // Guard against DST spring-forward gap: a time falling in the gap is invalid for ConvertTimeToUtc
+        // and would throw ArgumentException. Advance past the gap (by 1 hour) so the conversion always
+        // receives a valid local time — a real reset at 2:30am during the spring-forward resolves to 3:30am.
+        if (zone.IsInvalidTime(candidateInZone))
+        {
+            candidateInZone = candidateInZone.AddHours(1);
+        }
+
         DateTimeOffset candidateUtc = TimeZoneInfo.ConvertTimeToUtc(candidateInZone, zone);
 
         if (candidateUtc <= DateTimeOffset.UtcNow)
         {
             candidateInZone = candidateInZone.AddDays(1);
+
+            // Apply the same DST guard on the rolled-forward candidate
+            if (zone.IsInvalidTime(candidateInZone))
+            {
+                candidateInZone = candidateInZone.AddHours(1);
+            }
+
             candidateUtc = TimeZoneInfo.ConvertTimeToUtc(candidateInZone, zone);
         }
 

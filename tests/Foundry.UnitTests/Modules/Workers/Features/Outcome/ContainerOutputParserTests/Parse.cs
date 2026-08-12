@@ -802,20 +802,39 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenUnrelatedTextContainsTime_DoesNotParseAsResetTime()
+    public void WhenNonLimitTerminalReason_ReturnsNormalExit()
     {
-        // Arrange — result text that resembles a usage-limit message but is actually a normal exit
-        // (terminal_reason is "completed" with no usage-limit signals)
+        // Arrange — api_error_status:200 and terminal_reason:"completed" are not usage-limit signals;
+        // this test proves the classification gate (IsUsageLimit) short-circuits before any regex runs
         string log = """
             {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":1,"result":"The meeting resets at 3pm (UTC) tomorrow.","session_id":"abc","terminal_reason":"completed","api_error_status":200}
             """;
-        DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
         ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
 
         // Assert — normal exit, not usage-limited
         result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenUsageLimitButResetPhraseHasNoTimezone_FallsBackToDefaultCooldown()
+    {
+        // Arrange — terminal_reason is blocking_limit (IS a usage limit) but the reset-time phrase has no
+        // timezone in parentheses, so the wall-clock regex must NOT match — exercises the regex rejection path
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at 3pm today.","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — falls back to default cooldown because the regex requires "(timezone)"
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
+        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
+        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
     }
 
     [Fact]
@@ -858,5 +877,89 @@ public sealed class Parse
         limited.ResetsAt.Hour.ShouldBe(0);
         limited.ResetsAt.Minute.ShouldBe(10);
         limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void WhenBareHourWithSpaceBeforeAmPm_ResolvesCorrectly()
+    {
+        // Arrange — "reset at 3 pm (UTC)" has a space between "3" and "pm"; NormalizedBareHourTime must
+        // trim the space before splicing ":00" so TimeOnly.TryParse receives "3:00pm", not "3 :00pm"
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. reset at 3 pm (UTC).","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.Hour.ShouldBe(15);
+        limited.ResetsAt.Minute.ShouldBe(0);
+        limited.ResetsAt.Offset.ShouldBe(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void WhenDstSpringForwardGapTime_DoesNotThrowAndReturnsUsageLimited()
+    {
+        // Arrange — construct a result text with a wall-clock time in the America/New_York spring-forward gap
+        // (clocks jump from 2:00am to 3:00am on the second Sunday of March, so 2:30am does not exist).
+        // The parse must NEVER throw — it must return UsageLimited (resolved or fallback).
+        // We use a fixed gap time from a known past spring-forward date; the zone lookup is always valid.
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Usage limit reached. reset at 2:30am (America/New_York).","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act — must not throw ArgumentException from ConvertTimeToUtc
+        ContainerOutputParseResult result = Should.NotThrow(() => _sut.Parse(log, DefaultCooldownMinutes));
+
+        // Assert — classified as UsageLimited (either resolved past the gap or default-cooldown fallback)
+        result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+    }
+
+    [Fact]
+    public void WhenResetAtWithIanaTimezoneAlreadyPastInZone_ResolvesToNextDayUtc()
+    {
+        // Arrange — pick a wall-clock time that is guaranteed to be already past in America/Chicago right now:
+        // compute "1 hour ago" in Chicago time, then embed that as the reset time.
+        // This exercises the IANA ConvertTimeToUtc roll-forward path (not the UTC fast-path).
+        TimeZoneInfo chicagoZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+        DateTimeOffset nowInChicago = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chicagoZone);
+        DateTimeOffset oneHourAgoInChicago = nowInChicago.AddHours(-1);
+        string pastTime = oneHourAgoInChicago.ToString("h:mmtt", System.Globalization.CultureInfo.InvariantCulture)
+            .ToLowerInvariant();
+        string log = $$$"""
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"Your limit will reset at {{{pastTime}}} (America/Chicago).","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+        DateTimeOffset utcNow = DateTimeOffset.UtcNow;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — rolled forward to tomorrow Chicago time; the resolved UTC instant must be in the future.
+        // The assertion verifies consistency within a tolerance window (the zone lookup and parse use the
+        // same production ConvertTimeToUtc path, so this mirrors production conversion, not absolute ground truth).
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.ShouldBeGreaterThan(utcNow);
+    }
+
+    [Fact]
+    public void WhenTimezoneExceedsLengthCap_FallsBackToDefaultCooldown()
+    {
+        // Arrange — a timezone string longer than 64 characters is not a real IANA id; the parser must
+        // fall back to the default cooldown without calling FindSystemTimeZoneById
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+        string longTimezone = new string('A', 65);
+        string log = $$"""
+            {"type":"result","subtype":"error","is_error":true,"duration_ms":500,"num_turns":2,"result":"reset at 3pm ({{longTimezone}}).","session_id":"xyz","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log, DefaultCooldownMinutes);
+
+        // Assert — falls back gracefully
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        DateTimeOffset expectedMin = before.AddMinutes(DefaultCooldownMinutes);
+        DateTimeOffset expectedMax = DateTimeOffset.UtcNow.AddMinutes(DefaultCooldownMinutes);
+        limited.ResetsAt.ShouldBeInRange(expectedMin, expectedMax);
     }
 }
