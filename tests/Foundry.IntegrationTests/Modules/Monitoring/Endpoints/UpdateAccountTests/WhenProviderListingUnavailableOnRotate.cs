@@ -16,6 +16,7 @@ using Foundry.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -65,7 +66,8 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
             // Returns 401 for the new token to simulate a transient listing failure.
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new FailNewTokenListingHandler(OriginalToken, BroadListingJson))));
+                    new HttpClient(new FailNewTokenListingHandler(OriginalToken, BroadListingJson)),
+                    NullLogger<GitHubHttpClient>.Instance));
 
             // Evaluator marks all resolving repos Unreachable (simulating provider unavailability).
             services.RemoveAll<IRepositoryEligibilityEvaluator>();

@@ -1,7 +1,7 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { DecimalPipe, NgClass } from '@angular/common';
 import { IssueSummary, RunStats, LIVE_STATES } from '../issue.model';
-import { STATE_ARIA_LABELS } from '../../../shared/utils/state-display';
+import { STATE_ARIA_LABELS, cardAccentFor } from '../../../shared/utils/state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
@@ -82,6 +82,7 @@ function hasVisiblePills(stats: RunStats): boolean {
     <button
       type="button"
       class="issue-card"
+      [ngClass]="_accentClass()"
       [attr.aria-expanded]="expanded().toString()"
       [attr.aria-controls]="'detail-' + issue().id"
       [attr.aria-label]="issueAriaLabel()"
@@ -236,6 +237,11 @@ export class IssueCardComponent {
   readonly toggle: OutputEmitterRef<void> = output<void>();
 
   private readonly _ticker = inject(TickerService);
+
+  readonly _accentClass = computed(() => {
+    const accent = cardAccentFor(this.issue().state);
+    return accent === 'working' ? 'issue-card--working' : accent === 'ready' ? 'issue-card--ready' : '';
+  });
 
   readonly _activityLine = computed(() => {
     // Depend on ticker to re-evaluate every ~30s

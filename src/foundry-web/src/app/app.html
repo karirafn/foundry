@@ -29,6 +29,7 @@
 <fd-system-banner [attr.inert]="overlayBlocking() ? '' : null" />
 <fd-forge-overlay />
 <fd-toast />
+<div class="app__sr-announcer sr-only" aria-live="polite" aria-atomic="true">{{ srAnnouncement() }}</div>
 <main class="app-content" [attr.inert]="overlayBlocking() ? '' : null">
   <router-outlet />
 </main>

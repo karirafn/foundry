@@ -42,8 +42,9 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     /// <summary>
     /// Returns true for states that can be safely hard-deleted when a provider untrack event is received.
-    /// Active states (in_progress, revision_in_progress, review) and terminal states (completed, unchanged)
-    /// return false so in-flight or completed work is preserved.
+    /// Active states (in_progress, revision_in_progress, review) return false — a live worker is running or
+    /// the issue is under active review. The terminal state completed returns false — completion wins over
+    /// provider closure. All other states (including unchanged) return true and are hard-deleted on untrack.
     /// </summary>
     public bool IsRestingState() =>
         this is DetectedIssue
@@ -53,7 +54,8 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
             or ContinuableFailedIssue
             or RevisionFailedIssue
             or RevisionQueuedIssue
-            or ContinuationQueuedIssue;
+            or ContinuationQueuedIssue
+            or UnchangedIssue;
 
     internal void SetBlockedBy(IReadOnlyList<int> blockers)
     {

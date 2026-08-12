@@ -12,6 +12,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -28,7 +29,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -62,7 +63,7 @@ public sealed class GetMergeRequestByBranchAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -97,7 +98,7 @@ public sealed class GetMergeRequestByBranchAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -132,7 +133,7 @@ public sealed class GetMergeRequestByBranchAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -174,7 +175,7 @@ public sealed class GetMergeRequestByBranchAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -216,7 +217,7 @@ public sealed class GetMergeRequestByBranchAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -240,7 +241,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -262,7 +263,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.NotFound, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -284,7 +285,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
@@ -307,7 +308,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.GetMergeRequestByBranchAsync(

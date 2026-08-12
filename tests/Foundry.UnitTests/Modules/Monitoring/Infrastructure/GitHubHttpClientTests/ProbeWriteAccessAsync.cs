@@ -11,6 +11,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -30,7 +31,7 @@ public sealed class ProbeWriteAccessAsync
             (HttpStatusCode.Forbidden, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeWriteAccessAsync(
@@ -59,7 +60,7 @@ public sealed class ProbeWriteAccessAsync
             (HttpStatusCode.Forbidden, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeWriteAccessAsync(
@@ -89,7 +90,7 @@ public sealed class ProbeWriteAccessAsync
             (HttpStatusCode.Forbidden, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeWriteAccessAsync(
@@ -117,7 +118,7 @@ public sealed class ProbeWriteAccessAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeWriteAccessAsync(
@@ -141,7 +142,7 @@ public sealed class ProbeWriteAccessAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeWriteAccessAsync(
@@ -166,7 +167,7 @@ public sealed class ProbeWriteAccessAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeWriteAccessAsync(
@@ -191,7 +192,7 @@ public sealed class ProbeWriteAccessAsync
             (HttpStatusCode.UnprocessableEntity, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.ProbeWriteAccessAsync(
@@ -218,7 +219,7 @@ public sealed class ProbeWriteAccessAsync
             (HttpStatusCode.UnprocessableEntity, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeWriteAccessAsync(

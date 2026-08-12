@@ -1,7 +1,7 @@
-import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, UNGROUPED_RANK, WITHIN_GROUP_ORDER, groupRankFor, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
+import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, WITHIN_GROUP_ORDER, groupRankFor, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
 import { IssueState } from './issue.model';
 
-// All lifecycle states — ineligible is an overlay, not a lifecycle state.
+// All lifecycle states — must match IssueState union exactly.
 const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'detected',
   'queued',
@@ -20,7 +20,8 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
 
 describe('issue-lifecycle model', () => {
   // Cycle 1: ACTIVE_STATES and RESOLVED_STATES match backend registry exactly
-  it('should include all active states from the backend IssueStateRegistry', () => {
+  // Contract test: mirror IssueStateRegistry.ActiveMap (server: src/Modules/Issues/.../StateChanges/IssueStateRegistry.cs)
+  it('should include all active states from the backend IssueStateRegistry.ActiveMap', () => {
     // Arrange
     const expectedActive: ReadonlySet<IssueState> = new Set<IssueState>([
       'detected',
@@ -28,6 +29,7 @@ describe('issue-lifecycle model', () => {
       'blocked',
       'in_progress',
       'review',
+      'unchanged',
       'failed',
       'continuable_failed',
       'continuation_queued',
@@ -43,11 +45,11 @@ describe('issue-lifecycle model', () => {
     }
   });
 
-  it('should include all resolved states from the backend IssueStateRegistry', () => {
+  // Contract test: mirror IssueStateRegistry.ResolvedMap (server: src/Modules/Issues/.../StateChanges/IssueStateRegistry.cs)
+  it('should include all resolved states from the backend IssueStateRegistry.ResolvedMap', () => {
     // Arrange
     const expectedResolved: ReadonlySet<IssueState> = new Set<IssueState>([
       'completed',
-      'unchanged',
     ]);
 
     // Act / Assert
@@ -57,21 +59,10 @@ describe('issue-lifecycle model', () => {
     }
   });
 
-  it('should not include ineligible in ACTIVE_STATES', () => {
-    // Arrange / Act / Assert
-    expect(ACTIVE_STATES.has('ineligible' as IssueState)).toBe(false);
-  });
-
-  it('should not include ineligible in RESOLVED_STATES', () => {
-    // Arrange / Act / Assert
-    expect(RESOLVED_STATES.has('ineligible' as IssueState)).toBe(false);
-  });
-
   // Cycle 2: isResolvedState predicate
   it('should return true for resolved states', () => {
     // Arrange / Act / Assert
     expect(isResolvedState('completed')).toBe(true);
-    expect(isResolvedState('unchanged')).toBe(true);
   });
 
   it('should return false for active states', () => {
@@ -79,6 +70,7 @@ describe('issue-lifecycle model', () => {
     expect(isResolvedState('in_progress')).toBe(false);
     expect(isResolvedState('detected')).toBe(false);
     expect(isResolvedState('failed')).toBe(false);
+    expect(isResolvedState('unchanged')).toBe(false);
   });
 
   // Cycle 3: STATE_GROUPS completeness and partition guard
@@ -98,7 +90,7 @@ describe('issue-lifecycle model', () => {
     expect(labels).toContain('Resolved');
   });
 
-  it('should cover every lifecycle state (except ineligible) in exactly one group', () => {
+  it('should cover every lifecycle state in exactly one group', () => {
     // Arrange
     const seenStates = new Map<IssueState, string>();
 
@@ -168,11 +160,6 @@ describe('issue-lifecycle model', () => {
     expect(groupRankFor('review')).toBeLessThan(groupRankFor('queued'));
   });
 
-  it('should return UNGROUPED_RANK for ineligible', () => {
-    // Arrange / Act / Assert
-    expect(groupRankFor('ineligible')).toBe(UNGROUPED_RANK);
-  });
-
   it('should return the Resolved group index (3) for a Resolved-group state', () => {
     // Arrange
     const resolvedIndex = STATE_GROUPS.findIndex(g => g.label === 'Resolved');
@@ -185,15 +172,8 @@ describe('issue-lifecycle model', () => {
     expect(rank).toBe(3);
   });
 
-  it('should return UNGROUPED_RANK that sorts after all defined groups', () => {
-    // Arrange / Act / Assert
-    for (let i = 0; i < STATE_GROUPS.length; i++) {
-      expect(UNGROUPED_RANK).toBeGreaterThan(i);
-    }
-  });
-
   // Cycle 4: group → state membership spot checks
-  it('should place in_progress, revision_in_progress, continuation_queued in the In progress group', () => {
+  it('should place in_progress and revision_in_progress in the In progress group', () => {
     // Arrange
     const inProgress = STATE_GROUPS.find(g => g.label === 'In progress');
 
@@ -201,10 +181,18 @@ describe('issue-lifecycle model', () => {
     expect(inProgress).toBeDefined();
     expect(inProgress!.states).toContain('in_progress');
     expect(inProgress!.states).toContain('revision_in_progress');
-    expect(inProgress!.states).toContain('continuation_queued');
   });
 
-  it('should place detected, queued, blocked, revision_queued in the Waiting group', () => {
+  it('should not place continuation_queued in the In progress group', () => {
+    // Arrange
+    const inProgress = STATE_GROUPS.find(g => g.label === 'In progress');
+
+    // Act / Assert
+    expect(inProgress).toBeDefined();
+    expect(inProgress!.states).not.toContain('continuation_queued');
+  });
+
+  it('should place detected, queued, blocked, revision_queued, continuation_queued in the Waiting group', () => {
     // Arrange
     const waiting = STATE_GROUPS.find(g => g.label === 'Waiting');
 
@@ -214,28 +202,30 @@ describe('issue-lifecycle model', () => {
     expect(waiting!.states).toContain('queued');
     expect(waiting!.states).toContain('blocked');
     expect(waiting!.states).toContain('revision_queued');
+    expect(waiting!.states).toContain('continuation_queued');
   });
 
-  it('should place review, failed, continuable_failed, revision_failed in the Needs attention group', () => {
+  it('should place review, unchanged, failed, continuable_failed, revision_failed in the Needs attention group', () => {
     // Arrange
     const needsAttention = STATE_GROUPS.find(g => g.label === 'Needs attention');
 
     // Act / Assert
     expect(needsAttention).toBeDefined();
     expect(needsAttention!.states).toContain('review');
+    expect(needsAttention!.states).toContain('unchanged');
     expect(needsAttention!.states).toContain('failed');
     expect(needsAttention!.states).toContain('continuable_failed');
     expect(needsAttention!.states).toContain('revision_failed');
   });
 
-  it('should place completed and unchanged in the Resolved group', () => {
+  it('should place only completed in the Resolved group', () => {
     // Arrange
     const resolved = STATE_GROUPS.find(g => g.label === 'Resolved');
 
     // Act / Assert
     expect(resolved).toBeDefined();
     expect(resolved!.states).toContain('completed');
-    expect(resolved!.states).toContain('unchanged');
+    expect(resolved!.states).not.toContain('unchanged');
   });
 });
 
@@ -261,27 +251,28 @@ describe('withinGroupRankFor', () => {
     expect(withinGroupRankFor('queued')).toBe(withinGroupRankFor('revision_queued'));
   });
 
+  it('should assign equal rank to queued, revision_queued, and continuation_queued', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('continuation_queued')).toBe(withinGroupRankFor('queued'));
+  });
+
+  it('should rank continuation_queued before detected in the Waiting group', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('continuation_queued')).toBeLessThan(withinGroupRankFor('detected'));
+  });
+
   // Cycle 2: In-progress group tier ordering
-  it('should rank in_progress before continuation_queued in the In progress group', () => {
-    // Arrange / Act / Assert
-    expect(withinGroupRankFor('in_progress')).toBeLessThan(withinGroupRankFor('continuation_queued'));
-  });
-
-  it('should rank revision_in_progress before continuation_queued in the In progress group', () => {
-    // Arrange / Act / Assert
-    expect(withinGroupRankFor('revision_in_progress')).toBeLessThan(withinGroupRankFor('continuation_queued'));
-  });
-
   it('should assign equal rank to in_progress and revision_in_progress', () => {
     // Arrange / Act / Assert
     expect(withinGroupRankFor('in_progress')).toBe(withinGroupRankFor('revision_in_progress'));
   });
 
-  // Cycle 3: Needs attention — all states equal rank
-  it('should assign equal rank to all Needs attention states', () => {
+  // Cycle 3: Needs attention — all states equal rank (including unchanged)
+  it('should assign equal rank to all Needs attention states including unchanged', () => {
     // Arrange
     const needsAttentionRanks = [
       withinGroupRankFor('review'),
+      withinGroupRankFor('unchanged'),
       withinGroupRankFor('failed'),
       withinGroupRankFor('continuable_failed'),
       withinGroupRankFor('revision_failed'),
@@ -292,12 +283,6 @@ describe('withinGroupRankFor', () => {
     for (const rank of needsAttentionRanks) {
       expect(rank).toBe(firstRank);
     }
-  });
-
-  // Cycle 4: Unlisted / ineligible returns default 0
-  it('should return 0 for ineligible (unlisted state)', () => {
-    // Arrange / Act / Assert
-    expect(withinGroupRankFor('ineligible')).toBe(0);
   });
 
   // Cycle 5: Partition guard — every STATE_GROUPS state appears in exactly one within-group tier

@@ -11,6 +11,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -33,7 +34,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Created, createJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -62,7 +63,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.UnprocessableEntity, conflictJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -88,7 +89,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -116,7 +117,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -139,7 +140,7 @@ public sealed class CreateBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
@@ -169,7 +170,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Created, createJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.CreateBranchAsync(
@@ -199,7 +200,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Created, createJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         await sut.CreateBranchAsync(
@@ -233,7 +234,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Forbidden, forbiddenJson, forbiddenHeaders),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -266,7 +267,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Forbidden, forbiddenJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -303,7 +304,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Forbidden, rateLimitJson, rateLimitHeaders),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -333,7 +334,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Forbidden, forbiddenJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -365,7 +366,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Forbidden, forbiddenJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -395,7 +396,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -425,7 +426,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Forbidden, forbiddenJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(

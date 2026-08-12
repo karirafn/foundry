@@ -99,14 +99,14 @@ public sealed class WhenResolvedStatesRequested : IAsyncDisposable
     [Fact]
     public async Task ReturnsPagedIssuesWithNextCursor_WhenMoreRowsExist()
     {
-        // Arrange — seed 3 resolved issues; request page of 2
+        // Arrange — seed 3 completed issues; request page of 2
         await SeedCompletedIssueAsync(issueNumber: 1, detectedAt: BaseTime.AddHours(-2));
         await SeedCompletedIssueAsync(issueNumber: 2, detectedAt: BaseTime.AddHours(-1));
         await SeedCompletedIssueAsync(issueNumber: 3, detectedAt: BaseTime);
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(
-            new Uri("/api/issues?states=completed,unchanged&limit=2", UriKind.Relative),
+            new Uri("/api/issues?states=completed&limit=2", UriKind.Relative),
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -165,22 +165,18 @@ public sealed class WhenResolvedStatesRequested : IAsyncDisposable
     }
 
     [Fact]
-    public async Task BothResolvedStatesMixedInCommaList_ReturnsAll()
+    public async Task MixingActiveAndResolvedStates_ReturnsBadRequest()
     {
-        // Arrange
+        // Arrange — unchanged is active, completed is resolved; mixing them is rejected
         await SeedCompletedIssueAsync(issueNumber: 1, detectedAt: BaseTime);
         await SeedUnchangedIssueAsync(issueNumber: 2, detectedAt: BaseTime.AddHours(-1));
 
-        // Act — comma-separated states in single query parameter value
+        // Act — comma-separated states mixing active (unchanged) and resolved (completed)
         HttpResponseMessage response = await _client.GetAsync(
             new Uri("/api/issues?states=completed,unchanged&limit=10", UriKind.Relative),
             TestContext.Current.CancellationToken);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        PagedIssues? result = await response.Content
-            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
-        result.ShouldNotBeNull();
-        result.Items.Count.ShouldBe(2);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 }

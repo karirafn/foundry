@@ -1,5 +1,6 @@
 import type { IssueState } from '../../shared/utils/issue-state';
 export type { IssueState } from '../../shared/utils/issue-state';
+import { WORKING_STATES } from '../../shared/utils/issue-state';
 
 export interface RunStats {
   runCount: number;
@@ -57,7 +58,7 @@ export interface IssueDetail extends IssueSummary {
 
 // Live states: issues with an active worker running (in progress or under revision).
 // continuation_queued is intentionally excluded: it is a queued tier, not an active worker state.
-export const LIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress']);
+export const LIVE_STATES: ReadonlySet<IssueState> = WORKING_STATES;
 
 // The three queued tiers dispatched in Dispatch Order: revision > continuation > fresh.
 export const QUEUED_TIER_STATES: ReadonlySet<IssueState> = new Set<IssueState>([

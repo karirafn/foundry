@@ -43,9 +43,10 @@
   --fd-spacing-xl: 1.5rem;
   --fd-spacing-2xl: 2rem;
 
-  /* State live indicator */
-  --fd-state-live: #3fb950;
   --fd-text-on-state: #ffffff;
+  --fd-accent-working: #a371f7;
+  --fd-accent-ready:   #3fb950;
+  --fd-text-activity:  #b392f0;
 
   /* Warning backgrounds and text */
   --fd-bg-warning-subtle: rgba(210, 153, 34, 0.10);

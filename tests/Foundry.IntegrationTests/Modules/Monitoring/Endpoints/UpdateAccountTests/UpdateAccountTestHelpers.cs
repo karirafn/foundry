@@ -23,11 +23,10 @@ internal sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Que
         CancellationToken cancellationToken)
     {
         ValidateToken.Response response = new(
-            IsValid: true,
-            IsAuthFailure: false,
-            ScopesVerified: true,
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: "test-user",
             MissingScopes: [],
-            AccountName: "test-user");
+            DetectedProvider: null);
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
     }
 }

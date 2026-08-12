@@ -87,7 +87,8 @@ const MAX_VISIBLE_NAMESPACES = 4;
             <div class="account-list__actions">
               <fd-row-actions
                 [editLabel]="'Edit account ' + account.name"
-                [deleteLabel]="'Delete account ' + account.name"
+                [deleteBusy]="deletingAccountId() === account.id"
+                [deleteLabel]="deletingAccountId() === account.id ? ('Deleting account ' + account.name + '…') : ('Delete account ' + account.name)"
                 (edit)="edit.emit(account)"
                 (delete)="delete.emit(account)"
               />
@@ -103,6 +104,7 @@ export class AccountListComponent {
   readonly accounts: InputSignal<AccountSummary[]> = input<AccountSummary[]>([]);
   readonly loading: InputSignal<boolean> = input<boolean>(false);
   readonly error: InputSignal<string | null> = input<string | null>(null);
+  readonly deletingAccountId: InputSignal<string | null> = input<string | null>(null);
 
   readonly add: OutputEmitterRef<void> = output<void>();
   readonly edit: OutputEmitterRef<AccountSummary> = output<AccountSummary>();

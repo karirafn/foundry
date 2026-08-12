@@ -132,7 +132,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Retries a failed issue */
+        /** Retries an issue in a retry-supporting state */
         post: operations["RetryIssue"];
         delete?: never;
         options?: never;
@@ -788,11 +788,10 @@ export interface components {
             providerType: string;
         };
         ValidateTokenResponse: {
-            isValid: boolean;
-            isAuthFailure: boolean;
-            scopesVerified: boolean;
-            missingScopes: string[];
+            kind: string;
             accountName: null | string;
+            missingScopes: string[];
+            detectedProvider: null | string;
         };
         WorkerRunCommitMarker: {
             /** Format: date-time */

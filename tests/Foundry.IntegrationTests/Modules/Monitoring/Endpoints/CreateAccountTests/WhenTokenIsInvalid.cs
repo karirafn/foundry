@@ -21,7 +21,11 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
 
     public WhenTokenIsInvalid()
     {
-        ValidateToken.Response invalidResponse = new(IsValid: false, IsAuthFailure: true, ScopesVerified: false, MissingScopes: [], AccountName: null);
+        ValidateToken.Response invalidResponse = new(
+            Kind: ValidateToken.Kinds.AuthenticationFailed,
+            AccountName: null,
+            MissingScopes: [],
+            DetectedProvider: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -62,7 +66,11 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     public async Task WhenTokenMissesScopes_ReturnsBadRequest()
     {
         // Arrange — token is valid auth but missing required scopes, so IsValid == false
-        ValidateToken.Response missingScopes = new(IsValid: false, IsAuthFailure: false, ScopesVerified: true, MissingScopes: ["repo"], AccountName: null);
+        ValidateToken.Response missingScopes = new(
+            Kind: ValidateToken.Kinds.Authenticated,
+            AccountName: "octocat",
+            MissingScopes: ["repo"],
+            DetectedProvider: null);
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();

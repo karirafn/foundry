@@ -11,6 +11,7 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -28,7 +29,7 @@ public sealed class GetDefaultBranchAsync
         string json = """{ "id": 1, "default_branch": "main" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<string> result = await sut.GetDefaultBranchAsync(
@@ -49,7 +50,7 @@ public sealed class GetDefaultBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.NotFound, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         Result<string> result = await sut.GetDefaultBranchAsync(
@@ -70,7 +71,7 @@ public sealed class GetDefaultBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -93,7 +94,7 @@ public sealed class GetDefaultBranchAsync
         string json = """{ "id": 1, "default_branch": "main" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.GetDefaultBranchAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
@@ -112,7 +113,7 @@ public sealed class GetDefaultBranchAsync
         string json = """{ "id": 1, "default_branch": "develop" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
 
         // Act
         await sut.GetDefaultBranchAsync(ValidBaseUrl, nestedSlug, "glpat_token", CancellationToken.None);
