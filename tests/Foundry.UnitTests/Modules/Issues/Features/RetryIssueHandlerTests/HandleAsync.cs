@@ -137,6 +137,28 @@ public sealed class HandleAsync : IAsyncDisposable
         return revisionFailed;
     }
 
+    private async Task<UnchangedIssue> SeedUnchangedIssueAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken = default)
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
+            repositoryId,
+            issueNumber: 5,
+            title: "Issue 5",
+            body: "Body",
+            author: ValidAuthor,
+            url: ValidUrl,
+            labels: [],
+            detectedAt: DateTimeOffset.UtcNow);
+        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
+        _dbContext.Set<Issue>().Add(unchanged);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        return unchanged;
+    }
+
     private async Task<QueuedIssue> SeedQueuedIssueAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken = default)
@@ -277,6 +299,47 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         _dispatcher.DispatchedEvents
             .OfType<IssueRevisionQueued>()
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenUnchangedIssue_TransitionsToQueuedIssue()
+    {
+        // Arrange
+        UnchangedIssue unchanged = await SeedUnchangedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
+        RetryIssue.Command command = new(unchanged.Id);
+
+        // Act
+        Result<IssueDetail> result = await _sut.HandleAsync(command, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueDetail>.Success>();
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.Id == unchanged.Id,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<QueuedIssue>();
+        result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.Id.ShouldBe(unchanged.Id.Value);
+    }
+
+    [Fact]
+    public async Task WhenUnchangedIssue_DispatchesIssueQueuedEvent()
+    {
+        // Arrange
+        UnchangedIssue unchanged = await SeedUnchangedIssueAsync(
+            MonitoredRepositoryId.New(),
+            TestContext.Current.CancellationToken);
+        RetryIssue.Command command = new(unchanged.Id);
+
+        // Act
+        await _sut.HandleAsync(command, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueQueued>()
             .ShouldHaveSingleItem();
     }
 

@@ -39,12 +39,13 @@ internal static class RetryIssue
                 FailedIssue failed => failed.Retry(),
                 ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
                 RevisionFailedIssue revisionFailed => revisionFailed.Retry(),
+                UnchangedIssue unchanged => unchanged.Retry(),
                 _ => null,
             };
 
             if (next is null)
             {
-                return Result<IssueDetail>.Fail(IssueErrors.WrongState(command.IssueId, "failed, continuable_failed, or revision_failed"));
+                return Result<IssueDetail>.Fail(IssueErrors.WrongState(command.IssueId, "failed, continuable_failed, revision_failed, or unchanged"));
             }
 
             await db.TransitionAsync(issue, next, domainEventDispatcher, cancellationToken);
@@ -85,7 +86,7 @@ internal static class RetryIssue
                         });
                 })
                 .WithName("RetryIssue")
-                .WithSummary("Retries a failed issue")
+                .WithSummary("Retries an issue in a retry-supporting state")
                 .Produces<IssueDetail>(StatusCodes.Status200OK)
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)

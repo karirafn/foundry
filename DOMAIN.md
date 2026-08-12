@@ -259,7 +259,7 @@ A lifecycle state for an issue whose worker completed successfully and produced 
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable.
 Awaits human review of the PR. The monitoring service polls the provider for PR/issue status and review feedback.
 `FeedbackCutoffAt` filters stale feedback — only review comments submitted after this timestamp are considered actionable. Set to the worker run's completion time on first entry; updated on re-entry after a revision cycle.
-Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists); `Retry()` → `ContinuationQueuedIssue` (manual restart with branch context).
+Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists).
 
 ## Unchanged Issue
 
@@ -334,9 +334,9 @@ Transitions: `Retry()` → `RevisionQueuedIssue` (re-enters revision path with e
 
 ## Operator-Triggered Retry
 
-A manual action available on any failed issue via `POST /api/issues/{id}/retry`.
-Dispatches polymorphically on the loaded issue state: `FailedIssue.Retry()` → `QueuedIssue` (fresh run); `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `RevisionFailedIssue.Retry()` → `RevisionQueuedIssue` (re-enters revision path).
-Any non-retryable state returns a validation/conflict error with no state change.
+A manual action available on any retry-supporting issue via `POST /api/issues/{id}/retry`.
+Dispatches polymorphically on the loaded issue state: `FailedIssue.Retry()` → `QueuedIssue` (fresh run); `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `RevisionFailedIssue.Retry()` → `RevisionQueuedIssue` (re-enters revision path); `UnchangedIssue.Retry()` → `QueuedIssue` (fresh run, operator disagrees with worker assessment).
+Any non-retryable state returns a conflict error with no state change.
 
 ## Transient Retry
 

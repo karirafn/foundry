@@ -18,8 +18,8 @@ const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_RESOLVED_ERROR = 'Failed to load resolved issues';
 const LOAD_MORE_RESOLVED_ERROR = 'Failed to load more resolved issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
-const RETRY_FAILED_ERROR = 'Failed to retry issue.';
-const RETRY_FAILED_SUCCESS = 'Retry queued. Issue status is updating.';
+const RETRY_ERROR = 'Failed to retry issue.';
+const RETRY_SUCCESS = 'Retry queued. Issue status is updating.';
 const SAFE_ID_RE = /^[\w-]+$/;
 const COUNTS_DEBOUNCE_MS = 300;
 
@@ -34,7 +34,7 @@ export class IssueService {
   readonly issueDetail: WritableSignal<IssueDetail | null> = signal(null);
   readonly detailLoading: WritableSignal<boolean> = signal(false);
   readonly initialLoading: WritableSignal<boolean> = signal(true);
-  readonly retryingFailed: WritableSignal<boolean> = signal(false);
+  readonly retrying: WritableSignal<boolean> = signal(false);
 
   private readonly _loadErrorSignal: WritableSignal<string | null> = signal(null);
   readonly loadError: Signal<string | null> = this._loadErrorSignal.asReadonly();
@@ -42,11 +42,11 @@ export class IssueService {
   private readonly _detailErrorSignal: WritableSignal<string | null> = signal(null);
   readonly detailError: Signal<string | null> = this._detailErrorSignal.asReadonly();
 
-  private readonly _retryFailedErrorSignal: WritableSignal<string | null> = signal(null);
-  readonly retryFailedError: Signal<string | null> = this._retryFailedErrorSignal.asReadonly();
+  private readonly _retryErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly retryError: Signal<string | null> = this._retryErrorSignal.asReadonly();
 
-  private readonly _retryFailedSuccessSignal: WritableSignal<string | null> = signal(null);
-  readonly retryFailedSuccess: Signal<string | null> = this._retryFailedSuccessSignal.asReadonly();
+  private readonly _retrySuccessSignal: WritableSignal<string | null> = signal(null);
+  readonly retrySuccess: Signal<string | null> = this._retrySuccessSignal.asReadonly();
 
   private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
   readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
@@ -278,9 +278,9 @@ export class IssueService {
   }
 
   toggleExpand(id: string): void {
-    this._retryFailedErrorSignal.set(null);
-    this._retryFailedSuccessSignal.set(null);
-    this.retryingFailed.set(false);
+    this._retryErrorSignal.set(null);
+    this._retrySuccessSignal.set(null);
+    this.retrying.set(false);
 
     if (this.expandedIssueId() === id) {
       this.expandedIssueId.set(null);
@@ -294,20 +294,20 @@ export class IssueService {
     this.loadDetail(id);
   }
 
-  retryFailed(id: string): void {
-    this._retryFailedErrorSignal.set(null);
-    this._retryFailedSuccessSignal.set(null);
-    this.retryingFailed.set(true);
+  retryIssue(id: string): void {
+    this._retryErrorSignal.set(null);
+    this._retrySuccessSignal.set(null);
+    this.retrying.set(true);
     this._http.post<IssueDetail>(`/api/issues/${encodeURIComponent(id)}/retry`, {}).subscribe({
       next: () => {
-        this.retryingFailed.set(false);
-        this._retryFailedSuccessSignal.set(RETRY_FAILED_SUCCESS);
+        this.retrying.set(false);
+        this._retrySuccessSignal.set(RETRY_SUCCESS);
         this.loadDetail(id);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this.retryingFailed.set(false);
-        this._retryFailedErrorSignal.set(RETRY_FAILED_ERROR);
+        this.retrying.set(false);
+        this._retryErrorSignal.set(RETRY_ERROR);
       },
     });
   }

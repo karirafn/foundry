@@ -330,7 +330,7 @@
         "tags": [
           "Issues"
         ],
-        "summary": "Retries a failed issue",
+        "summary": "Retries an issue in a retry-supporting state",
         "operationId": "RetryIssue",
         "parameters": [
           {
