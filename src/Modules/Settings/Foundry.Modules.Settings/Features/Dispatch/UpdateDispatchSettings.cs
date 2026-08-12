@@ -52,11 +52,7 @@ internal static class UpdateDispatchSettings
 
                     return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound>>(
                         summary => TypedResults.Ok(summary),
-                        error => error.Code switch
-                        {
-                            SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.NotFound(),
-                        });
+                        _ => TypedResults.NotFound());
                 })
                 .WithName("UpdateDispatchSettings")
                 .WithSummary("Updates the dispatch auto-resume setting")

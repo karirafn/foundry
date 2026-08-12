@@ -118,7 +118,7 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         await SeedFailedIssueAsync(repositoryId, WorkerRunFailed.CreditsExhaustedReason);
 
-        CreditsRestored @event = new(null, null, null);
+        CreditsRestored @event = new();
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -139,7 +139,7 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         await SeedContinuableFailedIssueAsync(repositoryId, WorkerRunFailed.CreditsExhaustedReason);
 
-        CreditsRestored @event = new(null, null, null);
+        CreditsRestored @event = new();
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -160,7 +160,7 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         await SeedFailedIssueAsync(repositoryId, WorkerRunFailed.UsageLimitedReason);
 
-        CreditsRestored @event = new(null, null, null);
+        CreditsRestored @event = new();
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -181,7 +181,7 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         await SeedContinuableFailedIssueAsync(repositoryId, WorkerRunFailed.UsageLimitedReason);
 
-        CreditsRestored @event = new(null, null, null);
+        CreditsRestored @event = new();
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -199,7 +199,7 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenNoFailedIssues_HandlesGracefully()
     {
         // Arrange
-        CreditsRestored @event = new(null, null, null);
+        CreditsRestored @event = new();
 
         // Act
         Task act = _sut.HandleAsync(@event, CancellationToken.None);

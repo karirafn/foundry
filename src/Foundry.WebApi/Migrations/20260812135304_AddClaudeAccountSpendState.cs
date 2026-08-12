@@ -15,7 +15,7 @@ namespace Foundry.WebApi.Migrations
                 table: "claude_account",
                 type: "TEXT",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "{\"type\":\"available\"}");
 
             // Backfill existing rows to the serialized Available value.
             // The literal matches exactly what SpendStateJsonConverter produces for SpendState.Available.

@@ -138,6 +138,32 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAccountAlreadyBlocked_DoesNotSave()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.BlockSpend();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext actDb = CreateDbContext();
+        WorkerCreditsExhaustedHandler sut = new(
+            actDb,
+            NullLogger<WorkerCreditsExhaustedHandler>.Instance);
+
+        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert — BlockSpend() is a no-op when already blocked, so no changes should be pending
+        actDb.ChangeTracker.HasChanges().ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task WhenAccountIsAvailable_DoesNotChangeValidity()
     {
         // Arrange

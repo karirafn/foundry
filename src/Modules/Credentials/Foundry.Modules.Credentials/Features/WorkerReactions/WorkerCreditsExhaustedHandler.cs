@@ -25,8 +25,11 @@ internal sealed class WorkerCreditsExhaustedHandler(
             return;
         }
 
-        account.BlockSpend();
+        bool stateChanged = account.BlockSpend();
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (stateChanged)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 }

@@ -30,7 +30,7 @@ internal sealed class DispatchResumedSpendHandler(
         if (stateChanged)
         {
             await integrationEventDispatcher.DispatchAsync(
-                [new CreditsRestored(account.OAuthAccountEmail, account.OAuthAccountOrgName, null)],
+                [new CreditsRestored()],
                 cancellationToken);
         }
 

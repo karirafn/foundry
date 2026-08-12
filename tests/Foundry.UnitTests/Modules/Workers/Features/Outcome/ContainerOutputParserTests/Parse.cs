@@ -891,7 +891,8 @@ public sealed class Parse
         // Act — must not throw ArgumentException from ConvertTimeToUtc
         ContainerOutputParseResult result = Should.NotThrow(() => _sut.Parse(log));
 
-        // Assert — classified as UsageLimited (either resolved past the gap or default-cooldown fallback)
+        // Assert — classified as UsageLimited because the spring-forward gap time resolves forward to a
+        // valid future wall-clock time, so a reset time still parses successfully.
         result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
     }
 
