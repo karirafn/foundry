@@ -8,7 +8,6 @@ public sealed record GlobalSettingsSummary(
     DateTimeOffset? UsageLimitResetsAt,
     bool IsDispatchPaused,
     bool AutoResumeOnUsageReset,
-    int DefaultCooldownMinutes,
     bool InstallDotnet,
     bool InstallAngular,
     bool InstallGlab,

@@ -4,7 +4,7 @@ namespace Foundry.Modules.Workers.Features.Outcome;
 
 internal interface IContainerOutputParser
 {
-    ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes);
+    ContainerOutputParseResult Parse(string? log);
 
     RunResultSummary? ParseRunResultSummary(string? log);
 }

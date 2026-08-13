@@ -93,13 +93,5 @@ public sealed class Create
         settings.AutoResumeOnUsageReset.ShouldBeTrue();
     }
 
-    [Fact]
-    public void WhenCreated_DefaultCooldownMinutesIs60()
-    {
-        // Arrange & Act
-        GlobalSettings settings = GlobalSettings.Create();
 
-        // Assert
-        settings.DefaultCooldownMinutes.ShouldBe(60);
-    }
 }

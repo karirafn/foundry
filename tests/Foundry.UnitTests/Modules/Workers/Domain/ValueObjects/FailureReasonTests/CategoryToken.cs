@@ -99,4 +99,17 @@ public sealed class CategoryToken
         // Assert
         token.ShouldBe("transient_api_error");
     }
+
+    [Fact]
+    public void WhenCreditsExhausted_CategoryTokenIsCreditsExhausted()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.CreditsExhausted();
+
+        // Act
+        string token = reason.CategoryToken;
+
+        // Assert
+        token.ShouldBe("credits_exhausted");
+    }
 }

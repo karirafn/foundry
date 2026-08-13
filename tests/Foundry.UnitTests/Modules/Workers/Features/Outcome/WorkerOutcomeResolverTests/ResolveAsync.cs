@@ -17,7 +17,6 @@ public sealed class ResolveAsync
 {
     private const string DefaultBranchName = "feat/1-my-feature";
     private const string PrUrl = "https://github.com/owner/repo/pull/42";
-    private const int DefaultCooldownMinutes = 60;
 
     private static ActiveRun CreateActiveRun(string branchName = DefaultBranchName)
     {
@@ -60,7 +59,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -86,7 +84,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -109,7 +106,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -133,7 +129,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -157,7 +152,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -180,7 +174,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -204,7 +197,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -227,7 +219,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -259,7 +250,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -283,7 +273,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -314,7 +303,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -344,7 +332,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -379,7 +366,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -402,7 +388,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -427,7 +412,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: "some output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -453,7 +437,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: "usage limit output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -477,7 +460,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -501,7 +483,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -524,7 +505,6 @@ public sealed class ResolveAsync
             run,
             exitCode: null,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -548,7 +528,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -572,7 +551,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -596,7 +574,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -622,7 +599,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: "output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -647,7 +623,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -675,7 +650,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: "transient output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -700,7 +674,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 1,
             containerOutput: "transient output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -725,7 +698,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: "transient output",
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -749,7 +721,6 @@ public sealed class ResolveAsync
             run,
             exitCode: 0,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -772,13 +743,64 @@ public sealed class ResolveAsync
             run,
             exitCode: 2,
             containerOutput: null,
-            DefaultCooldownMinutes,
             TestContext.Current.CancellationToken);
 
         // Assert
         WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
         FailureReason.NonZeroExit nonZeroExit = failure.FailureReason.ShouldBeOfType<FailureReason.NonZeroExit>();
         nonZeroExit.ExitCode.ShouldBe(2);
+    }
+
+    // -------------------------------------------------------------------------
+    // CreditsExhausted parse result wiring
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndCreditsExhausted_ReturnsFailureWithCreditsExhausted()
+    {
+        // Arrange — exit 0 + no commits + CreditsExhausted parse result → Failure(CreditsExhausted)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        IContainerOutputParser parser = new CreditsExhaustedParser();
+        WorkerOutcomeResolver sut = BuildResolver(queries, parser);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 0,
+            containerOutput: "credits output",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.CreditsExhausted>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndNonZeroExitWithNoCommitsAndCreditsExhausted_ReturnsFailureWithCreditsExhausted()
+    {
+        // Arrange — non-zero exit + CreditsExhausted parse result + no commits → Failure(CreditsExhausted)
+        ActiveRun run = CreateActiveRun();
+        MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(noneMr));
+        IContainerOutputParser parser = new CreditsExhaustedParser();
+        WorkerOutcomeResolver sut = BuildResolver(queries, parser);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            exitCode: 1,
+            containerOutput: "credits output",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.CreditsExhausted>();
     }
 
     // -------------------------------------------------------------------------
@@ -849,7 +871,7 @@ public sealed class ResolveAsync
 
     private sealed class NullContainerOutputParser : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
@@ -857,7 +879,7 @@ public sealed class ResolveAsync
 
     private sealed class UsageLimitedParser(DateTimeOffset resetsAt) : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.UsageLimited(resetsAt);
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
@@ -865,7 +887,7 @@ public sealed class ResolveAsync
 
     private sealed class NoResultLineParser : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.NoResultLine();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
@@ -873,8 +895,16 @@ public sealed class ResolveAsync
 
     private sealed class TransientApiErrorParser : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.TransientApiError();
+
+        public RunResultSummary? ParseRunResultSummary(string? log) => null;
+    }
+
+    private sealed class CreditsExhaustedParser : IContainerOutputParser
+    {
+        public ContainerOutputParseResult Parse(string? log)
+            => new ContainerOutputParseResult.CreditsExhausted();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
     }

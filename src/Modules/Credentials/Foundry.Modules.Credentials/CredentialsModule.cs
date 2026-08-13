@@ -2,6 +2,7 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Credentials.Features;
 using Foundry.Modules.Credentials.Features.Broadcasts;
+using Foundry.Modules.Credentials.Features.DispatchReactions;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Features.WorkerReactions;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
@@ -22,7 +23,9 @@ public static class CredentialsModule
         services.AddCommandHandler<UpdateAuthMode.Command, ClaudeAccountSummary, UpdateAuthMode.Handler, UpdateAuthMode.Validator>();
         services.AddHostedService<ClaudeAccountSeeder>();
 
+        services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedSpendHandler>();
         services.AddIntegrationEventHandler<WorkerAuthenticationFailed, WorkerAuthenticationFailedHandler>();
+        services.AddIntegrationEventHandler<WorkerCreditsExhausted, WorkerCreditsExhaustedHandler>();
         services.AddIntegrationEventHandler<CredentialsInvalidated, CredentialsInvalidatedBroadcastHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedBroadcastHandler>();
 

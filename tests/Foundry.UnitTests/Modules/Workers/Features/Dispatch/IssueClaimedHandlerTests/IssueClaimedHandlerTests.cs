@@ -1125,9 +1125,6 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true));
 
-        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(60);
-
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);
 

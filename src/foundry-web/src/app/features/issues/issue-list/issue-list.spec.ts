@@ -44,7 +44,6 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
-  defaultCooldownMinutes: 60,
   installDotnet: false,
   installAngular: false,
   installGlab: false,

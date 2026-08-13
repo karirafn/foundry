@@ -64,6 +64,23 @@ describe('failure-category', () => {
     expect(display?.cssClass).toBe('badge--failure-provider-error');
   });
 
+  it('should return display for credits_exhausted', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('credits_exhausted');
+
+    // Assert
+    expect(display).not.toBeNull();
+    expect(display?.label).toBe('CREDITS EXHAUSTED');
+  });
+
+  it('should return badge--failure-credits-exhausted cssClass for credits_exhausted', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('credits_exhausted');
+
+    // Assert
+    expect(display?.cssClass).toBe('badge--failure-credits-exhausted');
+  });
+
   // Cycle 2: unknown category returns null
   it('should return null for an unknown category token', () => {
     // Arrange / Act

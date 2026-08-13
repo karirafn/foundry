@@ -30,7 +30,6 @@ const BASE_RESPONSE = {
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
-  defaultCooldownMinutes: 60,
   ...IMAGE_FLAGS_DEFAULTS,
   systemPromptTemplate: null,
   workerPromptTemplate: null,
@@ -1130,27 +1129,12 @@ describe('SettingsGeneralComponent', () => {
     expect(ngModel.model).toBe(false);
   });
 
-  it('should initialize cooldown number input from settings defaultCooldownMinutes value', () => {
+  it('should call updateDispatchSettings with autoResumeOnUsageReset when Save is clicked', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, { ...API_KEY_RESPONSE, defaultCooldownMinutes: 120 });
-    fixture.detectChanges();
-
-    // Act
-    const ngModel = fixture.debugElement.query(By.css('#defaultCooldown')).injector.get(NgModel);
-
-    // Assert
-    expect(ngModel.model).toBe(120);
-  });
-
-  it('should call updateDispatchSettings with current values when Save is clicked', () => {
-    // Arrange
-    const { httpMock } = setup();
-    const fixture = TestBed.createComponent(SettingsGeneralComponent);
-    fixture.detectChanges();
-    flushSettings(httpMock, { ...API_KEY_RESPONSE, autoResumeOnUsageReset: true, defaultCooldownMinutes: 90 });
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, autoResumeOnUsageReset: true });
     fixture.detectChanges();
 
     // Act
@@ -1162,28 +1146,8 @@ describe('SettingsGeneralComponent', () => {
     // Assert
     const req = httpMock.expectOne('/api/settings/dispatch');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true, defaultCooldownMinutes: 90 });
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true });
     req.flush(API_KEY_RESPONSE);
-  });
-
-  it('should disable Save button when cooldown is out of range', () => {
-    // Arrange
-    const { httpMock } = setup();
-    const fixture = TestBed.createComponent(SettingsGeneralComponent);
-    fixture.detectChanges();
-    flushSettings(httpMock);
-    fixture.detectChanges();
-
-    // Act
-    const component = fixture.componentInstance as unknown as { _cooldownValue: { set: (v: number) => void } };
-    component._cooldownValue.set(0);
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const dispatchForm = el.querySelector('.general-settings__dispatch-form') as HTMLElement;
-    const saveBtn = dispatchForm.querySelector('.general-settings__save-btn') as HTMLButtonElement;
-    expect(saveBtn.disabled).toBe(true);
   });
 
   it('should disable Save button while dispatch settings are saving', () => {
@@ -1196,7 +1160,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true);
     fixture.detectChanges();
 
     // Assert
@@ -1219,7 +1183,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true);
     httpMock.expectOne('/api/settings/dispatch').flush(API_KEY_RESPONSE);
     fixture.detectChanges();
 
@@ -1228,38 +1192,6 @@ describe('SettingsGeneralComponent', () => {
     const successEls = Array.from(el.querySelectorAll('[role="status"]'));
     const dispatchSuccess = successEls.find(e => e.textContent?.includes('Dispatch settings saved successfully'));
     expect(dispatchSuccess).toBeTruthy();
-  });
-
-  it('should disable the cooldown input when auto-resume is off', () => {
-    // Arrange
-    const { httpMock } = setup();
-    const fixture = TestBed.createComponent(SettingsGeneralComponent);
-    fixture.detectChanges();
-    flushSettings(httpMock, { ...API_KEY_RESPONSE, autoResumeOnUsageReset: false });
-    fixture.detectChanges();
-
-    // Act
-    const el = fixture.nativeElement as HTMLElement;
-    const cooldownInput = el.querySelector('#defaultCooldown') as HTMLInputElement;
-
-    // Assert
-    expect(cooldownInput.disabled).toBe(true);
-  });
-
-  it('should enable the cooldown input when auto-resume is on', () => {
-    // Arrange
-    const { httpMock } = setup();
-    const fixture = TestBed.createComponent(SettingsGeneralComponent);
-    fixture.detectChanges();
-    flushSettings(httpMock, { ...API_KEY_RESPONSE, autoResumeOnUsageReset: true });
-    fixture.detectChanges();
-
-    // Act
-    const el = fixture.nativeElement as HTMLElement;
-    const cooldownInput = el.querySelector('#defaultCooldown') as HTMLInputElement;
-
-    // Assert
-    expect(cooldownInput.disabled).toBe(false);
   });
 
   it('should show error message when dispatch save fails', () => {
@@ -1272,7 +1204,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',

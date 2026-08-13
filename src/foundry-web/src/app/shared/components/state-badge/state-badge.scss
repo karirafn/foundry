@@ -95,6 +95,12 @@
     color: var(--fd-text-error);
   }
 
+  &--failure-credits-exhausted {
+    background: transparent;
+    border: 1px solid var(--fd-text-warning);
+    color: var(--fd-text-warning);
+  }
+
   &--retrying {
     background: transparent;
     border: 1px solid var(--fd-text-warning);

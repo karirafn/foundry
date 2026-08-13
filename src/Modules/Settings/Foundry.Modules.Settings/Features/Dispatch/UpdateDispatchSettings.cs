@@ -12,22 +12,7 @@ namespace Foundry.Modules.Settings.Features.Dispatch;
 
 internal static class UpdateDispatchSettings
 {
-    internal sealed record Command(bool AutoResumeOnUsageReset, int DefaultCooldownMinutes)
-        : ICommand<GlobalSettingsSummary>;
-
-    internal sealed class Validator : ICommandValidator<Command>
-    {
-        public Result Validate(Command command)
-        {
-            if (command.DefaultCooldownMinutes < GlobalSettings.MinDefaultCooldownMinutes
-                || command.DefaultCooldownMinutes > GlobalSettings.MaxDefaultCooldownMinutes)
-            {
-                return SettingsErrors.InvalidDefaultCooldown(command.DefaultCooldownMinutes);
-            }
-
-            return Result.Ok();
-        }
-    }
+    internal sealed record Command(bool AutoResumeOnUsageReset) : ICommand<GlobalSettingsSummary>;
 
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, GlobalSettingsSummary>
     {
@@ -43,14 +28,7 @@ internal static class UpdateDispatchSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            Result updateResult = settings.UpdateDispatchSettings(
-                command.AutoResumeOnUsageReset,
-                command.DefaultCooldownMinutes);
-
-            if (updateResult is Result.Failure failure)
-            {
-                return Result<GlobalSettingsSummary>.Fail(failure.Error);
-            }
+            settings.UpdateDispatchSettings(command.AutoResumeOnUsageReset);
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -60,7 +38,7 @@ internal static class UpdateDispatchSettings
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(bool AutoResumeOnUsageReset, int DefaultCooldownMinutes);
+        private sealed record RequestBody(bool AutoResumeOnUsageReset);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -69,22 +47,17 @@ internal static class UpdateDispatchSettings
                     ICommandHandler<Command, GlobalSettingsSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(body.AutoResumeOnUsageReset, body.DefaultCooldownMinutes);
+                    Command command = new(body.AutoResumeOnUsageReset);
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, ProblemHttpResult>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound>>(
                         summary => TypedResults.Ok(summary),
-                        error => error.Code switch
-                        {
-                            SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.Problem(error.Message, statusCode: StatusCodes.Status400BadRequest),
-                        });
+                        _ => TypedResults.NotFound());
                 })
                 .WithName("UpdateDispatchSettings")
-                .WithSummary("Updates the dispatch pause and cooldown settings")
+                .WithSummary("Updates the dispatch auto-resume setting")
                 .Produces<GlobalSettingsSummary>()
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status400BadRequest);
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
     }
 }

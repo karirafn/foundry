@@ -102,4 +102,32 @@ public sealed class Summary
         // Assert
         summary.ShouldBe("Transient Anthropic API fault");
     }
+
+    [Fact]
+    public void WhenCreditsExhausted_SummaryIsCreditsExhausted()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.CreditsExhausted();
+
+        // Act
+        string summary = reason.Summary;
+
+        // Assert
+        summary.ShouldBe("Credits exhausted");
+    }
+
+    [Fact]
+    public void WhenCreditsExhausted_SummaryDoesNotStartWithUsageLimitReached()
+    {
+        // Arrange
+        // Guard: DispatchResumedHandler re-queues via EF.Functions.Like(FailureReason, "Usage limit reached%").
+        // A shared prefix would make usage-limit resume wrongly sweep credit-blocked issues.
+        FailureReason reason = new FailureReason.CreditsExhausted();
+
+        // Act
+        string summary = reason.Summary;
+
+        // Assert
+        summary.ShouldNotStartWith("Usage limit reached");
+    }
 }

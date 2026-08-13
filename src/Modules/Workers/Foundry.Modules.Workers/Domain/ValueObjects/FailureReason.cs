@@ -12,6 +12,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(AuthInvalid), typeDiscriminator: FailureReason.AuthInvalidToken)]
 [JsonDerivedType(typeof(ProviderError), typeDiscriminator: FailureReason.ProviderErrorToken)]
 [JsonDerivedType(typeof(TransientApiError), typeDiscriminator: FailureReason.TransientApiErrorToken)]
+[JsonDerivedType(typeof(CreditsExhausted), typeDiscriminator: FailureReason.CreditsExhaustedToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = "non_zero_exit";
@@ -22,6 +23,7 @@ public abstract record FailureReason
     public const string AuthInvalidToken = "auth_invalid";
     public const string ProviderErrorToken = "provider_error";
     public const string TransientApiErrorToken = "transient_api_error";
+    public const string CreditsExhaustedToken = "credits_exhausted";
 
     private FailureReason()
     {
@@ -37,6 +39,7 @@ public abstract record FailureReason
         AuthInvalid => AuthInvalidToken,
         ProviderError => ProviderErrorToken,
         TransientApiError => TransientApiErrorToken,
+        CreditsExhausted => CreditsExhaustedToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -50,6 +53,7 @@ public abstract record FailureReason
         AuthInvalid => "Worker authentication failed",
         ProviderError providerError => providerError.Message,
         TransientApiError => "Transient Anthropic API fault",
+        CreditsExhausted => "Credits exhausted",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -68,4 +72,6 @@ public abstract record FailureReason
     public sealed record ProviderError(string Message) : FailureReason;
 
     public sealed record TransientApiError : FailureReason;
+
+    public sealed record CreditsExhausted : FailureReason;
 }

@@ -19,8 +19,6 @@ internal static class SettingsErrors
     internal static readonly Error InvalidPromptTemplateTooLong =
         new(InvalidPromptTemplateTooLongCode, $"Prompt templates must not exceed {GlobalSettings.MaxPromptTemplateLength} characters.");
 
-    internal const string InvalidDefaultCooldownCode = "Settings.InvalidDefaultCooldown";
-
     internal static Error InvalidMaxConcurrent(int value) =>
         new(InvalidMaxConcurrentCode, $"Max concurrent workers must be between 1 and 20, but was {value}.");
 
@@ -31,7 +29,4 @@ internal static class SettingsErrors
 
     internal static readonly Error InvalidRetryStatus =
         new(InvalidRetryStatusCode, "Retry is only valid when the last build failed.");
-
-    internal static Error InvalidDefaultCooldown(int value) =>
-        new(InvalidDefaultCooldownCode, $"Default cooldown must be between 1 and 1440 minutes, but was {value}.");
 }

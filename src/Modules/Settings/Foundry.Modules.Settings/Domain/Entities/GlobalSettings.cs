@@ -13,9 +13,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int DefaultMaxConcurrent = 1;
     internal const int DefaultTimeoutMinutes = 120;
     internal const int MaxPromptTemplateLength = 32768;
-    internal const int MinDefaultCooldownMinutes = 1;
-    internal const int MaxDefaultCooldownMinutes = 1440;
-    internal const int DefaultCooldownMinutesValue = 60;
     internal const int MaxUsageLimitResetDays = 7;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
@@ -27,7 +24,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         MaxConcurrent = DefaultMaxConcurrent;
         TimeoutMinutes = DefaultTimeoutMinutes;
         AutoResumeOnUsageReset = true;
-        DefaultCooldownMinutes = DefaultCooldownMinutesValue;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
         ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
@@ -47,8 +43,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public bool IsDispatchPaused { get; private set; }
 
     public bool AutoResumeOnUsageReset { get; private set; }
-
-    public int DefaultCooldownMinutes { get; private set; }
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
 
@@ -113,17 +107,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    public Result UpdateDispatchSettings(bool autoResume, int defaultCooldownMinutes)
+    public void UpdateDispatchSettings(bool autoResume)
     {
-        if (defaultCooldownMinutes < MinDefaultCooldownMinutes || defaultCooldownMinutes > MaxDefaultCooldownMinutes)
-        {
-            return SettingsErrors.InvalidDefaultCooldown(defaultCooldownMinutes);
-        }
-
         AutoResumeOnUsageReset = autoResume;
-        DefaultCooldownMinutes = defaultCooldownMinutes;
         UpdatedAt = DateTimeOffset.UtcNow;
-        return Result.Ok();
     }
 
     public Result UpdatePromptTemplates(string? systemPromptTemplate, string? workerPromptTemplate)

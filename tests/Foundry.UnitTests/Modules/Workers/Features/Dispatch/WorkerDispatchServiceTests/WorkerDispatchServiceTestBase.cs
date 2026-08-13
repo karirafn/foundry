@@ -231,7 +231,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
     internal sealed class NullContainerOutputParser : IContainerOutputParser
     {
-        public ContainerOutputParseResult Parse(string? log, int defaultCooldownMinutes)
+        public ContainerOutputParseResult Parse(string? log)
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
@@ -255,9 +255,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true));
-
-        public Task<int> GetDefaultCooldownMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(60);
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

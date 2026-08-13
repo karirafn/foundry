@@ -424,7 +424,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the dispatch pause and cooldown settings */
+        /** Updates the dispatch auto-resume setting */
         put: operations["UpdateDispatchSettings"];
         post?: never;
         delete?: never;
@@ -574,8 +574,6 @@ export interface components {
             usageLimitResetsAt: null | string;
             isDispatchPaused: boolean;
             autoResumeOnUsageReset: boolean;
-            /** Format: int32 */
-            defaultCooldownMinutes: number | string;
             installDotnet: boolean;
             installAngular: boolean;
             installGlab: boolean;
@@ -756,8 +754,6 @@ export interface components {
         };
         UpdateDispatchSettingsRequestBody: {
             autoResumeOnUsageReset: boolean;
-            /** Format: int32 */
-            defaultCooldownMinutes: number | string;
         };
         UpdatePromptTemplatesRequestBody: {
             systemPromptTemplate: null | string;
@@ -1908,15 +1904,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GlobalSettingsSummary"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Not Found */

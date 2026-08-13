@@ -69,7 +69,7 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
             TimeSpan.Zero);
         settings.SetUsageLimitResetsAt(resetsAt);
         settings.PauseDispatch();
-        settings.UpdateDispatchSettings(autoResume: false, defaultCooldownMinutes: 90);
+        settings.UpdateDispatchSettings(autoResume: false);
 
         _dbContext.Set<GlobalSettings>().Add(settings);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -85,7 +85,6 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.UsageLimitResetsAt.ShouldBe(resetsAt),
             () => reloaded.IsDispatchPaused.ShouldBeTrue(),
-            () => reloaded.AutoResumeOnUsageReset.ShouldBeFalse(),
-            () => reloaded.DefaultCooldownMinutes.ShouldBe(90));
+            () => reloaded.AutoResumeOnUsageReset.ShouldBeFalse());
     }
 }

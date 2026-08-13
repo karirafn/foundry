@@ -103,6 +103,51 @@ public sealed class CanDispatchAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenInvalidAndSpendBlocked_ReturnsFalse()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.Invalidate("worker_auth_failed");
+            account.BlockSpend();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialGate sut = new(dbContext, new FakeLoginSessionState(isActive: false));
+
+        // Act
+        bool result = await sut.CanDispatchAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenSpendBlocked_ReturnsFalse()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.BlockSpend();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialGate sut = new(dbContext, new FakeLoginSessionState(isActive: false));
+
+        // Act
+        bool result = await sut.CanDispatchAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task WhenNoAccountExists_ReturnsFalse()
     {
         // Arrange

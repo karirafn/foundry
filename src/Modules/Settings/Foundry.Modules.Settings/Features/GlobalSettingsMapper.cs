@@ -25,7 +25,6 @@ internal static class GlobalSettingsMapper
             settings.UsageLimitResetsAt,
             settings.IsDispatchPaused,
             settings.AutoResumeOnUsageReset,
-            settings.DefaultCooldownMinutes,
             settings.WorkerImageConfiguration.InstallDotnet,
             settings.WorkerImageConfiguration.InstallAngular,
             settings.WorkerImageConfiguration.InstallGlab,
