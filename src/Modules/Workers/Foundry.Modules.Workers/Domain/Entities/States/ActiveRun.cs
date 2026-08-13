@@ -57,13 +57,12 @@ public sealed class ActiveRun : WorkerRun
 
     public void RecordBranchCommitCount(int count, string? sha, DateTimeOffset observedAt)
     {
-        BranchCommitCount = count;
-
         if (sha == LastObservedCommitSha)
         {
             return;
         }
 
+        BranchCommitCount = count;
         LastObservedCommitSha = sha;
         AddDomainEvent(new WorkerActivityObserved(Id, IssueId, observedAt, count));
     }

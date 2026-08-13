@@ -112,7 +112,21 @@ public sealed class OnConnectedAsync
     {
         WorkerHub hub = new(logStream, queries);
         hub.Clients = clients;
+        hub.Context = new StubHubCallerContext();
         return hub;
+    }
+
+    private sealed class StubHubCallerContext : HubCallerContext
+    {
+        public override string ConnectionId => "test-connection";
+        public override string? UserIdentifier => null;
+        public override System.Security.Claims.ClaimsPrincipal? User => null;
+        public override IDictionary<object, object?> Items { get; } = new Dictionary<object, object?>();
+        public override Microsoft.AspNetCore.Http.Features.IFeatureCollection Features { get; } =
+            new Microsoft.AspNetCore.Http.Features.FeatureCollection();
+        public override CancellationToken ConnectionAborted => CancellationToken.None;
+
+        public override void Abort() { }
     }
 
     private sealed class StubWorkerLogStream(IReadOnlyList<string> lines) : IWorkerLogStream

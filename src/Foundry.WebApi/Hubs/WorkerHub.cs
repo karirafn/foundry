@@ -13,11 +13,11 @@ public sealed class WorkerHub(IWorkerLogStream logStream, IWorkerRunQueries work
     public override async Task OnConnectedAsync()
     {
         IReadOnlyCollection<WorkerActivity> activities =
-            await workerRunQueries.GetActiveRunActivityAsync(CancellationToken.None);
+            await workerRunQueries.GetActiveRunActivityAsync(Context.ConnectionAborted);
 
         foreach (WorkerActivity activity in activities)
         {
-            await Clients.Caller.SendAsync(WorkerActivityMethod, activity, CancellationToken.None);
+            await Clients.Caller.SendAsync(WorkerActivityMethod, activity, Context.ConnectionAborted);
         }
 
         await base.OnConnectedAsync();

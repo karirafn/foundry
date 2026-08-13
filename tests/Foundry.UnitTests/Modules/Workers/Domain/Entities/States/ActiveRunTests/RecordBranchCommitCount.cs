@@ -75,7 +75,7 @@ public sealed class RecordBranchCommitCount
     }
 
     [Fact]
-    public void WhenCalledWithSameSha_UpdatesBranchCommitCount()
+    public void WhenCalledWithSameSha_LeavesCountAtFirstValue()
     {
         // Arrange
         ActiveRun active = CreateActiveRun();
@@ -84,11 +84,11 @@ public sealed class RecordBranchCommitCount
         active.RecordBranchCommitCount(3, "abc1234", first);
         active.ClearDomainEvents();
 
-        // Act
+        // Act — same SHA, count argument differs (does not occur in production, but guard must hold)
         active.RecordBranchCommitCount(4, "abc1234", second);
 
-        // Assert
-        active.BranchCommitCount.ShouldBe(4);
+        // Assert — count unchanged because the SHA dedup guard fires before mutation
+        active.BranchCommitCount.ShouldBe(3);
     }
 
     [Fact]
@@ -106,6 +106,34 @@ public sealed class RecordBranchCommitCount
 
         // Assert
         active.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WhenCalledWithNullShaTwice_RaisesNoDomainEventOnSecondCall()
+    {
+        // Arrange — first call: null SHA, raises event (null != initial null? No — initial LastObservedCommitSha is null).
+        // So the first null call is also a dedup-no-op. We need a prior non-null SHA to show
+        // the null→null dedup path: set a sha, clear events, then call with null (first transition),
+        // clear events, then call with null again (second call — same sha).
+        ActiveRun active = CreateActiveRun();
+        DateTimeOffset t1 = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
+        DateTimeOffset t2 = new(2026, 6, 29, 11, 0, 0, TimeSpan.Zero);
+        DateTimeOffset t3 = new(2026, 6, 29, 12, 0, 0, TimeSpan.Zero);
+
+        // Establish a non-null SHA first
+        active.RecordBranchCommitCount(3, "abc1234", t1);
+        active.ClearDomainEvents();
+
+        // Transition to null (branch gone / NotFound) — event should be raised
+        active.RecordBranchCommitCount(0, null, t2);
+        active.ClearDomainEvents();
+
+        // Act — second call with null SHA (same as current LastObservedCommitSha)
+        active.RecordBranchCommitCount(0, null, t3);
+
+        // Assert — no event raised; count unchanged
+        active.DomainEvents.ShouldBeEmpty();
+        active.BranchCommitCount.ShouldBe(0);
     }
 
     [Fact]

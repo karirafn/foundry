@@ -102,6 +102,25 @@ public sealed class WhenProviderReturnsCommitSummary : IAsyncDisposable
             () => activeRun.LastObservedCommitSha.ShouldBe(ExpectedSha));
     }
 
+    [Fact]
+    public async Task WhenProviderReturnsCommitSummary_BroadcastsWorkerActivityWithCommitCount()
+    {
+        // Arrange
+        await SeedActiveRunAsync();
+
+        IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
+        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance);
+
+        // Act — Tick 1: reconciliation
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Act — Tick 2: monitoring path, provider returns commit summary
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — a WorkerActivity with the expected commit count was broadcast
+        _broadcaster.Broadcasts.ShouldContain(a => a.CommitCount == ExpectedCommitCount);
+    }
+
     /// <summary>
     /// Returns the container as always-running; logs return null so log-based activity is not triggered.
     /// </summary>
