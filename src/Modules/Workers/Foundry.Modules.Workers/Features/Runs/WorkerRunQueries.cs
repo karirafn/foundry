@@ -129,9 +129,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: null,
             OutputTokens: null,
             LastActivityAt: run.LastActivityAt,
-            CommitMarkers: run.CommitMarkers
-                .Select(m => new WorkerRunCommitMarker(m.ObservedAt, m.Sha, m.Message))
-                .ToList(),
+            CommitMarkers: [],
             HasStoredLog: false);
 
     private static WorkerRunDetail MapCompleted(CompletedRun run) =>

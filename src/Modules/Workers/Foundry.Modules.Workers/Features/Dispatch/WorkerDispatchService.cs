@@ -824,17 +824,10 @@ internal sealed class WorkerDispatchService(
             activeRun.BranchName.Value,
             cancellationToken);
 
-        if (commitResult is Result<BranchCommitSummary>.Success { Value: BranchCommitSummary summary }
-            && summary.LatestSha is not null)
+        if (commitResult is Result<BranchCommitSummary>.Success { Value: BranchCommitSummary summary })
         {
-            _lastSeenCommitSha.TryGetValue(activeRun.Id, out string? lastSha);
-
-            if (summary.LatestSha != lastSha)
-            {
-                _lastSeenCommitSha[activeRun.Id] = summary.LatestSha;
-                // Message will be surfaced in step 5 (observation-loop rework); placeholder kept here.
-                activeRun.RecordCommit(CommitMarker.Create(now, summary.LatestSha, summary.LatestSha));
-            }
+            // TODO (step 5): replace with full observation-loop rework that uses CommitCount.
+            activeRun.RecordBranchCommitCount(summary.CommitCount, summary.LatestSha, now);
         }
 
         if (activeRun.DomainEvents.Count > 0)

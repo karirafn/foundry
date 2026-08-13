@@ -110,7 +110,7 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
     }
 
     [Fact]
-    public async Task WhenRunningWorkerHasNewCommit_CommitMarkerRecorded()
+    public async Task WhenRunningWorkerHasNewCommit_BranchCommitCountRecorded()
     {
         // Arrange
         SeedActiveRun("running-commit-record");
@@ -130,12 +130,12 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.CommitMarkers.ShouldHaveSingleItem();
-        activeRun.CommitMarkers[0].Sha.ShouldBe("sha-abc123");
+        activeRun.BranchCommitCount.ShouldBe(1);
+        activeRun.LastObservedCommitSha.ShouldBe("sha-abc123");
     }
 
     [Fact]
-    public async Task WhenRunningWorkerSameCommitTwice_CommitMarkerNotDuplicated()
+    public async Task WhenRunningWorkerSameCommitTwice_BranchCommitCountUpdatedNoEvent()
     {
         // Arrange — same SHA returned on both tick 2 and tick 3
         SeedActiveRun("running-commit-dedup");
@@ -149,17 +149,17 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         // Tick 1: reconciliation
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Tick 2: first time seeing commit
+        // Tick 2: first time seeing commit — count set, event raised
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Act — Tick 3: same commit SHA again
+        // Act — Tick 3: same commit SHA again — count updated, no new event
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — only one commit marker despite two ticks seeing the same SHA
+        // Assert — count remains 1 (same SHA, no rebase)
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.CommitMarkers.Count.ShouldBe(1);
+        activeRun.BranchCommitCount.ShouldBe(1);
     }
 
     [Fact]
@@ -178,12 +178,12 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         // Act — Tick 2: provider fails, but logs have new output
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — activity recorded from logs; no commit markers; no exception thrown
+        // Assert — activity recorded from logs; commit count stays zero; no exception thrown
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
         activeRun.LastActivityAt.ShouldNotBeNull();
-        activeRun.CommitMarkers.ShouldBeEmpty();
+        activeRun.BranchCommitCount.ShouldBe(0);
     }
 
     [Fact]

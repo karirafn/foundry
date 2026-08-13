@@ -285,9 +285,9 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenActiveRunHasCommitMarkers_MapsCommitMarkers()
+    public async Task WhenActiveRunHasBranchCommitCount_CommitMarkersIsEmpty()
     {
-        // Arrange
+        // Arrange — CommitMarkers DTO is kept for backward compat but step 7 will reshape it.
         WorkerRunId id = WorkerRunId.New();
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, id);
@@ -297,8 +297,7 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
             MonitoredRepositoryId.New());
 
         DateTimeOffset observedAt = DateTimeOffset.UtcNow;
-        CommitMarker marker = CommitMarker.Create(observedAt, "abc123", "feat: add feature");
-        active.RecordCommit(marker);
+        active.RecordBranchCommitCount(2, "abc123", observedAt);
 
         _dbContext.Set<WorkerRun>().Add(active);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -313,9 +312,6 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
 
         // Assert
         WorkerRunDetail detail = result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value;
-        WorkerRunCommitMarker mappedMarker = detail.CommitMarkers.ShouldHaveSingleItem();
-        mappedMarker.ShouldSatisfyAllConditions(
-            () => mappedMarker.Sha.ShouldBe("abc123"),
-            () => mappedMarker.Message.ShouldBe("feat: add feature"));
+        detail.CommitMarkers.ShouldBeEmpty();
     }
 }

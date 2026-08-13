@@ -35,7 +35,7 @@ public sealed class HandleAsync
             WorkerRunId.New(),
             IssueId.New(),
             DateTimeOffset.UtcNow,
-            NewCommitMarker: null);
+            CommitCount: 0);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -55,7 +55,7 @@ public sealed class HandleAsync
             workerRunId,
             IssueId.New(),
             DateTimeOffset.UtcNow,
-            NewCommitMarker: null);
+            CommitCount: 0);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -76,7 +76,7 @@ public sealed class HandleAsync
             WorkerRunId.New(),
             issueId,
             DateTimeOffset.UtcNow,
-            NewCommitMarker: null);
+            CommitCount: 0);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -97,7 +97,7 @@ public sealed class HandleAsync
             WorkerRunId.New(),
             IssueId.New(),
             lastActivityAt,
-            NewCommitMarker: null);
+            CommitCount: 0);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -108,39 +108,18 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenHandledWithCommitMarker_BroadcastsCommitShaAndMessage()
+    public async Task WhenHandled_BroadcastsNullCommitFields()
     {
         // Arrange
-        CapturingWorkerActivityBroadcaster broadcaster = new();
-        WorkerActivityObservedHandler sut = new(broadcaster);
-        CommitMarker marker = CommitMarker.Create(DateTimeOffset.UtcNow, "abc123", "feat: add thing");
-        WorkerActivityObserved @event = new(
-            WorkerRunId.New(),
-            IssueId.New(),
-            DateTimeOffset.UtcNow,
-            NewCommitMarker: marker);
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        WorkerActivity activity = broadcaster.Broadcasts.ShouldHaveSingleItem();
-        activity.ShouldSatisfyAllConditions(
-            () => activity.NewCommitSha.ShouldBe("abc123"),
-            () => activity.NewCommitMessage.ShouldBe("feat: add thing"));
-    }
-
-    [Fact]
-    public async Task WhenHandledWithNoCommitMarker_BroadcastsNullCommitFields()
-    {
-        // Arrange
+        // TODO (step 7): WorkerActivity DTO will be reshaped to carry CommitCount.
+        // Until then the handler broadcasts null for both commit fields.
         CapturingWorkerActivityBroadcaster broadcaster = new();
         WorkerActivityObservedHandler sut = new(broadcaster);
         WorkerActivityObserved @event = new(
             WorkerRunId.New(),
             IssueId.New(),
             DateTimeOffset.UtcNow,
-            NewCommitMarker: null);
+            CommitCount: 5);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
