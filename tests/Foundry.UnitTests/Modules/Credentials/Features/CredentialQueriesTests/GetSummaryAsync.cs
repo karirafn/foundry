@@ -182,4 +182,50 @@ public sealed class GetSummaryAsync : IAsyncDisposable
         ClaudeAccountSummary summary = result.ShouldNotBeNull();
         summary.AccountId.ShouldBe(ClaudeAccountId.Default.Value);
     }
+
+    [Fact]
+    public async Task WhenSpendStateIsAvailable_NextProbeAtIsNull()
+    {
+        // Arrange — default account starts with Available spend state.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialQueries sut = new(dbContext);
+
+        // Act
+        ClaudeAccountSummary? result = await sut.GetSummaryAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaudeAccountSummary summary = result.ShouldNotBeNull();
+        summary.NextProbeAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenSpendStateIsBlocked_NextProbeAtIsPopulated()
+    {
+        // Arrange
+        DateTimeOffset nextProbeAt = new DateTimeOffset(2025, 6, 1, 12, 0, 0, TimeSpan.Zero);
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.BlockSpend(nextProbeAt);
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialQueries sut = new(dbContext);
+
+        // Act
+        ClaudeAccountSummary? result = await sut.GetSummaryAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaudeAccountSummary summary = result.ShouldNotBeNull();
+        summary.NextProbeAt.ShouldBe(nextProbeAt);
+    }
 }

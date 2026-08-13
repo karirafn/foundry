@@ -85,6 +85,7 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
 
         string oauthStatus = ComputeOAuthStatus(account);
         string? subscriptionType = account.AuthMode is AuthMode.OAuth oauth ? oauth.SubscriptionType : null;
+        DateTimeOffset? nextProbeAt = account.SpendState is SpendState.Blocked blocked ? blocked.NextProbeAt : null;
 
         return new ClaudeAccountSummary(
             account.Id.Value,
@@ -92,7 +93,8 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
             oauthStatus,
             subscriptionType,
             account.OAuthAccountEmail,
-            account.OAuthAccountOrgName);
+            account.OAuthAccountOrgName,
+            nextProbeAt);
     }
 
     private static string ComputeOAuthStatus(ClaudeAccount account)

@@ -1712,7 +1712,8 @@
           "oAuthStatus",
           "subscriptionType",
           "oAuthAccountEmail",
-          "oAuthAccountOrgName"
+          "oAuthAccountOrgName",
+          "nextProbeAt"
         ],
         "type": "object",
         "properties": {
@@ -1743,6 +1744,13 @@
               "null",
               "string"
             ]
+          },
+          "nextProbeAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
