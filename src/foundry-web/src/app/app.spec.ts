@@ -10,6 +10,7 @@ import { SYSTEM_HUB_FACTORY, SystemHub, SystemSignalRService } from './core/serv
 import { SettingsService } from './core/services/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
 import { DispatchService } from './core/services/dispatch.service';
+import { CreditsService } from './core/services/credits.service';
 
 const mockSystemHubFactory = (): SystemHub => ({
   on: () => {},
@@ -97,6 +98,17 @@ function createMockSignalRService() {
   return {
     notifications: signal([]).asReadonly(),
     reconnected: new Subject<void>(),
+    creditsNotification: new Subject<void>(),
+    applyDockerAvailability: () => {},
+  };
+}
+
+function createMockCreditsService() {
+  return {
+    nextProbeAt: signal<string | null>(null).asReadonly(),
+    isChecking: signal<boolean>(false).asReadonly(),
+    checkNow: () => {},
+    updateFromCredentials: () => {},
   };
 }
 
@@ -113,6 +125,7 @@ function setupApp(isColdBuildBlocking = false) {
       { provide: AccountService, useValue: mockAccountService },
       { provide: DispatchService, useValue: createMockDispatchService() },
       { provide: SystemSignalRService, useValue: createMockSignalRService() },
+      { provide: CreditsService, useValue: createMockCreditsService() },
     ],
   });
   const fixture = TestBed.createComponent(App);

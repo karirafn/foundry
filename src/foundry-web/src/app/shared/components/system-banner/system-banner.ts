@@ -3,11 +3,12 @@ import { SystemNotificationsComponent } from './components/system-notifications/
 import { ImageBuildBannerComponent } from './components/image-build-banner/image-build-banner';
 import { DispatchBannerComponent } from './components/dispatch-banner/dispatch-banner';
 import { DockerBannerComponent } from './components/docker-banner/docker-banner';
+import { CreditsBannerComponent } from './components/credits-banner/credits-banner';
 
 @Component({
   selector: 'fd-system-banner',
   standalone: true,
-  imports: [SystemNotificationsComponent, DockerBannerComponent, ImageBuildBannerComponent, DispatchBannerComponent],
+  imports: [SystemNotificationsComponent, DockerBannerComponent, ImageBuildBannerComponent, CreditsBannerComponent, DispatchBannerComponent],
   templateUrl: './system-banner.html',
   styleUrl: './system-banner.scss',
 })
