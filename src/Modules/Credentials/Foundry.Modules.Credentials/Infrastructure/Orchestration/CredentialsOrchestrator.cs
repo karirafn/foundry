@@ -242,22 +242,24 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
 
             await foreach (string line in runtime.StreamLogsAsync(containerId, cancellationToken))
             {
+                if (logs.Length >= ProbeLogMaxLength)
+                {
+                    break;
+                }
+
                 if (logs.Length > 0)
                 {
-                    if (logs.Length >= ProbeLogMaxLength)
-                    {
-                        break;
-                    }
-
                     logs.AppendLine();
                 }
 
-                string redacted = SecretRedactor.Redact(line);
                 int remaining = ProbeLogMaxLength - logs.Length;
-                logs.Append(
-                    redacted.Length > remaining
-                        ? redacted[..remaining]
-                        : redacted);
+                if (remaining <= 0)
+                {
+                    break;
+                }
+
+                string redacted = SecretRedactor.Redact(line);
+                logs.Append(redacted.Length > remaining ? redacted[..remaining] : redacted);
             }
 
             return Result<string>.Ok(logs.ToString());

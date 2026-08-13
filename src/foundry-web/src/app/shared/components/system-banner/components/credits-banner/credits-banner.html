@@ -43,14 +43,14 @@
     <span class="system-banner__message">
       <strong>Dispatch blocked — Claude account can't spend</strong>
       <span class="system-banner__body">Add credits or raise the spend limit on the Anthropic account to resume.</span>
-      @if (viewState() === 'checking') {
-        <span class="system-banner__status-line" role="status" aria-atomic="true">Checking whether the Claude account can spend again&hellip;</span>
-      } @else {
-        <span class="system-banner__status-line" role="status" aria-atomic="true">
+      <span class="system-banner__status-line" role="status" aria-atomic="true">
+        @if (viewState() === 'checking') {
+          Checking whether the Claude account can spend again&hellip;
+        } @else {
           Next automatic check in
           <span class="system-banner__countdown-value" aria-hidden="true">{{ countdownText() }}</span>
-        </span>
-      }
+        }
+      </span>
     </span>
     <button
       type="button"

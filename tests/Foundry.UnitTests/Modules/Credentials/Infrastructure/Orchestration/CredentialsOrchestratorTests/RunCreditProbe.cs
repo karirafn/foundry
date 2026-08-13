@@ -154,6 +154,35 @@ public sealed class RunCreditProbe
     }
 
     [Fact]
+    public async Task WhenLogLinesStradleCapBoundary_NeverThrowsAndStaysWithinCap()
+    {
+        // Arrange — craft lines so logs.Length lands at 65534, 65535, and 65536 across iterations,
+        // straddling the cap boundary to expose the off-by-one that makes remaining negative.
+        // Line 1: 65534 chars — fills the buffer to 65534 (no preceding newline on first line)
+        // Line 2: 1 char — after the separator newline lands at 65536, remaining would be 0
+        // Line 3: any char — a buggy cap check lets this iteration run AppendLine past the cap
+        const int capBytes = 65_536;
+        string[] straddle =
+        [
+            new string('a', 65534),
+            "b",
+            "c",
+            "d",
+        ];
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithStreamLogLines(straddle);
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act — must not throw ArgumentOutOfRangeException
+        Result<string> result = await sut.RunCreditProbeAsync(OAuthSpec(), CancellationToken.None);
+
+        // Assert — success with length within cap
+        result.IsSuccess.ShouldBeTrue();
+        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
+        success.Value.Length.ShouldBeLessThanOrEqualTo(capBytes);
+    }
+
+    [Fact]
     public async Task WhenOAuthMode_MountsCredentialVolumeReadOnly()
     {
         // Arrange

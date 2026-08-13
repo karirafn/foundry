@@ -313,6 +313,45 @@ describe('CreditsBannerComponent', () => {
       expect(statusLine.getAttribute('aria-atomic')).toBe('true');
     });
 
+    it('should render exactly one role="status" status-line element regardless of view state', () => {
+      // Arrange / Act — checking state
+      const futureDate = new Date(Date.now() + 60_000).toISOString();
+      const { fixture, mockCredits } = setup({ credits: { nextProbeAt: futureDate, isChecking: true } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — single element in checking state
+      expect(el.querySelectorAll('.system-banner__status-line').length).toBe(1);
+
+      // Act — transition to counting-down
+      mockCredits._isCheckingSignal.set(false);
+      fixture.detectChanges();
+
+      // Assert — still exactly one element after state change
+      expect(el.querySelectorAll('.system-banner__status-line').length).toBe(1);
+    });
+
+    it('should show counting-down text in the live region when not checking', () => {
+      // Arrange / Act
+      const futureDate = new Date(Date.now() + 60_000).toISOString();
+      const { fixture } = setup({ credits: { nextProbeAt: futureDate, isChecking: false } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — live region contains the counting-down phrase
+      const statusLine = el.querySelector('.system-banner__status-line') as HTMLElement;
+      expect(statusLine.textContent).toContain('Next automatic check in');
+    });
+
+    it('should show checking text in the live region when checking', () => {
+      // Arrange / Act
+      const futureDate = new Date(Date.now() + 60_000).toISOString();
+      const { fixture } = setup({ credits: { nextProbeAt: futureDate, isChecking: true } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — live region contains the checking phrase
+      const statusLine = el.querySelector('.system-banner__status-line') as HTMLElement;
+      expect(statusLine.textContent).toContain('Checking whether the Claude account can spend again');
+    });
+
     it('should have a sr-only role="alert" (no aria-live) for one-shot state transition announcements', () => {
       // Arrange / Act
       const { fixture } = setup({ credits: { nextProbeAt: new Date(Date.now() + 60_000).toISOString() } });

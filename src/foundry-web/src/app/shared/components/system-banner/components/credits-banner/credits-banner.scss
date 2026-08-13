@@ -90,7 +90,6 @@
   }
 
   &:disabled {
-    border-color: color-mix(in srgb, var(--fd-text-ineligible) 50%, transparent);
     cursor: not-allowed;
     opacity: 0.5;
   }

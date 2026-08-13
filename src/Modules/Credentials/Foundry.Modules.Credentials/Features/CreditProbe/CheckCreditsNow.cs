@@ -7,7 +7,7 @@ namespace Foundry.Modules.Credentials.Features.CreditProbe;
 
 /// <summary>
 /// POST /api/credentials/probe
-/// Forces an immediate credit probe (force=true, single-flight).
+/// Forces an immediate credit probe (single-flight).
 /// Returns 202 Accepted with <c>inFlight: true</c> when a probe is already running,
 /// so the client shows the in-flight state instead of starting another.
 /// </summary>
