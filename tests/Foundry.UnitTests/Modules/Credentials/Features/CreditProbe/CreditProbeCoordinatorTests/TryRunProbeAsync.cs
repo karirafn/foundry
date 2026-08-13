@@ -79,7 +79,11 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         // Probe dependencies
         services.AddSingleton<Foundry.Modules.Credentials.Infrastructure.Orchestration.ICredentialsOrchestrator>(orchestrator);
         services.AddSingleton(classifier);
-        services.AddSingleton<IIntegrationEventProcessor>(eventProcessor);
+
+        // IIntegrationEventProcessor is scoped in production; the coordinator resolves it from
+        // its per-invocation scope. Register as scoped here so the scope factory returns the
+        // capturing instance — same instance is returned for the lifetime of each scope.
+        services.AddScoped<IIntegrationEventProcessor>(_ => eventProcessor);
         services.AddSingleton<StubLoginSessionState>(new StubLoginSessionState(isLoginActive));
         services.AddSingleton<Foundry.Modules.Credentials.Features.Login.ILoginSessionState>(
             sp => sp.GetRequiredService<StubLoginSessionState>());
@@ -101,7 +105,6 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             sp.GetRequiredService<IServiceScopeFactory>(),
             sp.GetRequiredService<Foundry.Modules.Credentials.Infrastructure.Orchestration.ICredentialsOrchestrator>(),
             sp.GetRequiredService<IProbeOutcomeClassifier>(),
-            sp.GetRequiredService<IIntegrationEventProcessor>(),
             sp.GetRequiredService<Foundry.Modules.Credentials.Features.Login.ILoginSessionState>(),
             NullLogger<CreditProbeCoordinator>.Instance);
 
@@ -537,7 +540,6 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
                 sp.GetRequiredService<IServiceScopeFactory>(),
                 sp.GetRequiredService<Foundry.Modules.Credentials.Infrastructure.Orchestration.ICredentialsOrchestrator>(),
                 sp.GetRequiredService<IProbeOutcomeClassifier>(),
-                sp.GetRequiredService<IIntegrationEventProcessor>(),
                 sp.GetRequiredService<Foundry.Modules.Credentials.Features.Login.ILoginSessionState>(),
                 new CapturingLoggerAdapter<CreditProbeCoordinator>(logger));
 
@@ -605,7 +607,6 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
                 sp.GetRequiredService<IServiceScopeFactory>(),
                 blockingOrchestrator,
                 sp.GetRequiredService<IProbeOutcomeClassifier>(),
-                sp.GetRequiredService<IIntegrationEventProcessor>(),
                 sp.GetRequiredService<Foundry.Modules.Credentials.Features.Login.ILoginSessionState>(),
                 NullLogger<CreditProbeCoordinator>.Instance);
 

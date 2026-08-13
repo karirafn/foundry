@@ -22,15 +22,14 @@ namespace Foundry.Modules.Credentials.Features.CreditProbe;
 /// <para>
 /// Singleton lifetime: <see cref="_semaphore"/> provides process-wide single-flight state.
 /// Scoped dependencies (<see cref="DbContext"/>, <see cref="IIntegrationEventDispatcher"/>,
-/// <see cref="IGlobalSettingsQueries"/>) are resolved per-invocation via
-/// <see cref="IServiceScopeFactory"/>.
+/// <see cref="IGlobalSettingsQueries"/>, <see cref="IIntegrationEventProcessor"/>) are resolved
+/// per-invocation via <see cref="IServiceScopeFactory"/>.
 /// </para>
 /// </summary>
 internal sealed class CreditProbeCoordinator(
     IServiceScopeFactory scopeFactory,
     ICredentialsOrchestrator orchestrator,
     IProbeOutcomeClassifier classifier,
-    IIntegrationEventProcessor integrationEventProcessor,
     ILoginSessionState loginSessionState,
     ILogger<CreditProbeCoordinator> logger) : ICreditProbeCoordinator, IDisposable
 {
@@ -77,6 +76,8 @@ internal sealed class CreditProbeCoordinator(
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         ISystemNotificationBroadcaster broadcaster =
             scope.ServiceProvider.GetRequiredService<ISystemNotificationBroadcaster>();
+        IIntegrationEventProcessor integrationEventProcessor =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventProcessor>();
 
         ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
             .FirstOrDefaultAsync(cancellationToken);
@@ -137,7 +138,7 @@ internal sealed class CreditProbeCoordinator(
             ProbeOutcome.CreditsStillBlocked => await HandleStillBlockedAsync(
                 account, dbContext, nextArm, broadcaster, cancellationToken),
             ProbeOutcome.UsageLimited usageLimited => await HandleUsageLimitedAsync(
-                account, dbContext, dispatcher, usageLimited.ResetsAt, cancellationToken),
+                account, dbContext, dispatcher, integrationEventProcessor, usageLimited.ResetsAt, cancellationToken),
             ProbeOutcome.InfrastructureFailure => await HandleInfrastructureFailureAsync(
                 account, dbContext, nextArm, broadcaster, cancellationToken),
             _ => throw new System.Diagnostics.UnreachableException(
@@ -184,6 +185,7 @@ internal sealed class CreditProbeCoordinator(
         ClaudeAccount account,
         DbContext dbContext,
         IIntegrationEventDispatcher dispatcher,
+        IIntegrationEventProcessor integrationEventProcessor,
         DateTimeOffset resetsAt,
         CancellationToken cancellationToken)
     {
@@ -206,6 +208,7 @@ internal sealed class CreditProbeCoordinator(
                 // Route via IIntegrationEventProcessor for direct in-process delivery (no outbox row,
                 // no relay latency on a transient notification).
                 await TryDeliverDirectAsync(
+                    integrationEventProcessor,
                     new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value),
                     cancellationToken);
             }
@@ -272,7 +275,10 @@ internal sealed class CreditProbeCoordinator(
     /// writing an outbox row. Use only for pure SignalR broadcast notifications with no durable
     /// DB consumer.
     /// </summary>
-    private async Task TryDeliverDirectAsync(IIntegrationEvent @event, CancellationToken cancellationToken)
+    private async Task TryDeliverDirectAsync(
+        IIntegrationEventProcessor integrationEventProcessor,
+        IIntegrationEvent @event,
+        CancellationToken cancellationToken)
     {
         try
         {
