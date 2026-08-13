@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 
+using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
@@ -22,6 +23,8 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         Result<AccountIdentity>.Ok(new AccountIdentity("user@example.com", "Test Org", "pro"));
     private Result<string> _startLoginResult =
         Result<string>.Ok("fake-login-container");
+    private Result<string> _creditProbeResult =
+        Result<string>.Ok("");
     private IReadOnlyList<string> _runningTransientContainerIds = [];
     private IReadOnlyList<string> _exitedTransientContainerIds = [];
     private Exception? _listTransientException;
@@ -56,6 +59,20 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
     public FakeCredentialsOrchestrator WithStartLoginFailure(Error error)
     {
         _startLoginResult = Result<string>.Fail(error);
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="RunCreditProbeAsync"/> to return specific logs.</summary>
+    public FakeCredentialsOrchestrator WithCreditProbeLogs(string logs)
+    {
+        _creditProbeResult = Result<string>.Ok(logs);
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="RunCreditProbeAsync"/> to return a failure.</summary>
+    public FakeCredentialsOrchestrator WithCreditProbeFailure(Error error)
+    {
+        _creditProbeResult = Result<string>.Fail(error);
         return this;
     }
 
@@ -132,6 +149,11 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         LoginContainerSpec spec,
         CancellationToken cancellationToken)
         => Task.FromResult(_startLoginResult);
+
+    public Task<Result<string>> RunCreditProbeAsync(
+        CreditProbeSpec spec,
+        CancellationToken cancellationToken)
+        => Task.FromResult(_creditProbeResult);
 
     public async Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
     {

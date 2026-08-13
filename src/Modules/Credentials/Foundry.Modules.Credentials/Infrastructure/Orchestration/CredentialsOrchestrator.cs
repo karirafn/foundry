@@ -1,8 +1,11 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Credentials.Domain.ValueObjects;
+using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -180,6 +183,76 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
         }
 
         return results;
+    }
+
+    public async Task<Result<string>> RunCreditProbeAsync(
+        CreditProbeSpec spec,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string probeCmd = $"timeout {spec.TimeoutSeconds} claude -p '{spec.Prompt}'";
+
+            List<string> env = [];
+            List<Mount> mounts = [];
+
+            if (spec.AuthMode is AuthMode.OAuth)
+            {
+                env.Add($"{CredentialVolumeConstants.ConfigDirEnvVar}={CredentialVolumeConstants.ContainerPath}");
+                mounts.Add(new Mount
+                {
+                    Type = "volume",
+                    Source = CredentialVolumeConstants.VolumeName,
+                    Target = CredentialVolumeConstants.ContainerPath,
+                    ReadOnly = true,
+                });
+            }
+            else if (spec.AuthMode is AuthMode.ApiKey apiKey)
+            {
+                env.Add($"ANTHROPIC_API_KEY={apiKey.Key}");
+            }
+
+            CreateContainerParameters createParams = new()
+            {
+                Image = WorkerImageNames.LoginImageName,
+                Cmd = ["sh", "-c", probeCmd],
+                Env = env,
+                Labels = new Dictionary<string, string>
+                {
+                    [ContainerLabelConstants.TransientLabelKey] = ContainerLabelConstants.TransientLabelValue,
+                    [ContainerLabelConstants.RoleLabelKey] = ContainerLabelConstants.RoleCreditProbe,
+                },
+                HostConfig = new HostConfig
+                {
+                    AutoRemove = true,
+                    Mounts = mounts.Count > 0 ? mounts : null,
+                },
+            };
+
+            string containerId = await runtime.CreateAndStartAsync(createParams, cancellationToken);
+
+            StringBuilder logs = new();
+
+            await foreach (string line in runtime.StreamLogsAsync(containerId, cancellationToken))
+            {
+                if (logs.Length > 0)
+                {
+                    logs.AppendLine();
+                }
+
+                logs.Append(SecretRedactor.Redact(line));
+            }
+
+            return Result<string>.Ok(logs.ToString());
+        }
+        catch (DockerApiException ex)
+        {
+            string redacted = SecretRedactor.Redact(ex.Message);
+            string message = redacted.Length > DockerErrorMessageMaxLength
+                ? redacted[..DockerErrorMessageMaxLength]
+                : redacted;
+            return Result<string>.Fail(new Error("Docker.CreditProbeStartFailed", message));
+        }
     }
 
     public async Task SeedOnboardingAsync(CancellationToken cancellationToken)
