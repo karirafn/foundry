@@ -4,8 +4,8 @@
   aria-label="Credit status"
   [hidden]="!isVisible()"
 >
-  <span class="sr-only" role="alert" aria-live="assertive">{{ transitionAlertText() }}</span>
-  <div class="system-banner__bar system-banner__bar--credits" role="status">
+  <span class="sr-only" role="alert">{{ transitionAlertText() }}</span>
+  <div class="system-banner__bar system-banner__bar--credits">
     @if (viewState() === 'checking') {
       <svg
         class="system-banner__spinner-icon"
@@ -44,9 +44,9 @@
       <strong>Dispatch blocked — Claude account can't spend</strong>
       <span class="system-banner__body">Add credits or raise the spend limit on the Anthropic account to resume.</span>
       @if (viewState() === 'checking') {
-        <span class="system-banner__status-line">Checking whether the account can spend again&hellip;</span>
+        <span class="system-banner__status-line" role="status" aria-atomic="true">Checking whether the Claude account can spend again&hellip;</span>
       } @else {
-        <span class="system-banner__status-line">
+        <span class="system-banner__status-line" role="status" aria-atomic="true">
           Next automatic check in
           <span class="system-banner__countdown-value" aria-hidden="true">{{ countdownText() }}</span>
         </span>

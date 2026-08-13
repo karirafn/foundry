@@ -70,7 +70,7 @@
   flex-shrink: 0;
   align-self: center;
   background: transparent;
-  border: 1px solid color-mix(in srgb, var(--fd-state-blocked) 70%, transparent);
+  border: 1px solid var(--fd-text-ineligible);
   border-radius: var(--fd-radius-sm);
   color: var(--fd-text-ineligible);
   cursor: pointer;
@@ -90,6 +90,7 @@
   }
 
   &:disabled {
+    border-color: color-mix(in srgb, var(--fd-text-ineligible) 50%, transparent);
     cursor: not-allowed;
     opacity: 0.5;
   }

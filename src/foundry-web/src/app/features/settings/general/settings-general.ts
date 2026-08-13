@@ -421,13 +421,13 @@ const PROBE_INTERVAL_MIN = 5;
               id="autoResume"
               [ngModel]="_autoResumeValue()"
               (ngModelChange)="_autoResumeValue.set($event)"
-              aria-describedby="dispatch-error"
+              [attr.aria-describedby]="settingsService.saveDispatchError() ? 'dispatch-error' : null"
             />
             Auto-resume when usage limit resets
           </label>
 
           <div class="general-settings__field">
-            <label class="general-settings__field-label" for="probeIntervalMinutes">Probe interval (minutes)</label>
+            <label class="general-settings__field-label" for="probeIntervalMinutes">Credit check interval (minutes)</label>
             <input
               class="general-settings__number-input"
               type="number"
@@ -436,12 +436,11 @@ const PROBE_INTERVAL_MIN = 5;
               step="1"
               [ngModel]="_probeIntervalValue()"
               (ngModelChange)="_probeIntervalValue.set($event)"
-              aria-describedby="probe-interval-hint dispatch-error"
+              aria-describedby="probe-interval-hint probe-interval-error dispatch-error"
+              [attr.aria-invalid]="_probeIntervalValue() < PROBE_INTERVAL_MIN || null"
             />
-            <span id="probe-interval-hint" class="general-settings__field-hint">Minimum {{ PROBE_INTERVAL_MIN }} minutes</span>
-            @if (_probeIntervalValue() < PROBE_INTERVAL_MIN) {
-              <span class="general-settings__field-error" role="alert">Must be at least {{ PROBE_INTERVAL_MIN }} minutes</span>
-            }
+            <span id="probe-interval-hint" class="general-settings__field-hint">How often Foundry checks whether the Claude account can spend again while dispatch is credit-blocked. Minimum {{ PROBE_INTERVAL_MIN }} minutes.</span>
+            <span id="probe-interval-error" class="general-settings__field-error" role="alert">{{ _probeIntervalValue() < PROBE_INTERVAL_MIN ? 'Must be at least ' + PROBE_INTERVAL_MIN + ' minutes' : '' }}</span>
           </div>
 
           <div id="dispatch-error" role="alert" class="general-settings__save-error">{{ settingsService.saveDispatchError() ?? '' }}</div>

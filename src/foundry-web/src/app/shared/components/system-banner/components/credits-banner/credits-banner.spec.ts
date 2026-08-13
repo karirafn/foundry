@@ -188,7 +188,7 @@ describe('CreditsBannerComponent', () => {
   });
 
   describe('checking state', () => {
-    it('should show "Checking…" line instead of countdown when isChecking is true', () => {
+    it('should show "Checking whether the Claude account can spend again" line when isChecking is true', () => {
       // Arrange
       const futureDate = new Date(Date.now() + 60_000).toISOString();
 
@@ -197,7 +197,7 @@ describe('CreditsBannerComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
-      expect(el.textContent).toContain('Checking whether the account can spend again');
+      expect(el.textContent).toContain('Checking whether the Claude account can spend again');
       expect(el.textContent).not.toContain('Next automatic check in');
     });
 
@@ -223,7 +223,7 @@ describe('CreditsBannerComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert — checking state shown, no ToastService in providers so no toast call
-      expect(el.textContent).toContain('Checking whether the account can spend again');
+      expect(el.textContent).toContain('Checking whether the Claude account can spend again');
     });
   });
 
@@ -291,15 +291,39 @@ describe('CreditsBannerComponent', () => {
       expect(wrapper.getAttribute('role')).toBe('region');
     });
 
-    it('should use role="status" (polite) on the inner bar, not role="alert"', () => {
+    it('should not have role="status" or role="alert" on the bar div itself (no bar-level live region)', () => {
       // Arrange / Act
       const { fixture } = setup({ credits: { nextProbeAt: new Date(Date.now() + 60_000).toISOString() } });
       const el = fixture.nativeElement as HTMLElement;
 
-      // Assert
+      // Assert — the bar must not be a live region; live regions are scoped to the sr-only span and status-line
       const bar = el.querySelector('.system-banner__bar--credits') as HTMLElement;
-      expect(bar.getAttribute('role')).toBe('status');
+      expect(bar.getAttribute('role')).toBeNull();
     });
+
+    it('should scope role="status" to the status-line span, not the bar', () => {
+      // Arrange / Act
+      const { fixture } = setup({ credits: { nextProbeAt: new Date(Date.now() + 60_000).toISOString() } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — status-line span carries role="status" with aria-atomic
+      const statusLine = el.querySelector('.system-banner__status-line') as HTMLElement;
+      expect(statusLine).not.toBeNull();
+      expect(statusLine.getAttribute('role')).toBe('status');
+      expect(statusLine.getAttribute('aria-atomic')).toBe('true');
+    });
+
+    it('should have a sr-only role="alert" (no aria-live) for one-shot state transition announcements', () => {
+      // Arrange / Act
+      const { fixture } = setup({ credits: { nextProbeAt: new Date(Date.now() + 60_000).toISOString() } });
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — the sr-only transition announcer must be role="alert" without a redundant aria-live
+      const announcer = el.querySelector('.sr-only[role="alert"]') as HTMLElement;
+      expect(announcer).not.toBeNull();
+      expect(announcer.getAttribute('aria-live')).toBeNull();
+    });
+
 
     it('should have type="button" on the Check now button', () => {
       // Arrange / Act

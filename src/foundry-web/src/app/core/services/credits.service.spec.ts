@@ -243,4 +243,20 @@ describe('CreditsService', () => {
     // Assert
     expect(service.isChecking()).toBe(false);
   });
+
+  // Cycle 14: re-entrancy guard — second checkNow while checking is a no-op
+  it('should not issue a second HTTP request when checkNow is called while already checking', () => {
+    // Arrange
+    service.checkNow();
+    httpMock.expectOne('/api/credentials/probe'); // first call in flight (do not flush yet)
+
+    // Act — call checkNow again while still in flight
+    service.checkNow();
+
+    // Assert — no second request is pending
+    httpMock.expectNone('/api/credentials/probe');
+
+    // Flush first request to avoid verify() failure
+    httpMock.match('/api/credentials/probe').forEach(r => r.flush(buildProbeResponse()));
+  });
 });

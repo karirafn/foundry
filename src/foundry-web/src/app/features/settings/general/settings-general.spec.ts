@@ -1151,7 +1151,7 @@ describe('SettingsGeneralComponent', () => {
     req.flush(API_KEY_RESPONSE);
   });
 
-  it('should render a "Probe interval (minutes)" number input in the Dispatch Settings form', () => {
+  it('should render a "Credit check interval (minutes)" label and number input in the Dispatch Settings form', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -1162,10 +1162,55 @@ describe('SettingsGeneralComponent', () => {
     // Act
     const el = fixture.nativeElement as HTMLElement;
     const probeInput = el.querySelector('#probeIntervalMinutes') as HTMLInputElement;
+    const probeLabel = el.querySelector('label[for="probeIntervalMinutes"]') as HTMLLabelElement;
 
     // Assert
     expect(probeInput).toBeTruthy();
     expect(probeInput.type).toBe('number');
+    expect(probeLabel?.textContent?.trim()).toBe('Credit check interval (minutes)');
+  });
+
+  it('should describe the probe-interval field purpose in the hint text', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const hint = el.querySelector('#probe-interval-hint') as HTMLElement;
+
+    // Assert — hint explains purpose and includes minimum
+    expect(hint).toBeTruthy();
+    expect(hint.textContent).toContain('Claude account');
+    expect(hint.textContent).toContain('Minimum 5 minutes');
+  });
+
+  it('should conditionally bind aria-describedby on the autoResume checkbox based on dispatch error presence', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act — no error initially
+    const el = fixture.nativeElement as HTMLElement;
+    const checkbox = el.querySelector('#autoResume') as HTMLInputElement;
+
+    // Assert — no aria-describedby when there is no save error
+    expect(checkbox.getAttribute('aria-describedby')).toBeNull();
+
+    // Act — trigger a dispatch save error
+    const service = TestBed.inject(SettingsService);
+    service.updateDispatchSettings(true, 60);
+    httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    // Assert — aria-describedby is bound to dispatch-error when error is present
+    expect(checkbox.getAttribute('aria-describedby')).toBe('dispatch-error');
   });
 
   it('should initialize probeIntervalMinutes input from loaded settings', () => {
@@ -1183,7 +1228,7 @@ describe('SettingsGeneralComponent', () => {
     expect(probeNgModel.model).toBe(30);
   });
 
-  it('should show a validation error when probeIntervalMinutes is below the minimum (5)', () => {
+  it('should show a validation error and set aria-invalid when probeIntervalMinutes is below the minimum (5)', () => {
     // Arrange
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -1196,15 +1241,17 @@ describe('SettingsGeneralComponent', () => {
     component._probeIntervalValue.set(3);
     fixture.detectChanges();
 
-    // Assert — validation error message is rendered
+    // Assert — always-present error element has message text and input is aria-invalid
     const el = fixture.nativeElement as HTMLElement;
-    const errorSpan = el.querySelector('.general-settings__field-error[role="alert"]') as HTMLElement;
+    const errorSpan = el.querySelector('#probe-interval-error[role="alert"]') as HTMLElement;
     expect(errorSpan).toBeTruthy();
     expect(errorSpan.textContent).toContain('at least 5 minutes');
+    const probeInput = el.querySelector('#probeIntervalMinutes') as HTMLInputElement;
+    expect(probeInput.getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('should not show a validation error when probeIntervalMinutes is at or above the minimum (5)', () => {
-    // Arrange
+  it('should render the probe-interval error element in the DOM at all times (always-present pattern)', () => {
+    // Arrange — value is valid (at minimum)
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
@@ -1213,10 +1260,13 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const errorSpan = el.querySelector('.general-settings__field-error[role="alert"]');
+    const errorSpan = el.querySelector('#probe-interval-error[role="alert"]') as HTMLElement;
 
-    // Assert
-    expect(errorSpan).toBeFalsy();
+    // Assert — element is always in DOM; content is empty when valid; aria-invalid is absent
+    expect(errorSpan).toBeTruthy();
+    expect(errorSpan.textContent?.trim()).toBe('');
+    const probeInput = el.querySelector('#probeIntervalMinutes') as HTMLInputElement;
+    expect(probeInput.getAttribute('aria-invalid')).toBeNull();
   });
 
   it('should disable the Save button when probeIntervalMinutes is below the minimum', () => {

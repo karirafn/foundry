@@ -34,10 +34,13 @@ export class CreditsService {
   }
 
   updateFromCredentials(summary: ClaudeAccountSummary): void {
-    this._nextProbeAtSignal.set(summary.nextProbeAt ?? null);
+    this._nextProbeAtSignal.set(summary.nextProbeAt);
   }
 
   checkNow(): void {
+    if (this._isCheckingSignal()) {
+      return;
+    }
     this._isCheckingSignal.set(true);
 
     this._http.post<CheckCreditsNowResponse>('/api/credentials/probe', null).subscribe({

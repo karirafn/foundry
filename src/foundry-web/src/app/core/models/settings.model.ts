@@ -55,7 +55,7 @@ export interface ClaudeAccountSummary {
   subscriptionType: string | null;
   oAuthAccountEmail: string | null;
   oAuthAccountOrgName: string | null;
-  nextProbeAt?: string | null;
+  nextProbeAt: string | null;
 }
 
 export interface GlobalSettingsResponse {
