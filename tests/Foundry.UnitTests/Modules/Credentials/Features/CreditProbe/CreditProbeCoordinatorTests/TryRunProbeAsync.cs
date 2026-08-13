@@ -263,7 +263,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            CreditProbeResult result = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult result = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Assert — result
             result.ShouldBeOfType<CreditProbeResult.Restored>();
@@ -298,7 +298,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert — exactly one CreditsRestored outbox row (not two)
@@ -325,7 +325,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            CreditProbeResult result = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult result = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Assert — result
             result.ShouldBeOfType<CreditProbeResult.StillBlocked>();
@@ -362,7 +362,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            CreditProbeResult result = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult result = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Assert — result
             CreditProbeResult.UsageLimited typedResult = result.ShouldBeOfType<CreditProbeResult.UsageLimited>();
@@ -403,7 +403,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert — exactly one CreditsRestored outbox row
@@ -430,7 +430,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            CreditProbeResult result = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult result = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Assert — result
             result.ShouldBeOfType<CreditProbeResult.InfrastructureFailure>();
@@ -469,7 +469,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            CreditProbeResult result = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult result = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Assert — result
             result.ShouldBeOfType<CreditProbeResult.InfrastructureFailure>();
@@ -506,7 +506,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            CreditProbeResult result = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult result = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Assert — result
             result.ShouldBeOfType<CreditProbeResult.Deferred>();
@@ -544,7 +544,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
                 new CapturingLoggerAdapter<CreditProbeCoordinator>(logger));
 
             // Act
-            CreditProbeResult result = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult result = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Assert — result
             result.ShouldBeOfType<CreditProbeResult.NoAccount>();
@@ -572,7 +572,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            CreditProbeResult result = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult result = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Assert — result
             result.ShouldBeOfType<CreditProbeResult.NotBlocked>();
@@ -611,13 +611,13 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
                 NullLogger<CreditProbeCoordinator>.Instance);
 
             // Start the first probe (will block inside RunCreditProbeAsync)
-            Task<CreditProbeResult> firstProbe = sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            Task<CreditProbeResult> firstProbe = sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Wait until the first probe is inside the orchestrator
             await blockingOrchestrator.ProbeStarted.Task;
 
             // Act — second caller while first is running
-            CreditProbeResult secondResult = await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            CreditProbeResult secondResult = await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
 
             // Release the blocking probe
             probeTcs.SetResult();
@@ -649,7 +649,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert — credits broadcast sent with IsActive:true (re-arm signals fresh countdown)
@@ -677,7 +677,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert — credits broadcast sent with IsActive:true (probe re-armed)
@@ -706,7 +706,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert — credits broadcast sent with IsActive:true (probe re-armed)
@@ -734,7 +734,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert — credits broadcast sent with IsActive:true (login-deferred re-arm)
@@ -762,7 +762,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert — coordinator does NOT broadcast directly on restore paths
@@ -792,7 +792,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeCoordinator sut = BuildCoordinator(sp);
 
             // Act
-            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert — coordinator does NOT broadcast a credits notification on usage-limited restore

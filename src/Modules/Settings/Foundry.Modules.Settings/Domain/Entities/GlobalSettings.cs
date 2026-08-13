@@ -15,6 +15,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MaxPromptTemplateLength = 32768;
     internal const int MaxUsageLimitResetDays = 7;
     internal const int MinProbeIntervalMinutes = 5;
+    internal const int MaxProbeIntervalMinutes = 10080;
     internal const int DefaultProbeIntervalMinutes = 60;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
@@ -120,7 +121,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public Result UpdateProbeInterval(int probeIntervalMinutes)
     {
-        if (probeIntervalMinutes < MinProbeIntervalMinutes)
+        if (probeIntervalMinutes < MinProbeIntervalMinutes || probeIntervalMinutes > MaxProbeIntervalMinutes)
         {
             return SettingsErrors.InvalidProbeInterval(probeIntervalMinutes);
         }

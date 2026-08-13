@@ -1,4 +1,5 @@
 using Foundry.Modules.Credentials.Domain.Entities;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
@@ -11,11 +12,9 @@ namespace Foundry.Modules.Credentials.Features.WorkerReactions;
 // BlockSpend() is a no-op when already blocked, so duplicate credits-exhausted events are idempotent.
 internal sealed class WorkerCreditsExhaustedHandler(
     DbContext dbContext,
+    IGlobalSettingsQueries settingsQueries,
     ILogger<WorkerCreditsExhaustedHandler> logger) : IIntegrationEventHandler<WorkerCreditsExhausted>
 {
-    // TODO(step 3): read ProbeIntervalMinutes from GlobalSettings instead of this default.
-    private const int DefaultProbeIntervalMinutes = 60;
-
     public async Task HandleAsync(WorkerCreditsExhausted @event, CancellationToken cancellationToken)
     {
         ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
@@ -28,7 +27,8 @@ internal sealed class WorkerCreditsExhaustedHandler(
             return;
         }
 
-        DateTimeOffset nextProbeAt = DateTimeOffset.UtcNow.AddMinutes(DefaultProbeIntervalMinutes);
+        int intervalMinutes = await settingsQueries.GetProbeIntervalMinutesAsync(cancellationToken);
+        DateTimeOffset nextProbeAt = DateTimeOffset.UtcNow.AddMinutes(intervalMinutes);
         bool stateChanged = account.BlockSpend(nextProbeAt);
 
         if (stateChanged)

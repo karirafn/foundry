@@ -10,5 +10,5 @@ internal interface ICreditProbeCoordinator
     /// Attempts to run the credit probe. Returns immediately with
     /// <see cref="CreditProbeResult.AlreadyRunning"/> when a probe is already in flight.
     /// </summary>
-    Task<CreditProbeResult> TryRunProbeAsync(bool force, CancellationToken cancellationToken);
+    Task<CreditProbeResult> TryRunProbeAsync(CancellationToken cancellationToken);
 }

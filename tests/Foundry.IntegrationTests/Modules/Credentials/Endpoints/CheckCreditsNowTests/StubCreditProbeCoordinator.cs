@@ -8,6 +8,6 @@ namespace Foundry.IntegrationTests.Modules.Credentials.Endpoints.CheckCreditsNow
 /// </summary>
 internal sealed class StubCreditProbeCoordinator(CreditProbeResult result) : ICreditProbeCoordinator
 {
-    public Task<CreditProbeResult> TryRunProbeAsync(bool force, CancellationToken cancellationToken)
+    public Task<CreditProbeResult> TryRunProbeAsync(CancellationToken cancellationToken)
         => Task.FromResult(result);
 }

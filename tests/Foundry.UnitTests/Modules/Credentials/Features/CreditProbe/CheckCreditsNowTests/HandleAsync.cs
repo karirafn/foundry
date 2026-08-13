@@ -13,11 +13,11 @@ public sealed class HandleAsync
 {
     private sealed class StubCreditProbeCoordinator(CreditProbeResult result) : ICreditProbeCoordinator
     {
-        public bool? LastForce { get; private set; }
+        public bool WasCalled { get; private set; }
 
-        public Task<CreditProbeResult> TryRunProbeAsync(bool force, CancellationToken cancellationToken)
+        public Task<CreditProbeResult> TryRunProbeAsync(CancellationToken cancellationToken)
         {
-            LastForce = force;
+            WasCalled = true;
             return Task.FromResult(result);
         }
     }
@@ -35,7 +35,7 @@ public sealed class HandleAsync
         Ok<CheckCreditsNow.Response> ok = result.ShouldBeOfType<Ok<CheckCreditsNow.Response>>();
         ok.Value.ShouldNotBeNull();
         ok.Value.InFlight.ShouldBeFalse();
-        ok.Value.Outcome.ShouldBe("Restored");
+        ok.Value.Outcome.ShouldBe("restored");
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed class HandleAsync
         Ok<CheckCreditsNow.Response> ok = result.ShouldBeOfType<Ok<CheckCreditsNow.Response>>();
         ok.Value.ShouldNotBeNull();
         ok.Value.InFlight.ShouldBeFalse();
-        ok.Value.Outcome.ShouldBe("StillBlocked");
+        ok.Value.Outcome.ShouldBe("stillBlocked");
     }
 
     [Fact]
@@ -82,11 +82,11 @@ public sealed class HandleAsync
         // Assert
         Ok<CheckCreditsNow.Response> ok = result.ShouldBeOfType<Ok<CheckCreditsNow.Response>>();
         ok.Value.ShouldNotBeNull();
-        ok.Value.Outcome.ShouldBe("NotBlocked");
+        ok.Value.Outcome.ShouldBe("notBlocked");
     }
 
     [Fact]
-    public async Task WhenCalled_CallsCoordinatorWithForceTrue()
+    public async Task WhenCalled_InvokesCoordinator()
     {
         // Arrange
         StubCreditProbeCoordinator coordinator = new(new CreditProbeResult.NotBlocked());
@@ -95,6 +95,6 @@ public sealed class HandleAsync
         await CheckCreditsNow.Endpoint.HandleAsync(coordinator, CancellationToken.None);
 
         // Assert
-        coordinator.LastForce.ShouldBe(true);
+        coordinator.WasCalled.ShouldBeTrue();
     }
 }

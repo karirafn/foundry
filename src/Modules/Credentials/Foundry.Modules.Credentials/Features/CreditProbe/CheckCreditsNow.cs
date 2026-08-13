@@ -34,14 +34,25 @@ internal static class CheckCreditsNow
             ICreditProbeCoordinator coordinator,
             CancellationToken cancellationToken)
         {
-            CreditProbeResult result = await coordinator.TryRunProbeAsync(force: true, cancellationToken);
+            CreditProbeResult result = await coordinator.TryRunProbeAsync(cancellationToken);
 
             if (result is CreditProbeResult.AlreadyRunning)
             {
                 return TypedResults.Accepted((string?)null, new Response(InFlight: true, Outcome: null));
             }
 
-            string outcome = result.GetType().Name;
+            string outcome = result switch
+            {
+                CreditProbeResult.Restored => "restored",
+                CreditProbeResult.StillBlocked => "stillBlocked",
+                CreditProbeResult.UsageLimited => "usageLimited",
+                CreditProbeResult.InfrastructureFailure => "infrastructureFailure",
+                CreditProbeResult.Deferred => "deferred",
+                CreditProbeResult.NoAccount => "noAccount",
+                CreditProbeResult.NotBlocked => "notBlocked",
+                _ => throw new System.Diagnostics.UnreachableException(
+                    $"Unexpected CreditProbeResult: {result.GetType().Name}"),
+            };
             return TypedResults.Ok(new Response(InFlight: false, Outcome: outcome));
         }
     }

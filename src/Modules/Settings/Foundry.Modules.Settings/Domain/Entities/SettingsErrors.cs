@@ -33,5 +33,5 @@ internal static class SettingsErrors
     internal const string InvalidProbeIntervalCode = "Settings.InvalidProbeInterval";
 
     internal static Error InvalidProbeInterval(int value) =>
-        new(InvalidProbeIntervalCode, $"Probe interval must be at least {GlobalSettings.MinProbeIntervalMinutes} minutes, but was {value}.");
+        new(InvalidProbeIntervalCode, $"Probe interval must be between {GlobalSettings.MinProbeIntervalMinutes} and {GlobalSettings.MaxProbeIntervalMinutes} minutes, but was {value}.");
 }

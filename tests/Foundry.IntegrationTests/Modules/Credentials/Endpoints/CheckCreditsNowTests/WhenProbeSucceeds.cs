@@ -61,6 +61,6 @@ public sealed class WhenProbeSucceeds : IAsyncDisposable
         body.ShouldNotBeNull();
         body.ShouldSatisfyAllConditions(
             () => body.InFlight.ShouldBeFalse(),
-            () => body.Outcome.ShouldBe("Restored"));
+            () => body.Outcome.ShouldBe("restored"));
     }
 }

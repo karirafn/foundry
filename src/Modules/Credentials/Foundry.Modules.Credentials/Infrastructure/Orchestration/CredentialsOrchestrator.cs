@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -24,6 +25,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
     private const string ManagedLabelKey = "foundry.managed";
     private const int DockerErrorMessageMaxLength = 500;
     private const int AuthStatusOutputMaxBytes = 16_384;
+    private const int ProbeLogMaxLength = 65_536;
 
     public async Task<Result<string>> StartLoginContainerAsync(
         LoginContainerSpec spec,
@@ -191,8 +193,6 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
     {
         try
         {
-            string probeCmd = $"timeout {spec.TimeoutSeconds} claude -p '{spec.Prompt}'";
-
             List<string> env = [];
             List<Mount> mounts = [];
 
@@ -215,7 +215,14 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
             CreateContainerParameters createParams = new()
             {
                 Image = WorkerImageNames.LoginImageName,
-                Cmd = ["sh", "-c", probeCmd],
+                Cmd =
+                [
+                    "timeout",
+                    spec.TimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+                    "claude",
+                    "-p",
+                    spec.Prompt,
+                ],
                 Env = env,
                 Labels = new Dictionary<string, string>
                 {
@@ -237,10 +244,20 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
             {
                 if (logs.Length > 0)
                 {
+                    if (logs.Length >= ProbeLogMaxLength)
+                    {
+                        break;
+                    }
+
                     logs.AppendLine();
                 }
 
-                logs.Append(SecretRedactor.Redact(line));
+                string redacted = SecretRedactor.Redact(line);
+                int remaining = ProbeLogMaxLength - logs.Length;
+                logs.Append(
+                    redacted.Length > remaining
+                        ? redacted[..remaining]
+                        : redacted);
             }
 
             return Result<string>.Ok(logs.ToString());

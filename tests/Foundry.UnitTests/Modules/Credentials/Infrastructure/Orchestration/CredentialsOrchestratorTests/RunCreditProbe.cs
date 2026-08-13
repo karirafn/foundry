@@ -94,7 +94,7 @@ public sealed class RunCreditProbe
     }
 
     [Fact]
-    public async Task WhenStarted_CmdWrapsClaudeWithTimeout()
+    public async Task WhenStarted_CmdIsDirectArgvWithTimeout()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
@@ -103,13 +103,54 @@ public sealed class RunCreditProbe
         // Act
         await sut.RunCreditProbeAsync(OAuthSpec(), CancellationToken.None);
 
-        // Assert
+        // Assert — argv form: ["timeout", "<seconds>", "claude", "-p", "<prompt>"]
+        // No shell interpretation of prompt or timeout value.
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
-        string cmdStr = string.Join(" ", captured.Cmd);
-        cmdStr.ShouldSatisfyAllConditions(
-            () => cmdStr.ShouldContain($"timeout {CreditProbeSpec.DefaultTimeoutSeconds}"),
-            () => cmdStr.ShouldContain("claude"),
-            () => cmdStr.ShouldContain("-p"));
+        IList<string> cmd = captured.Cmd.ShouldNotBeNull();
+        cmd.ShouldSatisfyAllConditions(
+            () => cmd[0].ShouldBe("timeout"),
+            () => cmd[1].ShouldBe(CreditProbeSpec.DefaultTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            () => cmd[2].ShouldBe("claude"),
+            () => cmd[3].ShouldBe("-p"),
+            () => cmd[4].ShouldBe(CreditProbeSpec.DefaultPrompt));
+    }
+
+    [Fact]
+    public async Task WhenStarted_DoesNotUseSh()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.RunCreditProbeAsync(OAuthSpec(), CancellationToken.None);
+
+        // Assert — no shell wrapper; shell would interpret prompt content
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        IList<string> cmd = captured.Cmd.ShouldNotBeNull();
+        cmd.ShouldNotContain("sh");
+        cmd.ShouldNotContain("/bin/sh");
+    }
+
+    [Fact]
+    public async Task WhenLogOutputExceedsCap_TruncatesAtCap()
+    {
+        // Arrange — flood the log stream with lines that exceed the 65536-byte cap
+        const int capBytes = 65_536;
+        string longLine = new('x', 1024);
+        // 100 lines × 1024 chars = 102400 bytes — well above the cap
+        string[] floodLines = Enumerable.Repeat(longLine, 100).ToArray();
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithStreamLogLines(floodLines);
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        Result<string> result = await sut.RunCreditProbeAsync(OAuthSpec(), CancellationToken.None);
+
+        // Assert — accumulated log must not exceed the cap
+        result.IsSuccess.ShouldBeTrue();
+        Result<string>.Success success = result.ShouldBeOfType<Result<string>.Success>();
+        success.Value.Length.ShouldBeLessThanOrEqualTo(capBytes);
     }
 
     [Fact]

@@ -82,7 +82,8 @@ public sealed class UpdateProbeInterval
     [InlineData(5)]
     [InlineData(60)]
     [InlineData(120)]
-    public void WhenValueIsAtOrAboveMin_Succeeds(int probeIntervalMinutes)
+    [InlineData(10080)]
+    public void WhenValueIsAtOrAboveMinAndAtOrBelowMax_Succeeds(int probeIntervalMinutes)
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
@@ -92,5 +93,35 @@ public sealed class UpdateProbeInterval
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(10081)]
+    [InlineData(99999)]
+    public void WhenValueExceedsMax_ReturnsInvalidProbeIntervalError(int probeIntervalMinutes)
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Act
+        Result result = settings.UpdateProbeInterval(probeIntervalMinutes);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe("Settings.InvalidProbeInterval");
+    }
+
+    [Fact]
+    public void WhenValueExceedsMax_DoesNotUpdateState()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        int originalInterval = settings.ProbeIntervalMinutes;
+
+        // Act
+        settings.UpdateProbeInterval(GlobalSettings.MaxProbeIntervalMinutes + 1);
+
+        // Assert
+        settings.ProbeIntervalMinutes.ShouldBe(originalInterval);
     }
 }

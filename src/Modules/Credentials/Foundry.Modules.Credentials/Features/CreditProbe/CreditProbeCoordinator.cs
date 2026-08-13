@@ -1,6 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
+using Foundry.Modules.Credentials.Features.Broadcasts;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Settings.Contracts.Queries;
@@ -33,8 +34,6 @@ internal sealed class CreditProbeCoordinator(
     ILoginSessionState loginSessionState,
     ILogger<CreditProbeCoordinator> logger) : ICreditProbeCoordinator, IDisposable
 {
-    private const string CreditsCategory = "credits";
-
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public void Dispose() => _semaphore.Dispose();
@@ -43,11 +42,7 @@ internal sealed class CreditProbeCoordinator(
     /// Attempts to run the credit probe. The probe is single-flight: if one is already
     /// in progress the call returns <see cref="CreditProbeResult.AlreadyRunning"/> immediately.
     /// </summary>
-    /// <param name="force">
-    /// Reserved for future use. Currently ignored — the account must be <c>Blocked</c>
-    /// for the probe to run regardless of this flag.
-    /// </param>
-    public async Task<CreditProbeResult> TryRunProbeAsync(bool force, CancellationToken cancellationToken)
+    public async Task<CreditProbeResult> TryRunProbeAsync(CancellationToken cancellationToken)
     {
         // Single-flight: non-blocking acquire; return immediately if probe already running.
         // CancellationToken.None: Wait(0) is a non-blocking try-acquire — cancellation is irrelevant.
@@ -267,7 +262,7 @@ internal sealed class CreditProbeCoordinator(
         ISystemNotificationBroadcaster broadcaster,
         CancellationToken cancellationToken)
         => broadcaster.SendAsync(
-            new SystemNotification(CreditsCategory, IsActive: true, Message: string.Empty),
+            new SystemNotification(NotificationCategories.Credits, IsActive: true, Message: string.Empty),
             cancellationToken);
 
     /// <summary>

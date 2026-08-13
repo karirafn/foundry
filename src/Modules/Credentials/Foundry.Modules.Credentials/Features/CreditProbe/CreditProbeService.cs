@@ -76,6 +76,6 @@ internal sealed class CreditProbeService : PeriodicBackgroundService
             "Credit probe due (NextProbeAt={NextProbeAt}). Invoking coordinator.",
             blocked.NextProbeAt);
 
-        await _coordinator.TryRunProbeAsync(force: false, cancellationToken);
+        await _coordinator.TryRunProbeAsync(cancellationToken);
     }
 }

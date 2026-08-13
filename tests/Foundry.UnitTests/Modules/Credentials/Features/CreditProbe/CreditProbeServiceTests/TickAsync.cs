@@ -78,7 +78,6 @@ public sealed class TickAsync : IAsyncDisposable
     internal sealed class StubCreditProbeCoordinator : ICreditProbeCoordinator
     {
         public int CallCount { get; private set; }
-        public bool? LastForce { get; private set; }
 
         private readonly CreditProbeResult _result;
 
@@ -87,10 +86,9 @@ public sealed class TickAsync : IAsyncDisposable
             _result = result;
         }
 
-        public Task<CreditProbeResult> TryRunProbeAsync(bool force, CancellationToken cancellationToken)
+        public Task<CreditProbeResult> TryRunProbeAsync(CancellationToken cancellationToken)
         {
             CallCount++;
-            LastForce = force;
             return Task.FromResult(_result);
         }
     }
@@ -100,7 +98,7 @@ public sealed class TickAsync : IAsyncDisposable
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public async Task WhenBlockedAndPastDue_CallsCoordinatorWithForcefalse()
+    public async Task WhenBlockedAndPastDue_CallsCoordinator()
     {
         // Arrange
         DateTimeOffset pastDue = DateTimeOffset.UtcNow.AddMinutes(-5);
@@ -114,7 +112,6 @@ public sealed class TickAsync : IAsyncDisposable
 
         // Assert
         coordinator.CallCount.ShouldBe(1);
-        coordinator.LastForce.ShouldBe(false);
     }
 
     [Fact]
