@@ -12,7 +12,21 @@ namespace Foundry.Modules.Settings.Features.Dispatch;
 
 internal static class UpdateDispatchSettings
 {
-    internal sealed record Command(bool AutoResumeOnUsageReset) : ICommand<GlobalSettingsSummary>;
+    internal sealed record Command(bool AutoResumeOnUsageReset, int ProbeIntervalMinutes)
+        : ICommand<GlobalSettingsSummary>;
+
+    internal sealed class Validator : ICommandValidator<Command>
+    {
+        public Result Validate(Command command)
+        {
+            if (command.ProbeIntervalMinutes < GlobalSettings.MinProbeIntervalMinutes)
+            {
+                return SettingsErrors.InvalidProbeInterval(command.ProbeIntervalMinutes);
+            }
+
+            return Result.Ok();
+        }
+    }
 
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, GlobalSettingsSummary>
     {
@@ -28,6 +42,12 @@ internal static class UpdateDispatchSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
+            Result probeResult = settings.UpdateProbeInterval(command.ProbeIntervalMinutes);
+            if (probeResult is Result.Failure probeFailure)
+            {
+                return Result<GlobalSettingsSummary>.Fail(probeFailure.Error);
+            }
+
             settings.UpdateDispatchSettings(command.AutoResumeOnUsageReset);
 
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -38,7 +58,7 @@ internal static class UpdateDispatchSettings
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(bool AutoResumeOnUsageReset);
+        private sealed record RequestBody(bool AutoResumeOnUsageReset, int ProbeIntervalMinutes);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -47,17 +67,22 @@ internal static class UpdateDispatchSettings
                     ICommandHandler<Command, GlobalSettingsSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(body.AutoResumeOnUsageReset);
+                    Command command = new(body.AutoResumeOnUsageReset, body.ProbeIntervalMinutes);
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, BadRequest<string>>>(
                         summary => TypedResults.Ok(summary),
-                        _ => TypedResults.NotFound());
+                        error => error.Code switch
+                        {
+                            SettingsErrors.NotFoundCode => TypedResults.NotFound(),
+                            _ => TypedResults.BadRequest(error.Message),
+                        });
                 })
                 .WithName("UpdateDispatchSettings")
-                .WithSummary("Updates the dispatch auto-resume setting")
+                .WithSummary("Updates dispatch settings including auto-resume and probe interval")
                 .Produces<GlobalSettingsSummary>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

@@ -1378,7 +1378,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the dispatch auto-resume setting",
+        "summary": "Updates dispatch settings including auto-resume and probe interval",
         "operationId": "UpdateDispatchSettings",
         "requestBody": {
           "content": {
@@ -1403,6 +1403,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2660,12 +2670,21 @@
       },
       "UpdateDispatchSettingsRequestBody": {
         "required": [
-          "autoResumeOnUsageReset"
+          "autoResumeOnUsageReset",
+          "probeIntervalMinutes"
         ],
         "type": "object",
         "properties": {
           "autoResumeOnUsageReset": {
             "type": "boolean"
+          },
+          "probeIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

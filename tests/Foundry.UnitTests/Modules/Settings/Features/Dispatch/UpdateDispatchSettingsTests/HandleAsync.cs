@@ -56,7 +56,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false);
+        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false, ProbeIntervalMinutes: 30);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -67,6 +67,32 @@ public sealed class HandleAsync : IAsyncLifetime
         Result<GlobalSettingsSummary>.Success success =
             result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
         success.Value.AutoResumeOnUsageReset.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenSettingsExist_UpdatesProbeIntervalAndReturnsSummary()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true, ProbeIntervalMinutes: 30);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<GlobalSettingsSummary>.Success success =
+            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
+        success.Value.ProbeIntervalMinutes.ShouldBe(30);
     }
 
     [Fact]
@@ -83,7 +109,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             UpdateDispatchSettings.Handler sut = new(dbContext);
-            UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false);
+            UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false, ProbeIntervalMinutes: 45);
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
 
@@ -92,7 +118,9 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
-        stored.AutoResumeOnUsageReset.ShouldBeFalse();
+        stored.ShouldSatisfyAllConditions(
+            () => stored.AutoResumeOnUsageReset.ShouldBeFalse(),
+            () => stored.ProbeIntervalMinutes.ShouldBe(45));
     }
 
     [Fact]
@@ -101,7 +129,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true);
+        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true, ProbeIntervalMinutes: 30);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -112,5 +140,31 @@ public sealed class HandleAsync : IAsyncLifetime
         Result<GlobalSettingsSummary>.Failure failure =
             result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
         failure.Error.Code.ShouldBe(SettingsErrors.NotFoundCode);
+    }
+
+    [Fact]
+    public async Task WhenProbeIntervalIsBelowMin_ReturnsInvalidProbeIntervalError()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true, ProbeIntervalMinutes: 1);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<GlobalSettingsSummary>.Failure failure =
+            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.InvalidProbeIntervalCode);
     }
 }
