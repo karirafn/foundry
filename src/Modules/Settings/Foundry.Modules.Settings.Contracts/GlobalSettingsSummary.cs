@@ -3,6 +3,7 @@ namespace Foundry.Modules.Settings.Contracts;
 public sealed record GlobalSettingsSummary(
     int MaxConcurrent,
     int TimeoutMinutes,
+    int ProbeIntervalMinutes,
     string? SystemPromptTemplate,
     string? WorkerPromptTemplate,
     DateTimeOffset? UsageLimitResetsAt,

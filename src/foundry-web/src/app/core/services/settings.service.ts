@@ -348,12 +348,12 @@ export class SettingsService {
     });
   }
 
-  updateDispatchSettings(autoResumeOnUsageReset: boolean): void {
+  updateDispatchSettings(autoResumeOnUsageReset: boolean, probeIntervalMinutes: number): void {
     this._saveDispatchErrorSignal.set(null);
     this._saveDispatchSuccessSignal.set(false);
     this._savingDispatchSignal.set(true);
 
-    this._http.put<GlobalSettingsResponse>('/api/settings/dispatch', { autoResumeOnUsageReset }).subscribe({
+    this._http.put<GlobalSettingsResponse>('/api/settings/dispatch', { autoResumeOnUsageReset, probeIntervalMinutes }).subscribe({
       next: (response) => {
         this._settingsSignal.set(response);
         this._dispatchService.updateFromSettings(response);

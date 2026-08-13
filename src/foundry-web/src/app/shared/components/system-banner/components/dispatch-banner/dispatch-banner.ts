@@ -1,6 +1,7 @@
 import { Component, DestroyRef, Signal, computed, effect, inject, signal } from '@angular/core';
 import { DispatchService } from '../../../../../core/services/dispatch.service';
 import { ToastService } from '../../../../../core/services/toast.service';
+import { formatCountdown } from '../../../../utils/format-countdown';
 
 const USAGE_LIMIT_RESET_MESSAGE = 'Usage limit reset';
 
@@ -47,7 +48,7 @@ export class DispatchBannerComponent {
     if (ms === null || ms <= 0) {
       return null;
     }
-    return this._formatCountdown(ms);
+    return formatCountdown(ms);
   });
 
   constructor() {
@@ -79,20 +80,4 @@ export class DispatchBannerComponent {
     this._destroyRef.onDestroy(() => clearInterval(intervalId));
   }
 
-  private _formatCountdown(remainingMs: number): string {
-    const totalSeconds = Math.ceil(remainingMs / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    if (hours >= 1) {
-      return `${hours}h ${minutes}m`;
-    }
-
-    if (totalSeconds >= 60) {
-      return `${minutes}m ${seconds}s`;
-    }
-
-    return `${seconds}s`;
-  }
 }

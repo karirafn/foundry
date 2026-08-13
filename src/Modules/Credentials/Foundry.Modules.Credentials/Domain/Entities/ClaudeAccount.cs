@@ -63,6 +63,7 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     /// Marks the credentials as invalid with the given reason.
     /// Idempotent: when already <see cref="CredentialValidity.Invalid"/>, does nothing and returns
     /// <c>false</c> so callers can avoid double-publishing an event.
+    /// Does not affect <see cref="Validity"/>.
     /// </summary>
     /// <returns><c>true</c> if the state changed; <c>false</c> if already invalid.</returns>
     public bool Invalidate(string reason)
@@ -98,20 +99,39 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     }
 
     /// <summary>
-    /// Marks spend as blocked, preventing further dispatch.
+    /// Marks spend as blocked with a scheduled probe time, preventing further dispatch.
     /// Idempotent: when already <see cref="SpendState.Blocked"/>, does nothing and returns
-    /// <c>false</c> so callers can avoid double-publishing an event.
+    /// <c>false</c>, preserving the existing probe schedule so a mid-probe manual resume
+    /// cannot reset the arm.
     /// Does not affect <see cref="Validity"/>.
     /// </summary>
     /// <returns><c>true</c> if the state changed; <c>false</c> if already blocked.</returns>
-    public bool BlockSpend()
+    public bool BlockSpend(DateTimeOffset nextProbeAt)
     {
         if (SpendState is SpendState.Blocked)
         {
             return false;
         }
 
-        SpendState = new SpendState.Blocked();
+        SpendState = new SpendState.Blocked(nextProbeAt);
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    /// <summary>
+    /// Re-arms the probe schedule on a blocked account.
+    /// Idempotent: when <see cref="SpendState.Available"/>, does nothing and returns <c>false</c>
+    /// so a probe completing after a manual resume cannot re-block the account.
+    /// </summary>
+    /// <returns><c>true</c> if the arm was updated; <c>false</c> if not blocked.</returns>
+    public bool RearmProbe(DateTimeOffset nextProbeAt)
+    {
+        if (SpendState is not SpendState.Blocked)
+        {
+            return false;
+        }
+
+        SpendState = new SpendState.Blocked(nextProbeAt);
         UpdatedAt = DateTimeOffset.UtcNow;
         return true;
     }

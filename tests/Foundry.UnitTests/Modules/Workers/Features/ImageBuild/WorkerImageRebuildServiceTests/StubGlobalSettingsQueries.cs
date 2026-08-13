@@ -17,6 +17,7 @@ internal sealed class StubGlobalSettingsQueries(
     private static readonly GlobalSettingsSummary DefaultSummary = new(
         MaxConcurrent: 1,
         TimeoutMinutes: 60,
+        ProbeIntervalMinutes: 60,
         SystemPromptTemplate: null,
         WorkerPromptTemplate: null,
         UsageLimitResetsAt: null,
@@ -43,6 +44,9 @@ internal sealed class StubGlobalSettingsQueries(
         => Task.FromResult(1);
 
     public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
+        => Task.FromResult(60);
+
+    public Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
         => Task.FromResult(60);
 
     public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(

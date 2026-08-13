@@ -6,5 +6,5 @@ public abstract record SpendState
 
     public sealed record Available : SpendState;
 
-    public sealed record Blocked : SpendState;
+    public sealed record Blocked(DateTimeOffset NextProbeAt) : SpendState;
 }

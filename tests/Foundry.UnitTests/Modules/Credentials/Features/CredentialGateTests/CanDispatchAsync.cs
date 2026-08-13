@@ -110,7 +110,7 @@ public sealed class CanDispatchAsync : IAsyncDisposable
         {
             ClaudeAccount account = ClaudeAccount.Create();
             account.Invalidate("worker_auth_failed");
-            account.BlockSpend();
+            account.BlockSpend(DateTimeOffset.UtcNow.AddHours(1));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -132,7 +132,7 @@ public sealed class CanDispatchAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
-            account.BlockSpend();
+            account.BlockSpend(DateTimeOffset.UtcNow.AddHours(1));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

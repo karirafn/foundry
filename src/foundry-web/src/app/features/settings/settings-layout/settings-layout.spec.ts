@@ -15,6 +15,7 @@ const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessi
 const SETTINGS_RESPONSE = {
   maxConcurrent: 3,
   timeoutMinutes: 60,
+  probeIntervalMinutes: 60,
   systemPromptTemplate: null,
   workerPromptTemplate: null,
   usageLimitResetsAt: null,
