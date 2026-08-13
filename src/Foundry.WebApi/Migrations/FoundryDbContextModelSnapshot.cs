@@ -352,6 +352,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_concurrent");
 
+                    b.Property<int>("ProbeIntervalMinutes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("probe_interval_minutes");
+
                     b.Property<string>("SystemPromptTemplate")
                         .HasMaxLength(32768)
                         .HasColumnType("TEXT")

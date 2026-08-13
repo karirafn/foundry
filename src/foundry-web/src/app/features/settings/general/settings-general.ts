@@ -24,6 +24,7 @@ const MAX_CONCURRENT_MIN = 1;
 const MAX_CONCURRENT_MAX = 20;
 const TIMEOUT_MINUTES_MIN = 1;
 const TIMEOUT_MINUTES_MAX = 1440;
+const PROBE_INTERVAL_MIN = 5;
 
 @Component({
   selector: 'fd-settings-general',
@@ -425,6 +426,23 @@ const TIMEOUT_MINUTES_MAX = 1440;
             Auto-resume when usage limit resets
           </label>
 
+          <div class="general-settings__field">
+            <label class="general-settings__field-label" for="probeIntervalMinutes">Credit check interval (minutes)</label>
+            <input
+              class="general-settings__number-input"
+              type="number"
+              id="probeIntervalMinutes"
+              [min]="PROBE_INTERVAL_MIN"
+              step="1"
+              [ngModel]="_probeIntervalValue()"
+              (ngModelChange)="_probeIntervalValue.set($event)"
+              aria-describedby="probe-interval-hint probe-interval-error dispatch-error"
+              [attr.aria-invalid]="_probeIntervalValue() < PROBE_INTERVAL_MIN || null"
+            />
+            <span id="probe-interval-hint" class="general-settings__field-hint">How often Foundry checks whether the Claude account can spend again while dispatch is credit-blocked. Minimum {{ PROBE_INTERVAL_MIN }} minutes.</span>
+            <span id="probe-interval-error" class="general-settings__field-error" role="alert">{{ _probeIntervalValue() < PROBE_INTERVAL_MIN ? 'Must be at least ' + PROBE_INTERVAL_MIN + ' minutes' : '' }}</span>
+          </div>
+
           <div id="dispatch-error" role="alert" class="general-settings__save-error">{{ settingsService.saveDispatchError() ?? '' }}</div>
 
           <div role="status" class="general-settings__save-success">{{ settingsService.saveDispatchSuccess() ? 'Dispatch settings saved successfully' : '' }}</div>
@@ -432,7 +450,7 @@ const TIMEOUT_MINUTES_MAX = 1440;
           <button
             class="general-settings__save-btn"
             type="button"
-            [disabled]="settingsService.savingDispatch()"
+            [disabled]="settingsService.savingDispatch() || !isDispatchFormValid()"
             (click)="saveDispatch()"
           >{{ settingsService.savingDispatch() ? 'Saving...' : 'Save' }}</button>
         </div>
@@ -455,6 +473,7 @@ export class SettingsGeneralComponent {
   protected readonly MAX_CONCURRENT_MAX = MAX_CONCURRENT_MAX;
   protected readonly TIMEOUT_MINUTES_MIN = TIMEOUT_MINUTES_MIN;
   protected readonly TIMEOUT_MINUTES_MAX = TIMEOUT_MINUTES_MAX;
+  protected readonly PROBE_INTERVAL_MIN = PROBE_INTERVAL_MIN;
 
   protected readonly _selectedMode: WritableSignal<AuthMode> = signal('api_key');
   protected readonly _showApiKey: WritableSignal<boolean> = signal(false);
@@ -478,6 +497,7 @@ export class SettingsGeneralComponent {
   private _promptsInitialized = false;
 
   protected readonly _autoResumeValue: WritableSignal<boolean> = signal(true);
+  protected readonly _probeIntervalValue: WritableSignal<number> = signal(PROBE_INTERVAL_MIN);
   private _dispatchInitialized = false;
 
   protected readonly _installDotnetValue: WritableSignal<boolean> = signal(false);
@@ -571,6 +591,7 @@ export class SettingsGeneralComponent {
       if (settings !== null && !this._dispatchInitialized) {
         this._dispatchInitialized = true;
         this._autoResumeValue.set(settings.autoResumeOnUsageReset);
+        this._probeIntervalValue.set(settings.probeIntervalMinutes);
       }
     });
 
@@ -726,8 +747,12 @@ export class SettingsGeneralComponent {
     this.settingsService.updatePromptTemplates(request);
   }
 
+  isDispatchFormValid(): boolean {
+    return this._probeIntervalValue() >= PROBE_INTERVAL_MIN;
+  }
+
   saveDispatch(): void {
-    this.settingsService.updateDispatchSettings(this._autoResumeValue());
+    this.settingsService.updateDispatchSettings(this._autoResumeValue(), this._probeIntervalValue());
   }
 
   saveImageFlags(): void {

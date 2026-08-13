@@ -10,6 +10,7 @@ import { DispatchService } from '../../../core/services/dispatch.service';
 import { SettingsService } from '../../../core/services/settings.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { SystemStatusService } from '../../../core/services/system-status.service';
+import { CreditsService } from '../../../core/services/credits.service';
 
 function createMockSignalRService(notifications: SystemNotification[]) {
   const notificationsSignal = signal(notifications);
@@ -24,6 +25,17 @@ function createMockSignalRService(notifications: SystemNotification[]) {
 
 function createMockSystemStatusService() {
   return {};
+}
+
+function createMockCreditsService() {
+  const nextProbeAtSignal = signal<string | null>(null);
+  const isCheckingSignal = signal<boolean>(false);
+
+  return {
+    nextProbeAt: nextProbeAtSignal.asReadonly(),
+    isChecking: isCheckingSignal.asReadonly(),
+    checkNow: vi.fn(),
+  };
 }
 
 function createMockDispatchService() {
@@ -64,6 +76,7 @@ function setup() {
   const mockSettings = createMockSettingsService();
   const mockToast = createMockToastService();
   const mockSystemStatus = createMockSystemStatusService();
+  const mockCredits = createMockCreditsService();
 
   TestBed.configureTestingModule({
     imports: [SystemBannerComponent],
@@ -74,6 +87,7 @@ function setup() {
       { provide: SettingsService, useValue: mockSettings },
       { provide: ToastService, useValue: mockToast },
       { provide: SystemStatusService, useValue: mockSystemStatus },
+      { provide: CreditsService, useValue: mockCredits },
     ],
   });
 
@@ -130,6 +144,27 @@ describe('SystemBannerComponent', () => {
       const dockerIndex = children.indexOf('fd-docker-banner');
       const imageBuildIndex = children.indexOf('fd-image-build-banner');
       expect(dockerIndex).toBeLessThan(imageBuildIndex);
+    });
+
+    it('should render fd-credits-banner child component', () => {
+      // Arrange / Act
+      const { fixture } = setup();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('fd-credits-banner')).not.toBeNull();
+    });
+
+    it('should render fd-credits-banner before fd-dispatch-banner', () => {
+      // Arrange / Act
+      const { fixture } = setup();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const children = Array.from(el.children).map((c) => c.tagName.toLowerCase());
+      const creditsIndex = children.indexOf('fd-credits-banner');
+      const dispatchIndex = children.indexOf('fd-dispatch-banner');
+      expect(creditsIndex).toBeLessThan(dispatchIndex);
     });
   });
 });

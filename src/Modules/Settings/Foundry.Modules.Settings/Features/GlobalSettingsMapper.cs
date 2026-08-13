@@ -20,6 +20,7 @@ internal static class GlobalSettingsMapper
         return new GlobalSettingsSummary(
             settings.MaxConcurrent,
             settings.TimeoutMinutes,
+            settings.ProbeIntervalMinutes,
             settings.SystemPromptTemplate,
             settings.WorkerPromptTemplate,
             settings.UsageLimitResetsAt,

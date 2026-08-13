@@ -21,4 +21,6 @@ internal static class ContainerLabelConstants
     internal const string RoleLogin = "login";
 
     internal const string RoleCredentialHelper = "credential-helper";
+
+    internal const string RoleCreditProbe = "credit-probe";
 }

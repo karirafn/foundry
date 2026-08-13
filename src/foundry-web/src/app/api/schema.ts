@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/credentials/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forces an immediate credit probe; returns 202 when already in flight */
+        post: operations["CheckCreditsNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/credentials/login/start": {
         parameters: {
             query?: never;
@@ -424,7 +441,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the dispatch auto-resume setting */
+        /** Updates dispatch settings including auto-resume and probe interval */
         put: operations["UpdateDispatchSettings"];
         post?: never;
         delete?: never;
@@ -522,6 +539,10 @@ export interface components {
             canPush: boolean;
             isMonitored: boolean;
         };
+        CheckCreditsNowResponse: {
+            inFlight: boolean;
+            outcome: null | string;
+        };
         ClaudeAccountSummary: {
             /** Format: uuid */
             accountId: string;
@@ -530,6 +551,8 @@ export interface components {
             subscriptionType: null | string;
             oAuthAccountEmail: null | string;
             oAuthAccountOrgName: null | string;
+            /** Format: date-time */
+            nextProbeAt: null | string;
         };
         CreateAccountRequestBody: {
             providerType: string;
@@ -568,6 +591,8 @@ export interface components {
             maxConcurrent: number | string;
             /** Format: int32 */
             timeoutMinutes: number | string;
+            /** Format: int32 */
+            probeIntervalMinutes: number | string;
             systemPromptTemplate: null | string;
             workerPromptTemplate: null | string;
             /** Format: date-time */
@@ -754,6 +779,8 @@ export interface components {
         };
         UpdateDispatchSettingsRequestBody: {
             autoResumeOnUsageReset: boolean;
+            /** Format: int32 */
+            probeIntervalMinutes: number | string;
         };
         UpdatePromptTemplatesRequestBody: {
             systemPromptTemplate: null | string;
@@ -892,6 +919,44 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    CheckCreditsNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckCreditsNowResponse"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckCreditsNowResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1904,6 +1969,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GlobalSettingsSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Not Found */

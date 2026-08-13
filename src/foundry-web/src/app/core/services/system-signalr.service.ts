@@ -2,6 +2,7 @@ import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } fr
 import { Observable, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import {
+  CREDITS_NOTIFICATION_CATEGORY,
   DISPATCH_NOTIFICATION_CATEGORY,
   DOCKER_NOTIFICATION_CATEGORY,
   IMAGE_BUILD_NOTIFICATION_CATEGORY,
@@ -57,12 +58,19 @@ export class SystemSignalRService {
   private readonly _loginSessionUpdate = new Subject<LoginSessionUpdate>();
   readonly loginSessionUpdate: Observable<LoginSessionUpdate> = this._loginSessionUpdate.asObservable();
 
+  private readonly _creditsNotification = new Subject<SystemNotification>();
+  readonly creditsNotification: Observable<SystemNotification> = this._creditsNotification.asObservable();
+
   constructor() {
     const hub = this._hubFactory();
 
     hub.on('SystemNotificationReceived', (notification: SystemNotification) => {
       if (RELOAD_TRIGGER_CATEGORIES.has(notification.category)) {
         this._reloadTrigger.next();
+      }
+
+      if (notification.category === CREDITS_NOTIFICATION_CATEGORY) {
+        this._creditsNotification.next(notification);
       }
 
       this._applyNotification(notification);

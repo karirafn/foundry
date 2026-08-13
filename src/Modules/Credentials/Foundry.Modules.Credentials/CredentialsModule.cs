@@ -2,6 +2,7 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Credentials.Features;
 using Foundry.Modules.Credentials.Features.Broadcasts;
+using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.DispatchReactions;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Features.WorkerReactions;
@@ -28,6 +29,8 @@ public static class CredentialsModule
         services.AddIntegrationEventHandler<WorkerCreditsExhausted, WorkerCreditsExhaustedHandler>();
         services.AddIntegrationEventHandler<CredentialsInvalidated, CredentialsInvalidatedBroadcastHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedBroadcastHandler>();
+        services.AddIntegrationEventHandler<WorkerCreditsExhausted, WorkerCreditsExhaustedBroadcastHandler>();
+        services.AddIntegrationEventHandler<CreditsRestored, CreditsRestoredBroadcastHandler>();
 
         services.AddScoped<ICredentialQueries, CredentialQueries>();
         services.AddScoped<ICredentialGate, CredentialGate>();
@@ -39,6 +42,10 @@ public static class CredentialsModule
         services.AddSingleton<LoginSessionService>();
         services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
         services.AddHostedService<TransientContainerReaper>();
+
+        services.AddSingleton<CreditProbeCoordinator>();
+        services.AddSingleton<ICreditProbeCoordinator>(sp => sp.GetRequiredService<CreditProbeCoordinator>());
+        services.AddHostedService<CreditProbeService>();
 
         return services;
     }

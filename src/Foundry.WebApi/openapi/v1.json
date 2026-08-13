@@ -87,6 +87,47 @@
         }
       }
     },
+    "/api/credentials/probe": {
+      "post": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Forces an immediate credit probe; returns 202 when already in flight",
+        "operationId": "CheckCreditsNow",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckCreditsNowResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckCreditsNowResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/credentials/login/start": {
       "post": {
         "tags": [
@@ -1378,7 +1419,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the dispatch auto-resume setting",
+        "summary": "Updates dispatch settings including auto-resume and probe interval",
         "operationId": "UpdateDispatchSettings",
         "requestBody": {
           "content": {
@@ -1403,6 +1444,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1636,6 +1687,24 @@
           }
         }
       },
+      "CheckCreditsNowResponse": {
+        "required": [
+          "inFlight",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "inFlight": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ClaudeAccountSummary": {
         "required": [
           "accountId",
@@ -1643,7 +1712,8 @@
           "oAuthStatus",
           "subscriptionType",
           "oAuthAccountEmail",
-          "oAuthAccountOrgName"
+          "oAuthAccountOrgName",
+          "nextProbeAt"
         ],
         "type": "object",
         "properties": {
@@ -1674,6 +1744,13 @@
               "null",
               "string"
             ]
+          },
+          "nextProbeAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -1816,6 +1893,7 @@
         "required": [
           "maxConcurrent",
           "timeoutMinutes",
+          "probeIntervalMinutes",
           "systemPromptTemplate",
           "workerPromptTemplate",
           "usageLimitResetsAt",
@@ -1844,6 +1922,14 @@
             "format": "int32"
           },
           "timeoutMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "probeIntervalMinutes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -2651,12 +2737,21 @@
       },
       "UpdateDispatchSettingsRequestBody": {
         "required": [
-          "autoResumeOnUsageReset"
+          "autoResumeOnUsageReset",
+          "probeIntervalMinutes"
         ],
         "type": "object",
         "properties": {
           "autoResumeOnUsageReset": {
             "type": "boolean"
+          },
+          "probeIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

@@ -185,7 +185,7 @@ public sealed class PersistClaudeAccount : IAsyncDisposable
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.BlockSpend();
+        account.BlockSpend(DateTimeOffset.UtcNow.AddHours(1));
 
         _dbContext.Set<ClaudeAccount>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

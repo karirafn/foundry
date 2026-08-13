@@ -37,7 +37,8 @@ public sealed class RoundTrip
     public void WhenBlockedRoundTripped_PreservesType()
     {
         // Arrange
-        SpendState original = new SpendState.Blocked();
+        DateTimeOffset nextProbeAt = new DateTimeOffset(2026, 1, 15, 10, 30, 0, TimeSpan.Zero);
+        SpendState original = new SpendState.Blocked(nextProbeAt);
 
         // Act
         string json = JsonSerializer.Serialize(original, _options);
@@ -45,6 +46,36 @@ public sealed class RoundTrip
 
         // Assert
         result.ShouldBeOfType<SpendState.Blocked>();
+    }
+
+    [Fact]
+    public void WhenBlockedRoundTripped_PreservesNextProbeAt()
+    {
+        // Arrange
+        DateTimeOffset nextProbeAt = new DateTimeOffset(2026, 1, 15, 10, 30, 0, TimeSpan.Zero);
+        SpendState original = new SpendState.Blocked(nextProbeAt);
+
+        // Act
+        string json = JsonSerializer.Serialize(original, _options);
+        SpendState.Blocked? result = JsonSerializer.Deserialize<SpendState>(json, _options) as SpendState.Blocked;
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.NextProbeAt.ShouldBe(nextProbeAt);
+    }
+
+    [Fact]
+    public void WhenBlockedSerialized_IncludesNextProbeAtField()
+    {
+        // Arrange
+        DateTimeOffset nextProbeAt = new DateTimeOffset(2026, 1, 15, 10, 30, 0, TimeSpan.Zero);
+        SpendState original = new SpendState.Blocked(nextProbeAt);
+
+        // Act
+        string json = JsonSerializer.Serialize(original, _options);
+
+        // Assert
+        json.ShouldContain("next_probe_at");
     }
 
     [Fact]

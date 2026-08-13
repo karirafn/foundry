@@ -14,6 +14,9 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int DefaultTimeoutMinutes = 120;
     internal const int MaxPromptTemplateLength = 32768;
     internal const int MaxUsageLimitResetDays = 7;
+    internal const int MinProbeIntervalMinutes = 5;
+    internal const int MaxProbeIntervalMinutes = 10080;
+    internal const int DefaultProbeIntervalMinutes = 60;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
     {
@@ -23,6 +26,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         MaxConcurrent = DefaultMaxConcurrent;
         TimeoutMinutes = DefaultTimeoutMinutes;
+        ProbeIntervalMinutes = DefaultProbeIntervalMinutes;
         AutoResumeOnUsageReset = true;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
         ImageBuildState = new ImageBuildState.Idle();
@@ -33,6 +37,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public int MaxConcurrent { get; private set; }
 
     public int TimeoutMinutes { get; private set; }
+
+    public int ProbeIntervalMinutes { get; private set; }
 
     public string? SystemPromptTemplate { get; private set; }
 
@@ -111,6 +117,18 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         AutoResumeOnUsageReset = autoResume;
         UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Result UpdateProbeInterval(int probeIntervalMinutes)
+    {
+        if (probeIntervalMinutes < MinProbeIntervalMinutes || probeIntervalMinutes > MaxProbeIntervalMinutes)
+        {
+            return SettingsErrors.InvalidProbeInterval(probeIntervalMinutes);
+        }
+
+        ProbeIntervalMinutes = probeIntervalMinutes;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
     }
 
     public Result UpdatePromptTemplates(string? systemPromptTemplate, string? workerPromptTemplate)

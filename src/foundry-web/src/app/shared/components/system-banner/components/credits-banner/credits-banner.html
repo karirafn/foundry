@@ -1,0 +1,70 @@
+<div
+  class="system-banner"
+  role="region"
+  aria-label="Credit status"
+  [hidden]="!isVisible()"
+>
+  <span class="sr-only" role="alert">{{ transitionAlertText() }}</span>
+  <div class="system-banner__bar system-banner__bar--credits">
+    @if (viewState() === 'checking') {
+      <svg
+        class="system-banner__spinner-icon"
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+      </svg>
+    } @else {
+      <svg
+        class="system-banner__icon"
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+      </svg>
+    }
+    <span class="system-banner__message">
+      <strong>Dispatch blocked — Claude account can't spend</strong>
+      <span class="system-banner__body">Add credits or raise the spend limit on the Anthropic account to resume.</span>
+      <span class="system-banner__status-line" role="status" aria-atomic="true">
+        @if (viewState() === 'checking') {
+          Checking whether the Claude account can spend again&hellip;
+        } @else {
+          Next automatic check in
+          <span class="system-banner__countdown-value" aria-hidden="true">{{ countdownText() }}</span>
+        }
+      </span>
+    </span>
+    <button
+      type="button"
+      class="system-banner__action-btn"
+      aria-label="Check the Claude account for available credit now"
+      [disabled]="creditsService.isChecking()"
+      [attr.aria-busy]="creditsService.isChecking() || null"
+      (click)="creditsService.checkNow()"
+    >
+      @if (creditsService.isChecking()) {
+        Checking&hellip;
+      } @else {
+        Check now
+      }
+    </button>
+  </div>
+</div>

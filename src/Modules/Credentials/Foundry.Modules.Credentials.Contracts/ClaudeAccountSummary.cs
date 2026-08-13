@@ -6,4 +6,5 @@ public sealed record ClaudeAccountSummary(
     string OAuthStatus,
     string? SubscriptionType,
     string? OAuthAccountEmail,
-    string? OAuthAccountOrgName);
+    string? OAuthAccountOrgName,
+    DateTimeOffset? NextProbeAt);
