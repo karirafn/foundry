@@ -47,8 +47,9 @@ public sealed class WhenProviderReturnsTransientError : IAsyncDisposable
             services.AddSingleton<IWorkerOrchestrator>(new RunningContainerOrchestrator());
 
             services.RemoveAll<IPostExitProviderQueries>();
-            services.AddScoped<IPostExitProviderQueries>(_ => new TransientErrorAfterSuccessProviderQueries(
-                new BranchCommitSummary(InitialCommitCount, InitialSha)));
+            services.AddSingleton<IPostExitProviderQueries>(
+                new TransientErrorAfterSuccessProviderQueries(
+                    new BranchCommitSummary(InitialCommitCount, InitialSha)));
 
             services.RemoveAll<IWorkerActivityBroadcaster>();
             services.AddScoped<IWorkerActivityBroadcaster>(_ => _broadcaster);

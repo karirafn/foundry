@@ -41,7 +41,7 @@ public sealed class WhenProviderReturnsNotFound : IAsyncDisposable
             services.AddSingleton<IWorkerOrchestrator>(new RunningContainerOrchestrator());
 
             services.RemoveAll<IPostExitProviderQueries>();
-            services.AddScoped<IPostExitProviderQueries>(_ =>
+            services.AddSingleton<IPostExitProviderQueries>(
                 new SuccessThenNotFoundProviderQueries(
                     new BranchCommitSummary(CommitCount: 5, LatestSha: "sha-prior")));
         });
