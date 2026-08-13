@@ -108,11 +108,9 @@ public sealed class HandleAsync
     }
 
     [Fact]
-    public async Task WhenHandled_BroadcastsNullCommitFields()
+    public async Task WhenHandled_BroadcastsCommitCount()
     {
         // Arrange
-        // TODO (step 7): WorkerActivity DTO will be reshaped to carry CommitCount.
-        // Until then the handler broadcasts null for both commit fields.
         CapturingWorkerActivityBroadcaster broadcaster = new();
         WorkerActivityObservedHandler sut = new(broadcaster);
         WorkerActivityObserved @event = new(
@@ -126,8 +124,6 @@ public sealed class HandleAsync
 
         // Assert
         WorkerActivity activity = broadcaster.Broadcasts.ShouldHaveSingleItem();
-        activity.ShouldSatisfyAllConditions(
-            () => activity.NewCommitSha.ShouldBeNull(),
-            () => activity.NewCommitMessage.ShouldBeNull());
+        activity.CommitCount.ShouldBe(5);
     }
 }

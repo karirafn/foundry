@@ -285,9 +285,9 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenActiveRunHasBranchCommitCount_CommitMarkersIsEmpty()
+    public async Task WhenActiveRunHasBranchCommitCount_ReturnsRunningState()
     {
-        // Arrange — CommitMarkers DTO is kept for backward compat but step 7 will reshape it.
+        // Arrange
         WorkerRunId id = WorkerRunId.New();
         IssueId issueId = IssueId.New();
         StartingRun starting = StartingRun.Begin(issueId, id);
@@ -312,6 +312,6 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
 
         // Assert
         WorkerRunDetail detail = result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value;
-        detail.CommitMarkers.ShouldBeEmpty();
+        detail.State.ShouldBe("running");
     }
 }

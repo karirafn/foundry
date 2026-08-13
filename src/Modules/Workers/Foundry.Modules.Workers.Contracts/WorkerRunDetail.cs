@@ -15,10 +15,4 @@ public sealed record WorkerRunDetail(
     int? InputTokens,
     int? OutputTokens,
     DateTimeOffset? LastActivityAt,
-    IReadOnlyList<WorkerRunCommitMarker> CommitMarkers,
     bool HasStoredLog);
-
-public sealed record WorkerRunCommitMarker(
-    DateTimeOffset ObservedAt,
-    string Sha,
-    string Message);

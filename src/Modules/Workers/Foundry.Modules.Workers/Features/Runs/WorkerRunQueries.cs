@@ -129,7 +129,6 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: null,
             OutputTokens: null,
             LastActivityAt: run.LastActivityAt,
-            CommitMarkers: [],
             HasStoredLog: false);
 
     private static WorkerRunDetail MapCompleted(CompletedRun run) =>
@@ -148,7 +147,6 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: run.ResultSummary?.InputTokens,
             OutputTokens: run.ResultSummary?.OutputTokens,
             LastActivityAt: null,
-            CommitMarkers: [],
             HasStoredLog: false);
 
     private static WorkerRunDetail MapFailed(FailedRun run) =>
@@ -167,7 +165,6 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: run.ResultSummary?.InputTokens,
             OutputTokens: run.ResultSummary?.OutputTokens,
             LastActivityAt: null,
-            CommitMarkers: [],
             HasStoredLog: run is { ContainerOutput.Length: > 0 });
 
     private static WorkerRunDetail MapStarting(StartingRun run) =>
@@ -186,7 +183,6 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: null,
             OutputTokens: null,
             LastActivityAt: null,
-            CommitMarkers: [],
             HasStoredLog: false);
 
     public async Task<int> CountConsecutiveTransientRunsAsync(

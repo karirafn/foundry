@@ -9,13 +9,11 @@ internal sealed class WorkerActivityObservedHandler(IWorkerActivityBroadcaster b
 {
     public Task HandleAsync(WorkerActivityObserved @event, CancellationToken cancellationToken)
     {
-        // TODO (step 7): reshape WorkerActivity DTO to carry CommitCount instead of commit SHA/message.
         WorkerActivity activity = new(
             WorkerRunId: @event.WorkerRunId.Value,
             IssueId: @event.IssueId.Value,
             LastActivityAt: @event.LastActivityAt,
-            NewCommitSha: null,
-            NewCommitMessage: null);
+            CommitCount: @event.CommitCount);
 
         return broadcaster.BroadcastActivityAsync(activity, cancellationToken);
     }
