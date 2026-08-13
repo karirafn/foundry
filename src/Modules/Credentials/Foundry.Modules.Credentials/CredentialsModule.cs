@@ -42,6 +42,8 @@ public static class CredentialsModule
         services.AddHostedService<TransientContainerReaper>();
 
         services.AddSingleton<CreditProbeCoordinator>();
+        services.AddSingleton<ICreditProbeCoordinator>(sp => sp.GetRequiredService<CreditProbeCoordinator>());
+        services.AddHostedService<CreditProbeService>();
 
         return services;
     }

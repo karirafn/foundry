@@ -87,6 +87,47 @@
         }
       }
     },
+    "/api/credentials/probe": {
+      "post": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Forces an immediate credit probe; returns 202 when already in flight",
+        "operationId": "CheckCreditsNow",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckCreditsNowResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckCreditsNowResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/credentials/login/start": {
       "post": {
         "tags": [
@@ -1643,6 +1684,24 @@
           },
           "isMonitored": {
             "type": "boolean"
+          }
+        }
+      },
+      "CheckCreditsNowResponse": {
+        "required": [
+          "inFlight",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "inFlight": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

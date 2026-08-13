@@ -32,7 +32,7 @@ internal sealed class CreditProbeCoordinator(
     IProbeOutcomeClassifier classifier,
     IIntegrationEventProcessor integrationEventProcessor,
     ILoginSessionState loginSessionState,
-    ILogger<CreditProbeCoordinator> logger) : IDisposable
+    ILogger<CreditProbeCoordinator> logger) : ICreditProbeCoordinator, IDisposable
 {
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
