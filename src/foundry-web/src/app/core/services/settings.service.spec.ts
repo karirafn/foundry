@@ -703,12 +703,12 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     const req = httpMock.expectOne('/api/settings/dispatch');
 
     // Assert
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true });
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true, probeIntervalMinutes: 60 });
     req.flush(buildSettingsResponse({ autoResumeOnUsageReset: true }));
   });
 
@@ -717,7 +717,7 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateDispatchSettings(false);
+    service.updateDispatchSettings(false, 60);
 
     // Assert — before flush
     expect(service.savingDispatch()).toBe(true);
@@ -726,7 +726,7 @@ describe('SettingsService', () => {
 
   it('should set saveDispatchSuccess to true and savingDispatch false after updateDispatchSettings succeeds', () => {
     // Arrange
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse({
       autoResumeOnUsageReset: true,
       isDispatchPaused: false,
@@ -740,7 +740,7 @@ describe('SettingsService', () => {
 
   it('should update dispatchService state after updateDispatchSettings succeeds', () => {
     // Arrange
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse({
       isDispatchPaused: true,
       usageLimitResetsAt: '2026-08-01T00:00:00Z',
@@ -753,7 +753,7 @@ describe('SettingsService', () => {
 
   it('should set saveDispatchError when updateDispatchSettings fails', () => {
     // Arrange
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
@@ -767,7 +767,7 @@ describe('SettingsService', () => {
 
   it('should set saveDispatchError to a fixed user-facing string when updateDispatchSettings fails', () => {
     // Arrange
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
@@ -779,7 +779,7 @@ describe('SettingsService', () => {
 
   it('should reset dispatch signals in loadSettings', () => {
     // Arrange — put signals into dirty state
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     httpMock.expectOne('/api/settings/dispatch').flush(buildSettingsResponse());
     expect(service.saveDispatchSuccess()).toBe(true);
 

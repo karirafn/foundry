@@ -1147,7 +1147,115 @@ describe('SettingsGeneralComponent', () => {
     // Assert
     const req = httpMock.expectOne('/api/settings/dispatch');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true });
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true, probeIntervalMinutes: 60 });
+    req.flush(API_KEY_RESPONSE);
+  });
+
+  it('should render a "Probe interval (minutes)" number input in the Dispatch Settings form', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const probeInput = el.querySelector('#probeIntervalMinutes') as HTMLInputElement;
+
+    // Assert
+    expect(probeInput).toBeTruthy();
+    expect(probeInput.type).toBe('number');
+  });
+
+  it('should initialize probeIntervalMinutes input from loaded settings', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, probeIntervalMinutes: 30 });
+    fixture.detectChanges();
+
+    // Act
+    const probeNgModel = fixture.debugElement.query(By.css('#probeIntervalMinutes')).injector.get(NgModel);
+
+    // Assert
+    expect(probeNgModel.model).toBe(30);
+  });
+
+  it('should show a validation error when probeIntervalMinutes is below the minimum (5)', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act — set value below minimum
+    const component = fixture.componentInstance as unknown as { _probeIntervalValue: { set: (v: number) => void } };
+    component._probeIntervalValue.set(3);
+    fixture.detectChanges();
+
+    // Assert — validation error message is rendered
+    const el = fixture.nativeElement as HTMLElement;
+    const errorSpan = el.querySelector('.general-settings__field-error[role="alert"]') as HTMLElement;
+    expect(errorSpan).toBeTruthy();
+    expect(errorSpan.textContent).toContain('at least 5 minutes');
+  });
+
+  it('should not show a validation error when probeIntervalMinutes is at or above the minimum (5)', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, probeIntervalMinutes: 5 });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const errorSpan = el.querySelector('.general-settings__field-error[role="alert"]');
+
+    // Assert
+    expect(errorSpan).toBeFalsy();
+  });
+
+  it('should disable the Save button when probeIntervalMinutes is below the minimum', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act — set value below minimum
+    const component = fixture.componentInstance as unknown as { _probeIntervalValue: { set: (v: number) => void } };
+    component._probeIntervalValue.set(2);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const dispatchForm = el.querySelector('.general-settings__dispatch-form') as HTMLElement;
+    const saveBtn = dispatchForm.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true);
+  });
+
+  it('should include probeIntervalMinutes in the dispatch settings save payload', () => {
+    // Arrange
+    const { httpMock } = setup();
+    const fixture = TestBed.createComponent(SettingsGeneralComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, probeIntervalMinutes: 45, autoResumeOnUsageReset: false });
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const dispatchForm = el.querySelector('.general-settings__dispatch-form') as HTMLElement;
+    const saveBtn = dispatchForm.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    const req = httpMock.expectOne('/api/settings/dispatch');
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: false, probeIntervalMinutes: 45 });
     req.flush(API_KEY_RESPONSE);
   });
 
@@ -1161,7 +1269,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     fixture.detectChanges();
 
     // Assert
@@ -1184,7 +1292,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     httpMock.expectOne('/api/settings/dispatch').flush(API_KEY_RESPONSE);
     fixture.detectChanges();
 
@@ -1205,7 +1313,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true);
+    service.updateDispatchSettings(true, 60);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
