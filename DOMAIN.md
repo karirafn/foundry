@@ -454,7 +454,7 @@ Docker timestamps are enabled (`--timestamps` flag) so each output line carries 
 Failed-run output is served by `GET /api/workers/runs/{workerRunId}/log` (200 with text body when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
 
 Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines with backlog replay followed by live follow.
-The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and interleaves commit markers by timestamp to give a unified activity timeline.
+The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and renders the redacted lines in arrival order.
 
 ## First-Run Wizard
 
