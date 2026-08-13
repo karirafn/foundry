@@ -121,12 +121,12 @@ internal sealed class WorkerOutcomeResolver(
         FailureReason failureReason,
         CancellationToken cancellationToken)
     {
-        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
+        Result<BranchCommitSummary> commitsResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             run.MonitoredRepositoryId,
             run.BranchName.Value,
             cancellationToken);
 
-        if (commitsResult is Result<bool>.Failure commitsFailure)
+        if (commitsResult is Result<BranchCommitSummary>.Failure commitsFailure)
         {
             if (commitsFailure.Error.Kind == ErrorKind.NotFound)
             {
@@ -137,7 +137,7 @@ internal sealed class WorkerOutcomeResolver(
             return new WorkerOutcome.Indeterminate(commitsFailure.Error);
         }
 
-        bool hasCommits = ((Result<bool>.Success)commitsResult).Value;
+        bool hasCommits = ((Result<BranchCommitSummary>.Success)commitsResult).Value.CommitCount > 0;
 
         return hasCommits
             ? new WorkerOutcome.ContinuableFailure(run.BranchName, failureReason, containerOutput, summary)
@@ -151,14 +151,14 @@ internal sealed class WorkerOutcomeResolver(
         CancellationToken cancellationToken)
     {
         // Step 5b — no MR fallback
-        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
+        Result<BranchCommitSummary> commitsResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             run.MonitoredRepositoryId,
             run.BranchName.Value,
             cancellationToken);
 
         bool hasCommits;
 
-        if (commitsResult is Result<bool>.Failure commitsFailure)
+        if (commitsResult is Result<BranchCommitSummary>.Failure commitsFailure)
         {
             if (commitsFailure.Error.Kind == ErrorKind.NotFound)
             {
@@ -173,7 +173,7 @@ internal sealed class WorkerOutcomeResolver(
         }
         else
         {
-            hasCommits = ((Result<bool>.Success)commitsResult).Value;
+            hasCommits = ((Result<BranchCommitSummary>.Success)commitsResult).Value.CommitCount > 0;
         }
 
         RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);

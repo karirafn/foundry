@@ -144,8 +144,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     /// <summary>
     /// Scriptable stub for <see cref="IPostExitProviderQueries"/>.
     /// <para>
-    /// <paramref name="hasCommits"/> — result for <see cref="HasBranchCommitsAsync"/>
-    /// when no error is scripted.
+    /// <paramref name="hasCommits"/> — when <c>true</c>, <see cref="GetBranchCommitSummaryAsync"/>
+    /// returns a summary with <c>CommitCount = 1</c>; otherwise <c>CommitCount = 0</c>.
     /// </para>
     /// <para>
     /// <paramref name="mergeRequest"/> — when set, <see cref="GetMergeRequestByBranchAsync"/>
@@ -156,7 +156,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
     /// returns this failure instead.
     /// </para>
     /// <para>
-    /// <paramref name="hasCommitsError"/> — when set, <see cref="HasBranchCommitsAsync"/> returns
+    /// <paramref name="hasCommitsError"/> — when set, <see cref="GetBranchCommitSummaryAsync"/> returns
     /// this failure (use <see cref="ErrorKind.NotFound"/> to signal a deleted branch).
     /// </para>
     /// </summary>
@@ -199,8 +199,17 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit found")));
+        {
+            if (hasCommitsError is not null)
+            {
+                return Task.FromResult(Result<BranchCommitSummary>.Fail(hasCommitsError));
+            }
+
+            BranchCommitSummary summary = hasCommits
+                ? new BranchCommitSummary(1, "sha")
+                : new BranchCommitSummary(0, null);
+            return Task.FromResult(Result<BranchCommitSummary>.Ok(summary));
+        }
     }
 
     protected sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher

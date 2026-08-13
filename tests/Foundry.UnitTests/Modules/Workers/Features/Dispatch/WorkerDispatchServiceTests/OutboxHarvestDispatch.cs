@@ -352,8 +352,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit")));
+            => Task.FromResult(Result<BranchCommitSummary>.Ok(new BranchCommitSummary(0, null)));
     }
 
     private sealed class NullContainerOutputParser : IContainerOutputParser
