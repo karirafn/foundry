@@ -456,6 +456,8 @@ The resulting presence maps to outcomes:
 - `Closed` (unmerged) + branch has commits → `ContinuableFailure`; otherwise → `Failure`
 - `None` (no MR found) → fall back to exit-code + branch-commits path (see below)
 
+The "branch has commits" boolean is derived from `GetBranchCommitSummaryAsync` (commit count > 0) — the single consolidated query behind both the closed-MR and no-MR paths.
+
 **NotFound vs transient errors.**
 Provider query failures carry `Error.Kind`.
 Only `ErrorKind.NotFound` is a definitive signal — "branch deleted, no commits reachable".
