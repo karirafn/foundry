@@ -9,6 +9,8 @@ namespace Foundry.UnitTests.Modules.Credentials.Domain.Entities.ClaudeAccountTes
 
 public sealed class BlockSpend
 {
+    private static readonly DateTimeOffset SomeProbeAt = DateTimeOffset.UtcNow.AddHours(1);
+
     [Fact]
     public void WhenSpendIsAvailable_TransitionsToBlockedAndReturnsTrue()
     {
@@ -16,7 +18,7 @@ public sealed class BlockSpend
         ClaudeAccount account = ClaudeAccount.Create();
 
         // Act
-        bool changed = account.BlockSpend();
+        bool changed = account.BlockSpend(SomeProbeAt);
 
         // Assert
         account.SpendState.ShouldBeOfType<SpendState.Blocked>();
@@ -24,17 +26,48 @@ public sealed class BlockSpend
     }
 
     [Fact]
+    public void WhenSpendIsAvailable_SetsNextProbeAt()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+        DateTimeOffset expectedProbeAt = DateTimeOffset.UtcNow.AddMinutes(60);
+
+        // Act
+        account.BlockSpend(expectedProbeAt);
+
+        // Assert
+        SpendState.Blocked blocked = account.SpendState.ShouldBeOfType<SpendState.Blocked>();
+        blocked.NextProbeAt.ShouldBe(expectedProbeAt);
+    }
+
+    [Fact]
     public void WhenSpendAlreadyBlocked_IsIdempotentAndReturnsFalse()
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.BlockSpend();
+        account.BlockSpend(SomeProbeAt);
 
         // Act
-        bool changed = account.BlockSpend();
+        bool changed = account.BlockSpend(SomeProbeAt.AddHours(1));
 
         // Assert
         changed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenSpendAlreadyBlocked_PreservesExistingProbeAt()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+        DateTimeOffset originalProbeAt = DateTimeOffset.UtcNow.AddHours(1);
+        account.BlockSpend(originalProbeAt);
+
+        // Act
+        account.BlockSpend(originalProbeAt.AddHours(1));
+
+        // Assert
+        SpendState.Blocked blocked = account.SpendState.ShouldBeOfType<SpendState.Blocked>();
+        blocked.NextProbeAt.ShouldBe(originalProbeAt);
     }
 
     [Fact]
@@ -44,7 +77,7 @@ public sealed class BlockSpend
         ClaudeAccount account = ClaudeAccount.Create();
 
         // Act
-        account.BlockSpend();
+        account.BlockSpend(SomeProbeAt);
 
         // Assert
         account.Validity.ShouldBeOfType<CredentialValidity.Valid>();
@@ -58,7 +91,7 @@ public sealed class BlockSpend
         DateTimeOffset before = account.UpdatedAt;
 
         // Act
-        account.BlockSpend();
+        account.BlockSpend(SomeProbeAt);
 
         // Assert
         account.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
@@ -69,11 +102,11 @@ public sealed class BlockSpend
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.BlockSpend();
+        account.BlockSpend(SomeProbeAt);
         DateTimeOffset updatedAt = account.UpdatedAt;
 
         // Act
-        account.BlockSpend();
+        account.BlockSpend(SomeProbeAt);
 
         // Assert
         account.UpdatedAt.ShouldBe(updatedAt);
@@ -84,7 +117,7 @@ public sealed class BlockSpend
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.BlockSpend();
+        account.BlockSpend(SomeProbeAt);
 
         // Act
         bool changed = account.RestoreSpend();
@@ -112,7 +145,7 @@ public sealed class BlockSpend
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.BlockSpend();
+        account.BlockSpend(SomeProbeAt);
         account.Invalidate("some_reason");
 
         // Act
@@ -130,5 +163,50 @@ public sealed class BlockSpend
 
         // Assert
         account.SpendState.ShouldBeOfType<SpendState.Available>();
+    }
+
+    [Fact]
+    public void WhenRearmProbe_OnBlockedAccount_UpdatesNextProbeAt()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+        account.BlockSpend(SomeProbeAt);
+        DateTimeOffset newProbeAt = SomeProbeAt.AddHours(1);
+
+        // Act
+        bool changed = account.RearmProbe(newProbeAt);
+
+        // Assert
+        changed.ShouldBeTrue();
+        SpendState.Blocked blocked = account.SpendState.ShouldBeOfType<SpendState.Blocked>();
+        blocked.NextProbeAt.ShouldBe(newProbeAt);
+    }
+
+    [Fact]
+    public void WhenRearmProbe_OnAvailableAccount_IsNoOpAndReturnsFalse()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+
+        // Act
+        bool changed = account.RearmProbe(SomeProbeAt);
+
+        // Assert
+        changed.ShouldBeFalse();
+        account.SpendState.ShouldBeOfType<SpendState.Available>();
+    }
+
+    [Fact]
+    public void WhenRearmProbe_OnAvailableAccount_DoesNotUpdateUpdatedAt()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+        DateTimeOffset updatedAt = account.UpdatedAt;
+
+        // Act
+        account.RearmProbe(SomeProbeAt);
+
+        // Assert
+        account.UpdatedAt.ShouldBe(updatedAt);
     }
 }

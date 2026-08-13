@@ -114,7 +114,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
-            account.BlockSpend();
+            account.BlockSpend(DateTimeOffset.UtcNow.AddHours(1));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -144,7 +144,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
-            account.BlockSpend();
+            account.BlockSpend(DateTimeOffset.UtcNow.AddHours(1));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

@@ -13,6 +13,9 @@ internal sealed class WorkerCreditsExhaustedHandler(
     DbContext dbContext,
     ILogger<WorkerCreditsExhaustedHandler> logger) : IIntegrationEventHandler<WorkerCreditsExhausted>
 {
+    // TODO(step 3): read ProbeIntervalMinutes from GlobalSettings instead of this default.
+    private const int DefaultProbeIntervalMinutes = 60;
+
     public async Task HandleAsync(WorkerCreditsExhausted @event, CancellationToken cancellationToken)
     {
         ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
@@ -25,7 +28,8 @@ internal sealed class WorkerCreditsExhaustedHandler(
             return;
         }
 
-        bool stateChanged = account.BlockSpend();
+        DateTimeOffset nextProbeAt = DateTimeOffset.UtcNow.AddMinutes(DefaultProbeIntervalMinutes);
+        bool stateChanged = account.BlockSpend(nextProbeAt);
 
         if (stateChanged)
         {
