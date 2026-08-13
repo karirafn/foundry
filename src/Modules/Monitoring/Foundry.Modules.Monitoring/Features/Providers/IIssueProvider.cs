@@ -50,7 +50,7 @@ internal interface IIssueProvider
         string branchName,
         CancellationToken cancellationToken);
 
-    Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+    Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         RepositorySlug slug,
         string branchName,
         CancellationToken cancellationToken);

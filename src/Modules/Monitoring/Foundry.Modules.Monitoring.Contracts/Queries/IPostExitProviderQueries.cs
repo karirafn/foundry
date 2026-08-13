@@ -19,7 +19,7 @@ public interface IPostExitProviderQueries
         string branchName,
         CancellationToken cancellationToken);
 
-    Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+    Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         MonitoredRepositoryId repositoryId,
         string branchName,
         CancellationToken cancellationToken);

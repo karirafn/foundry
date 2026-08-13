@@ -287,12 +287,12 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
             => Task.FromResult(
                 Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
-        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(
-                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+                Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit found")));
     }
 
     private sealed class MonitoringStubWorkerOrchestrator(WorkerStatus exitedStatus) : IWorkerOrchestrator

@@ -115,9 +115,9 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         // Arrange
         SeedActiveRun("running-commit-record");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        LatestBranchCommit commit = new("sha-abc123", "feat: initial commit");
+        BranchCommitSummary commit = new(CommitCount: 1, LatestSha: "sha-abc123");
         ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: "log", secondLogs: "log");
-        ScriptedCommitProviderQueries queries = new(firstCommit: null, secondCommit: commit);
+        ScriptedCommitProviderQueries queries = new(firstSummary: null, secondSummary: commit);
         WorkerDispatchService sut = BuildService(orchestrator, queries);
 
         // Tick 1: reconciliation — no commit yet
@@ -140,7 +140,7 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         // Arrange — same SHA returned on both tick 2 and tick 3
         SeedActiveRun("running-commit-dedup");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        LatestBranchCommit commit = new("sha-dedup", "feat: dedup test");
+        BranchCommitSummary commit = new(CommitCount: 1, LatestSha: "sha-dedup");
         // Both ticks return the same commit
         ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: "log", secondLogs: "log");
         ConstantCommitProviderQueries queries = new(commit);
@@ -308,8 +308,8 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
     }
 
     private sealed class ScriptedCommitProviderQueries(
-        LatestBranchCommit? firstCommit,
-        LatestBranchCommit? secondCommit) : IPostExitProviderQueries
+        BranchCommitSummary? firstSummary,
+        BranchCommitSummary? secondSummary) : IPostExitProviderQueries
     {
         private int _callCount;
 
@@ -332,20 +332,20 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
             => Task.FromResult(
                 Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
-        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
         {
-            LatestBranchCommit? commit = _callCount == 0 ? firstCommit : secondCommit;
+            BranchCommitSummary? summary = _callCount == 0 ? firstSummary : secondSummary;
             _callCount++;
-            return Task.FromResult(commit is null
-                ? Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit"))
-                : Result<LatestBranchCommit>.Ok(commit));
+            return Task.FromResult(summary is null
+                ? Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit"))
+                : Result<BranchCommitSummary>.Ok(summary));
         }
     }
 
-    private sealed class ConstantCommitProviderQueries(LatestBranchCommit commit) : IPostExitProviderQueries
+    private sealed class ConstantCommitProviderQueries(BranchCommitSummary summary) : IPostExitProviderQueries
     {
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
@@ -366,11 +366,11 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
             => Task.FromResult(
                 Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
-        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<LatestBranchCommit>.Ok(commit));
+            => Task.FromResult(Result<BranchCommitSummary>.Ok(summary));
     }
 
     private sealed class FailingCommitProviderQueries : IPostExitProviderQueries
@@ -394,11 +394,11 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
             => Task.FromResult(
                 Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
-        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(
-                Result<LatestBranchCommit>.Fail(new Error("Provider.Unavailable", "provider down")));
+                Result<BranchCommitSummary>.Fail(new Error("Provider.Unavailable", "provider down")));
     }
 }

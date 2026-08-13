@@ -819,19 +819,21 @@ internal sealed class WorkerDispatchService(
             activeRun.RecordActivity(now);
         }
 
-        Result<LatestBranchCommit> commitResult = await postExitProviderQueries.GetLatestBranchCommitAsync(
+        Result<BranchCommitSummary> commitResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             activeRun.MonitoredRepositoryId,
             activeRun.BranchName.Value,
             cancellationToken);
 
-        if (commitResult is Result<LatestBranchCommit>.Success { Value: LatestBranchCommit latestCommit })
+        if (commitResult is Result<BranchCommitSummary>.Success { Value: BranchCommitSummary summary }
+            && summary.LatestSha is not null)
         {
             _lastSeenCommitSha.TryGetValue(activeRun.Id, out string? lastSha);
 
-            if (latestCommit.Sha != lastSha)
+            if (summary.LatestSha != lastSha)
             {
-                _lastSeenCommitSha[activeRun.Id] = latestCommit.Sha;
-                activeRun.RecordCommit(CommitMarker.Create(now, latestCommit.Sha, latestCommit.Message));
+                _lastSeenCommitSha[activeRun.Id] = summary.LatestSha;
+                // Message will be surfaced in step 5 (observation-loop rework); placeholder kept here.
+                activeRun.RecordCommit(CommitMarker.Create(now, summary.LatestSha, summary.LatestSha));
             }
         }
 

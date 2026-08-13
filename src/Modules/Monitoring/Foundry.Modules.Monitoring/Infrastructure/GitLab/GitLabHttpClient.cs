@@ -616,21 +616,24 @@ internal sealed partial class GitLabHttpClient(
         return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.WebUrl));
     }
 
-    public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+    public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
+        string defaultBranch,
         string branchName,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<LatestBranchCommit>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<BranchCommitSummary>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedDefault = Uri.EscapeDataString(defaultBranch);
         string encodedBranch = Uri.EscapeDataString(branchName);
-        string relativePath = $"projects/{encodedPath}/repository/commits?ref_name={encodedBranch}&per_page=1";
+        // GitLab compare defaults to merge-base (diverged) comparison — do not add straight=true.
+        string relativePath = $"projects/{encodedPath}/repository/compare?from={encodedDefault}&to={encodedBranch}";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
@@ -640,24 +643,17 @@ internal sealed partial class GitLabHttpClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<LatestBranchCommit>.Fail(ErrorFromNonSuccess(response));
+            return Result<BranchCommitSummary>.Fail(ErrorFromNonSuccess(response));
         }
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitLabCommitListItemDto>? dtos =
-            JsonSerializer.Deserialize<List<GitLabCommitListItemDto>>(body, JsonOptions);
+        GitLabCompareDto? dto = JsonSerializer.Deserialize<GitLabCompareDto>(body, JsonOptions);
 
-        GitLabCommitListItemDto? latest = (dtos ?? []).FirstOrDefault();
+        IReadOnlyList<GitLabCommitDto> commits = dto?.Commits ?? [];
+        int commitCount = commits.Count;
+        string? latestSha = commits.Count > 0 ? commits[^1].Id : null;
 
-        if (latest is null)
-        {
-            return Result<LatestBranchCommit>.Fail(GitLabErrors.NoBranchCommits);
-        }
-
-        string shortSha = latest.Id.Length >= 7 ? latest.Id[..7] : latest.Id;
-        string commitMessage = latest.Title ?? string.Empty;
-
-        return Result<LatestBranchCommit>.Ok(new LatestBranchCommit(shortSha, commitMessage));
+        return Result<BranchCommitSummary>.Ok(new BranchCommitSummary(commitCount, latestSha));
     }
 
     public async Task<Result<string>> GetDefaultBranchAsync(
@@ -921,8 +917,6 @@ internal sealed partial class GitLabHttpClient(
 
     private sealed record GitLabCommitDto(string Id);
 
-    private sealed record GitLabCommitListItemDto(string Id, string? Title);
-
     private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt);
 
     private sealed record GitLabProjectWithPermissionsDto(GitLabProjectPermissionsDto? Permissions);
@@ -947,10 +941,6 @@ internal static class GitLabErrors
     public static readonly Error InvalidMergeRequestUrl = new(
         "GitLab.InvalidMergeRequestUrl",
         "The merge request URL does not contain a valid MR IID.");
-
-    public static readonly Error NoBranchCommits = new(
-        "GitLab.NoBranchCommits",
-        "The branch has no commits.");
 
     public static readonly Error MissingMergeRequestState = new(
         "GitLab.MissingMergeRequestState",
