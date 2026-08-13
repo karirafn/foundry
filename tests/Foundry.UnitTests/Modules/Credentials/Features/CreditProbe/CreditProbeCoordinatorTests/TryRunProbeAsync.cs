@@ -60,7 +60,8 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         IProbeOutcomeClassifier classifier,
         CapturingIntegrationEventProcessor eventProcessor,
         int probeIntervalMinutes,
-        bool isLoginActive)
+        bool isLoginActive,
+        CapturingSystemNotificationBroadcaster? broadcaster = null)
     {
         ServiceCollection services = new();
 
@@ -87,6 +88,10 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         // coordinator resolves it from its per-invocation scope (not at construction time).
         services.AddScoped<Foundry.Modules.Settings.Contracts.Queries.IGlobalSettingsQueries>(
             _ => new StubGlobalSettingsQueries(probeIntervalMinutes));
+
+        // ISystemNotificationBroadcaster is scoped — resolved from the per-invocation scope.
+        CapturingSystemNotificationBroadcaster resolvedBroadcaster = broadcaster ?? new CapturingSystemNotificationBroadcaster();
+        services.AddScoped<ISystemNotificationBroadcaster>(_ => resolvedBroadcaster);
 
         return services.BuildServiceProvider();
     }
@@ -199,6 +204,19 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         public Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
         {
             _captured.Add(@event);
+            return Task.CompletedTask;
+        }
+    }
+
+    internal sealed class CapturingSystemNotificationBroadcaster : ISystemNotificationBroadcaster
+    {
+        private readonly List<SystemNotification> _notifications = [];
+
+        public IReadOnlyList<SystemNotification> SentNotifications => _notifications;
+
+        public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+        {
+            _notifications.Add(notification);
             return Task.CompletedTask;
         }
     }
@@ -607,6 +625,178 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             // Assert — second caller got AlreadyRunning immediately
             secondResult.ShouldBeOfType<CreditProbeResult.AlreadyRunning>();
         }
+    }
+
+    [Fact]
+    public async Task WhenStillBlocked_SendsCreditsBroadcastWithIsActiveTrue()
+    {
+        // Arrange
+        DateTimeOffset originalNextProbeAt = DateTimeOffset.UtcNow.AddMinutes(5);
+        await SeedBlockedAccountAsync(originalNextProbeAt);
+
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator: new FakeCredentialsOrchestrator().WithCreditProbeLogs("credits exhausted"),
+            classifier: new FakeProbeOutcomeClassifier(new ProbeOutcome.CreditsStillBlocked()),
+            eventProcessor: new CapturingIntegrationEventProcessor(),
+            probeIntervalMinutes: 60,
+            isLoginActive: false,
+            broadcaster: broadcaster);
+        await using (sp)
+        {
+            CreditProbeCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+        }
+
+        // Assert — credits broadcast sent with IsActive:true (re-arm signals fresh countdown)
+        broadcaster.SentNotifications.ShouldContain(n =>
+            n.Category == "credits" && n.IsActive);
+    }
+
+    [Fact]
+    public async Task WhenInfrastructureFailureFromClassifier_SendsCreditsBroadcastWithIsActiveTrue()
+    {
+        // Arrange
+        await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
+
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator: new FakeCredentialsOrchestrator().WithCreditProbeLogs("docker error"),
+            classifier: new FakeProbeOutcomeClassifier(new ProbeOutcome.InfrastructureFailure()),
+            eventProcessor: new CapturingIntegrationEventProcessor(),
+            probeIntervalMinutes: 60,
+            isLoginActive: false,
+            broadcaster: broadcaster);
+        await using (sp)
+        {
+            CreditProbeCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+        }
+
+        // Assert — credits broadcast sent with IsActive:true (probe re-armed)
+        broadcaster.SentNotifications.ShouldContain(n =>
+            n.Category == "credits" && n.IsActive);
+    }
+
+    [Fact]
+    public async Task WhenOrchestratorFails_SendsCreditsBroadcastWithIsActiveTrue()
+    {
+        // Arrange
+        await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
+
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator: new FakeCredentialsOrchestrator()
+                .WithCreditProbeFailure(new Error("Docker.Error", "container failed to start")),
+            classifier: new FakeProbeOutcomeClassifier(new ProbeOutcome.Available()),
+            eventProcessor: new CapturingIntegrationEventProcessor(),
+            probeIntervalMinutes: 60,
+            isLoginActive: false,
+            broadcaster: broadcaster);
+        await using (sp)
+        {
+            CreditProbeCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+        }
+
+        // Assert — credits broadcast sent with IsActive:true (probe re-armed)
+        broadcaster.SentNotifications.ShouldContain(n =>
+            n.Category == "credits" && n.IsActive);
+    }
+
+    [Fact]
+    public async Task WhenLoginActive_SendsCreditsBroadcastWithIsActiveTrue()
+    {
+        // Arrange
+        await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
+
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator: new FakeCredentialsOrchestrator(),
+            classifier: new FakeProbeOutcomeClassifier(new ProbeOutcome.Available()),
+            eventProcessor: new CapturingIntegrationEventProcessor(),
+            probeIntervalMinutes: 60,
+            isLoginActive: true,
+            broadcaster: broadcaster);
+        await using (sp)
+        {
+            CreditProbeCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+        }
+
+        // Assert — credits broadcast sent with IsActive:true (login-deferred re-arm)
+        broadcaster.SentNotifications.ShouldContain(n =>
+            n.Category == "credits" && n.IsActive);
+    }
+
+    [Fact]
+    public async Task WhenAvailable_DoesNotSendCreditsBroadcastFromCoordinator()
+    {
+        // Arrange
+        await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
+
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator: new FakeCredentialsOrchestrator().WithCreditProbeLogs("ok"),
+            classifier: new FakeProbeOutcomeClassifier(new ProbeOutcome.Available()),
+            eventProcessor: new CapturingIntegrationEventProcessor(),
+            probeIntervalMinutes: 60,
+            isLoginActive: false,
+            broadcaster: broadcaster);
+        await using (sp)
+        {
+            CreditProbeCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+        }
+
+        // Assert — coordinator does NOT broadcast directly on restore paths
+        // (CreditsRestored → CreditsRestoredBroadcastHandler handles that separately)
+        broadcaster.SentNotifications.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenUsageLimited_DoesNotSendCreditsBroadcastFromCoordinator()
+    {
+        // Arrange
+        await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
+        await SeedGlobalSettingsAsync();
+
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        DateTimeOffset resetsAt = DateTimeOffset.UtcNow.AddHours(2);
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator: new FakeCredentialsOrchestrator().WithCreditProbeLogs("rate limited"),
+            classifier: new FakeProbeOutcomeClassifier(new ProbeOutcome.UsageLimited(resetsAt)),
+            eventProcessor: new CapturingIntegrationEventProcessor(),
+            probeIntervalMinutes: 60,
+            isLoginActive: false,
+            broadcaster: broadcaster);
+        await using (sp)
+        {
+            CreditProbeCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            await sut.TryRunProbeAsync(force: false, TestContext.Current.CancellationToken);
+        }
+
+        // Assert — coordinator does NOT broadcast a credits notification on usage-limited restore
+        // (CreditsRestored → CreditsRestoredBroadcastHandler handles the banner clear separately)
+        broadcaster.SentNotifications.ShouldBeEmpty();
     }
 
     /// <summary>

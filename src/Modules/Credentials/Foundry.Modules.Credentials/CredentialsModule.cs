@@ -29,6 +29,8 @@ public static class CredentialsModule
         services.AddIntegrationEventHandler<WorkerCreditsExhausted, WorkerCreditsExhaustedHandler>();
         services.AddIntegrationEventHandler<CredentialsInvalidated, CredentialsInvalidatedBroadcastHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedBroadcastHandler>();
+        services.AddIntegrationEventHandler<WorkerCreditsExhausted, WorkerCreditsExhaustedBroadcastHandler>();
+        services.AddIntegrationEventHandler<CreditsRestored, CreditsRestoredBroadcastHandler>();
 
         services.AddScoped<ICredentialQueries, CredentialQueries>();
         services.AddScoped<ICredentialGate, CredentialGate>();

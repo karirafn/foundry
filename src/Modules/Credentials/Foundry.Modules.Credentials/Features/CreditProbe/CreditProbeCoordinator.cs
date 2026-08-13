@@ -34,6 +34,8 @@ internal sealed class CreditProbeCoordinator(
     ILoginSessionState loginSessionState,
     ILogger<CreditProbeCoordinator> logger) : ICreditProbeCoordinator, IDisposable
 {
+    private const string CreditsCategory = "credits";
+
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public void Dispose() => _semaphore.Dispose();
@@ -73,6 +75,8 @@ internal sealed class CreditProbeCoordinator(
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
         IGlobalSettingsQueries settingsQueries =
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
+        ISystemNotificationBroadcaster broadcaster =
+            scope.ServiceProvider.GetRequiredService<ISystemNotificationBroadcaster>();
 
         ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
             .FirstOrDefaultAsync(cancellationToken);
@@ -101,6 +105,7 @@ internal sealed class CreditProbeCoordinator(
         {
             account.RearmProbe(nextArm);
             await dbContext.SaveChangesAsync(cancellationToken);
+            await SendCreditsRearmBroadcastAsync(broadcaster, cancellationToken);
             return new CreditProbeResult.Deferred();
         }
 
@@ -118,6 +123,7 @@ internal sealed class CreditProbeCoordinator(
                 failure.Error.Message);
             account.RearmProbe(nextArm);
             await dbContext.SaveChangesAsync(cancellationToken);
+            await SendCreditsRearmBroadcastAsync(broadcaster, cancellationToken);
             return new CreditProbeResult.InfrastructureFailure(nextArm);
         }
 
@@ -129,11 +135,11 @@ internal sealed class CreditProbeCoordinator(
             ProbeOutcome.Available => await HandleAvailableAsync(
                 account, dbContext, dispatcher, cancellationToken),
             ProbeOutcome.CreditsStillBlocked => await HandleStillBlockedAsync(
-                account, dbContext, nextArm, cancellationToken),
+                account, dbContext, nextArm, broadcaster, cancellationToken),
             ProbeOutcome.UsageLimited usageLimited => await HandleUsageLimitedAsync(
                 account, dbContext, dispatcher, usageLimited.ResetsAt, cancellationToken),
             ProbeOutcome.InfrastructureFailure => await HandleInfrastructureFailureAsync(
-                account, dbContext, nextArm, cancellationToken),
+                account, dbContext, nextArm, broadcaster, cancellationToken),
             _ => throw new System.Diagnostics.UnreachableException(
                 $"Unexpected ProbeOutcome: {outcome.GetType().Name}"),
         };
@@ -162,10 +168,12 @@ internal sealed class CreditProbeCoordinator(
         ClaudeAccount account,
         DbContext dbContext,
         DateTimeOffset nextArm,
+        ISystemNotificationBroadcaster broadcaster,
         CancellationToken cancellationToken)
     {
         account.RearmProbe(nextArm);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await SendCreditsRearmBroadcastAsync(broadcaster, cancellationToken);
 
         logger.LogInformation(
             "Credit probe: credits still exhausted. Next probe at {NextProbeAt}.", nextArm);
@@ -231,6 +239,7 @@ internal sealed class CreditProbeCoordinator(
         ClaudeAccount account,
         DbContext dbContext,
         DateTimeOffset nextArm,
+        ISystemNotificationBroadcaster broadcaster,
         CancellationToken cancellationToken)
     {
         // Infrastructure failure: do not change spend state or raise credit-problem events.
@@ -238,12 +247,25 @@ internal sealed class CreditProbeCoordinator(
         // Docker / container infrastructure, not the credentials themselves.
         account.RearmProbe(nextArm);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await SendCreditsRearmBroadcastAsync(broadcaster, cancellationToken);
 
         logger.LogWarning(
             "Credit probe: infrastructure failure. Probe re-armed at {NextProbeAt}.", nextArm);
 
         return new CreditProbeResult.InfrastructureFailure(nextArm);
     }
+
+    /// <summary>
+    /// Sends a credits re-arm broadcast directly. <c>IsActive:true</c> tells clients the credit
+    /// block is still active and the countdown has been refreshed — they should re-sync from
+    /// <c>/api/credentials</c> to pick up the new <c>nextProbeAt</c>.
+    /// </summary>
+    private static Task SendCreditsRearmBroadcastAsync(
+        ISystemNotificationBroadcaster broadcaster,
+        CancellationToken cancellationToken)
+        => broadcaster.SendAsync(
+            new SystemNotification(CreditsCategory, IsActive: true, Message: string.Empty),
+            cancellationToken);
 
     /// <summary>
     /// Delivers an ephemeral event directly via <see cref="IIntegrationEventProcessor"/> without
