@@ -846,17 +846,6 @@ public sealed class ResolveAsync
             return Task.FromResult(result);
         }
 
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-        {
-            Result<bool> result = _commitsResultQueue.Count > 0
-                ? _commitsResultQueue.Dequeue()
-                : _commitsResult;
-            return Task.FromResult(result);
-        }
-
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,

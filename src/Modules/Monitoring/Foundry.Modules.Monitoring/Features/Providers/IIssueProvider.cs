@@ -40,11 +40,6 @@ internal interface IIssueProvider
         string branchName,
         CancellationToken cancellationToken);
 
-    Task<Result<bool>> HasBranchCommitsAsync(
-        RepositorySlug slug,
-        string branchName,
-        CancellationToken cancellationToken);
-
     Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         RepositorySlug slug,
         string branchName,

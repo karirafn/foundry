@@ -20,7 +20,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 /// <summary>
 /// Tests that the three non-clean-exit failure paths (timeout, orphan-reconcile, container-not-found)
-/// consult HasBranchCommitsAsync before setting BranchName on WorkerRunFailed events — mirroring the
+/// consult GetBranchCommitSummaryAsync before setting BranchName on WorkerRunFailed events — mirroring the
 /// clean-exit path in ProcessExitedRunAsync.
 /// </summary>
 public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
@@ -432,12 +432,6 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
 
     private sealed class FailingBranchCommitsCheckQueries : IPostExitProviderQueries
     {
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Fail(new Error("Provider.Unavailable", "Git provider returned an error")));
-
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,

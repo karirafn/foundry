@@ -1,6 +1,6 @@
 using System.Net;
 
-using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
@@ -8,16 +8,17 @@ using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
-using Shouldly;
-
-using Xunit;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
+using Shouldly;
+
+using Xunit;
+
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabIssueProviderTests;
 
-public sealed class HasBranchCommitsAsync
+public sealed class GetBranchCommitSummaryAsync
 {
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
     private const string ValidToken = "glpat_token";
@@ -28,16 +29,26 @@ public sealed class HasBranchCommitsAsync
     private static GitLabIssueProvider BuildSut(SequentialFakeHandler handler)
     {
         HttpClient httpClient = new(handler);
-        GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient gitLabHttpClient = new(
+            httpClient,
+            NullLogger<GitLabHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         return new GitLabIssueProvider(gitLabHttpClient, ValidToken, ValidBaseUrl);
     }
 
     [Fact]
-    public async Task WhenBranchHasCommitsAheadOfDefault_ReturnsTrue()
+    public async Task WhenBranchHasCommitsAheadOfDefault_ReturnsNonZeroCommitCount()
     {
         // Arrange
         string projectJson = """{ "default_branch": "main" }""";
-        string compareJson = """{ "commits": [{ "id": "abc123" }] }""";
+        string compareJson = """
+            {
+                "commits": [
+                    { "id": "aaa111", "short_id": "aaa111", "title": "first", "message": "", "author_name": "", "authored_date": "2026-01-01T00:00:00Z", "committer_name": "", "committed_date": "2026-01-01T00:00:00Z" },
+                    { "id": "bbb222", "short_id": "bbb222", "title": "second", "message": "", "author_name": "", "authored_date": "2026-01-01T00:00:00Z", "committer_name": "", "committed_date": "2026-01-01T00:00:00Z" }
+                ]
+            }
+            """;
         SequentialFakeHandler handler = new(
         [
             (HttpStatusCode.OK, projectJson),
@@ -46,19 +57,18 @@ public sealed class HasBranchCommitsAsync
         GitLabIssueProvider sut = BuildSut(handler);
 
         // Act
-        Result<bool> result = await sut.HasBranchCommitsAsync(
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<bool>.Success success = result.ShouldBeOfType<Result<bool>.Success>();
-        success.Value.ShouldBeTrue();
+        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
+        success.Value.CommitCount.ShouldBe(2);
     }
 
     [Fact]
-    public async Task WhenBranchHasNoCommitsAheadOfDefault_ReturnsFalse()
+    public async Task WhenBranchHasNoCommitsAheadOfDefault_ReturnsZeroCommitCount()
     {
         // Arrange
         string projectJson = """{ "default_branch": "main" }""";
@@ -71,15 +81,14 @@ public sealed class HasBranchCommitsAsync
         GitLabIssueProvider sut = BuildSut(handler);
 
         // Act
-        Result<bool> result = await sut.HasBranchCommitsAsync(
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<bool>.Success success = result.ShouldBeOfType<Result<bool>.Success>();
-        success.Value.ShouldBeFalse();
+        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
+        success.Value.CommitCount.ShouldBe(0);
     }
 
     [Fact]
@@ -93,7 +102,7 @@ public sealed class HasBranchCommitsAsync
         GitLabIssueProvider sut = BuildSut(handler);
 
         // Act
-        Result<bool> result = await sut.HasBranchCommitsAsync(
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);
@@ -115,12 +124,35 @@ public sealed class HasBranchCommitsAsync
         GitLabIssueProvider sut = BuildSut(handler);
 
         // Act
-        Result<bool> result = await sut.HasBranchCommitsAsync(
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
             ValidSlug,
             "feat/my-branch",
             CancellationToken.None);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenCompareApiReturnsNotFound_ReturnsNotFoundError()
+    {
+        // Arrange
+        string projectJson = """{ "default_branch": "main" }""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, projectJson),
+            (HttpStatusCode.NotFound, string.Empty),
+        ]);
+        GitLabIssueProvider sut = BuildSut(handler);
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            ValidSlug,
+            "feat/my-branch",
+            CancellationToken.None);
+
+        // Assert
+        Result<BranchCommitSummary>.Failure failure = result.ShouldBeOfType<Result<BranchCommitSummary>.Failure>();
+        failure.Error.Kind.ShouldBe(ErrorKind.NotFound);
     }
 }

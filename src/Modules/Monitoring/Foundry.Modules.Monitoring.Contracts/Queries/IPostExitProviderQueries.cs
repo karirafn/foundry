@@ -9,11 +9,6 @@ public interface IPostExitProviderQueries
         string branchName,
         CancellationToken cancellationToken);
 
-    Task<Result<bool>> HasBranchCommitsAsync(
-        MonitoredRepositoryId repositoryId,
-        string branchName,
-        CancellationToken cancellationToken);
-
     Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         MonitoredRepositoryId repositoryId,
         string branchName,

@@ -144,7 +144,7 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
     /// <summary>
     /// Stub provider queries for the merged MR + branch-deleted scenario:
     /// <see cref="GetMergeRequestByBranchAsync"/> returns a merged MR with a URL;
-    /// <see cref="HasBranchCommitsAsync"/> returns NotFound (branch was deleted after merge).
+    /// <see cref="GetBranchCommitSummaryAsync"/> returns not-found (branch was deleted after merge).
     /// </summary>
     private sealed class MergedMrBranchDeletedQueries(string prUrl) : IPostExitProviderQueries
     {
@@ -153,21 +153,6 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
-
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-        {
-            // Branch was deleted after merge — provider returns NotFound.
-            // The resolver never reaches this path for a Merged MR, but the stub
-            // provides an accurate representation of the real scenario.
-            Error error = new("Provider.BranchNotFound", "Branch not found")
-            {
-                Kind = ErrorKind.NotFound,
-            };
-            return Task.FromResult(Result<bool>.Fail(error));
-        }
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,

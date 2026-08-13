@@ -249,7 +249,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenHasBranchCommitsReturnsFailure_RunRemainsActive()
+    public async Task WhenGetBranchCommitSummaryReturnsFailure_RunRemainsActive()
     {
         // Arrange
         SeedActiveRun("container-commits-check-failure");
@@ -268,12 +268,6 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
 
     private sealed class FailingCommitsCheckQueries : IPostExitProviderQueries
     {
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Fail(new Error("Provider.Unavailable", "Git provider returned an error")));
-
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,

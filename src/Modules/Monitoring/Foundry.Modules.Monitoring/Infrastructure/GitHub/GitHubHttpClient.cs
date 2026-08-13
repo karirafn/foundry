@@ -775,45 +775,6 @@ internal sealed partial class GitHubHttpClient(
         return Result<bool>.Ok(true);
     }
 
-    public async Task<Result<bool>> HasBranchCommitsAsync(
-        Uri apiBaseUrl,
-        RepositorySlug slug,
-        string defaultBranch,
-        string branchName,
-        string token,
-        CancellationToken cancellationToken)
-    {
-        if (apiBaseUrl.Scheme is not "https")
-        {
-            return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
-        }
-
-        string owner = Uri.EscapeDataString(slug.Owner);
-        string repo = Uri.EscapeDataString(slug.Name);
-        string encodedDefault = Uri.EscapeDataString(defaultBranch);
-        string encodedBranch = Uri.EscapeDataString(branchName);
-        string relativePath = $"repos/{owner}/{repo}/compare/{encodedDefault}...{encodedBranch}";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
-
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Result<bool>.Fail(ErrorFromNonSuccess(response));
-        }
-
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        GitHubCompareDto? dto = JsonSerializer.Deserialize<GitHubCompareDto>(body, JsonOptions);
-
-        return Result<bool>.Ok((dto?.AheadBy ?? 0) > 0);
-    }
-
     public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,

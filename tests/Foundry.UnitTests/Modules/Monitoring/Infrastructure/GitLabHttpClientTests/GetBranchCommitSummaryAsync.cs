@@ -128,4 +128,26 @@ public sealed class GetBranchCommitSummaryAsync
         Result<BranchCommitSummary>.Failure failure = result.ShouldBeOfType<Result<BranchCommitSummary>.Failure>();
         failure.Error.Message.ShouldContain("500");
     }
+
+    [Fact]
+    public async Task WhenBaseUrlHasNonHttpsScheme_ReturnsInvalidBaseUrlError()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, string.Empty);
+        GitLabHttpClient sut = CreateSut(handler);
+        Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            invalidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<BranchCommitSummary>.Failure failure = result.ShouldBeOfType<Result<BranchCommitSummary>.Failure>();
+        failure.Error.Code.ShouldBe("GitLab.InvalidBaseUrl");
+    }
 }

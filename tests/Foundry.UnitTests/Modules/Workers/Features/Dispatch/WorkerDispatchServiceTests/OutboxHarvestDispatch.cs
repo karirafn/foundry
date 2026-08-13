@@ -335,12 +335,6 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(false));
 
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(false));
-
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,

@@ -187,4 +187,51 @@ public sealed class GetBranchCommitSummaryAsync
         Result<BranchCommitSummary>.Failure failure = result.ShouldBeOfType<Result<BranchCommitSummary>.Failure>();
         failure.Error.Message.ShouldContain("500");
     }
+
+    [Fact]
+    public async Task WhenBaseUrlHasNonHttpsScheme_ReturnsInvalidBaseUrlError()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, string.Empty);
+        GitHubHttpClient sut = CreateSut(handler);
+        Uri invalidBaseUrl = new("ftp://api.github.com");
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            invalidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<BranchCommitSummary>.Failure failure = result.ShouldBeOfType<Result<BranchCommitSummary>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.InvalidBaseUrl");
+    }
+
+    [Fact]
+    public async Task WhenBranchNameContainsSpecialCharacters_EncodesThemInUrl()
+    {
+        // Arrange
+        string json = """{ "ahead_by": 1, "behind_by": 0, "head_commit": { "sha": "abc" } }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = CreateSut(handler);
+
+        // Act
+        await sut.GetBranchCommitSummaryAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/branch?inject=true",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
+        request.RequestUri.ShouldNotBeNull();
+        string requestUrl = request.RequestUri.ToString();
+        requestUrl.ShouldNotContain("?inject=true");
+        requestUrl.ShouldContain("%3F");
+    }
 }
