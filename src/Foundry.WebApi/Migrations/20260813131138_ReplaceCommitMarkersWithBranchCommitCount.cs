@@ -20,6 +20,15 @@ namespace Foundry.WebApi.Migrations
                 type: "INTEGER",
                 nullable: true);
 
+            // Backfill ActiveRun rows (state = 'active') that existed before this migration.
+            // SQLite performs a table rebuild for DROP COLUMN, leaving newly-added nullable
+            // columns as NULL on pre-existing rows. BranchCommitCount is a non-nullable CLR
+            // int on ActiveRun; reading NULL into it throws InvalidOperationException on the
+            // next dispatch loop tick. Scoped to state = 'active' — sibling states
+            // (starting, completed, failed) never read this column.
+            migrationBuilder.Sql(
+                "UPDATE worker_runs SET branch_commit_count = 0 WHERE state = 'active' AND branch_commit_count IS NULL;");
+
             migrationBuilder.AddColumn<string>(
                 name: "last_observed_commit_sha",
                 table: "worker_runs",

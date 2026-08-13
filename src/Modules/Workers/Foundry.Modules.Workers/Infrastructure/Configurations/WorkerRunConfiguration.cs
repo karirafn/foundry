@@ -130,6 +130,7 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
             .HasColumnName("last_observed_commit_sha");
 
         builder.Property(r => r.BranchCommitCount)
+            .HasDefaultValue(0)
             .HasColumnName("branch_commit_count");
     }
 }
