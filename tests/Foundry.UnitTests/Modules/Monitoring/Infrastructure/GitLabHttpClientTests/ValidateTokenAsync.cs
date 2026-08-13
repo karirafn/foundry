@@ -7,7 +7,9 @@ using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Shared;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -24,7 +26,7 @@ public sealed class ValidateTokenAsync
     private const string SelfWithoutApiScopeJson = """{ "scopes": ["read_api", "read_repository"] }""";
 
     private static GitLabHttpClient CreateSut(FakeHandler handler) =>
-        new(new HttpClient(handler), NullLogger<GitLabHttpClient>.Instance);
+        new(new HttpClient(handler), NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
     [Fact]
     public async Task WhenTokenIsUnauthorized_ReturnsAuthenticationFailed()

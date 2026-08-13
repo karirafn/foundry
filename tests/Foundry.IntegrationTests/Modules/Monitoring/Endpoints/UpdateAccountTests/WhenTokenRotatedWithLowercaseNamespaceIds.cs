@@ -18,7 +18,9 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -65,7 +67,7 @@ public sealed class WhenTokenRotatedWithLowercaseNamespaceIds : IAsyncDisposable
 
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)), NullLogger<GitHubHttpClient>.Instance));
+                new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
 
             services.RemoveAll<IRepositoryEligibilityEvaluator>();
             services.AddScoped<IRepositoryEligibilityEvaluator>(_ =>

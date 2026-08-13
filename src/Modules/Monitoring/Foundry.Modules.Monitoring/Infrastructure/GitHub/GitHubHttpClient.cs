@@ -19,7 +19,8 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal sealed partial class GitHubHttpClient(
     HttpClient httpClient,
-    ILogger<GitHubHttpClient> logger) : IGitHubWriteProber
+    ILogger<GitHubHttpClient> logger,
+    DefaultBranchCache defaultBranchCache) : IGitHubWriteProber
 {
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
@@ -42,7 +43,7 @@ internal sealed partial class GitHubHttpClient(
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    public async Task<Result<string>> GetDefaultBranchAsync(
+    public Task<Result<string>> GetDefaultBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -50,9 +51,21 @@ internal sealed partial class GitHubHttpClient(
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<string>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Task.FromResult(Result<string>.Fail(GitHubErrors.InvalidBaseUrl));
         }
 
+        return defaultBranchCache.GetOrFetchAsync(
+            apiBaseUrl,
+            slug,
+            () => FetchDefaultBranchAsync(apiBaseUrl, slug, token, cancellationToken));
+    }
+
+    private async Task<Result<string>> FetchDefaultBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}";

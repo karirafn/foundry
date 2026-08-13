@@ -21,7 +21,8 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
 internal sealed partial class GitLabHttpClient(
     HttpClient httpClient,
-    ILogger<GitLabHttpClient> logger)
+    ILogger<GitLabHttpClient> logger,
+    DefaultBranchCache defaultBranchCache)
 {
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
@@ -656,7 +657,7 @@ internal sealed partial class GitLabHttpClient(
         return Result<BranchCommitSummary>.Ok(new BranchCommitSummary(commitCount, latestSha));
     }
 
-    public async Task<Result<string>> GetDefaultBranchAsync(
+    public Task<Result<string>> GetDefaultBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -664,9 +665,21 @@ internal sealed partial class GitLabHttpClient(
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<string>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Task.FromResult(Result<string>.Fail(GitLabErrors.InvalidBaseUrl));
         }
 
+        return defaultBranchCache.GetOrFetchAsync(
+            apiBaseUrl,
+            slug,
+            () => FetchDefaultBranchAsync(apiBaseUrl, slug, token, cancellationToken));
+    }
+
+    private async Task<Result<string>> FetchDefaultBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
         Result<GitLabProjectInfoDto> infoResult =
             await GetProjectInfoAsync(apiBaseUrl, slug, token, cancellationToken);
 

@@ -11,7 +11,9 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -34,7 +36,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Created, branchJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -62,7 +64,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.BadRequest, conflictJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -87,7 +89,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -114,7 +116,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<bool> result = await sut.CreateBranchAsync(
@@ -136,7 +138,7 @@ public sealed class CreateBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -165,7 +167,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Created, branchJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         await sut.CreateBranchAsync(
@@ -194,7 +196,7 @@ public sealed class CreateBranchAsync
             (HttpStatusCode.Created, branchJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         await sut.CreateBranchAsync(

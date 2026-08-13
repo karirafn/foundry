@@ -10,7 +10,9 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
 
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -35,8 +37,8 @@ public sealed class DeriveAsync
 
     private static NamespaceDeriver BuildSut(HttpClient gitHubClient, HttpClient? gitLabClient = null)
     {
-        GitHubHttpClient gh = new(gitHubClient, NullLogger<GitHubHttpClient>.Instance);
-        GitLabHttpClient gl = new(gitLabClient ?? new HttpClient(new NotCalledHandler()), NullLogger<GitLabHttpClient>.Instance);
+        GitHubHttpClient gh = new(gitHubClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient gl = new(gitLabClient ?? new HttpClient(new NotCalledHandler()), NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         return new NamespaceDeriver(gh, gl, NullLogger<NamespaceDeriver>.Instance);
     }
 

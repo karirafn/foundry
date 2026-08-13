@@ -14,7 +14,9 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -60,7 +62,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this issue", newPath: "src/Foo.cs"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -88,7 +90,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(resolved: true));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -112,7 +114,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(resolvable: false));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -136,7 +138,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(updatedAt: "2025-12-31T23:59:59Z"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -160,7 +162,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(updatedAt: "2026-01-01T00:00:00Z"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -184,7 +186,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "New comment", updatedAt: "2026-01-02T00:00:00Z"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -218,7 +220,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, jsonBuilder.ToString());
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -243,7 +245,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: longBody));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -269,7 +271,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "Comment without path"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -293,7 +295,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: "../../../etc/passwd"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -317,7 +319,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: "/etc/passwd"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -341,7 +343,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: "C:/windows/system32"));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -366,7 +368,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: longPath));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -391,7 +393,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: maxPath));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -415,7 +417,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = BuildDiscussionJson(BuildNoteJson(body: "Fix this", newPath: ""));
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -438,7 +440,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -461,7 +463,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
