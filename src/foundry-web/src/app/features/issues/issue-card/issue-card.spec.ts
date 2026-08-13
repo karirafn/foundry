@@ -14,7 +14,7 @@ const mockIssue: IssueSummary = {
   url: 'https://github.com/owner/repo/issues/42',
 };
 
-function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null) {
+function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, commitCount: number | null = null) {
   TestBed.configureTestingModule({
     imports: [IssueCardComponent],
     providers: [
@@ -26,6 +26,9 @@ function createComponent(issue: IssueSummary = mockIssue, expanded = false, last
   fixture.componentRef.setInput('expanded', expanded);
   if (lastActivityAt !== null) {
     fixture.componentRef.setInput('lastActivityAt', lastActivityAt);
+  }
+  if (commitCount !== null) {
+    fixture.componentRef.setInput('commitCount', commitCount);
   }
   fixture.detectChanges();
   return fixture;
@@ -558,6 +561,153 @@ describe('IssueCardComponent', () => {
     // Assert
     const badge = el.querySelector('fd-state-badge span');
     expect(badge?.textContent?.trim()).toBe('USAGE LIMITED');
+  });
+
+  // Cycle 22: commit count phrases in the activity line
+  it('should show "no commits yet" when commitCount is 0', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('no commits yet');
+  });
+
+  it('should show "1 commit" (singular) when commitCount is 1', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 1);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('1 commit');
+    expect(activity?.textContent).not.toContain('1 commits');
+  });
+
+  it('should show "2 commits" (plural) when commitCount is 2', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 2);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('2 commits');
+  });
+
+  it('should show "N commits" for N >= 2', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 5);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('5 commits');
+  });
+
+  // Cycle 23: silence threshold — no silence segment when < 5 minutes
+  it('should NOT show silence segment when silent duration is less than 5 minutes', () => {
+    // Arrange — 4 minutes 59 seconds silent (just under threshold)
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const justUnderThreshold = new Date(Date.now() - (5 * 60 * 1000 - 1000)).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, justUnderThreshold, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).not.toContain('silent');
+  });
+
+  it('should show silence segment when silent duration is exactly 5 minutes', () => {
+    // Arrange — exactly 5 minutes silent
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const exactlyFiveMin = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, exactlyFiveMin, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('silent 5m');
+  });
+
+  it('should show silence segment when silent duration is more than 5 minutes', () => {
+    // Arrange — 7 minutes silent
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, sevenMinutesAgo, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('silent 7m');
+  });
+
+  it('should place the silence segment after the commit segment', () => {
+    // Arrange — 7 minutes silent, 3 commits
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, sevenMinutesAgo, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — commit segment appears before silence segment in text
+    const text = el.querySelector('.issue-card__activity')?.textContent ?? '';
+    const commitIdx = text.indexOf('3 commits');
+    const silentIdx = text.indexOf('silent');
+    expect(commitIdx).toBeGreaterThan(-1);
+    expect(silentIdx).toBeGreaterThan(commitIdx);
+  });
+
+  it('should render "no commits yet · silent 7m" for 0 commits and 7 minutes silent', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, sevenMinutesAgo, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const text = el.querySelector('.issue-card__activity')?.textContent ?? '';
+    expect(text).toContain('no commits yet');
+    expect(text).toContain('silent 7m');
+  });
+
+  it('should NOT show activity line when issue is not in LIVE_STATES even with commitCount', () => {
+    // Arrange
+    const failedIssue: IssueSummary = { ...mockIssue, state: 'failed' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(failedIssue, false, recentAt, 5);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — no activity line regardless of commitCount
+    const activity = el.querySelector('.issue-card__activity');
+    expect(activity).toBeFalsy();
   });
 
   // Cycle 11: continuation_queued is NOT treated as a live state for the activity timer

@@ -1,9 +1,3 @@
-export interface WorkerRunCommitMarker {
-  readonly observedAt: string;
-  readonly sha: string;
-  readonly message: string;
-}
-
 export type WorkerRunState = 'running' | 'completed' | 'failed';
 
 export interface WorkerRunDetail {
@@ -21,7 +15,5 @@ export interface WorkerRunDetail {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly lastActivityAt: string | null;
-  readonly commitMarkers: WorkerRunCommitMarker[];
   readonly hasStoredLog: boolean;
 }
-

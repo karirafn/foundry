@@ -45,6 +45,7 @@ export class WorkerSignalRService {
 
   private readonly _activityByRunId = new Map<string, string>();
   private readonly _activityByIssueId = new Map<string, string>();
+  private readonly _commitCountByIssueId = new Map<string, number>();
 
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
@@ -56,6 +57,7 @@ export class WorkerSignalRService {
       this._workerActivitySignal.set(activity);
       this._activityByRunId.set(activity.workerRunId, activity.lastActivityAt);
       this._activityByIssueId.set(activity.issueId, activity.lastActivityAt);
+      this._commitCountByIssueId.set(activity.issueId, activity.commitCount);
     });
 
     this._hub.onReconnected(() => {
@@ -73,6 +75,10 @@ export class WorkerSignalRService {
 
   activityForIssue(issueId: string): string | null {
     return this._activityByIssueId.get(issueId) ?? null;
+  }
+
+  commitCountForIssue(issueId: string): number {
+    return this._commitCountByIssueId.get(issueId) ?? 0;
   }
 
   streamLog(workerRunId: string): Observable<string> {

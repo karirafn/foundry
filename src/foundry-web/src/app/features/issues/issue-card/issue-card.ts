@@ -8,6 +8,7 @@ import { TickerService } from '../../../core/services/ticker.service';
 import { formatCost as _formatCostImpl, formatDuration as _formatDurationImpl } from '../run-stats.format';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
+const SILENCE_THRESHOLD_MINUTES = 5;
 
 // Re-export shared helpers so existing imports from this module continue to work.
 export { formatCost, formatDuration } from '../run-stats.format';
@@ -51,16 +52,23 @@ function timeAgo(dateString: string): string {
   return `${diffYears} year${diffYears === 1 ? '' : 's'} ago`;
 }
 
-function silentDuration(lastActivityAt: string): string {
+function silentDuration(lastActivityAt: string): string | null {
   const now = Date.now();
   const then = new Date(lastActivityAt).getTime();
   const diffMs = now - then;
   const diffMinutes = Math.floor(diffMs / 60000);
 
-  if (diffMinutes < 1) {
-    return 'silent <1m';
+  if (diffMinutes < SILENCE_THRESHOLD_MINUTES) {
+    return null;
   }
   return `silent ${diffMinutes}m`;
+}
+
+function commitPhrase(count: number): string {
+  if (count === 0) {
+    return 'no commits yet';
+  }
+  return count === 1 ? '1 commit' : `${count} commits`;
 }
 
 function hasVisiblePills(stats: RunStats): boolean {
@@ -233,6 +241,7 @@ export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
+  readonly commitCount: InputSignal<number> = input<number>(0);
   readonly isNextUp: InputSignal<boolean> = input<boolean>(false);
   readonly toggle: OutputEmitterRef<void> = output<void>();
 
@@ -250,7 +259,9 @@ export class IssueCardComponent {
     if (at === null || !LIVE_STATES.has(this.issue().state)) {
       return null;
     }
-    return silentDuration(at);
+    const commit = commitPhrase(this.commitCount());
+    const silence = silentDuration(at);
+    return silence !== null ? `${commit} · ${silence}` : commit;
   });
 
   readonly _warningClass = computed(() => {
