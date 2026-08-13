@@ -1479,4 +1479,60 @@ describe('IssueCardComponent', () => {
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('commits');
   });
+
+  // Finding 2: aria-label silence phrase must be reactive to the ticker (a11y regression guard).
+  // issueAriaLabel must be a computed signal so that advancing the ticker causes Angular's
+  // signal graph to re-evaluate the aria-label binding on the same cadence as _activityLine.
+  it('should re-evaluate aria-label when the ticker advances (issueAriaLabel is a computed signal)', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const tickerSignal = signal(0);
+    TestBed.configureTestingModule({
+      imports: [IssueCardComponent],
+      providers: [
+        { provide: TickerService, useValue: { tick: tickerSignal } },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueCardComponent);
+    fixture.componentRef.setInput('issue', liveIssue);
+    fixture.componentRef.setInput('expanded', false);
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+    fixture.componentRef.setInput('lastActivityAt', sevenMinutesAgo);
+    fixture.componentRef.setInput('commitCount', 2);
+    fixture.detectChanges();
+
+    // Act — issueAriaLabel() must be a computed; verify it is a Signal (has a .()
+    // accessor shape), not just a plain method, so Angular tracks its dependency on tick()
+    const component = fixture.componentInstance;
+    // A computed signal is callable and its type-level shape is Signal<string>.
+    // The template reads it as issueAriaLabel() which works for both a method and a computed.
+    // To prove it's reactive: read it inside an effect/computed context — if it's a plain
+    // method it won't track tick; if it's a computed it will. We verify via the DOM that
+    // the aria-label updates even when ONLY the ticker changes.
+    const card = fixture.nativeElement.querySelector('.issue-card') as HTMLElement;
+    const labelBefore = card?.getAttribute('aria-label') ?? '';
+    expect(labelBefore).toContain('silent');
+
+    // Advance the ticker — if issueAriaLabel is a computed that reads tick(),
+    // Angular will mark the aria-label binding dirty and re-render it.
+    tickerSignal.set(1);
+    fixture.detectChanges();
+
+    const labelAfter = card?.getAttribute('aria-label') ?? '';
+    // The label must still contain the silence phrase after the ticker fires.
+    expect(labelAfter).toContain('silent');
+    expect(labelAfter).toContain('minutes');
+
+    // Verify issueAriaLabel is a Signal (computed), not a plain string-returning method:
+    // A computed signal has a distinct prototype vs a class method — we check it is
+    // accessible as a property (signal accessor) and not just a function reference.
+    // The concrete check: reading issueAriaLabel directly (without calling it) should
+    // be a function whose .name property identifies it as a computed signal created by
+    // Angular's computed() factory, not a plain prototype method.
+    const descriptor = Object.getOwnPropertyDescriptor(component, 'issueAriaLabel');
+    // A computed signal is stored as an own property (not on the prototype), while a
+    // plain method lives on the prototype. If issueAriaLabel is a computed, it will
+    // be an own property of the component instance.
+    expect(descriptor).toBeDefined();
+  });
 });

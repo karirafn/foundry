@@ -286,7 +286,9 @@ export class IssueCardComponent {
     return stats;
   });
 
-  issueAriaLabel(): string {
+  readonly issueAriaLabel = computed(() => {
+    // Depend on ticker so the silence phrase re-evaluates on the same cadence as _activityLine.
+    void this._ticker.tick();
     const issue = this.issue();
     const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
     const nextUp = this.isNextUp() ? 'Next up. ' : '';
@@ -296,7 +298,7 @@ export class IssueCardComponent {
     const runStatsPart = this._buildRunStatsAriaText();
     const activityPart = this._buildActivityAriaText();
     return `${base}${warningPart}${runStatsPart}${activityPart}`;
-  }
+  });
 
   private _buildActivityAriaText(): string {
     const at = this.lastActivityAt();
