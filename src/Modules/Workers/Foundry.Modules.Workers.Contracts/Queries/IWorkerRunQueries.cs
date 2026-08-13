@@ -25,6 +25,9 @@ public interface IWorkerRunQueries
         Guid issueId,
         int maxAttempts,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

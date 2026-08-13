@@ -185,6 +185,21 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             LastActivityAt: null,
             HasStoredLog: false);
 
+    public async Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
+        CancellationToken cancellationToken)
+    {
+        List<WorkerActivity> activities = await db.Set<ActiveRun>()
+            .AsNoTracking()
+            .Select(r => new WorkerActivity(
+                r.Id.Value,
+                r.IssueId.Value,
+                r.LastActivityAt ?? r.StartedAt,
+                r.BranchCommitCount))
+            .ToListAsync(cancellationToken);
+
+        return activities;
+    }
+
     public async Task<int> CountConsecutiveTransientRunsAsync(
         Guid issueId,
         int maxAttempts,

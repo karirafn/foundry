@@ -173,5 +173,9 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             int maxAttempts,
             CancellationToken cancellationToken)
             => Task.FromResult(0);
+
+        public Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyCollection<WorkerActivity>>([]);
     }
 }
