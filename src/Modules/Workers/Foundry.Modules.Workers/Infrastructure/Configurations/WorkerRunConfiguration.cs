@@ -124,8 +124,6 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         builder.Property(r => r.LastActivityAt)
             .HasColumnName("last_activity_at");
 
-        // TODO (step 4): add EF column mapping for LastObservedCommitSha and BranchCommitCount,
-        // and add a migration to drop commit_markers / add the new columns.
         builder.Property(r => r.LastObservedCommitSha)
             .HasMaxLength(LastObservedCommitShaMaxLength)
             .IsUnicode(false)
