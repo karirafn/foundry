@@ -305,7 +305,7 @@ Transitions: `FailedIssue.Retry()` → `QueuedIssue` (fresh run, no branch conte
 A lifecycle state for an issue whose worker run failed but left recoverable work on a pushed branch.
 Carries `WorkerRunId`, `BranchName`, `FailureReason`, and `FailedAt` — all non-nullable.
 Optionally carries `PullRequestUrl` — present when created from `ReviewIssue.Fail()` (PR was closed without merge), absent when created from `InProgressIssue` (no PR existed).
-Created from `InProgressIssue` when the failed run left commits on the branch — Foundry checks via `HasBranchCommitsAsync` against the provider after the container exits.
+Created from `InProgressIssue` when the failed run left commits on the branch — Foundry checks via `GetBranchCommitSummaryAsync` against the provider after the container exits; commit count > 0 is the branch-has-commits boolean.
 Also created from `ReviewIssue.Fail()` since `ReviewIssue` always has a branch.
 Retry dispatches a continuation run that checks out the existing branch and resumes implementation.
 Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch).
@@ -455,6 +455,8 @@ The resulting presence maps to outcomes:
 - `Open` → `Review` (transitions `InProgressIssue` → `ReviewIssue`)
 - `Closed` (unmerged) + branch has commits → `ContinuableFailure`; otherwise → `Failure`
 - `None` (no MR found) → fall back to exit-code + branch-commits path (see below)
+
+The "branch has commits" boolean is derived from `GetBranchCommitSummaryAsync` (commit count > 0) — the single consolidated query behind both the closed-MR and no-MR paths.
 
 **NotFound vs transient errors.**
 Provider query failures carry `Error.Kind`.

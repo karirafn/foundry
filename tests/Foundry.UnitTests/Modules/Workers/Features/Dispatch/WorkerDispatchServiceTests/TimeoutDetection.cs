@@ -209,6 +209,29 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenRunTimesOutAndProviderReturnsNotFound_TransitionsToFailureWithNoBranch()
+    {
+        // Arrange — provider signals branch definitively does not exist
+        SeedActiveRun("container-timeout-notfound", branchName: "feat/42-notfound-branch");
+        TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
+        Error notFoundError = new Error("Provider.NotFound", "Branch not found") { Kind = ErrorKind.NotFound };
+        StubPostExitProviderQueries postExitQueries = new(hasCommitsError: notFoundError);
+        WorkerDispatchService sut = base.BuildService(
+            orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
+            postExitProviderQueries: postExitQueries);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — definitively no branch → FailedRun (not ContinuableFailedRun)
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.TimedOut>();
+    }
+
+    [Fact]
     public async Task WhenRunHasNotExceededTimeout_DoesNotTransitionRun()
     {
         // Arrange — use a very large timeout so no run will time out

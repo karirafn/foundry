@@ -707,7 +707,7 @@ internal sealed class WorkerDispatchService(
 
     /// <summary>
     /// Builds a <see cref="WorkerOutcome"/> for a run that exceeded the timeout ceiling.
-    /// Consults <see cref="IPostExitProviderQueries.HasBranchCommitsAsync"/> to decide between
+    /// Consults <see cref="IPostExitProviderQueries.GetBranchCommitSummaryAsync"/> to decide between
     /// <see cref="WorkerOutcome.ContinuableFailure"/> (commits exist or query failed transiently)
     /// and <see cref="WorkerOutcome.Failure"/> (definitively no commits).
     /// </summary>
@@ -718,14 +718,14 @@ internal sealed class WorkerDispatchService(
         IPostExitProviderQueries postExitProviderQueries,
         CancellationToken cancellationToken)
     {
-        Result<bool> commitsResult = await postExitProviderQueries.HasBranchCommitsAsync(
+        Result<BranchCommitSummary> commitsResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             run.MonitoredRepositoryId,
             run.BranchName.Value,
             cancellationToken);
 
         FailureReason timedOut = new FailureReason.TimedOut();
 
-        if (commitsResult is Result<bool>.Failure commitsFailure)
+        if (commitsResult is Result<BranchCommitSummary>.Failure commitsFailure)
         {
             if (commitsFailure.Error.Kind == ErrorKind.NotFound)
             {
@@ -737,7 +737,7 @@ internal sealed class WorkerDispatchService(
             return new WorkerOutcome.ContinuableFailure(run.BranchName, timedOut, containerOutput, summary);
         }
 
-        bool hasCommits = ((Result<bool>.Success)commitsResult).Value;
+        bool hasCommits = ((Result<BranchCommitSummary>.Success)commitsResult).Value.CommitCount > 0;
 
         return hasCommits
             ? new WorkerOutcome.ContinuableFailure(run.BranchName, timedOut, containerOutput, summary)

@@ -335,12 +335,6 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(false));
 
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(false));
-
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
@@ -352,8 +346,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit")));
+            => Task.FromResult(Result<BranchCommitSummary>.Ok(new BranchCommitSummary(0, null)));
     }
 
     private sealed class NullContainerOutputParser : IContainerOutputParser

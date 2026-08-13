@@ -104,28 +104,6 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
             cancellationToken);
     }
 
-    public async Task<Result<bool>> HasBranchCommitsAsync(
-        RepositorySlug slug,
-        string branchName,
-        CancellationToken cancellationToken)
-    {
-        Result<string> defaultBranchResult = await GetDefaultBranchAsync(slug, cancellationToken);
-
-        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
-        {
-            Error error = ((Result<string>.Failure)defaultBranchResult).Error;
-            return Result<bool>.Fail(error);
-        }
-
-        return await httpClient.HasBranchCommitsAsync(
-            apiBaseUrl,
-            slug,
-            defaultBranchSuccess.Value,
-            branchName,
-            token,
-            cancellationToken);
-    }
-
     public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         RepositorySlug slug,
         string branchName,

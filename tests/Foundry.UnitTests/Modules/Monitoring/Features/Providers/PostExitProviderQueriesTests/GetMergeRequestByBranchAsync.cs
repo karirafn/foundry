@@ -190,14 +190,6 @@ public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
             return Task.FromResult(Result<bool>.Ok(true));
         }
 
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            RepositorySlug slug,
-            string branchName,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult(Result<bool>.Ok(false));
-        }
-
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             RepositorySlug slug,
             string branchName,

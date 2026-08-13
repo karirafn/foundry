@@ -265,12 +265,6 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             => Task.FromResult(
                 Result<bool>.Fail(new Error("Provider.BranchCreationFailed", "403 Forbidden")));
 
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(false));
-
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
@@ -293,12 +287,6 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
-
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(false));
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,

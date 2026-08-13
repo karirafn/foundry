@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -844,17 +846,6 @@ public sealed class ResolveAsync
             return Task.FromResult(result);
         }
 
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-        {
-            Result<bool> result = _commitsResultQueue.Count > 0
-                ? _commitsResultQueue.Dequeue()
-                : _commitsResult;
-            return Task.FromResult(result);
-        }
-
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
@@ -865,8 +856,21 @@ public sealed class ResolveAsync
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit found")));
+        {
+            Result<bool> boolResult = _commitsResultQueue.Count > 0
+                ? _commitsResultQueue.Dequeue()
+                : _commitsResult;
+
+            Result<BranchCommitSummary> result = boolResult switch
+            {
+                Result<bool>.Success { Value: true } => Result<BranchCommitSummary>.Ok(new BranchCommitSummary(1, "sha")),
+                Result<bool>.Success { Value: false } => Result<BranchCommitSummary>.Ok(new BranchCommitSummary(0, null)),
+                Result<bool>.Failure f => Result<BranchCommitSummary>.Fail(f.Error),
+                _ => throw new UnreachableException(),
+            };
+
+            return Task.FromResult(result);
+        }
     }
 
     private sealed class NullContainerOutputParser : IContainerOutputParser

@@ -521,41 +521,6 @@ internal sealed partial class GitLabHttpClient(
         return Result<bool>.Ok(true);
     }
 
-    public async Task<Result<bool>> HasBranchCommitsAsync(
-        Uri apiBaseUrl,
-        RepositorySlug slug,
-        string defaultBranch,
-        string branchName,
-        string token,
-        CancellationToken cancellationToken)
-    {
-        if (apiBaseUrl.Scheme is not "https")
-        {
-            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
-        }
-
-        string encodedPath = Uri.EscapeDataString(slug.FullPath);
-        string encodedDefault = Uri.EscapeDataString(defaultBranch);
-        string encodedBranch = Uri.EscapeDataString(branchName);
-        string relativePath = $"projects/{encodedPath}/repository/compare?from={encodedDefault}&to={encodedBranch}";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
-
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        AddCommonHeaders(request, token);
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Result<bool>.Fail(ErrorFromNonSuccess(response));
-        }
-
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        GitLabCompareDto? dto = JsonSerializer.Deserialize<GitLabCompareDto>(body, JsonOptions);
-
-        return Result<bool>.Ok((dto?.Commits ?? []).Count > 0);
-    }
-
     public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,

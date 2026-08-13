@@ -169,12 +169,6 @@ public sealed class WhenProviderReturnsTransientError : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
 
-        public Task<Result<bool>> HasBranchCommitsAsync(
-            MonitoredRepositoryId repositoryId,
-            string branchName,
-            CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(true));
-
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
