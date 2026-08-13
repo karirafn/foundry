@@ -718,14 +718,14 @@ internal sealed class WorkerDispatchService(
         IPostExitProviderQueries postExitProviderQueries,
         CancellationToken cancellationToken)
     {
-        Result<BranchCommitSummary> commitResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
+        Result<BranchCommitSummary> commitsResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             run.MonitoredRepositoryId,
             run.BranchName.Value,
             cancellationToken);
 
         FailureReason timedOut = new FailureReason.TimedOut();
 
-        if (commitResult is Result<BranchCommitSummary>.Failure commitsFailure)
+        if (commitsResult is Result<BranchCommitSummary>.Failure commitsFailure)
         {
             if (commitsFailure.Error.Kind == ErrorKind.NotFound)
             {
@@ -737,7 +737,7 @@ internal sealed class WorkerDispatchService(
             return new WorkerOutcome.ContinuableFailure(run.BranchName, timedOut, containerOutput, summary);
         }
 
-        bool hasCommits = ((Result<BranchCommitSummary>.Success)commitResult).Value.CommitCount > 0;
+        bool hasCommits = ((Result<BranchCommitSummary>.Success)commitsResult).Value.CommitCount > 0;
 
         return hasCommits
             ? new WorkerOutcome.ContinuableFailure(run.BranchName, timedOut, containerOutput, summary)
