@@ -1816,6 +1816,7 @@
         "required": [
           "maxConcurrent",
           "timeoutMinutes",
+          "probeIntervalMinutes",
           "systemPromptTemplate",
           "workerPromptTemplate",
           "usageLimitResetsAt",
@@ -1844,6 +1845,14 @@
             "format": "int32"
           },
           "timeoutMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "probeIntervalMinutes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",

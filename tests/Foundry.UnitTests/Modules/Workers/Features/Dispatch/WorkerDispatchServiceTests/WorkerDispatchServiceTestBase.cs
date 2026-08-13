@@ -249,6 +249,9 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
             => Task.FromResult(timeoutMinutes);
 
+        public Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(60);
+
         public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
             CancellationToken cancellationToken)
             => Task.FromResult<(string?, string?)>((null, null));

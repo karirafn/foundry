@@ -29,4 +29,9 @@ internal static class SettingsErrors
 
     internal static readonly Error InvalidRetryStatus =
         new(InvalidRetryStatusCode, "Retry is only valid when the last build failed.");
+
+    internal const string InvalidProbeIntervalCode = "Settings.InvalidProbeInterval";
+
+    internal static Error InvalidProbeInterval(int value) =>
+        new(InvalidProbeIntervalCode, $"Probe interval must be at least {GlobalSettings.MinProbeIntervalMinutes} minutes, but was {value}.");
 }
