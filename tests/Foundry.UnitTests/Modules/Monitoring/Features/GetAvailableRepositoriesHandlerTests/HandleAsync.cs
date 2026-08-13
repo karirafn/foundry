@@ -14,7 +14,9 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -101,8 +103,8 @@ public sealed class HandleAsync : IAsyncDisposable
         HttpClient gitLabHttpClient = new(gitLabFake);
         return new GetAvailableRepositories.Handler(
             _dbContext,
-            new GitHubHttpClient(gitHubHttpClient, NullLogger<GitHubHttpClient>.Instance),
-            new GitLabHttpClient(gitLabHttpClient, NullLogger<GitLabHttpClient>.Instance));
+            new GitHubHttpClient(gitHubHttpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))),
+            new GitLabHttpClient(gitLabHttpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
     }
 
     [Fact]

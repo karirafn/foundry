@@ -14,7 +14,9 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -90,7 +92,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             (HttpStatusCode.OK, commentsJsonBuilder.ToString()),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -130,7 +132,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             (HttpStatusCode.OK, commentsJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -172,7 +174,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             (HttpStatusCode.OK, commentsJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -211,7 +213,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             (HttpStatusCode.OK, "[]"),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -250,7 +252,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             (HttpStatusCode.OK, commentsJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -289,7 +291,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             (HttpStatusCode.OK, commentsJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -328,7 +330,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             (HttpStatusCode.OK, commentsJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -367,7 +369,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
             (HttpStatusCode.OK, commentsJson),
         ]);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -390,7 +392,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
@@ -414,7 +416,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(

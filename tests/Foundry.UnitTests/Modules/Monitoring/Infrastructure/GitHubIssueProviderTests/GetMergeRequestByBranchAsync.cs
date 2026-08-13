@@ -12,7 +12,9 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubIssueProviderTests;
 
@@ -41,7 +43,7 @@ public sealed class GetMergeRequestByBranchAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, prJson);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
@@ -62,7 +64,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act
@@ -83,7 +85,7 @@ public sealed class GetMergeRequestByBranchAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
 
         // Act

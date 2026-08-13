@@ -43,8 +43,12 @@ export class WorkerSignalRService {
   private readonly _workerActivitySignal: WritableSignal<WorkerActivity | null> = signal(null);
   readonly workerActivity: Signal<WorkerActivity | null> = this._workerActivitySignal.asReadonly();
 
-  private readonly _activityByRunId = new Map<string, string>();
-  private readonly _activityByIssueId = new Map<string, string>();
+  // Signal-backed maps so reads are reactive under OnPush.
+  // Wrapping the entire map in a signal means any write causes a new reference,
+  // which propagates to all computed/template reads that depend on it.
+  private readonly _activityByRunIdSignal: WritableSignal<ReadonlyMap<string, string>> = signal(new Map());
+  private readonly _activityByIssueIdSignal: WritableSignal<ReadonlyMap<string, string>> = signal(new Map());
+  private readonly _commitCountByIssueIdSignal: WritableSignal<ReadonlyMap<string, number>> = signal(new Map());
 
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
@@ -54,8 +58,18 @@ export class WorkerSignalRService {
 
     this._hub.on('WorkerActivity', (activity: WorkerActivity) => {
       this._workerActivitySignal.set(activity);
-      this._activityByRunId.set(activity.workerRunId, activity.lastActivityAt);
-      this._activityByIssueId.set(activity.issueId, activity.lastActivityAt);
+
+      const nextByRunId = new Map(this._activityByRunIdSignal());
+      nextByRunId.set(activity.workerRunId, activity.lastActivityAt);
+      this._activityByRunIdSignal.set(nextByRunId);
+
+      const nextByIssueId = new Map(this._activityByIssueIdSignal());
+      nextByIssueId.set(activity.issueId, activity.lastActivityAt);
+      this._activityByIssueIdSignal.set(nextByIssueId);
+
+      const nextCommitCount = new Map(this._commitCountByIssueIdSignal());
+      nextCommitCount.set(activity.issueId, activity.commitCount);
+      this._commitCountByIssueIdSignal.set(nextCommitCount);
     });
 
     this._hub.onReconnected(() => {
@@ -68,11 +82,16 @@ export class WorkerSignalRService {
   }
 
   activityFor(workerRunId: string): string | null {
-    return this._activityByRunId.get(workerRunId) ?? null;
+    return this._activityByRunIdSignal().get(workerRunId) ?? null;
   }
 
   activityForIssue(issueId: string): string | null {
-    return this._activityByIssueId.get(issueId) ?? null;
+    return this._activityByIssueIdSignal().get(issueId) ?? null;
+  }
+
+  /** Returns the observed commit count for the issue, or null if no WorkerActivity has arrived yet. */
+  commitCountForIssue(issueId: string): number | null {
+    return this._commitCountByIssueIdSignal().get(issueId) ?? null;
   }
 
   streamLog(workerRunId: string): Observable<string> {

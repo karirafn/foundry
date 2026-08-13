@@ -13,8 +13,7 @@ internal sealed class WorkerActivityObservedHandler(IWorkerActivityBroadcaster b
             WorkerRunId: @event.WorkerRunId.Value,
             IssueId: @event.IssueId.Value,
             LastActivityAt: @event.LastActivityAt,
-            NewCommitSha: @event.NewCommitMarker?.Sha,
-            NewCommitMessage: @event.NewCommitMarker?.Message);
+            CommitCount: @event.CommitCount);
 
         return broadcaster.BroadcastActivityAsync(activity, cancellationToken);
     }

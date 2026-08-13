@@ -129,9 +129,6 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: null,
             OutputTokens: null,
             LastActivityAt: run.LastActivityAt,
-            CommitMarkers: run.CommitMarkers
-                .Select(m => new WorkerRunCommitMarker(m.ObservedAt, m.Sha, m.Message))
-                .ToList(),
             HasStoredLog: false);
 
     private static WorkerRunDetail MapCompleted(CompletedRun run) =>
@@ -150,7 +147,6 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: run.ResultSummary?.InputTokens,
             OutputTokens: run.ResultSummary?.OutputTokens,
             LastActivityAt: null,
-            CommitMarkers: [],
             HasStoredLog: false);
 
     private static WorkerRunDetail MapFailed(FailedRun run) =>
@@ -169,7 +165,6 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: run.ResultSummary?.InputTokens,
             OutputTokens: run.ResultSummary?.OutputTokens,
             LastActivityAt: null,
-            CommitMarkers: [],
             HasStoredLog: run is { ContainerOutput.Length: > 0 });
 
     private static WorkerRunDetail MapStarting(StartingRun run) =>
@@ -188,8 +183,22 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: null,
             OutputTokens: null,
             LastActivityAt: null,
-            CommitMarkers: [],
             HasStoredLog: false);
+
+    public async Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
+        CancellationToken cancellationToken)
+    {
+        List<WorkerActivity> activities = await db.Set<ActiveRun>()
+            .AsNoTracking()
+            .Select(r => new WorkerActivity(
+                r.Id.Value,
+                r.IssueId.Value,
+                r.LastActivityAt ?? r.StartedAt,
+                r.BranchCommitCount))
+            .ToListAsync(cancellationToken);
+
+        return activities;
+    }
 
     public async Task<int> CountConsecutiveTransientRunsAsync(
         Guid issueId,

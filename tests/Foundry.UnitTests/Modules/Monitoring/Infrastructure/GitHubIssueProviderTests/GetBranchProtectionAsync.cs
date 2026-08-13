@@ -12,7 +12,9 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubIssueProviderTests;
 
@@ -27,7 +29,7 @@ public sealed class GetBranchProtectionAsync
     private static GitHubIssueProvider BuildSut(SequentialFakeHandler handler)
     {
         HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         return new GitHubIssueProvider(gitHubHttpClient, ValidToken, ValidBaseUrl);
     }
 

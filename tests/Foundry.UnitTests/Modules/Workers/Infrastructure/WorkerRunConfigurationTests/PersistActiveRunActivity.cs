@@ -68,7 +68,7 @@ public sealed class PersistActiveRunActivity : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenActiveRunHasCommitMarkers_CommitMarkersRoundTrip()
+    public async Task WhenActiveRunHasBranchCommitCount_RoundTrips()
     {
         // Arrange
         IssueId issueId = IssueId.New();
@@ -78,12 +78,8 @@ public sealed class PersistActiveRunActivity : IAsyncDisposable
             BranchName.From("feat/2-commits"),
             MonitoredRepositoryId.New());
 
-        CommitMarker marker = CommitMarker.Create(
-            observedAt: new DateTimeOffset(2026, 6, 29, 13, 0, 0, TimeSpan.Zero),
-            sha: "abc123def456",
-            message: "feat: add something");
-
-        run.RecordCommit(marker);
+        DateTimeOffset observedAt = new DateTimeOffset(2026, 6, 29, 13, 0, 0, TimeSpan.Zero);
+        run.RecordBranchCommitCount(3, "abc123def456", observedAt);
 
         _dbContext.Set<WorkerRun>().Add(run);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -96,12 +92,9 @@ public sealed class PersistActiveRunActivity : IAsyncDisposable
 
         // Assert
         ActiveRun reloaded = result.ShouldBeOfType<ActiveRun>();
-        reloaded.CommitMarkers.Count.ShouldBe(1);
-        CommitMarker reloadedMarker = reloaded.CommitMarkers[0];
-        reloadedMarker.ShouldSatisfyAllConditions(
-            () => reloadedMarker.Sha.ShouldBe("abc123def456"),
-            () => reloadedMarker.Message.ShouldBe("feat: add something"),
-            () => reloadedMarker.ObservedAt.ShouldBe(new DateTimeOffset(2026, 6, 29, 13, 0, 0, TimeSpan.Zero)));
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.BranchCommitCount.ShouldBe(3),
+            () => reloaded.LastObservedCommitSha.ShouldBe("abc123def456"));
     }
 
     [Fact]

@@ -1147,6 +1147,12 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Workers.Domain.Entities.WorkerRun");
 
+                    b.Property<int>("BranchCommitCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("branch_commit_count");
+
                     b.Property<string>("BranchName")
                         .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()
@@ -1154,12 +1160,6 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
-
-                    b.Property<string>("CommitMarkers")
-                        .IsRequired()
-                        .HasMaxLength(2147483647)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("commit_markers");
 
                     b.Property<string>("ContainerId")
                         .IsRequired()
@@ -1171,6 +1171,12 @@ namespace Foundry.WebApi.Migrations
                     b.Property<DateTimeOffset?>("LastActivityAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("last_activity_at");
+
+                    b.Property<string>("LastObservedCommitSha")
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_observed_commit_sha");
 
                     b.Property<Guid>("MonitoredRepositoryId")
                         .HasColumnType("TEXT")

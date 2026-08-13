@@ -122,12 +122,26 @@ internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string to
         return httpClient.GetMergeRequestByBranchAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
     }
 
-    public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+    public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         RepositorySlug slug,
         string branchName,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetLatestBranchCommitAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
+        Result<string> defaultBranchResult = await GetDefaultBranchAsync(slug, cancellationToken);
+
+        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
+        {
+            Error error = ((Result<string>.Failure)defaultBranchResult).Error;
+            return Result<BranchCommitSummary>.Fail(error);
+        }
+
+        return await httpClient.GetBranchCommitSummaryAsync(
+            apiBaseUrl,
+            slug,
+            defaultBranchSuccess.Value,
+            branchName,
+            token,
+            cancellationToken);
     }
 
     public Task<Result<bool>> CanPushAsync(

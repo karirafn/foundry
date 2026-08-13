@@ -108,6 +108,28 @@ public sealed class RecordActivity
             () => domainEvent.WorkerRunId.ShouldBe(active.Id),
             () => domainEvent.IssueId.ShouldBe(issueId),
             () => domainEvent.LastActivityAt.ShouldBe(observedAt),
-            () => domainEvent.NewCommitMarker.ShouldBeNull());
+            () => domainEvent.CommitCount.ShouldBe(0));
+    }
+
+    [Fact]
+    public void WhenCalledAfterBranchCommitCountSet_RaisesWorkerActivityObservedWithCurrentCount()
+    {
+        // Arrange — silence bump after a commit was already recorded must carry the current count
+        IssueId issueId = IssueId.New();
+        ActiveRun active = CreateActiveRun(issueId);
+        DateTimeOffset commitAt = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
+        DateTimeOffset silenceAt = new(2026, 6, 29, 10, 1, 0, TimeSpan.Zero);
+        active.RecordBranchCommitCount(3, "abc1234", commitAt);
+        active.ClearDomainEvents();
+
+        // Act
+        active.RecordActivity(silenceAt);
+
+        // Assert
+        WorkerActivityObserved domainEvent = active.DomainEvents
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<WorkerActivityObserved>();
+
+        domainEvent.CommitCount.ShouldBe(3);
     }
 }

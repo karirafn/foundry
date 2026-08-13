@@ -32,4 +32,8 @@ public sealed class NullWorkerRunQueries(int consecutiveTransientRuns = 0) : IWo
         int maxAttempts,
         CancellationToken cancellationToken)
         => Task.FromResult(consecutiveTransientRuns);
+
+    public Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyCollection<WorkerActivity>>([]);
 }

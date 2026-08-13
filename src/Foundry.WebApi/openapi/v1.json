@@ -2904,26 +2904,6 @@
           }
         }
       },
-      "WorkerRunCommitMarker": {
-        "required": [
-          "observedAt",
-          "sha",
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "observedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "sha": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        }
-      },
       "WorkerRunDetail": {
         "required": [
           "workerRunId",
@@ -2940,7 +2920,6 @@
           "inputTokens",
           "outputTokens",
           "lastActivityAt",
-          "commitMarkers",
           "hasStoredLog"
         ],
         "type": "object",
@@ -3037,12 +3016,6 @@
               "string"
             ],
             "format": "date-time"
-          },
-          "commitMarkers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkerRunCommitMarker"
-            }
           },
           "hasStoredLog": {
             "type": "boolean"

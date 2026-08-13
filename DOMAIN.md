@@ -399,6 +399,49 @@ Modeled as a polymorphic aggregate with state variants: `StartingRun` (container
 An issue can have multiple runs (e.g. after retry from Failed or Review state).
 Foundry derives each run's outcome via `WorkerOutcomeResolver` — a pure function that consults merge-request state first (see Worker Outcome Detection).
 `ActiveRun` carries the `BranchName` — set at activation from the dispatch payload's pre-created branch name, propagated to `FailedRun` and `CompletedRun`.
+`ActiveRun` also carries `BranchCommitCount` (non-nullable int, default 0) and `LastObservedCommitSha` (nullable string) — see Branch Commit Count and Worker Activity Observation Loop below.
+
+## Branch Commit Count
+
+The number of commits the issue branch is ahead of the repository's default branch by merge-base comparison.
+This is a projection of provider truth, not a Foundry-maintained tally — Foundry queries the provider on each observation tick and stores the result on `ActiveRun.BranchCommitCount`.
+
+**Provider mechanics.**
+GitHub: `GET /repos/{owner}/{repo}/compare/{default}...{branch}` — the `ahead_by` field in the response gives the commit count; the last entry in `commits` gives the head SHA.
+GitLab: `GET /projects/{path}/repository/compare?from={default}&to={branch}` — the compare endpoint defaults to merge-base comparison (never straight); `commits.Count` is the commit count and the last entry's `id` is the head SHA.
+
+**Change detection.**
+`ActiveRun.LastObservedCommitSha` stores the head SHA seen on the previous tick.
+`RecordBranchCommitCount(count, sha, observedAt)` updates `BranchCommitCount` unconditionally but only raises `WorkerActivityObserved` when `sha` differs from `LastObservedCommitSha` — an unchanged head SHA produces no broadcast and no unnecessary write.
+`LastObservedCommitSha` is persisted (not in-memory), so dedup survives a host restart.
+
+**Rebase behaviour.**
+The count is not monotonically clamped — a rebase reduces it.
+A `NotFound` provider response (branch deleted) resets the count to 0 and clears the SHA.
+Any other provider error (transient network failure, etc.) leaves the persisted count and SHA unchanged and broadcasts nothing.
+
+## Worker Activity Observation Loop
+
+On each ~10 s `WorkerDispatchService` tick, for every `ActiveRun` the service:
+
+1. Fetches the container's current log output and compares its length to the in-memory `_lastSeenLogLength` entry for the run.
+   If the log grew, `ActiveRun.RecordActivity(now)` is called — this updates `LastActivityAt` and raises `WorkerActivityObserved`.
+2. Calls `GetBranchCommitSummaryAsync` to project the current branch commit count from the provider:
+   - **Success** — calls `RecordBranchCommitCount(summary.CommitCount, summary.LatestSha, now)`; a `WorkerActivityObserved` event is raised only when the head SHA changed.
+   - **`NotFound`** — calls `RecordBranchCommitCount(0, null, now)`; always raises `WorkerActivityObserved` (the null SHA differs from any prior SHA).
+   - **Any other failure** — does nothing; the persisted count stays unchanged and no event is raised.
+3. If any domain events were raised, saves to the database (within the same scope transaction) and dispatches the events.
+
+`WorkerActivityObserved` is handled by `WorkerActivityObservedHandler`, which broadcasts a `WorkerActivity` payload (`WorkerRunId`, `IssueId`, `LastActivityAt`, `CommitCount`) to all connected dashboard clients via `WorkerHub`.
+
+## SignalR Worker Activity Replay
+
+`WorkerHub.OnConnectedAsync` replays a `WorkerActivity` payload for every active run to the connecting client, so a dashboard reload or reconnect renders the current commit count (and last-activity time) without waiting for the next observation tick.
+Live pushes and connect-replay use the same `WorkerActivity` client method — the frontend makes no distinction between them.
+
+**Dashboard display.**
+The in-progress issue card headline shows the branch commit count.
+Log silence (the wall-clock gap since the last log output) is a frontend-only signal shown only past a 5-minute threshold — it is rendered alongside the commit count, not instead of it.
 
 ## Worker Outcome Detection
 

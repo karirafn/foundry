@@ -816,12 +816,6 @@ export interface components {
             missingScopes: string[];
             detectedProvider: null | string;
         };
-        WorkerRunCommitMarker: {
-            /** Format: date-time */
-            observedAt: string;
-            sha: string;
-            message: string;
-        };
         WorkerRunDetail: {
             /** Format: uuid */
             workerRunId: string;
@@ -845,7 +839,6 @@ export interface components {
             outputTokens: null | number | string;
             /** Format: date-time */
             lastActivityAt: null | string;
-            commitMarkers: components["schemas"]["WorkerRunCommitMarker"][];
             hasStoredLog: boolean;
         };
     };

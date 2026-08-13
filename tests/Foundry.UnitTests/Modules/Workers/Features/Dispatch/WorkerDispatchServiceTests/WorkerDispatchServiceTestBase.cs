@@ -85,7 +85,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IGlobalSettingsQueries? settingsQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null,
         IContainerOutputParser? containerOutputParser = null,
-        ICredentialGate? credentialGate = null)
+        ICredentialGate? credentialGate = null,
+        IDomainEventDispatcher? domainEventDispatcher = null)
     {
         SqliteConnection connection = _connection;
 
@@ -98,9 +99,20 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             return new FoundryDbContext(options);
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
-        // Use the real DomainEventDispatcher so that the WorkerRunFailedBridgeHandler
-        // can route domain WorkerRunFailed events to the integration event dispatcher.
-        services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+
+        if (domainEventDispatcher is not null)
+        {
+            // Allow the caller to inject a capturing dispatcher; still register the bridge handler
+            // so WorkerRunFailed domain events can reach the integration event dispatcher.
+            services.AddScoped<IDomainEventDispatcher>(_ => domainEventDispatcher);
+        }
+        else
+        {
+            // Use the real DomainEventDispatcher so that the WorkerRunFailedBridgeHandler
+            // can route domain WorkerRunFailed events to the integration event dispatcher.
+            services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        }
+
         services.AddScoped<IDomainEventHandler<DomainWorkerRunFailed>, WorkerRunFailedBridgeHandler>();
         services.AddScoped<IIntegrationEventDispatcher>(
             _ => integrationEventDispatcher ?? new NullIntegrationEventDispatcher());
@@ -183,12 +195,12 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             return Task.FromResult(Result<MergeRequestByBranch>.Ok(result));
         }
 
-        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
             => Task.FromResult(
-                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+                Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit found")));
     }
 
     protected sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher

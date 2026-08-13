@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -10,7 +9,6 @@ using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -90,11 +88,7 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 {
     private const int ContainerIdMaxLength = 200;
-
-    private static readonly JsonSerializerOptions CommitMarkersJsonOptions = new()
-    {
-        Converters = { new JsonStringEnumConverter() },
-    };
+    private const int LastObservedCommitShaMaxLength = 40;
 
     private static readonly ValueConverter<ContainerId, string> ContainerIdConverter = new(
         id => id.Value,
@@ -103,20 +97,6 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
     private static readonly ValueConverter<MonitoredRepositoryId, Guid> MonitoredRepositoryIdConverter = new(
         id => id.Value,
         value => MonitoredRepositoryId.From(value));
-
-    private static readonly ValueConverter<IReadOnlyList<CommitMarker>, string> CommitMarkersConverter = new(
-        markers => JsonSerializer.Serialize(markers, CommitMarkersJsonOptions),
-        json => JsonSerializer.Deserialize<List<CommitMarker>>(json, CommitMarkersJsonOptions)
-            ?? new List<CommitMarker>());
-
-    // Compares by serialized JSON so EF detects mutations to the list contents.
-    private static readonly ValueComparer<IReadOnlyList<CommitMarker>> CommitMarkersComparer = new(
-        (a, b) => JsonSerializer.Serialize(a, CommitMarkersJsonOptions)
-            == JsonSerializer.Serialize(b, CommitMarkersJsonOptions),
-        list => JsonSerializer.Serialize(list, CommitMarkersJsonOptions).GetHashCode(),
-        list => JsonSerializer.Deserialize<List<CommitMarker>>(
-            JsonSerializer.Serialize(list, CommitMarkersJsonOptions),
-            CommitMarkersJsonOptions) ?? new List<CommitMarker>());
 
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
@@ -144,11 +124,14 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         builder.Property(r => r.LastActivityAt)
             .HasColumnName("last_activity_at");
 
-        builder.Property(r => r.CommitMarkers)
-            .HasConversion(CommitMarkersConverter, CommitMarkersComparer)
-            .HasMaxLength(int.MaxValue)
-            .HasColumnType("TEXT")
-            .HasColumnName("commit_markers");
+        builder.Property(r => r.LastObservedCommitSha)
+            .HasMaxLength(LastObservedCommitShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("last_observed_commit_sha");
+
+        builder.Property(r => r.BranchCommitCount)
+            .HasDefaultValue(0)
+            .HasColumnName("branch_commit_count");
     }
 }
 

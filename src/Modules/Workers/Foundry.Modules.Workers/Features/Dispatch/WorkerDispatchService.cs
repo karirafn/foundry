@@ -38,10 +38,9 @@ internal sealed class WorkerDispatchService(
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
 
-    // Per-run in-memory tick state for activity and commit detection.
+    // Per-run in-memory tick state for log-silence detection.
     // Keyed by WorkerRunId; entries are added on first observation and removed on terminal transition.
     private readonly Dictionary<WorkerRunId, int> _lastSeenLogLength = [];
-    private readonly Dictionary<WorkerRunId, string> _lastSeenCommitSha = [];
 
     protected override TimeSpan TickInterval => Interval;
 
@@ -703,7 +702,6 @@ internal sealed class WorkerDispatchService(
         }
 
         _lastSeenLogLength.Remove(activeRun.Id);
-        _lastSeenCommitSha.Remove(activeRun.Id);
         await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
     }
 
@@ -819,20 +817,25 @@ internal sealed class WorkerDispatchService(
             activeRun.RecordActivity(now);
         }
 
-        Result<LatestBranchCommit> commitResult = await postExitProviderQueries.GetLatestBranchCommitAsync(
+        Result<BranchCommitSummary> commitResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             activeRun.MonitoredRepositoryId,
             activeRun.BranchName.Value,
             cancellationToken);
 
-        if (commitResult is Result<LatestBranchCommit>.Success { Value: LatestBranchCommit latestCommit })
+        switch (commitResult)
         {
-            _lastSeenCommitSha.TryGetValue(activeRun.Id, out string? lastSha);
+            case Result<BranchCommitSummary>.Success { Value: BranchCommitSummary summary }:
+                activeRun.RecordBranchCommitCount(summary.CommitCount, summary.LatestSha, now);
+                break;
 
-            if (latestCommit.Sha != lastSha)
-            {
-                _lastSeenCommitSha[activeRun.Id] = latestCommit.Sha;
-                activeRun.RecordCommit(CommitMarker.Create(now, latestCommit.Sha, latestCommit.Message));
-            }
+            case Result<BranchCommitSummary>.Failure { Error: { Kind: ErrorKind.NotFound } }:
+                // Branch is gone — reset the count to 0 so the UI reflects the deleted branch.
+                activeRun.RecordBranchCommitCount(0, null, now);
+                break;
+
+            // Any other failure (transient provider error): leave the persisted count unchanged.
+            // Do not call RecordBranchCommitCount — the aggregate must not raise a WorkerActivity
+            // broadcast for an error state, and the last known count remains accurate.
         }
 
         if (activeRun.DomainEvents.Count > 0)

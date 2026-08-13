@@ -11,7 +11,9 @@ using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 using Shouldly;
 
 using Xunit;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabIssueProviderTests;
 
@@ -26,7 +28,7 @@ public sealed class CanPushAsync
     private static GitLabIssueProvider BuildSut(FakeHandler handler)
     {
         HttpClient httpClient = new(handler);
-        GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance);
+        GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         return new GitLabIssueProvider(gitLabHttpClient, ValidToken, ValidBaseUrl);
     }
 

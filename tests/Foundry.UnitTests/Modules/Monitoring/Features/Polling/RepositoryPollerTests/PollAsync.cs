@@ -1194,13 +1194,13 @@ public sealed class PollAsync : IAsyncDisposable
                 Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
         }
 
-        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
             RepositorySlug slug,
             string branchName,
             CancellationToken cancellationToken)
         {
             return Task.FromResult(
-                Result<LatestBranchCommit>.Fail(new Error("Provider.NoCommit", "No commit found")));
+                Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit found")));
         }
 
         public Task<Result<bool>> CanPushAsync(
@@ -1282,12 +1282,12 @@ public sealed class PollAsync : IAsyncDisposable
             return Task.FromResult(Result<MergeRequestByBranch>.Fail(error));
         }
 
-        public Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
             RepositorySlug slug,
             string branchName,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<LatestBranchCommit>.Fail(error));
+            return Task.FromResult(Result<BranchCommitSummary>.Fail(error));
         }
 
         public Task<Result<bool>> CanPushAsync(

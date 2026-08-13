@@ -14,7 +14,7 @@ const mockIssue: IssueSummary = {
   url: 'https://github.com/owner/repo/issues/42',
 };
 
-function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null) {
+function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, commitCount: number | null = null, isNextUp = false) {
   TestBed.configureTestingModule({
     imports: [IssueCardComponent],
     providers: [
@@ -26,6 +26,12 @@ function createComponent(issue: IssueSummary = mockIssue, expanded = false, last
   fixture.componentRef.setInput('expanded', expanded);
   if (lastActivityAt !== null) {
     fixture.componentRef.setInput('lastActivityAt', lastActivityAt);
+  }
+  if (commitCount !== null) {
+    fixture.componentRef.setInput('commitCount', commitCount);
+  }
+  if (isNextUp) {
+    fixture.componentRef.setInput('isNextUp', true);
   }
   fixture.detectChanges();
   return fixture;
@@ -558,6 +564,153 @@ describe('IssueCardComponent', () => {
     // Assert
     const badge = el.querySelector('fd-state-badge span');
     expect(badge?.textContent?.trim()).toBe('USAGE LIMITED');
+  });
+
+  // Cycle 22: commit count phrases in the activity line
+  it('should show "no commits yet" when commitCount is 0', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('no commits yet');
+  });
+
+  it('should show "1 commit" (singular) when commitCount is 1', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 1);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('1 commit');
+    expect(activity?.textContent).not.toContain('1 commits');
+  });
+
+  it('should show "2 commits" (plural) when commitCount is 2', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 2);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('2 commits');
+  });
+
+  it('should show "N commits" for N >= 2', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 5);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('5 commits');
+  });
+
+  // Cycle 23: silence threshold — no silence segment when < 5 minutes
+  it('should NOT show silence segment when silent duration is less than 5 minutes', () => {
+    // Arrange — 4 minutes 59 seconds silent (just under threshold)
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const justUnderThreshold = new Date(Date.now() - (5 * 60 * 1000 - 1000)).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, justUnderThreshold, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).not.toContain('silent');
+  });
+
+  it('should show silence segment when silent duration is exactly 5 minutes', () => {
+    // Arrange — exactly 5 minutes silent
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const exactlyFiveMin = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, exactlyFiveMin, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('silent 5m');
+  });
+
+  it('should show silence segment when silent duration is more than 5 minutes', () => {
+    // Arrange — 7 minutes silent
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, sevenMinutesAgo, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('silent 7m');
+  });
+
+  it('should place the silence segment after the commit segment', () => {
+    // Arrange — 7 minutes silent, 3 commits
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, sevenMinutesAgo, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — commit segment appears before silence segment in text
+    const text = el.querySelector('.issue-card__activity')?.textContent ?? '';
+    const commitIdx = text.indexOf('3 commits');
+    const silentIdx = text.indexOf('silent');
+    expect(commitIdx).toBeGreaterThan(-1);
+    expect(silentIdx).toBeGreaterThan(commitIdx);
+  });
+
+  it('should render "no commits yet · silent 7m" for 0 commits and 7 minutes silent', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, sevenMinutesAgo, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const text = el.querySelector('.issue-card__activity')?.textContent ?? '';
+    expect(text).toContain('no commits yet');
+    expect(text).toContain('silent 7m');
+  });
+
+  it('should NOT show activity line when issue is not in LIVE_STATES even with commitCount', () => {
+    // Arrange
+    const failedIssue: IssueSummary = { ...mockIssue, state: 'failed' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(failedIssue, false, recentAt, 5);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — no activity line regardless of commitCount
+    const activity = el.querySelector('.issue-card__activity');
+    expect(activity).toBeFalsy();
   });
 
   // Cycle 11: continuation_queued is NOT treated as a live state for the activity timer
@@ -1204,5 +1357,182 @@ describe('IssueCardComponent', () => {
     const card = el.querySelector('.issue-card') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('Run stats:');
+  });
+
+  // Finding 1: aria-label includes activity with expanded units
+  it('should include activity with commit count in aria-label for a live issue', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — aria-label should contain screen-reader-friendly activity info
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Active: 3 commits.');
+  });
+
+  it('should include "1 commit" (singular) in aria-label for a live issue with 1 commit', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 1);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Active: 1 commit.');
+  });
+
+  it('should include "no commits yet" in aria-label for a live issue with 0 commits', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Active: no commits yet.');
+  });
+
+  it('should include expanded silence duration in aria-label when silent >= 5 minutes', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, sevenMinutesAgo, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — aria-label uses "7 minutes", not "7m"
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('silent 7 minutes');
+  });
+
+  it('should not include activity in aria-label for a non-live issue', () => {
+    // Arrange
+    const failedIssue: IssueSummary = { ...mockIssue, state: 'failed' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(failedIssue, false, recentAt, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('Active:');
+  });
+
+  // Finding 3: null commitCount = pre-handshake (no commit phrase)
+  it('should not show commit phrase when commitCount is null (pre-handshake)', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act — commitCount not set (null = pre-handshake)
+    const fixture = createComponent(liveIssue, false, recentAt, null);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — activity line shows just "active" with no commit phrase
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).not.toContain('commits');
+    expect(activity?.textContent).not.toContain('no commits yet');
+  });
+
+  it('should show "no commits yet" when commitCount is observed 0 (not pre-handshake)', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act — commitCount explicitly set to 0 (observed via SignalR)
+    const fixture = createComponent(liveIssue, false, recentAt, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('no commits yet');
+  });
+
+  it('should not include commit phrase in aria-label when commitCount is null', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, null);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('commits');
+  });
+
+  // Finding 2: aria-label silence phrase must be reactive to the ticker (a11y regression guard).
+  // issueAriaLabel must be a computed signal so that advancing the ticker causes Angular's
+  // signal graph to re-evaluate the aria-label binding on the same cadence as _activityLine.
+  it('should re-evaluate aria-label when the ticker advances (issueAriaLabel is a computed signal)', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const tickerSignal = signal(0);
+    TestBed.configureTestingModule({
+      imports: [IssueCardComponent],
+      providers: [
+        { provide: TickerService, useValue: { tick: tickerSignal } },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueCardComponent);
+    fixture.componentRef.setInput('issue', liveIssue);
+    fixture.componentRef.setInput('expanded', false);
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+    fixture.componentRef.setInput('lastActivityAt', sevenMinutesAgo);
+    fixture.componentRef.setInput('commitCount', 2);
+    fixture.detectChanges();
+
+    // Act — issueAriaLabel() must be a computed; verify it is a Signal (has a .()
+    // accessor shape), not just a plain method, so Angular tracks its dependency on tick()
+    const component = fixture.componentInstance;
+    // A computed signal is callable and its type-level shape is Signal<string>.
+    // The template reads it as issueAriaLabel() which works for both a method and a computed.
+    // To prove it's reactive: read it inside an effect/computed context — if it's a plain
+    // method it won't track tick; if it's a computed it will. We verify via the DOM that
+    // the aria-label updates even when ONLY the ticker changes.
+    const card = fixture.nativeElement.querySelector('.issue-card') as HTMLElement;
+    const labelBefore = card?.getAttribute('aria-label') ?? '';
+    expect(labelBefore).toContain('silent');
+
+    // Advance the ticker — if issueAriaLabel is a computed that reads tick(),
+    // Angular will mark the aria-label binding dirty and re-render it.
+    tickerSignal.set(1);
+    fixture.detectChanges();
+
+    const labelAfter = card?.getAttribute('aria-label') ?? '';
+    // The label must still contain the silence phrase after the ticker fires.
+    expect(labelAfter).toContain('silent');
+    expect(labelAfter).toContain('minutes');
+
+    // Verify issueAriaLabel is a Signal (computed), not a plain string-returning method:
+    // A computed signal has a distinct prototype vs a class method — we check it is
+    // accessible as a property (signal accessor) and not just a function reference.
+    // The concrete check: reading issueAriaLabel directly (without calling it) should
+    // be a function whose .name property identifies it as a computed signal created by
+    // Angular's computed() factory, not a plain prototype method.
+    const descriptor = Object.getOwnPropertyDescriptor(component, 'issueAriaLabel');
+    // A computed signal is stored as an own property (not on the prototype), while a
+    // plain method lives on the prototype. If issueAriaLabel is a computed, it will
+    // be an own property of the component instance.
+    expect(descriptor).toBeDefined();
   });
 });

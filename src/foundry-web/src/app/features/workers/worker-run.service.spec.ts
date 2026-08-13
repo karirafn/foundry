@@ -19,7 +19,6 @@ const mockDetail: WorkerRunDetail = {
   inputTokens: 1000,
   outputTokens: 500,
   lastActivityAt: '2026-01-01T00:01:00Z',
-  commitMarkers: [],
   hasStoredLog: true,
 };
 

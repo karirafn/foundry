@@ -19,7 +19,8 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal sealed partial class GitHubHttpClient(
     HttpClient httpClient,
-    ILogger<GitHubHttpClient> logger) : IGitHubWriteProber
+    ILogger<GitHubHttpClient> logger,
+    DefaultBranchCache defaultBranchCache) : IGitHubWriteProber
 {
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
@@ -42,7 +43,7 @@ internal sealed partial class GitHubHttpClient(
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    public async Task<Result<string>> GetDefaultBranchAsync(
+    public Task<Result<string>> GetDefaultBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -50,9 +51,21 @@ internal sealed partial class GitHubHttpClient(
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<string>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Task.FromResult(Result<string>.Fail(GitHubErrors.InvalidBaseUrl));
         }
 
+        return defaultBranchCache.GetOrFetchAsync(
+            apiBaseUrl,
+            slug,
+            () => FetchDefaultBranchAsync(apiBaseUrl, slug, token, cancellationToken));
+    }
+
+    private async Task<Result<string>> FetchDefaultBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
         string relativePath = $"repos/{owner}/{repo}";
@@ -801,22 +814,24 @@ internal sealed partial class GitHubHttpClient(
         return Result<bool>.Ok((dto?.AheadBy ?? 0) > 0);
     }
 
-    public async Task<Result<LatestBranchCommit>> GetLatestBranchCommitAsync(
+    public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
+        string defaultBranch,
         string branchName,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<LatestBranchCommit>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<BranchCommitSummary>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
+        string encodedDefault = Uri.EscapeDataString(defaultBranch);
         string encodedBranch = Uri.EscapeDataString(branchName);
-        string relativePath = $"repos/{owner}/{repo}/commits?sha={encodedBranch}&per_page=1";
+        string relativePath = $"repos/{owner}/{repo}/compare/{encodedDefault}...{encodedBranch}";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
@@ -829,26 +844,19 @@ internal sealed partial class GitHubHttpClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<LatestBranchCommit>.Fail(ErrorFromNonSuccess(response));
+            return Result<BranchCommitSummary>.Fail(ErrorFromNonSuccess(response));
         }
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitHubCommitListItemDto>? dtos =
-            JsonSerializer.Deserialize<List<GitHubCommitListItemDto>>(body, JsonOptions);
+        GitHubCompareDto? dto = JsonSerializer.Deserialize<GitHubCompareDto>(body, JsonOptions);
 
-        GitHubCommitListItemDto? latest = (dtos ?? []).FirstOrDefault();
+        int commitCount = dto?.AheadBy ?? 0;
+        // Use the top-level head_commit.sha field (not commits[^1].sha) — the commits[] array is
+        // capped at 250 entries, so commits[^1].sha would stop advancing beyond the 250th commit.
+        // head_commit always reflects the actual branch tip regardless of how far ahead it is.
+        string? latestSha = commitCount > 0 ? dto?.HeadCommit?.Sha : null;
 
-        if (latest is null)
-        {
-            return Result<LatestBranchCommit>.Fail(GitHubErrors.NoBranchCommits);
-        }
-
-        string shortSha = latest.Sha.Length >= 7 ? latest.Sha[..7] : latest.Sha;
-        string commitMessage = latest.Commit?.Message ?? string.Empty;
-        int newlineIndex = commitMessage.IndexOf('\n', StringComparison.Ordinal);
-        string firstLine = newlineIndex >= 0 ? commitMessage[..newlineIndex] : commitMessage;
-
-        return Result<LatestBranchCommit>.Ok(new LatestBranchCommit(shortSha, firstLine));
+        return Result<BranchCommitSummary>.Ok(new BranchCommitSummary(commitCount, latestSha));
     }
 
     public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
@@ -1168,11 +1176,12 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record GitHubGitObjectDto(string Sha);
 
-    private sealed record GitHubCompareDto(int AheadBy);
+    private sealed record GitHubCompareDto(
+        int AheadBy,
+        IReadOnlyList<GitHubCommitRefDto> Commits,
+        GitHubCommitRefDto? HeadCommit);
 
-    private sealed record GitHubCommitListItemDto(string Sha, GitHubCommitDetailDto? Commit);
-
-    private sealed record GitHubCommitDetailDto(string Message);
+    private sealed record GitHubCommitRefDto(string Sha);
 
     private sealed record GitHubPullRequestStateDto(
         string HtmlUrl,
@@ -1198,10 +1207,6 @@ internal static class GitHubErrors
     public static readonly Error InvalidPullRequestUrl = new(
         "GitHub.InvalidPullRequestUrl",
         "The pull request URL does not contain a valid PR number.");
-
-    public static readonly Error NoBranchCommits = new(
-        "GitHub.NoBranchCommits",
-        "The branch has no commits.");
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitHub.UnexpectedStatusCode", $"GitHub API returned unexpected status code {statusCode}.");

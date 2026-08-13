@@ -6,7 +6,9 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -24,7 +26,7 @@ public sealed class ValidateTokenAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.Unauthorized, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -46,7 +48,7 @@ public sealed class ValidateTokenAsync
         FakeHandler handler = new(HttpStatusCode.OK, json);
         handler.ResponseHeaders["X-OAuth-Scopes"] = "repo, user";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -71,7 +73,7 @@ public sealed class ValidateTokenAsync
         FakeHandler handler = new(HttpStatusCode.OK, json);
         handler.ResponseHeaders["X-OAuth-Scopes"] = "user, read:org";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -93,7 +95,7 @@ public sealed class ValidateTokenAsync
         string json = """{ "login": "octocat" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -115,7 +117,7 @@ public sealed class ValidateTokenAsync
         string json = """{ "username": "gitlab_user", "id": 42 }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -138,7 +140,7 @@ public sealed class ValidateTokenAsync
         FakeHandler handler = new(HttpStatusCode.OK, json);
         handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -160,7 +162,7 @@ public sealed class ValidateTokenAsync
         FakeHandler handler = new(HttpStatusCode.OK, json);
         handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -182,7 +184,7 @@ public sealed class ValidateTokenAsync
         FakeHandler handler = new(HttpStatusCode.OK, json);
         handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -202,7 +204,7 @@ public sealed class ValidateTokenAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
@@ -222,7 +224,7 @@ public sealed class ValidateTokenAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
@@ -245,7 +247,7 @@ public sealed class ValidateTokenAsync
         FakeHandler handler = new(HttpStatusCode.OK, json);
         handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         await sut.ValidateTokenAsync(ValidBaseUrl, "ghp_token", CancellationToken.None);
@@ -264,7 +266,7 @@ public sealed class ValidateTokenAsync
         FakeHandler handler = new(HttpStatusCode.OK, json);
         handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         await sut.ValidateTokenAsync(ValidBaseUrl, "ghp_my_secret_token", CancellationToken.None);
@@ -285,7 +287,7 @@ public sealed class ValidateTokenAsync
         FakeHandler handler = new(HttpStatusCode.OK, json);
         handler.ResponseHeaders["X-OAuth-Scopes"] = string.Empty;
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(

@@ -1,4 +1,5 @@
 using Foundry.Modules.Workers.Features.Runs;
+using Foundry.Testing;
 using Foundry.WebApi.Hubs;
 
 using Microsoft.AspNetCore.SignalR;
@@ -42,7 +43,7 @@ public sealed class StreamLog
         StubWorkerLogStream stub = new([]);
 
         // Act
-        WorkerHub sut = new(stub);
+        WorkerHub sut = new(stub, new NullWorkerRunQueries());
 
         // Assert
         sut.ShouldBeAssignableTo<Hub>();
@@ -54,7 +55,7 @@ public sealed class StreamLog
         // Arrange
         Guid workerRunId = Guid.NewGuid();
         StubWorkerLogStream stub = new(["line one"]);
-        WorkerHub sut = new(stub);
+        WorkerHub sut = new(stub, new NullWorkerRunQueries());
 
         // Act
         List<string> received = [];
@@ -74,7 +75,7 @@ public sealed class StreamLog
         Guid workerRunId = Guid.NewGuid();
         IReadOnlyList<string> expectedLines = ["line one", "line two"];
         StubWorkerLogStream stub = new(expectedLines);
-        WorkerHub sut = new(stub);
+        WorkerHub sut = new(stub, new NullWorkerRunQueries());
 
         // Act
         List<string> received = [];
