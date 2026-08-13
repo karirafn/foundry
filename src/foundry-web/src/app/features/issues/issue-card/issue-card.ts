@@ -52,16 +52,11 @@ function timeAgo(dateString: string): string {
   return `${diffYears} year${diffYears === 1 ? '' : 's'} ago`;
 }
 
-function silentDuration(lastActivityAt: string): string | null {
+function silentMinutes(lastActivityAt: string): number | null {
   const now = Date.now();
   const then = new Date(lastActivityAt).getTime();
-  const diffMs = now - then;
-  const diffMinutes = Math.floor(diffMs / 60000);
-
-  if (diffMinutes < SILENCE_THRESHOLD_MINUTES) {
-    return null;
-  }
-  return `silent ${diffMinutes}m`;
+  const diffMinutes = Math.floor((now - then) / 60000);
+  return diffMinutes >= SILENCE_THRESHOLD_MINUTES ? diffMinutes : null;
 }
 
 function commitPhrase(count: number): string {
@@ -202,8 +197,8 @@ function hasVisiblePills(stats: RunStats): boolean {
 
       <div class="issue-card__footer">
         <span class="issue-card__timestamp">{{ timestamp() }}</span>
-        @if (_activityLine()) {
-          <span class="issue-card__activity"><span class="sr-only">Active, </span>active · {{ _activityLine() }}</span>
+        @if (_activityLineVisible()) {
+          <span class="issue-card__activity" aria-hidden="true">{{ _activityLineText() }}</span>
         }
         @if (issue().url | safeHref; as safeUrl) {
           <a
@@ -241,7 +236,7 @@ export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
-  readonly commitCount: InputSignal<number> = input<number>(0);
+  readonly commitCount: InputSignal<number | null> = input<number | null>(null);
   readonly isNextUp: InputSignal<boolean> = input<boolean>(false);
   readonly toggle: OutputEmitterRef<void> = output<void>();
 
@@ -259,9 +254,23 @@ export class IssueCardComponent {
     if (at === null || !LIVE_STATES.has(this.issue().state)) {
       return null;
     }
-    const commit = commitPhrase(this.commitCount());
-    const silence = silentDuration(at);
-    return silence !== null ? `${commit} · ${silence}` : commit;
+    const count = this.commitCount();
+    const silenceMinutes = silentMinutes(at);
+    const silencePart = silenceMinutes !== null ? ` · silent ${silenceMinutes}m` : '';
+    // null count means pre-handshake: suppress commit phrase, show just "active"
+    if (count === null) {
+      return silenceMinutes !== null ? `silent ${silenceMinutes}m` : '';
+    }
+    return `${commitPhrase(count)}${silencePart}`;
+  });
+
+  /** Whether the activity line should render at all (live state + lastActivityAt present). */
+  readonly _activityLineVisible = computed(() => this._activityLine() !== null);
+
+  /** Visual text for the activity line (e.g. "active · 3 commits · silent 7m"). */
+  readonly _activityLineText = computed(() => {
+    const detail = this._activityLine();
+    return detail ? `active · ${detail}` : 'active';
   });
 
   readonly _warningClass = computed(() => {
@@ -285,7 +294,25 @@ export class IssueCardComponent {
     const warning = this.repoWarningLabel();
     const warningPart = warning ? ` ${warning}` : '';
     const runStatsPart = this._buildRunStatsAriaText();
-    return `${base}${warningPart}${runStatsPart}`;
+    const activityPart = this._buildActivityAriaText();
+    return `${base}${warningPart}${runStatsPart}${activityPart}`;
+  }
+
+  private _buildActivityAriaText(): string {
+    const at = this.lastActivityAt();
+    if (at === null || !LIVE_STATES.has(this.issue().state)) {
+      return '';
+    }
+    const count = this.commitCount();
+    if (count === null) {
+      // Pre-handshake: no commit info yet
+      return '';
+    }
+    const silenceMinutes = silentMinutes(at);
+    const silencePart = silenceMinutes !== null
+      ? `, silent ${silenceMinutes} minute${silenceMinutes === 1 ? '' : 's'}`
+      : '';
+    return ` Active: ${commitPhrase(count)}${silencePart}.`;
   }
 
   private _buildRunStatsAriaText(): string {

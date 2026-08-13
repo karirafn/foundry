@@ -14,7 +14,7 @@ const mockIssue: IssueSummary = {
   url: 'https://github.com/owner/repo/issues/42',
 };
 
-function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, commitCount: number | null = null) {
+function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, commitCount: number | null = null, isNextUp = false) {
   TestBed.configureTestingModule({
     imports: [IssueCardComponent],
     providers: [
@@ -29,6 +29,9 @@ function createComponent(issue: IssueSummary = mockIssue, expanded = false, last
   }
   if (commitCount !== null) {
     fixture.componentRef.setInput('commitCount', commitCount);
+  }
+  if (isNextUp) {
+    fixture.componentRef.setInput('isNextUp', true);
   }
   fixture.detectChanges();
   return fixture;
@@ -1354,5 +1357,126 @@ describe('IssueCardComponent', () => {
     const card = el.querySelector('.issue-card') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('Run stats:');
+  });
+
+  // Finding 1: aria-label includes activity with expanded units
+  it('should include activity with commit count in aria-label for a live issue', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — aria-label should contain screen-reader-friendly activity info
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Active: 3 commits.');
+  });
+
+  it('should include "1 commit" (singular) in aria-label for a live issue with 1 commit', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 1);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Active: 1 commit.');
+  });
+
+  it('should include "no commits yet" in aria-label for a live issue with 0 commits', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Active: no commits yet.');
+  });
+
+  it('should include expanded silence duration in aria-label when silent >= 5 minutes', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, sevenMinutesAgo, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — aria-label uses "7 minutes", not "7m"
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('silent 7 minutes');
+  });
+
+  it('should not include activity in aria-label for a non-live issue', () => {
+    // Arrange
+    const failedIssue: IssueSummary = { ...mockIssue, state: 'failed' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(failedIssue, false, recentAt, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('Active:');
+  });
+
+  // Finding 3: null commitCount = pre-handshake (no commit phrase)
+  it('should not show commit phrase when commitCount is null (pre-handshake)', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act — commitCount not set (null = pre-handshake)
+    const fixture = createComponent(liveIssue, false, recentAt, null);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — activity line shows just "active" with no commit phrase
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).not.toContain('commits');
+    expect(activity?.textContent).not.toContain('no commits yet');
+  });
+
+  it('should show "no commits yet" when commitCount is observed 0 (not pre-handshake)', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act — commitCount explicitly set to 0 (observed via SignalR)
+    const fixture = createComponent(liveIssue, false, recentAt, 0);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+    expect(activity?.textContent).toContain('no commits yet');
+  });
+
+  it('should not include commit phrase in aria-label when commitCount is null', () => {
+    // Arrange
+    const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+    const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Act
+    const fixture = createComponent(liveIssue, false, recentAt, null);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('commits');
   });
 });

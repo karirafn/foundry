@@ -196,12 +196,12 @@ describe('WorkerSignalRService', () => {
   });
 
   // Cycle 8: commitCount is parsed from an incoming WorkerActivity
-  it('should return 0 from commitCountForIssue for an unknown issueId', () => {
+  it('should return null from commitCountForIssue for an unknown issueId before any activity arrives', () => {
     // Arrange / Act
     const { svc } = setup();
 
-    // Assert
-    expect(svc.commitCountForIssue('unknown-issue')).toBe(0);
+    // Assert — null signals pre-handshake state (unknown), distinct from observed 0
+    expect(svc.commitCountForIssue('unknown-issue')).toBeNull();
   });
 
   it('should return commitCount from commitCountForIssue after WorkerActivity is received', () => {
@@ -268,5 +268,68 @@ describe('WorkerSignalRService', () => {
     // Assert
     expect(svc.commitCountForIssue('issue-E')).toBe(1);
     expect(svc.commitCountForIssue('issue-F')).toBe(9);
+  });
+
+  // Finding 3: commitCountForIssue returns null for unknown issues (pre-handshake)
+  it('should return null from commitCountForIssue for an unknown issueId (pre-handshake state)', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert — null distinguishes "not yet observed" from observed 0
+    expect(svc.commitCountForIssue('unknown-issue')).toBeNull();
+  });
+
+  it('should return 0 from commitCountForIssue when WorkerActivity arrives with commitCount 0', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const activity: WorkerActivity = {
+      workerRunId: 'run-G',
+      issueId: 'issue-G',
+      lastActivityAt: '2026-06-01T19:00:00Z',
+      commitCount: 0,
+    };
+
+    // Act
+    captured.onWorkerActivity!(activity);
+
+    // Assert — 0 is a real observed value, not null
+    expect(svc.commitCountForIssue('issue-G')).toBe(0);
+  });
+
+  // Finding 2: commitCountForIssue and activityForIssue are reactive — reading via workerActivity signal
+  it('should reflect new commitCount reactively after WorkerActivity arrives', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const initialNull = svc.commitCountForIssue('issue-H');
+
+    // Act
+    captured.onWorkerActivity!({
+      workerRunId: 'run-H',
+      issueId: 'issue-H',
+      lastActivityAt: '2026-06-01T20:00:00Z',
+      commitCount: 5,
+    });
+
+    // Assert — value changes after push, no external tick needed
+    expect(initialNull).toBeNull();
+    expect(svc.commitCountForIssue('issue-H')).toBe(5);
+  });
+
+  it('should reflect new activityAt reactively after WorkerActivity arrives', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const initialNull = svc.activityForIssue('issue-I');
+
+    // Act
+    captured.onWorkerActivity!({
+      workerRunId: 'run-I',
+      issueId: 'issue-I',
+      lastActivityAt: '2026-06-01T21:00:00Z',
+      commitCount: 2,
+    });
+
+    // Assert
+    expect(initialNull).toBeNull();
+    expect(svc.activityForIssue('issue-I')).toBe('2026-06-01T21:00:00Z');
   });
 });

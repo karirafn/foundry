@@ -117,7 +117,7 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
                   [issue]="issue"
                   [expanded]="issueService.expandedIssueId() === issue.id"
                   [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
-                  [commitCount]="isLiveIssue(issue.state) ? workerSignalR.commitCountForIssue(issue.id) : 0"
+                  [commitCount]="isLiveIssue(issue.state) ? workerSignalR.commitCountForIssue(issue.id) : null"
                   [isNextUp]="issueService.nextUpIssueId() === issue.id"
                   (toggle)="issueService.toggleExpand(issue.id)"
                 />
