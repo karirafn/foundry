@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { SystemSignalRService, SYSTEM_HUB_FACTORY, SystemHub } from './system-signalr.service';
 import {
+  CREDITS_NOTIFICATION_CATEGORY,
   DISPATCH_NOTIFICATION_CATEGORY,
   DOCKER_NOTIFICATION_CATEGORY,
   IMAGE_BUILD_NOTIFICATION_CATEGORY,
@@ -345,5 +346,52 @@ describe('SystemSignalRService', () => {
     expect(svc.notifications().length).toBe(2);
     expect(svc.notifications().some((n) => n.category === 'auth')).toBe(true);
     expect(svc.notifications().some((n) => n.category === DOCKER_NOTIFICATION_CATEGORY)).toBe(true);
+  });
+
+  // Cycle 20: creditsNotification emits when a credits notification arrives
+  it('should emit on creditsNotification when a credits system notification arrives', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    let received: SystemNotification | null = null;
+    svc.creditsNotification.subscribe((n) => (received = n));
+    const notification: SystemNotification = {
+      category: CREDITS_NOTIFICATION_CATEGORY,
+      isActive: true,
+      message: 'Credits exhausted',
+    };
+
+    // Act
+    captured.onSystemNotificationReceived!(notification);
+
+    // Assert
+    expect(received).toEqual(notification);
+  });
+
+  // Cycle 21: creditsNotification does not emit for non-credits categories
+  it('should not emit on creditsNotification for non-credits categories', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    let emitCount = 0;
+    svc.creditsNotification.subscribe(() => emitCount++);
+    const notification: SystemNotification = {
+      category: DISPATCH_NOTIFICATION_CATEGORY,
+      isActive: true,
+      message: 'Dispatch paused',
+    };
+
+    // Act
+    captured.onSystemNotificationReceived!(notification);
+
+    // Assert
+    expect(emitCount).toBe(0);
+  });
+
+  // Cycle 22: creditsNotification is an Observable (not a writable Subject)
+  it('should expose creditsNotification as an Observable (no next() method)', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert
+    expect((svc.creditsNotification as unknown as { next?: unknown }).next).toBeUndefined();
   });
 });

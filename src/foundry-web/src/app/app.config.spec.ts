@@ -13,6 +13,7 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
   return {
     maxConcurrent: 3,
     timeoutMinutes: 60,
+    probeIntervalMinutes: 60,
     systemPromptTemplate: null,
     workerPromptTemplate: null,
     usageLimitResetsAt: null,

@@ -55,11 +55,13 @@ export interface ClaudeAccountSummary {
   subscriptionType: string | null;
   oAuthAccountEmail: string | null;
   oAuthAccountOrgName: string | null;
+  nextProbeAt?: string | null;
 }
 
 export interface GlobalSettingsResponse {
   maxConcurrent: number;
   timeoutMinutes: number;
+  probeIntervalMinutes: number;
   systemPromptTemplate: string | null;
   workerPromptTemplate: string | null;
   usageLimitResetsAt: string | null;

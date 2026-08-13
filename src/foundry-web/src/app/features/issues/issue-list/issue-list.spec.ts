@@ -39,6 +39,7 @@ const mockSummary: IssueSummary = {
 const mockSettingsResponse: GlobalSettingsResponse = {
   maxConcurrent: 3,
   timeoutMinutes: 30,
+  probeIntervalMinutes: 60,
   systemPromptTemplate: null,
   workerPromptTemplate: null,
   usageLimitResetsAt: null,

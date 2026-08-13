@@ -46,6 +46,7 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
   return {
     maxConcurrent: 3,
     timeoutMinutes: 60,
+    probeIntervalMinutes: 60,
     systemPromptTemplate: null,
     workerPromptTemplate: null,
     usageLimitResetsAt: null,
@@ -74,6 +75,7 @@ function buildCredentialsResponse(overrides: Record<string, unknown> = {}): Reco
     subscriptionType: null,
     oAuthAccountEmail: null,
     oAuthAccountOrgName: null,
+    nextProbeAt: null,
     ...overrides,
   };
 }

@@ -38,6 +38,7 @@ const BASE_RESPONSE = {
 const API_KEY_RESPONSE = {
   maxConcurrent: 3,
   timeoutMinutes: 60,
+  probeIntervalMinutes: 60,
   ...BASE_RESPONSE,
 };
 
