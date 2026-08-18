@@ -117,6 +117,9 @@ export class AccountService {
         error: (err: HttpErrorResponse | TimeoutError) => {
           console.error(err);
           if (!(err instanceof TimeoutError)) {
+            // Guard is shape-based (not status-based) by design: a bare-string 409 (e.g. duplicate-account) returns
+            // false from _isNamespaceConflictResponse and falls through to _extractErrorMessage. Refactoring to branch
+            // on err.status === 409 alone would silently swallow that plain-string body.
             if (err.status === 409 && this._isNamespaceConflictResponse(err.error)) {
               const conflictBody = err.error as NamespaceConflictResponse;
               this._conflictsSignal.set(conflictBody.conflicts);
