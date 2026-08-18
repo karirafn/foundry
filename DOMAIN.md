@@ -474,7 +474,8 @@ Every terminal outcome (`Completed`, `Review`, `ContinuableFailure`, `Failure`, 
 
 **Timeout watchdog.**
 The watchdog ceiling (`StartedAt + timeout_minutes`) is evaluated regardless of whether the container is still running.
-Any unresolved run that exceeds the ceiling is processed through the same resolver → applier pair (exit code null; MR-state still consulted first), so no run can hold a worker slot indefinitely.
+Any unresolved run that exceeds the ceiling is processed through the same resolver → applier pair (exit code null; MR-state still consulted first), so no active run can hold a worker slot indefinitely.
+The ceiling derives from `StartedAt`, which only `ActiveRun` carries — the watchdog therefore covers active runs only, and a run that never reaches `ActiveRun` is outside it.
 
 **Docker daemon reachability.**
 `GetStatusAsync` returns a discriminated `WorkerStatusProbe` distinguishing three cases:
