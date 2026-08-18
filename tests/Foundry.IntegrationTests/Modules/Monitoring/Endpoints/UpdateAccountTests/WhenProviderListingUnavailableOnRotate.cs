@@ -6,7 +6,6 @@ using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
@@ -48,16 +47,8 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
 
     public WhenProviderListingUnavailableOnRotate()
     {
-        // The new token maps to no listing entry, so the fake returns "[]" → but we also
-        // need the listing call to return a failure to trigger Unavailable outcome.
-        // Use a token-keyed handler: new token returns 401 → listing fails → Unavailable.
-        Dictionary<string, string> tokenToListing = new()
-        {
-            [OriginalToken] = BroadListingJson,
-            // NewToken deliberately absent → returns [] (success with empty) in TokenKeyedListingFakeHandler.
-            // To get Unavailable, we need a non-200 response for NewToken.
-        };
-
+        // FailNewTokenListingHandler returns 401 for any token other than OriginalToken,
+        // which drives NamespaceDeriver to the Unavailable outcome.
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -70,11 +61,6 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
                 new GitHubHttpClient(
                     new HttpClient(new FailNewTokenListingHandler(OriginalToken, BroadListingJson)),
                     NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
-
-            // Evaluator marks all resolving repos Unreachable (simulating provider unavailability).
-            services.RemoveAll<IRepositoryEligibilityEvaluator>();
-            services.AddScoped<IRepositoryEligibilityEvaluator>(_ =>
-                new UnreachableEligibilityEvaluator());
         });
         _client = _factory.CreateClient();
     }
