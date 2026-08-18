@@ -55,13 +55,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
         CredentialRotationService rotationService = new(
             _dbContext,
-            deriver ?? new StubNamespaceDeriver(new NamespaceDerivationOutcome.Unavailable()),
-            differ,
-            NullLogger<CredentialRotationService>.Instance);
+            differ);
 
         return new UpdateAccount.Handler(
             _dbContext,
             validateToken ?? new StubValidateTokenHandler("updated-user"),
+            deriver ?? new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])),
             rotationService);
     }
 
@@ -161,6 +160,129 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenNoTokenSupplied_DeriverIsNeverCalledEvenIfItWouldReturnUnavailable()
+    {
+        // Arrange — deriver returns Unavailable; with no token, derivation must not run.
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Unavailable()));
+
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", Token: null);
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert — no token path succeeds regardless of what the deriver would return
+        result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+    }
+
+    [Fact]
+    public async Task WhenTokenSupplied_DerivationUnavailable_RejectsAndLeavesCredentialUnchanged()
+    {
+        // Arrange
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential credential = GitHubCredential.Create("original-user", "ghp_original", baseUrl);
+        _dbContext.Set<Credential>().Add(credential);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        UpdateAccount.Handler handler = BuildHandler(
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Unavailable()));
+
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert — rejected with the correct error code
+        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.NamespaceDerivationUnavailableCode);
+
+        // Assert — credential is unchanged in the database (AC#7)
+        Credential? stored = await _dbContext.Set<Credential>()
+            .FirstOrDefaultAsync(c => c.Id == credential.Id, TestContext.Current.CancellationToken);
+        stored.ShouldNotBeNull();
+        stored.ShouldSatisfyAllConditions(
+            () => stored.Token.ShouldBe("ghp_original"),
+            () => stored.Name.ShouldBe("original-user"),
+            () => stored.BaseUrl.Value.Host.ShouldBe("github.com"));
+    }
+
+    [Fact]
+    public async Task WhenTokenSupplied_DuplicateLoginIntersectsOwner_ReturnsDuplicateError()
+    {
+        // Arrange — seed two accounts: "first-user" claiming "first-user", "second-user" with no namespaces.
+        // Then attempt to rotate second with a token resolving to "first-user" and deriving "first-user".
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+
+        GitHubCredential first = GitHubCredential.Create("first-user", "ghp_first", baseUrl);
+        Namespace firstNs = Namespace.Create("first-user").ValueOrThrow();
+        first.SetNamespaces([firstNs]);
+        _dbContext.Set<Credential>().Add(first);
+
+        GitHubCredential second = GitHubCredential.Create("second-user", "ghp_second", baseUrl);
+        _dbContext.Set<Credential>().Add(second);
+
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Token resolves to "first-user" and derives namespace "first-user" — same as first account's claim.
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("first-user"),
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([firstNs], [])));
+
+        UpdateAccount.Command command = new(second.Id, "https://github.com", "ghp_colliding");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert — rejected as duplicate
+        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.DuplicateAccountCode);
+
+        // Assert — second account's token/name/baseUrl are unchanged in the database (AC#7)
+        Credential? stored = await _dbContext.Set<Credential>()
+            .FirstOrDefaultAsync(c => c.Id == second.Id, TestContext.Current.CancellationToken);
+        stored.ShouldNotBeNull();
+        stored.ShouldSatisfyAllConditions(
+            () => stored.Token.ShouldBe("ghp_second"),
+            () => stored.Name.ShouldBe("second-user"),
+            () => stored.BaseUrl.Value.Host.ShouldBe("github.com"));
+    }
+
+    [Fact]
+    public async Task WhenTokenSupplied_OwnNamespaceExcludesSelf_Succeeds()
+    {
+        // Arrange — seed a single account claiming its own namespace.
+        // Rotating with a token deriving the same namespace must succeed because the account
+        // is excluded from the duplicate check (AC#3).
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential credential = GitHubCredential.Create("alice", "ghp_old", baseUrl);
+        Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
+        credential.SetNamespaces([aliceNs]);
+        _dbContext.Set<Credential>().Add(credential);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("alice"),
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([aliceNs], [])));
+
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_new");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert — legitimate own-namespace rotation succeeds (not flagged as a duplicate)
+        result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+    }
+
+    [Fact]
     public async Task WhenDerivedNamespaceClaimedByOtherOnRotate_SubtractsItSilently()
     {
         // Arrange — seed two credentials; rotate the second whose derived set overlaps first's namespace.
@@ -178,7 +300,8 @@ public sealed class HandleAsync : IAsyncDisposable
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
 
-        // The deriver returns both namespaces; "shared-org" is already held by first
+        // The deriver returns both namespaces; "shared-org" is already held by first.
+        // "second-user" != "first-user" so the duplicate guard does not fire.
         UpdateAccount.Handler handler = BuildHandler(
             deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([sharedNs, ownNs], [])));
 
@@ -190,7 +313,7 @@ public sealed class HandleAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert — rotation succeeds; second only ends up with its own namespace
-        Result<CredentialUpdateResult>.Success success = result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+        result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
         Credential? stored = await _dbContext.Set<Credential>()
             .Include(c => c.Namespaces)
             .FirstOrDefaultAsync(c => c.Id == second.Id, CancellationToken.None);

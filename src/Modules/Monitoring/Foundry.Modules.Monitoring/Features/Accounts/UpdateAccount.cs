@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
+using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
@@ -63,6 +64,7 @@ internal static partial class UpdateAccount
     internal sealed class Handler(
         DbContext dbContext,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
+        INamespaceDeriver namespaceDeriver,
         CredentialRotationService rotationService)
         : ICommandHandler<Command, CredentialUpdateResult>
     {
@@ -148,13 +150,46 @@ internal static partial class UpdateAccount
 
                 accountName = resolvedName;
 
-                // Update the credential so the new token is available for namespace derivation.
+                // Derive namespaces using the new token and new base URL — before any mutation.
+                // Using the raw-token overload so the credential does not need to be updated first.
+                NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(
+                    apiBaseUrl,
+                    command.Token!,
+                    isGitLab,
+                    cancellationToken);
+
+                if (outcome is not NamespaceDerivationOutcome.Derived derived)
+                {
+                    // Unavailable: provider is transiently unreachable — reject without mutating anything.
+                    return Result<CredentialUpdateResult>.Fail(CredentialErrors.NamespaceDerivationUnavailable);
+                }
+
+                IReadOnlyCollection<Namespace> derivedNamespaces = derived.Namespaces;
+
+                // Guard: reject if a different credential on the same host shares the same login
+                // and its claimed namespaces intersect the incoming token's derived owner set.
+                // Uses the new host so a simultaneous base-URL change is correctly keyed.
+                Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
+                    await dbContext.FindClaimedNamespacesAsync(
+                        baseUrl.Value.Host,
+                        excludingCredentialId: credential.Id.Value,
+                        cancellationToken);
+
+                if (DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
+                {
+                    return Result<CredentialUpdateResult>.Fail(
+                        CredentialErrors.DuplicateAccount(holderName, sharedOwner));
+                }
+
+                // Both guards passed — safe to mutate and rotate.
                 UpdateCredential(credential, accountName, command.Token, baseUrl);
 
-                // Re-derive namespaces and re-evaluate repo eligibility; returns affected repos.
                 try
                 {
-                    affectedRepositories = await rotationService.RotateAsync(credential, cancellationToken);
+                    affectedRepositories = await rotationService.RotateAsync(
+                        credential,
+                        derivedNamespaces,
+                        cancellationToken);
                 }
                 catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsNamespaceDuplicateViolation(ex))
                 {
@@ -226,6 +261,7 @@ internal static partial class UpdateAccount
                         {
                             CredentialErrors.NotFoundCode => TypedResults.NotFound(),
                             CredentialErrors.DuplicateNamespaceCode => TypedResults.Conflict(error.Message),
+                            CredentialErrors.DuplicateAccountCode => TypedResults.Conflict(error.Message),
                             _ => TypedResults.BadRequest(error.Message),
                         });
                 })

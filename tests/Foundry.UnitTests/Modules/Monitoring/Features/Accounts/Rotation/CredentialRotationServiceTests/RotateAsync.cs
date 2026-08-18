@@ -3,13 +3,11 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Eligibility;
-using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -41,9 +39,7 @@ public sealed class RotateAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private CredentialRotationService BuildSut(
-        INamespaceDeriver deriver,
-        IRepositoryEligibilityEvaluator? evaluator = null)
+    private CredentialRotationService BuildSut(IRepositoryEligibilityEvaluator? evaluator = null)
     {
         RepositoryEligibilityDiffer differ = new(
             _dbContext,
@@ -51,9 +47,7 @@ public sealed class RotateAsync : IAsyncDisposable
 
         return new CredentialRotationService(
             _dbContext,
-            deriver,
-            differ,
-            NullLogger<CredentialRotationService>.Instance);
+            differ);
     }
 
     private async Task<(GitHubCredential Credential, MonitoredRepository RepoA, MonitoredRepository RepoB)>
@@ -86,11 +80,10 @@ public sealed class RotateAsync : IAsyncDisposable
         // Arrange
         (GitHubCredential credential, _, _) = await SeedTwoOwnerScenarioAsync();
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs], []);
-        CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived));
+        CredentialRotationService sut = BuildSut();
 
         // Act
-        await sut.RotateAsync(credential, CancellationToken.None);
+        await sut.RotateAsync(credential, [aliceNs], CancellationToken.None);
 
         // Assert
         Credential? stored = await _dbContext.Set<Credential>()
@@ -108,7 +101,6 @@ public sealed class RotateAsync : IAsyncDisposable
         (GitHubCredential credential, MonitoredRepository repoA, MonitoredRepository repoB) =
             await SeedTwoOwnerScenarioAsync();
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs], []);
 
         // Evaluator: repoA stays eligible (no-op), repoB loses credential → ineligible
         AssignedEligibilityEvaluator evaluator = new(new Dictionary<string, RepositoryEligibility>
@@ -117,11 +109,12 @@ public sealed class RotateAsync : IAsyncDisposable
             ["bob/repo-b"] = new RepositoryEligibility.Ineligible(
                 [EligibilityViolation.NoCredential("bob")]),
         });
-        CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived), evaluator);
+        CredentialRotationService sut = BuildSut(evaluator);
 
         // Act
         IReadOnlyList<AffectedRepository> affected = await sut.RotateAsync(
             credential,
+            [aliceNs],
             CancellationToken.None);
 
         // Assert — only bob's repo changed (eligible → ineligible)
@@ -140,43 +133,22 @@ public sealed class RotateAsync : IAsyncDisposable
         (GitHubCredential credential, _, _) = await SeedTwoOwnerScenarioAsync();
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
         Namespace bobNs = Namespace.Create("bob").ValueOrThrow();
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs, bobNs], []);
 
         AssignedEligibilityEvaluator evaluator = new(new Dictionary<string, RepositoryEligibility>
         {
             ["alice/repo-a"] = new RepositoryEligibility.Eligible(),
             ["bob/repo-b"] = new RepositoryEligibility.Eligible(),
         });
-        CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived), evaluator);
+        CredentialRotationService sut = BuildSut(evaluator);
 
         // Act
         IReadOnlyList<AffectedRepository> affected = await sut.RotateAsync(
             credential,
+            [aliceNs, bobNs],
             CancellationToken.None);
 
         // Assert
         affected.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenUnavailable_KeepsPriorNamespaces()
-    {
-        // Arrange
-        (GitHubCredential credential, _, _) = await SeedTwoOwnerScenarioAsync();
-        NamespaceDerivationOutcome unavailable = new NamespaceDerivationOutcome.Unavailable();
-        CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(unavailable));
-
-        // Act
-        await sut.RotateAsync(credential, CancellationToken.None);
-
-        // Assert
-        Credential? stored = await _dbContext.Set<Credential>()
-            .Include(c => c.Namespaces)
-            .FirstOrDefaultAsync(c => c.Id == credential.Id, CancellationToken.None);
-        stored.ShouldNotBeNull();
-        stored.Namespaces.Count.ShouldBe(2);
-        stored.Namespaces.ShouldContain(n => n.Value == "alice");
-        stored.Namespaces.ShouldContain(n => n.Value == "bob");
     }
 
     [Fact]
@@ -196,12 +168,10 @@ public sealed class RotateAsync : IAsyncDisposable
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
 
-        // Derivation returns both "alice" and "bob" — but "bob" is held by another credential
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([aliceNs, bobNs], []);
-        CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived));
+        CredentialRotationService sut = BuildSut();
 
-        // Act
-        await sut.RotateAsync(alice, CancellationToken.None);
+        // Act — alice's token now derives both "alice" and "bob"; "bob" is held by another credential
+        await sut.RotateAsync(alice, [aliceNs, bobNs], CancellationToken.None);
 
         // Assert — alice must NOT steal "bob" from bob
         Credential? stored = await _dbContext.Set<Credential>()
@@ -210,33 +180,6 @@ public sealed class RotateAsync : IAsyncDisposable
         stored.ShouldNotBeNull();
         stored.Namespaces.ShouldContain(n => n.Value == "alice");
         stored.Namespaces.ShouldNotContain(n => n.Value == "bob");
-    }
-
-    [Fact]
-    public async Task WhenUnavailable_MarksResolvingReposUnreachable()
-    {
-        // Arrange
-        (GitHubCredential credential, MonitoredRepository repoA, MonitoredRepository repoB) =
-            await SeedTwoOwnerScenarioAsync();
-        NamespaceDerivationOutcome unavailable = new NamespaceDerivationOutcome.Unavailable();
-
-        // Evaluator: both repos marked unreachable
-        AssignedEligibilityEvaluator evaluator = new(new Dictionary<string, RepositoryEligibility>
-        {
-            ["alice/repo-a"] = new RepositoryEligibility.Unreachable(),
-            ["bob/repo-b"] = new RepositoryEligibility.Unreachable(),
-        });
-        CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(unavailable), evaluator);
-
-        // Act
-        IReadOnlyList<AffectedRepository> affected = await sut.RotateAsync(
-            credential,
-            CancellationToken.None);
-
-        // Assert — both repos changed: eligible → unreachable
-        affected.Count.ShouldBe(2);
-        affected.ShouldContain(r => r.Slug == "alice/repo-a" && r.NewStatus == "unreachable");
-        affected.ShouldContain(r => r.Slug == "bob/repo-b" && r.NewStatus == "unreachable");
     }
 
     [Fact]
@@ -260,34 +203,18 @@ public sealed class RotateAsync : IAsyncDisposable
         }
         await _dbContext.SaveChangesAsync(CancellationToken.None);
 
-        NamespaceDerivationOutcome derived = new NamespaceDerivationOutcome.Derived([ownerNs], []);
         CountingEligibilityEvaluator evaluator = new();
-        CredentialRotationService sut = BuildSut(new StubNamespaceDeriver(derived), evaluator);
+        CredentialRotationService sut = BuildSut(evaluator);
 
         // Act
-        await sut.RotateAsync(credential, CancellationToken.None);
+        await sut.RotateAsync(credential, [ownerNs], CancellationToken.None);
 
         // Assert — each of the 8 repos evaluated exactly once, never more than one at a time
         evaluator.TotalCalls.ShouldBe(8);
         evaluator.MaxConcurrency.ShouldBe(1);
     }
 
-    // Stubs and fakes
-
-    private sealed class StubNamespaceDeriver(NamespaceDerivationOutcome outcome) : INamespaceDeriver
-    {
-        public Task<NamespaceDerivationOutcome> DeriveAsync(
-            Credential credential,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(outcome);
-
-        public Task<NamespaceDerivationOutcome> DeriveAsync(
-            Uri apiBaseUrl,
-            string token,
-            bool isGitLab,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(outcome);
-    }
+    // Fakes
 
     private sealed class RecordingEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
