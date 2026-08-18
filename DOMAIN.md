@@ -219,6 +219,22 @@ A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`Wo
 
 The dashboard partitions queued issues into two groups before applying the key: eligible-repository issues (real `Position`) rank above ineligible-repository issues (sentinel `int.MaxValue` position), each retaining its `RepositoryEligibilityStatus` for display.
 
+## Claim
+
+The act of assigning a queued issue to a specific worker run — the transition from a queued state variant to an in-progress one, paired with the `IssueClaimed` integration event that tells the Workers module to start a container.
+
+A claim is authorized by exactly one `WorkerCapacityAvailable` event. That event carries only a `WorkerRunId` and is delivered durably through the outbox, so it is a one-shot authorization token with no expiry: each delivered event claims at most one issue, and an event that finds nothing to claim is consumed without effect.
+
+Claiming proceeds in three steps:
+
+1. **Resolve eligible repositories** — every repository owning a queued issue is checked against Repository Eligibility, and eligible ones contribute their `Position`. Resolving all repositories up front (rather than checking the head candidate) means an ineligible repository cannot block dispatch of issues behind it.
+2. **Select the winner** — the queued issue with the smallest Dispatch Order key across all eligible repositories and all three tiers.
+3. **Claim it** — resolve the repository's dispatch info (slug, clone URL, account token, provider), call `Claim(workerRunId)` on the aggregate, publish `IssueClaimed` carrying a `ClaimedIssueDispatch`, and transition the aggregate. The event and the state change commit as one atomic unit.
+
+Claiming is the only path from a queued state to an in-progress one; nothing else in the system claims an issue. Claims are never concurrent — the outbox relay is a single host-level service that delivers sequentially.
+
+When the winning issue's repository has no resolvable dispatch info, the claim is abandoned and the capacity event is consumed without claiming anything. This is a narrow race — "no covering credential" is already modelled as ineligibility and filtered out in step 1, so it arises only when a credential is deleted or its token cleared between the last poll cycle and the claim.
+
 ## Repository Eligibility
 
 Whether a Monitored Repository meets Foundry's processing preconditions (Branch Protection).
@@ -313,7 +329,7 @@ Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (res
 ## Continuation Queued Issue
 
 A lifecycle state for an issue queued for continuation from an existing branch with prior work.
-Carries `BranchName`.
+Carries `BranchName` and `FailureReason` — both non-nullable. `FailureReason` is copied from the originating `ContinuableFailedIssue` and truncated to 500 characters by the aggregate.
 Created from `ContinuableFailedIssue.Retry()`.
 Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress variant; the continuation context lives in the dispatch payload).
 
