@@ -5,4 +5,10 @@ namespace Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 internal interface INamespaceDeriver
 {
     Task<NamespaceDerivationOutcome> DeriveAsync(Credential credential, CancellationToken cancellationToken);
+
+    Task<NamespaceDerivationOutcome> DeriveAsync(
+        Uri apiBaseUrl,
+        string token,
+        bool isGitLab,
+        CancellationToken cancellationToken);
 }

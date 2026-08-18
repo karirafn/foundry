@@ -280,6 +280,13 @@ public sealed class RotateAsync : IAsyncDisposable
             Credential credential,
             CancellationToken cancellationToken) =>
             Task.FromResult(outcome);
+
+        public Task<NamespaceDerivationOutcome> DeriveAsync(
+            Uri apiBaseUrl,
+            string token,
+            bool isGitLab,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(outcome);
     }
 
     private sealed class RecordingEligibilityEvaluator : IRepositoryEligibilityEvaluator
