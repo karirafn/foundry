@@ -493,7 +493,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NamespaceConflictResponse"
+                  "type": "string"
                 }
               }
             }
@@ -2269,40 +2269,6 @@
               "string"
             ],
             "format": "int32"
-          }
-        }
-      },
-      "NamespaceConflict": {
-        "required": [
-          "namespace",
-          "holderCredentialId",
-          "holderName"
-        ],
-        "type": "object",
-        "properties": {
-          "namespace": {
-            "type": "string"
-          },
-          "holderCredentialId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "holderName": {
-            "type": "string"
-          }
-        }
-      },
-      "NamespaceConflictResponse": {
-        "required": [
-          "conflicts"
-        ],
-        "type": "object",
-        "properties": {
-          "conflicts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamespaceConflict"
-            }
           }
         }
       },
