@@ -133,4 +133,43 @@ public sealed class Find
             () => result.Value.HolderName.ShouldBe("karirafn"),
             () => result.Value.SharedOwner.ShouldBe("karirafn"));
     }
+
+    [Fact]
+    public void WhenTwoClaimsShareSameLoginAndBothIntersect_ReturnsOrdinallyFirstNamespace()
+    {
+        // Arrange — same login "karirafn" claims both "aaa-karirafn" and "zzz-karirafn";
+        // derived set contains both; the ordinally-smallest must be reported regardless of insertion order.
+        Namespace nsA = Namespace.Create("aaa-karirafn").ValueOrThrow();
+        Namespace nsZ = Namespace.Create("zzz-karirafn").ValueOrThrow();
+
+        Dictionary<string, (Guid HolderCredentialId, string HolderName)> forwardOrder = new()
+        {
+            ["zzz-karirafn"] = (Guid.NewGuid(), "karirafn"),
+            ["aaa-karirafn"] = (Guid.NewGuid(), "karirafn"),
+        };
+
+        Dictionary<string, (Guid HolderCredentialId, string HolderName)> reverseOrder = new()
+        {
+            ["aaa-karirafn"] = (Guid.NewGuid(), "karirafn"),
+            ["zzz-karirafn"] = (Guid.NewGuid(), "karirafn"),
+        };
+
+        // Act
+        (string HolderName, string SharedOwner)? resultForward = DuplicateAccount.Find(
+            resolvedName: "karirafn",
+            derivedNamespaces: [nsA, nsZ],
+            claimedByOthers: forwardOrder);
+
+        (string HolderName, string SharedOwner)? resultReverse = DuplicateAccount.Find(
+            resolvedName: "karirafn",
+            derivedNamespaces: [nsA, nsZ],
+            claimedByOthers: reverseOrder);
+
+        // Assert
+        resultForward.ShouldNotBeNull();
+        resultForward.Value.SharedOwner.ShouldBe("aaa-karirafn");
+
+        resultReverse.ShouldNotBeNull();
+        resultReverse.Value.SharedOwner.ShouldBe("aaa-karirafn");
+    }
 }

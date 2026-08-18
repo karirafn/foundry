@@ -493,7 +493,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/NamespaceConflictResponse"
                 }
               }
             }
@@ -573,9 +573,9 @@
           "409": {
             "description": "Conflict",
             "content": {
-              "application/problem+json": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "type": "string"
                 }
               }
             }
@@ -583,9 +583,9 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/problem+json": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "type": "string"
                 }
               }
             }
@@ -2269,6 +2269,40 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "NamespaceConflict": {
+        "required": [
+          "namespace",
+          "holderCredentialId",
+          "holderName"
+        ],
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "holderCredentialId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "holderName": {
+            "type": "string"
+          }
+        }
+      },
+      "NamespaceConflictResponse": {
+        "required": [
+          "conflicts"
+        ],
+        "type": "object",
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamespaceConflict"
+            }
           }
         }
       },

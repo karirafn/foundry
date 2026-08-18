@@ -150,38 +150,23 @@ internal static partial class UpdateAccount
 
                 accountName = resolvedName;
 
-                // Derive namespaces using the new token and new base URL — before any mutation.
-                // Using the raw-token overload so the credential does not need to be updated first.
-                NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(
+                Result<IReadOnlyCollection<Namespace>> deriveResult = await DeriveAndGuardAsync(
+                    accountName,
+                    credential.Id.Value,
                     apiBaseUrl,
                     command.Token!,
+                    baseUrl,
                     isGitLab,
                     cancellationToken);
 
-                if (outcome is not NamespaceDerivationOutcome.Derived derived)
+                if (deriveResult is Result<IReadOnlyCollection<Namespace>>.Failure deriveFailure)
                 {
-                    // Unavailable: provider is transiently unreachable — reject without mutating anything.
-                    return Result<CredentialUpdateResult>.Fail(CredentialErrors.NamespaceDerivationUnavailable);
+                    return Result<CredentialUpdateResult>.Fail(deriveFailure.Error);
                 }
 
-                IReadOnlyCollection<Namespace> derivedNamespaces = derived.Namespaces;
+                IReadOnlyCollection<Namespace> derivedNamespaces =
+                    ((Result<IReadOnlyCollection<Namespace>>.Success)deriveResult).Value;
 
-                // Guard: reject if a different credential on the same host shares the same login
-                // and its claimed namespaces intersect the incoming token's derived owner set.
-                // Uses the new host so a simultaneous base-URL change is correctly keyed.
-                Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
-                    await dbContext.FindClaimedNamespacesAsync(
-                        baseUrl.Value.Host,
-                        excludingCredentialId: credential.Id.Value,
-                        cancellationToken);
-
-                if (DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
-                {
-                    return Result<CredentialUpdateResult>.Fail(
-                        CredentialErrors.DuplicateAccount(holderName, sharedOwner));
-                }
-
-                // Both guards passed — safe to mutate and rotate.
                 UpdateCredential(credential, accountName, command.Token, baseUrl);
 
                 try
@@ -220,6 +205,48 @@ internal static partial class UpdateAccount
                 credential.Namespaces.Select(n => n.Value).ToList());
 
             return Result<CredentialUpdateResult>.Ok(new CredentialUpdateResult(summary, affectedRepositories));
+        }
+
+        /// <summary>
+        /// Derives namespaces for the new token and guards against duplicate-account and
+        /// transient-unavailability failures — all before any state mutation.
+        /// Returns the derived namespaces on success, or the rejection <see cref="Error"/> on failure.
+        /// </summary>
+        private async Task<Result<IReadOnlyCollection<Namespace>>> DeriveAndGuardAsync(
+            string accountName,
+            Guid excludeCredentialId,
+            Uri apiBaseUrl,
+            string token,
+            BaseUrlVo baseUrl,
+            bool isGitLab,
+            CancellationToken cancellationToken)
+        {
+            NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(
+                apiBaseUrl,
+                token,
+                isGitLab,
+                cancellationToken);
+
+            if (outcome is not NamespaceDerivationOutcome.Derived derived)
+            {
+                return Result<IReadOnlyCollection<Namespace>>.Fail(CredentialErrors.NamespaceDerivationUnavailable);
+            }
+
+            IReadOnlyCollection<Namespace> derivedNamespaces = derived.Namespaces;
+
+            Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
+                await dbContext.FindClaimedNamespacesAsync(
+                    baseUrl.Value.Host,
+                    excludingCredentialId: excludeCredentialId,
+                    cancellationToken);
+
+            if (DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
+            {
+                return Result<IReadOnlyCollection<Namespace>>.Fail(
+                    CredentialErrors.DuplicateAccount(holderName, sharedOwner));
+            }
+
+            return Result<IReadOnlyCollection<Namespace>>.Ok(derivedNamespaces);
         }
 
         private static void UpdateCredential(Credential credential, string accountName, string? token, BaseUrlVo baseUrl)
@@ -269,8 +296,8 @@ internal static partial class UpdateAccount
                 .WithSummary("Updates an existing account")
                 .Produces<CredentialUpdateResult>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status400BadRequest);
+                .Produces<string>(StatusCodes.Status409Conflict)
+                .Produces<string>(StatusCodes.Status400BadRequest);
         }
     }
 }

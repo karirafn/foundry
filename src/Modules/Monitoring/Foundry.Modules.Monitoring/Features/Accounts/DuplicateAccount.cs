@@ -19,6 +19,9 @@ internal static class DuplicateAccount
             derivedNamespaces.Select(ns => ns.Value),
             StringComparer.Ordinal);
 
+        string? earliestNamespace = null;
+        string? holderName = null;
+
         foreach (KeyValuePair<string, (Guid HolderCredentialId, string HolderName)> entry in claimedByOthers)
         {
             if (!string.Equals(entry.Value.HolderName, resolvedName, StringComparison.Ordinal))
@@ -31,9 +34,13 @@ internal static class DuplicateAccount
                 continue;
             }
 
-            return (entry.Value.HolderName, entry.Key);
+            if (earliestNamespace is null || StringComparer.Ordinal.Compare(entry.Key, earliestNamespace) < 0)
+            {
+                earliestNamespace = entry.Key;
+                holderName = entry.Value.HolderName;
+            }
         }
 
-        return null;
+        return earliestNamespace is null ? null : (holderName!, earliestNamespace);
     }
 }
