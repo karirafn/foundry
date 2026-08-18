@@ -112,7 +112,7 @@ Five variants:
 
 - `Authenticated(AccountName, MissingScopes)` — the token authenticated and the PAT owner resolved; `MissingScopes` lists any required scopes absent from the token.
 - `AuthenticationFailed` — the token was rejected (401/unauthorized).
-- `ScopesUnverifiable(AccountName)` — the token authenticated and the owner resolved, but the token's scopes could not be read (e.g. GitLab group/project access tokens where `personal_access_tokens/self` returns non-2xx, or GitHub classic PATs served without `X-OAuth-Scopes`).
+- `ScopesUnverifiable(AccountName)` — the token authenticated and the owner resolved, but the token's scopes could not be read (GitLab group/project access tokens where `personal_access_tokens/self` returns non-2xx, or any GitHub token served without `X-OAuth-Scopes`). GitHub never sends that header for fine-grained PATs, which is the token type Foundry's own token requirements instruct operators to create — so on GitHub this is the *expected* outcome for the recommended token, not an exceptional one.
 - `IdentityUnresolved` — the response could not be parsed to an identity (neither provider's identity field present).
 - `ProviderMismatch(DetectedProvider)` — the response carried the *other* provider's identity shape (e.g. GitLab answered while GitHub was selected); names the detected provider.
 
