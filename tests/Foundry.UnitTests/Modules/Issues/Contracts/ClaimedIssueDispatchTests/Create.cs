@@ -70,6 +70,10 @@ public sealed class Create
             Context: revision);
 
         // Assert
-        dispatch.Context.ShouldBeOfType<DispatchContext.Revision>();
+        DispatchContext.Revision held = dispatch.Context.ShouldBeOfType<DispatchContext.Revision>();
+        held.ShouldSatisfyAllConditions(
+            () => held.BranchName.ShouldBe("foundry/42"),
+            () => held.PullRequestUrl.ShouldBe("https://github.com/org/repo/pull/7"),
+            () => held.Comments.Count.ShouldBe(1));
     }
 }

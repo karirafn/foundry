@@ -127,9 +127,9 @@ internal static class SystemPromptBuilder
     {
         if (comment.FilePath is not null && comment.Line is not null)
         {
-            return $"- {comment.FilePath}:{comment.Line} — {comment.Body}";
+            return $"- {EncodeForXmlData(comment.FilePath)}:{comment.Line} — {EncodeForXmlData(comment.Body)}";
         }
 
-        return $"- {comment.Body}";
+        return $"- {EncodeForXmlData(comment.Body)}";
     }
 }
