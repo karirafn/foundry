@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
@@ -38,12 +40,17 @@ internal sealed class RepositoryDispatchQueries(
             return null;
         }
 
-        string providerType = credential is GitHubCredential ? "github" : "gitlab";
+        WorkerProvider provider = credential switch
+        {
+            GitHubCredential => new WorkerProvider.GitHub(),
+            GitLabCredential => new WorkerProvider.GitLab(),
+            _ => throw new UnreachableException($"Unknown credential type: {credential.GetType().Name}"),
+        };
 
         return new RepositoryDispatchInfo(
             repo.Slug.ToString(),
             new Uri(credential.BaseUrl.Value, $"{repo.Slug}.git"),
             credential.Token,
-            providerType);
+            provider);
     }
 }

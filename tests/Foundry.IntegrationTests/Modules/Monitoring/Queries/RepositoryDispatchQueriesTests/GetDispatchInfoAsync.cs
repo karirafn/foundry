@@ -28,7 +28,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAccountIsGitHub_ProjectsGithubProviderType()
+    public async Task WhenAccountIsGitHub_ProjectsGitHubProvider()
     {
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
@@ -49,11 +49,11 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
 
         // Assert
         RepositoryDispatchInfo info = result.ShouldNotBeNull();
-        info.ProviderType.ShouldBe("github");
+        info.Provider.ShouldBeOfType<WorkerProvider.GitHub>();
     }
 
     [Fact]
-    public async Task WhenAccountIsGitLab_ProjectsGitlabProviderType()
+    public async Task WhenAccountIsGitLab_ProjectsGitlabProvider()
     {
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory, name: "My GitLab 2");
@@ -70,7 +70,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
 
         // Assert
         RepositoryDispatchInfo info = result.ShouldNotBeNull();
-        info.ProviderType.ShouldBe("gitlab");
+        info.Provider.ShouldBeOfType<WorkerProvider.GitLab>();
     }
 
     [Fact]
