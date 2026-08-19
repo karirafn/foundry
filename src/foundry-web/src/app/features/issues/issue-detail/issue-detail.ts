@@ -107,7 +107,7 @@ import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state'
             @if (s.blockedBy?.length) {
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Blocked By</span>
-                <span class="issue-detail__field-value">{{ s.blockedBy?.join(', ') }}</span>
+                <span class="issue-detail__field-value">{{ s.blockedBy.join(', ') }}</span>
               </div>
             }
 
