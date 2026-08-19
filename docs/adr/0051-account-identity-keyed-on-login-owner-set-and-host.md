@@ -17,6 +17,11 @@ A request is a duplicate when another credential on the same host carries the sa
 It is rejected with 409 naming the colliding account and the shared owner.
 Same login with disjoint owners is permitted; a different login reaching an already-claimed owner stays a Namespace Claim conflict resolved through takeover.
 
+On the update path the intersection is necessary but not sufficient.
+A rotation is rejected only when the same-login sibling covers the *entire* derived set — that is, when subtracting every namespace claimed by another credential would leave the rotated account with nothing.
+Intersection alone would reject exactly the rotation this decision exists to unblock: a classic PAT spanning both owners derives both namespaces, so rotating either of two same-login accounts always intersects the other's claim.
+`CredentialRotationService.RotateAsync` already subtracts namespaces held by others, so a partial overlap reduces to the account's own namespaces without a unique-constraint violation; the guard only has to catch the case where that subtraction empties the set.
+
 On a token-bearing update, namespace derivation runs first and both guards evaluate before the credential is mutated.
 `CredentialRotationService.RotateAsync` no longer derives internally — it receives the derived set from the caller — so `INamespaceDeriver` leaves its constructor.
 A derivation returning `Unavailable` rejects the update and persists nothing.
@@ -53,3 +58,7 @@ This decision adds no invariant; it surfaces the existing one as a specific 409 
 
 The guard is deliberately qualified on the login, which leaves one case open: a token for a *different* login whose reachable owners are all already claimed still routes into the namespace-filtering path and can strand the account on zero claims.
 That defect is tracked separately as issue #439.
+
+The empty-retained-set qualifier applies to the update path only, so create and update no longer share one predicate.
+Create keeps rejecting on bare intersection, because relaxing it there would route a same-login overlap into the takeover flow and offer to transfer a namespace away from the operator's own account — the outcome this decision set out to remove.
+Reaching the same never-steal semantics on create means subtracting same-login siblings from the conflict set rather than reusing the update-path check.
