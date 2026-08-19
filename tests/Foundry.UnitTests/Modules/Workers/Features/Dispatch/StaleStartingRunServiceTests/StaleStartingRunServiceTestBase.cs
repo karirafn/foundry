@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -76,6 +77,20 @@ public abstract class StaleStartingRunServiceTestBase : IAsyncDisposable
         db.Set<WorkerRun>().Add(starting);
         await db.SaveChangesAsync(CancellationToken.None);
         return starting;
+    }
+
+    internal async Task<ActiveRun> SeedActiveRunAsync(string containerId = "container-123")
+    {
+        await using FoundryDbContext db = CreateDbContext();
+        IssueId issueId = IssueId.New();
+        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
+        ActiveRun active = starting.Activate(
+            ContainerId.From(containerId),
+            BranchName.From("feat/1-default"),
+            MonitoredRepositoryId.New());
+        db.Set<WorkerRun>().Add(active);
+        await db.SaveChangesAsync(CancellationToken.None);
+        return active;
     }
 
     internal StaleStartingRunService BuildService(

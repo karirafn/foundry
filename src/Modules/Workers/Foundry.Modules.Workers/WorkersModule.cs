@@ -68,6 +68,7 @@ public static class WorkersModule
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageRebuildService>();
+        services.AddHostedService<StaleStartingRunService>();
 
         return services;
     }

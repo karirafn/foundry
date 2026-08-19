@@ -224,7 +224,9 @@ internal sealed class WorkerDispatchService(
         List<ActiveRun> activeRuns,
         CancellationToken cancellationToken)
     {
-        bool daemonReachable = await RemoveUnknownContainersAsync(dbContext, orchestrator, cancellationToken);
+        // Orphaned container reaping is now owned by StaleStartingRunService.
+        // Reachability is determined solely by the per-run GetStatusAsync probe below.
+        bool daemonReachable = true;
         List<ActiveRun> runsToRemove = [];
 
         foreach (ActiveRun activeRun in activeRuns)
@@ -960,52 +962,6 @@ internal sealed class WorkerDispatchService(
             fullyUnpaused);
 
         return fullyUnpaused;
-    }
-
-    private async Task<bool> RemoveUnknownContainersAsync(
-        DbContext dbContext,
-        IWorkerOrchestrator orchestrator,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)> containers =
-                await orchestrator.ListByLabelAsync(cancellationToken);
-
-            List<WorkerRunId> activeRunIdList = await dbContext.Set<ActiveRun>()
-                .Select(r => r.Id)
-                .ToListAsync(cancellationToken);
-
-            HashSet<WorkerRunId> activeRunIds = activeRunIdList.ToHashSet();
-
-            foreach ((ContainerId containerId, WorkerRunId workerRunId) in containers)
-            {
-                if (activeRunIds.Contains(workerRunId))
-                {
-                    continue;
-                }
-
-                await orchestrator.StopAndRemoveAsync(containerId.Value, cancellationToken);
-            }
-
-            return true;
-        }
-#pragma warning disable CA1031 // Docker daemon failures during startup must not crash the BackgroundService; the warning log surfaces the issue without blocking reconciliation.
-        catch (Exception ex) when (ex is not OperationCanceledException)
-#pragma warning restore CA1031
-        {
-            if (DockerDaemonConnectivity.IsUnreachable(ex, cancellationToken))
-            {
-                logger.LogWarning(
-                    "Docker daemon unreachable during startup reconciliation orphan scan; deferring until next tick.");
-                return false;
-            }
-
-            logger.LogWarning(
-                ex,
-                "Docker scan failed during startup reconciliation; skipping orphaned container removal.");
-            return true;
-        }
     }
 
     private async Task TryDispatchAsync(

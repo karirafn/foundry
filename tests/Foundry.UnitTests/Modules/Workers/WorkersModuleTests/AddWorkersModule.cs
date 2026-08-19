@@ -155,6 +155,27 @@ public sealed class AddWorkersModule
     }
 
     [Fact]
+    public void WhenCalled_RegistersStaleStartingRunServiceAsHostedService()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddLogging();
+        services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
+        services.AddSingleton<ILoginSessionState, NullLoginSessionState>();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
+        hostedServices.ShouldContain(s => s is StaleStartingRunService);
+    }
+
+    [Fact]
     public void WhenCalled_RegistersIImageOperations()
     {
         // Arrange
