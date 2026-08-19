@@ -43,6 +43,74 @@ public sealed class DeriveAsync
     }
 
     [Fact]
+    public async Task RawToken_WhenGitHubListingSucceeds_ReturnsDerivedWithNamespaces()
+    {
+        // Arrange
+        Uri apiBaseUrl = new("https://api.github.com/");
+        HttpClient httpClient = new(new StaticJsonHandler(HttpStatusCode.OK, GitHubListingJson));
+        NamespaceDeriver sut = BuildSut(httpClient);
+
+        // Act
+        NamespaceDerivationOutcome outcome = await sut.DeriveAsync(
+            apiBaseUrl,
+            token: "ghp_test",
+            isGitLab: false,
+            CancellationToken.None);
+
+        // Assert
+        NamespaceDerivationOutcome.Derived derived = outcome.ShouldBeOfType<NamespaceDerivationOutcome.Derived>();
+        derived.Namespaces.Count.ShouldBe(1);
+        derived.Namespaces.ShouldContain(ns => ns.Value == "octocat");
+    }
+
+    private const string GitLabListingJson = """
+        [
+          { "path_with_namespace": "gitlab-user/project-a", "visibility": "public",
+            "permissions": { "project_access": { "access_level": 40 }, "group_access": null } }
+        ]
+        """;
+
+    [Fact]
+    public async Task RawToken_WhenGitLabListingSucceeds_ReturnsDerivedWithNamespaces()
+    {
+        // Arrange
+        Uri apiBaseUrl = new("https://gitlab.com/");
+        HttpClient gitLabClient = new(new StaticJsonHandler(HttpStatusCode.OK, GitLabListingJson));
+        NamespaceDeriver sut = BuildSut(new HttpClient(new NotCalledHandler()), gitLabClient);
+
+        // Act
+        NamespaceDerivationOutcome outcome = await sut.DeriveAsync(
+            apiBaseUrl,
+            token: "glpat-test",
+            isGitLab: true,
+            CancellationToken.None);
+
+        // Assert
+        NamespaceDerivationOutcome.Derived derived = outcome.ShouldBeOfType<NamespaceDerivationOutcome.Derived>();
+        derived.Namespaces.Count.ShouldBe(1);
+        derived.Namespaces.ShouldContain(ns => ns.Value == "gitlab-user");
+    }
+
+    [Fact]
+    public async Task RawToken_WhenListingResultIsFailure_ReturnsUnavailable()
+    {
+        // Arrange
+        Uri apiBaseUrl = new("https://api.github.com/");
+        HttpClient httpClient = new(new StaticJsonHandler(HttpStatusCode.Unauthorized, "{}"));
+        NamespaceDeriver sut = BuildSut(httpClient);
+
+        // Act
+        NamespaceDerivationOutcome outcome = await sut.DeriveAsync(
+            apiBaseUrl,
+            token: "ghp_bad",
+            isGitLab: false,
+            CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<NamespaceDerivationOutcome.Unavailable>();
+    }
+
+    [Fact]
     public async Task WhenListingSucceeds_ReturnsDerivedWithNamespaces()
     {
         // Arrange

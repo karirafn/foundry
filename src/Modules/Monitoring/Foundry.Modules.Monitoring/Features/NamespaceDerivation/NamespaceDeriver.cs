@@ -13,26 +13,38 @@ internal sealed class NamespaceDeriver(
     GitLabHttpClient gitLabHttpClient,
     ILogger<NamespaceDeriver> logger) : INamespaceDeriver
 {
-    public async Task<NamespaceDerivationOutcome> DeriveAsync(
+    public Task<NamespaceDerivationOutcome> DeriveAsync(
         Credential credential,
         CancellationToken cancellationToken)
     {
         if (credential.Token is null)
         {
-            return new NamespaceDerivationOutcome.Unavailable();
+            return Task.FromResult<NamespaceDerivationOutcome>(new NamespaceDerivationOutcome.Unavailable());
         }
 
+        return DeriveAsync(
+            credential.ApiBaseUrl,
+            credential.Token,
+            credential is GitLabCredential,
+            cancellationToken);
+    }
+
+    public async Task<NamespaceDerivationOutcome> DeriveAsync(
+        Uri apiBaseUrl,
+        string token,
+        bool isGitLab,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            bool isGitLab = credential is GitLabCredential;
             Result<IReadOnlyList<ProviderRepository>> listResult = isGitLab
                 ? await gitLabHttpClient.ListRepositoriesAsync(
-                    credential.ApiBaseUrl,
-                    credential.Token,
+                    apiBaseUrl,
+                    token,
                     cancellationToken)
                 : await gitHubHttpClient.ListRepositoriesAsync(
-                    credential.ApiBaseUrl,
-                    credential.Token,
+                    apiBaseUrl,
+                    token,
                     cancellationToken);
 
             if (listResult is not Result<IReadOnlyList<ProviderRepository>>.Success listSuccess)
@@ -52,8 +64,8 @@ internal sealed class NamespaceDeriver(
         {
             logger.LogWarning(
                 ex,
-                "Namespace derivation failed for credential {CredentialId}; treating as unavailable.",
-                credential.Id);
+                "Namespace derivation failed for base URL {ApiBaseUrl}; treating as unavailable.",
+                apiBaseUrl);
             return new NamespaceDerivationOutcome.Unavailable();
         }
     }

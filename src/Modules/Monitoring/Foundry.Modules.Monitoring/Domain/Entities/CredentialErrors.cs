@@ -13,6 +13,8 @@ internal static class CredentialErrors
     internal const string MissingWritePermissionCode = "Credential.MissingWritePermission";
     internal const string NoNamespaceRepositoriesCode = "Credential.NoNamespaceRepositories";
     internal const string WriteAccessVerificationFailedCode = "Credential.WriteAccessVerificationFailed";
+    internal const string DuplicateAccountCode = "Credential.DuplicateAccount";
+    internal const string NamespaceDerivationUnavailableCode = "Credential.NamespaceDerivationUnavailable";
 
     internal static Error NotFound(CredentialId id) =>
         new(NotFoundCode, $"Credential with ID '{id.Value}' was not found.");
@@ -42,4 +44,12 @@ internal static class CredentialErrors
     internal static readonly Error WriteAccessVerificationFailed =
         new(WriteAccessVerificationFailedCode,
             "Could not verify write access to the repository. Check your connection and try again.");
+
+    internal static readonly Error NamespaceDerivationUnavailable =
+        new(NamespaceDerivationUnavailableCode,
+            "Could not derive namespaces from the provider — the provider may be temporarily unavailable. Try again.");
+
+    internal static Error DuplicateAccount(string holderName, string sharedOwner) =>
+        new(DuplicateAccountCode,
+            $"Your '{holderName}' account already covers '{sharedOwner}'. Rotate that account's token instead.");
 }

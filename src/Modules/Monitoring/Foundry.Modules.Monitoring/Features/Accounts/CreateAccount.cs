@@ -104,6 +104,11 @@ internal static partial class CreateAccount
             public TakeoverValidationResponse Invalid { get; } = invalid;
         }
 
+        internal sealed class Duplicate(Error error) : Outcome
+        {
+            public Error Error { get; } = error;
+        }
+
         internal sealed class Failure(Error error) : Outcome
         {
             public Error Error { get; } = error;
@@ -222,6 +227,17 @@ internal static partial class CreateAccount
             HashSet<string> derivedValues = derivedNamespaces
                 .Select(n => n.Value)
                 .ToHashSet(StringComparer.Ordinal);
+
+            (string HolderName, string SharedOwner)? duplicate =
+                DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers);
+
+            if (duplicate is not null)
+            {
+                Error duplicateError = CredentialErrors.DuplicateAccount(
+                    duplicate.Value.HolderName,
+                    duplicate.Value.SharedOwner);
+                return new Outcome.Duplicate(duplicateError);
+            }
 
             List<NamespaceConflict> conflicts = [];
             foreach (KeyValuePair<string, (Guid HolderCredentialId, string HolderName)> entry in claimedByOthers)
@@ -461,6 +477,8 @@ internal static partial class CreateAccount
                                 created.Value),
                         Outcome.Conflict conflict =>
                             (IResult)TypedResults.Conflict(conflict.Conflicts),
+                        Outcome.Duplicate duplicate =>
+                            TypedResults.Conflict(duplicate.Error.Message),
                         Outcome.InvalidTakeover invalid =>
                             TypedResults.UnprocessableEntity(invalid.Invalid),
                         Outcome.Failure failure => TypedResults.BadRequest(failure.Error.Message),

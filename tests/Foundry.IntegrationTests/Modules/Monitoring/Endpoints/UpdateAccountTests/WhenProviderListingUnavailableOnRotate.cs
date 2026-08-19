@@ -6,7 +6,6 @@ using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
@@ -27,9 +26,9 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
 
 /// <summary>
-/// Verifies the edge case: when the provider listing is unavailable during rotation,
-/// the prior namespace associations are kept and resolving repos are marked unreachable,
-/// without dropping coverage (AC edge case).
+/// Verifies the edge case: when the provider listing is unavailable (transient failure) on a
+/// token-bearing update, the request is rejected with 400 and the credential is unchanged.
+/// The operator retries. The background recheck path still retains prior namespaces on Unavailable.
 /// </summary>
 public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
 {
@@ -48,16 +47,8 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
 
     public WhenProviderListingUnavailableOnRotate()
     {
-        // The new token maps to no listing entry, so the fake returns "[]" → but we also
-        // need the listing call to return a failure to trigger Unavailable outcome.
-        // Use a token-keyed handler: new token returns 401 → listing fails → Unavailable.
-        Dictionary<string, string> tokenToListing = new()
-        {
-            [OriginalToken] = BroadListingJson,
-            // NewToken deliberately absent → returns [] (success with empty) in TokenKeyedListingFakeHandler.
-            // To get Unavailable, we need a non-200 response for NewToken.
-        };
-
+        // FailNewTokenListingHandler returns 401 for any token other than OriginalToken,
+        // which drives NamespaceDeriver to the Unavailable outcome.
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -70,11 +61,6 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
                 new GitHubHttpClient(
                     new HttpClient(new FailNewTokenListingHandler(OriginalToken, BroadListingJson)),
                     NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
-
-            // Evaluator marks all resolving repos Unreachable (simulating provider unavailability).
-            services.RemoveAll<IRepositoryEligibilityEvaluator>();
-            services.AddScoped<IRepositoryEligibilityEvaluator>(_ =>
-                new UnreachableEligibilityEvaluator());
         });
         _client = _factory.CreateClient();
     }
@@ -86,7 +72,7 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenListingUnavailable_KeepsPriorNamespacesAndMarksReposUnreachable()
+    public async Task WhenListingUnavailable_RejectsWithBadRequestAndLeavesCredentialUnchanged()
     {
         // Arrange — create with broad token (alice + bob namespaces)
         object createBody = new
@@ -107,19 +93,7 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
         createdResult.ShouldNotBeNull();
         CredentialSummary created = createdResult.Credential;
 
-        // Seed monitored repos under both owners and set them eligible
-        Guid aliceRepoId = await RepositorySeeder.SeedRepositoryAsync(
-            _factory,
-            created.Id,
-            slug: "alice/repo-a");
-        Guid bobRepoId = await RepositorySeeder.SeedRepositoryAsync(
-            _factory,
-            created.Id,
-            slug: "bob/repo-b");
-
-        await RepositoryEligibilitySeeder.SetEligibleAsync(_factory, aliceRepoId, bobRepoId);
-
-        // Act — rotate to a new token whose listing call fails (simulating transient error)
+        // Act — attempt to rotate to a new token whose listing call fails (simulating transient error)
         object updateBody = new
         {
             baseUrl = "https://github.com",
@@ -131,10 +105,10 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
             updateBody,
             TestContext.Current.CancellationToken);
 
-        // Assert — response is 200, coverage NOT dropped
-        updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        // Assert — provider unavailable on derivation → rejected with 400 (AC#5)
+        updateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
-        // Namespaces must be unchanged (both alice and bob retained)
+        // Credential is unchanged: both namespaces retained, token/name/baseUrl not mutated (AC#7)
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         Credential? credential = await dbContext.Set<Credential>()
@@ -143,17 +117,9 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
                 c => c.Id == CredentialId.From(created.Id),
                 TestContext.Current.CancellationToken);
         credential.ShouldNotBeNull();
-        credential.Namespaces.Count.ShouldBe(2, "prior namespaces must be retained on transient failure");
+        credential.Namespaces.Count.ShouldBe(2, "prior namespaces must be unchanged when derivation is rejected");
         credential.Namespaces.ShouldContain(ns => ns.Value == "alice");
         credential.Namespaces.ShouldContain(ns => ns.Value == "bob");
-
-        // Both repos changed: eligible → unreachable (recheck marker)
-        CredentialUpdateResult? result = await updateResponse.Content
-            .ReadFromJsonAsync<CredentialUpdateResult>(TestContext.Current.CancellationToken);
-        result.ShouldNotBeNull();
-        result.AffectedRepositories.Count.ShouldBe(2, "both repos changed from eligible to unreachable");
-        result.AffectedRepositories.ShouldAllBe(r => r.NewStatus == "unreachable");
-        result.AffectedRepositories.ShouldAllBe(r => r.PreviousStatus == "eligible");
     }
 
     /// <summary>

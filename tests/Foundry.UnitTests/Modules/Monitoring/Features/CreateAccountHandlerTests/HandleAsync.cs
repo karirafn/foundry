@@ -112,6 +112,33 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTokenResolvesToSameLoginAsExistingHolder_AndNamespacesIntersect_ReturnsDuplicate()
+    {
+        // Arrange — seed a credential named "octocat" that already claims the "octocat" namespace
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existing);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // The incoming token also resolves to "octocat" and derives the "octocat" namespace
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new StubValidateTokenHandler());  // resolves to "octocat"
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_new_token");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Duplicate duplicate = result.ShouldBeOfType<CreateAccount.Outcome.Duplicate>();
+        duplicate.Error.Code.ShouldBe(CredentialErrors.DuplicateAccountCode);
+    }
+
+    [Fact]
     public async Task WhenNamespaceAlreadyClaimed_AndNoTakeover_ReturnsConflict()
     {
         // Arrange — seed an existing credential that claims "octocat"
@@ -627,6 +654,13 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         public Task<NamespaceDerivationOutcome> DeriveAsync(
             Credential credential,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(outcome);
+
+        public Task<NamespaceDerivationOutcome> DeriveAsync(
+            Uri apiBaseUrl,
+            string token,
+            bool isGitLab,
             CancellationToken cancellationToken) =>
             Task.FromResult(outcome);
     }

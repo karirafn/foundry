@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
+using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
@@ -63,6 +64,7 @@ internal static partial class UpdateAccount
     internal sealed class Handler(
         DbContext dbContext,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
+        INamespaceDeriver namespaceDeriver,
         CredentialRotationService rotationService)
         : ICommandHandler<Command, CredentialUpdateResult>
     {
@@ -148,13 +150,31 @@ internal static partial class UpdateAccount
 
                 accountName = resolvedName;
 
-                // Update the credential so the new token is available for namespace derivation.
+                Result<IReadOnlyCollection<Namespace>> deriveResult = await DeriveAndGuardAsync(
+                    accountName,
+                    credential.Id.Value,
+                    apiBaseUrl,
+                    command.Token!,
+                    baseUrl,
+                    isGitLab,
+                    cancellationToken);
+
+                if (deriveResult is Result<IReadOnlyCollection<Namespace>>.Failure deriveFailure)
+                {
+                    return Result<CredentialUpdateResult>.Fail(deriveFailure.Error);
+                }
+
+                IReadOnlyCollection<Namespace> derivedNamespaces =
+                    ((Result<IReadOnlyCollection<Namespace>>.Success)deriveResult).Value;
+
                 UpdateCredential(credential, accountName, command.Token, baseUrl);
 
-                // Re-derive namespaces and re-evaluate repo eligibility; returns affected repos.
                 try
                 {
-                    affectedRepositories = await rotationService.RotateAsync(credential, cancellationToken);
+                    affectedRepositories = await rotationService.RotateAsync(
+                        credential,
+                        derivedNamespaces,
+                        cancellationToken);
                 }
                 catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsNamespaceDuplicateViolation(ex))
                 {
@@ -185,6 +205,57 @@ internal static partial class UpdateAccount
                 credential.Namespaces.Select(n => n.Value).ToList());
 
             return Result<CredentialUpdateResult>.Ok(new CredentialUpdateResult(summary, affectedRepositories));
+        }
+
+        /// <summary>
+        /// Derives namespaces for the new token and guards against duplicate-account and
+        /// transient-unavailability failures — all before any state mutation.
+        /// Returns the derived namespaces on success, or the rejection <see cref="Error"/> on failure.
+        /// </summary>
+        private async Task<Result<IReadOnlyCollection<Namespace>>> DeriveAndGuardAsync(
+            string accountName,
+            Guid excludeCredentialId,
+            Uri apiBaseUrl,
+            string token,
+            BaseUrlVo baseUrl,
+            bool isGitLab,
+            CancellationToken cancellationToken)
+        {
+            NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(
+                apiBaseUrl,
+                token,
+                isGitLab,
+                cancellationToken);
+
+            if (outcome is not NamespaceDerivationOutcome.Derived derived)
+            {
+                return Result<IReadOnlyCollection<Namespace>>.Fail(CredentialErrors.NamespaceDerivationUnavailable);
+            }
+
+            IReadOnlyCollection<Namespace> derivedNamespaces = derived.Namespaces;
+
+            Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
+                await dbContext.FindClaimedNamespacesAsync(
+                    baseUrl.Value.Host,
+                    excludingCredentialId: excludeCredentialId,
+                    cancellationToken);
+
+            if (DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
+            {
+                // Reject only when the rotation would strand the credential on zero namespaces
+                // because the sibling already covers the entire derived set. When a retained set
+                // remains, RotateAsync's never-steal subtraction will reduce to it correctly.
+                bool retainedSetIsEmpty = derivedNamespaces
+                    .All(ns => claimedByOthers.ContainsKey(ns.Value));
+
+                if (retainedSetIsEmpty)
+                {
+                    return Result<IReadOnlyCollection<Namespace>>.Fail(
+                        CredentialErrors.DuplicateAccount(holderName, sharedOwner));
+                }
+            }
+
+            return Result<IReadOnlyCollection<Namespace>>.Ok(derivedNamespaces);
         }
 
         private static void UpdateCredential(Credential credential, string accountName, string? token, BaseUrlVo baseUrl)
@@ -226,6 +297,7 @@ internal static partial class UpdateAccount
                         {
                             CredentialErrors.NotFoundCode => TypedResults.NotFound(),
                             CredentialErrors.DuplicateNamespaceCode => TypedResults.Conflict(error.Message),
+                            CredentialErrors.DuplicateAccountCode => TypedResults.Conflict(error.Message),
                             _ => TypedResults.BadRequest(error.Message),
                         });
                 })
@@ -233,8 +305,8 @@ internal static partial class UpdateAccount
                 .WithSummary("Updates an existing account")
                 .Produces<CredentialUpdateResult>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status400BadRequest);
+                .Produces<string>(StatusCodes.Status409Conflict)
+                .Produces<string>(StatusCodes.Status400BadRequest);
         }
     }
 }

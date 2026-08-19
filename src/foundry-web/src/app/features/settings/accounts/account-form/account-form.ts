@@ -259,14 +259,6 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
             }
           }
         }
-        @if (_isDuplicate()) {
-          <span class="account-form__validation-block">
-            <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-            <span class="account-form__validation-message account-form__validation-message--warning">
-              An account for "{{ _resolvedAccountName() }}" already exists on {{ _resolvedHost() }}
-            </span>
-          </span>
-        }
         @if (_isEditMode() && _showRenameNotice()) {
           <span class="account-form__validation-block">
             <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
@@ -434,22 +426,6 @@ export class AccountFormComponent implements OnInit {
     }
   }
 
-  protected readonly _isDuplicate: Signal<boolean> = computed(() => {
-    const name = this._resolvedAccountName();
-    const baseUrl = this._baseUrl().trim().toLowerCase();
-    if (!name) {
-      return false;
-    }
-    const editingId = this.account()?.id ?? null;
-    return this.accounts().some(a => {
-      if (editingId !== null && a.id === editingId) {
-        return false;
-      }
-      return a.name.toLowerCase() === name.toLowerCase() &&
-        a.baseUrl.trim().toLowerCase() === baseUrl;
-    });
-  });
-
   /** True only when the last resolved triple still matches current inputs — hides stale results after edits. */
   protected readonly _resultVisible: Signal<boolean> = computed(() => {
     const last = this._lastResolvedPair();
@@ -473,9 +449,6 @@ export class AccountFormComponent implements OnInit {
 
   /** Pure validity — everything except the saving guard. */
   protected readonly _formValid: Signal<boolean> = computed(() => {
-    if (this._isDuplicate()) {
-      return false;
-    }
     if (this._visibleConflicts().length > 0 && this._selectedConflicts().size === 0) {
       return false;
     }

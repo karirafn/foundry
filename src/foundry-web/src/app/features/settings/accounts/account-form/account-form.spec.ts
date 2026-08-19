@@ -927,60 +927,6 @@ describe('AccountFormComponent', () => {
     expect(btn.disabled).toBe(true);
   });
 
-  // Cycle 44: duplicate detection in create mode — duplicate warning shown, save disabled
-  it('should show duplicate warning and disable save when account with same name+baseUrl exists in create mode', () => {
-    // Arrange
-    const { el, fixture } = setup({
-      account: null,
-      accounts: [MOCK_ACCOUNT],
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
-    });
-
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_token';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    // Act — blur triggers resolution, making result visible
-    tokenInput.dispatchEvent(new Event('blur'));
-    fixture.detectChanges();
-
-    // Assert — duplicate warning visible inside live region
-    const region = el.querySelector('#account-token-validation');
-    expect(region?.textContent).toContain('An account for "my-github" already exists on github.com');
-
-    // Assert — save disabled
-    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-  });
-
-  // Cycle 45: duplicate detection excludes self in edit mode
-  it('should NOT show duplicate warning when the matching account is the account being edited', () => {
-    // Arrange — resolves to same name/baseUrl as MOCK_ACCOUNT, but MOCK_ACCOUNT is the account being edited
-    const { el, fixture } = setup({
-      account: MOCK_ACCOUNT,
-      accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
-    });
-
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_token';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    // Act — blur triggers resolution, making result visible
-    tokenInput.dispatchEvent(new Event('blur'));
-    fixture.detectChanges();
-
-    // Assert — no duplicate warning in live region
-    const region = el.querySelector('#account-token-validation');
-    expect(region?.textContent).not.toContain('already exists');
-
-    // Assert — save enabled
-    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(false);
-  });
-
   // Cycle 46: live-region divs render unconditionally so screen readers announce changes
   it('should render validation-error div even when validationError is null', () => {
     // Arrange
@@ -1115,27 +1061,6 @@ describe('AccountFormComponent', () => {
     // Assert — stale result no longer shown
     const region = el.querySelector('#account-token-validation');
     expect(region?.textContent).not.toContain('Authenticated as');
-  });
-
-  // Cycle 53: duplicate warning is inside the live status region
-  it('should render duplicate warning inside the role="status" live region', () => {
-    // Arrange
-    const { el, fixture } = setup({
-      account: null,
-      accounts: [MOCK_ACCOUNT],
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'my-github', detectedProvider: null },
-    });
-
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_token';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    tokenInput.dispatchEvent(new Event('blur'));
-    fixture.detectChanges();
-
-    // Assert — warning text is inside the polite live region
-    const region = el.querySelector('#account-token-validation[role="status"]');
-    expect(region?.textContent).toContain('already exists on');
   });
 
   // Cycle 54: rename notice is inside the live status region

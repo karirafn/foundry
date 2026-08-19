@@ -105,6 +105,19 @@ Multiple accounts can exist per provider and per host — including multiple PAT
 The provider username the token authenticates as — resolved from the provider's `/user` endpoint at token validation and stored as the account's name (`Credential.Name`).
 Not user-chosen: the account's display name *is* the PAT owner. Because multiple accounts may share one PAT owner, the name alone does not identify an account; UI surfaces disambiguate with the account's Namespace Claims and host.
 
+### Account Identity
+
+An account is identified by `(PAT Owner, derived owner-namespace set, host)`.
+The login alone is not enough, because one login legitimately holds several tokens — GitHub fine-grained PATs are each bound to a single resource owner, so reaching two owners requires two tokens and therefore two accounts.
+A request is a **duplicate account** when another credential on the same host carries the same `Credential.Name` *and* its Namespace Claims intersect the incoming token's derived owner namespaces; it is rejected with 409 naming the colliding account and the shared owner.
+Overlap is tested on exact namespace values, and by intersection rather than set equality, so a token reaching only some of another account's owners still matches.
+On a token-bearing update the intersection is necessary but not sufficient: the rotation is rejected only when the same-login sibling covers the *entire* derived set, leaving the rotated account with no namespace of its own.
+A partial overlap is not a duplicate — the never-steal subtraction already reduces the account to the namespaces it alone reaches, so a token that spans both owners still rotates cleanly.
+Same login with disjoint owners is permitted — that is the normal shape, not an exception.
+A *different* login reaching an already-claimed owner is not a duplicate; it is a Namespace Claim conflict, resolved through takeover.
+Detection is server-side only, in the create and update handlers: the derived owner set requires a provider repository listing, so no client can compute it.
+On a token-bearing update, derivation runs and both guards evaluate *before* the credential is mutated, so a rejected rotation persists nothing; a derivation that returns `Unavailable` rejects the update rather than proceeding unguarded (see ADR 0051).
+
 ### Token Validation Outcome
 
 A closed variant set (`TokenValidationOutcome`) returned by both provider adapters after validating a PAT.

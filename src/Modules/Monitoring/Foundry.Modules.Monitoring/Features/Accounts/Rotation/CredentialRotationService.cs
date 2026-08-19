@@ -1,23 +1,17 @@
-using System.Diagnostics;
-
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-
 namespace Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 
 internal sealed class CredentialRotationService(
     DbContext dbContext,
-    INamespaceDeriver namespaceDeriver,
-    RepositoryEligibilityDiffer differ,
-    ILogger<CredentialRotationService> logger)
+    RepositoryEligibilityDiffer differ)
 {
     public async Task<IReadOnlyList<AffectedRepository>> RotateAsync(
         Credential credential,
+        IReadOnlyCollection<Namespace> derivedNamespaces,
         CancellationToken cancellationToken)
     {
         // Snapshot repos covered by the credential before namespace change
@@ -28,30 +22,14 @@ internal sealed class CredentialRotationService(
             r => r.Id.Value,
             r => r.EligibilityStatus ?? "unreachable");
 
-        NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
-
-        switch (outcome)
-        {
-            case NamespaceDerivationOutcome.Derived derived:
-                Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
-                    await dbContext.FindClaimedNamespacesAsync(
-                        credential.Host,
-                        excludingCredentialId: credential.Id.Value,
-                        cancellationToken);
-                HashSet<string> claimedValues = [..claimedByOthers.Keys];
-                credential.SetNamespaces(derived.Namespaces, claimedValues);
-                break;
-            case NamespaceDerivationOutcome.Unavailable:
-                // Keep prior namespaces — do not drop coverage on transient failure.
-                // Log so operators know the derivation was skipped.
-                logger.LogWarning(
-                    "Namespace derivation unavailable for credential {CredentialId}; retaining prior namespaces.",
-                    credential.Id.Value);
-                break;
-            default:
-                throw new UnreachableException(
-                    $"Unhandled NamespaceDerivationOutcome variant: {outcome.GetType().Name}");
-        }
+        // Apply the caller-derived namespace set, excluding namespaces already held by others.
+        Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
+            await dbContext.FindClaimedNamespacesAsync(
+                credential.Host,
+                excludingCredentialId: credential.Id.Value,
+                cancellationToken);
+        HashSet<string> claimedValues = [..claimedByOthers.Keys];
+        credential.SetNamespaces(derivedNamespaces, claimedValues);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
