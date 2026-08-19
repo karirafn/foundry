@@ -26,32 +26,42 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 /// Verifies duplicate-account detection when two accounts share the same provider login
 /// but the incoming token intersects an existing account's namespace claims.
 /// AC#2: a rotation whose derived owner set intersects a different credential's claims
-/// with the same resolved login is rejected with 409.
-/// AC#1: a rotation for the account's own owner (different namespace, same login) succeeds.
+/// with the same resolved login is rejected with 409 only when the retained set (derived
+/// minus sibling-held) is empty — i.e. all derived namespaces are already held by a sibling.
+/// AC#1: a rotation that retains at least one non-sibling namespace (same login, partial or
+/// no overlap) succeeds; sibling-held namespaces are subtracted, not stolen.
 /// </summary>
 public sealed class WhenDuplicateLoginIntersectsOwner : IAsyncDisposable
 {
     // Token-keyed routing: each token maps to a fixed account name and namespace listing.
-    // ghp_first_token      → first-user  (create first account, namespace "first-user")
-    // ghp_second_token     → second-user (create second account, namespace "second-user")
-    // ghp_colliding_token  → first-user  (update second account; same login + same namespace → 409)
-    // ghp_legitimate_token → first-user  (update second account; same login but different namespace → 200)
+    // ghp_first_token         → first-user  (create first account, namespace "first-user")
+    // ghp_second_token        → second-user (create second account, namespace "second-user")
+    // ghp_colliding_token     → first-user  (update second account; same login + same namespace → 409
+    //                                         because retained set after subtracting sibling claim is empty)
+    // ghp_legitimate_token    → first-user  (update second account; same login but different namespace → 200)
+    // ghp_partial_overlap     → first-user  (update second account; same login, derives "first-user" AND
+    //                                         "first-user-org" → 200 because "first-user-org" is retained
+    //                                         after subtracting A's "first-user" claim)
     private const string FirstToken = "ghp_first_token";
     private const string SecondToken = "ghp_second_token";
     private const string CollidingToken = "ghp_colliding_token";
     private const string LegitimateToken = "ghp_legitimate_token";
+    private const string PartialOverlapToken = "ghp_partial_overlap";
     private const string FirstAccountName = "first-user";
     private const string SecondAccountName = "second-user";
 
     // Note: CollidingToken and FirstToken both derive namespace "first-user" — that is the
     // point of the collision test. LegitimateToken derives "first-user-org" which does not
-    // intersect with account A's claim of "first-user".
+    // intersect with account A's claim of "first-user". PartialOverlapToken derives both
+    // "first-user" (held by A) and "first-user-org" (held by no one), so after subtracting
+    // A's claim the retained set is ["first-user-org"], which is non-empty → 200.
     private static readonly Dictionary<string, string> TokenToListing = new()
     {
         [FirstToken] = """[{"full_name":"first-user/repo","private":false,"permissions":{"push":true}}]""",
         [SecondToken] = """[{"full_name":"second-user/repo","private":false,"permissions":{"push":true}}]""",
         [CollidingToken] = """[{"full_name":"first-user/repo","private":false,"permissions":{"push":true}}]""",
         [LegitimateToken] = """[{"full_name":"first-user-org/repo","private":false,"permissions":{"push":true}}]""",
+        [PartialOverlapToken] = """[{"full_name":"first-user/repo","private":false,"permissions":{"push":true}},{"full_name":"first-user-org/repo","private":false,"permissions":{"push":true}}]""",
     };
 
     private readonly FoundryWebAppFactory _factory;
@@ -66,6 +76,7 @@ public sealed class WhenDuplicateLoginIntersectsOwner : IAsyncDisposable
             [SecondToken] = SecondAccountName,
             [CollidingToken] = FirstAccountName,
             [LegitimateToken] = FirstAccountName,
+            [PartialOverlapToken] = FirstAccountName,
         });
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -170,6 +181,37 @@ public sealed class WhenDuplicateLoginIntersectsOwner : IAsyncDisposable
 
         // Assert — same login but non-intersecting namespace → allowed
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task WhenTokenDerivesPartialOverlapWithSibling_ReturnsOkAndSubtractsSiblingNamespace()
+    {
+        // Arrange — create account A (first-user / "first-user") and account B (second-user / "second-user").
+        // Update B with PartialOverlapToken: resolves to "first-user" (same login as A) and derives
+        // namespaces "first-user" (held by A) and "first-user-org" (held by no one).
+        // The handler must subtract A's claim and accept the rotation; B's retained namespace is "first-user-org".
+        (_, Guid secondId) = await SeedTwoAccountsAsync();
+
+        object updateBody = new
+        {
+            baseUrl = "https://github.com",
+            token = PartialOverlapToken,
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri($"/api/accounts/{secondId}", UriKind.Relative),
+            updateBody,
+            TestContext.Current.CancellationToken);
+
+        // Assert — partial overlap with sibling → accepted; sibling namespace subtracted, not stolen
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        CredentialUpdateResult result = (await response.Content
+            .ReadFromJsonAsync<CredentialUpdateResult>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+
+        result.Credential.Namespaces.ShouldBe(["first-user-org"], ignoreOrder: true);
     }
 
     [Fact]
