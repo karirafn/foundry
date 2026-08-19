@@ -55,11 +55,10 @@ public sealed class OrphanedContainerReaping : StaleStartingRunServiceTestBase
     }
 
     [Fact]
-    public async Task WhenDockerScanThrowsNonConnectivityException_TickContinuesToNextRun()
+    public async Task WhenDockerScanThrowsNonConnectivityException_DefersTick()
     {
-        // Arrange — ListByLabelAsync throws a non-connectivity exception (e.g. daemon unavailable)
-        // Unlike a connectivity exception, execution does not abort — the tick still returns without
-        // failing any starting runs, and the next tick will retry.
+        // Arrange — ListByLabelAsync throws a non-connectivity exception (e.g. daemon unavailable);
+        // the whole tick exits early (nothing to iterate over), deferring all work to the next tick.
         StartingRun stale = await SeedStaleStartingRunAsync(StaleStartingRunService.StaleStartingRunThreshold + TimeSpan.FromMinutes(1));
         OrchestratorStub orchestrator = new(listThrows: true);
         StaleStartingRunService sut = BuildService(orchestrator);
@@ -67,7 +66,7 @@ public sealed class OrphanedContainerReaping : StaleStartingRunServiceTestBase
         // Act
         await sut.TickForTest(TestContext.Current.CancellationToken);
 
-        // Assert — the stale run remains in starting state (sweep aborted early)
+        // Assert — the stale run remains in starting state (tick deferred entirely)
         await using FoundryDbContext db = CreateDbContext();
         WorkerRun? run = await db.Set<WorkerRun>()
             .FindAsync([stale.Id], TestContext.Current.CancellationToken);

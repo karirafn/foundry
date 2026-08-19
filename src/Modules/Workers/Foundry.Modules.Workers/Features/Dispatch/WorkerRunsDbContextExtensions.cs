@@ -35,7 +35,6 @@ internal static class WorkerRunsDbContextExtensions
             .Select(r => r.Id)
             .ToListAsync(cancellationToken);
 
-        HashSet<WorkerRunId> result = [..ids];
-        return result;
+        return ids.ToHashSet();
     }
 }

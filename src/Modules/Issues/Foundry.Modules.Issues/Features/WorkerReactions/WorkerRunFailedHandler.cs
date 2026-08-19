@@ -63,6 +63,16 @@ internal sealed class WorkerRunFailedHandler(
         // the revision path has its own retry mechanism (RevisionFailedIssue.Retry → RevisionQueuedIssue).
         if (issue is RevisionInProgressIssue revisionInProgress)
         {
+            if (@event.WorkerRunId != revisionInProgress.WorkerRunId)
+            {
+                logger.LogWarning(
+                    "WorkerRunFailed for issue {IssueId} has run id {EventRunId} which does not match current run id {CurrentRunId}; ignoring stale event.",
+                    @event.IssueId,
+                    @event.WorkerRunId,
+                    revisionInProgress.WorkerRunId);
+                return;
+            }
+
             RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
                 @event.WorkerRunId,
                 @event.ReasonDescription,
