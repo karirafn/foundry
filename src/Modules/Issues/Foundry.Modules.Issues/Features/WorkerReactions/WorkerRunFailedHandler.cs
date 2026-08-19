@@ -27,6 +27,16 @@ internal sealed class WorkerRunFailedHandler(
 
         if (issue is InProgressIssue inProgress)
         {
+            if (@event.WorkerRunId != inProgress.WorkerRunId)
+            {
+                logger.LogWarning(
+                    "WorkerRunFailed for issue {IssueId} has run id {EventRunId} which does not match current run id {CurrentRunId}; ignoring stale event.",
+                    @event.IssueId,
+                    @event.WorkerRunId,
+                    inProgress.WorkerRunId);
+                return;
+            }
+
             if (@event.BranchName is not null)
             {
                 ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
