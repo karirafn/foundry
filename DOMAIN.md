@@ -430,6 +430,19 @@ Foundry derives each run's outcome via `WorkerOutcomeResolver` — a pure functi
 `ActiveRun` carries the `BranchName` — set at activation from the dispatch payload's pre-created branch name, propagated to `FailedRun` and `CompletedRun`.
 `ActiveRun` also carries `BranchCommitCount` (non-nullable int, default 0) and `LastObservedCommitSha` (nullable string) — see Branch Commit Count and Worker Activity Observation Loop below.
 
+**`StartingRun` bounded lifetime.**
+`StartingRun` is the state a worker run occupies between row creation (in `IssueClaimedHandler`) and container start (`StartAsync`).
+This window exists because the row must be committed before the Docker API is called — a crash or daemon failure in that gap would otherwise leave the issue in `in_progress` with no recovery path.
+`StartingRun` rows are bounded to at most `StaleStartingRunThreshold` (10 minutes) by the periodic sweep (see Orphan Reconciliation).
+After that threshold, the sweep fails the run via `StartingRun.Fail(ContainerError)`, which raises `WorkerRunFailed`, which the Issues module's `WorkerRunFailedHandler` turns into `InProgressIssue → FailedIssue` — making the issue retryable from the dashboard (see ADR 0050).
+
+## Worker Slot Occupancy
+
+The count of worker runs that hold a dispatch slot at any moment — the figure checked against `MaxConcurrent` before a new run is dispatched.
+Slot occupancy is the union of `starting` and `active` runs (`starting ∪ active`): both states count against the limit.
+Including `StartingRun` in the count prevents over-dispatch during the window between row creation and container start; a `StartingRun` that never progresses holds its slot for at most `StaleStartingRunThreshold` (10 minutes) before the periodic sweep fails it (see Orphan Reconciliation).
+The query is implemented by `DbContext.GetSlotOccupancyCountAsync` and `DbContext.GetSlotOccupancyRunIdsAsync` extension methods, used by both `WorkerDispatchService` (dispatch gate) and `StaleStartingRunService` (orphan reaping).
+
 ## Branch Commit Count
 
 The number of commits the issue branch is ahead of the repository's default branch by merge-base comparison.
@@ -505,6 +518,7 @@ Every terminal outcome (`Completed`, `Review`, `ContinuableFailure`, `Failure`, 
 The watchdog ceiling (`StartedAt + timeout_minutes`) is evaluated regardless of whether the container is still running.
 Any unresolved run that exceeds the ceiling is processed through the same resolver → applier pair (exit code null; MR-state still consulted first), so no active run can hold a worker slot indefinitely.
 The ceiling derives from `StartedAt`, which only `ActiveRun` carries — the watchdog therefore covers active runs only, and a run that never reaches `ActiveRun` is outside it.
+Runs stranded in `StartingRun` (never reaching `ActiveRun`) are handled by the periodic sweep instead — see Orphan Reconciliation.
 
 **Docker daemon reachability.**
 `GetStatusAsync` returns a discriminated `WorkerStatusProbe` distinguishing three cases:
@@ -515,10 +529,36 @@ The ceiling derives from `StartedAt`, which only `ActiveRun` carries — the wat
   Any other `DockerApiException` propagates as an unexpected error.
 
 On `Unreachable` the active run is left in `ActiveRun` state (never failed) and recovers on a later tick.
-Startup reconciliation is deferred when the daemon is unreachable — the `_reconciled` latch is gated on daemon reachability across both the orphan-container sweep (`ListByLabelAsync`) and per-run `GetStatusAsync` probes — so the orphan sweep is not silently skipped for the boot.
+Startup reconciliation is deferred when the daemon is unreachable — the `_reconciled` latch is set only after every per-run `GetStatusAsync` probe returns without an `Unreachable` result; a boot with zero `ActiveRun` rows latches `_reconciled` immediately without contacting Docker.
+Orphan-container reaping is not part of the startup reconcile: it has moved to the always-on periodic sweep (`StaleStartingRunService`), which defers its own tick when `ListByLabelAsync` returns `Unreachable` — see Orphan Reconciliation.
 
 A `/ready` readiness health check (tagged `ready`, mapped unconditionally at `/ready`) surfaces Docker daemon connectivity:
 healthy when the daemon responds to a ping within 3 seconds, unhealthy with a message identifying Docker daemon connectivity when the ping fails or times out.
+
+## Orphan Reconciliation
+
+The periodic sweep that detects and cleans up containers and runs that have fallen out of the normal lifecycle — implemented by `StaleStartingRunService` (a `PeriodicBackgroundService` in the Workers module, ticking every minute).
+
+**Orphaned container reaping.**
+Each tick, the sweep calls `IWorkerOrchestrator.ListByLabelAsync` to enumerate every container carrying the `foundry.managed` label (worker-managed containers), then cross-references the returned run IDs against slot occupancy (see Worker Slot Occupancy).
+Any labelled container whose run ID is outside the `starting ∪ active` set is an orphan — its run ended (or was lost) but the container was not cleaned up.
+The sweep stops and removes each orphan container immediately.
+
+**Stale `StartingRun` failure.**
+After reaping orphaned containers, the sweep loads all `StartingRun` rows and applies the staleness threshold (`StaleStartingRunThreshold` = 10 minutes).
+A `StartingRun` older than the threshold is stale: the container either never started or the host died before activation.
+For each stale run, the sweep:
+
+1. Reaps the run's container first, if a labelled container with that run ID was found by `ListByLabelAsync`.
+2. Calls `StartingRun.Fail(ContainerError("Container did not start within the allowed time."))`.
+3. The `WorkerRunFailed` domain event raised by `Fail` flows through `WorkerRunFailedHandler` → `InProgressIssue.MarkFailed()` → `FailedIssue` → the issue becomes retryable from the dashboard (see ADR 0050).
+
+A `container_error` failure does not auto-retry (`TransientRetryService` filters on `transient_api_error` only) — the issue parks under "Needs attention" for operator review, consistent with ADR 0014.
+A `WorkerRunFailed` event whose run ID does not match the issue's current `WorkerRunId` is silently ignored by `WorkerRunFailedHandler` (stale-run-ID guard), so a concurrent transition cannot produce a double failure.
+
+**Daemon-unreachable defer.**
+When `ListByLabelAsync` fails with a daemon connectivity error (detected by `DockerDaemonConnectivity.IsUnreachable`), the sweep logs a warning and returns without reaping or failing anything — both phases are skipped for that tick.
+Per-run failure attempts that encounter Docker errors are also best-effort: a `TryStopAndRemoveAsync` failure is logged but does not abort the failure transition for the run.
 
 ## Container Output
 
