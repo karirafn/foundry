@@ -274,7 +274,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
         ClaimedIssueDispatch dispatch = claimed.Dispatch;
-        RevisionContext revision = dispatch.Revision.ShouldNotBeNull();
+        DispatchContext.Revision revision = dispatch.Context.ShouldBeOfType<DispatchContext.Revision>();
         revision.ShouldSatisfyAllConditions(
             () => revision.BranchName.ShouldBe("feat/issue-10-fix"),
             () => revision.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"),
@@ -300,7 +300,7 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         IssueClaimed claimed = _dispatcher.Captured
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
-        claimed.Dispatch.Revision.ShouldBeNull();
+        claimed.Dispatch.Context.ShouldBeOfType<DispatchContext.Fresh>();
     }
 
     [Fact]

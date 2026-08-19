@@ -87,8 +87,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string? accountToken = "ghp_test_token",
         string branchName = "feat/42-test-issue",
         MonitoredRepositoryId? monitoredRepositoryId = null,
-        RevisionContext? revision = null,
-        ContinuationContext? continuation = null,
+        DispatchContext? context = null,
         WorkerProvider? provider = null,
         string? cloneUrl = null)
     {
@@ -101,11 +100,10 @@ public sealed class HandleAsync : IAsyncDisposable
             repositorySlug,
             new Uri(cloneUrl ?? $"https://github.com/{repositorySlug}.git"),
             accountToken,
-            branchName,
+            BranchName.From(branchName),
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             provider ?? new WorkerProvider.GitHub(),
-            revision,
-            continuation);
+            context ?? new DispatchContext.Fresh(branchName));
         return new IssueClaimed(dispatch);
     }
 
@@ -594,11 +592,11 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c4");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        RevisionContext revision = new(
+        DispatchContext.Revision revision = new(
             "feat/42-fix",
             "https://github.com/owner/repo/pull/10",
             [new ReviewComment("Please add tests.")]);
-        IssueClaimed @event = BuildEvent(branchName: "feat/42-fix", revision: revision);
+        IssueClaimed @event = BuildEvent(branchName: "feat/42-fix", context: revision);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -611,12 +609,12 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNoRevisionOrContinuationContext_BranchNameEnvVarIsStillSet()
+    public async Task WhenFreshContext_BranchNameEnvVarIsStillSet()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c5");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        IssueClaimed @event = BuildEvent(revision: null, continuation: null, branchName: "feat/42-my-issue");
+        IssueClaimed @event = BuildEvent(branchName: "feat/42-my-issue");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -718,8 +716,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        ContinuationContext continuation = new("feat/103-my-feature");
-        IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", continuation: continuation);
+        DispatchContext.Continuation continuation = new("feat/103-my-feature");
+        IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", context: continuation);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -773,8 +771,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation-prompt");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        ContinuationContext continuation = new("feat/103-my-feature");
-        IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", continuation: continuation);
+        DispatchContext.Continuation continuation = new("feat/103-my-feature");
+        IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", context: continuation);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);

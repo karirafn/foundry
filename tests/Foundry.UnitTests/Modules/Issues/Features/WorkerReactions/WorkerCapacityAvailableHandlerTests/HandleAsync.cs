@@ -64,7 +64,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
-                "github")),
+                new WorkerProvider.GitHub())),
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             _domainEventDispatcher,
@@ -561,7 +561,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
-                "github")),
+                new WorkerProvider.GitHub())),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -601,7 +601,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://gitlab.com/owner/repo.git"),
                 "GITLAB_PAT",
-                "gitlab")),
+                new WorkerProvider.GitLab())),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -629,7 +629,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
-                "github")),
+                new WorkerProvider.GitHub())),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -657,7 +657,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
-                "github")),
+                new WorkerProvider.GitHub())),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -685,7 +685,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://gitlab.com/owner/repo.git"),
                 "GITLAB_PAT",
-                "gitlab")),
+                new WorkerProvider.GitLab())),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -713,7 +713,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://gitlab.com/owner/repo.git"),
                 "GITLAB_PAT",
-                "gitlab")),
+                new WorkerProvider.GitLab())),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -760,7 +760,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimed claimed = capturingDispatcher.DispatchedEvents
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
-        claimed.Dispatch.BranchName.ShouldBe("feat/42-add-health-check");
+        claimed.Dispatch.BranchName.ShouldBe(BranchName.From("feat/42-add-health-check"));
     }
 
     [Fact]
@@ -790,7 +790,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimed claimed = capturingDispatcher.DispatchedEvents
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
-        claimed.Dispatch.Continuation.ShouldNotBeNull()
+        claimed.Dispatch.Context.ShouldBeOfType<DispatchContext.Continuation>()
             .BranchName.ShouldBe("feat/103-fix");
     }
 

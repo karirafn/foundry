@@ -25,9 +25,10 @@ public sealed class Create
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
             AccountToken: "ghp_test_token",
-            BranchName: "feat/42",
+            BranchName: BranchName.From("feat/42"),
             MonitoredRepositoryId: repositoryId,
-            Provider: new WorkerProvider.GitHub());
+            Provider: new WorkerProvider.GitHub(),
+            Context: new DispatchContext.Fresh("feat/42"));
 
         // Act
         IssueClaimed @event = new(dispatch);

@@ -120,19 +120,9 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        if (WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType) is not Result<WorkerProvider>.Success providerSuccess)
-        {
-            logger.LogWarning(
-                "Unknown provider discriminator '{Discriminator}' for repository {RepositoryId}; revision issue #{IssueNumber} not claimed.",
-                dispatchInfo.ProviderType,
-                revisionQueued.MonitoredRepositoryId,
-                revisionQueued.IssueNumber);
-            return;
-        }
-
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
 
-        RevisionContext revision = new(
+        DispatchContext context = new DispatchContext.Revision(
             revisionQueued.BranchName,
             revisionQueued.PullRequestUrl,
             revisionQueued.ReviewComments);
@@ -146,10 +136,10 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
-            revisionQueued.BranchName,
+            BranchName.From(revisionQueued.BranchName),
             revisionQueued.MonitoredRepositoryId,
-            providerSuccess.Value,
-            revision);
+            dispatchInfo.Provider,
+            context);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],
@@ -176,19 +166,11 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        if (WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType) is not Result<WorkerProvider>.Success providerSuccess)
-        {
-            logger.LogWarning(
-                "Unknown provider discriminator '{Discriminator}' for repository {RepositoryId}; continuation issue #{IssueNumber} not claimed.",
-                dispatchInfo.ProviderType,
-                continuationQueued.MonitoredRepositoryId,
-                continuationQueued.IssueNumber);
-            return;
-        }
-
         InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
 
-        ContinuationContext continuation = new(continuationQueued.BranchName, continuationQueued.FailureReason);
+        DispatchContext context = new DispatchContext.Continuation(
+            continuationQueued.BranchName,
+            continuationQueued.FailureReason);
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,
@@ -199,10 +181,10 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
-            continuationQueued.BranchName,
+            BranchName.From(continuationQueued.BranchName),
             continuationQueued.MonitoredRepositoryId,
-            providerSuccess.Value,
-            Continuation: continuation);
+            dispatchInfo.Provider,
+            context);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],
@@ -229,19 +211,9 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        if (WorkerProvider.FromDiscriminator(dispatchInfo.ProviderType) is not Result<WorkerProvider>.Success providerSuccess)
-        {
-            logger.LogWarning(
-                "Unknown provider discriminator '{Discriminator}' for repository {RepositoryId}; issue #{IssueNumber} not claimed.",
-                dispatchInfo.ProviderType,
-                queued.MonitoredRepositoryId,
-                queued.IssueNumber);
-            return;
-        }
-
         InProgressIssue inProgress = queued.Claim(workerRunId);
 
-        string branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title).Value;
+        BranchName branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title);
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,
@@ -254,7 +226,8 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.AccountToken,
             branchName,
             queued.MonitoredRepositoryId,
-            providerSuccess.Value);
+            dispatchInfo.Provider,
+            new DispatchContext.Fresh(branchName.Value));
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

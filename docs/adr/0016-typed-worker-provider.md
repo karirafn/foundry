@@ -1,5 +1,7 @@
 # Typed Worker Provider
 
+> **The `RepositoryDispatchInfo`-carries-a-string clause of this ADR is superseded by [ADR 0051](0051-dispatch-context-union-and-typed-dispatch-seam.md).** `RepositoryDispatchInfo` now carries `WorkerProvider Provider` directly; `WorkerProvider.FromDiscriminator` is deleted. The core decision — closed record hierarchy over enum for provider identity — still stands.
+
 ## Context
 
 Workers need to behave differently depending on whether the monitored repository is hosted on GitHub or GitLab — for example, configuring the appropriate CLI auth helper. The dispatch pipeline must carry provider identity from the account to the worker container.
