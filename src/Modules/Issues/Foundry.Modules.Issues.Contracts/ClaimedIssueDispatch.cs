@@ -16,5 +16,4 @@ public sealed record ClaimedIssueDispatch(
     BranchName BranchName,
     MonitoredRepositoryId MonitoredRepositoryId,
     WorkerProvider Provider,
-    RevisionContext? Revision = null,
-    ContinuationContext? Continuation = null);
+    DispatchContext Context);

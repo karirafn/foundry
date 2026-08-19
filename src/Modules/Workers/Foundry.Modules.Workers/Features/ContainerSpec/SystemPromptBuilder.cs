@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
@@ -23,9 +24,7 @@ internal static class SystemPromptBuilder
         string body,
         WorkerOptions options,
         string systemPromptTemplate,
-        RevisionContext? revision = null,
-        ContinuationContext? continuation = null,
-        string? branchName = null)
+        DispatchContext context)
     {
         string safetyPreamble = SafetyPreambleTemplate
             .Replace("{branchNamingInstruction}", options.BranchNamingInstruction, StringComparison.Ordinal);
@@ -46,22 +45,13 @@ internal static class SystemPromptBuilder
 
         string prompt = safetyPreamble + "\n\n" + basePrompt;
 
-        if (revision is not null)
+        return context switch
         {
-            return prompt + "\n\n" + BuildRevisionSection(revision);
-        }
-
-        if (continuation is not null)
-        {
-            return prompt + "\n\n" + BuildContinuationSection(continuation);
-        }
-
-        if (branchName is not null)
-        {
-            return prompt + "\n\n" + BuildCheckoutInstruction(branchName);
-        }
-
-        return prompt;
+            DispatchContext.Revision revision => prompt + "\n\n" + BuildRevisionSection(revision),
+            DispatchContext.Continuation continuation => prompt + "\n\n" + BuildContinuationSection(continuation),
+            DispatchContext.Fresh fresh => prompt + "\n\n" + BuildCheckoutInstruction(fresh.BranchName),
+            _ => throw new UnreachableException($"Unhandled DispatchContext variant: {context.GetType().Name}"),
+        };
     }
 
     private static string BuildCheckoutInstruction(string branchName)
@@ -73,7 +63,7 @@ internal static class SystemPromptBuilder
             """;
     }
 
-    private static string BuildContinuationSection(ContinuationContext continuation)
+    private static string BuildContinuationSection(DispatchContext.Continuation continuation)
     {
         StringBuilder sb = new();
 
@@ -111,7 +101,7 @@ internal static class SystemPromptBuilder
             .Replace(">", "&gt;", StringComparison.Ordinal);
     }
 
-    private static string BuildRevisionSection(RevisionContext revision)
+    private static string BuildRevisionSection(DispatchContext.Revision revision)
     {
         StringBuilder sb = new();
 

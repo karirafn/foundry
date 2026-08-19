@@ -122,7 +122,7 @@ internal sealed class WorkerCapacityAvailableHandler(
 
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
 
-        RevisionContext revision = new(
+        DispatchContext context = new DispatchContext.Revision(
             revisionQueued.BranchName,
             revisionQueued.PullRequestUrl,
             revisionQueued.ReviewComments);
@@ -139,7 +139,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             BranchName.From(revisionQueued.BranchName),
             revisionQueued.MonitoredRepositoryId,
             dispatchInfo.Provider,
-            revision);
+            context);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],
@@ -168,7 +168,9 @@ internal sealed class WorkerCapacityAvailableHandler(
 
         InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
 
-        ContinuationContext continuation = new(continuationQueued.BranchName, continuationQueued.FailureReason);
+        DispatchContext context = new DispatchContext.Continuation(
+            continuationQueued.BranchName,
+            continuationQueued.FailureReason);
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,
@@ -182,7 +184,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             BranchName.From(continuationQueued.BranchName),
             continuationQueued.MonitoredRepositoryId,
             dispatchInfo.Provider,
-            Continuation: continuation);
+            context);
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],
@@ -224,7 +226,8 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.AccountToken,
             branchName,
             queued.MonitoredRepositoryId,
-            dispatchInfo.Provider);
+            dispatchInfo.Provider,
+            new DispatchContext.Fresh(branchName.Value));
 
         await integrationEventDispatcher.DispatchAsync(
             [new IssueClaimed(dispatch)],

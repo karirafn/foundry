@@ -134,9 +134,7 @@ internal sealed class IssueClaimedHandler(
             claimed.Body,
             _options,
             effectiveSystemPromptTemplate,
-            claimed.Revision,
-            claimed.Continuation,
-            claimed.BranchName.Value);
+            claimed.Context);
 
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);

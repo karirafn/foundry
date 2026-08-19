@@ -29,7 +29,8 @@ public sealed class Create
             AccountToken: "ghp_test_token",
             BranchName: BranchName.From("feat/42"),
             MonitoredRepositoryId: repositoryId,
-            Provider: new WorkerProvider.GitHub());
+            Provider: new WorkerProvider.GitHub(),
+            Context: new DispatchContext.Fresh("feat/42"));
 
         // Assert
         dispatch.ShouldSatisfyAllConditions(
@@ -39,7 +40,7 @@ public sealed class Create
             () => dispatch.BranchName.ShouldBe(BranchName.From("feat/42")),
             () => dispatch.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => dispatch.Provider.ShouldBeOfType<WorkerProvider.GitHub>(),
-            () => dispatch.Revision.ShouldBeNull());
+            () => dispatch.Context.ShouldBeOfType<DispatchContext.Fresh>());
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public sealed class Create
         // Arrange
         IssueId issueId = IssueId.New();
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        RevisionContext revision = new(
+        DispatchContext.Revision revision = new(
             BranchName: "foundry/42",
             PullRequestUrl: "https://github.com/org/repo/pull/7",
             Comments: [new ReviewComment("Please fix this")]);
@@ -66,9 +67,9 @@ public sealed class Create
             BranchName: BranchName.From("foundry/42"),
             MonitoredRepositoryId: repositoryId,
             Provider: new WorkerProvider.GitHub(),
-            Revision: revision);
+            Context: revision);
 
         // Assert
-        dispatch.Revision.ShouldBe(revision);
+        dispatch.Context.ShouldBeOfType<DispatchContext.Revision>();
     }
 }

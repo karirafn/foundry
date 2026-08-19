@@ -790,7 +790,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimed claimed = capturingDispatcher.DispatchedEvents
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
-        claimed.Dispatch.Continuation.ShouldNotBeNull()
+        claimed.Dispatch.Context.ShouldBeOfType<DispatchContext.Continuation>()
             .BranchName.ShouldBe("feat/103-fix");
     }
 

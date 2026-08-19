@@ -27,7 +27,8 @@ public sealed class Create
             AccountToken: "ghp_test_token",
             BranchName: BranchName.From("feat/42"),
             MonitoredRepositoryId: repositoryId,
-            Provider: new WorkerProvider.GitHub());
+            Provider: new WorkerProvider.GitHub(),
+            Context: new DispatchContext.Fresh("feat/42"));
 
         // Act
         IssueClaimed @event = new(dispatch);
