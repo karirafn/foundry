@@ -143,14 +143,14 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        int activeCount = activeRuns.Count;
+        int slotOccupancy = await dbContext.GetSlotOccupancyCountAsync(cancellationToken);
         int maxConcurrent = await settingsQueries.GetMaxConcurrentAsync(cancellationToken);
 
-        if (activeCount >= maxConcurrent)
+        if (slotOccupancy >= maxConcurrent)
         {
             logger.LogDebug(
-                "Dispatch skipped: {ActiveCount}/{MaxConcurrent} slots in use.",
-                activeCount,
+                "Dispatch skipped: {SlotOccupancy}/{MaxConcurrent} slots in use.",
+                slotOccupancy,
                 maxConcurrent);
             return;
         }
