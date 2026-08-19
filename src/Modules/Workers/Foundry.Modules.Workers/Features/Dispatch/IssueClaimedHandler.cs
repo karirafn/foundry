@@ -46,7 +46,7 @@ internal sealed class IssueClaimedHandler(
 
         Result<bool> branchResult = await postExitProviderQueries.CreateBranchAsync(
             claimed.MonitoredRepositoryId,
-            claimed.BranchName,
+            claimed.BranchName.Value,
             cancellationToken);
 
         if (branchResult is Result<bool>.Failure branchFailure)
@@ -87,8 +87,7 @@ internal sealed class IssueClaimedHandler(
 
         if (startResult is Result<ContainerId>.Success success)
         {
-            BranchName branchName = BranchName.From(claimed.BranchName);
-            ActiveRun activeRun = startingRun.Activate(success.Value, branchName, claimed.MonitoredRepositoryId);
+            ActiveRun activeRun = startingRun.Activate(success.Value, claimed.BranchName, claimed.MonitoredRepositoryId);
             await dbContext.TransitionAsync(startingRun, activeRun, domainEventDispatcher, cancellationToken);
 
             logger.LogDebug(
@@ -137,7 +136,7 @@ internal sealed class IssueClaimedHandler(
             effectiveSystemPromptTemplate,
             claimed.Revision,
             claimed.Continuation,
-            claimed.BranchName);
+            claimed.BranchName.Value);
 
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
@@ -167,7 +166,7 @@ internal sealed class IssueClaimedHandler(
             ["GIT_PAT"] = gitPat,
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
-            ["BRANCH_NAME"] = claimed.BranchName,
+            ["BRANCH_NAME"] = claimed.BranchName.Value,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),

@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
 
 using Shouldly;
 
@@ -26,7 +27,7 @@ public sealed class Create
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
             AccountToken: "ghp_test_token",
-            BranchName: "feat/42",
+            BranchName: BranchName.From("feat/42"),
             MonitoredRepositoryId: repositoryId,
             Provider: new WorkerProvider.GitHub());
 
@@ -35,7 +36,7 @@ public sealed class Create
             () => dispatch.IssueId.ShouldBe(issueId),
             () => dispatch.IssueNumber.ShouldBe(42),
             () => dispatch.RepositorySlug.ShouldBe("org/repo"),
-            () => dispatch.BranchName.ShouldBe("feat/42"),
+            () => dispatch.BranchName.ShouldBe(BranchName.From("feat/42")),
             () => dispatch.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => dispatch.Provider.ShouldBeOfType<WorkerProvider.GitHub>(),
             () => dispatch.Revision.ShouldBeNull());
@@ -62,7 +63,7 @@ public sealed class Create
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
             AccountToken: "ghp_test_token",
-            BranchName: "foundry/42",
+            BranchName: BranchName.From("foundry/42"),
             MonitoredRepositoryId: repositoryId,
             Provider: new WorkerProvider.GitHub(),
             Revision: revision);

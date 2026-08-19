@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 
 using Shouldly;
@@ -60,7 +61,7 @@ public sealed class PayloadRoundTrip
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,
-            "feat/7-implement-feature",
+            BranchName.From("feat/7-implement-feature"),
             repoId,
             new WorkerProvider.GitHub());
         IssueClaimed original = new(dispatch);
@@ -78,6 +79,6 @@ public sealed class PayloadRoundTrip
             () => deserialized.Dispatch.IssueId.ShouldBe(issueId),
             () => deserialized.Dispatch.MonitoredRepositoryId.ShouldBe(repoId),
             () => deserialized.Dispatch.IssueNumber.ShouldBe(7),
-            () => deserialized.Dispatch.BranchName.ShouldBe("feat/7-implement-feature"));
+            () => deserialized.Dispatch.BranchName.ShouldBe(BranchName.From("feat/7-implement-feature")));
     }
 }

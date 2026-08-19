@@ -760,7 +760,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimed claimed = capturingDispatcher.DispatchedEvents
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
-        claimed.Dispatch.BranchName.ShouldBe("feat/42-add-health-check");
+        claimed.Dispatch.BranchName.ShouldBe(BranchName.From("feat/42-add-health-check"));
     }
 
     [Fact]

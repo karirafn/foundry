@@ -136,7 +136,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
-            revisionQueued.BranchName,
+            BranchName.From(revisionQueued.BranchName),
             revisionQueued.MonitoredRepositoryId,
             dispatchInfo.Provider,
             revision);
@@ -179,7 +179,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             dispatchInfo.RepositorySlug,
             dispatchInfo.CloneUrl,
             dispatchInfo.AccountToken,
-            continuationQueued.BranchName,
+            BranchName.From(continuationQueued.BranchName),
             continuationQueued.MonitoredRepositoryId,
             dispatchInfo.Provider,
             Continuation: continuation);
@@ -211,7 +211,7 @@ internal sealed class WorkerCapacityAvailableHandler(
 
         InProgressIssue inProgress = queued.Claim(workerRunId);
 
-        string branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title).Value;
+        BranchName branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title);
 
         ClaimedIssueDispatch dispatch = new(
             inProgress.Id,

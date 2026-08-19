@@ -101,7 +101,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositorySlug,
             new Uri(cloneUrl ?? $"https://github.com/{repositorySlug}.git"),
             accountToken,
-            branchName,
+            BranchName.From(branchName),
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             provider ?? new WorkerProvider.GitHub(),
             revision,
