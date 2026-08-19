@@ -242,8 +242,17 @@ internal static partial class UpdateAccount
 
             if (DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
             {
-                return Result<IReadOnlyCollection<Namespace>>.Fail(
-                    CredentialErrors.DuplicateAccount(holderName, sharedOwner));
+                // Reject only when the rotation would strand the credential on zero namespaces
+                // because the sibling already covers the entire derived set. When a retained set
+                // remains, RotateAsync's never-steal subtraction will reduce to it correctly.
+                bool retainedSetIsEmpty = derivedNamespaces
+                    .All(ns => claimedByOthers.ContainsKey(ns.Value));
+
+                if (retainedSetIsEmpty)
+                {
+                    return Result<IReadOnlyCollection<Namespace>>.Fail(
+                        CredentialErrors.DuplicateAccount(holderName, sharedOwner));
+                }
             }
 
             return Result<IReadOnlyCollection<Namespace>>.Ok(derivedNamespaces);

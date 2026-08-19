@@ -323,6 +323,59 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTokenSupplied_SiblingSharesLoginButOwnNamespaceRetained_Succeeds()
+    {
+        // Arrange — two credentials on github.com both named "karirafn";
+        // A claims "karirafn", B claims "Kraftlyftingasamband-Islands".
+        // Rotating A with a token that resolves to "karirafn" and derives BOTH namespaces must
+        // succeed — RotateAsync will subtract the sibling-owned namespace, leaving A with only "karirafn".
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+
+        Namespace karirafnNs = Namespace.Create("karirafn").ValueOrThrow();
+        Namespace kraftNs = Namespace.Create("Kraftlyftingasamband-Islands").ValueOrThrow();
+
+        GitHubCredential credentialA = GitHubCredential.Create("karirafn", "ghp_old_a", baseUrl);
+        credentialA.SetNamespaces([karirafnNs]);
+        _dbContext.Set<Credential>().Add(credentialA);
+
+        GitHubCredential credentialB = GitHubCredential.Create("karirafn", "ghp_b", baseUrl);
+        credentialB.SetNamespaces([kraftNs]);
+        _dbContext.Set<Credential>().Add(credentialB);
+
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("karirafn"),
+            deriver: new StubNamespaceDeriver(
+                new NamespaceDerivationOutcome.Derived([karirafnNs, kraftNs], [])));
+
+        UpdateAccount.Command command = new(credentialA.Id, "https://github.com", "ghp_new_a");
+
+        // Act
+        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+
+        Credential? storedA = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == credentialA.Id, CancellationToken.None);
+        storedA.ShouldNotBeNull();
+        storedA.ShouldSatisfyAllConditions(
+            () => storedA.Token.ShouldBe("ghp_new_a"),
+            () => storedA.Namespaces.Count.ShouldBe(1),
+            () => storedA.Namespaces.ShouldContain(n => n.Value == "karirafn"));
+
+        Credential? storedB = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == credentialB.Id, CancellationToken.None);
+        storedB.ShouldNotBeNull();
+        storedB.Namespaces.ShouldContain(n => n.Value == "Kraftlyftingasamband-Islands");
+    }
+
+    [Fact]
     public async Task WhenCredentialNotFound_ReturnsNotFoundError()
     {
         // Arrange
