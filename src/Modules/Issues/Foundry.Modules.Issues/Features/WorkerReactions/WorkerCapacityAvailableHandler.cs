@@ -33,7 +33,7 @@ internal sealed class WorkerCapacityAvailableHandler(
             return;
         }
 
-        Issue? winner = await PickByMinDispatchOrderKeyAsync(positionByRepoId, cancellationToken);
+        ClaimableIssue? winner = await PickByMinDispatchOrderKeyAsync(positionByRepoId, cancellationToken);
 
         if (winner is null)
         {
@@ -61,14 +61,13 @@ internal sealed class WorkerCapacityAvailableHandler(
     /// (revision → continuation → fresh) while also breaking ties by repository position,
     /// DetectedAt, and finally IssueId.
     /// </summary>
-    private async Task<Issue?> PickByMinDispatchOrderKeyAsync(
+    private async Task<ClaimableIssue?> PickByMinDispatchOrderKeyAsync(
         Dictionary<MonitoredRepositoryId, int> positionByRepoId,
         CancellationToken cancellationToken)
     {
         Dictionary<MonitoredRepositoryId, int>.KeyCollection eligibleIds = positionByRepoId.Keys;
 
-        List<Issue> candidates = await db.Set<Issue>()
-            .Where(i => i is RevisionQueuedIssue || i is ContinuationQueuedIssue || i is QueuedIssue)
+        List<ClaimableIssue> candidates = await db.Set<ClaimableIssue>()
             .Where(i => eligibleIds.Contains(i.MonitoredRepositoryId))
             .ToListAsync(cancellationToken);
 
@@ -79,8 +78,7 @@ internal sealed class WorkerCapacityAvailableHandler(
     private async Task<Dictionary<MonitoredRepositoryId, int>> ResolveEligibleRepositoryPositionsAsync(
         CancellationToken cancellationToken)
     {
-        List<MonitoredRepositoryId> candidateRepoIds = await db.Set<Issue>()
-            .Where(i => i is RevisionQueuedIssue || i is ContinuationQueuedIssue || i is QueuedIssue)
+        List<MonitoredRepositoryId> candidateRepoIds = await db.Set<ClaimableIssue>()
             .Select(i => i.MonitoredRepositoryId)
             .Distinct()
             .ToListAsync(cancellationToken);
