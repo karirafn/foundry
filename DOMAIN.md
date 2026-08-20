@@ -232,6 +232,19 @@ A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`Wo
 
 The dashboard partitions queued issues into two groups before applying the key: eligible-repository issues (real `Position`) rank above ineligible-repository issues (sentinel `int.MaxValue` position), each retaining its `RepositoryEligibilityStatus` for display.
 
+## Dispatch Context
+
+The sealed union describing the nature of the work being dispatched to a worker — assembled on the aggregate, not in the handler.
+Three variants:
+
+- **`Fresh`** — a new implementation attempt; carries `BranchName`.
+- **`Revision`** — a revision cycle addressing review feedback; carries `BranchName`, `PullRequestUrl`, and `IReadOnlyList<ReviewComment>`.
+- **`Continuation`** — resuming an existing branch after a failed run; carries `BranchName` and optional `FailureReason`.
+
+`DispatchContext` is assembled by the concrete `ClaimableIssue` subtype overriding the abstract `Context` property — `QueuedIssue` returns `Fresh`, `RevisionQueuedIssue` returns `Revision`, `ContinuationQueuedIssue` returns `Continuation`.
+The handler and claimer treat `Context` as an opaque value — they forward it into `ClaimedIssueDispatch` without switching on it.
+Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see ADR 0051).
+
 ## Claim
 
 The act of assigning a queued issue to a specific worker run — the transition from a queued state variant to an in-progress one, paired with the `IssueClaimed` integration event that tells the Workers module to start a container.
@@ -241,12 +254,31 @@ A claim is authorized by exactly one `WorkerCapacityAvailable` event. That event
 Claiming proceeds in three steps:
 
 1. **Resolve eligible repositories** — every repository owning a queued issue is checked against Repository Eligibility, and eligible ones contribute their `Position`. Resolving all repositories up front (rather than checking the head candidate) means an ineligible repository cannot block dispatch of issues behind it.
-2. **Select the winner** — the queued issue with the smallest Dispatch Order key across all eligible repositories and all three tiers.
-3. **Claim it** — resolve the repository's dispatch info (slug, clone URL, account token, provider), call `Claim(workerRunId)` on the aggregate, publish `IssueClaimed` carrying a `ClaimedIssueDispatch`, and transition the aggregate. The event and the state change commit as one atomic unit.
+2. **Select the winner** — the claimable issues across all eligible repositories and all three tiers are sorted by Dispatch Order key; the head of the sorted list whose repository has resolvable dispatch info wins. If the best candidate's repository cannot yield dispatch info, that candidate is skipped and the next-best is tried — the tick is NOT aborted. Dispatch info resolution is memoized per repository within a tick, so a second candidate from the same repository reuses the cached result without a second query.
+3. **Claim it** — call `Claim(workerRunId)` on the aggregate, publish `IssueClaimed` carrying a `ClaimedIssueDispatch` (assembled from the winning candidate's pre-fetched dispatch info and the aggregate's own `DispatchBranchName` and `Context`), and transition the aggregate. The event and the state change commit as one atomic unit.
 
 Claiming is the only path from a queued state to an in-progress one; nothing else in the system claims an issue. Claims are never concurrent — the outbox relay is a single host-level service that delivers sequentially.
 
-When the winning issue's repository has no resolvable dispatch info, the claim is abandoned and the capacity event is consumed without claiming anything. This is a narrow race — "no covering credential" is already modelled as ineligibility and filtered out in step 1, so it arises only when a credential is deleted or its token cleared between the last poll cycle and the claim.
+**Terminal outcomes** are logged once at the handler: `Debug` when no eligible repositories exist or no candidates remain after eligibility filtering, `Warning` when every candidate was skipped because its repository's dispatch info could not be resolved (`AllCandidatesUnresolvable`). The "no covering credential" race is narrow — ineligibility already filters out repositories with no account in step 1, so an unresolvable dispatch info arises only when a credential is deleted or its token cleared between the last poll cycle and the claim.
+
+## Claimable Issue
+
+The abstract intermediate in the Issue hierarchy covering all three queued state variants: `QueuedIssue`, `RevisionQueuedIssue`, and `ContinuationQueuedIssue`.
+Defined as `abstract ClaimableIssue : Issue`, it carries the members shared by every claimable state:
+
+- **`TierRank`** (abstract, computed) — the dispatch-priority rank, overridden by each concrete variant.
+- **`DispatchBranchName`** (abstract, computed) — the branch name the worker should operate on.
+- **`Context`** (abstract, computed) — the `DispatchContext` union value describing the nature of the work.
+- **`Claim(Guid workerRunId)`** (abstract) — transitions the aggregate to its in-progress state with covariant return type on each override.
+
+`ClaimableIssue` collapses every three-way type union in the codebase — `is ClaimableIssue` and `OfType<ClaimableIssue>()` replace the former per-tier switches in `IsRestingState`, `IsQueuedVariant`, `GetUntrackableIssueNumbersAsync`, and `DispatchOrderKey.For`.
+
+**EF Core registration.** EF Core 10 omits an abstract intermediate from the model unless it is explicitly registered — otherwise `OfType<ClaimableIssue>()` and `is ClaimableIssue` in translated queries throw `InvalidOperationException` at query time (not at model build or compile time).
+`ClaimableIssue` is registered via a dedicated `IEntityTypeConfiguration<ClaimableIssue>` with `HasBaseType<Issue>()`.
+No `HasValue<T>()` discriminator entry is added — EF assigns an unused default and `HasDiscriminator(...).IsComplete(true)` remains valid through the concrete leaves.
+Computed get-only members (`TierRank`, `DispatchBranchName`, `Context`) are not mapped and require no `Ignore()`.
+
+`OrderBy(TierRank)` does not translate to SQL — it refers to a computed, unmapped property. Sorting over the bounded queued set stays in memory (see ADR 0025).
 
 ## Repository Eligibility
 
