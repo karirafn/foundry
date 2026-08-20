@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -103,16 +104,18 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedQueuedIssue(dbContext, repositoryId);
 
-        WorkerCapacityAvailableHandler sut = new(
+        DispatchCandidateSelector selector = new(
             dbContext,
             new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub())),
-            integrationEventDispatcher,
-            new AllEligibleRepositoryEligibilityQuery(),
-            new CapturingDomainEventDispatcher(),
+            new AllEligibleRepositoryEligibilityQuery());
+        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
+        WorkerCapacityAvailableHandler sut = new(
+            selector,
+            claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -147,16 +150,18 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedRevisionQueuedIssue(dbContext, repositoryId);
 
-        WorkerCapacityAvailableHandler sut = new(
+        DispatchCandidateSelector selector = new(
             dbContext,
             new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub())),
-            integrationEventDispatcher,
-            new AllEligibleRepositoryEligibilityQuery(),
-            new CapturingDomainEventDispatcher(),
+            new AllEligibleRepositoryEligibilityQuery());
+        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
+        WorkerCapacityAvailableHandler sut = new(
+            selector,
+            claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -191,16 +196,18 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedContinuationQueuedIssue(dbContext, repositoryId);
 
-        WorkerCapacityAvailableHandler sut = new(
+        DispatchCandidateSelector selector = new(
             dbContext,
             new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub())),
-            integrationEventDispatcher,
-            new AllEligibleRepositoryEligibilityQuery(),
-            new CapturingDomainEventDispatcher(),
+            new AllEligibleRepositoryEligibilityQuery());
+        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
+        WorkerCapacityAvailableHandler sut = new(
+            selector,
+            claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
@@ -235,12 +242,14 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedQueuedIssue(dbContext, repositoryId);
 
-        WorkerCapacityAvailableHandler sut = new(
+        DispatchCandidateSelector selector = new(
             dbContext,
             new StubRepositoryDispatchQueries(null),
-            integrationEventDispatcher,
-            new NoEligibleRepositoryEligibilityQuery(),
-            new CapturingDomainEventDispatcher(),
+            new NoEligibleRepositoryEligibilityQuery());
+        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
+        WorkerCapacityAvailableHandler sut = new(
+            selector,
+            claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());

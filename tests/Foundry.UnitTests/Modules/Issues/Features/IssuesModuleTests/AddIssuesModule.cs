@@ -2,6 +2,7 @@ using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.CredentialReactions;
 using Foundry.Modules.Issues.Features.DispatchReactions;
 using Foundry.Modules.Issues.Features.ProviderReactions;
@@ -314,6 +315,28 @@ public sealed class AddIssuesModule : IAsyncDisposable
         IIntegrationEventHandler<DispatchResumed> handler =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<DispatchResumed>>();
         handler.ShouldBeOfType<DispatchResumedHandler>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_DispatchCandidateSelectorResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        DispatchCandidateSelector selector = scope.ServiceProvider.GetRequiredService<DispatchCandidateSelector>();
+        selector.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_IssueClaimerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IssueClaimer claimer = scope.ServiceProvider.GetRequiredService<IssueClaimer>();
+        claimer.ShouldNotBeNull();
     }
 
     private sealed class NullIssueBroadcaster : IIssueBroadcaster

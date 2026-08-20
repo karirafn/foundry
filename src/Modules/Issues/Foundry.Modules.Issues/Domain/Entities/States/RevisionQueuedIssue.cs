@@ -1,10 +1,13 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
+
+using BranchNameValue = Foundry.Shared.BranchName;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
-public sealed class RevisionQueuedIssue : Issue
+public sealed class RevisionQueuedIssue : ClaimableIssue
 {
     // Private parameterless constructor for EF Core materialization.
     private RevisionQueuedIssue()
@@ -15,7 +18,12 @@ public sealed class RevisionQueuedIssue : Issue
     {
     }
 
-    public const int TierRank = 0;
+    public override int TierRank => 0;
+
+    public override BranchNameValue DispatchBranchName => BranchNameValue.From(BranchName);
+
+    public override DispatchContext Context =>
+        new DispatchContext.Revision(BranchName, PullRequestUrl, ReviewComments);
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -61,7 +69,7 @@ public sealed class RevisionQueuedIssue : Issue
         return revisionQueued;
     }
 
-    public RevisionInProgressIssue Claim(Guid workerRunId)
+    public override RevisionInProgressIssue Claim(Guid workerRunId)
     {
         RevisionInProgressIssue revisionInProgress = RevisionInProgressIssue.FromRevisionQueued(this, workerRunId);
         AddDomainEvent(new Events.IssueRevisionInProgress(Id, MonitoredRepositoryId));

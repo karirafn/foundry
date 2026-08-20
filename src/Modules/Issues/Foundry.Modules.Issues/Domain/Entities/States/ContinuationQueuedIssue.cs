@@ -1,12 +1,14 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Shared;
+
+using BranchNameValue = Foundry.Shared.BranchName;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
-public sealed class ContinuationQueuedIssue : Issue
+public sealed class ContinuationQueuedIssue : ClaimableIssue
 {
     public const int FailureReasonMaxLength = 500;
-    public const int TierRank = 1;
 
     // Private parameterless constructor for EF Core materialization.
     private ContinuationQueuedIssue()
@@ -16,6 +18,13 @@ public sealed class ContinuationQueuedIssue : Issue
     private ContinuationQueuedIssue(IssueId id) : base(id)
     {
     }
+
+    public override int TierRank => 1;
+
+    public override BranchNameValue DispatchBranchName => BranchNameValue.From(BranchName);
+
+    public override DispatchContext Context =>
+        new DispatchContext.Continuation(BranchName, FailureReason);
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -40,7 +49,7 @@ public sealed class ContinuationQueuedIssue : Issue
         return queued;
     }
 
-    public InProgressIssue Claim(Guid workerRunId)
+    public override InProgressIssue Claim(Guid workerRunId)
     {
         InProgressIssue inProgress = InProgressIssue.FromContinuationQueued(this, workerRunId);
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));

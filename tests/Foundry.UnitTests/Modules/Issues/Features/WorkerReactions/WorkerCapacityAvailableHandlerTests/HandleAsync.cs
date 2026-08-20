@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -58,16 +59,23 @@ public sealed class HandleAsync : IAsyncDisposable
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
     {
-        return new WorkerCapacityAvailableHandler(
+        DispatchCandidateSelector selector = new(
             _dbContext,
             repositoryDispatchQueries ?? new StubRepositoryDispatchQueries(new RepositoryDispatchInfo(
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub())),
+            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery());
+
+        IssueClaimer claimer = new(
+            _dbContext,
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
-            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
-            _domainEventDispatcher,
+            _domainEventDispatcher);
+
+        return new WorkerCapacityAvailableHandler(
+            selector,
+            claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 

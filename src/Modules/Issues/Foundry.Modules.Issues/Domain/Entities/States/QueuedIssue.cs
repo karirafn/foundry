@@ -1,9 +1,10 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
-public sealed class QueuedIssue : Issue
+public sealed class QueuedIssue : ClaimableIssue
 {
     // Private parameterless constructor for EF Core materialization.
     private QueuedIssue()
@@ -14,7 +15,13 @@ public sealed class QueuedIssue : Issue
     {
     }
 
-    public const int TierRank = 2;
+    public override int TierRank => 2;
+
+    public override BranchName DispatchBranchName =>
+        BranchName.Generate(IssueKind.BranchPrefix, IssueNumber, Title);
+
+    public override DispatchContext Context =>
+        new DispatchContext.Fresh(DispatchBranchName.Value);
 
     internal static QueuedIssue FromDetected(DetectedIssue detected)
     {
@@ -73,7 +80,7 @@ public sealed class QueuedIssue : Issue
         return blocked;
     }
 
-    public InProgressIssue Claim(Guid workerRunId)
+    public override InProgressIssue Claim(Guid workerRunId)
     {
         InProgressIssue inProgress = InProgressIssue.FromQueued(this, workerRunId);
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));

@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
-using Foundry.Modules.Issues.Domain.Entities.States;
 
 namespace Foundry.Modules.Issues.Domain.ValueObjects;
 
@@ -18,16 +17,8 @@ public readonly record struct DispatchOrderKey(
     /// Builds a <see cref="DispatchOrderKey"/> from a queued issue and its repository position.
     /// Position is external to the aggregate — it comes from the repository's EligibleRepository.Position.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when <paramref name="issue"/> is not a queued variant.</exception>
-    public static DispatchOrderKey For(Issue issue, int position) =>
-        issue switch
-        {
-            RevisionQueuedIssue => new DispatchOrderKey(RevisionQueuedIssue.TierRank, position, issue.DetectedAt, issue.Id),
-            ContinuationQueuedIssue => new DispatchOrderKey(ContinuationQueuedIssue.TierRank, position, issue.DetectedAt, issue.Id),
-            QueuedIssue => new DispatchOrderKey(QueuedIssue.TierRank, position, issue.DetectedAt, issue.Id),
-            _ => throw new InvalidOperationException(
-                $"Cannot build a {nameof(DispatchOrderKey)} for a non-queued issue type '{issue.GetType().Name}'."),
-        };
+    public static DispatchOrderKey For(ClaimableIssue issue, int position) =>
+        new(issue.TierRank, position, issue.DetectedAt, issue.Id);
 
     public static bool operator <(DispatchOrderKey left, DispatchOrderKey right) => left.CompareTo(right) < 0;
 

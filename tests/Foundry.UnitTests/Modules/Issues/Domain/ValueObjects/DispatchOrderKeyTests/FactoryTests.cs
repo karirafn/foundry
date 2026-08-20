@@ -123,16 +123,4 @@ public sealed class FactoryTests
             () => key.Id.ShouldBe(continuationQueued.Id));
     }
 
-    [Fact]
-    public void WhenNonQueuedIssue_ThrowsInvalidOperationException()
-    {
-        // Arrange
-        DateTimeOffset detectedAt = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        QueuedIssue queued = CreateFreshQueued(detectedAt);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        int position = 1;
-
-        // Act / Assert
-        Should.Throw<InvalidOperationException>(() => DispatchOrderKey.For(inProgress, position));
-    }
 }

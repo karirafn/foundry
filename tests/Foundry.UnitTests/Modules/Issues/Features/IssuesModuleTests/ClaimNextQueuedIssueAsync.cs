@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -45,13 +46,16 @@ public sealed class ClaimNextQueuedIssueAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
 
         _dispatcher = new CapturingIntegrationEventDispatcher();
+
         RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext, new CredentialResolver(_dbContext));
-        _sut = new WorkerCapacityAvailableHandler(
+        DispatchCandidateSelector selector = new(
             _dbContext,
             repositoryDispatchQueries,
-            _dispatcher,
-            new AllEligibleRepositoryEligibilityQuery(),
-            new NullDomainEventDispatcher(),
+            new AllEligibleRepositoryEligibilityQuery());
+        IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher());
+        _sut = new WorkerCapacityAvailableHandler(
+            selector,
+            claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
