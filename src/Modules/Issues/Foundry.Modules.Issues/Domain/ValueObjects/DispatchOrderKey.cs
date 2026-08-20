@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
-using Foundry.Modules.Issues.Domain.Entities.States;
 
 namespace Foundry.Modules.Issues.Domain.ValueObjects;
 
@@ -22,9 +21,7 @@ public readonly record struct DispatchOrderKey(
     public static DispatchOrderKey For(Issue issue, int position) =>
         issue switch
         {
-            RevisionQueuedIssue => new DispatchOrderKey(RevisionQueuedIssue.TierRank, position, issue.DetectedAt, issue.Id),
-            ContinuationQueuedIssue => new DispatchOrderKey(ContinuationQueuedIssue.TierRank, position, issue.DetectedAt, issue.Id),
-            QueuedIssue => new DispatchOrderKey(QueuedIssue.TierRank, position, issue.DetectedAt, issue.Id),
+            ClaimableIssue claimable => new DispatchOrderKey(claimable.TierRank, position, issue.DetectedAt, issue.Id),
             _ => throw new InvalidOperationException(
                 $"Cannot build a {nameof(DispatchOrderKey)} for a non-queued issue type '{issue.GetType().Name}'."),
         };
