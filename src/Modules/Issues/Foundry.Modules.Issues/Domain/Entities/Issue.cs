@@ -45,16 +45,16 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// Active states (in_progress, revision_in_progress, review) return false — a live worker is running or
     /// the issue is under active review. The terminal state completed returns false — completion wins over
     /// provider closure. All other states (including unchanged) return true and are hard-deleted on untrack.
+    /// ClaimableIssue covers all queued variants (queued, revision_queued, continuation_queued) — any future
+    /// queued tier added under ClaimableIssue is included by default, which is the correct safe default.
     /// </summary>
     public bool IsRestingState() =>
         this is DetectedIssue
-            or QueuedIssue
+            or ClaimableIssue
             or BlockedIssue
             or FailedIssue
             or ContinuableFailedIssue
             or RevisionFailedIssue
-            or RevisionQueuedIssue
-            or ContinuationQueuedIssue
             or UnchangedIssue;
 
     internal void SetBlockedBy(IReadOnlyList<int> blockers)

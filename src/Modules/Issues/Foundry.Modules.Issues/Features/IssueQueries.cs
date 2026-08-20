@@ -60,18 +60,18 @@ internal sealed class IssueQueries(
         // so the type-pattern Where clause is kept explicit here. A unit test in
         // GetUntrackableIssueNumbersAsync.cs asserts that both sets agree, so any future drift
         // between this expression and Issue.IsRestingState() fails a test.
+        // ClaimableIssue covers all queued variants — EF Core translates `i is ClaimableIssue`
+        // to `state IN ('queued', 'revision_queued', 'continuation_queued')` via TPH discriminators.
         List<int> numbers = await db.Set<Issue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
             .Where(i =>
                 i is DetectedIssue ||
-                i is QueuedIssue ||
+                i is ClaimableIssue ||
                 i is BlockedIssue ||
                 i is FailedIssue ||
                 i is ContinuableFailedIssue ||
                 i is RevisionFailedIssue ||
-                i is RevisionQueuedIssue ||
-                i is ContinuationQueuedIssue ||
                 i is UnchangedIssue)
             .Select(i => i.IssueNumber)
             .ToListAsync(cancellationToken);
@@ -539,12 +539,12 @@ internal sealed class IssueQueries(
         Dictionary<Guid, int> positionByRepo = eligibleRepositories
             .ToDictionary(r => r.Id, r => r.Position);
 
-        List<Issue> queuedIssues = issues
-            .Where(IsQueuedVariant)
+        List<ClaimableIssue> queuedIssues = issues
+            .OfType<ClaimableIssue>()
             .ToList();
 
         List<Issue> nonQueuedIssues = issues
-            .Where(i => !IsQueuedVariant(i))
+            .Where(i => i is not ClaimableIssue)
             .OrderByDescending(i => i.DetectedAt)
             .ToList();
 
@@ -553,7 +553,7 @@ internal sealed class IssueQueries(
         // For ineligible issues (IsEligible = false), pos defaults to 0 here, but Position is
         // not consumed for them — ineligible issues pass int.MaxValue as the sentinel position
         // to DispatchOrderKey.For, ensuring they sort after all eligible queued issues.
-        List<(Issue Issue, bool IsEligible, int Position)> queuedWithPosition = queuedIssues
+        List<(ClaimableIssue Issue, bool IsEligible, int Position)> queuedWithPosition = queuedIssues
             .Select(i => (
                 Issue: i,
                 IsEligible: positionByRepo.TryGetValue(i.MonitoredRepositoryId.Value, out int pos),
@@ -564,7 +564,7 @@ internal sealed class IssueQueries(
         List<Issue> eligibleQueued = queuedWithPosition
             .Where(t => t.IsEligible)
             .OrderBy(t => DispatchOrderKey.For(t.Issue, t.Position))
-            .Select(t => t.Issue)
+            .Select(t => (Issue)t.Issue)
             .ToList();
 
         // Ineligible-repo queued issues: sentinel position so they sort among themselves
@@ -572,7 +572,7 @@ internal sealed class IssueQueries(
         List<Issue> ineligibleQueued = queuedWithPosition
             .Where(t => !t.IsEligible)
             .OrderBy(t => DispatchOrderKey.For(t.Issue, int.MaxValue))
-            .Select(t => t.Issue)
+            .Select(t => (Issue)t.Issue)
             .ToList();
 
         List<Issue> orderedIssues = [..eligibleQueued, ..ineligibleQueued, ..nonQueuedIssues];
@@ -595,9 +595,6 @@ internal sealed class IssueQueries(
                     : null))
             .ToList();
     }
-
-    private static bool IsQueuedVariant(Issue issue) =>
-        issue is QueuedIssue or RevisionQueuedIssue or ContinuationQueuedIssue;
 
     private static Expression<Func<Issue, bool>> BuildTypeOrPredicate(IReadOnlyCollection<string> stateNames)
     {
