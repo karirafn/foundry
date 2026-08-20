@@ -12,10 +12,10 @@ internal abstract record SelectionOutcome
     /// <summary>A candidate was found and its repository dispatch info resolved successfully.</summary>
     internal sealed record Selected(DispatchCandidate Candidate) : SelectionOutcome;
 
-    /// <summary>No repositories were eligible for dispatch at this tick.</summary>
+    /// <summary>Claimable issues exist but none of their repositories are eligible for dispatch at this tick.</summary>
     internal sealed record NoEligibleRepositories : SelectionOutcome;
 
-    /// <summary>Eligible repositories exist but none have queued candidates.</summary>
+    /// <summary>No claimable issues exist.</summary>
     internal sealed record NoCandidates : SelectionOutcome;
 
     /// <summary>

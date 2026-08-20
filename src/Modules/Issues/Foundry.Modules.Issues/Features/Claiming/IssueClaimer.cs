@@ -23,6 +23,7 @@ internal sealed class IssueClaimer(
         CancellationToken cancellationToken)
     {
         ClaimableIssue issue = candidate.Issue;
+        BranchName branchName = issue.DispatchBranchName;
         Issue claimed = issue.Claim(workerRunId);
 
         ClaimedIssueDispatch dispatch = new(
@@ -34,7 +35,7 @@ internal sealed class IssueClaimer(
             candidate.DispatchInfo.RepositorySlug,
             candidate.DispatchInfo.CloneUrl,
             candidate.DispatchInfo.AccountToken,
-            issue.DispatchBranchName,
+            branchName,
             issue.MonitoredRepositoryId,
             candidate.DispatchInfo.Provider,
             issue.Context);

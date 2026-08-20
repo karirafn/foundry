@@ -18,32 +18,35 @@ internal sealed class DispatchCandidateSelector(
 {
     public async Task<SelectionOutcome> SelectAsync(CancellationToken cancellationToken)
     {
-        List<ClaimableIssue> allCandidates = await db.Set<ClaimableIssue>()
+        List<MonitoredRepositoryId> claimableRepoIds = await db.Set<ClaimableIssue>()
+            .Select(c => c.MonitoredRepositoryId)
+            .Distinct()
             .ToListAsync(cancellationToken);
 
-        if (allCandidates.Count == 0)
+        if (claimableRepoIds.Count == 0)
         {
             return new SelectionOutcome.NoCandidates();
         }
 
+        List<Guid> rawIds = claimableRepoIds
+            .Select(id => id.Value)
+            .ToList();
+
         Dictionary<MonitoredRepositoryId, int> positionByRepoId =
-            await ResolveEligibleRepositoryPositionsAsync(allCandidates, cancellationToken);
+            await ResolveEligibleRepositoryPositionsAsync(rawIds, cancellationToken);
 
         if (positionByRepoId.Count == 0)
         {
             return new SelectionOutcome.NoEligibleRepositories();
         }
 
-        List<ClaimableIssue> eligibleCandidates = allCandidates
-            .Where(c => positionByRepoId.ContainsKey(c.MonitoredRepositoryId))
-            .ToList();
+        List<MonitoredRepositoryId> eligibleIds = positionByRepoId.Keys.ToList();
 
-        if (eligibleCandidates.Count == 0)
-        {
-            return new SelectionOutcome.NoCandidates();
-        }
+        List<ClaimableIssue> candidates = await db.Set<ClaimableIssue>()
+            .Where(c => eligibleIds.Contains(c.MonitoredRepositoryId))
+            .ToListAsync(cancellationToken);
 
-        List<ClaimableIssue> ordered = eligibleCandidates
+        List<ClaimableIssue> ordered = candidates
             .OrderBy(c => DispatchOrderKey.For(c, positionByRepoId[c.MonitoredRepositoryId]))
             .ToList();
 
@@ -73,16 +76,11 @@ internal sealed class DispatchCandidateSelector(
     }
 
     private async Task<Dictionary<MonitoredRepositoryId, int>> ResolveEligibleRepositoryPositionsAsync(
-        List<ClaimableIssue> candidates,
+        List<Guid> claimableRepoIds,
         CancellationToken cancellationToken)
     {
-        List<Guid> rawIds = candidates
-            .Select(c => c.MonitoredRepositoryId.Value)
-            .Distinct()
-            .ToList();
-
         IReadOnlyList<EligibleRepository> eligibleRepos = await repositoryEligibilityQuery
-            .GetEligibleRepositoriesAsync(rawIds, cancellationToken);
+            .GetEligibleRepositoriesAsync(claimableRepoIds, cancellationToken);
 
         return eligibleRepos
             .Select(r => (Id: MonitoredRepositoryId.From(r.Id), r.Position))

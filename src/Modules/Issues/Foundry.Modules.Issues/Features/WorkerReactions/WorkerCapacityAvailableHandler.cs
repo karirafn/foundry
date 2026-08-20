@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -40,6 +42,9 @@ internal sealed class WorkerCapacityAvailableHandler(
                     "All {Skipped} candidate(s) skipped because their repository dispatch info could not be resolved.",
                     skipped);
                 break;
+
+            default:
+                throw new UnreachableException($"Unhandled SelectionOutcome: {outcome.GetType().Name}");
         }
     }
 }
