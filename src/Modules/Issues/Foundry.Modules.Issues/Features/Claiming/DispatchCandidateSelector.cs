@@ -28,12 +28,10 @@ internal sealed class DispatchCandidateSelector(
             return new SelectionOutcome.NoCandidates();
         }
 
-        List<Guid> rawIds = claimableRepoIds
-            .Select(id => id.Value)
-            .ToList();
-
         Dictionary<MonitoredRepositoryId, int> positionByRepoId =
-            await ResolveEligibleRepositoryPositionsAsync(rawIds, cancellationToken);
+            await ResolveEligibleRepositoryPositionsAsync(
+                claimableRepoIds.Select(id => id.Value).ToList(),
+                cancellationToken);
 
         if (positionByRepoId.Count == 0)
         {
