@@ -89,6 +89,31 @@ public sealed class ValidateTokenAsync
     }
 
     [Fact]
+    public async Task WhenFineGrainedPatHasRequiredScopeInHeader_ReturnsAuthenticatedWithNoMissingScopes()
+    {
+        // Arrange
+        string json = """{ "login": "octocat" }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo, user";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
+            ValidBaseUrl,
+            "github_pat_fine_grained_token_with_header",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
+        TokenValidationOutcome.AuthenticatedOutcome outcome = success.Value.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>();
+        outcome.ShouldSatisfyAllConditions(
+            () => outcome.AccountName.ShouldBe("octocat"),
+            () => outcome.MissingScopes.ShouldBeEmpty());
+    }
+
+    [Fact]
     public async Task WhenClassicPatHasNoScopesHeader_ReturnsScopesUnverifiable()
     {
         // Arrange
