@@ -85,6 +85,31 @@ internal static partial class UpdateAccount
         }
     }
 
+    /// <summary>
+    /// Three-way result from <see cref="Handler.DeriveAndGuardAsync"/>, separating the
+    /// success (derived namespaces ready to use), fully-claimed-by-others rejection, and
+    /// error-rejection paths without encoding them into <see cref="Error.Message"/>.
+    /// </summary>
+    private abstract class DeriveGuardResult
+    {
+        private DeriveGuardResult() { }
+
+        internal sealed class Derived(IReadOnlyCollection<Namespace> namespaces) : DeriveGuardResult
+        {
+            public IReadOnlyCollection<Namespace> Namespaces { get; } = namespaces;
+        }
+
+        internal sealed class ClaimedElsewhere(NamespaceClaimedElsewhereResponse response) : DeriveGuardResult
+        {
+            public NamespaceClaimedElsewhereResponse Response { get; } = response;
+        }
+
+        internal sealed class Rejected(Error error) : DeriveGuardResult
+        {
+            public Error Error { get; } = error;
+        }
+    }
+
     internal sealed class Handler(
         DbContext dbContext,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
@@ -173,7 +198,7 @@ internal static partial class UpdateAccount
 
                 accountName = resolvedName;
 
-                Result<IReadOnlyCollection<Namespace>> deriveResult = await DeriveAndGuardAsync(
+                DeriveGuardResult deriveResult = await DeriveAndGuardAsync(
                     accountName,
                     credential.Id.Value,
                     apiBaseUrl,
@@ -182,13 +207,18 @@ internal static partial class UpdateAccount
                     isGitLab,
                     cancellationToken);
 
-                if (deriveResult is Result<IReadOnlyCollection<Namespace>>.Failure deriveFailure)
+                if (deriveResult is DeriveGuardResult.Rejected deriveRejected)
                 {
-                    return new Outcome.Rejected(deriveFailure.Error);
+                    return new Outcome.Rejected(deriveRejected.Error);
+                }
+
+                if (deriveResult is DeriveGuardResult.ClaimedElsewhere deriveClaimedElsewhere)
+                {
+                    return new Outcome.ClaimedElsewhere(deriveClaimedElsewhere.Response);
                 }
 
                 IReadOnlyCollection<Namespace> derivedNamespaces =
-                    ((Result<IReadOnlyCollection<Namespace>>.Success)deriveResult).Value;
+                    ((DeriveGuardResult.Derived)deriveResult).Namespaces;
 
                 UpdateCredential(credential, accountName, command.Token, baseUrl);
 
@@ -231,11 +261,10 @@ internal static partial class UpdateAccount
         }
 
         /// <summary>
-        /// Derives namespaces for the new token and guards against duplicate-account and
-        /// transient-unavailability failures — all before any state mutation.
-        /// Returns the derived namespaces on success, or the rejection <see cref="Error"/> on failure.
+        /// Derives namespaces for the new token and guards against duplicate-account,
+        /// fully-claimed-by-other-logins, and transient-unavailability failures — all before any state mutation.
         /// </summary>
-        private async Task<Result<IReadOnlyCollection<Namespace>>> DeriveAndGuardAsync(
+        private async Task<DeriveGuardResult> DeriveAndGuardAsync(
             string accountName,
             Guid excludeCredentialId,
             Uri apiBaseUrl,
@@ -252,7 +281,7 @@ internal static partial class UpdateAccount
 
             if (outcome is not NamespaceDerivationOutcome.Derived derived)
             {
-                return Result<IReadOnlyCollection<Namespace>>.Fail(CredentialErrors.NamespaceDerivationUnavailable);
+                return new DeriveGuardResult.Rejected(CredentialErrors.NamespaceDerivationUnavailable);
             }
 
             IReadOnlyCollection<Namespace> derivedNamespaces = derived.Namespaces;
@@ -273,12 +302,32 @@ internal static partial class UpdateAccount
 
                 if (retainedSetIsEmpty)
                 {
-                    return Result<IReadOnlyCollection<Namespace>>.Fail(
+                    return new DeriveGuardResult.Rejected(
                         CredentialErrors.DuplicateAccount(holderName, sharedOwner));
                 }
             }
 
-            return Result<IReadOnlyCollection<Namespace>>.Ok(derivedNamespaces);
+            // Reject when the token's entire (non-empty) derived owner set is already claimed by
+            // OTHER credentials — rotating would strand this account on zero namespace claims.
+            bool derivedIsNonEmpty = derivedNamespaces.Count > 0;
+            bool everyDerivedIsClaimedByOthers = derivedNamespaces
+                .All(ns => claimedByOthers.ContainsKey(ns.Value));
+
+            if (derivedIsNonEmpty && everyDerivedIsClaimedByOthers)
+            {
+                List<NamespaceConflict> conflicts = derivedNamespaces
+                    .OrderBy(ns => ns.Value, StringComparer.Ordinal)
+                    .Select(ns =>
+                    {
+                        claimedByOthers.TryGetValue(ns.Value, out (Guid HolderCredentialId, string HolderName) holder);
+                        return new NamespaceConflict(ns.Value, holder.HolderCredentialId, holder.HolderName);
+                    })
+                    .ToList();
+
+                return new DeriveGuardResult.ClaimedElsewhere(new NamespaceClaimedElsewhereResponse(conflicts));
+            }
+
+            return new DeriveGuardResult.Derived(derivedNamespaces);
         }
 
         private static void UpdateCredential(Credential credential, string accountName, string? token, BaseUrlVo baseUrl)
