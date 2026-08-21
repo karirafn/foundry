@@ -1280,6 +1280,29 @@ public sealed class HandleAsync : IAsyncDisposable
             => Task.FromResult(info);
     }
 
+    [Fact]
+    public async Task WhenQueuedIssueClaimed_PersistsProvidedWorkerRunId()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repositoryId);
+        Guid workerRunId = Guid.NewGuid();
+
+        WorkerCapacityAvailableHandler sut = BuildHandler();
+        WorkerCapacityAvailable @event = new(workerRunId);
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        InProgressIssue? inProgress = await _dbContext.Set<Issue>()
+            .OfType<InProgressIssue>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        inProgress.ShouldNotBeNull();
+        inProgress.WorkerRunId.ShouldBe(workerRunId);
+    }
+
     private sealed class NullIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
