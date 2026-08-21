@@ -66,10 +66,10 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
     }
 
     private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
+        IssueAuthor.Create("octocat").ShouldBeOfType<Result<IssueAuthor>.Success>().Value;
 
     private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
+        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ShouldBeOfType<Result<ProviderUrl>.Success>().Value;
 
     private async Task<(MonitoredRepository, GitHubCredential)> SeedRepositoryAsync(
         string slug = "owner/repo",
@@ -125,7 +125,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
     public async Task WhenQueuedIssueClaimed_DispatchPayloadResolvesFromRealCredential()
     {
         // Arrange
-        (MonitoredRepository repository, GitHubCredential account) =
+        (MonitoredRepository repository, _) =
             await SeedRepositoryAsync("myorg/myrepo", token: "ghp_my_github_token");
 
         QueuedIssue queued = await SeedQueuedIssueAsync(
