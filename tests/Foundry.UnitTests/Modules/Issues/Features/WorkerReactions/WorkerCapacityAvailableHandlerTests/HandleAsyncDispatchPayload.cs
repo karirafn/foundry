@@ -141,7 +141,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
 
         // Assert
-        IssueClaimed claimed = _dispatcher.Captured
+        IssueClaimed claimed = _dispatcher.DispatchedEvents
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
         ClaimedIssueDispatch dispatch = claimed.Dispatch;
@@ -160,7 +160,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
     {
         private readonly List<IIntegrationEvent> _captured = [];
 
-        public IReadOnlyList<IIntegrationEvent> Captured => _captured;
+        public IReadOnlyList<IIntegrationEvent> DispatchedEvents => _captured;
 
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
         {
