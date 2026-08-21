@@ -1083,6 +1083,46 @@ public sealed class HandleAsync : IAsyncDisposable
         eligibleIssue.ShouldBeOfType<InProgressIssue>();
     }
 
+    [Fact]
+    public async Task WhenQueuedIssueClaimed_PersistsProvidedWorkerRunId()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repositoryId);
+        Guid workerRunId = Guid.NewGuid();
+
+        WorkerCapacityAvailableHandler sut = BuildHandler();
+        WorkerCapacityAvailable @event = new(workerRunId);
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        InProgressIssue? inProgress = await _dbContext.Set<Issue>()
+            .OfType<InProgressIssue>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        inProgress.ShouldNotBeNull();
+        inProgress.WorkerRunId.ShouldBe(workerRunId);
+    }
+
+    [Fact]
+    public async Task WhenNoQueuedIssuesExist_DoesNotDispatchIssueClaimed()
+    {
+        // Arrange
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldBeEmpty();
+    }
+
     private QueuedIssue SeedQueuedIssueAtTime(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
