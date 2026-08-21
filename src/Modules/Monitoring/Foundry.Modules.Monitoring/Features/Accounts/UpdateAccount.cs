@@ -61,14 +61,37 @@ internal static partial class UpdateAccount
         }
     }
 
+    /// <summary>
+    /// Discriminated union returned by the update handler to carry structured
+    /// conflict/validation payloads without encoding them into Error.Message.
+    /// </summary>
+    internal abstract class Outcome
+    {
+        private Outcome() { }
+
+        internal sealed class Updated(CredentialUpdateResult value) : Outcome
+        {
+            public CredentialUpdateResult Value { get; } = value;
+        }
+
+        internal sealed class ClaimedElsewhere(NamespaceClaimedElsewhereResponse response) : Outcome
+        {
+            public NamespaceClaimedElsewhereResponse Response { get; } = response;
+        }
+
+        internal sealed class Rejected(Error error) : Outcome
+        {
+            public Error Error { get; } = error;
+        }
+    }
+
     internal sealed class Handler(
         DbContext dbContext,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
         INamespaceDeriver namespaceDeriver,
         CredentialRotationService rotationService)
-        : ICommandHandler<Command, CredentialUpdateResult>
     {
-        public async Task<Result<CredentialUpdateResult>> HandleAsync(
+        public async Task<Outcome> HandleAsync(
             Command command,
             CancellationToken cancellationToken)
         {
@@ -77,7 +100,7 @@ internal static partial class UpdateAccount
                     .FirstOrDefaultAsync(a => a.Id == command.Id, cancellationToken)
                 is not Credential credential)
             {
-                return Result<CredentialUpdateResult>.Fail(CredentialErrors.NotFound(command.Id));
+                return new Outcome.Rejected(CredentialErrors.NotFound(command.Id));
             }
 
             if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
@@ -105,7 +128,7 @@ internal static partial class UpdateAccount
 
                 if (tokenResult is Result<ValidateToken.Response>.Failure tokenFailure)
                 {
-                    return Result<CredentialUpdateResult>.Fail(tokenFailure.Error);
+                    return new Outcome.Rejected(tokenFailure.Error);
                 }
 
                 if (tokenResult is not Result<ValidateToken.Response>.Success { Value: ValidateToken.Response tokenResponse })
@@ -135,17 +158,17 @@ internal static partial class UpdateAccount
                             CredentialErrors.ProviderMismatch(tokenResponse.DetectedProvider ?? string.Empty),
                         _ => CredentialErrors.InvalidToken,
                     };
-                    return Result<CredentialUpdateResult>.Fail(kindError);
+                    return new Outcome.Rejected(kindError);
                 }
 
                 if (string.IsNullOrWhiteSpace(resolvedName))
                 {
-                    return Result<CredentialUpdateResult>.Fail(CredentialErrors.UnresolvedIdentity);
+                    return new Outcome.Rejected(CredentialErrors.UnresolvedIdentity);
                 }
 
                 if (resolvedName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || resolvedName.Any(char.IsControl))
                 {
-                    return Result<CredentialUpdateResult>.Fail(CredentialErrors.UnresolvedIdentity);
+                    return new Outcome.Rejected(CredentialErrors.UnresolvedIdentity);
                 }
 
                 accountName = resolvedName;
@@ -161,7 +184,7 @@ internal static partial class UpdateAccount
 
                 if (deriveResult is Result<IReadOnlyCollection<Namespace>>.Failure deriveFailure)
                 {
-                    return Result<CredentialUpdateResult>.Fail(deriveFailure.Error);
+                    return new Outcome.Rejected(deriveFailure.Error);
                 }
 
                 IReadOnlyCollection<Namespace> derivedNamespaces =
@@ -178,7 +201,7 @@ internal static partial class UpdateAccount
                 }
                 catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsNamespaceDuplicateViolation(ex))
                 {
-                    return Result<CredentialUpdateResult>.Fail(CredentialErrors.DuplicateNamespace(credential.Host));
+                    return new Outcome.Rejected(CredentialErrors.DuplicateNamespace(credential.Host));
                 }
             }
             else
@@ -191,7 +214,7 @@ internal static partial class UpdateAccount
                 }
                 catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsNamespaceDuplicateViolation(ex))
                 {
-                    return Result<CredentialUpdateResult>.Fail(CredentialErrors.DuplicateNamespace(credential.Host));
+                    return new Outcome.Rejected(CredentialErrors.DuplicateNamespace(credential.Host));
                 }
             }
 
@@ -204,7 +227,7 @@ internal static partial class UpdateAccount
                 credential.Token is not null,
                 credential.Namespaces.Select(n => n.Value).ToList());
 
-            return Result<CredentialUpdateResult>.Ok(new CredentialUpdateResult(summary, affectedRepositories));
+            return new Outcome.Updated(new CredentialUpdateResult(summary, affectedRepositories));
         }
 
         /// <summary>
@@ -284,27 +307,43 @@ internal static partial class UpdateAccount
             group.MapPut("{id:guid}", static async (
                     Guid id,
                     RequestBody body,
-                    ICommandHandler<Command, CredentialUpdateResult> handler,
+                    Handler handler,
+                    ICommandValidator<Command> validator,
                     CancellationToken cancellationToken) =>
                 {
                     CredentialId credentialId = CredentialId.From(id);
                     Command command = new(credentialId, body.BaseUrl, body.Token);
-                    Result<CredentialUpdateResult> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<CredentialUpdateResult>, NotFound, Conflict<string>, BadRequest<string>>>(
-                        updateResult => TypedResults.Ok(updateResult),
-                        error => error.Code switch
+                    Result validation = validator.Validate(command);
+                    if (validation is Result.Failure validationFailure)
+                    {
+                        return (IResult)TypedResults.BadRequest(validationFailure.Error.Message);
+                    }
+
+                    Outcome outcome = await handler.HandleAsync(command, cancellationToken);
+
+                    return outcome switch
+                    {
+                        Outcome.Updated updated =>
+                            TypedResults.Ok(updated.Value),
+                        Outcome.ClaimedElsewhere claimedElsewhere =>
+                            (IResult)TypedResults.Conflict(claimedElsewhere.Response),
+                        Outcome.Rejected rejected => rejected.Error.Code switch
                         {
-                            CredentialErrors.NotFoundCode => TypedResults.NotFound(),
-                            CredentialErrors.DuplicateNamespaceCode => TypedResults.Conflict(error.Message),
-                            CredentialErrors.DuplicateAccountCode => TypedResults.Conflict(error.Message),
-                            _ => TypedResults.BadRequest(error.Message),
-                        });
+                            CredentialErrors.NotFoundCode => (IResult)TypedResults.NotFound(),
+                            CredentialErrors.DuplicateNamespaceCode => TypedResults.Conflict(rejected.Error.Message),
+                            CredentialErrors.DuplicateAccountCode => TypedResults.Conflict(rejected.Error.Message),
+                            _ => TypedResults.BadRequest(rejected.Error.Message),
+                        },
+                        _ => throw new UnreachableException(
+                            $"Unhandled UpdateAccount.Outcome: {outcome.GetType().Name}"),
+                    };
                 })
                 .WithName("UpdateAccount")
                 .WithSummary("Updates an existing account")
                 .Produces<CredentialUpdateResult>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
+                .Produces<NamespaceClaimedElsewhereResponse>(StatusCodes.Status409Conflict)
                 .Produces<string>(StatusCodes.Status409Conflict)
                 .Produces<string>(StatusCodes.Status400BadRequest);
         }
