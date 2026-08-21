@@ -60,7 +60,7 @@ public sealed class WhenIssueIsInFailedState : IAsyncDisposable
             url: ValidUrl,
             labels: ["bug"],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         FailedIssue failed = inProgress.MarkFailed(
             Guid.NewGuid(),
@@ -115,6 +115,6 @@ public sealed class WhenIssueIsInFailedState : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.Id == failed.Id,
                 TestContext.Current.CancellationToken);
-        persisted.ShouldBeOfType<QueuedIssue>();
+        persisted.ShouldBeOfType<FreshQueuedIssue>();
     }
 }

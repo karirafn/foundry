@@ -31,7 +31,7 @@ public sealed class Revise
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         return inProgress.MarkInReview(
             Guid.NewGuid(),

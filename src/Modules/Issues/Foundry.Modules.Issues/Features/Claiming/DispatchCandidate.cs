@@ -6,4 +6,4 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 /// <summary>
 /// A claimable issue paired with its resolved repository dispatch info.
 /// </summary>
-internal sealed record DispatchCandidate(ClaimableIssue Issue, RepositoryDispatchInfo DispatchInfo);
+internal sealed record DispatchCandidate(QueuedIssue Issue, RepositoryDispatchInfo DispatchInfo);

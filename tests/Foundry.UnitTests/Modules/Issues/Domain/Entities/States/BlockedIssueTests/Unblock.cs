@@ -42,7 +42,7 @@ public sealed class Unblock
         BlockedIssue blocked = CreateBlockedIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = blocked.Unblock();
+        FreshQueuedIssue queued = blocked.Unblock();
 
         // Assert
         queued.Id.ShouldBe(blocked.Id);
@@ -73,7 +73,7 @@ public sealed class Unblock
         BlockedIssue blocked = CreateBlockedIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = blocked.Unblock();
+        FreshQueuedIssue queued = blocked.Unblock();
 
         // Assert
         queued.BlockedBy.ShouldBeEmpty();

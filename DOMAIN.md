@@ -158,7 +158,7 @@ Runs on a fixed tick interval (30s default) and checks whether each repo is due 
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `QueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ### Issue Lifecycle Partition
@@ -178,7 +178,7 @@ The dashboard renders Active states in four display groups, classified by one ru
 Two states deserve explicit note:
 
 - `unchanged` is Active/Needs-attention because the worker produced no changes and the user must decide whether to retry — it cannot resolve itself.
-- `blocked` is Waiting because a `BlockedIssue` auto-transitions to `QueuedIssue` when its blockers close on the provider; no user action is required.
+- `blocked` is Waiting because a `BlockedIssue` auto-transitions to `FreshQueuedIssue` when its blockers close on the provider; no user action is required.
 
 ## Issue Kind
 
@@ -241,7 +241,7 @@ Three variants:
 - **`Revision`** — a revision cycle addressing review feedback; carries `BranchName`, `PullRequestUrl`, and `IReadOnlyList<ReviewComment>`.
 - **`Continuation`** — resuming an existing branch after a failed run; carries `BranchName` and optional `FailureReason`.
 
-`DispatchContext` is assembled by the concrete `ClaimableIssue` subtype overriding the abstract `Context` property — `QueuedIssue` returns `Fresh`, `RevisionQueuedIssue` returns `Revision`, `ContinuationQueuedIssue` returns `Continuation`.
+`DispatchContext` is assembled by the concrete `QueuedIssue` subtype overriding the abstract `Context` property — `FreshQueuedIssue` returns `Fresh`, `RevisionQueuedIssue` returns `Revision`, `ContinuationQueuedIssue` returns `Continuation`.
 The handler and claimer treat `Context` as an opaque value — they forward it into `ClaimedIssueDispatch` without switching on it.
 Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see ADR 0051).
 
@@ -261,20 +261,20 @@ Claiming is the only path from a queued state to an in-progress one; nothing els
 
 **Terminal outcomes** are logged once at the handler: `Debug` when no eligible repositories exist or no candidates remain after eligibility filtering, `Warning` when every candidate was skipped because its repository's dispatch info could not be resolved (`AllCandidatesUnresolvable`). The "no covering credential" race is narrow — ineligibility already filters out repositories with no account in step 1, so an unresolvable dispatch info arises only when a credential is deleted or its token cleared between the last poll cycle and the claim.
 
-## Claimable Issue
+## Queued Issue
 
-The abstract intermediate in the Issue hierarchy covering all three queued state variants: `QueuedIssue`, `RevisionQueuedIssue`, and `ContinuationQueuedIssue`.
-Defined as `abstract ClaimableIssue : Issue`, it carries the members shared by every claimable state:
+The abstract intermediate in the Issue hierarchy covering all three queued state variants: `FreshQueuedIssue`, `RevisionQueuedIssue`, and `ContinuationQueuedIssue`.
+Defined as `abstract QueuedIssue : Issue`, it carries the members shared by every claimable state:
 
 - **`TierRank`** (abstract, computed) — the dispatch-priority rank, overridden by each concrete variant.
 - **`DispatchBranchName`** (abstract, computed) — the branch name the worker should operate on.
 - **`Context`** (abstract, computed) — the `DispatchContext` union value describing the nature of the work.
 - **`Claim(Guid workerRunId)`** (abstract) — transitions the aggregate to its in-progress state with covariant return type on each override.
 
-`ClaimableIssue` collapses every three-way type union in the codebase — `is ClaimableIssue` and `OfType<ClaimableIssue>()` replace the former per-tier switches in `IsRestingState`, `IsQueuedVariant`, `GetUntrackableIssueNumbersAsync`, and `DispatchOrderKey.For`.
+`QueuedIssue` collapses every three-way type union in the codebase — `is QueuedIssue` and `OfType<QueuedIssue>()` replace the former per-tier switches in `IsRestingState`, `IsQueuedVariant`, `GetUntrackableIssueNumbersAsync`, and `DispatchOrderKey.For`.
 
-**EF Core registration.** EF Core 10 omits an abstract intermediate from the model unless it is explicitly registered — otherwise `OfType<ClaimableIssue>()` and `is ClaimableIssue` in translated queries throw `InvalidOperationException` at query time (not at model build or compile time).
-`ClaimableIssue` is registered via a dedicated `IEntityTypeConfiguration<ClaimableIssue>` with `HasBaseType<Issue>()`.
+**EF Core registration.** EF Core 10 omits an abstract intermediate from the model unless it is explicitly registered — otherwise `OfType<QueuedIssue>()` and `is QueuedIssue` in translated queries throw `InvalidOperationException` at query time (not at model build or compile time).
+`QueuedIssue` is registered via a dedicated `IEntityTypeConfiguration<QueuedIssue>` with `HasBaseType<Issue>()`.
 No `HasValue<T>()` discriminator entry is added — EF assigns an unused default and `HasDiscriminator(...).IsComplete(true)` remains valid through the concrete leaves.
 Computed get-only members (`TierRank`, `DispatchBranchName`, `Context`) are not mapped and require no `Ignore()`.
 
@@ -311,9 +311,9 @@ When a blocker's state is missing or unrecognized, it is treated as still blocki
 ## Blocked Issue
 
 A lifecycle state for an issue that has unresolved dependencies.
-A `DetectedIssue` with blockers transitions to `BlockedIssue` instead of `QueuedIssue`.
-A `QueuedIssue` that gains blockers is demoted to `BlockedIssue`.
-When all blockers are resolved — that is, closed in the provider — a `BlockedIssue` transitions to `QueuedIssue`.
+A `DetectedIssue` with blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`.
+A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue`.
+When all blockers are resolved — that is, closed in the provider — a `BlockedIssue` transitions to `FreshQueuedIssue`.
 
 ## Review Issue
 
@@ -328,15 +328,23 @@ Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete
 A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
 Requires manual resolution: the user can retry (disagreeing with the worker's assessment).
 Classified as Active / Needs attention (see [Issue Lifecycle Partition](#issue-lifecycle-partition)) — it cannot resolve itself.
-Transitions: `UnchangedIssue.Retry()` → `QueuedIssue`.
+Transitions: `UnchangedIssue.Retry()` → `FreshQueuedIssue`.
 Hard-deleted when the provider-side issue is closed or loses its trigger label (untracked by the poller). If reopened upstream with the trigger label it is re-detected as a new issue.
+
+## Fresh Queued Issue
+
+The first-time dispatch tier — the lowest-priority of the three queued variants (`TierRank = 2`).
+An issue reaches this state from three paths: `DetectedIssue` with no blockers, an unblocked `BlockedIssue` (all blockers resolved), or a retried `FailedIssue` / `UnchangedIssue`.
+`DispatchBranchName` is generated fresh from the issue kind prefix, number, and title (`BranchName.Generate(IssueKind.BranchPrefix, IssueNumber, Title)`).
+`Context` is `DispatchContext.Fresh(branchName)` — instructs the worker to start a new implementation on a new branch.
+Transitions: `Claim()` → `InProgressIssue` (worker assigned); `Block()` → `BlockedIssue` (blockers detected).
 
 ## Revision Queued Issue
 
 A lifecycle state for an issue queued for revision after receiving review feedback.
 Carries `BranchName`, `PullRequestUrl`, and `ReviewComments` (`IReadOnlyList<ReviewComment>`) — all non-nullable.
 Created from `ReviewIssue.Revise()` when the monitoring service detects a "changes requested" review.
-Claimed with priority over regular `QueuedIssue` to minimize open issue count.
+Claimed with priority over regular `FreshQueuedIssue` to minimize open issue count.
 Transitions: `Claim()` → `RevisionInProgressIssue`.
 
 ## Revision In-Progress Issue
@@ -359,7 +367,7 @@ A lifecycle state for an issue whose fresh worker run failed without producing r
 Also used when a PR is closed without merge and the review had no prior branch context.
 Carries `WorkerRunId`, `FailureReason` (string description), and `FailedAt`.
 Can come from `InProgressIssue` (worker failed before pushing a branch) or `ReviewIssue` (PR closed without merge, no branch recovery needed).
-Transitions: `FailedIssue.Retry()` → `QueuedIssue` (fresh run, no branch context).
+Transitions: `FailedIssue.Retry()` → `FreshQueuedIssue` (fresh run, no branch context).
 
 ## Continuable Failed Issue
 
@@ -397,14 +405,14 @@ Transitions: `Retry()` → `RevisionQueuedIssue` (re-enters revision path with e
 ## Operator-Triggered Retry
 
 A manual action available on any retry-supporting issue via `POST /api/issues/{id}/retry`.
-Dispatches polymorphically on the loaded issue state: `FailedIssue.Retry()` → `QueuedIssue` (fresh run); `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `RevisionFailedIssue.Retry()` → `RevisionQueuedIssue` (re-enters revision path); `UnchangedIssue.Retry()` → `QueuedIssue` (fresh run, operator disagrees with worker assessment).
+Dispatches polymorphically on the loaded issue state: `FailedIssue.Retry()` → `FreshQueuedIssue` (fresh run); `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `RevisionFailedIssue.Retry()` → `RevisionQueuedIssue` (re-enters revision path); `UnchangedIssue.Retry()` → `FreshQueuedIssue` (fresh run, operator disagrees with worker assessment).
 Any non-retryable state returns a conflict error with no state change.
 
 ## Transient Retry
 
 A bounded, automatic retry for issues that failed with `FailureReason.TransientApiError`, run by `TransientRetryService` (a periodic background service in the Issues module, 60 s tick).
 Each tick, it loads `FailedIssue` / `ContinuableFailedIssue` candidates whose `failure_category` is `transient_api_error` (a SQL-filterable column) with a coarse `FailedAt <= now - InitialBackoff` prefilter, then decides per candidate in memory: the attempt count is the number of leading consecutive transient runs derived from the append-only `worker_runs` rows (`IWorkerRunQueries.CountConsecutiveTransientRunsAsync`, bounded at `MaxTransientRetries + 1` materialized rows), and the issue is due when `FailedAt + backoff(attempt)` has elapsed.
-Due candidates are re-queued through the existing `Retry()` transition — `FailedIssue` → `QueuedIssue`, `ContinuableFailedIssue` → `ContinuationQueuedIssue` — so a de-labelled or already-retried issue is a safe no-op (a concurrent manual retry that moved the issue out of the failed state is tolerated).
+Due candidates are re-queued through the existing `Retry()` transition — `FailedIssue` → `FreshQueuedIssue`, `ContinuableFailedIssue` → `ContinuationQueuedIssue` — so a de-labelled or already-retried issue is a safe no-op (a concurrent manual retry that moved the issue out of the failed state is tolerated).
 Constants are hardcoded (no settings surface): `MaxTransientRetries = 2`, `InitialBackoff = 1 minute`. With `MaxTransientRetries = 2` both auto-retries use a flat 1-minute backoff — exponential doubling only applies if `MaxTransientRetries` is raised above 2 (the exhaustion guard fires before `ComputeBackoff` is reached for attempt ≥ 2). At 2 consecutive transient runs the issue is exhausted — the service stops retrying it, leaving `POST /api/issues/{id}/retry` as the manual escape hatch.
 Due-ness is recomputed from the persisted `FailedAt` on every tick, so a host restart during a backoff window costs at most one extra tick of delay — no in-memory timer is required.
 

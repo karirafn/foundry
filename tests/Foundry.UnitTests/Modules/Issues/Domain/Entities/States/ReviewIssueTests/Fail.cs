@@ -31,7 +31,7 @@ public sealed class Fail
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         return inProgress.MarkInReview(Guid.NewGuid(), "foundry/1/add-feature", "https://github.com/owner/repo/pull/5", DateTimeOffset.UtcNow);
     }

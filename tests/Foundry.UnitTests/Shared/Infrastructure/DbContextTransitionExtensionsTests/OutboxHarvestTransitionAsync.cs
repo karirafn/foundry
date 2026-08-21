@@ -100,7 +100,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.Add(detected);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
 
         // Act
         await dbContext.TransitionAsync(detected, queued, domainEventDispatcher, TestContext.Current.CancellationToken);
@@ -109,7 +109,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.ChangeTracker.Clear();
         Issue? result = await dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == queued.Id, TestContext.Current.CancellationToken);
-        result.ShouldBeOfType<QueuedIssue>();
+        result.ShouldBeOfType<FreshQueuedIssue>();
 
         // Assert — exactly one outbox row written by the harvest save
         List<OutboxMessage> messages = await dbContext
@@ -131,7 +131,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         IssueId issueId = detected.Id;
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
 
         // Act — should propagate the exception
         await Should.ThrowAsync<InvalidOperationException>(async () =>
@@ -143,7 +143,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
 
         // Assert — state change rolled back: the original DetectedIssue row is still present
         // (the Remove + SaveChanges inside the transaction was rolled back), and the row has
-        // not been replaced by a QueuedIssue.
+        // not been replaced by a FreshQueuedIssue.
         dbContext.ChangeTracker.Clear();
         Issue? result = await dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == issueId, TestContext.Current.CancellationToken);
@@ -169,9 +169,9 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.Add(detected);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Call Enqueue() to get the QueuedIssue, then clear domain events so the dispatcher
+        // Call Enqueue() to get the FreshQueuedIssue, then clear domain events so the dispatcher
         // receives an empty list — the harvest save must still be a no-op for the outbox.
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         detected.ClearDomainEvents();
 
         // Act
@@ -181,7 +181,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.ChangeTracker.Clear();
         Issue? result = await dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == queued.Id, TestContext.Current.CancellationToken);
-        result.ShouldBeOfType<QueuedIssue>();
+        result.ShouldBeOfType<FreshQueuedIssue>();
 
         // Assert — no outbox rows
         List<OutboxMessage> messages = await dbContext

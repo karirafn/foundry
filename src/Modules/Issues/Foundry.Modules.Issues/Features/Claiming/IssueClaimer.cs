@@ -22,7 +22,7 @@ internal sealed class IssueClaimer(
         Guid workerRunId,
         CancellationToken cancellationToken)
     {
-        ClaimableIssue issue = candidate.Issue;
+        QueuedIssue issue = candidate.Issue;
         BranchName branchName = issue.DispatchBranchName;
         Issue claimed = issue.Claim(workerRunId);
 

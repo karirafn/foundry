@@ -39,7 +39,7 @@ public sealed class Enqueue
         DetectedIssue detected = CreateDetectedIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
 
         // Assert
         queued.Id.ShouldBe(detected.Id);
@@ -70,7 +70,7 @@ public sealed class Enqueue
         DetectedIssue detected = CreateDetectedIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
 
         // Assert
         queued.ShouldSatisfyAllConditions(

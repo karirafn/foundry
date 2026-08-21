@@ -31,7 +31,7 @@ public sealed class Retry
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         return inProgress.MarkFailed(Guid.NewGuid(), "Container exited with code 1", DateTimeOffset.UtcNow, "generic_failure");
     }
@@ -44,7 +44,7 @@ public sealed class Retry
         FailedIssue failed = CreateFailedIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = failed.Retry();
+        FreshQueuedIssue queued = failed.Retry();
 
         // Assert
         queued.Id.ShouldBe(failed.Id);
@@ -75,7 +75,7 @@ public sealed class Retry
         FailedIssue failed = CreateFailedIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = failed.Retry();
+        FreshQueuedIssue queued = failed.Retry();
 
         // Assert
         queued.ShouldSatisfyAllConditions(

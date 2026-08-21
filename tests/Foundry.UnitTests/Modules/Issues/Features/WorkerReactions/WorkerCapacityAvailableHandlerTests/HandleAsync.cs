@@ -79,7 +79,7 @@ public sealed class HandleAsync : IAsyncDisposable
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
-    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
+    private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -90,7 +90,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -145,7 +145,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // Unreachable repo (no eligibility record): queued issue is skipped
@@ -171,7 +171,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // Mixed: eligible and ineligible repos — only eligible one is claimed
@@ -204,7 +204,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == ineligibleRepoId,
                 TestContext.Current.CancellationToken);
         eligibleIssue.ShouldBeOfType<InProgressIssue>();
-        ineligibleIssue.ShouldBeOfType<QueuedIssue>();
+        ineligibleIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // Ineligible first in QueuedIssue tier: skip to next eligible candidate
@@ -225,7 +225,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow.AddMinutes(-5));
-        QueuedIssue ineligibleQueued = QueuedIssue.FromDetected(ineligibleDetected);
+        FreshQueuedIssue ineligibleQueued = FreshQueuedIssue.FromDetected(ineligibleDetected);
         _dbContext.Set<Issue>().Add(ineligibleQueued);
 
         DetectedIssue eligibleDetected = DetectedIssue.Detect(
@@ -237,7 +237,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue eligibleQueued = QueuedIssue.FromDetected(eligibleDetected);
+        FreshQueuedIssue eligibleQueued = FreshQueuedIssue.FromDetected(eligibleDetected);
         _dbContext.Set<Issue>().Add(eligibleQueued);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -261,7 +261,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == eligibleRepoId,
                 TestContext.Current.CancellationToken);
-        ineligibleIssue.ShouldBeOfType<QueuedIssue>();
+        ineligibleIssue.ShouldBeOfType<FreshQueuedIssue>();
         eligibleIssue.ShouldBeOfType<InProgressIssue>();
     }
 
@@ -394,7 +394,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .ToListAsync(TestContext.Current.CancellationToken);
         foreach (Issue issue in issues)
         {
-            (issue is RevisionQueuedIssue or ContinuationQueuedIssue or QueuedIssue).ShouldBeTrue();
+            (issue is RevisionQueuedIssue or ContinuationQueuedIssue or FreshQueuedIssue).ShouldBeTrue();
         }
     }
 
@@ -427,7 +427,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == queuedRepositoryId,
                 TestContext.Current.CancellationToken);
         revisionIssue.ShouldBeOfType<RevisionInProgressIssue>();
-        queuedIssue.ShouldBeOfType<QueuedIssue>();
+        queuedIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // Claim-priority ordering: continuation queued takes precedence over fresh queued
@@ -459,7 +459,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == queuedRepositoryId,
                 TestContext.Current.CancellationToken);
         continuationIssue.ShouldBeOfType<InProgressIssue>();
-        queuedIssue.ShouldBeOfType<QueuedIssue>();
+        queuedIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // Claim-priority ordering: revision queued takes precedence over continuation queued
@@ -558,7 +558,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -598,7 +598,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -750,7 +750,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -839,7 +839,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == lowPriorityRepoId,
                 TestContext.Current.CancellationToken);
         highPriorityIssue.ShouldBeOfType<InProgressIssue>();
-        lowPriorityIssue.ShouldBeOfType<QueuedIssue>();
+        lowPriorityIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // DetectedAt tiebreaker within the same Position
@@ -880,7 +880,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repoBId,
                 TestContext.Current.CancellationToken);
         repoAIssue.ShouldBeOfType<InProgressIssue>();
-        repoBIssue.ShouldBeOfType<QueuedIssue>();
+        repoBIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // Cross-tier: high-position revision queued still beats low-position fresh queued
@@ -917,7 +917,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == revisionRepoId,
                 TestContext.Current.CancellationToken);
-        freshIssue.ShouldBeOfType<QueuedIssue>();
+        freshIssue.ShouldBeOfType<FreshQueuedIssue>();
         revisionIssue.ShouldBeOfType<RevisionInProgressIssue>();
     }
 
@@ -1010,8 +1010,8 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repoBId = MonitoredRepositoryId.New();
 
         // Seed both issues with exactly the same DetectedAt; both repos share the same Position.
-        QueuedIssue issueA = SeedQueuedIssueAtTime(repoAId, issueNumber: 1, detectedAt: sameTime);
-        QueuedIssue issueB = SeedQueuedIssueAtTime(repoBId, issueNumber: 2, detectedAt: sameTime);
+        FreshQueuedIssue issueA = SeedQueuedIssueAtTime(repoAId, issueNumber: 1, detectedAt: sameTime);
+        FreshQueuedIssue issueB = SeedQueuedIssueAtTime(repoBId, issueNumber: 2, detectedAt: sameTime);
 
         // Determine which IssueId is lower by the same ordering used by DispatchOrderKey.
         bool issueAHasLowerId = issueA.Id.CompareTo(issueB.Id) < 0;
@@ -1042,7 +1042,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == expectedLoserRepoId,
                 TestContext.Current.CancellationToken);
         winnerIssue.ShouldBeOfType<InProgressIssue>();
-        loserIssue.ShouldBeOfType<QueuedIssue>();
+        loserIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // Guards the TryGetValue refactoring: a candidate whose repo id is absent from the
@@ -1079,7 +1079,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == eligibleRepoId,
                 TestContext.Current.CancellationToken);
-        absentIssue.ShouldBeOfType<QueuedIssue>();
+        absentIssue.ShouldBeOfType<FreshQueuedIssue>();
         eligibleIssue.ShouldBeOfType<InProgressIssue>();
     }
 
@@ -1123,7 +1123,7 @@ public sealed class HandleAsync : IAsyncDisposable
         capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldBeEmpty();
     }
 
-    private QueuedIssue SeedQueuedIssueAtTime(
+    private FreshQueuedIssue SeedQueuedIssueAtTime(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
         DateTimeOffset detectedAt)
@@ -1137,7 +1137,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -1158,7 +1158,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -1186,7 +1186,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -1215,7 +1215,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt ?? DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -1244,7 +1244,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt ?? DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),

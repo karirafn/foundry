@@ -16,7 +16,7 @@ public sealed class InProgressIssue : Issue
 
     public Guid WorkerRunId { get; private set; }
 
-    internal static InProgressIssue FromQueued(QueuedIssue queued, Guid workerRunId)
+    internal static InProgressIssue FromQueued(FreshQueuedIssue queued, Guid workerRunId)
     {
         InProgressIssue inProgress = new(queued.Id);
         inProgress.SetSharedProperties(

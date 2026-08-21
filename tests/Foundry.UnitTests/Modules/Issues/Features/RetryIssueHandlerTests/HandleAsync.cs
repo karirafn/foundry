@@ -67,7 +67,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow, "generic_failure");
         _dbContext.Set<Issue>().Add(failed);
@@ -89,7 +89,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -116,7 +116,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -150,7 +150,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
         _dbContext.Set<Issue>().Add(unchanged);
@@ -159,7 +159,7 @@ public sealed class HandleAsync : IAsyncDisposable
         return unchanged;
     }
 
-    private async Task<QueuedIssue> SeedQueuedIssueAsync(
+    private async Task<FreshQueuedIssue> SeedQueuedIssueAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken = default)
     {
@@ -172,7 +172,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -198,7 +198,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.Id == failed.Id,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
         result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.Id.ShouldBe(failed.Id.Value);
     }
 
@@ -321,7 +321,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.Id == unchanged.Id,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
         result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.Id.ShouldBe(unchanged.Id.Value);
     }
 
@@ -347,7 +347,7 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenIssueInWrongState_ReturnsWrongStateError()
     {
         // Arrange
-        QueuedIssue queued = await SeedQueuedIssueAsync(
+        FreshQueuedIssue queued = await SeedQueuedIssueAsync(
             MonitoredRepositoryId.New(),
             TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(queued.Id);
@@ -364,7 +364,7 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenIssueInWrongState_NoStateChange()
     {
         // Arrange
-        QueuedIssue queued = await SeedQueuedIssueAsync(
+        FreshQueuedIssue queued = await SeedQueuedIssueAsync(
             MonitoredRepositoryId.New(),
             TestContext.Current.CancellationToken);
         RetryIssue.Command command = new(queued.Id);
@@ -378,7 +378,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.Id == queued.Id,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]

@@ -31,7 +31,7 @@ public sealed class Retry
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         return inProgress.MarkUnchanged(Guid.NewGuid());
     }
@@ -44,7 +44,7 @@ public sealed class Retry
         UnchangedIssue unchanged = CreateUnchangedIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = unchanged.Retry();
+        FreshQueuedIssue queued = unchanged.Retry();
 
         // Assert
         queued.Id.ShouldBe(unchanged.Id);
@@ -75,7 +75,7 @@ public sealed class Retry
         UnchangedIssue unchanged = CreateUnchangedIssue(repositoryId);
 
         // Act
-        QueuedIssue queued = unchanged.Retry();
+        FreshQueuedIssue queued = unchanged.Retry();
 
         // Assert
         queued.ShouldSatisfyAllConditions(

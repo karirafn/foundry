@@ -11,7 +11,7 @@ public sealed class WhenEntityType_IsMapped
 {
     [Theory]
     [InlineData("detected", typeof(DetectedIssue))]
-    [InlineData("queued", typeof(QueuedIssue))]
+    [InlineData("queued", typeof(FreshQueuedIssue))]
     [InlineData("blocked", typeof(BlockedIssue))]
     [InlineData("in_progress", typeof(InProgressIssue))]
     [InlineData("review", typeof(ReviewIssue))]

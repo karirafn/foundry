@@ -68,7 +68,7 @@ internal sealed class ProcessIssueDependenciesHandler(
         {
             case DetectedIssue detected when issue.BlockedBy.Count == 0:
             {
-                QueuedIssue queued = detected.Enqueue();
+                FreshQueuedIssue queued = detected.Enqueue();
                 await db.TransitionAsync(detected, queued, dispatcher, cancellationToken);
                 break;
             }
@@ -80,7 +80,7 @@ internal sealed class ProcessIssueDependenciesHandler(
                 break;
             }
 
-            case QueuedIssue queued when issue.BlockedBy.Count > 0:
+            case FreshQueuedIssue queued when issue.BlockedBy.Count > 0:
             {
                 BlockedIssue blocked = queued.Block(issue.BlockedBy);
                 await db.TransitionAsync(queued, blocked, dispatcher, cancellationToken);
@@ -89,7 +89,7 @@ internal sealed class ProcessIssueDependenciesHandler(
 
             case BlockedIssue blocked when issue.BlockedBy.Count == 0:
             {
-                QueuedIssue queued = blocked.Unblock();
+                FreshQueuedIssue queued = blocked.Unblock();
                 await db.TransitionAsync(blocked, queued, dispatcher, cancellationToken);
                 break;
             }
@@ -99,8 +99,8 @@ internal sealed class ProcessIssueDependenciesHandler(
                 await db.SaveChangesAsync(cancellationToken);
                 break;
 
-            // QueuedIssue with no new blockers: already queued, persist (SetBlockedBy([]) is a no-op but save is explicit).
-            case QueuedIssue when issue.BlockedBy.Count == 0:
+            // FreshQueuedIssue with no new blockers: already queued, persist (SetBlockedBy([]) is a no-op but save is explicit).
+            case FreshQueuedIssue when issue.BlockedBy.Count == 0:
                 await db.SaveChangesAsync(cancellationToken);
                 break;
         }

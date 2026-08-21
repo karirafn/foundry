@@ -18,7 +18,7 @@ internal sealed class DispatchCandidateSelector(
 {
     public async Task<SelectionOutcome> SelectAsync(CancellationToken cancellationToken)
     {
-        List<MonitoredRepositoryId> claimableRepoIds = await db.Set<ClaimableIssue>()
+        List<MonitoredRepositoryId> claimableRepoIds = await db.Set<QueuedIssue>()
             .Select(c => c.MonitoredRepositoryId)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -40,18 +40,18 @@ internal sealed class DispatchCandidateSelector(
 
         List<MonitoredRepositoryId> eligibleIds = positionByRepoId.Keys.ToList();
 
-        List<ClaimableIssue> candidates = await db.Set<ClaimableIssue>()
+        List<QueuedIssue> candidates = await db.Set<QueuedIssue>()
             .Where(c => eligibleIds.Contains(c.MonitoredRepositoryId))
             .ToListAsync(cancellationToken);
 
-        List<ClaimableIssue> ordered = candidates
+        List<QueuedIssue> ordered = candidates
             .OrderBy(c => DispatchOrderKey.For(c, positionByRepoId[c.MonitoredRepositoryId]))
             .ToList();
 
         Dictionary<MonitoredRepositoryId, RepositoryDispatchInfo?> dispatchInfoCache = [];
         int skipped = 0;
 
-        foreach (ClaimableIssue candidate in ordered)
+        foreach (QueuedIssue candidate in ordered)
         {
             MonitoredRepositoryId repoId = candidate.MonitoredRepositoryId;
 

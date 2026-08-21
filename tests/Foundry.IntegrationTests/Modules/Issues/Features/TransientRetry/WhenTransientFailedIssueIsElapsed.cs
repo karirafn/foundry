@@ -83,7 +83,7 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: failedAt.AddHours(-2));
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         FailedIssue failed = inProgress.MarkFailed(
             Guid.NewGuid(),
@@ -129,7 +129,7 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         Issue? persisted = await dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == failed.Id, TestContext.Current.CancellationToken);
-        persisted.ShouldBeOfType<QueuedIssue>();
+        persisted.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]

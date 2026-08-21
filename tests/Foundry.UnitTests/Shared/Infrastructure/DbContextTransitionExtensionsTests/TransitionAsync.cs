@@ -67,7 +67,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         NullDomainEventDispatcher dispatcher = new();
 
         // Act
@@ -77,7 +77,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         Issue? result = await _dbContext.Issues.FindAsync(
             [queued.Id],
             TestContext.Current.CancellationToken);
-        result.ShouldBeOfType<QueuedIssue>();
+        result.ShouldBeOfType<FreshQueuedIssue>();
         result.Id.ShouldBe(queued.Id);
     }
 
@@ -90,7 +90,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         NullDomainEventDispatcher dispatcher = new();
 
         // Act
@@ -112,7 +112,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         CapturingDomainEventDispatcher dispatcher = new();
 
         // Act
@@ -131,7 +131,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         NullDomainEventDispatcher dispatcher = new();
 
         // Act

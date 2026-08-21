@@ -58,7 +58,7 @@ public sealed class WhenResolvedFilteredByRepositoryId : IAsyncDisposable
             labels: [],
             detectedAt: BaseTime);
 
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,

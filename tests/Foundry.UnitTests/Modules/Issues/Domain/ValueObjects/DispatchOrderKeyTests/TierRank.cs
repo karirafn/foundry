@@ -30,7 +30,7 @@ public sealed class TierRank
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
 
-    private static QueuedIssue CreateFreshQueued()
+    private static FreshQueuedIssue CreateFreshQueued()
     {
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetected(repositoryId);
@@ -41,7 +41,7 @@ public sealed class TierRank
     {
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetected(repositoryId);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -55,7 +55,7 @@ public sealed class TierRank
     {
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetected(repositoryId);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -96,7 +96,7 @@ public sealed class TierRank
     public void WhenFreshQueued_TierRankIsTwo()
     {
         // Arrange
-        QueuedIssue queued = CreateFreshQueued();
+        FreshQueuedIssue queued = CreateFreshQueued();
 
         // Act
         int tierRank = queued.TierRank;

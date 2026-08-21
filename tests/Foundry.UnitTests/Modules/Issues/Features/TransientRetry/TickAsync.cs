@@ -65,7 +65,7 @@ public sealed class TickAsync : IAsyncDisposable
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow.AddHours(-2));
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         FailedIssue failed = inProgress.MarkFailed(
             Guid.NewGuid(),
@@ -90,7 +90,7 @@ public sealed class TickAsync : IAsyncDisposable
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow.AddHours(-2));
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -143,7 +143,7 @@ public sealed class TickAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
         Issue? persisted = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == failed.Id, TestContext.Current.CancellationToken);
-        persisted.ShouldBeOfType<QueuedIssue>();
+        persisted.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]
@@ -209,7 +209,7 @@ public sealed class TickAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
         Issue? persisted = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == failed.Id, TestContext.Current.CancellationToken);
-        persisted.ShouldBeOfType<QueuedIssue>();
+        persisted.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]
@@ -274,8 +274,8 @@ public sealed class TickAsync : IAsyncDisposable
             .FirstOrDefaultAsync(i => i.Id == failed1.Id, TestContext.Current.CancellationToken);
         Issue? persisted2 = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == failed2.Id, TestContext.Current.CancellationToken);
-        persisted1.ShouldBeOfType<QueuedIssue>();
-        persisted2.ShouldBeOfType<QueuedIssue>();
+        persisted1.ShouldBeOfType<FreshQueuedIssue>();
+        persisted2.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // -------------------------------------------------------------------------

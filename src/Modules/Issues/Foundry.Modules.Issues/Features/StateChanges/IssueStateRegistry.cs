@@ -14,7 +14,7 @@ internal static class IssueStateRegistry
     private static readonly FrozenDictionary<string, Type> ActiveMap = new Dictionary<string, Type>
     {
         ["detected"] = typeof(DetectedIssue),
-        ["queued"] = typeof(QueuedIssue),
+        ["queued"] = typeof(FreshQueuedIssue),
         ["blocked"] = typeof(BlockedIssue),
         ["in_progress"] = typeof(InProgressIssue),
         ["review"] = typeof(ReviewIssue),

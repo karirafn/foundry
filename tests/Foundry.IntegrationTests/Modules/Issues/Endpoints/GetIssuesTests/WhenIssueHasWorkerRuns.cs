@@ -62,7 +62,7 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
 
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
 
         dbContext.Set<Issue>().Add(queued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -167,7 +167,7 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
 
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,

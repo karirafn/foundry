@@ -197,7 +197,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -235,7 +235,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -268,7 +268,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -308,7 +308,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -347,7 +347,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -383,7 +383,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -425,7 +425,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -465,7 +465,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -499,7 +499,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -543,7 +543,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();
@@ -577,7 +577,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DetectedIssue detected = await SaveDetectedIssueAsync();
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         Guid workerRunId = Guid.NewGuid();

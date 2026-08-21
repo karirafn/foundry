@@ -68,10 +68,10 @@ public sealed class ClaimHappyPath : IAsyncDisposable
     }
 
     /// <summary>
-    /// Seeds a QueuedIssue pointing at the given repository directly via DbContext,
+    /// Seeds a FreshQueuedIssue pointing at the given repository directly via DbContext,
     /// since no HTTP endpoint exists to produce this state.
     /// </summary>
-    private async Task<QueuedIssue> SeedQueuedIssueAsync(MonitoredRepositoryId repositoryId, int issueNumber = 1)
+    private async Task<FreshQueuedIssue> SeedQueuedIssueAsync(MonitoredRepositoryId repositoryId, int issueNumber = 1)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -85,7 +85,7 @@ public sealed class ClaimHappyPath : IAsyncDisposable
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
 
         dbContext.Set<Issue>().Add(queued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -97,7 +97,7 @@ public sealed class ClaimHappyPath : IAsyncDisposable
     {
         // Arrange — seed a repository with real credentials and eligibility, plus a queued issue.
         MonitoredRepositoryId repositoryId = await SeedEligibleRepositoryWithDispatchInfoAsync();
-        QueuedIssue queued = await SeedQueuedIssueAsync(repositoryId);
+        FreshQueuedIssue queued = await SeedQueuedIssueAsync(repositoryId);
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
         // Act — resolve the real handler from DI and invoke it directly (no HTTP endpoint exists).
@@ -106,7 +106,7 @@ public sealed class ClaimHappyPath : IAsyncDisposable
             scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<WorkerCapacityAvailable>>();
         await handler.HandleAsync(@event, TestContext.Current.CancellationToken);
 
-        // Assert — issue transitioned from QueuedIssue to InProgressIssue via the real wiring.
+        // Assert — issue transitioned from FreshQueuedIssue to InProgressIssue via the real wiring.
         using IServiceScope assertScope = _factory.Services.CreateScope();
         DbContext dbContext = assertScope.ServiceProvider.GetRequiredService<DbContext>();
         Issue? persisted = await dbContext.Set<Issue>()

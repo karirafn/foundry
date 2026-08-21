@@ -11,7 +11,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.ClaimableIssueTests;
+namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.QueuedIssueTests;
 
 public sealed class PolymorphicMembers
 {
@@ -32,7 +32,7 @@ public sealed class PolymorphicMembers
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
 
-    private static QueuedIssue CreateQueuedIssue(MonitoredRepositoryId repositoryId)
+    private static FreshQueuedIssue CreateFreshQueuedIssue(MonitoredRepositoryId repositoryId)
     {
         DetectedIssue detected = CreateDetected(repositoryId);
         return detected.Enqueue();
@@ -41,7 +41,7 @@ public sealed class PolymorphicMembers
     private static RevisionQueuedIssue CreateRevisionQueuedIssue(MonitoredRepositoryId repositoryId)
     {
         DetectedIssue detected = CreateDetected(repositoryId);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -54,7 +54,7 @@ public sealed class PolymorphicMembers
     private static ContinuationQueuedIssue CreateContinuationQueuedIssue(MonitoredRepositoryId repositoryId)
     {
         DetectedIssue detected = CreateDetected(repositoryId);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -72,7 +72,7 @@ public sealed class PolymorphicMembers
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
 
         // Act
         int tierRank = queued.TierRank;
@@ -116,7 +116,7 @@ public sealed class PolymorphicMembers
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
         BranchName expected = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title);
 
         // Act
@@ -163,7 +163,7 @@ public sealed class PolymorphicMembers
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
         BranchName branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title);
 
         // Act
@@ -216,7 +216,7 @@ public sealed class PolymorphicMembers
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
         Guid workerRunId = Guid.NewGuid();
 
         // Act
@@ -231,7 +231,7 @@ public sealed class PolymorphicMembers
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
 
         // Act
         queued.Claim(Guid.NewGuid());

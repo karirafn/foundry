@@ -95,7 +95,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         return (repository, credential);
     }
 
-    private async Task<QueuedIssue> SeedQueuedIssueAsync(
+    private async Task<FreshQueuedIssue> SeedQueuedIssueAsync(
         MonitoredRepositoryId repositoryId,
         int issueNumber = 1,
         string title = "Test Issue",
@@ -114,7 +114,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         _dbContext.Set<Issue>().Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -128,7 +128,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         (MonitoredRepository repository, _) =
             await SeedRepositoryAsync("myorg/myrepo", token: "ghp_my_github_token");
 
-        QueuedIssue queued = await SeedQueuedIssueAsync(
+        FreshQueuedIssue queued = await SeedQueuedIssueAsync(
             repository.Id,
             issueNumber: 7,
             title: "Fix the bug",

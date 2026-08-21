@@ -32,9 +32,9 @@ public sealed class UnchangedIssue : Issue
         return unchanged;
     }
 
-    public QueuedIssue Retry()
+    public FreshQueuedIssue Retry()
     {
-        QueuedIssue queued = QueuedIssue.FromRetry(this);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromRetry(this);
         AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }
