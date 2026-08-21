@@ -6,7 +6,6 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
-using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
 
@@ -85,35 +84,9 @@ internal static partial class UpdateAccount
         }
     }
 
-    /// <summary>
-    /// Three-way result from <see cref="Handler.DeriveAndGuardAsync"/>, separating the
-    /// success (derived namespaces ready to use), fully-claimed-by-others rejection, and
-    /// error-rejection paths without encoding them into <see cref="Error.Message"/>.
-    /// </summary>
-    private abstract class DeriveGuardResult
-    {
-        private DeriveGuardResult() { }
-
-        internal sealed class Derived(IReadOnlyCollection<Namespace> namespaces) : DeriveGuardResult
-        {
-            public IReadOnlyCollection<Namespace> Namespaces { get; } = namespaces;
-        }
-
-        internal sealed class ClaimedElsewhere(NamespaceClaimedElsewhereResponse response) : DeriveGuardResult
-        {
-            public NamespaceClaimedElsewhereResponse Response { get; } = response;
-        }
-
-        internal sealed class Rejected(Error error) : DeriveGuardResult
-        {
-            public Error Error { get; } = error;
-        }
-    }
-
     internal sealed class Handler(
         DbContext dbContext,
-        IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
-        INamespaceDeriver namespaceDeriver,
+        TokenAccountResolver tokenAccountResolver,
         CredentialRotationService rotationService)
     {
         public async Task<Outcome> HandleAsync(
@@ -140,89 +113,30 @@ internal static partial class UpdateAccount
 
             if (command.Token is not null)
             {
-                Uri apiBaseUrl = isGitLab
-                    ? GitLabCredential.DeriveApiBaseUrl(baseUrl)
-                    : GitHubCredential.DeriveApiBaseUrl(baseUrl);
-
-                string providerTypeForValidation = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
-
-                ValidateToken.Query tokenQuery = new(command.Token, apiBaseUrl, providerTypeForValidation);
-                Result<ValidateToken.Response> tokenResult = await validateToken.HandleAsync(
-                    tokenQuery,
-                    cancellationToken);
-
-                if (tokenResult is Result<ValidateToken.Response>.Failure tokenFailure)
-                {
-                    return new Outcome.Rejected(tokenFailure.Error);
-                }
-
-                if (tokenResult is not Result<ValidateToken.Response>.Success { Value: ValidateToken.Response tokenResponse })
-                {
-                    throw new UnreachableException(
-                        $"Token validation returned an unexpected result type: {tokenResult.GetType().Name}");
-                }
-
-                string? resolvedName = tokenResponse.Kind switch
-                {
-                    ValidateToken.Kinds.Authenticated when tokenResponse.MissingScopes.Count == 0
-                        => tokenResponse.AccountName,
-                    ValidateToken.Kinds.ScopesUnverifiable
-                        => tokenResponse.AccountName,
-                    _ => null,
-                };
-
-                if (resolvedName is null)
-                {
-                    Error kindError = tokenResponse.Kind switch
-                    {
-                        ValidateToken.Kinds.Authenticated => CredentialErrors.InvalidToken,
-                        ValidateToken.Kinds.AuthenticationFailed => CredentialErrors.InvalidToken,
-                        ValidateToken.Kinds.IdentityUnresolved => CredentialErrors.UnresolvedIdentity,
-                        ValidateToken.Kinds.ScopesUnverifiable => CredentialErrors.UnresolvedIdentity,
-                        ValidateToken.Kinds.ProviderMismatch =>
-                            CredentialErrors.ProviderMismatch(tokenResponse.DetectedProvider ?? string.Empty),
-                        _ => CredentialErrors.InvalidToken,
-                    };
-                    return new Outcome.Rejected(kindError);
-                }
-
-                if (string.IsNullOrWhiteSpace(resolvedName))
-                {
-                    return new Outcome.Rejected(CredentialErrors.UnresolvedIdentity);
-                }
-
-                if (resolvedName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || resolvedName.Any(char.IsControl))
-                {
-                    return new Outcome.Rejected(CredentialErrors.UnresolvedIdentity);
-                }
-
-                accountName = resolvedName;
-
-                DeriveGuardResult deriveResult = await DeriveAndGuardAsync(
-                    accountName,
-                    credential.Id.Value,
-                    apiBaseUrl,
-                    command.Token!,
+                TokenResolution resolution = await tokenAccountResolver.ResolveAsync(
+                    credential,
+                    command.Token,
                     baseUrl,
                     isGitLab,
                     cancellationToken);
 
-                if (deriveResult is DeriveGuardResult.Rejected deriveRejected)
+                if (resolution is TokenResolution.Rejected rejected)
                 {
-                    return new Outcome.Rejected(deriveRejected.Error);
+                    return new Outcome.Rejected(rejected.Error);
                 }
 
-                if (deriveResult is DeriveGuardResult.ClaimedElsewhere deriveClaimedElsewhere)
+                if (resolution is TokenResolution.ClaimedElsewhere claimed)
                 {
-                    return new Outcome.ClaimedElsewhere(deriveClaimedElsewhere.Response);
+                    return new Outcome.ClaimedElsewhere(claimed.Response);
                 }
 
-                if (deriveResult is not DeriveGuardResult.Derived derivedResult)
+                if (resolution is not TokenResolution.Resolved resolved)
                 {
-                    throw new UnreachableException($"Unhandled DeriveGuardResult: {deriveResult.GetType().Name}");
+                    throw new UnreachableException(
+                        $"Unhandled TokenResolution: {resolution.GetType().Name}");
                 }
 
-                IReadOnlyCollection<Namespace> derivedNamespaces = derivedResult.Namespaces;
+                accountName = resolved.AccountName;
 
                 UpdateCredential(credential, accountName, command.Token, baseUrl);
 
@@ -230,7 +144,7 @@ internal static partial class UpdateAccount
                 {
                     affectedRepositories = await rotationService.RotateAsync(
                         credential,
-                        derivedNamespaces,
+                        resolved.Namespaces,
                         cancellationToken);
                 }
                 catch (DbUpdateException ex) when (AccountsDatabaseHelpers.IsNamespaceDuplicateViolation(ex))
@@ -262,73 +176,6 @@ internal static partial class UpdateAccount
                 credential.Namespaces.Select(n => n.Value).ToList());
 
             return new Outcome.Updated(new CredentialUpdateResult(summary, affectedRepositories));
-        }
-
-        /// <summary>
-        /// Derives namespaces for the new token and guards against duplicate-account,
-        /// fully-claimed-by-other-logins, and transient-unavailability failures — all before any state mutation.
-        /// </summary>
-        private async Task<DeriveGuardResult> DeriveAndGuardAsync(
-            string accountName,
-            Guid excludeCredentialId,
-            Uri apiBaseUrl,
-            string token,
-            BaseUrlVo baseUrl,
-            bool isGitLab,
-            CancellationToken cancellationToken)
-        {
-            NamespaceDerivationOutcome outcome = await namespaceDeriver.DeriveAsync(
-                apiBaseUrl,
-                token,
-                isGitLab,
-                cancellationToken);
-
-            if (outcome is not NamespaceDerivationOutcome.Derived derived)
-            {
-                return new DeriveGuardResult.Rejected(CredentialErrors.NamespaceDerivationUnavailable);
-            }
-
-            IReadOnlyCollection<Namespace> derivedNamespaces = derived.Namespaces;
-
-            Dictionary<string, (Guid HolderCredentialId, string HolderName)> claimedByOthers =
-                await dbContext.FindClaimedNamespacesAsync(
-                    baseUrl.Value.Host,
-                    excludingCredentialId: excludeCredentialId,
-                    cancellationToken);
-
-            bool allDerivedClaimedByOthers = derivedNamespaces.All(ns => claimedByOthers.TryGetValue(ns.Value, out _));
-
-            if (DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
-            {
-                // Reject only when the rotation would strand the credential on zero namespaces
-                // because the sibling already covers the entire derived set. When a retained set
-                // remains, RotateAsync's never-steal subtraction will reduce to it correctly.
-                if (allDerivedClaimedByOthers)
-                {
-                    return new DeriveGuardResult.Rejected(
-                        CredentialErrors.DuplicateAccount(holderName, sharedOwner));
-                }
-            }
-
-            // Reject when the token's entire (non-empty) derived owner set is already claimed by
-            // OTHER credentials — rotating would strand this account on zero namespace claims.
-            bool derivedIsNonEmpty = derivedNamespaces.Count > 0;
-
-            if (derivedIsNonEmpty && allDerivedClaimedByOthers)
-            {
-                List<NamespaceConflict> conflicts = derivedNamespaces
-                    .OrderBy(ns => ns.Value, StringComparer.Ordinal)
-                    .Select(ns =>
-                    {
-                        claimedByOthers.TryGetValue(ns.Value, out (Guid HolderCredentialId, string HolderName) holder);
-                        return new NamespaceConflict(ns.Value, holder.HolderCredentialId, holder.HolderName);
-                    })
-                    .ToList();
-
-                return new DeriveGuardResult.ClaimedElsewhere(new NamespaceClaimedElsewhereResponse(conflicts));
-            }
-
-            return new DeriveGuardResult.Derived(derivedNamespaces);
         }
 
         private static void UpdateCredential(Credential credential, string accountName, string? token, BaseUrlVo baseUrl)

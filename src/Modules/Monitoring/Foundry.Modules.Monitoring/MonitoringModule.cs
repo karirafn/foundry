@@ -40,6 +40,7 @@ public static class MonitoringModule
         services.AddScoped<INamespaceDeriver, NamespaceDeriver>();
         services.AddScoped<RepositoryEligibilityDiffer>();
         services.AddScoped<CredentialRotationService>();
+        services.AddScoped<TokenAccountResolver>();
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
