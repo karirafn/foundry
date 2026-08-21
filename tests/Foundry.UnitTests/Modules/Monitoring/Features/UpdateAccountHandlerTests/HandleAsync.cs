@@ -57,11 +57,12 @@ public sealed class HandleAsync : IAsyncDisposable
             _dbContext,
             differ);
 
-        return new UpdateAccount.Handler(
+        TokenAccountResolver tokenAccountResolver = new(
             _dbContext,
             validateToken ?? new StubValidateTokenHandler("updated-user"),
-            deriver ?? new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])),
-            rotationService);
+            deriver ?? new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])));
+
+        return new UpdateAccount.Handler(_dbContext, tokenAccountResolver, rotationService);
     }
 
     private async Task<GitHubCredential> SeedCredentialAsync(string accountName = "original-user")
