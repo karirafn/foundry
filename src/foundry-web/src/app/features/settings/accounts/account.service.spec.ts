@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AccountService } from './account.service';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, TokenRequirements, UpdateAccountRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceClaimedElsewhereResponse, NamespaceConflict, TokenRequirements, UpdateAccountRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
 
@@ -396,6 +396,70 @@ describe('AccountService', () => {
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT));
+  });
+
+  // Claimed-elsewhere (409 with NamespaceClaimedElsewhereResponse) — update path
+  it('should set saveError naming holders when updateAccount returns 409 with NamespaceClaimedElsewhereResponse', () => {
+    // Arrange
+    const body: NamespaceClaimedElsewhereResponse = {
+      claimedNamespaces: [
+        { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Other Account' },
+      ],
+    };
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: 'ghp_new' });
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(body, {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Assert — saveError names the holder
+    expect(service.saveError()).toContain('Other Account');
+    expect(service.saveSuccess()).toBe(false);
+    expect(service.saving()).toBe(false);
+  });
+
+  it('should not populate conflicts() when updateAccount returns 409 with NamespaceClaimedElsewhereResponse', () => {
+    // Arrange — conflicts starts empty (fresh service)
+    expect(service.conflicts()).toEqual([]);
+
+    // Act — update-path 409 with claimed-elsewhere body
+    const body: NamespaceClaimedElsewhereResponse = {
+      claimedNamespaces: [
+        { namespace: 'myorg', holderCredentialId: 'cred-2', holderName: 'Other Account' },
+      ],
+    };
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: 'ghp_new' });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(body, {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Assert — conflicts() remains empty (takeover panel must NOT activate on the update path)
+    expect(service.conflicts()).toEqual([]);
+  });
+
+  it('should set saveError naming all holders when multiple namespaces are claimed elsewhere', () => {
+    // Arrange
+    const body: NamespaceClaimedElsewhereResponse = {
+      claimedNamespaces: [
+        { namespace: 'org-a', holderCredentialId: 'cred-1', holderName: 'Account Alpha' },
+        { namespace: 'org-b', holderCredentialId: 'cred-2', holderName: 'Account Beta' },
+      ],
+    };
+    service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: 'ghp_new' });
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(body, {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Assert — both holder names appear in the error message
+    const error = service.saveError();
+    expect(error).toContain('Account Alpha');
+    expect(error).toContain('Account Beta');
   });
 
   // Cycle 6: updateAccount calls PUT /api/accounts/{id}
