@@ -16,12 +16,12 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Issues.Infrastructure.IssueConfigurationTests;
 
-public sealed class OfTypeClaimableIssue : IAsyncDisposable
+public sealed class OfTypeQueuedIssue : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
-    public OfTypeClaimableIssue()
+    public OfTypeQueuedIssue()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -64,7 +64,7 @@ public sealed class OfTypeClaimableIssue : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenMixedStatesExist_OfTypeClaimableIssueReturnsAllThreeQueuedTiersAndExcludesNonClaimable()
+    public async Task WhenMixedStatesExist_OfTypeQueuedIssueReturnsAllThreeQueuedTiersAndExcludesNonClaimable()
     {
         // Arrange
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
@@ -76,12 +76,12 @@ public sealed class OfTypeClaimableIssue : IAsyncDisposable
         DetectedIssue detected4 = SeedDetected(issueNumber: 4, title: "In-progress issue — non-claimable");
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        // Seed QueuedIssue
-        QueuedIssue queued = detected1.Enqueue();
+        // Seed FreshQueuedIssue
+        FreshQueuedIssue queued = detected1.Enqueue();
         await _dbContext.TransitionAsync(detected1, queued, dispatcher, cancellationToken);
 
         // Seed RevisionQueuedIssue
-        QueuedIssue queued2 = detected2.Enqueue();
+        FreshQueuedIssue queued2 = detected2.Enqueue();
         await _dbContext.TransitionAsync(detected2, queued2, dispatcher, cancellationToken);
         InProgressIssue inProgress2 = queued2.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued2, inProgress2, dispatcher, cancellationToken);
@@ -95,7 +95,7 @@ public sealed class OfTypeClaimableIssue : IAsyncDisposable
         await _dbContext.TransitionAsync(review2, revisionQueued, dispatcher, cancellationToken);
 
         // Seed ContinuationQueuedIssue
-        QueuedIssue queued3 = detected3.Enqueue();
+        FreshQueuedIssue queued3 = detected3.Enqueue();
         await _dbContext.TransitionAsync(detected3, queued3, dispatcher, cancellationToken);
         InProgressIssue inProgress3 = queued3.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued3, inProgress3, dispatcher, cancellationToken);
@@ -110,7 +110,7 @@ public sealed class OfTypeClaimableIssue : IAsyncDisposable
         await _dbContext.TransitionAsync(continuableFailed, continuationQueued, dispatcher, cancellationToken);
 
         // Seed InProgressIssue (non-claimable)
-        QueuedIssue queued4 = detected4.Enqueue();
+        FreshQueuedIssue queued4 = detected4.Enqueue();
         await _dbContext.TransitionAsync(detected4, queued4, dispatcher, cancellationToken);
         InProgressIssue inProgress4 = queued4.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued4, inProgress4, dispatcher, cancellationToken);
@@ -118,9 +118,9 @@ public sealed class OfTypeClaimableIssue : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Act
-        List<ClaimableIssue> results = await _dbContext
+        List<QueuedIssue> results = await _dbContext
             .Set<Issue>()
-            .OfType<ClaimableIssue>()
+            .OfType<QueuedIssue>()
             .ToListAsync(cancellationToken);
 
         // Assert

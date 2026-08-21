@@ -66,7 +66,7 @@ public sealed class RunIdMismatch : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         Guid workerRunId = Guid.NewGuid();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         _dbContext.Set<Issue>().Add(inProgress);

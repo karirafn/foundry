@@ -47,7 +47,7 @@ internal sealed class IssueTestDbContext(DbContextOptions<IssueTestDbContext> op
 
             builder.HasDiscriminator<string>("State")
                 .HasValue<DetectedIssue>("detected")
-                .HasValue<QueuedIssue>("queued");
+                .HasValue<FreshQueuedIssue>("queued");
         });
     }
 }

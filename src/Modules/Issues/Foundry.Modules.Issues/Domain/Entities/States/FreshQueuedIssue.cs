@@ -4,14 +4,14 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
-public sealed class QueuedIssue : ClaimableIssue
+public sealed class FreshQueuedIssue : QueuedIssue
 {
     // Private parameterless constructor for EF Core materialization.
-    private QueuedIssue()
+    private FreshQueuedIssue()
     {
     }
 
-    private QueuedIssue(IssueId id) : base(id)
+    private FreshQueuedIssue(IssueId id) : base(id)
     {
     }
 
@@ -23,9 +23,9 @@ public sealed class QueuedIssue : ClaimableIssue
     public override DispatchContext Context =>
         new DispatchContext.Fresh(DispatchBranchName.Value);
 
-    internal static QueuedIssue FromDetected(DetectedIssue detected)
+    internal static FreshQueuedIssue FromDetected(DetectedIssue detected)
     {
-        QueuedIssue queued = new(detected.Id);
+        FreshQueuedIssue queued = new(detected.Id);
         queued.SetSharedProperties(
             detected.MonitoredRepositoryId,
             detected.IssueNumber,
@@ -38,9 +38,9 @@ public sealed class QueuedIssue : ClaimableIssue
         return queued;
     }
 
-    internal static QueuedIssue FromBlocked(BlockedIssue blocked)
+    internal static FreshQueuedIssue FromBlocked(BlockedIssue blocked)
     {
-        QueuedIssue queued = new(blocked.Id);
+        FreshQueuedIssue queued = new(blocked.Id);
         queued.SetSharedProperties(
             blocked.MonitoredRepositoryId,
             blocked.IssueNumber,
@@ -53,9 +53,9 @@ public sealed class QueuedIssue : ClaimableIssue
         return queued;
     }
 
-    internal static QueuedIssue FromRetry(Issue source)
+    internal static FreshQueuedIssue FromRetry(Issue source)
     {
-        QueuedIssue queued = new(source.Id);
+        FreshQueuedIssue queued = new(source.Id);
         queued.SetSharedProperties(
             source.MonitoredRepositoryId,
             source.IssueNumber,

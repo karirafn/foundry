@@ -57,7 +57,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery) =>
         new IssueQueries(_dbContext, new NullRepositorySlugQueries(), eligibilityQuery, new NullWorkerRunQueries());
 
-    private QueuedIssue SeedQueuedIssue(
+    private FreshQueuedIssue SeedQueuedIssue(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
         DateTimeOffset? detectedAt = null)
@@ -71,7 +71,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt ?? Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -92,7 +92,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt ?? Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -121,7 +121,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt ?? Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -160,7 +160,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     public async Task WhenQueuedIssuesAcrossTiers_OrderedByDispatchKey_TierRankFirst()
     {
         // Arrange: RevisionQueued (rank 0) should come before ContinuationQueued (rank 1)
-        // and QueuedIssue (rank 2), even if detected later.
+        // and FreshQueuedIssue (rank 2), even if detected later.
         MonitoredRepositoryId repoA = MonitoredRepositoryId.New();
 
         SeedQueuedIssue(repoA, issueNumber: 1, detectedAt: Now.AddHours(-3));

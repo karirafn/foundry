@@ -70,7 +70,7 @@ public sealed class HandleAsync : IAsyncDisposable
         return detected;
     }
 
-    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
+    private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -81,7 +81,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -117,7 +117,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Worker exited with code 1", Now, "generic_failure");
         _dbContext.Set<Issue>().Add(failed);
@@ -137,7 +137,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -162,7 +162,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -188,7 +188,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -213,7 +213,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -244,7 +244,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         _dbContext.Set<Issue>().Add(inProgress);
         _dbContext.SaveChanges();
@@ -263,7 +263,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -289,7 +289,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -313,7 +313,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -338,7 +338,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
         _dbContext.Set<Issue>().Add(unchanged);
@@ -374,7 +374,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 1);
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 1);
         ProviderIssueUntracked @event = new(repositoryId, 1);
 
         // Act

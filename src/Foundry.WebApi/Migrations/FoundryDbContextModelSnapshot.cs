@@ -816,7 +816,7 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator().HasValue("in_progress");
                 });
 
-            modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.QueuedIssue", b =>
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.FreshQueuedIssue", b =>
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
 

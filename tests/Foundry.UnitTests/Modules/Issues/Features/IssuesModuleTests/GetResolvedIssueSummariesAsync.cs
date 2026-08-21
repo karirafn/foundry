@@ -66,7 +66,7 @@ public sealed class GetResolvedIssueSummariesAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -93,7 +93,7 @@ public sealed class GetResolvedIssueSummariesAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
         _dbContext.Set<Issue>().Add(unchanged);

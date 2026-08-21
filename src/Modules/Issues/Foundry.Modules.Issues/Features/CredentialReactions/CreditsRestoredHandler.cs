@@ -26,7 +26,7 @@ internal sealed class CreditsRestoredHandler(
 
         foreach (FailedIssue failed in failedIssues)
         {
-            QueuedIssue queued = failed.Retry();
+            FreshQueuedIssue queued = failed.Retry();
             await db.TransitionAsync(failed, queued, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(

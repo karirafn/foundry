@@ -63,7 +63,7 @@ public sealed class SelectAsync : IAsyncDisposable
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery());
     }
 
-    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
+    private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -74,14 +74,14 @@ public sealed class SelectAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
         return queued;
     }
 
-    private QueuedIssue SeedQueuedIssueAtTime(
+    private FreshQueuedIssue SeedQueuedIssueAtTime(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
         DateTimeOffset detectedAt)
@@ -95,7 +95,7 @@ public sealed class SelectAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -108,7 +108,7 @@ public sealed class SelectAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
@@ -146,7 +146,7 @@ public sealed class SelectAsync : IAsyncDisposable
     public async Task WhenNoCandidatesExist_ReturnsNoCandidates()
     {
         // Arrange
-        // No ClaimableIssue records in the database.
+        // No QueuedIssue records in the database.
         DispatchCandidateSelector sut = BuildSelector();
 
         // Act
@@ -191,8 +191,8 @@ public sealed class SelectAsync : IAsyncDisposable
         DateTimeOffset newerTime = DateTimeOffset.UtcNow;
 
         // Unresolvable repo has older DetectedAt → lower DispatchOrderKey → heads the queue
-        QueuedIssue unresolvableIssue = SeedQueuedIssueAtTime(unresolvableRepoId, issueNumber: 1, detectedAt: olderTime);
-        QueuedIssue resolvableIssue = SeedQueuedIssueAtTime(resolvableRepoId, issueNumber: 2, detectedAt: newerTime);
+        FreshQueuedIssue unresolvableIssue = SeedQueuedIssueAtTime(unresolvableRepoId, issueNumber: 1, detectedAt: olderTime);
+        FreshQueuedIssue resolvableIssue = SeedQueuedIssueAtTime(resolvableRepoId, issueNumber: 2, detectedAt: newerTime);
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(

@@ -6,7 +6,7 @@ using BranchNameValue = Foundry.Shared.BranchName;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
-public sealed class ContinuationQueuedIssue : ClaimableIssue
+public sealed class ContinuationQueuedIssue : QueuedIssue
 {
     public const int FailureReasonMaxLength = 500;
 

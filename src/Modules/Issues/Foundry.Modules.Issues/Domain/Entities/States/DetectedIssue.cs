@@ -41,7 +41,7 @@ public sealed class DetectedIssue : Issue
         return issue;
     }
 
-    public QueuedIssue Enqueue()
+    public FreshQueuedIssue Enqueue()
     {
         if (BlockedBy.Count > 0)
         {
@@ -49,7 +49,7 @@ public sealed class DetectedIssue : Issue
                 "Cannot enqueue an issue that has unresolved blockers.");
         }
 
-        QueuedIssue queued = QueuedIssue.FromDetected(this);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(this);
         AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }

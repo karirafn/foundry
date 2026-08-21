@@ -7,7 +7,7 @@ using BranchNameValue = Foundry.Shared.BranchName;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
-public sealed class RevisionQueuedIssue : ClaimableIssue
+public sealed class RevisionQueuedIssue : QueuedIssue
 {
     // Private parameterless constructor for EF Core materialization.
     private RevisionQueuedIssue()

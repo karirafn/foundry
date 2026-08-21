@@ -71,7 +71,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,

@@ -66,7 +66,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -79,7 +79,7 @@ public sealed class HandleAsync : IAsyncDisposable
         return review;
     }
 
-    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 2)
+    private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 2)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -90,7 +90,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -136,7 +136,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 2);
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 2);
 
         PullRequestChangesRequested @event = new(
             RepositoryId: repositoryId,
@@ -153,7 +153,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]

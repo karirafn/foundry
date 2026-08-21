@@ -67,7 +67,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         FailedIssue failed = inProgress.MarkFailed(
             inProgress.WorkerRunId,
@@ -94,7 +94,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             inProgress.WorkerRunId,
@@ -126,7 +126,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
         List<Issue> issues = await _dbContext.Set<Issue>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        issues.ShouldAllBe(i => i is QueuedIssue);
+        issues.ShouldAllBe(i => i is FreshQueuedIssue);
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == nonUsageLimitedRepo,
                 TestContext.Current.CancellationToken);
-        usageLimitedIssue.ShouldBeOfType<QueuedIssue>();
+        usageLimitedIssue.ShouldBeOfType<FreshQueuedIssue>();
         nonUsageLimitedIssue.ShouldBeOfType<FailedIssue>();
     }
 

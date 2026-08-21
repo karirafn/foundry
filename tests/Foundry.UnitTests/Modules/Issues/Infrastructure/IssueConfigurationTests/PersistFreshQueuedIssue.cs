@@ -16,12 +16,12 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Issues.Infrastructure.IssueConfigurationTests;
 
-public sealed class PersistQueuedIssue : IAsyncDisposable
+public sealed class PersistFreshQueuedIssue : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
-    public PersistQueuedIssue()
+    public PersistFreshQueuedIssue()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
         _connection.Open();
@@ -47,7 +47,7 @@ public sealed class PersistQueuedIssue : IAsyncDisposable
         ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     [Fact]
-    public async Task WhenQueuedIssueTransitioned_CanBeReloadedAsQueuedIssue()
+    public async Task WhenFreshQueuedIssueTransitioned_CanBeReloadedAsFreshQueuedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -64,7 +64,7 @@ public sealed class PersistQueuedIssue : IAsyncDisposable
         _dbContext.Set<Issue>().Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -74,6 +74,6 @@ public sealed class PersistQueuedIssue : IAsyncDisposable
             .FindAsync([queued.Id], TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeOfType<QueuedIssue>();
+        result.ShouldBeOfType<FreshQueuedIssue>();
     }
 }

@@ -31,7 +31,7 @@ public sealed class MarkFailed
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         return queued.Claim(Guid.NewGuid());
     }
 

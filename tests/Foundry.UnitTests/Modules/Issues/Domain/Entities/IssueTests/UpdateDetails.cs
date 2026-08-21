@@ -54,7 +54,7 @@ public sealed class UpdateDetails
     {
         // Arrange
         DetectedIssue detected = CreateDetectedIssue();
-        QueuedIssue issue = detected.Enqueue();
+        FreshQueuedIssue issue = detected.Enqueue();
         string newTitle = "Updated Title";
         string newBody = "Updated body";
         IReadOnlyList<string> newLabels = ["foundry", "bug"];

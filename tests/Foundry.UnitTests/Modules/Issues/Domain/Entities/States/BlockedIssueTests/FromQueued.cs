@@ -19,7 +19,7 @@ public sealed class FromQueued
     private static ProviderUrl ValidUrl =>
         ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
-    private static QueuedIssue CreateQueuedIssue(MonitoredRepositoryId repositoryId)
+    private static FreshQueuedIssue CreateQueuedIssue(MonitoredRepositoryId repositoryId)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -38,7 +38,7 @@ public sealed class FromQueued
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = CreateQueuedIssue(repositoryId);
         IReadOnlyList<int> blockers = [7];
 
         // Act
@@ -53,7 +53,7 @@ public sealed class FromQueued
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = CreateQueuedIssue(repositoryId);
         IReadOnlyList<int> blockers = [7];
 
         // Act
@@ -76,7 +76,7 @@ public sealed class FromQueued
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = CreateQueuedIssue(repositoryId);
         IReadOnlyList<int> blockers = [7, 13];
 
         // Act

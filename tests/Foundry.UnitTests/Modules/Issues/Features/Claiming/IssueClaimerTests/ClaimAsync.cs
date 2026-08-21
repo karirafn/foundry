@@ -66,7 +66,7 @@ public sealed class ClaimAsync : IAsyncDisposable
             _domainEventDispatcher);
     }
 
-    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1, string title = "Add Health Check")
+    private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1, string title = "Add Health Check")
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -77,7 +77,7 @@ public sealed class ClaimAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -95,7 +95,7 @@ public sealed class ClaimAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -123,7 +123,7 @@ public sealed class ClaimAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -138,13 +138,13 @@ public sealed class ClaimAsync : IAsyncDisposable
         return continuationQueued;
     }
 
-    // Cycle 1: QueuedIssue — issue transitions to InProgressIssue
+    // Cycle 1: FreshQueuedIssue — issue transitions to InProgressIssue
     [Fact]
     public async Task WhenQueuedIssue_TransitionsToInProgress()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
         DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
         Guid workerRunId = Guid.NewGuid();
         IssueClaimer sut = BuildClaimer();
@@ -161,13 +161,13 @@ public sealed class ClaimAsync : IAsyncDisposable
         issue.ShouldBeOfType<InProgressIssue>();
     }
 
-    // Cycle 2: QueuedIssue — dispatches exactly one IssueClaimed event
+    // Cycle 2: FreshQueuedIssue — dispatches exactly one IssueClaimed event
     [Fact]
     public async Task WhenQueuedIssue_DispatchesExactlyOneIssueClaimedEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
         DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
         Guid workerRunId = Guid.NewGuid();
         IssueClaimer sut = BuildClaimer();
@@ -181,13 +181,13 @@ public sealed class ClaimAsync : IAsyncDisposable
             .ShouldHaveSingleItem();
     }
 
-    // Cycle 3: QueuedIssue — IssueClaimed payload has the correct branch name
+    // Cycle 3: FreshQueuedIssue — IssueClaimed payload has the correct branch name
     [Fact]
     public async Task WhenQueuedIssue_IssueClaimed_HasCorrectBranchName()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 42, title: "Add Health Check");
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 42, title: "Add Health Check");
         DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
         Guid workerRunId = Guid.NewGuid();
         IssueClaimer sut = BuildClaimer();
@@ -202,13 +202,13 @@ public sealed class ClaimAsync : IAsyncDisposable
         claimed.Dispatch.BranchName.ShouldBe(BranchName.From("feat/42-add-health-check"));
     }
 
-    // Cycle 4: QueuedIssue — IssueClaimed payload has Fresh context
+    // Cycle 4: FreshQueuedIssue — IssueClaimed payload has Fresh context
     [Fact]
     public async Task WhenQueuedIssue_IssueClaimed_HasFreshContext()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 42, title: "Add Health Check");
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 42, title: "Add Health Check");
         DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
         Guid workerRunId = Guid.NewGuid();
         IssueClaimer sut = BuildClaimer();
@@ -223,13 +223,13 @@ public sealed class ClaimAsync : IAsyncDisposable
         claimed.Dispatch.Context.ShouldBeOfType<DispatchContext.Fresh>();
     }
 
-    // Cycle 5: QueuedIssue — IssueClaimed payload has correct provider
+    // Cycle 5: FreshQueuedIssue — IssueClaimed payload has correct provider
     [Fact]
     public async Task WhenQueuedIssue_IssueClaimed_HasCorrectProvider()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = SeedQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
         RepositoryDispatchInfo gitLabInfo = new(
             "owner/repo",
             new Uri("https://gitlab.com/owner/repo.git"),

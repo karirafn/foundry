@@ -75,7 +75,7 @@ public sealed class HandleAsync : IAsyncDisposable
         return issue;
     }
 
-    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
+    private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -86,7 +86,7 @@ public sealed class HandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -157,7 +157,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await Should.NotThrowAsync(act);
     }
 
-    // Behavior (c): DetectedIssue + no blockers → QueuedIssue
+    // Behavior (c): DetectedIssue + no blockers → FreshQueuedIssue
     [Fact]
     public async Task WhenDetectedIssueHasNoBlockers_TransitionsToQueuedIssue()
     {
@@ -179,7 +179,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 2,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]
@@ -249,7 +249,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .ShouldHaveSingleItem();
     }
 
-    // Behavior (e): QueuedIssue + has blockers → BlockedIssue
+    // Behavior (e): FreshQueuedIssue + has blockers → BlockedIssue
     [Fact]
     public async Task WhenQueuedIssueHasBlockers_TransitionsToBlockedIssue()
     {
@@ -295,7 +295,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .ShouldHaveSingleItem();
     }
 
-    // Behavior (f): BlockedIssue + cleared blockers → QueuedIssue
+    // Behavior (f): BlockedIssue + cleared blockers → FreshQueuedIssue
     [Fact]
     public async Task WhenBlockedIssueHasNoMoreBlockers_TransitionsToQueuedIssue()
     {
@@ -317,7 +317,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 8,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]
@@ -436,7 +436,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 11,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<QueuedIssue>();
+        issue.ShouldBeOfType<FreshQueuedIssue>();
         _dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
 

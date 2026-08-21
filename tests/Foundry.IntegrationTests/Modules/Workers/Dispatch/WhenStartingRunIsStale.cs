@@ -94,7 +94,7 @@ public sealed class WhenStartingRunIsStale : IAsyncDisposable
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow.AddHours(-1));
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(workerRunId.Value);
 
         dbContext.Set<Issue>().Add(inProgress);

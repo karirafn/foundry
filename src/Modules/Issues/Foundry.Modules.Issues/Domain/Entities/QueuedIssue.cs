@@ -7,14 +7,14 @@ namespace Foundry.Modules.Issues.Domain.Entities;
 /// Intermediate abstract base for issue states that can be claimed by a worker.
 /// Carries the polymorphic dispatch members shared by all queued variants.
 /// </summary>
-public abstract class ClaimableIssue : Issue
+public abstract class QueuedIssue : Issue
 {
     // Private parameterless constructor for EF Core materialization.
-    private protected ClaimableIssue() : base(IssueId.New())
+    private protected QueuedIssue() : base(IssueId.New())
     {
     }
 
-    protected ClaimableIssue(IssueId id) : base(id)
+    protected QueuedIssue(IssueId id) : base(id)
     {
     }
 

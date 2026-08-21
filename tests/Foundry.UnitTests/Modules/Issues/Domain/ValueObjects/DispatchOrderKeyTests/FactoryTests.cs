@@ -30,7 +30,7 @@ public sealed class FactoryTests
             labels: ["foundry"],
             detectedAt: detectedAt);
 
-    private static QueuedIssue CreateFreshQueued(DateTimeOffset detectedAt)
+    private static FreshQueuedIssue CreateFreshQueued(DateTimeOffset detectedAt)
     {
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetected(repositoryId, detectedAt);
@@ -41,7 +41,7 @@ public sealed class FactoryTests
     {
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetected(repositoryId, detectedAt);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -55,7 +55,7 @@ public sealed class FactoryTests
     {
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         DetectedIssue detected = CreateDetected(repositoryId, detectedAt);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -71,7 +71,7 @@ public sealed class FactoryTests
     {
         // Arrange
         DateTimeOffset detectedAt = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        QueuedIssue freshQueued = CreateFreshQueued(detectedAt);
+        FreshQueuedIssue freshQueued = CreateFreshQueued(detectedAt);
         int position = 3;
 
         // Act

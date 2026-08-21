@@ -30,7 +30,7 @@ public sealed class BlockedIssue : Issue
         return blocked;
     }
 
-    internal static BlockedIssue FromQueued(QueuedIssue queued, IReadOnlyList<int> blockers)
+    internal static BlockedIssue FromQueued(FreshQueuedIssue queued, IReadOnlyList<int> blockers)
     {
         BlockedIssue blocked = new(queued.Id);
         blocked.SetSharedProperties(
@@ -46,9 +46,9 @@ public sealed class BlockedIssue : Issue
         return blocked;
     }
 
-    public QueuedIssue Unblock()
+    public FreshQueuedIssue Unblock()
     {
-        QueuedIssue queued = QueuedIssue.FromBlocked(this);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromBlocked(this);
         AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }

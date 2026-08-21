@@ -10,9 +10,9 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.QueuedIssueTests;
+namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.FreshQueuedIssueTests;
 
-public sealed class Block
+public sealed class Claim
 {
     private static IssueAuthor ValidAuthor =>
         IssueAuthor.Create("octocat").ValueOrThrow();
@@ -20,7 +20,7 @@ public sealed class Block
     private static ProviderUrl ValidUrl =>
         ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
-    private static QueuedIssue CreateQueuedIssue(MonitoredRepositoryId repositoryId)
+    private static FreshQueuedIssue CreateFreshQueuedIssue(MonitoredRepositoryId repositoryId)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -35,62 +35,68 @@ public sealed class Block
     }
 
     [Fact]
-    public void WhenBlocked_ReturnsBlockedIssueWithSameId()
+    public void WhenClaimed_ReturnsInProgressIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
-        IReadOnlyList<int> blockers = [10];
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
+        Guid workerRunId = Guid.NewGuid();
 
         // Act
-        BlockedIssue blocked = queued.Block(blockers);
+        InProgressIssue inProgress = queued.Claim(workerRunId);
 
         // Assert
-        blocked.Id.ShouldBe(queued.Id);
+        inProgress.Id.ShouldBe(queued.Id);
     }
 
     [Fact]
-    public void WhenBlocked_RaisesIssueBlockedDomainEvent()
+    public void WhenClaimed_RaisesIssueInProgressDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
-        IReadOnlyList<int> blockers = [10];
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
 
         // Act
-        queued.Block(blockers);
+        queued.Claim(Guid.NewGuid());
 
         // Assert
-        IssueBlocked domainEvent = queued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueBlocked>();
+        IssueInProgress domainEvent = queued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInProgress>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(queued.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public void WhenBlocked_BlockedByContainsSuppliedBlockers()
+    public void WhenClaimed_SharedPropertiesAreCopied()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
-        IReadOnlyList<int> blockers = [10, 20];
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
 
         // Act
-        BlockedIssue blocked = queued.Block(blockers);
+        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
 
         // Assert
-        blocked.BlockedBy.ShouldBe(blockers);
+        inProgress.ShouldSatisfyAllConditions(
+            () => inProgress.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => inProgress.IssueNumber.ShouldBe(1),
+            () => inProgress.Title.ShouldBe("Test Issue"),
+            () => inProgress.Body.ShouldBe("Test body"),
+            () => inProgress.Labels.ShouldBe(["foundry"]));
     }
 
     [Fact]
-    public void WhenBlockersIsEmpty_ThrowsInvalidOperationException()
+    public void WhenClaimed_WorkerRunIdMatchesProvidedGuid()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        QueuedIssue queued = CreateQueuedIssue(repositoryId);
-        IReadOnlyList<int> blockers = [];
+        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
+        Guid workerRunId = Guid.NewGuid();
 
-        // Act & Assert
-        Should.Throw<InvalidOperationException>(() => queued.Block(blockers));
+        // Act
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+
+        // Assert
+        inProgress.WorkerRunId.ShouldBe(workerRunId);
     }
 }

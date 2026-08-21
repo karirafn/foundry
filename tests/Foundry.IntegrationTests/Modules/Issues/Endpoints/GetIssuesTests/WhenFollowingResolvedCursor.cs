@@ -59,7 +59,7 @@ public sealed class WhenFollowingResolvedCursor : IAsyncDisposable
             labels: [],
             detectedAt: detectedAt);
 
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,

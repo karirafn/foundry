@@ -74,7 +74,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         return services.BuildServiceProvider();
     }
 
-    private static QueuedIssue SeedQueuedIssue(FoundryDbContext dbContext, MonitoredRepositoryId repositoryId)
+    private static FreshQueuedIssue SeedQueuedIssue(FoundryDbContext dbContext, MonitoredRepositoryId repositoryId)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -85,7 +85,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         dbContext.Set<Issue>().Add(queued);
         dbContext.SaveChanges();
         dbContext.ChangeTracker.Clear();
@@ -276,7 +276,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -301,7 +301,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),

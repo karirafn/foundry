@@ -114,7 +114,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
 
         dbContext.Set<Issue>().Add(queued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -139,7 +139,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             Guid.NewGuid(),
@@ -171,7 +171,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             url: ValidUrl,
             labels: [],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -214,7 +214,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         MonitoredRepositoryId repoB = await SeedEligibleRepositoryAsync("owner/repo-b", position: 1);
         MonitoredRepositoryId ineligibleRepo = await SeedIneligibleRepositoryAsync("owner/ineligible");
 
-        // Issue 1: fresh QueuedIssue on repoA (position 2, tier 2)
+        // Issue 1: fresh FreshQueuedIssue on repoA (position 2, tier 2)
         await SeedQueuedIssueAsync(repoA, issueNumber: 1, detectedAt: Now.AddHours(-3));
 
         // Issue 2: RevisionQueuedIssue on repoB (position 1, tier 0) — highest priority despite repoB's lower position
@@ -223,7 +223,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         // Issue 3: ContinuationQueuedIssue on repoB (position 1, tier 1)
         await SeedContinuationQueuedIssueAsync(repoB, issueNumber: 3, detectedAt: Now.AddHours(-1));
 
-        // Issue 4: QueuedIssue on ineligible repo — must appear after all eligible-repo queued issues
+        // Issue 4: FreshQueuedIssue on ineligible repo — must appear after all eligible-repo queued issues
         await SeedQueuedIssueAsync(ineligibleRepo, issueNumber: 4, detectedAt: Now.AddHours(-10));
 
         // Issue 5: DetectedIssue on repoA — non-queued, must appear last

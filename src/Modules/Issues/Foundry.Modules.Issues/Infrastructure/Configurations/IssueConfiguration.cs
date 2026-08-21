@@ -167,7 +167,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 
         builder.HasDiscriminator<string>("state")
             .HasValue<DetectedIssue>("detected")
-            .HasValue<QueuedIssue>("queued")
+            .HasValue<FreshQueuedIssue>("queued")
             .HasValue<BlockedIssue>("blocked")
             .HasValue<InProgressIssue>("in_progress")
             .HasValue<ReviewIssue>("review")

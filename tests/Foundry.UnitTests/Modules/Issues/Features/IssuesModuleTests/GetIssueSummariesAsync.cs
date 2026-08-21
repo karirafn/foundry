@@ -186,7 +186,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         _slugQueries.AddSlug(repositoryId, "owner/repo");
 
         DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId, issueNumber: 1, DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
@@ -211,7 +211,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         _slugQueries.AddSlug(repositoryId, "owner/repo");
 
         DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId, issueNumber: 1, DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         Guid workerRunId = Guid.NewGuid();
         InProgressIssue inProgress = queued.Claim(workerRunId);
@@ -242,7 +242,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         _slugQueries.AddSlug(repositoryId, "owner/repo");
 
         DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId, issueNumber: 1, DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);

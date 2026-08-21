@@ -78,7 +78,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -91,7 +91,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
         return completed;
     }
 
-    private QueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
+    private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
         DetectedIssue detected = DetectedIssue.Detect(
             repositoryId,
@@ -102,7 +102,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         return queued;
@@ -119,7 +119,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         BlockedIssue blocked = queued.Block([99]);
         _dbContext.Set<Issue>().Add(blocked);
         _dbContext.SaveChanges();
@@ -137,7 +137,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Failure reason", Now, "generic_failure");
         _dbContext.Set<Issue>().Add(failed);
@@ -156,7 +156,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -180,7 +180,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -204,7 +204,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -234,7 +234,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             Guid.NewGuid(),
@@ -259,7 +259,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         _dbContext.Set<Issue>().Add(inProgress);
         _dbContext.SaveChanges();
@@ -277,7 +277,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -300,7 +300,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         ReviewIssue review = inProgress.MarkInReview(
             inProgress.WorkerRunId,
@@ -325,7 +325,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             url: ValidUrl,
             labels: [],
             detectedAt: Now);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
         _dbContext.Set<Issue>().Add(unchanged);

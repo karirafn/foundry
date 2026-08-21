@@ -17,7 +17,7 @@ public readonly record struct DispatchOrderKey(
     /// Builds a <see cref="DispatchOrderKey"/> from a queued issue and its repository position.
     /// Position is external to the aggregate — it comes from the repository's EligibleRepository.Position.
     /// </summary>
-    public static DispatchOrderKey For(ClaimableIssue issue, int position) =>
+    public static DispatchOrderKey For(QueuedIssue issue, int position) =>
         new(issue.TierRank, position, issue.DetectedAt, issue.Id);
 
     public static bool operator <(DispatchOrderKey left, DispatchOrderKey right) => left.CompareTo(right) < 0;

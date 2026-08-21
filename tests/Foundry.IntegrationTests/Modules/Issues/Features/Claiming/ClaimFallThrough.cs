@@ -100,10 +100,10 @@ public sealed class ClaimFallThrough : IAsyncDisposable
     }
 
     /// <summary>
-    /// Seeds a QueuedIssue for the given repository directly via DbContext
+    /// Seeds a FreshQueuedIssue for the given repository directly via DbContext
     /// since no HTTP endpoint produces this state.
     /// </summary>
-    private async Task<QueuedIssue> SeedQueuedIssueAsync(
+    private async Task<FreshQueuedIssue> SeedQueuedIssueAsync(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
         DateTimeOffset detectedAt)
@@ -120,7 +120,7 @@ public sealed class ClaimFallThrough : IAsyncDisposable
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: detectedAt);
-        QueuedIssue queued = QueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
 
         dbContext.Set<Issue>().Add(queued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -144,8 +144,8 @@ public sealed class ClaimFallThrough : IAsyncDisposable
 
         // Both issues have the same detectedAt so position is the tiebreaker.
         DateTimeOffset sameTime = DateTimeOffset.UtcNow.AddMinutes(-1);
-        QueuedIssue unresolvableIssue = await SeedQueuedIssueAsync(unresolvableRepoId, issueNumber: 1, detectedAt: sameTime);
-        QueuedIssue resolvableIssue = await SeedQueuedIssueAsync(resolvableRepoId, issueNumber: 2, detectedAt: sameTime);
+        FreshQueuedIssue unresolvableIssue = await SeedQueuedIssueAsync(unresolvableRepoId, issueNumber: 1, detectedAt: sameTime);
+        FreshQueuedIssue resolvableIssue = await SeedQueuedIssueAsync(resolvableRepoId, issueNumber: 2, detectedAt: sameTime);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 
@@ -165,7 +165,7 @@ public sealed class ClaimFallThrough : IAsyncDisposable
             .FirstOrDefaultAsync(i => i.Id == unresolvableIssue.Id, TestContext.Current.CancellationToken);
 
         claimedIssue.ShouldBeOfType<InProgressIssue>();
-        skippedIssue.ShouldBeOfType<QueuedIssue>();
+        skippedIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public sealed class ClaimFallThrough : IAsyncDisposable
 
         DateTimeOffset sameTime = DateTimeOffset.UtcNow.AddMinutes(-2);
         await SeedQueuedIssueAsync(unresolvableRepoId, issueNumber: 10, detectedAt: sameTime);
-        QueuedIssue resolvableIssue = await SeedQueuedIssueAsync(resolvableRepoId, issueNumber: 11, detectedAt: sameTime);
+        FreshQueuedIssue resolvableIssue = await SeedQueuedIssueAsync(resolvableRepoId, issueNumber: 11, detectedAt: sameTime);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
 

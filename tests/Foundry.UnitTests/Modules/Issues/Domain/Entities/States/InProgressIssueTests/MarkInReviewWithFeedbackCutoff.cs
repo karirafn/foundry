@@ -30,7 +30,7 @@ public sealed class MarkInReviewWithFeedbackCutoff
             url: ValidUrl,
             labels: ["foundry"],
             detectedAt: DateTimeOffset.UtcNow);
-        QueuedIssue queued = detected.Enqueue();
+        FreshQueuedIssue queued = detected.Enqueue();
         return queued.Claim(Guid.NewGuid());
     }
 
