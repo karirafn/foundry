@@ -24,6 +24,7 @@ internal sealed partial class GitHubHttpClient(
 {
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
+    private const string FineGrainedPatPrefix = "github_pat_";
     private const int MaxComments = 50;
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
@@ -502,7 +503,9 @@ internal sealed partial class GitHubHttpClient(
 
         if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
         {
-            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login));
+            return IsFineGrainedPat(token)
+                ? Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login))
+                : Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login));
         }
 
         IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
@@ -906,6 +909,9 @@ internal sealed partial class GitHubHttpClient(
         string uriString = uri.ToString();
         return uriString.EndsWith('/') ? uri : new Uri(uriString + '/');
     }
+
+    private static bool IsFineGrainedPat(string token) =>
+        token.StartsWith(FineGrainedPatPrefix, StringComparison.Ordinal);
 
     private static List<string> ParseMissingScopes(IEnumerable<string> scopeHeaders)
     {
