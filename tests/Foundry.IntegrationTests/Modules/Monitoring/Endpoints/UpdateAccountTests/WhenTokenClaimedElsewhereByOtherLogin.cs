@@ -150,7 +150,7 @@ public sealed class WhenTokenClaimedElsewhereByOtherLogin : IAsyncDisposable
         // Rotate second-user with ThirdTokenClaimed: resolves to "third-user", derives "first-user".
         // "first-user" is claimed by the first account whose login is "first-user" — DIFFERENT from
         // "third-user" — so DuplicateAccount.Find returns null and the step-3 guard fires.
-        (_, Guid secondId) = await SeedTwoAccountsAsync();
+        (Guid firstId, Guid secondId) = await SeedTwoAccountsAsync();
 
         object updateBody = new
         {
@@ -177,7 +177,8 @@ public sealed class WhenTokenClaimedElsewhereByOtherLogin : IAsyncDisposable
             .ShouldHaveSingleItem();
         conflict.ShouldSatisfyAllConditions(
             () => conflict.Namespace.ShouldBe(FirstAccountName),
-            () => conflict.HolderName.ShouldBe(FirstAccountName));
+            () => conflict.HolderName.ShouldBe(FirstAccountName),
+            () => conflict.HolderCredentialId.ShouldBe(firstId));
 
         // Assert — second account's namespace is unchanged (not stranded on zero)
         using IServiceScope scope = _factory.Services.CreateScope();

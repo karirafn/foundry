@@ -575,7 +575,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/NamespaceClaimedElsewhereResponse"
                 }
               }
             }
@@ -2269,6 +2269,20 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "NamespaceClaimedElsewhereResponse": {
+        "required": [
+          "claimedNamespaces"
+        ],
+        "type": "object",
+        "properties": {
+          "claimedNamespaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamespaceConflict"
+            }
           }
         }
       },

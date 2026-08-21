@@ -15,7 +15,6 @@ internal static class CredentialErrors
     internal const string WriteAccessVerificationFailedCode = "Credential.WriteAccessVerificationFailed";
     internal const string DuplicateAccountCode = "Credential.DuplicateAccount";
     internal const string NamespaceDerivationUnavailableCode = "Credential.NamespaceDerivationUnavailable";
-    internal const string NamespaceFullyClaimedElsewhereCode = "Credential.NamespaceFullyClaimedElsewhere";
 
     internal static Error NotFound(CredentialId id) =>
         new(NotFoundCode, $"Credential with ID '{id.Value}' was not found.");
@@ -53,8 +52,4 @@ internal static class CredentialErrors
     internal static Error DuplicateAccount(string holderName, string sharedOwner) =>
         new(DuplicateAccountCode,
             $"Your '{holderName}' account already covers '{sharedOwner}'. Rotate that account's token instead.");
-
-    internal static Error NamespaceFullyClaimedElsewhere(string holderName, string sharedOwner) =>
-        new(NamespaceFullyClaimedElsewhereCode,
-            $"'{sharedOwner}' is already claimed by '{holderName}'. All namespaces derived from this token are held by other credentials.");
 }

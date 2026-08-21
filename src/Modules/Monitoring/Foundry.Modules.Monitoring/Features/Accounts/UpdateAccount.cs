@@ -217,8 +217,12 @@ internal static partial class UpdateAccount
                     return new Outcome.ClaimedElsewhere(deriveClaimedElsewhere.Response);
                 }
 
-                IReadOnlyCollection<Namespace> derivedNamespaces =
-                    ((DeriveGuardResult.Derived)deriveResult).Namespaces;
+                if (deriveResult is not DeriveGuardResult.Derived derivedResult)
+                {
+                    throw new UnreachableException($"Unhandled DeriveGuardResult: {deriveResult.GetType().Name}");
+                }
+
+                IReadOnlyCollection<Namespace> derivedNamespaces = derivedResult.Namespaces;
 
                 UpdateCredential(credential, accountName, command.Token, baseUrl);
 
@@ -292,15 +296,14 @@ internal static partial class UpdateAccount
                     excludingCredentialId: excludeCredentialId,
                     cancellationToken);
 
+            bool allDerivedClaimedByOthers = derivedNamespaces.All(ns => claimedByOthers.TryGetValue(ns.Value, out _));
+
             if (DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
             {
                 // Reject only when the rotation would strand the credential on zero namespaces
                 // because the sibling already covers the entire derived set. When a retained set
                 // remains, RotateAsync's never-steal subtraction will reduce to it correctly.
-                bool retainedSetIsEmpty = derivedNamespaces
-                    .All(ns => claimedByOthers.ContainsKey(ns.Value));
-
-                if (retainedSetIsEmpty)
+                if (allDerivedClaimedByOthers)
                 {
                     return new DeriveGuardResult.Rejected(
                         CredentialErrors.DuplicateAccount(holderName, sharedOwner));
@@ -310,10 +313,8 @@ internal static partial class UpdateAccount
             // Reject when the token's entire (non-empty) derived owner set is already claimed by
             // OTHER credentials — rotating would strand this account on zero namespace claims.
             bool derivedIsNonEmpty = derivedNamespaces.Count > 0;
-            bool everyDerivedIsClaimedByOthers = derivedNamespaces
-                .All(ns => claimedByOthers.ContainsKey(ns.Value));
 
-            if (derivedIsNonEmpty && everyDerivedIsClaimedByOthers)
+            if (derivedIsNonEmpty && allDerivedClaimedByOthers)
             {
                 List<NamespaceConflict> conflicts = derivedNamespaces
                     .OrderBy(ns => ns.Value, StringComparer.Ordinal)
@@ -393,7 +394,6 @@ internal static partial class UpdateAccount
                 .Produces<CredentialUpdateResult>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .Produces<NamespaceClaimedElsewhereResponse>(StatusCodes.Status409Conflict)
-                .Produces<string>(StatusCodes.Status409Conflict)
                 .Produces<string>(StatusCodes.Status400BadRequest);
         }
     }

@@ -14,12 +14,7 @@ export type AffectedRepository = Schemas['AffectedRepository'];
 export type NamespaceConflict = Schemas['NamespaceConflict'];
 export type NamespaceConflictResponse = Schemas['NamespaceConflictResponse'];
 export type TakeoverValidationResponse = Schemas['TakeoverValidationResponse'];
-// NamespaceClaimedElsewhereResponse is not in the generated schema because the ASP.NET Core
-// OpenAPI generator merges duplicate status-code Produces declarations and keeps only one schema
-// for 409. The wire shape is defined by the C# contract in Foundry.Modules.Monitoring.Contracts.
-export interface NamespaceClaimedElsewhereResponse {
-  claimedNamespaces: NamespaceConflict[];
-}
+export type NamespaceClaimedElsewhereResponse = Schemas['NamespaceClaimedElsewhereResponse'];
 export type TokenRequirements = Schemas['TokenRequirements'];
 
 // Client-side refinements layered over the generated string wire type.
