@@ -88,15 +88,15 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        CredentialUpdateResult updateResult = result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>().Value;
-        updateResult.ShouldSatisfyAllConditions(
-            () => updateResult.Credential.Id.ShouldBe(credential.Id.Value),
-            () => updateResult.AffectedRepositories.ShouldBeEmpty());
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.ShouldSatisfyAllConditions(
+            () => updated.Value.Credential.Id.ShouldBe(credential.Id.Value),
+            () => updated.Value.AffectedRepositories.ShouldBeEmpty());
     }
 
     [Fact]
@@ -110,13 +110,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        CredentialUpdateResult updateResult = result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>().Value;
-        updateResult.Credential.Name.ShouldBe("new-account-name");
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.Name.ShouldBe("new-account-name");
     }
 
     [Fact]
@@ -129,15 +129,15 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", Token: null);
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        CredentialUpdateResult updateResult = result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>().Value;
-        updateResult.ShouldSatisfyAllConditions(
-            () => updateResult.Credential.Id.ShouldBe(credential.Id.Value),
-            () => updateResult.AffectedRepositories.ShouldBeEmpty());
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.ShouldSatisfyAllConditions(
+            () => updated.Value.Credential.Id.ShouldBe(credential.Id.Value),
+            () => updated.Value.AffectedRepositories.ShouldBeEmpty());
     }
 
     [Fact]
@@ -170,12 +170,12 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", Token: null);
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert — no token path succeeds regardless of what the deriver would return
-        result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
     }
 
     [Fact]
@@ -193,13 +193,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert — rejected with the correct error code
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.NamespaceDerivationUnavailableCode);
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.NamespaceDerivationUnavailableCode);
 
         // Assert — credential is unchanged in the database (AC#7)
         Credential? stored = await _dbContext.Set<Credential>()
@@ -236,13 +236,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(second.Id, "https://github.com", "ghp_colliding");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert — rejected as duplicate
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.DuplicateAccountCode);
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.DuplicateAccountCode);
 
         // Assert — second account's token/name/baseUrl are unchanged in the database (AC#7)
         Credential? stored = await _dbContext.Set<Credential>()
@@ -274,12 +274,12 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_new");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert — legitimate own-namespace rotation succeeds (not flagged as a duplicate)
-        result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
     }
 
     [Fact]
@@ -308,12 +308,12 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(second.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert — rotation succeeds; second only ends up with its own namespace
-        result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
         Credential? stored = await _dbContext.Set<Credential>()
             .Include(c => c.Namespaces)
             .FirstOrDefaultAsync(c => c.Id == second.Id, CancellationToken.None);
@@ -352,12 +352,12 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credentialA.Id, "https://github.com", "ghp_new_a");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>();
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
 
         Credential? storedA = await _dbContext.Set<Credential>()
             .Include(c => c.Namespaces)
@@ -376,6 +376,130 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAllDerivedNamespacesClaimedByDifferentLogin_ReturnsClaimedElsewhere()
+    {
+        // Arrange — seed holder claiming "org-a", and subject with no namespaces.
+        // Subject's new token resolves to "subject-user" (different login from holder)
+        // but derives only "org-a" — already fully claimed by holder.
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+
+        GitHubCredential holder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        Namespace orgNs = Namespace.Create("org-a").ValueOrThrow();
+        holder.SetNamespaces([orgNs]);
+        _dbContext.Set<Credential>().Add(holder);
+
+        GitHubCredential subject = GitHubCredential.Create("subject-user", "ghp_subject", baseUrl);
+        subject.SetNamespaces([]);
+        _dbContext.Set<Credential>().Add(subject);
+
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("subject-user"),
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([orgNs], [])));
+
+        UpdateAccount.Command command = new(subject.Id, "https://github.com", "ghp_new_subject");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert — returns ClaimedElsewhere with the conflict details
+        UpdateAccount.Outcome.ClaimedElsewhere claimedElsewhere =
+            outcome.ShouldBeOfType<UpdateAccount.Outcome.ClaimedElsewhere>();
+        claimedElsewhere.Response.ClaimedNamespaces.Count.ShouldBe(1);
+        NamespaceConflict conflict = claimedElsewhere.Response.ClaimedNamespaces[0];
+        conflict.ShouldSatisfyAllConditions(
+            () => conflict.Namespace.ShouldBe("org-a"),
+            () => conflict.HolderCredentialId.ShouldBe(holder.Id.Value),
+            () => conflict.HolderName.ShouldBe("holder-user"));
+
+        // Assert — subject's namespaces are unchanged (no strand)
+        Credential? stored = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == subject.Id, CancellationToken.None);
+        stored.ShouldNotBeNull();
+        stored.Namespaces.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenPartialDerivedSetClaimedByOthers_ReturnsUpdatedWithRetainedNamespace()
+    {
+        // Arrange — holder claims "claimed-org"; subject derives both "claimed-org" and "free-org".
+        // Guard must NOT fire — "free-org" is available, so rotation can proceed and retain it.
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+
+        GitHubCredential holder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        Namespace claimedNs = Namespace.Create("claimed-org").ValueOrThrow();
+        holder.SetNamespaces([claimedNs]);
+        _dbContext.Set<Credential>().Add(holder);
+
+        GitHubCredential subject = GitHubCredential.Create("subject-user", "ghp_subject", baseUrl);
+        _dbContext.Set<Credential>().Add(subject);
+
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        Namespace freeNs = Namespace.Create("free-org").ValueOrThrow();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("subject-user"),
+            deriver: new StubNamespaceDeriver(
+                new NamespaceDerivationOutcome.Derived([claimedNs, freeNs], [])));
+
+        UpdateAccount.Command command = new(subject.Id, "https://github.com", "ghp_new_subject");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert — partial overlap must not trigger the fully-claimed guard
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+
+        // Assert — subject retains only the free namespace after rotation
+        Credential? stored = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == subject.Id, CancellationToken.None);
+        stored.ShouldNotBeNull();
+        stored.Namespaces.ShouldSatisfyAllConditions(
+            () => stored.Namespaces.ShouldContain(n => n.Value == "free-org"),
+            () => stored.Namespaces.ShouldNotContain(n => n.Value == "claimed-org"));
+    }
+
+    [Fact]
+    public async Task WhenDerivedSetIsEmpty_DoesNotReturnClaimedElsewhere()
+    {
+        // Arrange — another credential claims a namespace, but the deriver returns an empty set.
+        // The fully-claimed guard must NOT fire on an empty derived set.
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+
+        GitHubCredential holder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        Namespace holderNs = Namespace.Create("some-org").ValueOrThrow();
+        holder.SetNamespaces([holderNs]);
+        _dbContext.Set<Credential>().Add(holder);
+
+        GitHubCredential subject = GitHubCredential.Create("subject-user", "ghp_subject", baseUrl);
+        _dbContext.Set<Credential>().Add(subject);
+
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Deriver returns empty — zero derived namespaces
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("subject-user"),
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])));
+
+        UpdateAccount.Command command = new(subject.Id, "https://github.com", "ghp_new_subject");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert — empty derived set must not trigger the fully-claimed guard
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+    }
+
+    [Fact]
     public async Task WhenCredentialNotFound_ReturnsNotFoundError()
     {
         // Arrange
@@ -384,13 +508,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(nonExistentId, "https://github.com", Token: null);
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.NotFoundCode);
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.NotFoundCode);
     }
 
     [Fact]
@@ -406,13 +530,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
     }
 
     [Fact]
@@ -428,13 +552,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        CredentialUpdateResult updateResult = result.ShouldBeOfType<Result<CredentialUpdateResult>.Success>().Value;
-        updateResult.Credential.Name.ShouldBe("unverifiable-user");
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.Name.ShouldBe("unverifiable-user");
     }
 
     [Fact]
@@ -451,14 +575,14 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.ProviderMismatchCode);
-        failure.Error.Message.ShouldContain("gitlab");
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.ProviderMismatchCode);
+        rejected.Error.Message.ShouldContain("gitlab");
     }
 
     [Fact]
@@ -474,13 +598,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
     }
 
     [Fact]
@@ -496,13 +620,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
     }
 
     [Fact]
@@ -519,13 +643,13 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
-        Result<CredentialUpdateResult> result = await handler.HandleAsync(
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
             command,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Result<CredentialUpdateResult>.Failure failure = result.ShouldBeOfType<Result<CredentialUpdateResult>.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
     }
 
     // Stubs and fakes

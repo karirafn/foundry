@@ -670,6 +670,9 @@ export interface components {
             /** Format: int32 */
             position: number | string;
         };
+        NamespaceClaimedElsewhereResponse: {
+            claimedNamespaces: components["schemas"]["NamespaceConflict"][];
+        };
         NamespaceConflict: {
             namespace: string;
             /** Format: uuid */
@@ -1310,7 +1313,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string;
+                    "application/json": components["schemas"]["NamespaceClaimedElsewhereResponse"];
                 };
             };
         };

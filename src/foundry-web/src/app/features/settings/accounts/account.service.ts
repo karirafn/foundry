@@ -2,7 +2,7 @@ import { Injectable, Signal, WritableSignal, effect, inject, signal } from '@ang
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError, firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, NamespaceConflictResponse, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceClaimedElsewhereResponse, NamespaceConflict, NamespaceConflictResponse, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
 
@@ -176,6 +176,24 @@ export class AccountService {
         },
         error: (err: HttpErrorResponse | TimeoutError) => {
           console.error(err);
+          if (!(err instanceof TimeoutError)) {
+            // Guard is shape-based (not status-based) by design: keeps this path
+            // separate from the create-path conflict (NamespaceConflictResponse) and
+            // plain-string 409s. Never sets _conflictsSignal — that would render the
+            // takeover panel, which must only appear on the create path.
+            if (err.status === 409 && this._isClaimedElsewhereResponse(err.error)) {
+              const body = err.error as NamespaceClaimedElsewhereResponse;
+              const holderList = body.claimedNamespaces
+                .map(c => `${c.namespace} (held by ${c.holderName})`)
+                .join(', ');
+              const message = `Cannot rotate token: all derived namespaces are claimed by other accounts — ${holderList}.`;
+              this._saveErrorSignal.set(message);
+              this._srAnnouncementSignal.set(`Could not update account: ${message}`);
+              this._savingSignal.set(false);
+              this._saveSuccessSignal.set(false);
+              return;
+            }
+          }
           const message = this._extractErrorMessage(err);
           this._saveErrorSignal.set(message);
           this._srAnnouncementSignal.set(`Could not update account: ${message}`);
@@ -246,6 +264,15 @@ export class AccountService {
       body !== null &&
       'conflicts' in body &&
       Array.isArray((body as NamespaceConflictResponse).conflicts)
+    );
+  }
+
+  private _isClaimedElsewhereResponse(body: unknown): boolean {
+    return (
+      typeof body === 'object' &&
+      body !== null &&
+      'claimedNamespaces' in body &&
+      Array.isArray((body as NamespaceClaimedElsewhereResponse).claimedNamespaces)
     );
   }
 

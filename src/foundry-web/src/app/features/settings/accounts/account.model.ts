@@ -14,6 +14,7 @@ export type AffectedRepository = Schemas['AffectedRepository'];
 export type NamespaceConflict = Schemas['NamespaceConflict'];
 export type NamespaceConflictResponse = Schemas['NamespaceConflictResponse'];
 export type TakeoverValidationResponse = Schemas['TakeoverValidationResponse'];
+export type NamespaceClaimedElsewhereResponse = Schemas['NamespaceClaimedElsewhereResponse'];
 export type TokenRequirements = Schemas['TokenRequirements'];
 
 // Client-side refinements layered over the generated string wire type.
