@@ -1353,6 +1353,13 @@ public sealed class PollAsync : IAsyncDisposable
             return Task.FromResult(_untrackableNumbers);
         }
 
+        public Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+        }
+
         public Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
             MonitoredRepositoryId? repositoryId,
             CancellationToken cancellationToken)

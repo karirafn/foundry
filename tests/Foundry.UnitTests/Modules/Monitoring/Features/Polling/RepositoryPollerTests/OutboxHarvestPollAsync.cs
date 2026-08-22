@@ -236,6 +236,11 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
 
+        public Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+
         public Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
             MonitoredRepositoryId? repositoryId,
             CancellationToken cancellationToken)

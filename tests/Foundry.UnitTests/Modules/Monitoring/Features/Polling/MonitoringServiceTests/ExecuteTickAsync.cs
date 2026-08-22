@@ -350,6 +350,13 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             return Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
         }
 
+        public Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+        }
+
         public Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
             MonitoredRepositoryId? repositoryId,
             IReadOnlyCollection<string>? states,

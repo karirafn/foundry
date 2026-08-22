@@ -52,6 +52,28 @@ internal sealed class IssueQueries(
         return snapshots;
     }
 
+    public async Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        // EF Core cannot translate a C# instance method call into SQL, so the type-pattern
+        // Where clause is kept explicit here. Only the three concrete states that
+        // ProcessIssueDependenciesHandler acts on are included — FreshQueuedIssue is used
+        // explicitly (never the QueuedIssue base type) because RevisionQueuedIssue and
+        // ContinuationQueuedIssue both derive from QueuedIssue but are not acted on.
+        List<int> numbers = await db.Set<Issue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Where(i =>
+                i is DetectedIssue ||
+                i is FreshQueuedIssue ||
+                i is BlockedIssue)
+            .Select(i => i.IssueNumber)
+            .ToListAsync(cancellationToken);
+
+        return numbers.ToHashSet();
+    }
+
     public async Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
