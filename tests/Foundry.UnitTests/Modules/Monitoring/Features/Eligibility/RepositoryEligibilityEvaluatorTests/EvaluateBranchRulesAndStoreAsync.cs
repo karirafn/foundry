@@ -17,12 +17,21 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Features.Eligibility.RepositoryEligibilityEvaluatorTests;
 
-public sealed class EvaluateAndStoreAsync
+public sealed class EvaluateBranchRulesAndStoreAsync
 {
-    private static MonitoredRepository CreateRepo(string slug = "owner/repo")
+    private static MonitoredRepository CreateRepo(
+        string slug = "owner/repo",
+        WriteProbeVerdict? verdict = null)
     {
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
-        return MonitoredRepository.Create(repositorySlug, "github.com", pollInterval: null);
+        MonitoredRepository repo = MonitoredRepository.Create(repositorySlug, "github.com", pollInterval: null);
+
+        if (verdict is not null)
+        {
+            repo.SetWriteProbeVerdict(verdict);
+        }
+
+        return repo;
     }
 
     private static RepositoryEligibilityEvaluator CreateSut(
@@ -33,7 +42,7 @@ public sealed class EvaluateAndStoreAsync
         return new RepositoryEligibilityEvaluator(
             resolver ?? new NullCredentialResolver(),
             providerFactory ?? new NullProviderFactory(),
-            writeProber ?? new GrantedWriteProber(),
+            writeProber ?? new NeverCalledWriteProber(),
             NullLogger<RepositoryEligibilityEvaluator>.Instance);
     }
 
@@ -41,11 +50,11 @@ public sealed class EvaluateAndStoreAsync
     public async Task WhenNoCredentialCoversRepo_SetsEligibilityToIneligibleWithNoCredentialViolation()
     {
         // Arrange
-        MonitoredRepository repo = CreateRepo("myorg/repo");
+        MonitoredRepository repo = CreateRepo("myorg/repo", new WriteProbeVerdict.Granted());
         RepositoryEligibilityEvaluator sut = CreateSut(resolver: new NullCredentialResolver());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
@@ -57,272 +66,154 @@ public sealed class EvaluateAndStoreAsync
     public async Task WhenNoCredentialCoversRepo_DoesNotInvokeProviderFactory()
     {
         // Arrange
-        MonitoredRepository repo = CreateRepo("myorg/repo");
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         TrackingProviderFactory trackingFactory = new();
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new NullCredentialResolver(),
             providerFactory: trackingFactory);
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         trackingFactory.WasInvoked.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task WhenNoCredentialCoversRepo_ReportsTopLevelNamespace()
+    public async Task WhenVerdictIsDenied_SetsEligibilityToIneligibleWithCannotPushViolation()
     {
-        // Arrange — "a/b/c/repo" has top-level namespace "a" (last in PrefixesOf, which is longest-first)
-        MonitoredRepository repo = CreateRepo("a/b/c/repo");
-        RepositoryEligibilityEvaluator sut = CreateSut(resolver: new NullCredentialResolver());
+        // Arrange
+        MonitoredRepository repo = CreateRepo("owner/repo", new WriteProbeVerdict.Denied());
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        TrackingProviderFactory trackingFactory = new();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: trackingFactory);
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
-        ineligible.Violations[0].Rule.ShouldBe("no-credential:a");
+        ineligible.Violations.ShouldHaveSingleItem();
+        ineligible.Violations[0].Rule.ShouldBe("cannot-push:owner/repo");
     }
 
     [Fact]
-    public async Task WhenGitHubCredentialCoversRepo_AndProbeGranted_AndBranchProtectionPasses_SetsEligibilityToEligible()
+    public async Task WhenVerdictIsDenied_DoesNotRunBranchRulesGet()
     {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
+        // Arrange — Denied short-circuits before branch-rules GET
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Denied());
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        TrackingProviderFactory trackingFactory = new();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: trackingFactory);
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        trackingFactory.WasInvoked.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenVerdictIsUnknown_SetsEligibilityToUnreachable()
+    {
+        // Arrange — Unknown means never probed; pit-of-success: do not treat as eligible
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Unknown());
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new NullProviderFactory());
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+    }
+
+    [Fact]
+    public async Task WhenVerdictIsUnknown_DoesNotRunBranchRulesGet()
+    {
+        // Arrange — Unknown short-circuits without invoking the provider
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Unknown());
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        TrackingProviderFactory trackingFactory = new();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: trackingFactory);
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        trackingFactory.WasInvoked.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenVerdictIsGranted_AndBranchProtectionPasses_SetsEligibilityToEligible()
+    {
+        // Arrange — auto-heal: stored Granted + passing ruleset → Eligible without any probe (ADR-0013)
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
             "test",
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
+    }
+
+    [Fact]
+    public async Task WhenVerdictIsGranted_AndBranchProtectionPasses_DoesNotRunWriteProbe()
+    {
+        // Arrange — EvaluateBranchRulesAndStoreAsync must not invoke IGitHubWriteProber
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+
+        // NeverCalledWriteProber throws if invoked — proves no write probe was issued
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
             providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)),
-            writeProber: new GrantedWriteProber());
+            writeProber: new NeverCalledWriteProber());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
     }
 
     [Fact]
-    public async Task WhenGitHubProbeReturnsMissing_SetsEligibilityToIneligibleWithCannotPushViolation()
+    public async Task WhenVerdictIsGranted_AndBranchProtectionFails_SetsEligibilityToUnreachable()
     {
         // Arrange
-        MonitoredRepository repo = CreateRepo("owner/repo");
-        GitHubCredential credential = GitHubCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://github.com").ValueOrThrow());
-        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
-        StubProviderFactory factory = new(Result<BranchProtection>.Ok(protection));
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: factory,
-            writeProber: new MissingWriteProber(WritePermission.Contents));
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
-        ineligible.Violations.ShouldHaveSingleItem();
-        ineligible.Violations[0].Rule.ShouldBe("cannot-push:owner/repo");
-        factory.CreatedProvider.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task WhenGitHubProbeReturnsTransportFailure_SetsEligibilityToUnreachable()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
-        GitHubCredential credential = GitHubCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://github.com").ValueOrThrow());
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: new NullProviderFactory(),
-            writeProber: new FailingWriteProber());
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
-    }
-
-    [Fact]
-    public async Task WhenGitLabCredentialCoversRepo_AndCanPushReturnsFalse_SetsEligibilityToIneligibleWithCannotPushViolation()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo("owner/repo");
-        GitLabCredential credential = GitLabCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://gitlab.com").ValueOrThrow());
-        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
-        StubProviderFactory factory = new(
-            Result<BranchProtection>.Ok(protection),
-            canPushResult: Result<bool>.Ok(false));
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: factory,
-            writeProber: new GrantedWriteProber());
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
-        ineligible.Violations.ShouldHaveSingleItem();
-        ineligible.Violations[0].Rule.ShouldBe("cannot-push:owner/repo");
-        factory.CreatedProvider.ShouldNotBeNull();
-        factory.CreatedProvider!.BranchProtectionWasCalled.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task WhenGitLabCredentialCoversRepo_AndCanPushFails_SetsEligibilityToUnreachable()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
-        GitLabCredential credential = GitLabCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://gitlab.com").ValueOrThrow());
-        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: new StubProviderFactory(
-                Result<BranchProtection>.Ok(protection),
-                canPushResult: Result<bool>.Fail(new Error("Provider.Error", "Upstream error"))));
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
-    }
-
-    [Fact]
-    public async Task WhenGitLabCanPushThrows_SetsEligibilityToUnreachable()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
-        GitLabCredential credential = GitLabCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://gitlab.com").ValueOrThrow());
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: new ThrowingCanPushProviderFactory());
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
-    }
-
-    [Fact]
-    public async Task WhenGitLabCredentialCoversRepo_AndCanPushReturnsTrue_AndBranchProtectionPasses_SetsEligibilityToEligible()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
-        GitLabCredential credential = GitLabCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://gitlab.com").ValueOrThrow());
-        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
-        StubProviderFactory factory = new(
-            Result<BranchProtection>.Ok(protection),
-            canPushResult: Result<bool>.Ok(true));
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: factory);
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
-        factory.CreatedProvider.ShouldNotBeNull();
-        factory.CreatedProvider!.BranchProtectionWasCalled.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task WhenCredentialCoversRepo_AndProviderReturnsDirectPushesViolation_SetsEligibilityToIneligible()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
-        BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
-        GitHubCredential credential = GitHubCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://github.com").ValueOrThrow());
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
-        ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDirectPushesRule);
-    }
-
-    [Fact]
-    public async Task WhenCredentialCoversRepo_AndProviderReturnsForcePushesViolation_SetsEligibilityToIneligible()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
-        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: false, RejectDeletion: true);
-        GitHubCredential credential = GitHubCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://github.com").ValueOrThrow());
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
-        ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowForcePushesRule);
-    }
-
-    [Fact]
-    public async Task WhenCredentialCoversRepo_AndProviderReturnsDeletionViolation_SetsEligibilityToIneligible()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
-        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: false);
-        GitHubCredential credential = GitHubCredential.Create(
-            "test",
-            "token",
-            BaseUrl.Create("https://github.com").ValueOrThrow());
-        RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(credential),
-            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
-
-        // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
-
-        // Assert
-        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
-        ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDeletionRule);
-    }
-
-    [Fact]
-    public async Task WhenCredentialCoversRepo_AndProviderFails_SetsEligibilityToUnreachable()
-    {
-        // Arrange
-        MonitoredRepository repo = CreateRepo();
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.Create(
             "test",
             "token",
@@ -333,17 +224,17 @@ public sealed class EvaluateAndStoreAsync
                 Result<BranchProtection>.Fail(new Error("Provider.Error", "Unreachable"))));
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
     }
 
     [Fact]
-    public async Task WhenGetBranchProtectionThrows_SetsEligibilityToUnreachable()
+    public async Task WhenVerdictIsGranted_AndBranchProtectionThrows_SetsEligibilityToUnreachable()
     {
         // Arrange
-        MonitoredRepository repo = CreateRepo();
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.Create(
             "test",
             "token",
@@ -353,10 +244,53 @@ public sealed class EvaluateAndStoreAsync
             providerFactory: new ThrowingBranchProtectionProviderFactory());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+    }
+
+    [Fact]
+    public async Task WhenVerdictIsGranted_AndDirectPushViolation_SetsEligibilityToIneligible()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldContain(v => v.Rule == EligibilityViolation.AllowDirectPushesRule);
+    }
+
+    [Fact]
+    public async Task WhenVerdictIsGranted_DoesNotAlterStoredVerdict()
+    {
+        // Arrange — cheap path must not overwrite the persisted verdict
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Granted>();
     }
 
     // Returns null — simulates no credential covering the repository
@@ -381,7 +315,7 @@ public sealed class EvaluateAndStoreAsync
     private sealed class NullProviderFactory : IIssueProviderFactory
     {
         public IIssueProvider CreateProvider(Credential credential, string token) =>
-            throw new InvalidOperationException("Provider factory must not be called when no credential covers the repo.");
+            throw new InvalidOperationException("Provider factory must not be called when verdict short-circuits.");
     }
 
     private sealed class TrackingProviderFactory : IIssueProviderFactory
@@ -465,14 +399,8 @@ public sealed class EvaluateAndStoreAsync
     {
         private readonly Result<bool> _canPushResult = canPushResult ?? Result<bool>.Ok(true);
 
-        public StubProvider? CreatedProvider { get; private set; }
-
-        public IIssueProvider CreateProvider(Credential credential, string token)
-        {
-            StubProvider provider = new(branchProtectionResult, _canPushResult);
-            CreatedProvider = provider;
-            return provider;
-        }
+        public IIssueProvider CreateProvider(Credential credential, string token) =>
+            new StubProvider(branchProtectionResult, _canPushResult);
     }
 
     private sealed class ThrowingBranchProtectionProviderFactory : IIssueProviderFactory
@@ -486,8 +414,6 @@ public sealed class EvaluateAndStoreAsync
         Result<bool>? canPushResult = null) : IIssueProvider
     {
         private readonly Result<bool> _canPushResult = canPushResult ?? Result<bool>.Ok(true);
-
-        public bool BranchProtectionWasCalled { get; private set; }
 
         public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
             RepositorySlug slug,
@@ -522,10 +448,7 @@ public sealed class EvaluateAndStoreAsync
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
-        {
-            BranchProtectionWasCalled = true;
-            return Task.FromResult(branchProtectionResult);
-        }
+            => Task.FromResult(branchProtectionResult);
 
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,
@@ -616,108 +539,15 @@ public sealed class EvaluateAndStoreAsync
             => Task.FromResult(Result<bool>.Ok(true));
     }
 
-    private sealed class ThrowingCanPushProviderFactory : IIssueProviderFactory
-    {
-        public IIssueProvider CreateProvider(Credential credential, string token) =>
-            new ThrowingCanPushProvider();
-
-        private sealed class ThrowingCanPushProvider : IIssueProvider
-        {
-            public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
-                RepositorySlug slug,
-                CancellationToken cancellationToken)
-                => Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
-
-            public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
-                RepositorySlug slug,
-                int issueNumber,
-                CancellationToken cancellationToken)
-                => Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
-
-            public Task<Result<bool>> IsIssueClosedAsync(
-                RepositorySlug slug,
-                int issueNumber,
-                CancellationToken cancellationToken)
-                => Task.FromResult(Result<bool>.Ok(false));
-
-            public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-                RepositorySlug slug,
-                string pullRequestUrl,
-                CancellationToken cancellationToken)
-                => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
-
-            public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
-                RepositorySlug slug,
-                string pullRequestUrl,
-                DateTimeOffset since,
-                CancellationToken cancellationToken)
-                => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
-
-            public Task<Result<BranchProtection>> GetBranchProtectionAsync(
-                RepositorySlug slug,
-                CancellationToken cancellationToken)
-                => Task.FromResult(Result<BranchProtection>.Ok(
-                    new BranchProtection("main", true, true, true)));
-
-            public Task<Result<bool>> CreateBranchAsync(
-                RepositorySlug slug,
-                string branchName,
-                CancellationToken cancellationToken)
-                => Task.FromResult(Result<bool>.Ok(true));
-
-            public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
-                RepositorySlug slug,
-                string branchName,
-                CancellationToken cancellationToken)
-                => Task.FromResult(
-                    Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
-
-            public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
-                RepositorySlug slug,
-                string branchName,
-                CancellationToken cancellationToken)
-                => Task.FromResult(
-                    Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit found")));
-
-            public Task<Result<bool>> CanPushAsync(
-                RepositorySlug slug,
-                CancellationToken cancellationToken)
-                => throw new HttpRequestException("Connection refused");
-        }
-    }
-
-    // Always returns Granted — default for tests that don't exercise the probe outcome
-    private sealed class GrantedWriteProber : IGitHubWriteProber
+    // Throws if invoked — proves no write probe was issued during the cheap evaluation path
+    private sealed class NeverCalledWriteProber : IGitHubWriteProber
     {
         public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
             Uri apiBaseUrl,
             RepositorySlug slug,
             string token,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()));
-    }
-
-    // Returns Missing with the given permission — simulates insufficient write access
-    private sealed class MissingWriteProber(WritePermission permission) : IGitHubWriteProber
-    {
-        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
-            Uri apiBaseUrl,
-            RepositorySlug slug,
-            string token,
-            CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permission)));
-    }
-
-    // Returns transport failure — simulates unreachable GitHub API
-    private sealed class FailingWriteProber : IGitHubWriteProber
-    {
-        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
-            Uri apiBaseUrl,
-            RepositorySlug slug,
-            string token,
-            CancellationToken cancellationToken)
-            => Task.FromResult(
-                Result<WritePermissionProbeResult>.Fail(new Error("GitHub.Unreachable", "Transport failure")));
+            => throw new InvalidOperationException(
+                "EvaluateBranchRulesAndStoreAsync must not invoke the write prober.");
     }
 }

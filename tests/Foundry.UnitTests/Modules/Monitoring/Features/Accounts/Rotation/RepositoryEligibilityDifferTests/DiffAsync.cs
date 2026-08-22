@@ -161,18 +161,78 @@ public sealed class DiffAsync : IAsyncDisposable
             () => affected.NewStatus.ShouldBe("eligible"));
     }
 
+    [Fact]
+    public async Task WhenDiffingRepos_CallsFullEvaluationNotCheapPath()
+    {
+        // Arrange — credential rotation/transfer must refresh the write probe (full path)
+        MonitoredRepository repo = await SeedRepoAsync("owner/repo", new RepositoryEligibility.Eligible());
+        Dictionary<Guid, string> priorStatus = new() { [repo.Id.Value] = "eligible" };
+        TrackingEligibilityEvaluator evaluator = new();
+        RepositoryEligibilityDiffer sut = BuildSut(evaluator);
+
+        // Act
+        IReadOnlyList<AffectedRepository> result = await sut.DiffAsync(
+            [repo],
+            [],
+            priorStatus,
+            CancellationToken.None);
+
+        // Assert
+        evaluator.FullEvaluateCallCount.ShouldBe(1);
+        evaluator.CheapEvaluateCallCount.ShouldBe(0);
+    }
+
     private sealed class NoOpEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
     }
 
+    private sealed class TrackingEligibilityEvaluator : IRepositoryEligibilityEvaluator
+    {
+        public int FullEvaluateCallCount { get; private set; }
+        public int CheapEvaluateCallCount { get; private set; }
+
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            FullEvaluateCallCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            CheapEvaluateCallCount++;
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class AssignedEligibilityEvaluator(
         Dictionary<string, RepositoryEligibility> assignments) : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            if (assignments.TryGetValue(repo.Slug.FullPath, out RepositoryEligibility? eligibility))
+            {
+                repo.SetEligibility(eligibility);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
         {

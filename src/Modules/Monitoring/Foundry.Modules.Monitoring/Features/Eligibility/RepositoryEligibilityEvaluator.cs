@@ -16,7 +16,10 @@ internal sealed class RepositoryEligibilityEvaluator(
     IGitHubWriteProber gitHubWriteProber,
     ILogger<RepositoryEligibilityEvaluator> logger) : IRepositoryEligibilityEvaluator
 {
-    public async Task EvaluateAndStoreAsync(
+    private readonly EligibilityComposer _composer = new(providerFactory);
+
+    /// <inheritdoc/>
+    public async Task EvaluateFullyAndStoreAsync(
         MonitoredRepository repo,
         CancellationToken cancellationToken)
     {
@@ -35,13 +38,18 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         string token = credential.Token ?? string.Empty;
 
-        RepositoryEligibility eligibility;
-
         try
         {
-            eligibility = credential is GitHubCredential gitHubCredential
-                ? await EvaluateGitHubEligibilityAsync(repo, gitHubCredential, token, cancellationToken)
-                : await EvaluateProviderEligibilityAsync(repo, credential, token, cancellationToken);
+            WriteProbeVerdict verdict = await RunWriteProbeAsync(repo, credential, token, cancellationToken);
+            repo.SetWriteProbeVerdict(verdict);
+
+            RepositoryEligibility eligibility = await _composer.ComposeAsync(
+                repo.Slug,
+                verdict,
+                credential,
+                token,
+                cancellationToken);
+            repo.SetEligibility(eligibility);
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — treat all as unreachable
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -51,13 +59,71 @@ internal sealed class RepositoryEligibilityEvaluator(
                 ex,
                 "Failed to evaluate eligibility for repository {Slug}; marking as unreachable.",
                 repo.Slug);
-            eligibility = new RepositoryEligibility.Unreachable();
+            // Reset verdict to Unknown so the cheap poll path (EvaluateBranchRulesAndStoreAsync) does
+            // not trust a stale Granted verdict from a previous cycle and re-open eligibility to Eligible
+            // without a fresh write probe succeeding.
+            repo.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown());
+            repo.SetEligibility(new RepositoryEligibility.Unreachable());
         }
-
-        repo.SetEligibility(eligibility);
     }
 
-    private async Task<RepositoryEligibility> EvaluateGitHubEligibilityAsync(
+    /// <inheritdoc/>
+    public async Task EvaluateBranchRulesAndStoreAsync(
+        MonitoredRepository repo,
+        CancellationToken cancellationToken)
+    {
+        Credential? credential = await credentialResolver.ResolveAsync(
+            repo.Host,
+            repo.Slug,
+            cancellationToken);
+
+        if (credential is null)
+        {
+            string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
+            repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                [EligibilityViolation.NoCredential(topLevelNamespace)]));
+            return;
+        }
+
+        string token = credential.Token ?? string.Empty;
+
+        try
+        {
+            RepositoryEligibility eligibility = await _composer.ComposeAsync(
+                repo.Slug,
+                repo.WriteProbeVerdict,
+                credential,
+                token,
+                cancellationToken);
+            repo.SetEligibility(eligibility);
+        }
+#pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — treat all as unreachable
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            logger.LogError(
+                ex,
+                "Failed to evaluate eligibility for repository {Slug}; marking as unreachable.",
+                repo.Slug);
+            repo.SetEligibility(new RepositoryEligibility.Unreachable());
+        }
+    }
+
+    private async Task<WriteProbeVerdict> RunWriteProbeAsync(
+        MonitoredRepository repo,
+        Credential credential,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (credential is GitHubCredential gitHubCredential)
+        {
+            return await ProbeGitHubWriteAccessAsync(repo, gitHubCredential, token, cancellationToken);
+        }
+
+        return await ProbeProviderWriteAccessAsync(repo, credential, token, cancellationToken);
+    }
+
+    private async Task<WriteProbeVerdict> ProbeGitHubWriteAccessAsync(
         MonitoredRepository repo,
         GitHubCredential credential,
         string token,
@@ -71,67 +137,28 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         if (probeResult is not Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult probe })
         {
-            return new RepositoryEligibility.Unreachable();
+            return new WriteProbeVerdict.Unknown();
         }
 
-        if (probe is WritePermissionProbeResult.Missing)
-        {
-            return new RepositoryEligibility.Ineligible([EligibilityViolation.CannotPush(repo.Slug)]);
-        }
-
-        IIssueProvider provider = providerFactory.CreateProvider(credential, token);
-        return EvaluateEligibility(await provider.GetBranchProtectionAsync(repo.Slug, cancellationToken));
+        return probe is WritePermissionProbeResult.Missing
+            ? new WriteProbeVerdict.Denied()
+            : new WriteProbeVerdict.Granted();
     }
 
-    private async Task<RepositoryEligibility> EvaluateProviderEligibilityAsync(
+    private async Task<WriteProbeVerdict> ProbeProviderWriteAccessAsync(
         MonitoredRepository repo,
         Credential credential,
         string token,
         CancellationToken cancellationToken)
     {
         IIssueProvider provider = providerFactory.CreateProvider(credential, token);
-
         Result<bool> canPushResult = await provider.CanPushAsync(repo.Slug, cancellationToken);
 
         return canPushResult switch
         {
-            Result<bool>.Failure => new RepositoryEligibility.Unreachable(),
-            Result<bool>.Success { Value: false } => new RepositoryEligibility.Ineligible(
-                [EligibilityViolation.CannotPush(repo.Slug)]),
-            _ => EvaluateEligibility(await provider.GetBranchProtectionAsync(repo.Slug, cancellationToken)),
+            Result<bool>.Failure => new WriteProbeVerdict.Unknown(),
+            Result<bool>.Success { Value: false } => new WriteProbeVerdict.Denied(),
+            _ => new WriteProbeVerdict.Granted(),
         };
-    }
-
-    private static RepositoryEligibility EvaluateEligibility(Result<BranchProtection> result)
-    {
-        if (result is not Result<BranchProtection>.Success success)
-        {
-            return new RepositoryEligibility.Unreachable();
-        }
-
-        BranchProtection protection = success.Value;
-        List<EligibilityViolation> violations = [];
-
-        if (!protection.RejectDirectPushes)
-        {
-            violations.Add(EligibilityViolation.AllowDirectPushes());
-        }
-
-        if (!protection.RejectForcePushes)
-        {
-            violations.Add(EligibilityViolation.AllowForcePushes());
-        }
-
-        if (!protection.RejectDeletion)
-        {
-            violations.Add(EligibilityViolation.AllowDeletion());
-        }
-
-        if (violations.Count > 0)
-        {
-            return new RepositoryEligibility.Ineligible(violations);
-        }
-
-        return new RepositoryEligibility.Eligible();
     }
 }

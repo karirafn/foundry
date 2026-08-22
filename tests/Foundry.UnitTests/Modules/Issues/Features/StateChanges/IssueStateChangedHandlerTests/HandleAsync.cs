@@ -151,6 +151,11 @@ public sealed class HandleAsync
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
 
+        public Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+
         public Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
             MonitoredRepositoryId? repositoryId,
             IReadOnlyCollection<string>? states,

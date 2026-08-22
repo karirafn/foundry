@@ -218,7 +218,12 @@ public sealed class RotateAsync : IAsyncDisposable
 
     private sealed class RecordingEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
@@ -227,7 +232,19 @@ public sealed class RotateAsync : IAsyncDisposable
     private sealed class AssignedEligibilityEvaluator(
         Dictionary<string, RepositoryEligibility> assignments) : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            if (assignments.TryGetValue(repo.Slug.FullPath, out RepositoryEligibility? eligibility))
+            {
+                repo.SetEligibility(eligibility);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
         {
@@ -249,7 +266,7 @@ public sealed class RotateAsync : IAsyncDisposable
         public int MaxConcurrency => _maxConcurrency;
         public int TotalCalls => _totalCalls;
 
-        public async Task EvaluateAndStoreAsync(
+        public async Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
         {
@@ -261,6 +278,22 @@ public sealed class RotateAsync : IAsyncDisposable
             }
 
             // Simulate async work — with sequential evaluation this should never overlap
+            await Task.Delay(1, cancellationToken);
+
+            _current--;
+        }
+
+        public async Task EvaluateBranchRulesAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            _current++;
+            _totalCalls++;
+            if (_current > _maxConcurrency)
+            {
+                _maxConcurrency = _current;
+            }
+
             await Task.Delay(1, cancellationToken);
 
             _current--;

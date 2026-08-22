@@ -203,7 +203,10 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
 
     private sealed class NullEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
+        public Task EvaluateFullyAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task EvaluateBranchRulesAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 
@@ -232,6 +235,11 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             => Task.FromResult(reviewIssues ?? (IReadOnlyList<ReviewIssueInfo>)[]);
 
         public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+
+        public Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());

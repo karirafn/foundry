@@ -26,6 +26,24 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
             ?? throw new InvalidOperationException("Failed to deserialize eligibility column of MonitoredRepository.");
     }
 
+    private static WriteProbeVerdict DeserializeWriteProbeVerdict(string? json)
+    {
+        if (json is null)
+        {
+            return new WriteProbeVerdict.Unknown();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<WriteProbeVerdict>(json, EligibilitySerializerOptions)
+                ?? new WriteProbeVerdict.Unknown();
+        }
+        catch (JsonException)
+        {
+            return new WriteProbeVerdict.Unknown();
+        }
+    }
+
     public void Configure(EntityTypeBuilder<MonitoredRepository> builder)
     {
         builder.ToTable("monitored_repositories");
@@ -90,6 +108,17 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
 
         builder.HasIndex(r => r.EligibilityStatus)
             .HasDatabaseName("ix_monitored_repositories_eligibility_status");
+
+        ValueConverter<WriteProbeVerdict, string?> writeProbeVerdictConverter = new(
+            verdict => JsonSerializer.Serialize(verdict, EligibilitySerializerOptions),
+            json => DeserializeWriteProbeVerdict(json));
+
+        builder.Property(r => r.WriteProbeVerdict)
+            .HasConversion(writeProbeVerdictConverter)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .IsRequired(false)
+            .HasColumnName("write_probe_verdict");
 
         builder.HasIndex(r => new { r.Host, r.Slug })
             .IsUnique()

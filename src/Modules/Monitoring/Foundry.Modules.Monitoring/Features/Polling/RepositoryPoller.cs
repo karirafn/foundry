@@ -24,8 +24,9 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // Pass 0: evaluate repository-level eligibility unconditionally every poll cycle.
-        await eligibilityEvaluator.EvaluateAndStoreAsync(repository, cancellationToken);
+        // Pass 0: evaluate repository-level eligibility using stored write-probe verdict every poll cycle.
+        // Using the cheap branch-rules path avoids issuing a write probe on every poll cycle.
+        await eligibilityEvaluator.EvaluateBranchRulesAndStoreAsync(repository, cancellationToken);
 
         IReadOnlySet<int> knownNumbers = await issueQueries.GetKnownIssueNumbersAsync(
             repository.Id,
@@ -81,13 +82,13 @@ internal sealed class RepositoryPoller(
         await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
         repository.ClearDomainEvents();
 
-        // Pass 3: detect dependencies for all known non-terminal issues.
-        // Re-query known numbers so newly detected issues from pass 1 are included.
-        IReadOnlySet<int> knownNumbersForDependencies = await issueQueries.GetKnownIssueNumbersAsync(
+        // Pass 3: detect dependencies for the dispatch-candidate issues the dependency handler can act on.
+        // Re-query after the first save so issues newly detected in this cycle are included.
+        IReadOnlySet<int> candidateNumbers = await issueQueries.GetDispatchCandidateIssueNumbersAsync(
             repository.Id,
             cancellationToken);
 
-        await DetectDependenciesAsync(repository, provider, knownNumbersForDependencies, cancellationToken);
+        await DetectDependenciesAsync(repository, provider, candidateNumbers, cancellationToken);
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();

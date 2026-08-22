@@ -708,7 +708,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private sealed class NoOpEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
@@ -717,7 +722,19 @@ public sealed class HandleAsync : IAsyncDisposable
     private sealed class AssignedEligibilityEvaluator(
         Dictionary<string, RepositoryEligibility> assignments) : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            if (assignments.TryGetValue(repo.Slug.FullPath, out RepositoryEligibility? eligibility))
+            {
+                repo.SetEligibility(eligibility);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
         {

@@ -12,7 +12,7 @@ namespace Foundry.UnitTests.Modules.Issues.Contracts.IIssueQueriesTests;
 public sealed class HasExpectedMembers
 {
     [Fact]
-    public void WhenInspected_HasElevenQueryMethods()
+    public void WhenInspected_HasTwelveQueryMethods()
     {
         // Arrange
         Type type = typeof(IIssueQueries);
@@ -21,7 +21,7 @@ public sealed class HasExpectedMembers
         MethodInfo[] methods = type.GetMethods();
 
         // Assert
-        methods.Length.ShouldBe(11);
+        methods.Length.ShouldBe(12);
     }
 
     [Fact]
@@ -123,6 +123,19 @@ public sealed class HasExpectedMembers
 
         // Act
         MethodInfo? method = type.GetMethod("GetUntrackableIssueNumbersAsync");
+
+        // Assert
+        method.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void WhenInspected_HasGetDispatchCandidateIssueNumbersAsync()
+    {
+        // Arrange
+        Type type = typeof(IIssueQueries);
+
+        // Act
+        MethodInfo? method = type.GetMethod("GetDispatchCandidateIssueNumbersAsync");
 
         // Assert
         method.ShouldNotBeNull();

@@ -294,8 +294,9 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         StubIssueQueries issueQueries = new(
-            new HashSet<int> { 42 },
-            new Dictionary<int, IssueSnapshot>());
+            knownNumbers: new HashSet<int> { 42 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: new HashSet<int> { 42 });
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([]);
 
@@ -323,8 +324,9 @@ public sealed class PollAsync : IAsyncDisposable
             [42] = Result<IReadOnlyList<int>>.Ok([10, 20]),
         };
         StubIssueQueries issueQueries = new(
-            new HashSet<int> { 42 },
-            new Dictionary<int, IssueSnapshot>());
+            knownNumbers: new HashSet<int> { 42 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: new HashSet<int> { 42 });
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([], dependencyResults);
 
@@ -349,8 +351,9 @@ public sealed class PollAsync : IAsyncDisposable
             [7] = Result<IReadOnlyList<int>>.Ok([]),
         };
         StubIssueQueries issueQueries = new(
-            new HashSet<int> { 7 },
-            new Dictionary<int, IssueSnapshot>());
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: new HashSet<int> { 7 });
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([], dependencyResults);
 
@@ -377,8 +380,9 @@ public sealed class PollAsync : IAsyncDisposable
             [6] = Result<IReadOnlyList<int>>.Ok([99]),
         };
         StubIssueQueries issueQueries = new(
-            new HashSet<int> { 5, 6 },
-            new Dictionary<int, IssueSnapshot>());
+            knownNumbers: new HashSet<int> { 5, 6 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: new HashSet<int> { 5, 6 });
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([], dependencyResults);
 
@@ -410,11 +414,12 @@ public sealed class PollAsync : IAsyncDisposable
             IssueKindLabel: "feature");
 
         // Pass 1: issue 15 is new (not in initial known numbers).
-        // After dispatch, issue 15 is now persisted — second call returns {15, 16}.
+        // After dispatch, issue 15 is now persisted — the dependency pass re-queries dispatch
+        // candidates and gets {15, 16}, so both get a dependency check.
         StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 16 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: new HashSet<int> { 15, 16 });
+            dispatchCandidateNumbers: new HashSet<int> { 15, 16 });
 
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([newIssue]);
@@ -444,7 +449,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [reviewIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -477,7 +482,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [reviewIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -514,7 +519,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [reviewIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -551,7 +556,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [failingIssue, successIssue]);
 
         Error providerError = new("GitHub.RateLimited", "Rate limited");
@@ -586,7 +591,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [reviewIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -619,7 +624,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [reviewIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -686,7 +691,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [reviewIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -734,7 +739,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [reviewIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -776,7 +781,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [failingIssue, successIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -826,7 +831,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: [reviewIssue]);
 
         Dictionary<int, Result<bool>> isClosedResults = new()
@@ -850,6 +855,30 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenZeroDispatchCandidates_MakesNoDependencyProviderCallsAndRaisesNoDependenciesDetectedEvent()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+
+        // No dispatch candidates — the dependency pass should be skipped entirely.
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 42 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: new HashSet<int>());
+
+        CountingIssueProvider provider = new();
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        provider.GetDependenciesCallCount.ShouldBe(0);
+        _dispatcher.DispatchedEvents.OfType<IssueDependenciesDetected>().ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenRepoHasNoTrackedIssues_EligibilityIsStillEvaluated()
     {
         // Arrange
@@ -862,6 +891,22 @@ public sealed class PollAsync : IAsyncDisposable
         // Assert
         result.IsSuccess.ShouldBeTrue();
         _eligibilityEvaluator.EvaluateCallCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenPolling_UsesCheapBranchRulesEvaluationNotWriteProbe()
+    {
+        // Arrange — poll cycle must use cheap path (no write probe issued)
+        MonitoredRepository repository = SeedRepository();
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _eligibilityEvaluator.CheapEvaluateCallCount.ShouldBe(1);
+        _eligibilityEvaluator.FullEvaluateCallCount.ShouldBe(0);
     }
 
     [Fact]
@@ -946,7 +991,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 7, 8 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 7 });
 
@@ -983,7 +1028,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 7 },
             snapshots: new Dictionary<int, IssueSnapshot> { [7] = snapshot },
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 7 });
 
@@ -1008,7 +1053,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 42 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: null,
             untrackableNumbers: new HashSet<int>());
 
@@ -1041,7 +1086,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 5, 6, 99 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 5, 6 });
 
@@ -1071,7 +1116,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 3, 4 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
-            knownNumbersSecondCall: null,
+            dispatchCandidateNumbers: null,
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 3, 4 });
 
@@ -1280,14 +1325,95 @@ public sealed class PollAsync : IAsyncDisposable
             => Task.FromResult(Result<bool>.Ok(true));
     }
 
+    private sealed class CountingIssueProvider : IIssueProvider
+    {
+        public int GetDependenciesCallCount { get; private set; }
+
+        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+        }
+
+        public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+        {
+            GetDependenciesCallCount++;
+            return Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
+        }
+
+        public Task<Result<bool>> IsIssueClosedAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Ok(false));
+        }
+
+        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+        }
+
+        public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            DateTimeOffset since,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+        }
+
+        public Task<Result<BranchProtection>> GetBranchProtectionAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<BranchProtection>.Ok(new BranchProtection("main", true, true, true)));
+        }
+
+        public Task<Result<bool>> CreateBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<bool>.Ok(true));
+        }
+
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+        }
+
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit found")));
+        }
+
+        public Task<Result<bool>> CanPushAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
+    }
+
     private sealed class StubIssueQueries : IIssueQueries
     {
         private readonly IReadOnlySet<int> _knownNumbers;
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
-        private readonly IReadOnlySet<int>? _knownNumbersSecondCall;
         private readonly IReadOnlyList<ReviewIssueInfo> _reviewIssues;
         private readonly IReadOnlySet<int> _untrackableNumbers;
-        private int _getKnownNumbersCallCount;
+        private readonly IReadOnlySet<int> _dispatchCandidateNumbers;
 
         public StubIssueQueries()
             : this(new HashSet<int>(), new Dictionary<int, IssueSnapshot>())
@@ -1295,20 +1421,20 @@ public sealed class PollAsync : IAsyncDisposable
         }
 
         public StubIssueQueries(IReadOnlySet<int> knownNumbers, IReadOnlyDictionary<int, IssueSnapshot> snapshots)
-            : this(knownNumbers, snapshots, knownNumbersSecondCall: null)
+            : this(knownNumbers, snapshots, dispatchCandidateNumbers: null)
         {
         }
 
         public StubIssueQueries(
             IReadOnlySet<int> knownNumbers,
             IReadOnlyDictionary<int, IssueSnapshot> snapshots,
-            IReadOnlySet<int>? knownNumbersSecondCall,
+            IReadOnlySet<int>? dispatchCandidateNumbers,
             IReadOnlyList<ReviewIssueInfo>? reviewIssues = null,
             IReadOnlySet<int>? untrackableNumbers = null)
         {
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
-            _knownNumbersSecondCall = knownNumbersSecondCall;
+            _dispatchCandidateNumbers = dispatchCandidateNumbers ?? new HashSet<int>();
             _reviewIssues = reviewIssues ?? [];
             _untrackableNumbers = untrackableNumbers ?? new HashSet<int>();
         }
@@ -1317,11 +1443,7 @@ public sealed class PollAsync : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
         {
-            _getKnownNumbersCallCount++;
-            IReadOnlySet<int> numbers = _knownNumbersSecondCall is not null && _getKnownNumbersCallCount >= 2
-                ? _knownNumbersSecondCall
-                : _knownNumbers;
-            return Task.FromResult(numbers);
+            return Task.FromResult(_knownNumbers);
         }
 
         public Task<IReadOnlyDictionary<int, IssueSnapshot>> GetIssueSnapshotsAsync(
@@ -1351,6 +1473,13 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             return Task.FromResult(_untrackableNumbers);
+        }
+
+        public Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_dispatchCandidateNumbers);
         }
 
         public Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
@@ -1417,12 +1546,25 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly RepositoryEligibility _eligibility = eligibility ?? new RepositoryEligibility.Eligible();
 
         public int EvaluateCallCount { get; private set; }
+        public int FullEvaluateCallCount { get; private set; }
+        public int CheapEvaluateCallCount { get; private set; }
 
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
         {
             EvaluateCallCount++;
+            FullEvaluateCallCount++;
+            repo.SetEligibility(_eligibility);
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            EvaluateCallCount++;
+            CheapEvaluateCallCount++;
             repo.SetEligibility(_eligibility);
             return Task.CompletedTask;
         }
