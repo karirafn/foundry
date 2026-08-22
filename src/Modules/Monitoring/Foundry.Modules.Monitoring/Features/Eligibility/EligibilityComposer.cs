@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
@@ -34,7 +36,7 @@ internal sealed class EligibilityComposer(IIssueProviderFactory providerFactory)
                 credential,
                 token,
                 cancellationToken),
-            _ => new RepositoryEligibility.Unreachable(),
+            _ => throw new UnreachableException($"Unhandled WriteProbeVerdict variant: {verdict.GetType().Name}"),
         };
     }
 

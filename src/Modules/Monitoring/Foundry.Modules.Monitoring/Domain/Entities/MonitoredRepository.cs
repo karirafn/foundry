@@ -37,7 +37,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public string? EligibilityStatus { get; private set; }
 
-    public WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
+    internal WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
 
     public static MonitoredRepository Create(
         RepositorySlug slug,
@@ -102,7 +102,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         };
     }
 
-    public void SetWriteProbeVerdict(WriteProbeVerdict verdict)
+    internal void SetWriteProbeVerdict(WriteProbeVerdict verdict)
     {
         WriteProbeVerdict = verdict;
     }

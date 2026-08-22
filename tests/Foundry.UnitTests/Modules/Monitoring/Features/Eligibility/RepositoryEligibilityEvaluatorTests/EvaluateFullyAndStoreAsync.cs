@@ -157,6 +157,71 @@ public sealed class EvaluateFullyAndStoreAsync
     }
 
     [Fact]
+    public async Task WhenGitHubProbeReturnsTransportFailure_SetsWriteProbeVerdictToUnknown()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new NullProviderFactory(),
+            writeProber: new FailingWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+    }
+
+    [Fact]
+    public async Task WhenWriteProberThrows_AndPreviousVerdictWasGranted_SetsWriteProbeVerdictToUnknown()
+    {
+        // Arrange — repo starts with a persisted Granted verdict from a previous cycle
+        MonitoredRepository repo = CreateRepo();
+        repo.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new NullProviderFactory(),
+            writeProber: new ThrowingWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+    }
+
+    [Fact]
+    public async Task WhenWriteProberThrows_AndPreviousVerdictWasGranted_SetsEligibilityToUnreachable()
+    {
+        // Arrange — repo starts with a persisted Granted verdict from a previous cycle
+        MonitoredRepository repo = CreateRepo();
+        repo.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new NullProviderFactory(),
+            writeProber: new ThrowingWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+    }
+
+    [Fact]
     public async Task WhenGitLabCredentialCoversRepo_AndCanPushReturnsFalse_SetsEligibilityToIneligibleWithCannotPushViolation()
     {
         // Arrange
@@ -723,5 +788,16 @@ public sealed class EvaluateFullyAndStoreAsync
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<WritePermissionProbeResult>.Fail(new Error("GitHub.Unreachable", "Transport failure")));
+    }
+
+    // Throws — simulates a transient exception from the GitHub write probe
+    private sealed class ThrowingWriteProber : IGitHubWriteProber
+    {
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
+            CancellationToken cancellationToken)
+            => throw new HttpRequestException("Connection refused");
     }
 }

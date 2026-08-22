@@ -59,6 +59,10 @@ internal sealed class RepositoryEligibilityEvaluator(
                 ex,
                 "Failed to evaluate eligibility for repository {Slug}; marking as unreachable.",
                 repo.Slug);
+            // Reset verdict to Unknown so the cheap poll path (EvaluateBranchRulesAndStoreAsync) does
+            // not trust a stale Granted verdict from a previous cycle and re-open eligibility to Eligible
+            // without a fresh write probe succeeding.
+            repo.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown());
             repo.SetEligibility(new RepositoryEligibility.Unreachable());
         }
     }

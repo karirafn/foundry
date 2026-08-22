@@ -92,4 +92,18 @@ public sealed class Serialization
         // Assert
         json.ShouldContain("unknown");
     }
+
+    [Fact]
+    public void WhenMalformedJson_DeserializeThrowsJsonException()
+    {
+        // Arrange — documents WHY MonitoredRepositoryConfiguration wraps deserialization in try/catch
+        const string malformedJson = "{ \"$type\": \"unrecognized_discriminator\" }";
+
+        // Act
+        JsonException ex = Should.Throw<JsonException>(() =>
+            JsonSerializer.Deserialize<WriteProbeVerdict>(malformedJson, Options));
+
+        // Assert
+        ex.ShouldNotBeNull();
+    }
 }

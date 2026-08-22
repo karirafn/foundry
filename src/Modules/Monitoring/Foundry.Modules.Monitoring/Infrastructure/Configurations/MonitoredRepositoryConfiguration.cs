@@ -33,8 +33,15 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
             return new WriteProbeVerdict.Unknown();
         }
 
-        return JsonSerializer.Deserialize<WriteProbeVerdict>(json, EligibilitySerializerOptions)
-            ?? new WriteProbeVerdict.Unknown();
+        try
+        {
+            return JsonSerializer.Deserialize<WriteProbeVerdict>(json, EligibilitySerializerOptions)
+                ?? new WriteProbeVerdict.Unknown();
+        }
+        catch (JsonException)
+        {
+            return new WriteProbeVerdict.Unknown();
+        }
     }
 
     public void Configure(EntityTypeBuilder<MonitoredRepository> builder)

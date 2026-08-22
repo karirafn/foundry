@@ -12,7 +12,7 @@ namespace Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 /// </summary>
 /// <remarks>
 /// Evaluation is sequential — DbContext is not thread-safe; concurrent calls to
-/// EvaluateAndStoreAsync would access the same DbContext instance from multiple threads.
+/// EvaluateFullyAndStoreAsync would access the same DbContext instance from multiple threads.
 /// </remarks>
 internal sealed class RepositoryEligibilityDiffer(
     DbContext dbContext,
@@ -58,7 +58,7 @@ internal sealed class RepositoryEligibilityDiffer(
 
     /// <summary>
     /// Finds tracked repositories covered by <paramref name="credential"/> on the same host.
-    /// Entities are tracked on purpose — EvaluateAndStoreAsync calls SetEligibility on them,
+    /// Entities are tracked on purpose — EvaluateFullyAndStoreAsync calls SetEligibility on them,
     /// and the outer SaveChangesAsync persists those mutations.
     /// </summary>
     public async Task<List<MonitoredRepository>> FindResolvingReposAsync(
